@@ -10,8 +10,9 @@ type SumRow = {
 
 export type AdminSummary = {
   users: number;
-  games: number;
-  gameVersions: number;
+  works: number;
+  releases: number;
+  archiveVersions: number;
   blobs: {
     count: number;
     sizeBytes: number;
@@ -27,8 +28,9 @@ export type AdminSummary = {
 export async function getAdminSummary(): Promise<AdminSummary> {
   const [
     users,
-    games,
-    gameVersions,
+    works,
+    releases,
+    archiveVersions,
     blobs,
     blobSize,
     corePacks,
@@ -37,8 +39,9 @@ export async function getAdminSummary(): Promise<AdminSummary> {
     downloadBuilds,
   ] = await Promise.all([
     countTable("users"),
-    countTable("games"),
-    countTable("game_versions"),
+    countTable("works"),
+    countTable("releases"),
+    countTable("archive_versions"),
     countTable("blobs"),
     sumTable("blobs", "size_bytes"),
     countTable("core_packs"),
@@ -49,8 +52,9 @@ export async function getAdminSummary(): Promise<AdminSummary> {
 
   return {
     users,
-    games,
-    gameVersions,
+    works,
+    releases,
+    archiveVersions,
     blobs: {
       count: blobs,
       sizeBytes: blobSize,

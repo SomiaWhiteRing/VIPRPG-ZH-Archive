@@ -3,13 +3,10 @@ import { verifyPassword } from "@/lib/server/auth/password";
 import {
   canManageRole,
   canUploadRole,
-  legacyRoleFor,
-  legacyUploadStatusFor,
   type UserRole,
 } from "@/lib/server/auth/roles";
 import { getD1 } from "@/lib/server/db/d1";
 
-export type UploadStatus = "pending" | "approved" | "rejected";
 export type UserStatus = "active" | "disabled";
 
 export type ArchiveUser = {
@@ -22,8 +19,6 @@ export type ArchiveUser = {
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
-  approvedAt: string | null;
-  approvedByUserId: number | null;
 };
 
 type UserRow = {
@@ -31,15 +26,11 @@ type UserRow = {
   external_auth_id: string;
   email: string | null;
   display_name: string;
-  legacy_role: "admin" | "uploader";
   role_key: UserRole;
-  upload_status: UploadStatus;
   status: UserStatus;
   email_verified_at: string | null;
   last_login_at: string | null;
   created_at: string;
-  approved_at: string | null;
-  approved_by_user_id: number | null;
 };
 
 type UserAuthRow = UserRow & {
@@ -53,22 +44,11 @@ const USER_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role AS legacy_role,
-  COALESCE(
-    role_key,
-    CASE
-      WHEN role = 'admin' THEN 'admin'
-      WHEN upload_status = 'approved' THEN 'uploader'
-      ELSE 'user'
-    END
-  ) AS role_key,
-  upload_status,
+  role_key,
   status,
   email_verified_at,
   last_login_at,
-  created_at,
-  approved_at,
-  approved_by_user_id
+  created_at
 FROM users`;
 
 const USER_AUTH_SELECT = `SELECT
@@ -76,22 +56,11 @@ const USER_AUTH_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role AS legacy_role,
-  COALESCE(
-    role_key,
-    CASE
-      WHEN role = 'admin' THEN 'admin'
-      WHEN upload_status = 'approved' THEN 'uploader'
-      ELSE 'user'
-    END
-  ) AS role_key,
-  upload_status,
+  role_key,
   status,
   email_verified_at,
   last_login_at,
   created_at,
-  approved_at,
-  approved_by_user_id,
   password_hash,
   failed_login_count,
   locked_until
@@ -154,10 +123,7 @@ export async function createOrActivateVerifiedUser(input: {
         `UPDATE users
         SET email = ?,
           display_name = COALESCE(NULLIF(display_name, ''), ?),
-          role = CASE WHEN ? THEN 'admin' ELSE role END,
           role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END,
-          upload_status = CASE WHEN ? THEN 'approved' ELSE upload_status END,
-          approved_at = CASE WHEN ? THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
           password_hash = ?,
           password_updated_at = CURRENT_TIMESTAMP,
           email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
@@ -170,9 +136,6 @@ export async function createOrActivateVerifiedUser(input: {
       .bind(
         email,
         email,
-        isBootstrapAdmin ? 1 : 0,
-        isBootstrapAdmin ? 1 : 0,
-        isBootstrapAdmin ? 1 : 0,
         isBootstrapAdmin ? 1 : 0,
         input.passwordHash,
         existing.id,
@@ -188,26 +151,19 @@ export async function createOrActivateVerifiedUser(input: {
         external_auth_id,
         email,
         display_name,
-        role,
         role_key,
-        upload_status,
         status,
         password_hash,
         password_updated_at,
         email_verified_at,
-        last_login_at,
-        approved_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${
-        isBootstrapAdmin ? "CURRENT_TIMESTAMP" : "NULL"
-      })`,
+        last_login_at
+      ) VALUES (?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       externalAuthId,
       email,
       email,
-      legacyRoleFor(isBootstrapAdmin ? "super_admin" : "user"),
       isBootstrapAdmin ? "super_admin" : "user",
-      legacyUploadStatusFor(isBootstrapAdmin ? "super_admin" : "user"),
       input.passwordHash,
     )
     .run();
@@ -244,16 +200,10 @@ export async function authenticateUser(input: {
       SET last_login_at = CURRENT_TIMESTAMP,
         failed_login_count = 0,
         locked_until = NULL,
-        role = CASE WHEN ? THEN 'admin' ELSE role END,
-        role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END,
-        upload_status = CASE WHEN ? THEN 'approved' ELSE upload_status END,
-        approved_at = CASE WHEN ? THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END
+        role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END
       WHERE id = ?`,
     )
     .bind(
-      getBootstrapAdminEmail() === email ? 1 : 0,
-      getBootstrapAdminEmail() === email ? 1 : 0,
-      getBootstrapAdminEmail() === email ? 1 : 0,
       getBootstrapAdminEmail() === email ? 1 : 0,
       row.id,
     )
@@ -293,10 +243,11 @@ export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUse
       `${USER_SELECT}
       ORDER BY
         CASE role_key
-          WHEN 'admin' THEN 0
-          WHEN 'uploader' THEN 1
-          WHEN 'user' THEN 2
-          ELSE 3
+          WHEN 'super_admin' THEN 0
+          WHEN 'admin' THEN 1
+          WHEN 'uploader' THEN 2
+          WHEN 'user' THEN 3
+          ELSE 4
         END,
         created_at DESC
       LIMIT 500`,
@@ -367,10 +318,7 @@ async function ensureBootstrapSuperAdmin<Row extends UserRow>(row: Row): Promise
   await getD1()
     .prepare(
       `UPDATE users
-      SET role_key = 'super_admin',
-        role = 'admin',
-        upload_status = 'approved',
-        approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)
+      SET role_key = 'super_admin'
       WHERE id = ?`,
     )
     .bind(row.id)
@@ -378,10 +326,7 @@ async function ensureBootstrapSuperAdmin<Row extends UserRow>(row: Row): Promise
 
   return {
     ...row,
-    legacy_role: "admin",
     role_key: "super_admin",
-    upload_status: "approved",
-    approved_at: row.approved_at ?? new Date().toISOString(),
   };
 }
 
@@ -420,8 +365,6 @@ function mapUserRow(row: UserRow): ArchiveUser {
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
-    approvedAt: row.approved_at,
-    approvedByUserId: row.approved_by_user_id,
   };
 }
 

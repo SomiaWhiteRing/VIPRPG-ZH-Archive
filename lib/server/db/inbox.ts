@@ -2,8 +2,6 @@ import {
   USER_ROLES,
   canAssignRole,
   canManageRole,
-  legacyRoleFor,
-  legacyUploadStatusFor,
   roleLabel,
   roleWeight,
   type UserRole,
@@ -216,19 +214,11 @@ export async function changeUserRole(input: {
   await getD1()
     .prepare(
       `UPDATE users
-      SET role_key = ?,
-        role = ?,
-        upload_status = ?,
-        approved_at = CASE WHEN ? = 'approved' THEN CURRENT_TIMESTAMP ELSE NULL END,
-        approved_by_user_id = ?
+      SET role_key = ?
       WHERE id = ?`,
     )
     .bind(
       input.newRole,
-      legacyRoleFor(input.newRole),
-      legacyUploadStatusFor(input.newRole),
-      legacyUploadStatusFor(input.newRole),
-      input.actor.id,
       target.id,
     )
     .run();

@@ -54,13 +54,3 @@ export function roleLabel(role: UserRole): string {
       return "普通用户";
   }
 }
-
-export function legacyRoleFor(role: UserRole): "admin" | "uploader" {
-  return roleWeight(role) >= roleWeight("admin") ? "admin" : "uploader";
-}
-
-export function legacyUploadStatusFor(
-  role: UserRole,
-): "pending" | "approved" | "rejected" {
-  return canUploadRole(role) ? "approved" : "pending";
-}
