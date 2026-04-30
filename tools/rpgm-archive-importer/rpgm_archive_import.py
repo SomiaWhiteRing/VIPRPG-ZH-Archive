@@ -25,7 +25,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-FILE_POLICY_VERSION = "rpgm2000-2003-whitelist-v2"
+FILE_POLICY_VERSION = "rpgm2000-2003-whitelist-v3"
 
 ALLOWED_FILE_TYPE_KEYS = {
     ".ini",
@@ -224,6 +224,8 @@ def forced_exclusion_type(rel_path: str) -> str | None:
         return "screenshots-dir"
     if len(parts) == 1 and "screenshot" in name:
         return "root-screenshot-file"
+    if len(parts) == 1 and name == "null.txt":
+        return "root-null-txt"
     return None
 
 
@@ -1020,8 +1022,8 @@ def render_report(
             "## 当前策略观察",
             "",
             "- 本次没有上传完整游戏 ZIP，也没有把本地分卷 7z 写入 R2。",
-            "- `StringScripts/` 与 `StringScripts_Origin/` 下的 `.txt` 文件按 v2 策略强制进入 core pack，不再作为独立 blob。",
-            "- `screenshots/` 目录和根目录 `screenshot` / `screenshots` 文件按 v2 策略强制排除。",
+            "- `StringScripts/` 与 `StringScripts_Origin/` 下的 `.txt` 文件按当前策略强制进入 core pack，不再作为独立 blob。",
+            "- `screenshots/` 目录、根目录 `screenshot` / `screenshots` 文件、根目录 `null.txt` 按当前策略强制排除。",
             "- `Save*.lsd`、分卷包、`.r3proj` 和 `.bat` 被排除。",
             "",
             "## 最大白名单内文件 Top 20",

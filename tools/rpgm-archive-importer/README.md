@@ -5,7 +5,7 @@
 当前用途：
 
 - 读取本地 RPG Maker 2000/2003 游戏文件夹。
-- 按 `rpgm2000-2003-whitelist-v2` 强制白名单和路径覆盖规则过滤。
+- 按 `rpgm2000-2003-whitelist-v3` 强制白名单和路径覆盖规则过滤。
 - 生成一个 ArchiveVersion 级 core pack。
 - 生成规范化 manifest 和导入报告。
 - 将 canonical 对象上传到 staging R2。
@@ -37,7 +37,7 @@ D:\path\to\game-folder
 规则验证：
 
 - `StringScripts/` 与 `StringScripts_Origin/` 下 862 个 `.txt` 进入 core pack。
-- `screenshots/` 目录和根目录 `screenshot*` 文件不进入 manifest。
+- `screenshots/` 目录、根目录 `screenshot*` 文件和根目录 `null.txt` 不进入 manifest。
 - R2 中 manifest、core pack、抽样 blob 的 SHA-256 与本地计划一致。
 
 ## 命令
