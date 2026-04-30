@@ -1,0 +1,7 @@
+__pycache__/
+workspace/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+reports/
