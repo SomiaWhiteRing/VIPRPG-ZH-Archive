@@ -140,6 +140,7 @@ p {
 .button {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   min-height: 38px;
   padding: 0 14px;
   border: 1px solid var(--panel-border);
@@ -204,6 +205,32 @@ p {
   background: #ffffff;
   color: var(--foreground);
   font: inherit;
+}
+
+.role-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.role-form select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .turnstile-box {
@@ -329,6 +356,61 @@ p {
 .badge.rejected {
   background: #fff1ed;
   color: #9f2d20;
+}
+
+.badge.user {
+  background: #edf0f2;
+  color: #475467;
+}
+
+.badge.uploader {
+  background: #e4f7ed;
+  color: #14633b;
+}
+
+.badge.admin {
+  background: #e9efff;
+  color: #2445a7;
+}
+
+.badge.super-admin {
+  background: #fff7d6;
+  color: #775500;
+}
+
+.notification-badge,
+.title-badge,
+.inline-unread-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #b42318;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.title-badge {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.inline-unread-dot {
+  min-width: auto;
+  min-height: 20px;
+  margin-left: 8px;
+  background: #fff1ed;
+  color: #9f2d20;
+  font-size: 12px;
+}
+
+.unread-row {
+  background: color-mix(in srgb, #fff7d6 42%, white);
 }
 
 .code-block {

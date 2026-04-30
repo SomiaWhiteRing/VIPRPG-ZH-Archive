@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/server/auth/guards";
+import { canUploadRole } from "@/lib/server/auth/roles";
+import { createUploadRoleRequest } from "@/lib/server/db/inbox";
+import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
-import { requestUploadAccess } from "@/lib/server/db/users";
 
 export const dynamic = "force-dynamic";
 
@@ -12,25 +14,30 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (auth.user.role === "admin" || auth.user.uploadStatus === "approved") {
+    if (canUploadRole(auth.user.role)) {
+      if (!request.headers.get("accept")?.includes("application/json")) {
+        return redirectResponse(new URL("/inbox", request.url));
+      }
+
       return json({
         ok: true,
-        user: {
-          id: auth.user.id,
-          role: auth.user.role,
-          uploadStatus: auth.user.uploadStatus,
-        },
+        alreadyGranted: true,
+        role: auth.user.role,
       });
     }
 
-    const user = await requestUploadAccess(auth.user.id);
+    const item = await createUploadRoleRequest(auth.user);
+
+    if (!request.headers.get("accept")?.includes("application/json")) {
+      return redirectResponse(new URL("/inbox", request.url));
+    }
 
     return json({
       ok: true,
-      user: {
-        id: user.id,
-        role: user.role,
-        uploadStatus: user.uploadStatus,
+      inboxItem: {
+        id: item.id,
+        status: item.status,
+        requestedRole: item.requestedRole,
       },
     });
   } catch (error) {

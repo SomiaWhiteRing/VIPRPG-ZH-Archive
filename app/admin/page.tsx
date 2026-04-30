@@ -1,5 +1,6 @@
 import { getAdminSummary } from "@/lib/server/db/admin-summary";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
+import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ const links = [
 export default async function AdminPage() {
   const adminUser = await requireAdminPageUser("/admin");
   const summary = await getAdminSummary();
+  const unreadInboxCount = await countUnreadInboxItemsForUser(adminUser);
 
   const metrics = [
     ["用户", summary.users.toLocaleString("zh-CN")],
@@ -43,12 +45,20 @@ export default async function AdminPage() {
           <h1>最小可用存储模型</h1>
           <p className="subtitle">
             当前管理员：{adminUser.displayName}。页面展示 canonical storage
-            计数，并提供上传权限审批入口。
+            计数，并提供用户层级与站内信入口。
           </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/users">
-            用户审批
+            用户层级
+          </Link>
+          <Link className="button" href="/inbox">
+            站内信
+            {unreadInboxCount > 0 ? (
+              <span className="notification-badge">
+                {formatUnreadCount(unreadInboxCount)}
+              </span>
+            ) : null}
           </Link>
           <Link className="button" href="/">
             返回首页
@@ -84,6 +94,10 @@ POST /api/imports/preflight`}</pre>
       </section>
     </main>
   );
+}
+
+function formatUnreadCount(count: number): string {
+  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
 
 function formatBytes(bytes: number): string {

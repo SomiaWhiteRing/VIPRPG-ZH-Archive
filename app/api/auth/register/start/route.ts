@@ -1,4 +1,5 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { buildAuthCallbackUrl } from "@/lib/server/auth/callback-url";
 import { hashPassword } from "@/lib/server/auth/password";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
@@ -7,6 +8,7 @@ import { verifyTurnstile } from "@/lib/server/auth/turnstile";
 import {
   assertEmailChallengeQuota,
   createEmailChallenge,
+  deletePendingEmailChallenge,
 } from "@/lib/server/db/auth-challenges";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { findUserByEmail, normalizeEmail } from "@/lib/server/db/users";
@@ -51,7 +53,26 @@ export async function POST(request: Request) {
       codeHash,
       pendingPasswordHash,
     });
-    await sendRegistrationCodeEmail({ to: email, code });
+
+    try {
+      await sendRegistrationCodeEmail({
+        to: email,
+        code,
+        callbackUrl: buildAuthCallbackUrl("/register", {
+          next: nextPath,
+          email,
+          sent: "1",
+        }),
+      });
+    } catch (sendError) {
+      await deletePendingEmailChallenge({
+        email,
+        purpose: "register",
+        codeHash,
+      }).catch(() => undefined);
+      throw sendError;
+    }
+
     await writeAuthAuditLog({
       email,
       eventType: "register_code_sent",

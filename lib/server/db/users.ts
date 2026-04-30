@@ -1,8 +1,14 @@
 import { getBootstrapAdminEmail } from "@/lib/server/auth/config";
 import { verifyPassword } from "@/lib/server/auth/password";
+import {
+  canManageRole,
+  canUploadRole,
+  legacyRoleFor,
+  legacyUploadStatusFor,
+  type UserRole,
+} from "@/lib/server/auth/roles";
 import { getD1 } from "@/lib/server/db/d1";
 
-export type UserRole = "admin" | "uploader";
 export type UploadStatus = "pending" | "approved" | "rejected";
 export type UserStatus = "active" | "disabled";
 
@@ -12,7 +18,6 @@ export type ArchiveUser = {
   externalAuthId: string;
   displayName: string;
   role: UserRole;
-  uploadStatus: UploadStatus;
   status: UserStatus;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
@@ -26,7 +31,8 @@ type UserRow = {
   external_auth_id: string;
   email: string | null;
   display_name: string;
-  role: UserRole;
+  legacy_role: "admin" | "uploader";
+  role_key: UserRole;
   upload_status: UploadStatus;
   status: UserStatus;
   email_verified_at: string | null;
@@ -47,7 +53,15 @@ const USER_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role,
+  role AS legacy_role,
+  COALESCE(
+    role_key,
+    CASE
+      WHEN role = 'admin' THEN 'admin'
+      WHEN upload_status = 'approved' THEN 'uploader'
+      ELSE 'user'
+    END
+  ) AS role_key,
   upload_status,
   status,
   email_verified_at,
@@ -62,7 +76,15 @@ const USER_AUTH_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role,
+  role AS legacy_role,
+  COALESCE(
+    role_key,
+    CASE
+      WHEN role = 'admin' THEN 'admin'
+      WHEN upload_status = 'approved' THEN 'uploader'
+      ELSE 'user'
+    END
+  ) AS role_key,
   upload_status,
   status,
   email_verified_at,
@@ -86,9 +108,15 @@ export function normalizeEmail(value: string): string {
 }
 
 export function canUpload(user: ArchiveUser): boolean {
+  return user.status === "active" && canUploadRole(user.role);
+}
+
+export function canManageUser(actor: ArchiveUser, target: ArchiveUser): boolean {
   return (
-    user.status === "active" &&
-    (user.role === "admin" || user.uploadStatus === "approved")
+    actor.status === "active" &&
+    target.status === "active" &&
+    actor.id !== target.id &&
+    canManageRole(actor.role, target.role)
   );
 }
 
@@ -98,13 +126,13 @@ export async function findUserById(id: number): Promise<ArchiveUser | null> {
     .bind(id)
     .first<UserRow>();
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await ensureBootstrapSuperAdmin(row)) : null;
 }
 
 export async function findUserByEmail(rawEmail: string): Promise<ArchiveUser | null> {
   const row = await findUserRowByEmail(normalizeEmail(rawEmail));
 
-  return row ? mapUserRow(row) : null;
+  return row ? mapUserRow(await ensureBootstrapSuperAdmin(row)) : null;
 }
 
 export async function createOrActivateVerifiedUser(input: {
@@ -127,6 +155,7 @@ export async function createOrActivateVerifiedUser(input: {
         SET email = ?,
           display_name = COALESCE(NULLIF(display_name, ''), ?),
           role = CASE WHEN ? THEN 'admin' ELSE role END,
+          role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END,
           upload_status = CASE WHEN ? THEN 'approved' ELSE upload_status END,
           approved_at = CASE WHEN ? THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
           password_hash = ?,
@@ -141,6 +170,7 @@ export async function createOrActivateVerifiedUser(input: {
       .bind(
         email,
         email,
+        isBootstrapAdmin ? 1 : 0,
         isBootstrapAdmin ? 1 : 0,
         isBootstrapAdmin ? 1 : 0,
         isBootstrapAdmin ? 1 : 0,
@@ -159,6 +189,7 @@ export async function createOrActivateVerifiedUser(input: {
         email,
         display_name,
         role,
+        role_key,
         upload_status,
         status,
         password_hash,
@@ -166,7 +197,7 @@ export async function createOrActivateVerifiedUser(input: {
         email_verified_at,
         last_login_at,
         approved_at
-      ) VALUES (?, ?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${
         isBootstrapAdmin ? "CURRENT_TIMESTAMP" : "NULL"
       })`,
     )
@@ -174,8 +205,9 @@ export async function createOrActivateVerifiedUser(input: {
       externalAuthId,
       email,
       email,
-      isBootstrapAdmin ? "admin" : "uploader",
-      isBootstrapAdmin ? "approved" : "pending",
+      legacyRoleFor(isBootstrapAdmin ? "super_admin" : "user"),
+      isBootstrapAdmin ? "super_admin" : "user",
+      legacyUploadStatusFor(isBootstrapAdmin ? "super_admin" : "user"),
       input.passwordHash,
     )
     .run();
@@ -213,11 +245,13 @@ export async function authenticateUser(input: {
         failed_login_count = 0,
         locked_until = NULL,
         role = CASE WHEN ? THEN 'admin' ELSE role END,
+        role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END,
         upload_status = CASE WHEN ? THEN 'approved' ELSE upload_status END,
         approved_at = CASE WHEN ? THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END
       WHERE id = ?`,
     )
     .bind(
+      getBootstrapAdminEmail() === email ? 1 : 0,
       getBootstrapAdminEmail() === email ? 1 : 0,
       getBootstrapAdminEmail() === email ? 1 : 0,
       getBootstrapAdminEmail() === email ? 1 : 0,
@@ -253,86 +287,29 @@ export async function setUserPasswordByEmail(input: {
     .run();
 }
 
-export async function listUsersForAdmin(): Promise<ArchiveUser[]> {
+export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUser[]> {
   const rows = await getD1()
     .prepare(
       `${USER_SELECT}
       ORDER BY
-        CASE upload_status
-          WHEN 'pending' THEN 0
-          WHEN 'rejected' THEN 1
-          ELSE 2
+        CASE role_key
+          WHEN 'admin' THEN 0
+          WHEN 'uploader' THEN 1
+          WHEN 'user' THEN 2
+          ELSE 3
         END,
         created_at DESC
-      LIMIT 200`,
+      LIMIT 500`,
     )
     .all<UserRow>();
 
-  return (rows.results ?? []).map(mapUserRow);
-}
+  const users = (rows.results ?? []).map(mapUserRow);
 
-export async function listPendingUploaders(): Promise<ArchiveUser[]> {
-  const rows = await getD1()
-    .prepare(
-      `${USER_SELECT}
-      WHERE role = 'uploader' AND upload_status = 'pending' AND status = 'active'
-      ORDER BY created_at ASC
-      LIMIT 200`,
-    )
-    .all<UserRow>();
+  if (!actor) {
+    return users;
+  }
 
-  return (rows.results ?? []).map(mapUserRow);
-}
-
-export async function requestUploadAccess(userId: number): Promise<ArchiveUser> {
-  await getD1()
-    .prepare(
-      `UPDATE users
-      SET upload_status = 'pending',
-        approved_at = NULL,
-        approved_by_user_id = NULL
-      WHERE id = ? AND role = 'uploader' AND upload_status <> 'approved'`,
-    )
-    .bind(userId)
-    .run();
-
-  return requiredUserById(userId);
-}
-
-export async function approveUploader(
-  userId: number,
-  approvedByUserId: number,
-): Promise<ArchiveUser> {
-  await getD1()
-    .prepare(
-      `UPDATE users
-      SET upload_status = 'approved',
-        approved_at = CURRENT_TIMESTAMP,
-        approved_by_user_id = ?
-      WHERE id = ? AND role = 'uploader'`,
-    )
-    .bind(approvedByUserId, userId)
-    .run();
-
-  return requiredUserById(userId);
-}
-
-export async function rejectUploader(
-  userId: number,
-  approvedByUserId: number,
-): Promise<ArchiveUser> {
-  await getD1()
-    .prepare(
-      `UPDATE users
-      SET upload_status = 'rejected',
-        approved_at = NULL,
-        approved_by_user_id = ?
-      WHERE id = ? AND role = 'uploader'`,
-    )
-    .bind(approvedByUserId, userId)
-    .run();
-
-  return requiredUserById(userId);
+  return users.filter((user) => user.id !== actor.id && canManageUser(actor, user));
 }
 
 async function recordFailedLogin(
@@ -379,6 +356,35 @@ async function findUserAuthRowByEmail(email: string): Promise<UserAuthRow | null
     .first<UserAuthRow>();
 }
 
+async function ensureBootstrapSuperAdmin<Row extends UserRow>(row: Row): Promise<Row> {
+  const bootstrapEmail = getBootstrapAdminEmail();
+  const rowEmail = row.email ?? externalAuthIdToEmail(row.external_auth_id);
+
+  if (bootstrapEmail !== rowEmail || row.role_key === "super_admin") {
+    return row;
+  }
+
+  await getD1()
+    .prepare(
+      `UPDATE users
+      SET role_key = 'super_admin',
+        role = 'admin',
+        upload_status = 'approved',
+        approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP)
+      WHERE id = ?`,
+    )
+    .bind(row.id)
+    .run();
+
+  return {
+    ...row,
+    legacy_role: "admin",
+    role_key: "super_admin",
+    upload_status: "approved",
+    approved_at: row.approved_at ?? new Date().toISOString(),
+  };
+}
+
 async function requiredUserByEmail(email: string): Promise<ArchiveUser> {
   const user = await findUserByEmail(email);
 
@@ -409,8 +415,7 @@ function mapUserRow(row: UserRow): ArchiveUser {
     email: row.email ?? externalAuthIdToEmail(row.external_auth_id),
     externalAuthId: row.external_auth_id,
     displayName: row.display_name,
-    role: row.role,
-    uploadStatus: row.upload_status,
+    role: row.role_key,
     status: row.status,
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,

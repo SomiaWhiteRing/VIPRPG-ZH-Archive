@@ -4,7 +4,11 @@ import { hashVerificationCode } from "@/lib/server/auth/tokens";
 import { consumeLatestEmailChallenge } from "@/lib/server/db/auth-challenges";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { createOrActivateVerifiedUser, normalizeEmail } from "@/lib/server/db/users";
-import { readRequiredFormString, redirectWithParams } from "@/lib/server/http/form";
+import {
+  readRequiredFormString,
+  redirectResponse,
+  redirectWithParams,
+} from "@/lib/server/http/form";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       eventType: "register_verified",
     });
 
-    const response = Response.redirect(new URL(nextPath, request.url), 303);
+    const response = redirectResponse(new URL(nextPath, request.url));
     response.headers.append(
       "Set-Cookie",
       await createSessionCookie(user.id, request.url),

@@ -73,6 +73,23 @@ export async function createEmailChallenge(input: {
     .run();
 }
 
+export async function deletePendingEmailChallenge(input: {
+  email: string;
+  purpose: ChallengePurpose;
+  codeHash: string;
+}): Promise<void> {
+  await getD1()
+    .prepare(
+      `DELETE FROM email_verification_challenges
+      WHERE email = ?
+        AND purpose = ?
+        AND code_hash = ?
+        AND consumed_at IS NULL`,
+    )
+    .bind(input.email, input.purpose, input.codeHash)
+    .run();
+}
+
 export async function consumeLatestEmailChallenge(input: {
   email: string;
   purpose: ChallengePurpose;

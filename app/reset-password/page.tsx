@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getEmailFrom } from "@/lib/server/auth/config";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function ResetPasswordPage({
 }: ResetPasswordPageProps) {
   const params = await searchParams;
   const nextPath = sanitizeRedirectPath(params.next, "/login");
+  const emailFrom = getEmailFrom();
 
   return (
     <main className="narrow-main">
@@ -30,7 +32,10 @@ export default async function ResetPasswordPage({
 
       <section className="card form-card">
         {params.sent ? (
-          <p className="success-message">验证码已发送到 {params.email}。</p>
+          <p className="success-message">
+            验证码已发送到 {params.email}。如果几分钟内没收到，请检查垃圾邮件或广告邮件，并确认发件人{" "}
+            {emailFrom} 未被拦截。
+          </p>
         ) : null}
         {params.error ? <p className="error-message">{params.error}</p> : null}
         <form

@@ -54,6 +54,26 @@ export function getEmailFrom(): string {
   return value;
 }
 
+export function getAppOrigin(): string {
+  const value = readRuntimeVariable("APP_ORIGIN");
+
+  if (!value) {
+    throw new Error("APP_ORIGIN is not configured");
+  }
+
+  const url = new URL(value);
+  const isLocalhost =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "[::1]";
+
+  if (url.protocol !== "https:" && !(isLocalhost && url.protocol === "http:")) {
+    throw new Error("APP_ORIGIN must be an https origin");
+  }
+
+  return url.origin;
+}
+
 function readRuntimeSecret(
   name: "AUTH_SECRET" | "BOOTSTRAP_ADMIN_EMAIL" | "TURNSTILE_SECRET_KEY",
 ): string | null {
@@ -66,7 +86,8 @@ function readRuntimeVariable(
     | "BOOTSTRAP_ADMIN_EMAIL"
     | "TURNSTILE_SECRET_KEY"
     | "TURNSTILE_SITE_KEY"
-    | "EMAIL_FROM",
+    | "EMAIL_FROM"
+    | "APP_ORIGIN",
 ): string | null {
   const processValue = process.env[name]?.trim();
 
