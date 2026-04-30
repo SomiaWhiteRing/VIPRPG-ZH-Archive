@@ -1,0 +1,37 @@
+{
+  "name": "viprpg-zh-archive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "opennext": "node scripts/open-next.mjs",
+    "preview": "node scripts/open-next.mjs build && node scripts/open-next.mjs preview",
+    "deploy": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy",
+    "deploy:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy --env staging",
+    "upload": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload",
+    "upload:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload --env staging",
+    "cf-typegen": "node scripts/cf-typegen.mjs",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@opennextjs/cloudflare": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "typescript": "latest",
+    "wrangler": "latest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
