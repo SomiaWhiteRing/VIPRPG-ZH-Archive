@@ -10,6 +10,7 @@
 相关主文档：
 
 - [RPG Maker 2000/2003 去重存储库架构计划](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
+- [游戏领域架构设计](./game-domain-architecture.md)
 
 ## 1. 固定原则
 
@@ -374,7 +375,7 @@ migrations/
 第一版 migration 直接承接主架构文档中的表结构，但在落地时做一次字段清理：
 
 - `blobs` 不保存文件名或路径。
-- 文件路径只存在于 `game_version_files` 和 manifest。
+- 文件路径只存在于 `archive_version_files` 和 manifest。
 - `download_builds.cache_key` 是边缘缓存 key，不是 R2 key。
 
 ### 7.2 创建和应用 migration
@@ -403,7 +404,7 @@ npx wrangler d1 migrations apply DB --remote
 ```text
 blobs/sha256/{aa}/{bb}/{sha256}
 core-packs/sha256/{aa}/{bb}/{sha256}.zip
-manifests/games/{game_id}/{game_version_id}-{manifest_sha256}.json
+manifests/sha256/{aa}/{bb}/{manifest_sha256}.json
 metadata/{kind}/sha256/{aa}/{bb}/{sha256}
 ```
 
@@ -518,7 +519,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现 `POST /api/auth/register/verify`：校验注册验证码，消费 challenge，创建或激活用户并签发 session。
 - 实现 `POST /api/auth/login`：校验邮箱 + 密码；登录失败按邮箱/IP 记录失败次数和临时锁定；常规登录不发送验证码。
 - 实现 `POST /api/auth/password-reset/start`：校验 Turnstile、短窗口 Rate Limiting、D1 长窗口频率，写入找回密码验证码 hash 并发送邮件。
-- 实现 `POST /api/auth/password-reset/confirm`：校验验证码和新密码强度，更新 `users.password_hash`，撤销旧 session 或要求重新登录。
+- 实现 `POST /api/auth/password-reset/confirm`：校验验证码和新密码强度，更新 `users.password_hash`，撤销既有 session 或要求重新登录。
 - 实现邮件模板：注册邮件只包含验证码、过期时间和安全提示；找回密码邮件只包含验证码、过期时间和安全提示。
 - 邮件模板应包含返回验证页面的回调链接，但链接不携带明文验证码或等价登录 token；发码成功页应提示检查垃圾邮件/广告邮件。
 - 登录和上传权限保持分离：邮箱验证通过后默认为 `user`，普通用户通过站内信申请成为 `uploader` 后才能上传。
@@ -534,7 +535,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 当前实现状态：
 
-- 已实现 `0002_auth_password_schema.sql`，本地和 staging D1 已应用。
+- 账户、密码、验证码、角色和站内信 schema 已整合进 `0001_init_archive_schema.sql`。
 - 已实现 PBKDF2-SHA256 100000 次迭代密码哈希、注册验证码 challenge、找回密码验证码 challenge、认证审计写入和登录失败临时锁定。
 - 已实现 Turnstile 服务端校验、Email Service `EMAIL` binding 发信、`AUTH_EMAIL_RATE_LIMITER` 短窗口限流。
 - 应用侧会把 Email Routing 目标地址未验证错误转换为中文运维提示，并在发信失败时清理刚创建的验证码 challenge。
@@ -567,7 +568,8 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现 `PUT /api/blobs/{sha256}`，会重新计算请求体 SHA-256，匹配后写入 R2 `blobs/sha256/{aa}/{bb}/{sha256}` 和 D1 `blobs`。
 - 已实现 `PUT /api/core-packs/{sha256}`，会校验请求体 SHA-256、基础 ZIP magic、`x-core-pack-file-count` 和 `x-core-pack-uncompressed-size`。
 - 已实现 `POST /api/imports/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
-- 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、games、versions、blobs、core packs、import jobs 和 download builds 的计数。
+- 当前初始 schema 已压平为 `0001_init_archive_schema.sql`，本地和 staging D1 均为 `works` / `releases` / `archive_versions` / `archive_version_files` 数据模型；production 在正式发布前应使用同一份初始 schema 创建或重建。
+- 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
 
 ### Phase D：浏览器预索引导入
@@ -587,9 +589,9 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 验收：
 
-- 导入成功后 D1 有 `games`、`game_versions`、`game_version_files`。
+- 导入成功后 D1 有 `works`、`releases`、`archive_versions`、`archive_version_files`。
 - manifest 可从 R2 `manifests/` 读取。
-- 文件路径只在 manifest 和 `game_version_files` 中出现。
+- 文件路径只在 manifest 和 `archive_version_files` 中出现。
 
 ### Phase E：下载重组
 
@@ -597,11 +599,11 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 任务：
 
-- 实现 `GET /api/games/{slug}/versions/{version}/download`。
+- 实现 `GET /api/archive-versions/{archiveVersionId}/download`，公开页面可从 `/games/{workSlug}/releases/{releaseId}` 链接到该端点。
 - 实现 streaming ZIP builder。
 - 实现 core pack entry 流式读取。
 - 实现 R2 Get 次数预估。
-- 对响应设置不可变缓存 key：`game_version_id + manifest_sha256 + packer_version`。
+- 对响应设置不可变缓存 key：`archive_version_id + manifest_sha256 + packer_version`。
 - 小于当前 Workers Cache/CDN 限制的响应尝试写入 Workers Cache。
 
 验收：

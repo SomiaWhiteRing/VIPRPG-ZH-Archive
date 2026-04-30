@@ -27,8 +27,9 @@ export default async function AdminPage() {
 
   const metrics = [
     ["用户", summary.users.toLocaleString("zh-CN")],
-    ["游戏", summary.games.toLocaleString("zh-CN")],
-    ["版本", summary.gameVersions.toLocaleString("zh-CN")],
+    ["作品", summary.works.toLocaleString("zh-CN")],
+    ["发布版本", summary.releases.toLocaleString("zh-CN")],
+    ["归档快照", summary.archiveVersions.toLocaleString("zh-CN")],
     ["Blob 数", summary.blobs.count.toLocaleString("zh-CN")],
     ["Blob 容量", formatBytes(summary.blobs.sizeBytes)],
     ["Core pack 数", summary.corePacks.count.toLocaleString("zh-CN")],
@@ -45,7 +46,7 @@ export default async function AdminPage() {
           <h1>最小可用存储模型</h1>
           <p className="subtitle">
             当前管理员：{adminUser.displayName}。页面展示 canonical storage
-            计数，并提供用户层级与站内信入口。
+            计数、作品领域模型计数，并提供用户层级与站内信入口。
           </p>
         </div>
         <div className="actions header-actions">

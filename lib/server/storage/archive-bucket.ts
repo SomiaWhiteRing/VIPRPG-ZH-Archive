@@ -47,13 +47,16 @@ export async function putCorePack(
 }
 
 export async function putManifest(
-  gameId: number,
-  gameVersionId: number,
   manifestSha256: string,
   manifestJson: string,
+  metadata: {
+    workId?: number;
+    releaseId?: number;
+    archiveVersionId?: number;
+  } = {},
 ): Promise<R2Object> {
   return getArchiveBucket().put(
-    manifestKey(gameId, gameVersionId, manifestSha256),
+    manifestKey(manifestSha256),
     manifestJson,
     {
       httpMetadata: {
@@ -61,8 +64,11 @@ export async function putManifest(
       },
       customMetadata: {
         manifestSha256,
-        gameId: String(gameId),
-        gameVersionId: String(gameVersionId),
+        ...(metadata.workId === undefined ? {} : { workId: String(metadata.workId) }),
+        ...(metadata.releaseId === undefined ? {} : { releaseId: String(metadata.releaseId) }),
+        ...(metadata.archiveVersionId === undefined
+          ? {}
+          : { archiveVersionId: String(metadata.archiveVersionId) }),
       },
     },
   );
