@@ -571,6 +571,9 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 当前初始 schema 已压平为 `0001_init_archive_schema.sql`，本地和 staging D1 均为 `works` / `releases` / `archive_versions` / `archive_version_files` 数据模型；production 在正式发布前应使用同一份初始 schema 创建或重建。
 - 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
+- 已新增 `tools/rpgm-archive-importer/` 受控导入工具，用于在浏览器 commit UI 完成前模拟本地预索引、core pack、manifest、R2 上传和 D1 commit。
+- 已用 `本地样本游戏` 在 staging 完成一次真实样本导入：3018 个归档文件，1705 个唯一 blob，1 个 core pack，manifest/core pack/blob 的 R2 SHA-256 抽验通过。
+- 本次样本固定了 `rpgm2000-2003-whitelist-v2` 路径覆盖规则：`StringScripts*` 的 `.txt` 进入 core pack，`screenshots/` 和根目录 `screenshot*` 强制排除。
 
 ### Phase D：浏览器预索引导入
 
@@ -581,6 +584,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现文件夹选择。
 - 实现本地 ZIP 读取，但不上传完整 ZIP。
 - 实现白名单过滤和 excluded 统计。
+- 实现路径覆盖规则：`StringScripts/`、`StringScripts_Origin/` 只保留 `.txt` 并强制进入 core pack；`screenshots/` 目录和根目录 `screenshot` / `screenshots` 文件强制排除。
 - 实现浏览器 SHA-256。
 - 实现 core pack 生成。
 - 实现 `/api/imports/preflight`。
