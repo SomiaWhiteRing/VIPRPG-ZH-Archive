@@ -621,7 +621,8 @@ CREATE TABLE release_external_links (
 
 说明：
 
-- 图标、浏览图、截图都作为普通 blob 存入 R2，再通过 `media_assets` 建立语义。
+- 上传表单中明确选择的图标、浏览图、截图作为普通 blob 存入 R2，再通过 `media_assets` 建立语义。
+- 游戏目录内的 `screenshots/` 文件夹，以及根目录下文件名包含 `screenshot` / `screenshots` 的文件，按导入策略强制排除，不自动作为媒体资产入库。
 - Work 的封面图和 Release 的截图可能不同，因此分开关联。
 - 外部链接不放进 JSON，便于统一显示、检查失效链接和做来源审计。
 
