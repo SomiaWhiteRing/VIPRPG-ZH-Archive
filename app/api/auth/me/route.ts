@@ -23,7 +23,6 @@ export async function GET(request: Request) {
       email: user.email,
       displayName: user.displayName,
       role: user.role,
-      uploadStatus: user.uploadStatus,
       createdAt: user.createdAt,
     },
   });

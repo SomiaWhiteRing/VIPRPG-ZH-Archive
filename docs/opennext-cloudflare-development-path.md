@@ -254,7 +254,8 @@ export default defineCloudflareConfig({});
   },
   "vars": {
     "TURNSTILE_SITE_KEY": "<PROD_TURNSTILE_SITE_KEY>",
-    "EMAIL_FROM": "noreply@example.com"
+    "EMAIL_FROM": "noreply@example.com",
+    "APP_ORIGIN": "https://example.com"
   },
   "env": {
     "staging": {
@@ -303,7 +304,8 @@ export default defineCloudflareConfig({});
       },
       "vars": {
         "TURNSTILE_SITE_KEY": "<STAGING_TURNSTILE_SITE_KEY>",
-        "EMAIL_FROM": "noreply@example.com"
+        "EMAIL_FROM": "noreply@example.com",
+        "APP_ORIGIN": "https://staging.example.com"
       }
     }
   }
@@ -319,7 +321,8 @@ export default defineCloudflareConfig({});
 - 不要把 `ARCHIVE_BUCKET` 命名为 `NEXT_INC_CACHE_R2_BUCKET`；两者语义完全不同。
 - 初版不配置 Cloudflare Images binding；图标和浏览图按普通 blob/metadata 资产处理，等确实需要图像变换服务时再加入。
 - 正式账户体系接入后，`send_email`、`ratelimits` 和 `vars` 也要在 `staging` 中显式写出；Rate Limiting 的 `namespace_id` 不要让 staging/prod 共用，避免测试流量影响生产发送额度。
-- `EMAIL_FROM` 必须是 Cloudflare Email Service 中已验证、且在 `allowed_sender_addresses` 中允许的发件地址。
+- `EMAIL_FROM` 必须是 Cloudflare Email Service Email Sending 中已验证、且在 `allowed_sender_addresses` 中允许的发件地址。
+- 不要把 Cloudflare Email Routing 当作公开验证码发信服务；Routing/Email Workers 的发信能力可能只能投递到已验证目标地址，用户注册邮箱会触发 `destination address is not a verified address`。
 
 ## 6. 本地变量和密钥
 
@@ -333,6 +336,7 @@ BOOTSTRAP_ADMIN_EMAIL=admin@example.local
 TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
 TURNSTILE_SITE_KEY=1x00000000000000000000AA
 EMAIL_FROM=noreply@example.com
+APP_ORIGIN=http://localhost:3000
 ```
 
 生产和 staging 密钥使用 Wrangler secrets：
@@ -352,6 +356,7 @@ npx wrangler secret put TURNSTILE_SECRET_KEY --env staging
 - 业务代码优先通过 `getCloudflareContext().env` 读取 Cloudflare bindings 和 secrets。
 - 认证原型也会回退读取 `process.env.AUTH_SECRET` 和 `process.env.BOOTSTRAP_ADMIN_EMAIL`，便于 `next dev` 或本地脚本验证。
 - `TURNSTILE_SECRET_KEY` 是 secret；`TURNSTILE_SITE_KEY` 和 `EMAIL_FROM` 可以作为 runtime vars，但不要从用户请求覆盖。
+- `APP_ORIGIN` 是注册/找回密码邮件中回调链接的基准地址；staging 和 production 必须分别配置为各自的受信任公开 origin，不要从请求 Host header 临时拼接。
 - Turnstile site key 优先通过服务端渲染或 `/api/auth/config` 输出给前端，避免依赖 Next.js 构建期 `NEXT_PUBLIC_*` 变量。
 - 不把生产密钥写入 `.env`、`.dev.vars` 或文档。
 - SSG 构建阶段不要读取敏感绑定；需要 Cloudflare 资源的页面优先保持动态渲染。
@@ -479,24 +484,25 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 编写第一版 D1 migration。
 - 实现 `lib/server/db/*`。
-- 实现用户表、管理员 bootstrap、注册用户上传资格审批。
+- 实现用户表、超级管理员 bootstrap、四层角色和站内信申请。
 - 添加 `/admin` 的最小管理页面。
 
 验收：
 
 - 本地和 staging D1 migration 都能成功。
-- 管理员可查看 pending uploader。
-- 非 approved 用户不能进入上传流程。
+- 管理员可查看低于自己层级的用户，并调整为低于自己层级的任意角色。
+- 普通用户通过站内信申请上传者角色；未达到 `uploader` 层级的用户不能进入上传流程。
 
 当前实现状态：
 
 - 已实现基于 HTTP-only cookie 的邮箱登录原型，cookie 使用 `AUTH_SECRET` 做 HMAC 签名。
-- 已实现 `BOOTSTRAP_ADMIN_EMAIL`：该邮箱首次登录会自动创建或提升为 `admin`，并默认具备上传权限。
-- 已实现注册用户自动入库；非 bootstrap 用户默认为 `role = 'uploader'`、`upload_status = 'pending'`。
+- 已实现 `BOOTSTRAP_ADMIN_EMAIL`：该邮箱首次登录会自动创建或提升为 `super_admin`，并默认具备上传权限。
+- 已实现注册用户自动入库；非 bootstrap 用户默认为 `role_key = 'user'`。
 - 已实现 `/login`、`POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me`。
-- 已实现 `/admin/users`、`GET /api/admin/users/pending-uploaders`、`POST /api/admin/users/{userId}/approve-uploader` 和 `POST /api/admin/users/{userId}/reject-uploader`。
+- 已实现 `/admin/users`、`/inbox`、`POST /api/admin/users/{userId}/role`、`POST /api/inbox/{itemId}/resolve`、`POST /api/inbox/{itemId}/read` 和 `POST /api/inbox/read-all`。
+- 站内信入口显示当前用户未读角标；站内信页支持一键标记全部可见未读项为已读。
 - 已将 `/admin`、`GET /api/admin/summary`、`PUT /api/blobs/{sha256}`、`PUT /api/core-packs/{sha256}`、`POST /api/imports/preflight` 接入权限校验。
-- 这套登录方式是 Phase B 的最小可用认证壳，用于固定权限边界；后续替换为 OAuth 或更正式的身份服务时，应保留 `users.role`、`users.upload_status` 和 route guard 语义。
+- 这套登录方式是 Phase B 的最小可用认证壳，用于固定权限边界；后续替换为 OAuth 或更正式的身份服务时，应保留 `users.role_key`、站内信行动项和 route guard 语义。
 
 ### Phase B.1：正式密码账户和验证码
 
@@ -506,7 +512,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - D1 增加 `email_verification_challenges`、`user_sessions`、`auth_audit_logs`，并为 `users` 增加 `email`、`password_hash`、`password_updated_at`、`email_verified_at`、`status`、`last_login_at`、`failed_login_count`、`locked_until`。
 - 在 Cloudflare Dashboard 创建 Turnstile widget，配置 `TURNSTILE_SITE_KEY` 和 `TURNSTILE_SECRET_KEY`。
-- 在 Cloudflare Email Service 中验证发件域和 `EMAIL_FROM`，并在 `wrangler.jsonc` 配置 `send_email` binding。
+- 在 Cloudflare Email Service 的 Email Sending 中验证发送域和 `EMAIL_FROM`，并在 `wrangler.jsonc` 配置 `send_email` binding；仅启用 Email Routing 不满足公开注册验证码投递需求。
 - 在 `wrangler.jsonc` 配置 `AUTH_EMAIL_RATE_LIMITER` Rate Limiting binding；staging/prod 使用不同 `namespace_id`。
 - 实现 `POST /api/auth/register/start`：校验 Turnstile、密码强度、短窗口 Rate Limiting 和 D1 长窗口频率，写入注册验证码 hash 与待激活密码 hash，并发送邮件。
 - 实现 `POST /api/auth/register/verify`：校验注册验证码，消费 challenge，创建或激活用户并签发 session。
@@ -514,7 +520,8 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现 `POST /api/auth/password-reset/start`：校验 Turnstile、短窗口 Rate Limiting、D1 长窗口频率，写入找回密码验证码 hash 并发送邮件。
 - 实现 `POST /api/auth/password-reset/confirm`：校验验证码和新密码强度，更新 `users.password_hash`，撤销旧 session 或要求重新登录。
 - 实现邮件模板：注册邮件只包含验证码、过期时间和安全提示；找回密码邮件只包含验证码、过期时间和安全提示。
-- 登录和上传权限保持分离：邮箱验证通过后仍是 pending uploader，管理员审批后才能上传。
+- 邮件模板应包含返回验证页面的回调链接，但链接不携带明文验证码或等价登录 token；发码成功页应提示检查垃圾邮件/广告邮件。
+- 登录和上传权限保持分离：邮箱验证通过后默认为 `user`，普通用户通过站内信申请成为 `uploader` 后才能上传。
 
 验收：
 
@@ -523,13 +530,14 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 注册和找回密码验证码过期、重复使用、超过尝试次数都会失败。
 - 常规登录只接受正确密码，不接受验证码或 magic link 作为登录替代路径。
 - D1 中不出现明文密码或明文验证码。
-- 已验证邮箱和密码登录后可进入账户状态页，但未获批用户调用上传 API 仍返回 403。
+- 已验证邮箱和密码登录后可进入账户状态页，但低于 `uploader` 层级的用户调用上传 API 仍返回 403。
 
 当前实现状态：
 
 - 已实现 `0002_auth_password_schema.sql`，本地和 staging D1 已应用。
 - 已实现 PBKDF2-SHA256 100000 次迭代密码哈希、注册验证码 challenge、找回密码验证码 challenge、认证审计写入和登录失败临时锁定。
 - 已实现 Turnstile 服务端校验、Email Service `EMAIL` binding 发信、`AUTH_EMAIL_RATE_LIMITER` 短窗口限流。
+- 应用侧会把 Email Routing 目标地址未验证错误转换为中文运维提示，并在发信失败时清理刚创建的验证码 challenge。
 - 已实现 `POST /api/auth/register/start`、`POST /api/auth/register/verify`、`POST /api/auth/login`、`POST /api/auth/password-reset/start`、`POST /api/auth/password-reset/confirm`。
 - 已实现 `/login`、`/register`、`/forgot-password`、`/reset-password` 页面。
 - 常规登录已切换为邮箱 + 密码；验证码只用于注册和找回密码。
@@ -560,7 +568,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现 `PUT /api/core-packs/{sha256}`，会校验请求体 SHA-256、基础 ZIP magic、`x-core-pack-file-count` 和 `x-core-pack-uncompressed-size`。
 - 已实现 `POST /api/imports/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
 - 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、games、versions、blobs、core packs、import jobs 和 download builds 的计数。
-- 上传和 preflight 接口现在要求管理员或 approved uploader；未登录返回 401，未获批注册用户返回 403。
+- 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
 
 ### Phase D：浏览器预索引导入
 
@@ -767,7 +775,7 @@ D1 production migration 不要在普通 PR preview 中自动执行。
 8. 部署 staging。
 9. 用 staging API 验证 preflight 前后状态变化和 blob 幂等写入。
 
-第二轮结束时，系统已经能证明 canonical object storage 的基本写入、索引和查询链路可用，并且上传接口已接入 Phase B 的管理员/approved uploader 权限边界。它仍不是完整导入系统：浏览器预索引、core pack 生成和 manifest commit 留到后续阶段。
+第二轮结束时，系统已经能证明 canonical object storage 的基本写入、索引和查询链路可用，并且上传接口已接入 Phase B 的 `uploader`/`admin`/`super_admin` 角色权限边界。它仍不是完整导入系统：浏览器预索引、core pack 生成和 manifest commit 留到后续阶段。
 
 ## 16. 参考
 

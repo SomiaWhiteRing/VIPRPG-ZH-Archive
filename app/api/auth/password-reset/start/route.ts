@@ -1,4 +1,5 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { buildAuthCallbackUrl } from "@/lib/server/auth/callback-url";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
 import { generateVerificationCode, hashVerificationCode } from "@/lib/server/auth/tokens";
@@ -6,6 +7,7 @@ import { verifyTurnstile } from "@/lib/server/auth/turnstile";
 import {
   assertEmailChallengeQuota,
   createEmailChallenge,
+  deletePendingEmailChallenge,
 } from "@/lib/server/db/auth-challenges";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { findUserByEmail, normalizeEmail } from "@/lib/server/db/users";
@@ -44,7 +46,26 @@ export async function POST(request: Request) {
         purpose: "password_reset",
         codeHash,
       });
-      await sendPasswordResetCodeEmail({ to: email, code });
+
+      try {
+        await sendPasswordResetCodeEmail({
+          to: email,
+          code,
+          callbackUrl: buildAuthCallbackUrl("/reset-password", {
+            next: nextPath,
+            email,
+            sent: "1",
+          }),
+        });
+      } catch (sendError) {
+        await deletePendingEmailChallenge({
+          email,
+          purpose: "password_reset",
+          codeHash,
+        }).catch(() => undefined);
+        throw sendError;
+      }
+
       await writeAuthAuditLog({
         userId: user.id,
         email,

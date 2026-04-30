@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
+import { canUploadRole, roleLabel } from "@/lib/server/auth/roles";
+import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 const checks = [
   {
@@ -28,6 +30,9 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const currentUser = await getCurrentUserFromCookies();
+  const unreadInboxCount = currentUser
+    ? await countUnreadInboxItemsForUser(currentUser)
+    : 0;
 
   return (
     <main>
@@ -43,12 +48,22 @@ export default async function HomePage() {
         <div className="session-panel">
           <span className="status-pill">{sessionLabel(currentUser)}</span>
           {currentUser ? (
-            <form action="/api/auth/logout" method="post" className="inline-form">
-              <input type="hidden" name="next" value="/" />
-              <button className="button" type="submit">
-                退出
-              </button>
-            </form>
+            <>
+              <Link className="button" href="/inbox">
+                站内信
+                {unreadInboxCount > 0 ? (
+                  <span className="notification-badge">
+                    {formatUnreadCount(unreadInboxCount)}
+                  </span>
+                ) : null}
+              </Link>
+              <form action="/api/auth/logout" method="post" className="inline-form">
+                <input type="hidden" name="next" value="/" />
+                <button className="button" type="submit">
+                  退出
+                </button>
+              </form>
+            </>
           ) : (
             <Link className="button primary" href="/login">
               登录
@@ -80,8 +95,28 @@ export default async function HomePage() {
           只能作为响应流或 Workers Cache/CDN 边缘缓存存在。
         </p>
       </section>
+
+      {currentUser && !canUploadRole(currentUser.role) ? (
+        <section className="card" style={{ marginTop: 16 }}>
+          <h2>上传者权限</h2>
+          <p>当前账户是普通用户。申请会进入站内信系统，由管理员处理。</p>
+          <form
+            action="/api/account/request-upload-access"
+            method="post"
+            className="actions"
+          >
+            <button className="button primary" type="submit">
+              申请成为上传者
+            </button>
+          </form>
+        </section>
+      ) : null}
     </main>
   );
+}
+
+function formatUnreadCount(count: number): string {
+  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
 
 function sessionLabel(
@@ -91,17 +126,5 @@ function sessionLabel(
     return "未登录";
   }
 
-  if (user.role === "admin") {
-    return `管理员：${user.displayName}`;
-  }
-
-  if (user.uploadStatus === "approved") {
-    return `已批准上传：${user.displayName}`;
-  }
-
-  if (user.uploadStatus === "rejected") {
-    return `上传申请已驳回：${user.displayName}`;
-  }
-
-  return `上传待审核：${user.displayName}`;
+  return `${roleLabel(user.role)}：${user.displayName}`;
 }

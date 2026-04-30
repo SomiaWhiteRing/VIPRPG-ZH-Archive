@@ -18,11 +18,29 @@ export function redirectWithParams(
 ): Response {
   const url = new URL(path, request.url);
 
+  applySearchParams(url, params);
+
+  return redirectResponse(url);
+}
+
+export function redirectResponse(url: URL | string, status = 303): Response {
+  return new Response(null, {
+    status,
+    headers: {
+      Location: url.toString(),
+    },
+  });
+}
+
+export function applySearchParams(
+  url: URL,
+  params: Record<string, string | null | undefined>,
+): URL {
   for (const [key, value] of Object.entries(params)) {
     if (value) {
       url.searchParams.set(key, value);
     }
   }
 
-  return Response.redirect(url, 303);
+  return url;
 }

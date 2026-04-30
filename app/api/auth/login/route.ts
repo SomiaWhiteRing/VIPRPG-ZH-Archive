@@ -1,7 +1,11 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 import { createSessionCookie } from "@/lib/server/auth/session";
 import { authenticateUser } from "@/lib/server/db/users";
-import { readRequiredFormString, redirectWithParams } from "@/lib/server/http/form";
+import {
+  readRequiredFormString,
+  redirectResponse,
+  redirectWithParams,
+} from "@/lib/server/http/form";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +19,7 @@ export async function POST(request: Request) {
       email: readRequiredFormString(formData, "email"),
       password: readRequiredFormString(formData, "password"),
     });
-    const response = Response.redirect(new URL(nextPath, request.url), 303);
+    const response = redirectResponse(new URL(nextPath, request.url));
 
     response.headers.append(
       "Set-Cookie",

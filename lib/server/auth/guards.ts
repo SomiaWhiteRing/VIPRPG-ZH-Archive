@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserFromCookies, getCurrentUserFromRequest } from "@/lib/server/auth/current-user";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { canManageUsersRole } from "@/lib/server/auth/roles";
 import { json } from "@/lib/server/http/json";
 import { type ArchiveUser, canUpload } from "@/lib/server/db/users";
 
@@ -44,8 +45,8 @@ export async function requireUploader(
       response: json(
         {
           ok: false,
-          error: "Upload permission has not been approved",
-          uploadStatus: auth.user.uploadStatus,
+          error: "Uploader role required",
+          role: auth.user.role,
         },
         { status: 403 },
       ),
@@ -62,7 +63,7 @@ export async function requireAdmin(request: Request): Promise<AuthSuccess | Auth
     return auth;
   }
 
-  if (auth.user.role !== "admin") {
+  if (!canManageUsersRole(auth.user.role)) {
     return {
       response: json(
         {
@@ -84,7 +85,7 @@ export async function requireAdminPageUser(nextPath: string): Promise<ArchiveUse
     redirect(`/login?next=${encodeURIComponent(sanitizeRedirectPath(nextPath))}`);
   }
 
-  if (user.role !== "admin") {
+  if (!canManageUsersRole(user.role)) {
     redirect("/");
   }
 
