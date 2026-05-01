@@ -201,7 +201,7 @@ export default defineCloudflareConfig({});
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "viprpg-zh-archive",
-  "main": ".open-next/worker.js",
+  "main": "worker.mjs",
   "compatibility_date": "2026-04-30",
   "compatibility_flags": [
     "nodejs_compat",
@@ -315,7 +315,7 @@ export default defineCloudflareConfig({});
 
 注意：
 
-- `main` 固定为 `.open-next/worker.js`。
+- `main` 固定为 `worker.mjs`；该入口先处理需要原生 Workers 能力的下载端点，再把其他请求交给 `.open-next/worker.js`。
 - `assets.directory` 固定为 `.open-next/assets`。
 - `compatibility_date` 必须不早于 `2024-09-23`。
 - `d1_databases`、`r2_buckets` 等环境绑定不要依赖继承，在 `staging` 中显式写出。
@@ -425,7 +425,8 @@ source-zips/
 - `getBlob(sha256)`
 - `putCorePack(sha256, stream, sizeBytes)`
 - `getCorePack(sha256)`
-- `putManifest(gameId, versionId, manifestSha256, json)`
+- `putManifest(manifestSha256, json, metadata)`
+- `getManifest(manifestSha256)`
 
 服务层必须通过 key builder 生成路径，业务代码不能手写 R2 key。
 
@@ -603,9 +604,9 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、浮标进度、IndexedDB 任务快照和同浏览器恢复。
 - 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
-- 已用 `D:\path\to\game-folder` 在 staging 完成浏览器端导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；写入 `ArchiveVersion #4`。
-- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 4`，`archive_version_files = 9073`；manifest SHA-256 为 `99173204fc520a270a09400ca8c904d853d9ef06b6b31478af8f0e7583b73bb6`。
-- staging R2 验证结果：manifest 位于 `manifests/sha256/99/17/99173204fc520a270a09400ca8c904d853d9ef06b6b31478af8f0e7583b73bb6.json`，下载后 SHA-256 与 D1 记录一致。
+- 已用 `D:\path\to\game-folder` 在 staging 完成浏览器端导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
+- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，`archive_version_files = 9073`；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
+- staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
 - commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
 
 ### Phase E：下载重组
@@ -618,7 +619,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现 streaming ZIP builder。
 - 实现 core pack entry 流式读取。
 - 实现 R2 Get 次数预估。
-- 对响应设置不可变缓存 key：`archive_version_id + manifest_sha256 + packer_version`。
+- 对响应设置不可变缓存 key：`archive_version_id + manifest_sha256 + packer_version + download_zip_builder_version`。
 - 小于当前 Workers Cache/CDN 限制的响应尝试写入 Workers Cache。
 
 验收：
@@ -627,6 +628,25 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 缓存命中时不读取 R2。
 - 缓存未命中时可重新生成。
 - R2 仍不保存完整游戏 ZIP。
+
+实施记录：
+
+- 已实现 `GET /api/archive-versions/{archiveVersionId}/download`，仅允许下载 `published` 且所属 Work/Release 未删除的 ArchiveVersion。
+- 下载端点从 R2 读取 manifest 并校验 SHA-256，再按 manifest 路径顺序重组 ZIP；最终 ZIP 使用 STORE 方法流式输出，不在 R2 写入完整游戏 ZIP。
+- 首页已加入“当前可下载归档”列表，只展示 `published + current` 的归档，并提供 ZIP 下载链接。
+- Workers Cache key 使用 `archive_version_id + manifest_sha256 + packer_version + download_zip_builder_version`，响应包含 `Content-Length`、`X-Download-Cache`、`X-Estimated-R2-Get-Count`、`X-Manifest-SHA256` 和 `X-Download-Zip-Builder`。
+- 缓存写入时，返回给当前请求的响应保留 `X-Download-Cache: MISS`，写入 Workers Cache 的副本改为 `X-Download-Cache: HIT`；否则后续命中缓存时会继续携带第一次生成响应的 `MISS` 头，造成验收误判。
+- 公开下载链接也携带 `zip_builder={download_zip_builder_version}` 查询参数，避免浏览器或边缘节点继续复用旧版无 `Content-Length` 响应头。
+- 因最终 ZIP 使用 STORE 且文件大小、UTF-8 路径和 ZIP header 长度都可从 manifest 推导，下载响应会在开始前精确计算 ZIP 总字节数，并用 Cloudflare `FixedLengthStream` 包装响应体，让运行时真正发出 `Content-Length`，从而让浏览器原生下载栏能显示百分比进度。只手动设置 `Content-Length` 但继续返回普通 `ReadableStream` 不够，Cloudflare 会把 GET 降回 chunked 响应。
+- 下载端点在 `worker.mjs` 原生 Worker 入口层拦截，再把非下载请求交还 `.open-next/worker.js`。这是因为 Next App Route / OpenNext 会二次包装响应流，导致 `FixedLengthStream` 无法穿透到最终网络响应。
+- Phase E MVP 会把单个 core pack 解压到 Worker 内存后按需写入最终 ZIP。当前 staging 样本 core pack 规模为 `#2` 约 1.41 MB 压缩 / 5.19 MB 解压、`#6` 约 3.54 MB 压缩 / 9.87 MB 解压，可接受；当 core pack 规模明显增大时，需要改为真正的 entry streaming 或增加更细粒度打包。
+- staging 验收：`ArchiveVersion #2` 下载 ZIP 为 132,788,001 bytes，3018 个 entry，payload 132,333,569 bytes；`ArchiveVersion #6` 下载 ZIP 为 288,344,604 bytes，9073 个 entry，payload 287,052,082 bytes；两者均可由本地 ZIP 读取器打开，且未发现路径穿越 entry。
+- 追加验收：新上传的 `ArchiveVersion #7`（もしもコレクション3）GET 响应已返回 `Content-Length: 36823763` 且不再返回 `Transfer-Encoding: chunked`；完整下载后 ZIP 可打开，629 个 entry，payload 36,747,329 bytes。
+- 可运行验收：`ArchiveVersion #2` 下载解压到本地后，`本地样本游戏` 可启动并正常游玩。
+- 缓存验收：`ArchiveVersion #7` 使用 `zip-store-v6-native-fixed-length-cache-hit-header` 下载 builder。第一次 GET 返回 `X-Download-Cache: MISS`、`Content-Length: 36823763`、无 `Transfer-Encoding: chunked`；第二次同 URL GET 返回 `X-Download-Cache: HIT`、`CF-Cache-Status: HIT`，两次下载 ZIP 的 SHA-256 均为 `1b6ed8beefec9227ec4cfbcdb819550eb53cbbf24f183bbde247b50551d097c3`。
+- R2 存储边界验收：staging bucket 共 3963 个对象，其中 `blobs/sha256/` 3949 个、`core-packs/sha256/` 7 个、`manifests/sha256/` 7 个；其他前缀 0 个，`core-packs/` 之外的 `.zip` 0 个。
+- Windows 部署修正：当前 Windows + Node 22 环境下 `fs.cpSync` 递归复制目录会触发 `EIO Access is denied`，`scripts/open-next.mjs` 通过仅 Windows 生效的 `scripts/win32-fs-cp-sync-workaround.mjs` 预加载补丁把 OpenNext 的目录复制改走 PowerShell，以保证 staging 部署可重复执行。
+- 最新 Phase E staging 部署版本：`78a3e836-b9ef-4983-9f78-728b9b1b80e0`。
 
 ### Phase F：运营和观测
 
