@@ -344,6 +344,23 @@ p {
   border-bottom: 0;
 }
 
+.download-section {
+  min-height: auto;
+  margin-top: 16px;
+}
+
+.compact-table-wrap {
+  margin-top: 16px;
+}
+
+.download-table {
+  min-width: 920px;
+}
+
+.download-table td:first-child {
+  min-width: 210px;
+}
+
 .compact-actions {
   margin-top: 0;
 }

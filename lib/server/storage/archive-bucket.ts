@@ -30,6 +30,10 @@ export async function getCorePack(sha256: string): Promise<R2ObjectBody | null> 
   return getArchiveBucket().get(corePackKey(sha256));
 }
 
+export async function getManifest(manifestSha256: string): Promise<R2ObjectBody | null> {
+  return getArchiveBucket().get(manifestKey(manifestSha256));
+}
+
 export async function putCorePack(
   sha256: string,
   body: ReadableStream | ArrayBuffer | string,

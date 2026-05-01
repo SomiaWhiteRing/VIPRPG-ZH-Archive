@@ -818,6 +818,7 @@ GET /api/archive-versions/{archiveVersionId}/download
   -> R2.get(core_pack.r2_key)
   -> 流式读取 core pack entries
   -> 对每个 asset/runtime blob 执行 R2.get(blob.r2_key)
+  -> 根据 manifest 文件大小、UTF-8 路径长度和 ZIP STORE header 公式计算 Content-Length
   -> 写入 ZIP stream
   -> 返回 application/zip
 ```
@@ -839,13 +840,15 @@ GET /api/archive-versions/{archiveVersionId}/download
 
 - ZIP entry 默认使用 `STORE` 或低压缩等级。
 - 对已压缩或不值得二次压缩的白名单格式直接 `STORE`：`png`、`jpg`、`gif`、`mp3`、`ogg`、`avi`、`mpg`。
-- 读取 core pack 时必须流式处理，不把整个 pack 解到内存。
+- 当最终 ZIP 使用 `STORE` 时，应在响应前精确计算最终 ZIP 字节数，并在 Cloudflare Workers 中使用 `FixedLengthStream` 返回固定长度 body，让运行时发出真实 `Content-Length`；仅手动设置 header 而 body 仍是普通 `ReadableStream` 时，GET 仍可能被降为 chunked，浏览器不会显示百分比进度。
+- 如果 OpenNext / Next.js 路由层会重新包装响应流，则下载端点应放在 Worker 原生入口层拦截，避免 `FixedLengthStream` 在框架层丢失。
+- 正式扩大前，读取 core pack 时应优先流式处理，不把大 pack 整体解到内存；Phase E MVP 可在 core pack 已由实测证明较小时整包解压，并把该限制写入风险记录。
 - 实时下载前必须估算 R2 Get 次数、Worker subrequest、预计输出大小和是否适合边缘缓存；接近限制时进入异步下载/排队流程，不写入 R2 完整 ZIP。
 
 ### 10.2 Workers Cache / CDN 边缘缓存
 
 ```text
-GET /downloads/{archive_version_id}/{manifest_sha256}/{packer_version}.zip
+GET /downloads/{archive_version_id}/{manifest_sha256}/{packer_version}/{download_zip_builder_version}.zip
   -> caches.default.match(cache_key)
   -> 命中则直接返回缓存响应
   -> 未命中则流式重组 ZIP
@@ -854,8 +857,10 @@ GET /downloads/{archive_version_id}/{manifest_sha256}/{packer_version}.zip
 
 策略：
 
-- URL 必须包含 `manifest_sha256` 和 `packer_version`，保证缓存 key 不可变。
+- URL 必须包含 `manifest_sha256`、`packer_version` 和下载 ZIP builder 版本，保证 manifest、导入打包器或下载重组格式任一变化都会避开旧缓存。
+- 页面上的公开下载链接也应携带下载 ZIP builder 版本参数；否则浏览器可能继续复用旧版 immutable 响应头，导致新能力例如 `Content-Length` 不生效。
 - 第一次下载直接重组；如果响应大小和请求条件适合缓存，则写入 Workers Cache/CDN 边缘缓存。
+- 如果响应头中暴露自定义缓存状态，写入缓存的响应副本必须标记为命中态；否则后续命中边缘缓存时仍可能携带第一次生成响应的 `MISS` 头。正式观测应同时记录自定义缓存头和 Cloudflare 的 `CF-Cache-Status`。
 - 后续同一边缘节点命中缓存时，不再读取 R2 core pack 和 blob。
 - 缓存未命中或被驱逐时，重新按 manifest 重组。
 - 大于当前 CDN/Cache API 单对象限制的 ZIP 直接流式返回，不尝试边缘缓存。
@@ -1386,7 +1391,7 @@ lib/server/download/zip-builder.ts
 应对：
 
 - 默认 STORE。
-- Core pack 解包和最终 ZIP 写入都采用 streaming。
+- 最终 ZIP 写入采用 streaming；core pack 在 MVP 可基于实测小体积整包解压，规模扩大前应改为 entry streaming 或调整 core pack 粒度。
 - 热门版本优先命中 Workers Cache/CDN 边缘缓存。
 - 大型版本进入异步下载/排队流程，必要时提示管理员优化打包策略。
 

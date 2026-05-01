@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { canUploadRole, roleLabel } from "@/lib/server/auth/roles";
+import { listCurrentArchiveDownloadRecords } from "@/lib/server/db/archive-downloads";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 const checks = [
@@ -38,6 +40,7 @@ export default async function HomePage() {
   const unreadInboxCount = currentUser
     ? await countUnreadInboxItemsForUser(currentUser)
     : 0;
+  const downloads = await listCurrentArchiveDownloadRecords();
 
   return (
     <main>
@@ -46,8 +49,8 @@ export default async function HomePage() {
           <p className="eyebrow">VIPRPG-ZH-Archive</p>
           <h1>RPG Maker 2000/2003 去重归档系统</h1>
           <p className="subtitle">
-            当前阶段聚焦 OpenNext、Cloudflare Workers、D1 和 R2
-            的基础连通性。归档导入和下载重组会在基础设施验证后继续实现。
+            当前原型已经支持浏览器端预索引导入、D1/R2 canonical
+            storage 写入，以及从 manifest、core pack 和 blob 流式重组 ZIP。
           </p>
         </div>
         <div className="session-panel">
@@ -101,6 +104,63 @@ export default async function HomePage() {
         </p>
       </section>
 
+      <section className="card download-section">
+        <h2>当前可下载归档</h2>
+        {downloads.length > 0 ? (
+          <div className="table-wrap compact-table-wrap">
+            <table className="data-table download-table">
+              <thead>
+                <tr>
+                  <th>作品</th>
+                  <th>Release</th>
+                  <th>ArchiveVersion</th>
+                  <th>规模</th>
+                  <th>下载</th>
+                </tr>
+              </thead>
+              <tbody>
+                {downloads.map((download) => (
+                  <tr key={download.id}>
+                    <td>
+                      <strong>
+                        {download.workChineseTitle || download.workOriginalTitle}
+                      </strong>
+                      {download.workChineseTitle ? (
+                        <span className="muted-line">
+                          {download.workOriginalTitle}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>{download.releaseLabel}</td>
+                    <td>
+                      {download.archiveLabel}
+                      <span className="muted-line mono">{download.archiveKey}</span>
+                    </td>
+                    <td>
+                      {formatNumber(download.totalFiles)} 文件
+                      <span className="muted-line">
+                        {formatBytes(download.totalSizeBytes)} / 约{" "}
+                        {formatNumber(download.estimatedR2GetCount)} 次 R2 读取
+                      </span>
+                    </td>
+                    <td>
+                      <a
+                        className="button primary"
+                        href={`/api/archive-versions/${download.id}/download?zip_builder=${downloadZipBuilderVersion}`}
+                      >
+                        下载 ZIP
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>当前没有已发布且标记为 current 的归档。</p>
+        )}
+      </section>
+
       {currentUser && !canUploadRole(currentUser.role) ? (
         <section className="card" style={{ marginTop: 16 }}>
           <h2>上传者权限</h2>
@@ -118,6 +178,27 @@ export default async function HomePage() {
       ) : null}
     </main>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("zh-CN");
 }
 
 function formatUnreadCount(count: number): string {
