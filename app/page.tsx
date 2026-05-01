@@ -10,6 +10,11 @@ const checks = [
     href: "/admin",
   },
   {
+    title: "浏览器导入",
+    description: "在本地浏览器完成预索引、去重上传和 ArchiveVersion commit。",
+    href: "/upload",
+  },
+  {
     title: "D1 连接",
     description: "验证 Worker binding 是否能访问元数据数据库。",
     href: "/api/health/db",

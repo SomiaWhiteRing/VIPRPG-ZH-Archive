@@ -140,8 +140,8 @@ CREATE INDEX IF NOT EXISTS idx_user_role_events_actor
 CREATE TABLE IF NOT EXISTS works (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE,
-  primary_title TEXT NOT NULL,
-  original_title TEXT,
+  original_title TEXT NOT NULL UNIQUE,
+  chinese_title TEXT,
   sort_title TEXT,
   description TEXT,
   original_release_date TEXT,
@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS works (
     engine_family IN ('rpg_maker_2000', 'rpg_maker_2003', 'mixed', 'unknown', 'other')
   ) DEFAULT 'unknown',
   engine_detail TEXT,
+  uses_maniacs_patch INTEGER NOT NULL DEFAULT 0,
+  icon_blob_sha256 TEXT REFERENCES blobs(sha256),
+  thumbnail_blob_sha256 TEXT REFERENCES blobs(sha256),
   status TEXT NOT NULL CHECK (
     status IN ('draft', 'published', 'hidden', 'deleted')
   ) DEFAULT 'draft',
@@ -163,7 +166,7 @@ CREATE TABLE IF NOT EXISTS works (
 );
 
 CREATE INDEX IF NOT EXISTS idx_works_status_title
-  ON works(status, sort_title, primary_title);
+  ON works(status, sort_title, original_title);
 
 CREATE TABLE IF NOT EXISTS work_titles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +174,7 @@ CREATE TABLE IF NOT EXISTS work_titles (
   title TEXT NOT NULL,
   language TEXT,
   title_type TEXT NOT NULL CHECK (
-    title_type IN ('primary', 'original', 'translated', 'alias', 'romanized', 'abbreviation')
+    title_type IN ('alias')
   ),
   is_searchable INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -244,7 +247,12 @@ CREATE INDEX IF NOT EXISTS idx_work_relations_to
 CREATE TABLE IF NOT EXISTS releases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  release_key TEXT NOT NULL,
   release_label TEXT NOT NULL,
+  base_variant TEXT NOT NULL CHECK (
+    base_variant IN ('original', 'remake', 'other')
+  ) DEFAULT 'original',
+  variant_label TEXT NOT NULL DEFAULT 'default',
   release_type TEXT NOT NULL CHECK (
     release_type IN (
       'original',
@@ -258,16 +266,12 @@ CREATE TABLE IF NOT EXISTS releases (
       'other'
     )
   ) DEFAULT 'original',
-  language TEXT,
   release_date TEXT,
   release_date_precision TEXT NOT NULL CHECK (
     release_date_precision IN ('year', 'month', 'day', 'unknown')
   ) DEFAULT 'unknown',
   source_name TEXT,
   source_url TEXT,
-  uses_maniacs_patch INTEGER NOT NULL DEFAULT 0,
-  is_proofread INTEGER NOT NULL DEFAULT 0,
-  is_image_edited INTEGER NOT NULL DEFAULT 0,
   executable_path TEXT,
   rights_notes TEXT,
   status TEXT NOT NULL CHECK (
@@ -278,7 +282,7 @@ CREATE TABLE IF NOT EXISTS releases (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
-  UNIQUE (work_id, release_label)
+  UNIQUE (work_id, release_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_releases_work_status
@@ -287,7 +291,12 @@ CREATE INDEX IF NOT EXISTS idx_releases_work_status
 CREATE TABLE IF NOT EXISTS archive_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+  archive_key TEXT NOT NULL,
   archive_label TEXT NOT NULL,
+  archive_variant_label TEXT NOT NULL DEFAULT 'default',
+  language TEXT NOT NULL,
+  is_proofread INTEGER NOT NULL DEFAULT 0,
+  is_image_edited INTEGER NOT NULL DEFAULT 0,
   manifest_sha256 TEXT NOT NULL,
   manifest_r2_key TEXT NOT NULL UNIQUE,
   file_policy_version TEXT NOT NULL,
@@ -314,15 +323,15 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
   deleted_at TEXT,
-  UNIQUE (release_id, archive_label),
-  UNIQUE (release_id, manifest_sha256)
+  UNIQUE (release_id, archive_key, archive_label),
+  UNIQUE (release_id, archive_key, manifest_sha256)
 );
 
 CREATE INDEX IF NOT EXISTS idx_archive_versions_release
-  ON archive_versions(release_id, status, is_current);
+  ON archive_versions(release_id, archive_key, status, is_current);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_archive_versions_one_current
-  ON archive_versions(release_id)
+  ON archive_versions(release_id, archive_key)
   WHERE is_current = 1 AND status = 'published';
 
 CREATE TABLE IF NOT EXISTS blobs (
@@ -518,7 +527,8 @@ CREATE TABLE IF NOT EXISTS media_assets (
   alt_text TEXT,
   width INTEGER,
   height INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (blob_sha256, kind)
 );
 
 CREATE TABLE IF NOT EXISTS work_media_assets (

@@ -485,7 +485,7 @@ commit 请求必须包含：
 幂等规则：
 
 - 同一 `import_job_id + manifest_sha256` 重复 commit 返回同一个 ArchiveVersion。
-- 同一 Release 下已存在相同 `manifest_sha256` 时，不创建重复 ArchiveVersion。
+- 同一 Release 的同一 `archive_key` 下已存在相同 `manifest_sha256` 时，不创建重复 ArchiveVersion。
 - commit 前确认所有声明的 blob/core pack 在 D1 和 R2 都存在。
 - manifest 写入 R2 成功后再写 D1 ArchiveVersion。
 - D1 写入失败时可重试同一 commit。
@@ -563,7 +563,32 @@ commit 请求必须包含：
 
 这些取舍能覆盖真实上传痛点，同时控制实现复杂度。
 
-## 14. 参考资料
+## 14. 当前实施记录
+
+Phase D 最小可用版本已落地：
+
+- 前端入口：`/upload`。
+- 上传表单按 `Work` / `Release` / `ArchiveVersion` 分组：Work 必填“原名”和“游戏引擎”；Release 必填“基底版本、发布类型、版本标识”；ArchiveVersion 必填“归档语言、归档标识”，并记录校对/修图状态。
+- Release 不再承载语言和校对/修图状态，而是用 `release_key = base_variant + release_type + variant_label` 区分原版、重制版、活动投下版等版本分支；ArchiveVersion 用 `archive_key = language + 校对/修图状态 + archive_variant_label` 区分同一 Release 下的具体可下载方案。
+- Work 标题检测：用户填写原名后查询库内既有作品；确认同一作品后带入 Work 信息，并允许选择既有 Release。
+- Work 媒体：图标和缩略图是单图 blob 引用，浏览图可多选并作为 Work 预览媒体保存；未选择图标/缩略图时由展示层按引擎使用缺省图。
+- 浏览器任务：`UploadTaskProvider` + Dedicated Worker + IndexedDB 快照。
+- 本地输入：文件夹选择和本地 ZIP 浏览器端读取均已实现；完整 ZIP 不上传到 Worker/R2。
+- 文件策略：`rpgm2000-2003-whitelist-v3`，包含 `StringScripts*`、`screenshots*`、根目录 `null.txt` 的覆盖规则。
+- 打包策略：每个导入生成 1 个 `core-main` ZIP core pack，使用 `fflate` 低压缩等级。
+- 服务端 API：`POST /api/imports`、`GET /api/imports/{id}`、`POST /api/imports/{id}/preflight`、`POST /api/imports/{id}/commit`、`POST /api/imports/{id}/cancel`，以及 blob/core pack 上传端点。
+- commit 策略：`archive_version_files` 分块写入，避免 D1 SQL 变量上限；同 manifest 或同 archive label 的失败草稿可清理后重试。
+
+2026-05-01 staging 验收样本：
+
+- 样本：`D:\path\to\game-folder`。
+- 浏览器源文件：9081 个，390.51 MB。
+- 归档结果：9073 个文件，273.75 MB。
+- 排除结果：8 个文件，122.42 MB，主要是原始分卷压缩包、无扩展名音频异常项、`.bat` 和 `.r3proj`。
+- D1：`ArchiveVersion #4` published/current，`archive_version_files = 9073`。
+- R2：manifest 对象 SHA-256 与 D1 `manifest_sha256` 一致。
+
+## 15. 参考资料
 
 - MDN：`beforeunload` 事件说明，尤其是不可靠触发和只建议在有未保存数据时监听的限制：<https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event>
 - MDN：`visibilitychange` 可作为页面进入 hidden 时的最后可靠可观察事件：<https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event>
