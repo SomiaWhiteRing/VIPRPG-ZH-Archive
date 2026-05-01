@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { UploadTaskProvider } from "@/app/upload/upload-task-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "VIPRPG 中文归档",
   description: "RPG Maker 2000/2003 游戏去重归档与下载系统",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -13,7 +17,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-Hans">
-      <body>{children}</body>
+      <body>
+        <UploadTaskProvider>{children}</UploadTaskProvider>
+      </body>
     </html>
   );
 }

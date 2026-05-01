@@ -599,6 +599,15 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - manifest 可从 R2 `manifests/` 读取。
 - 文件路径只在 manifest 和 `archive_version_files` 中出现。
 
+实施记录：
+
+- 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、浮标进度、IndexedDB 任务快照和同浏览器恢复。
+- 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
+- 已用 `D:\path\to\game-folder` 在 staging 完成浏览器端导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；写入 `ArchiveVersion #4`。
+- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 4`，`archive_version_files = 9073`；manifest SHA-256 为 `99173204fc520a270a09400ca8c904d853d9ef06b6b31478af8f0e7583b73bb6`。
+- staging R2 验证结果：manifest 位于 `manifests/sha256/99/17/99173204fc520a270a09400ca8c904d853d9ef06b6b31478af8f0e7583b73bb6.json`，下载后 SHA-256 与 D1 记录一致。
+- commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
+
 ### Phase E：下载重组
 
 目标：能从 manifest + core pack + blobs 重建 ZIP。
