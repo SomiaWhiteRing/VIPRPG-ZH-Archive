@@ -1,2 +1,11 @@
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+/play/runtime/easyrpg/*
+  Cache-Control: public,max-age=31536000,immutable
+
+/play/runtime/easyrpg/*.wasm
+  Content-Type: application/wasm
+
+/play/sw.js
+  Cache-Control: no-store
