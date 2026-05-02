@@ -666,6 +666,23 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 能发现 D1 有记录但 R2 缺失的对象。
 - GC 不会删除仍被引用的 blob/core pack。
 
+实施记录：
+
+- 新增迁移 `0002_phase_f_download_observability.sql`，在 `download_builds` 上增加缓存命中/未命中、累计 R2 Get、最近缓存状态、最近耗时和错误字段，并为 `cache_key` 建唯一索引。
+- 下载端在 `worker/archive-download.mjs` 原生入口写入 `download_builds` 聚合记录：缓存命中记 `cache_hit_count + 1` 且 `actual_r2_get_count = 0`；缓存未命中记 `cache_miss_count + 1` 且按 ArchiveVersion 的 `estimated_r2_get_count` 计入累计 R2 Get。Next App Route 版本也保留同样的 best-effort 记录逻辑。
+- 新增 `GET /api/admin/observability`，返回导入任务状态、累计排除容量、缺失对象数、下载次数、缓存命中/未命中、累计 R2 Get、缓存节省的预计 R2 Get、近期下载和高成本归档。
+- 新增 `GET /api/admin/consistency`，执行有界 D1/R2 一致性检查：抽样验证 D1 中 blob/core pack/manifest 的 R2 对象是否存在、大小是否匹配，并扫描 R2 对象样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`。
+- 新增 `GET /api/admin/gc/dry-run`，只生成候选报告，不删除对象。MVP 只把完全没有 `archive_version_files` 引用且超过宽限期的 blob/core pack 标为可清理；仅被 `deleted` ArchiveVersion 引用的对象单独统计，不自动删除。
+- `/admin` 页面新增 Phase F 摘要：下载观测、导入观测、GC dry-run、高成本归档和近期下载；一致性检查保留为显式 API，避免每次打开管理页都触发 R2 扫描。
+- MVP 运维改进：新增迁移 `0003_phase_f_mvp_operability.sql`，把导入侧观测补到 `import_jobs`：缺失对象容量、实际上传 blob/core pack 数量与容量、manifest 写入量、R2 Put 数、预检/上传/提交耗时和失败阶段。
+- 下载失败观测：`download_builds.failure_count` 记录失败次数，下载端捕获 manifest/R2/ZIP 构建阶段异常后写入最近错误和耗时；成功下载仍继续聚合 hit/miss 和实际 R2 Get。
+- `/admin` 页面新增“运行一致性检查”和“运行 GC dry-run”按钮，管理员可以手动触发有界检查并直接查看摘要结果。
+- staging 已应用 0002/0003 迁移并部署版本 `b21c5561-0c33-44b2-a3ef-3bdc3e8f6d00`。
+- staging 下载观测验收：对 `ArchiveVersion #7` 执行 GET，响应 `Content-Length: 36823763`、`X-Download-Cache: HIT`、`CF-Cache-Status: HIT`；D1 `download_builds` 已累计 `download_count = 3`、`cache_hit_count = 3`、`failure_count = 0`、`total_r2_get_count = 0`。
+- staging 导入观测字段验收：0003 字段已可查询；历史导入任务不会回填实际 R2 Put 和阶段耗时，后续新导入会开始记录。
+- staging dry-run 验收：当前完全无归档引用的候选为 `1` 个测试 blob（21 B）和 `2` 个 core pack（约 7.09 MB）；没有执行删除。
+- 未带管理员会话访问 `GET /api/admin/observability`、`GET /api/admin/consistency`、`GET /api/admin/gc/dry-run` 均返回 401，权限边界有效。
+
 ## 11. 部署和环境流程
 
 日常开发：

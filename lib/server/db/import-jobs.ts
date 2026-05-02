@@ -17,6 +17,19 @@ export type ImportJobRow = {
   file_policy_version: string | null;
   missing_blob_count: number;
   missing_core_pack_count: number;
+  missing_blob_size_bytes: number;
+  missing_core_pack_size_bytes: number;
+  uploaded_blob_count: number;
+  uploaded_blob_size_bytes: number;
+  uploaded_core_pack_count: number;
+  uploaded_core_pack_size_bytes: number;
+  manifest_put_count: number;
+  manifest_size_bytes: number;
+  r2_put_count: number;
+  preflight_duration_ms: number | null;
+  upload_duration_ms: number;
+  commit_duration_ms: number | null;
+  failed_stage: string | null;
   error_message: string | null;
   created_at: string;
   updated_at: string;
@@ -95,6 +108,19 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
         file_policy_version,
         missing_blob_count,
         missing_core_pack_count,
+        missing_blob_size_bytes,
+        missing_core_pack_size_bytes,
+        uploaded_blob_count,
+        uploaded_blob_size_bytes,
+        uploaded_core_pack_count,
+        uploaded_core_pack_size_bytes,
+        manifest_put_count,
+        manifest_size_bytes,
+        r2_put_count,
+        preflight_duration_ms,
+        upload_duration_ms,
+        commit_duration_ms,
+        failed_stage,
         error_message,
         created_at,
         updated_at,
@@ -118,6 +144,9 @@ export async function markImportJobPreflighted(input: {
   id: number;
   missingBlobCount: number;
   missingCorePackCount: number;
+  missingBlobSizeBytes: number;
+  missingCorePackSizeBytes: number;
+  durationMs: number;
 }): Promise<void> {
   await getD1()
     .prepare(
@@ -125,24 +154,91 @@ export async function markImportJobPreflighted(input: {
       SET status = 'preflighted',
         missing_blob_count = ?,
         missing_core_pack_count = ?,
+        missing_blob_size_bytes = ?,
+        missing_core_pack_size_bytes = ?,
+        preflight_duration_ms = ?,
         error_message = NULL,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
     )
-    .bind(input.missingBlobCount, input.missingCorePackCount, input.id)
+    .bind(
+      input.missingBlobCount,
+      input.missingCorePackCount,
+      input.missingBlobSizeBytes,
+      input.missingCorePackSizeBytes,
+      input.durationMs,
+      input.id,
+    )
     .run();
 }
 
-export async function markImportJobFailed(id: number, message: string): Promise<void> {
+export async function recordImportObjectUpload(input: {
+  id: number;
+  objectKind: "blob" | "core_pack";
+  sizeBytes: number;
+  durationMs: number;
+}): Promise<void> {
+  const isBlob = input.objectKind === "blob";
+
+  await getD1()
+    .prepare(
+      `UPDATE import_jobs
+      SET uploaded_blob_count = uploaded_blob_count + ?,
+        uploaded_blob_size_bytes = uploaded_blob_size_bytes + ?,
+        uploaded_core_pack_count = uploaded_core_pack_count + ?,
+        uploaded_core_pack_size_bytes = uploaded_core_pack_size_bytes + ?,
+        r2_put_count = r2_put_count + 1,
+        upload_duration_ms = upload_duration_ms + ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    )
+    .bind(
+      isBlob ? 1 : 0,
+      isBlob ? input.sizeBytes : 0,
+      isBlob ? 0 : 1,
+      isBlob ? 0 : input.sizeBytes,
+      Math.max(0, input.durationMs),
+      input.id,
+    )
+    .run();
+}
+
+export async function recordImportCommitSucceeded(input: {
+  id: number;
+  durationMs: number;
+  manifestSizeBytes: number;
+}): Promise<void> {
+  await getD1()
+    .prepare(
+      `UPDATE import_jobs
+      SET manifest_put_count = CASE WHEN manifest_put_count = 0 THEN 1 ELSE manifest_put_count END,
+        manifest_size_bytes = ?,
+        r2_put_count = r2_put_count + CASE WHEN manifest_put_count = 0 THEN 1 ELSE 0 END,
+        commit_duration_ms = ?,
+        failed_stage = NULL,
+        error_message = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`,
+    )
+    .bind(input.manifestSizeBytes, Math.max(0, input.durationMs), input.id)
+    .run();
+}
+
+export async function markImportJobFailed(
+  id: number,
+  message: string,
+  failedStage: string | null = null,
+): Promise<void> {
   await getD1()
     .prepare(
       `UPDATE import_jobs
       SET status = 'failed',
         error_message = ?,
+        failed_stage = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
     )
-    .bind(message.slice(0, 1000), id)
+    .bind(message.slice(0, 1000), failedStage, id)
     .run();
 }
 

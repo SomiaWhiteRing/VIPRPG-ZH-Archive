@@ -1,6 +1,12 @@
 import { normalizeSha256, sha256Hex, timingSafeEqualString } from "@/lib/server/crypto/sha256";
 import { requireUploader } from "@/lib/server/auth/guards";
 import { findExistingObjects, insertBlobRecord } from "@/lib/server/db/archive-objects";
+import {
+  assertImportJobAccess,
+  parseImportJobId,
+  recordImportObjectUpload,
+  requiredImportJob,
+} from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 import { readContentType } from "@/lib/server/http/request";
 import { putBlob } from "@/lib/server/storage/archive-bucket";
@@ -15,6 +21,7 @@ type RouteContext = {
 };
 
 export async function PUT(request: Request, context: RouteContext) {
+  const startedAt = Date.now();
   const auth = await requireUploader(request);
 
   if ("response" in auth) {
@@ -24,6 +31,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { sha256: rawSha256 } = await context.params;
     const sha256 = normalizeSha256(rawSha256);
+    const importJobId = await optionalAuthorizedImportJobId(request, auth.user);
     const existing = await findExistingObjects({
       blobSha256: [sha256],
       corePackSha256: [],
@@ -64,6 +72,15 @@ export async function PUT(request: Request, context: RouteContext) {
       r2Key: r2Object.key,
     });
 
+    if (importJobId !== null) {
+      await recordImportObjectUpload({
+        id: importJobId,
+        objectKind: "blob",
+        sizeBytes: body.byteLength,
+        durationMs: Date.now() - startedAt,
+      });
+    }
+
     return json(
       {
         ok: true,
@@ -77,4 +94,22 @@ export async function PUT(request: Request, context: RouteContext) {
   } catch (error) {
     return jsonError("Blob upload failed", error);
   }
+}
+
+async function optionalAuthorizedImportJobId(
+  request: Request,
+  user: Parameters<typeof assertImportJobAccess>[1],
+): Promise<number | null> {
+  const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
+
+  if (!rawImportJobId) {
+    return null;
+  }
+
+  const importJobId = parseImportJobId(rawImportJobId);
+  const job = await requiredImportJob(importJobId);
+
+  assertImportJobAccess(job, user);
+
+  return importJobId;
 }

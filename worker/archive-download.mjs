@@ -15,6 +15,7 @@ const uint32Max = 0xffffffff;
 const crcTable = buildCrcTable();
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
+  const startedAt = Date.now();
   const url = new URL(request.url);
   const match = /^\/api\/archive-versions\/(\d+)\/download\/?$/.exec(url.pathname);
 
@@ -31,46 +32,101 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     });
   }
 
-  const record = await getDownloadRecord(env.DB, Number(match[1]));
+  let record = null;
+  let cacheKey = null;
 
-  if (!record) {
-    return request.method === "HEAD"
-      ? new Response(null, { status: 404 })
-      : Response.json({ ok: false, error: "Archive version not found" }, { status: 404 });
-  }
+  try {
+    record = await getDownloadRecord(env.DB, Number(match[1]));
 
-  const cacheRequest = downloadCacheRequest(request, record);
-
-  if (request.method === "GET") {
-    const cached = await caches.default.match(cacheRequest);
-
-    if (cached) {
-      return cached;
+    if (!record) {
+      return request.method === "HEAD"
+        ? new Response(null, { status: 404 })
+        : Response.json({ ok: false, error: "Archive version not found" }, { status: 404 });
     }
+
+    const cacheRequest = downloadCacheRequest(request, record);
+    cacheKey = downloadBuildCacheKey(cacheRequest);
+
+    if (request.method === "GET") {
+      const cached = await caches.default.match(cacheRequest);
+
+      if (cached) {
+        ctx.waitUntil(
+          recordDownloadAccess(env.DB, {
+            record,
+            cacheKey,
+            cacheStatus: "HIT",
+            sizeBytes: numberHeader(cached.headers.get("Content-Length")) ?? record.totalSizeBytes,
+            actualR2GetCount: 0,
+            durationMs: Date.now() - startedAt,
+          }),
+        );
+
+        return cached;
+      }
+    }
+
+    const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
+    const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET);
+    const zipSizeBytes = estimateZipStreamSize(zipEntries);
+    const headers = downloadHeaders(record, request.method === "HEAD" ? "BYPASS" : "MISS", zipSizeBytes);
+
+    if (request.method === "HEAD") {
+      return new Response(null, { headers });
+    }
+
+    const response = new Response(createFixedLengthZipStream(zipEntries, zipSizeBytes), {
+      headers,
+    });
+    const recordMissAccess = recordDownloadAccess(env.DB, {
+      record,
+      cacheKey,
+      cacheStatus: "MISS",
+      sizeBytes: zipSizeBytes,
+      actualR2GetCount: record.estimatedR2GetCount,
+      durationMs: Date.now() - startedAt,
+    });
+
+    if (shouldTryWorkersCache(record.totalSizeBytes)) {
+      ctx.waitUntil(
+        caches.default
+          .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
+          .then(() => recordMissAccess)
+          .then(() => markDownloadCachePut(env.DB, cacheKey))
+          .catch((error) => {
+            console.warn("Native download cache put failed", error?.message ?? error);
+          }),
+      );
+    }
+
+    ctx.waitUntil(recordMissAccess);
+
+    return response;
+  } catch (error) {
+    if (record && cacheKey) {
+      ctx.waitUntil(
+        recordDownloadFailure(env.DB, {
+          record,
+          cacheKey,
+          durationMs: Date.now() - startedAt,
+          errorMessage: error?.message ?? "Unknown error",
+        }),
+      );
+    }
+
+    console.error("Native archive download failed", error?.message ?? error);
+
+    return request.method === "HEAD"
+      ? new Response(null, { status: 500 })
+      : Response.json(
+          {
+            ok: false,
+            error: "Archive download failed",
+            detail: error?.message ?? "Unknown error",
+          },
+          { status: 500 },
+        );
   }
-
-  const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
-  const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET);
-  const zipSizeBytes = estimateZipStreamSize(zipEntries);
-  const headers = downloadHeaders(record, request.method === "HEAD" ? "BYPASS" : "MISS", zipSizeBytes);
-
-  if (request.method === "HEAD") {
-    return new Response(null, { headers });
-  }
-
-  const response = new Response(createFixedLengthZipStream(zipEntries, zipSizeBytes), {
-    headers,
-  });
-
-  if (shouldTryWorkersCache(record.totalSizeBytes)) {
-    ctx.waitUntil(
-      caches.default.put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT")).catch((error) => {
-        console.warn("Native download cache put failed", error?.message ?? error);
-      }),
-    );
-  }
-
-  return response;
 }
 
 async function getDownloadRecord(db, archiveVersionId) {
@@ -524,8 +580,136 @@ function downloadCacheRequest(request, record) {
   return new Request(url.toString(), { method: "GET" });
 }
 
+function downloadBuildCacheKey(request) {
+  const url = new URL(request.url);
+
+  return `${url.pathname}${url.search}`;
+}
+
+function numberHeader(value) {
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isSafeInteger(number) ? number : null;
+}
+
 function shouldTryWorkersCache(totalSizeBytes) {
   return totalSizeBytes > 0 && totalSizeBytes <= 500 * 1024 * 1024;
+}
+
+async function recordDownloadAccess(db, input) {
+  const hitIncrement = input.cacheStatus === "HIT" ? 1 : 0;
+  const missIncrement = input.cacheStatus === "MISS" ? 1 : 0;
+  const bypassIncrement = input.cacheStatus === "BYPASS" ? 1 : 0;
+
+  await db
+    .prepare(
+      `INSERT INTO download_builds (
+        archive_version_id,
+        manifest_sha256,
+        cache_key,
+        status,
+        size_bytes,
+        estimated_r2_get_count,
+        actual_r2_get_count,
+        download_count,
+        cache_hit_count,
+        cache_miss_count,
+        cache_bypass_count,
+        total_r2_get_count,
+        last_cache_status,
+        last_duration_ms,
+        created_at,
+        last_accessed_at
+      ) VALUES (?, ?, ?, 'ready', ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        status = 'ready',
+        size_bytes = excluded.size_bytes,
+        estimated_r2_get_count = excluded.estimated_r2_get_count,
+        actual_r2_get_count = COALESCE(download_builds.actual_r2_get_count, 0) + excluded.actual_r2_get_count,
+        download_count = download_builds.download_count + 1,
+        cache_hit_count = download_builds.cache_hit_count + excluded.cache_hit_count,
+        cache_miss_count = download_builds.cache_miss_count + excluded.cache_miss_count,
+        cache_bypass_count = download_builds.cache_bypass_count + excluded.cache_bypass_count,
+        total_r2_get_count = download_builds.total_r2_get_count + excluded.total_r2_get_count,
+        last_cache_status = excluded.last_cache_status,
+        last_duration_ms = excluded.last_duration_ms,
+        last_error_message = NULL,
+        last_accessed_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(
+      input.record.id,
+      input.record.manifestSha256,
+      input.cacheKey,
+      input.sizeBytes,
+      input.record.estimatedR2GetCount,
+      input.actualR2GetCount,
+      hitIncrement,
+      missIncrement,
+      bypassIncrement,
+      input.actualR2GetCount,
+      input.cacheStatus,
+      input.durationMs,
+    )
+    .run()
+    .catch((error) => {
+      console.warn("Download observability write failed", error?.message ?? error);
+    });
+}
+
+async function markDownloadCachePut(db, cacheKey) {
+  await db
+    .prepare(
+      `UPDATE download_builds
+      SET last_cache_put_at = CURRENT_TIMESTAMP
+      WHERE cache_key = ?`,
+    )
+    .bind(cacheKey)
+    .run()
+    .catch((error) => {
+      console.warn("Download cache put observability write failed", error?.message ?? error);
+    });
+}
+
+async function recordDownloadFailure(db, input) {
+  await db
+    .prepare(
+      `INSERT INTO download_builds (
+        archive_version_id,
+        manifest_sha256,
+        cache_key,
+        status,
+        estimated_r2_get_count,
+        download_count,
+        failure_count,
+        last_duration_ms,
+        last_error_message,
+        created_at,
+        last_accessed_at
+      ) VALUES (?, ?, ?, 'failed', ?, 0, 1, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        status = 'failed',
+        estimated_r2_get_count = excluded.estimated_r2_get_count,
+        failure_count = download_builds.failure_count + 1,
+        last_duration_ms = excluded.last_duration_ms,
+        last_error_message = excluded.last_error_message,
+        last_accessed_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(
+      input.record.id,
+      input.record.manifestSha256,
+      input.cacheKey,
+      input.record.estimatedR2GetCount,
+      Math.max(0, input.durationMs),
+      String(input.errorMessage ?? "Unknown error").slice(0, 1000),
+    )
+    .run()
+    .catch((error) => {
+      console.warn("Download failure observability write failed", error?.message ?? error);
+    });
 }
 
 function withDownloadCacheHeader(response, cacheStatus) {
