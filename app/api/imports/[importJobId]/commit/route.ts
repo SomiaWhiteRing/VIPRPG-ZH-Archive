@@ -1,7 +1,13 @@
 import type { ArchiveCommitMetadata, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
 import { requireUploader } from "@/lib/server/auth/guards";
 import { commitArchiveImport } from "@/lib/server/db/archive-commit";
-import { markImportJobFailed, parseImportJobId } from "@/lib/server/db/import-jobs";
+import {
+  assertImportJobAccess,
+  markImportJobFailed,
+  parseImportJobId,
+  recordImportCommitSucceeded,
+  requiredImportJob,
+} from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +27,7 @@ type CommitRequest = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
+  const startedAt = Date.now();
   const auth = await requireUploader(request);
 
   if ("response" in auth) {
@@ -29,8 +36,13 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { importJobId } = await context.params;
   const id = parseImportJobId(importJobId);
+  let authorizedForJob = false;
 
   try {
+    const job = await requiredImportJob(id);
+    assertImportJobAccess(job, auth.user);
+    authorizedForJob = true;
+
     const payload = (await request.json()) as CommitRequest;
 
     if (
@@ -57,13 +69,24 @@ export async function POST(request: Request, context: RouteContext) {
       metadata: payload.metadata,
       excludedFileTypes: payload.excludedFileTypes ?? [],
     });
+    await recordImportCommitSucceeded({
+      id,
+      durationMs: Date.now() - startedAt,
+      manifestSizeBytes: new TextEncoder().encode(payload.manifestJson).byteLength,
+    });
 
     return json({
       ok: true,
       result,
     });
   } catch (error) {
-    await markImportJobFailed(id, error instanceof Error ? error.message : "Unknown error");
+    if (authorizedForJob) {
+      await markImportJobFailed(
+        id,
+        error instanceof Error ? error.message : "Unknown error",
+        "commit",
+      );
+    }
     return jsonError("Import commit failed", error);
   }
 }

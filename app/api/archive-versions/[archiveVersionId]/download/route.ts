@@ -7,6 +7,12 @@ import {
   parseArchiveVersionId,
 } from "@/lib/server/db/archive-downloads";
 import {
+  cacheKeyFromRequest,
+  markDownloadCachePut,
+  recordDownloadAccess,
+  recordDownloadFailure,
+} from "@/lib/server/db/download-builds";
+import {
   createFixedLengthArchiveZipStream,
   estimateArchiveZipSize,
 } from "@/lib/server/download/archive-zip";
@@ -30,6 +36,10 @@ type DownloadRecord = NonNullable<
 >;
 
 export async function GET(request: Request, context: RouteContext) {
+  const startedAt = Date.now();
+  let failureRecord: DownloadRecord | null = null;
+  let failureCacheKey: string | null = null;
+
   try {
     const record = await getDownloadRecord(context);
 
@@ -43,10 +53,24 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
+    failureRecord = record;
     const cacheRequest = downloadCacheRequest(request, record);
+    const cacheKey = cacheKeyFromRequest(cacheRequest);
+    failureCacheKey = cacheKey;
     const cached = await matchDownloadCache(cacheRequest);
 
     if (cached) {
+      queueRecordDownloadAccess({
+        archiveVersionId: record.id,
+        manifestSha256: record.manifestSha256,
+        cacheKey,
+        cacheStatus: "HIT",
+        sizeBytes: numberHeader(cached.headers.get("Content-Length")) ?? record.totalSizeBytes,
+        estimatedR2GetCount: record.estimatedR2GetCount,
+        actualR2GetCount: 0,
+        durationMs: Date.now() - startedAt,
+      });
+
       return withCacheHeader(cached, "HIT");
     }
 
@@ -63,10 +87,33 @@ export async function GET(request: Request, context: RouteContext) {
       cacheRequest,
       withCacheHeader(response.clone(), "HIT"),
       record.totalSizeBytes,
+      cacheKey,
     );
+
+    queueRecordDownloadAccess({
+      archiveVersionId: record.id,
+      manifestSha256: record.manifestSha256,
+      cacheKey,
+      cacheStatus: "MISS",
+      sizeBytes: zipSizeBytes,
+      estimatedR2GetCount: record.estimatedR2GetCount,
+      actualR2GetCount: record.estimatedR2GetCount,
+      durationMs: Date.now() - startedAt,
+    });
 
     return response;
   } catch (error) {
+    if (failureRecord && failureCacheKey) {
+      queueRecordDownloadFailure({
+        archiveVersionId: failureRecord.id,
+        manifestSha256: failureRecord.manifestSha256,
+        cacheKey: failureCacheKey,
+        estimatedR2GetCount: failureRecord.estimatedR2GetCount,
+        durationMs: Date.now() - startedAt,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
     return jsonError("Archive download failed", error);
   }
 }
@@ -191,7 +238,12 @@ async function matchDownloadCache(request: Request): Promise<Response | null> {
   return (await cache.match(request)) ?? null;
 }
 
-function putDownloadCache(request: Request, response: Response, totalSizeBytes: number): void {
+function putDownloadCache(
+  request: Request,
+  response: Response,
+  totalSizeBytes: number,
+  cacheKey: string,
+): void {
   const cache = getDefaultWorkersCache();
 
   if (!cache || !shouldTryWorkersCache(totalSizeBytes)) {
@@ -201,12 +253,15 @@ function putDownloadCache(request: Request, response: Response, totalSizeBytes: 
   const { ctx } = getCloudflareContext();
 
   ctx.waitUntil(
-    cache.put(request, response).catch((error: unknown) => {
-      console.warn(
-        "Download cache put failed",
-        error instanceof Error ? error.message : error,
-      );
-    }),
+    cache
+      .put(request, response)
+      .then(() => markDownloadCachePut(cacheKey))
+      .catch((error: unknown) => {
+        console.warn(
+          "Download cache put failed",
+          error instanceof Error ? error.message : error,
+        );
+      }),
   );
 }
 
@@ -218,8 +273,48 @@ function getDefaultWorkersCache(): Cache | null {
   return (caches as CloudflareCacheStorage).default ?? null;
 }
 
+function queueRecordDownloadAccess(
+  input: Parameters<typeof recordDownloadAccess>[0],
+): void {
+  const { ctx } = getCloudflareContext();
+
+  ctx.waitUntil(
+    recordDownloadAccess(input).catch((error: unknown) => {
+      console.warn(
+        "Download observability write failed",
+        error instanceof Error ? error.message : error,
+      );
+    }),
+  );
+}
+
+function queueRecordDownloadFailure(
+  input: Parameters<typeof recordDownloadFailure>[0],
+): void {
+  const { ctx } = getCloudflareContext();
+
+  ctx.waitUntil(
+    recordDownloadFailure(input).catch((error: unknown) => {
+      console.warn(
+        "Download failure observability write failed",
+        error instanceof Error ? error.message : error,
+      );
+    }),
+  );
+}
+
 function shouldTryWorkersCache(totalSizeBytes: number): boolean {
   return totalSizeBytes > 0 && totalSizeBytes <= 500 * 1024 * 1024;
+}
+
+function numberHeader(value: string | null): number | null {
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isSafeInteger(number) ? number : null;
 }
 
 function withCacheHeader(response: Response, cacheStatus: "HIT"): Response {

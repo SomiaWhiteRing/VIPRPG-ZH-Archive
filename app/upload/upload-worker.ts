@@ -184,8 +184,16 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
     task = await createImportJob(task);
     const preflight = await preflightObjects(
       task,
-      [...scan.blobObjects.keys()],
-      [manifestResult.corePack.sha256],
+      [...scan.blobObjects.values()].map((blob) => ({
+        sha256: blob.sha256,
+        sizeBytes: blob.size,
+      })),
+      [
+        {
+          sha256: manifestResult.corePack.sha256,
+          sizeBytes: manifestResult.corePack.bytes.byteLength,
+        },
+      ],
     );
     task = preflight.task;
 
@@ -562,8 +570,14 @@ async function createImportJob(
 
 async function preflightObjects(
   initialTask: BrowserUploadTaskSnapshot,
-  blobs: string[],
-  corePacks: string[],
+  blobs: Array<{
+    sha256: string;
+    sizeBytes: number;
+  }>,
+  corePacks: Array<{
+    sha256: string;
+    sizeBytes: number;
+  }>,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   missingBlobs: Set<string>;
@@ -578,8 +592,8 @@ async function preflightObjects(
 
   const response = await jsonFetch<{
     ok: true;
-    blobs: { missing: string[]; missingCount: number };
-    corePacks: { missing: string[]; missingCount: number };
+    blobs: { missing: string[]; missingCount: number; missingSizeBytes: number };
+    corePacks: { missing: string[]; missingCount: number; missingSizeBytes: number };
   }>(`/api/imports/${task.serverImportJobId}/preflight`, {
     method: "POST",
     body: JSON.stringify({
@@ -643,7 +657,7 @@ async function uploadMissingObjects(input: {
   if (input.missingCorePacks.has(input.corePack.sha256)) {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
-    await uploadCorePack(input.corePack);
+    await uploadCorePack(input.corePack, task.serverImportJobId);
     uploadedObjects += 1;
     uploadedBytes += input.corePack.bytes.byteLength;
     task = updateUploadProgress(task, uploadedObjects, totalObjects, uploadedBytes, totalBytes, "core pack");
@@ -658,7 +672,7 @@ async function uploadMissingObjects(input: {
   await runWithConcurrency(missingBlobObjects, 4, async (blob) => {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
-    await uploadBlob(blob);
+    await uploadBlob(blob, task.serverImportJobId);
     blob.uploaded = true;
     uploadedObjects += 1;
     uploadedBytes += blob.size;
@@ -703,9 +717,12 @@ async function commitTask(
   return response.result;
 }
 
-async function uploadCorePack(corePack: CorePackObject): Promise<void> {
+async function uploadCorePack(
+  corePack: CorePackObject,
+  importJobId: number | null,
+): Promise<void> {
   await retry(async () => {
-    const response = await fetch(`/api/core-packs/${corePack.sha256}`, {
+    const response = await fetch(uploadObjectUrl(`/api/core-packs/${corePack.sha256}`, importJobId), {
       method: "PUT",
       credentials: "same-origin",
       headers: {
@@ -722,10 +739,10 @@ async function uploadCorePack(corePack: CorePackObject): Promise<void> {
   });
 }
 
-async function uploadBlob(blob: BlobObject): Promise<void> {
+async function uploadBlob(blob: BlobObject, importJobId: number | null): Promise<void> {
   await retry(async () => {
     const bytes = await blob.source.bytes();
-    const response = await fetch(`/api/blobs/${blob.sha256}`, {
+    const response = await fetch(uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId), {
       method: "PUT",
       credentials: "same-origin",
       headers: {
@@ -738,6 +755,14 @@ async function uploadBlob(blob: BlobObject): Promise<void> {
       throw new Error(`Blob upload failed: ${response.status} ${blob.source.path}`);
     }
   });
+}
+
+function uploadObjectUrl(path: string, importJobId: number | null): string {
+  if (!importJobId) {
+    return path;
+  }
+
+  return `${path}?import_job_id=${encodeURIComponent(String(importJobId))}`;
 }
 
 function createInitialTask(input: {
