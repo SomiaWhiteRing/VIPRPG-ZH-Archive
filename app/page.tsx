@@ -115,7 +115,7 @@ export default async function HomePage() {
                   <th>Release</th>
                   <th>ArchiveVersion</th>
                   <th>规模</th>
-                  <th>下载</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,6 +150,11 @@ export default async function HomePage() {
                       >
                         下载 ZIP
                       </a>
+                      {!download.usesManiacsPatch ? (
+                        <Link className="button" href={`/play/${download.id}`}>
+                          在线游玩
+                        </Link>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

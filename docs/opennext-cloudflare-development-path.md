@@ -709,23 +709,42 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现 `GET /api/archive-versions/{archiveVersionId}/web-play`，返回下载 URL、`playKey`、manifest SHA-256、下载 ZIP builder 版本、Web Play installer 版本、EasyRPG runtime 版本、预计安装大小和 Maniacs Patch 可用性。
 - 实现 `/play/{archiveVersionId}` 页面：未安装、安装中、安装失败、已安装、运行中五种状态。
 - 实现浏览器 IndexedDB 存储：`web_play_installations` 和 `web_play_files`。
-- 实现 Web Worker 安装器：fetch 现有下载 ZIP URL、显示下载进度、流式解 ZIP、写 OPFS、生成 EasyRPG `index.json`、更新 IndexedDB。
+- 实现 Web Worker 安装器：fetch 现有下载 ZIP URL、显示下载进度、把 ZIP 字节保存在 Worker 内存中、解析 ZIP 中央目录、跳过 `.txt`、`.exe`、`.dll` 文件、滚动窗口式高并发写 OPFS、生成 EasyRPG `index.json`、批量更新 IndexedDB。
 - 实现 `/play/sw.js` Service Worker：拦截 `/play/games/{playKey}/...`，只从 OPFS 返回文件。
 - 在线游玩页注册 Service Worker，加载同源 EasyRPG runtime，并把 canvas 嵌入项目 UI。
-- 安装时调用 `navigator.storage.estimate()` 和 `navigator.storage.persist()`，显示浏览器存储容量和持久化结果。
-- UI 提供删除本地缓存、重新安装、安装崩溃恢复、前端日志面板和安装中 `beforeunload` 拦截。
+- 安装时由页面主线程调用 `navigator.storage.estimate()` 和 `navigator.storage.persist()`，显示浏览器存储容量和持久化结果，并把结果传给 Web Worker 安装任务。
+- UI 提供删除本地缓存、重新安装、安装崩溃恢复、前端日志面板和安装中 `beforeunload` 拦截；游戏启动中或运行中禁用删除本地缓存和重新安装。
 - `works.uses_maniacs_patch = true` 的作品不展示在线游玩入口，只保留下载。
 
 验收：
 
 - Web Play fetch 的下载 URL 与普通下载按钮相同；命中 Workers Cache/CDN 时不增加 R2 Get。
-- ZIP 不写入 OPFS；解包后 OPFS 中只有完整游戏目录和生成的 `index.json`。
+- ZIP 不写入 OPFS；解包后 OPFS 中只有 Web Play 运行目录和生成的 `index.json`，运行目录跳过 `.txt`、`.exe`、`.dll` 文件。当前下载 ZIP 使用 STORE + data descriptor，Web Play MVP 不使用流式 unzip 库，而是依赖中央目录定位 entry。
+- 小文件安装必须使用滚动窗口式并发 OPFS 写入、目录 handle cache、IndexedDB 文件记录批量提交和进度节流；并发从较低值逐步爬升到目标上限，避免 3000 个小文件串行写入，也避免固定 64 个文件一批的可见停顿。
 - 刷新页面后，已安装游戏无需重新请求云端即可启动。
 - 删除本地缓存后再次进入会重新安装。
 - 安装中关闭或浏览器崩溃后，再进入页面可以继续或清理重装。
 - 未使用 Maniacs Patch 的真实样本能启动并游玩。
 - 使用 Maniacs Patch 的作品只显示下载，不显示在线游玩。
 - Service Worker 对路径穿越、空路径、缺失文件返回明确错误，并在页面日志中可见。
+- 运行中不能删除本地缓存或重新安装；重复点击启动不会重复加载 EasyRPG runtime。
+
+完成记录：
+
+- 2026-05-02 staging 部署版本：`3fb501ae-5b23-4e4b-afff-4d7f331e6650`。
+- `ArchiveVersion #7` 验收通过：浏览器安装 `629 / 629` 文件，ZIP 下载进度和 OPFS 写入进度完整展示，持久化存储请求结果显示为已允许。
+- Service Worker 可从 OPFS 返回 `/play/games/{playKey}/index.json` 和 `RPG_RT.ldb`，`RPG_RT.ldb` 响应 `Content-Type: application/octet-stream`。
+- EasyRPG runtime 响应头验收通过：`index.wasm` 为 `application/wasm` 且长期 immutable 缓存；`/play/sw.js` 为 `no-store`。
+- 浏览器启动验收通过：`もしもコレクション3` 可进入 EasyRPG 菜单画面，控制台无 error。样本自身存在缺失素材 warning，不作为 Phase G 阻断项。
+- `ArchiveVersion #2` 问题收束：EasyRPG 无扩展名资源查询通过 installer 生成别名解决；canvas 聚焦解决无法操作；外层播放器容器 fullscreen 解决全屏黑屏。
+- 2026-05-02 MVP 收束部署版本：`4f4542e2-592b-44c1-bae9-0952ba77b55e`。
+- `ArchiveVersion #2` MVP 复测通过：已安装状态可直接启动，canvas 自动聚焦，方向键可操作；全屏元素为 `web-player-frame`，canvas 尺寸非零；运行中删除本地缓存和重新安装按钮禁用。
+- `ArchiveVersion #2` OPFS 边界验收通过：游戏根目录只有 `index.json` 和 `files/`，`files/` 下 3018 个文件，完整 ZIP 数量为 0。
+- Service Worker 错误验收通过：缺失文件返回 404 并写入页面日志；编码后的路径穿越请求返回 400 并写入页面日志。
+- `ArchiveVersion #7` 重新安装验收通过：下载 URL 与普通下载按钮一致，安装完成 `629 / 629` 文件，OPFS 中完整 ZIP 数量为 0；刷新页面后无需请求下载 URL 即可显示已安装并启动。
+- 中断安装验收通过：模拟 IndexedDB 遗留 `installing` 后，页面显示上次安装未完成，并只提供“清理并重装”入口。
+- staging 当前没有 `uses_maniacs_patch = true` 的已发布 current 样本；Maniacs Patch 入口屏蔽逻辑已在首页和 `/play/{archiveVersionId}` 按字段实现，但真实数据验收暂未覆盖。
+- 2026-05-02 追加优化：Web Play installer 提升为 `opfs-v7-skip-non-web-runtime-local-write`，本地 OPFS 写入和 EasyRPG 索引生成阶段跳过所有 `.txt`、`.exe`、`.dll` 文件；普通下载 ZIP 和 canonical manifest 不变。
 
 ## 11. 部署和环境流程
 

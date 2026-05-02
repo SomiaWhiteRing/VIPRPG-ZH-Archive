@@ -3,6 +3,7 @@ import { getD1 } from "@/lib/server/db/d1";
 export type ArchiveDownloadRecord = {
   id: number;
   releaseId: number;
+  workId: number;
   archiveLabel: string;
   archiveKey: string;
   manifestSha256: string;
@@ -15,11 +16,14 @@ export type ArchiveDownloadRecord = {
   workSlug: string;
   workOriginalTitle: string;
   workChineseTitle: string | null;
+  engineFamily: string;
+  usesManiacsPatch: boolean;
 };
 
 type ArchiveDownloadRow = {
   id: number;
   release_id: number;
+  work_id: number;
   archive_label: string;
   archive_key: string;
   manifest_sha256: string;
@@ -32,6 +36,8 @@ type ArchiveDownloadRow = {
   work_slug: string;
   work_original_title: string | null;
   work_chinese_title: string | null;
+  engine_family: string;
+  uses_maniacs_patch: number;
 };
 
 export function parseArchiveVersionId(value: string): number {
@@ -56,6 +62,7 @@ export async function getPublishedArchiveDownloadRecord(
       `SELECT
         av.id,
         av.release_id,
+        w.id AS work_id,
         av.archive_label,
         av.archive_key,
         av.manifest_sha256,
@@ -67,7 +74,9 @@ export async function getPublishedArchiveDownloadRecord(
         r.release_label,
         w.slug AS work_slug,
         w.original_title AS work_original_title,
-        w.chinese_title AS work_chinese_title
+        w.chinese_title AS work_chinese_title,
+        w.engine_family,
+        w.uses_maniacs_patch
       FROM archive_versions av
       JOIN releases r ON r.id = av.release_id
       JOIN works w ON w.id = r.work_id
@@ -87,6 +96,7 @@ export async function getPublishedArchiveDownloadRecord(
   return {
     id: row.id,
     releaseId: row.release_id,
+    workId: row.work_id,
     archiveLabel: row.archive_label,
     archiveKey: row.archive_key,
     manifestSha256: row.manifest_sha256,
@@ -99,6 +109,8 @@ export async function getPublishedArchiveDownloadRecord(
     workSlug: row.work_slug,
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
+    engineFamily: row.engine_family,
+    usesManiacsPatch: row.uses_maniacs_patch === 1,
   };
 }
 
@@ -108,6 +120,7 @@ export async function listCurrentArchiveDownloadRecords(): Promise<ArchiveDownlo
       `SELECT
         av.id,
         av.release_id,
+        w.id AS work_id,
         av.archive_label,
         av.archive_key,
         av.manifest_sha256,
@@ -119,7 +132,9 @@ export async function listCurrentArchiveDownloadRecords(): Promise<ArchiveDownlo
         r.release_label,
         w.slug AS work_slug,
         w.original_title AS work_original_title,
-        w.chinese_title AS work_chinese_title
+        w.chinese_title AS work_chinese_title,
+        w.engine_family,
+        w.uses_maniacs_patch
       FROM archive_versions av
       JOIN releases r ON r.id = av.release_id
       JOIN works w ON w.id = r.work_id
@@ -136,6 +151,7 @@ export async function listCurrentArchiveDownloadRecords(): Promise<ArchiveDownlo
     .map((row) => ({
       id: row.id,
       releaseId: row.release_id,
+      workId: row.work_id,
       archiveLabel: row.archive_label,
       archiveKey: row.archive_key,
       manifestSha256: row.manifest_sha256,
@@ -148,5 +164,7 @@ export async function listCurrentArchiveDownloadRecords(): Promise<ArchiveDownlo
       workSlug: row.work_slug,
       workOriginalTitle: row.work_original_title ?? "",
       workChineseTitle: row.work_chinese_title,
+      engineFamily: row.engine_family,
+      usesManiacsPatch: row.uses_maniacs_patch === 1,
     }));
 }
