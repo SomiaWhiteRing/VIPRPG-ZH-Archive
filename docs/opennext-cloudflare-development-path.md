@@ -11,6 +11,7 @@
 
 - [RPG Maker 2000/2003 去重存储库架构计划](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
 - [游戏领域架构设计](./game-domain-architecture.md)
+- [EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)
 
 ## 1. 固定原则
 
@@ -19,6 +20,8 @@
 - R2 archive bucket 只保存 canonical 数据：`blobs/`、`core-packs/`、`manifests/` 和元数据资产。
 - R2 不保存任何完整游戏 ZIP，也不保存原始完整 ZIP 临时对象。
 - Workers Cache/CDN 边缘缓存只用于可丢弃的最终下载响应，不作为存储层。
+- 在线游玩复用现有下载 ZIP 的 Workers Cache/CDN 缓存；浏览器端解包后写入 OPFS，不能为 Web Play 生成另一份专用 ZIP。
+- EasyRPG Web Player 必须同源自托管；跨域播放器无法访问本站 OPFS。
 - OpenNext 自身的 R2 incremental cache 如果后续启用，必须使用单独 bucket，不能与归档 bucket 混用，也不能存完整游戏 ZIP。
 - Cloudflare 绑定名固定、代码只依赖绑定名，不在业务代码中硬编码 bucket/database 真实名称。
 
@@ -27,8 +30,12 @@
 ```text
 VIPRPG-ZH-Archive/
   app/
+    play/
+      [archiveVersionId]/
   components/
   lib/
+    client/
+      web-play/
     server/
       cloudflare/
       db/
@@ -38,6 +45,13 @@ VIPRPG-ZH-Archive/
   migrations/
   public/
     _headers
+    play/
+      runtime/
+        easyrpg/
+          {version}/
+            index.js
+            index.wasm
+      sw.js
   next.config.ts
   open-next.config.ts
   wrangler.jsonc
@@ -47,6 +61,7 @@ VIPRPG-ZH-Archive/
   docs/
     rpg-maker-2000-2003-deduplicated-storage-plan.md
     opennext-cloudflare-development-path.md
+    easyrpg-web-play-architecture.md
 
   tools/
     rpgm-archive-scanner/
@@ -683,6 +698,35 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - staging dry-run 验收：当前完全无归档引用的候选为 `1` 个测试 blob（21 B）和 `2` 个 core pack（约 7.09 MB）；没有执行删除。
 - 未带管理员会话访问 `GET /api/admin/observability`、`GET /api/admin/consistency`、`GET /api/admin/gc/dry-run` 均返回 401，权限边界有效。
 
+### Phase G：EasyRPG 在线游玩
+
+目标：未使用 Maniacs Patch 的已发布 ArchiveVersion 可以在浏览器中安装到本地 OPFS，并通过内嵌 EasyRPG Web Player 游玩。
+
+任务：
+
+- 下载并固定 EasyRPG Web Player runtime，放入 `public/play/runtime/easyrpg/{version}/index.js` 和 `index.wasm`。
+- 配置 `index.wasm` 的 `Content-Type: application/wasm` 和 runtime 静态资源长期缓存。
+- 实现 `GET /api/archive-versions/{archiveVersionId}/web-play`，返回下载 URL、`playKey`、manifest SHA-256、下载 ZIP builder 版本、Web Play installer 版本、EasyRPG runtime 版本、预计安装大小和 Maniacs Patch 可用性。
+- 实现 `/play/{archiveVersionId}` 页面：未安装、安装中、安装失败、已安装、运行中五种状态。
+- 实现浏览器 IndexedDB 存储：`web_play_installations` 和 `web_play_files`。
+- 实现 Web Worker 安装器：fetch 现有下载 ZIP URL、显示下载进度、流式解 ZIP、写 OPFS、生成 EasyRPG `index.json`、更新 IndexedDB。
+- 实现 `/play/sw.js` Service Worker：拦截 `/play/games/{playKey}/...`，只从 OPFS 返回文件。
+- 在线游玩页注册 Service Worker，加载同源 EasyRPG runtime，并把 canvas 嵌入项目 UI。
+- 安装时调用 `navigator.storage.estimate()` 和 `navigator.storage.persist()`，显示浏览器存储容量和持久化结果。
+- UI 提供删除本地缓存、重新安装、安装崩溃恢复、前端日志面板和安装中 `beforeunload` 拦截。
+- `works.uses_maniacs_patch = true` 的作品不展示在线游玩入口，只保留下载。
+
+验收：
+
+- Web Play fetch 的下载 URL 与普通下载按钮相同；命中 Workers Cache/CDN 时不增加 R2 Get。
+- ZIP 不写入 OPFS；解包后 OPFS 中只有完整游戏目录和生成的 `index.json`。
+- 刷新页面后，已安装游戏无需重新请求云端即可启动。
+- 删除本地缓存后再次进入会重新安装。
+- 安装中关闭或浏览器崩溃后，再进入页面可以继续或清理重装。
+- 未使用 Maniacs Patch 的真实样本能启动并游玩。
+- 使用 Maniacs Patch 的作品只显示下载，不显示在线游玩。
+- Service Worker 对路径穿越、空路径、缺失文件返回明确错误，并在页面日志中可见。
+
 ## 11. 部署和环境流程
 
 日常开发：
@@ -796,6 +840,10 @@ D1 production migration 不要在普通 PR preview 中自动执行。
 - 不做 Cloudflare Pages 适配。
 - 不做完整 ZIP 上传到 Worker/R2。
 - 不做完整 ZIP R2 派生缓存。
+- 不做 Web Play 专用 ZIP；在线游玩必须复用普通下载 ZIP。
+- 不使用跨域 EasyRPG iframe；Web Player runtime 必须同源自托管。
+- MVP 不做 EasyRPG 存档云同步。
+- MVP 不为使用 Maniacs Patch 的作品提供在线游玩入口。
 - 不启用 OpenNext R2 incremental cache，除非后续明确需要 ISR。
 - 不做多 Worker 拆分；单 Worker 无法承载时再评估。
 - 不引入 Durable Objects；只有出现并发协调瓶颈时再考虑。
@@ -843,3 +891,7 @@ D1 production migration 不要在普通 PR preview 中自动执行。
 - Cloudflare Email Service Workers API: https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
 - Cloudflare Workers Rate Limiting binding: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
 - Cloudflare API token template URL: https://developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/
+- EasyRPG Web Player: https://easyrpg.org/player/guide/webplayer/
+- MDN OPFS / StorageManager.getDirectory: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/getDirectory
+- MDN Storage quotas and eviction criteria: https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+- MDN StorageManager.persist: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
