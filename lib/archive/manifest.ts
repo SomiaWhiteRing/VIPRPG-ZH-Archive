@@ -122,6 +122,14 @@ export type ArchiveCommitMetadata = {
     language: string | null;
     titleType: "alias";
   }>;
+  characters?: Array<{
+    name: string;
+    originalName: string | null;
+    roleKey: "main" | "supporting" | "cameo" | "mentioned" | "other";
+    spoilerLevel: number;
+    sortOrder: number | null;
+    notes: string | null;
+  }>;
   creators: Array<{
     slug: string;
     name: string;

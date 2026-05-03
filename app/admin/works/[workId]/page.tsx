@@ -136,6 +136,22 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               />
               使用 Maniacs Patch
             </label>
+            <label className="field">
+              图标 blob SHA-256
+              <input
+                defaultValue={work.iconBlobSha256 ?? ""}
+                name="icon_blob_sha256"
+                type="text"
+              />
+            </label>
+            <label className="field">
+              缩略图 blob SHA-256
+              <input
+                defaultValue={work.thumbnailBlobSha256 ?? ""}
+                name="thumbnail_blob_sha256"
+                type="text"
+              />
+            </label>
             <label className="field wide-field">
               简介
               <textarea
@@ -167,12 +183,74 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
             <label className="field">
               登场角色
               <textarea
-                defaultValue={work.characters.join("\n")}
+                defaultValue={work.characterCredits
+                  .map((character) =>
+                    [
+                      character.primaryName,
+                      character.roleKey,
+                      character.sortOrder ?? "",
+                      character.notes ?? "",
+                    ].join("|"),
+                  )
+                  .join("\n")}
                 name="characters"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个，或使用逗号分隔。角色独立写入角色表，不再作为标签保存。
+                每行一个：角色名|职务|排序|备注。职务可用 main / supporting / cameo / mentioned / other。
+                角色独立写入角色表，不再作为标签保存。
+              </span>
+            </label>
+            <label className="field">
+              浏览图 blob SHA-256
+              <textarea
+                defaultValue={work.media
+                  .filter((media) => media.kind === "preview")
+                  .map((media) => media.blobSha256)
+                  .join("\n")}
+                name="preview_blob_sha256s"
+                rows={5}
+              />
+              <span className="muted-line">每行一个图片 blob SHA-256；第一行作为主浏览图。</span>
+            </label>
+            <label className="field wide-field">
+              系列成员
+              <textarea
+                defaultValue={work.series
+                  .map((item) =>
+                    [
+                      item.slug,
+                      item.title,
+                      item.positionNumber ?? "",
+                      item.positionLabel ?? "",
+                      item.relationKind,
+                      "",
+                    ].join("|"),
+                  )
+                  .join("\n")}
+                name="series_memberships"
+                rows={5}
+              />
+              <span className="muted-line">
+                每行一个：系列slug|系列名|排序数字|排序标签|关系|备注。关系可用 main / side /
+                collection_member / same_setting / other。
+              </span>
+            </label>
+            <label className="field wide-field">
+              相关作品
+              <textarea
+                defaultValue={work.outgoingRelations
+                  .map((relation) =>
+                    [relation.slug, relation.relationType, relation.notes ?? ""].join("|"),
+                  )
+                  .join("\n")}
+                name="outgoing_relations"
+                rows={5}
+              />
+              <span className="muted-line">
+                每行一个：目标作品slug|关系|备注。关系可用 prequel / sequel / side_story /
+                same_setting / remake / remaster / fan_disc / alternate_version /
+                translation_source / inspired_by / other。
               </span>
             </label>
             <label className="field wide-field">

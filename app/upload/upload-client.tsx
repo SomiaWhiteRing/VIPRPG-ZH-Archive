@@ -27,6 +27,7 @@ type FlatMetadata = {
   engineFamily: EngineFamily;
   description: string;
   tags: string;
+  characters: string;
   creatorName: string;
   creatorSlug: string;
   creatorUrl: string;
@@ -104,6 +105,7 @@ const defaultForm: FlatMetadata = {
   engineFamily: "rpg_maker_2000",
   description: "",
   tags: "",
+  characters: "",
   creatorName: "",
   creatorSlug: "",
   creatorUrl: "",
@@ -534,6 +536,12 @@ export function UploadClient() {
               <TextField form={form} label="排序标题" name="sortTitle" setForm={setForm} />
               <TextAreaField form={form} label="别名" name="aliasTitles" setForm={setForm} />
               <TextField form={form} label="标签文本" name="tags" setForm={setForm} />
+              <TextAreaField
+                form={form}
+                label="登场角色"
+                name="characters"
+                setForm={setForm}
+              />
               <TextField form={form} label="作者名" name="creatorName" setForm={setForm} />
               <TextField form={form} label="作者链接" name="creatorUrl" setForm={setForm} />
             </div>
@@ -930,6 +938,7 @@ function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCom
         titleType: "alias" as const,
       })),
     ],
+    characters: parseCharacterLines(form.characters),
     creators: creator,
     workStaff: creator.length
       ? [
@@ -1032,6 +1041,20 @@ function parseAliases(value: string): string[] {
         .filter(Boolean),
     ),
   ];
+}
+
+function parseCharacterLines(value: string): NonNullable<ArchiveCommitMetadata["characters"]> {
+  return value
+    .split(/[,，\n]/)
+    .map((item, index) => ({
+      name: item.trim(),
+      originalName: null,
+      roleKey: "supporting" as const,
+      spoilerLevel: 0,
+      sortOrder: index + 1,
+      notes: null,
+    }))
+    .filter((item) => item.name);
 }
 
 function buildReleaseLabel(form: FlatMetadata): string {

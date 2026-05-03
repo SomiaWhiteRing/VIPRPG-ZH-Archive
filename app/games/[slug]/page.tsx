@@ -202,7 +202,9 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
               <ul className="plain-list">
                 {work.series.map((item) => (
                   <li key={item.seriesId}>
-                    <strong>{item.title}</strong>
+                    <Link href={`/series/${item.slug}`}>
+                      <strong>{item.title}</strong>
+                    </Link>
                     <span className="muted-line">
                       {item.positionLabel || item.relationKind}
                     </span>
