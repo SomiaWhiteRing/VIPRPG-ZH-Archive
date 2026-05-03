@@ -28,7 +28,7 @@ export async function insertBlobRecord(input: {
 }): Promise<void> {
   await getD1()
     .prepare(
-      `INSERT OR IGNORE INTO blobs (
+      `INSERT INTO blobs (
         sha256,
         size_bytes,
         content_type_hint,
@@ -36,7 +36,14 @@ export async function insertBlobRecord(input: {
         r2_key,
         verified_at,
         status
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')`,
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+      ON CONFLICT(sha256) DO UPDATE SET
+        size_bytes = excluded.size_bytes,
+        content_type_hint = excluded.content_type_hint,
+        observed_ext = excluded.observed_ext,
+        r2_key = excluded.r2_key,
+        verified_at = CURRENT_TIMESTAMP,
+        status = 'active'`,
     )
     .bind(
       input.sha256,
@@ -57,7 +64,7 @@ export async function insertCorePackRecord(input: {
 }): Promise<void> {
   await getD1()
     .prepare(
-      `INSERT OR IGNORE INTO core_packs (
+      `INSERT INTO core_packs (
         sha256,
         size_bytes,
         uncompressed_size_bytes,
@@ -65,7 +72,14 @@ export async function insertCorePackRecord(input: {
         r2_key,
         verified_at,
         status
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')`,
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+      ON CONFLICT(sha256) DO UPDATE SET
+        size_bytes = excluded.size_bytes,
+        uncompressed_size_bytes = excluded.uncompressed_size_bytes,
+        file_count = excluded.file_count,
+        r2_key = excluded.r2_key,
+        verified_at = CURRENT_TIMESTAMP,
+        status = 'active'`,
     )
     .bind(
       input.sha256,
@@ -91,7 +105,12 @@ async function findExistingSha256(
 
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = await getD1()
-      .prepare(`SELECT sha256 FROM ${tableName} WHERE sha256 IN (${placeholders})`)
+      .prepare(
+        `SELECT sha256
+        FROM ${tableName}
+        WHERE status = 'active'
+          AND sha256 IN (${placeholders})`,
+      )
       .bind(...chunk)
       .all<{ sha256: string }>();
 

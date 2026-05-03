@@ -83,7 +83,6 @@ export function canUpload(user: ArchiveUser): boolean {
 export function canManageUser(actor: ArchiveUser, target: ArchiveUser): boolean {
   return (
     actor.status === "active" &&
-    target.status === "active" &&
     actor.id !== target.id &&
     canManageRole(actor.role, target.role)
   );
@@ -261,6 +260,43 @@ export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUse
   }
 
   return users.filter((user) => user.id !== actor.id && canManageUser(actor, user));
+}
+
+export async function setUserStatusForAdmin(input: {
+  actor: ArchiveUser;
+  targetUserId: number;
+  status: UserStatus;
+}): Promise<ArchiveUser> {
+  const target = await findUserById(input.targetUserId);
+
+  if (!target) {
+    throw new Error("目标用户不存在");
+  }
+
+  if (!canManageUser(input.actor, target)) {
+    throw new Error("只能管理低于自己层级的用户");
+  }
+
+  if (target.status === input.status) {
+    return target;
+  }
+
+  await getD1()
+    .prepare(
+      `UPDATE users
+      SET status = ?
+      WHERE id = ?`,
+    )
+    .bind(input.status, target.id)
+    .run();
+
+  const updated = await findUserById(target.id);
+
+  if (!updated) {
+    throw new Error("目标用户更新后不可读取");
+  }
+
+  return updated;
 }
 
 async function recordFailedLogin(

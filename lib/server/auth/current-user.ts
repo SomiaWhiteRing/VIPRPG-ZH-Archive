@@ -14,7 +14,9 @@ export async function getCurrentUserFromRequest(
       request.headers.get("cookie"),
     );
 
-    return userId ? findUserById(userId) : null;
+    const user = userId ? await findUserById(userId) : null;
+
+    return user?.status === "active" ? user : null;
   } catch {
     return null;
   }
@@ -31,7 +33,9 @@ export async function getCurrentUserFromCookies(): Promise<ArchiveUser | null> {
 
     const userId = await readSessionUserIdFromToken(token);
 
-    return userId ? findUserById(userId) : null;
+    const user = userId ? await findUserById(userId) : null;
+
+    return user?.status === "active" ? user : null;
   } catch {
     return null;
   }

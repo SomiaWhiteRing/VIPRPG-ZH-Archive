@@ -23,7 +23,7 @@ const links = [
   },
   {
     href: "/api/admin/gc/dry-run",
-    label: "GC dry-run",
+    label: "清理预演",
   },
   {
     href: "/api/health/db",
@@ -98,9 +98,13 @@ export default async function AdminPage() {
     ],
   ];
   const gcMetrics = [
+    [
+      "可最终清理回收站",
+      `${formatNumber(gcDryRun.archiveVersions.eligibleCount)} / ${formatNumber(gcDryRun.archiveVersions.eligibleFileCount)} 文件 / ${formatBytes(gcDryRun.archiveVersions.eligibleSizeBytes)}`,
+    ],
     ["可清理 blob", `${formatNumber(gcDryRun.blobs.eligibleCount)} / ${formatBytes(gcDryRun.blobs.eligibleSizeBytes)}`],
     [
-      "仅 deleted 引用 blob",
+      "仅回收站引用 blob",
       `${formatNumber(gcDryRun.blobs.deletedOnlyReferenceCount)} / ${formatBytes(gcDryRun.blobs.deletedOnlyReferenceSizeBytes)}`,
     ],
     [
@@ -108,7 +112,7 @@ export default async function AdminPage() {
       `${formatNumber(gcDryRun.corePacks.eligibleCount)} / ${formatBytes(gcDryRun.corePacks.eligibleSizeBytes)}`,
     ],
     [
-      "仅 deleted 引用 core pack",
+      "仅回收站引用 core pack",
       `${formatNumber(gcDryRun.corePacks.deletedOnlyReferenceCount)} / ${formatBytes(gcDryRun.corePacks.deletedOnlyReferenceSizeBytes)}`,
     ],
   ];
@@ -127,6 +131,12 @@ export default async function AdminPage() {
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/users">
             用户层级
+          </Link>
+          <Link className="button" href="/admin/archive-versions">
+            归档维护
+          </Link>
+          <Link className="button" href="/admin/archive-versions/trash">
+            归档回收站
           </Link>
           <Link className="button" href="/inbox">
             站内信
@@ -177,9 +187,10 @@ export default async function AdminPage() {
         </section>
 
         <section className="card">
-          <h2>GC dry-run</h2>
+          <h2>清理预演</h2>
           <p className="muted-line">
-            当前只生成候选报告，不删除 R2 对象；默认宽限期 {gcDryRun.graceDays} 天。
+            这里展示清理预演候选，不删除 R2 对象；最终清理需要在运维检查中输入确认。
+            回收站默认保留 {gcDryRun.graceDays} 天。
           </p>
           <dl className="detail-list">
             {gcMetrics.map(([label, value]) => (
@@ -348,6 +359,9 @@ export default async function AdminPage() {
         <pre className="code-block">{`GET /api/admin/observability
 GET /api/admin/consistency
 GET /api/admin/gc/dry-run
+POST /api/admin/gc/sweep
+POST /api/admin/archive-versions/{archiveVersionId}/delete
+POST /api/admin/archive-versions/{archiveVersionId}/restore
 PUT /api/blobs/{sha256}
 PUT /api/core-packs/{sha256}
 POST /api/imports/preflight`}</pre>
