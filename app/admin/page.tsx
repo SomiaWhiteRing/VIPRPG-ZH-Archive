@@ -1,6 +1,7 @@
 import { getAdminSummary } from "@/lib/server/db/admin-summary";
 import { getAdminObservability } from "@/lib/server/db/admin-observability";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
+import { canAccessSuperAdminRole } from "@/lib/server/auth/roles";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { runGcDryRun } from "@/lib/server/storage/admin-storage-checks";
 import { AdminOperationPanel } from "@/app/admin/admin-operation-panel";
@@ -43,6 +44,7 @@ export default async function AdminPage() {
     runGcDryRun({ sampleLimit: 5 }),
     countUnreadInboxItemsForUser(adminUser),
   ]);
+  const isSuperAdmin = canAccessSuperAdminRole(adminUser.role);
 
   const metrics = [
     ["用户", summary.users.toLocaleString("zh-CN")],
@@ -138,6 +140,17 @@ export default async function AdminPage() {
           <Link className="button" href="/admin/archive-versions/trash">
             归档回收站
           </Link>
+          <Link className="button" href="/admin/works">
+            作品资料
+          </Link>
+          <Link className="button" href="/admin/creators">
+            作者资料
+          </Link>
+          {isSuperAdmin ? (
+            <Link className="button" href="/admin/audit">
+              审计日志
+            </Link>
+          ) : null}
           <Link className="button" href="/inbox">
             站内信
             {unreadInboxCount > 0 ? (
@@ -203,7 +216,7 @@ export default async function AdminPage() {
         </section>
       </section>
 
-      <AdminOperationPanel />
+      <AdminOperationPanel canRunFinalCleanup={isSuperAdmin} />
 
       <section className="card" style={{ marginTop: 16 }}>
         <h2>近期下载</h2>

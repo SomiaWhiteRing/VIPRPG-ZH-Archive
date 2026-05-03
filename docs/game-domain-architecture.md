@@ -936,6 +936,9 @@ LIMIT 1;
 - `work_titles.title`
 - `creators.name`
 - `tags.name`
+- `characters.primary_name`
+
+标签和登场角色都可以成为检索条件，但它们不共用同一张标签表。普通题材、类型、整理用标签进入 `tags`；登场角色进入 `characters` + `work_characters`，公开列表用独立的角色筛选参数反查作品。
 
 当数据量增大后，建议追加一个物化搜索表：
 

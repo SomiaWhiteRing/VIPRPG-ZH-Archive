@@ -1,6 +1,9 @@
-import { requireUploader } from "@/lib/server/auth/guards";
-import { moveArchiveVersionToTrash } from "@/lib/server/db/archive-maintenance";
+import { requireAdmin } from "@/lib/server/auth/guards";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
+import {
+  parseArchiveVersionEditForm,
+  updateArchiveVersionForAdmin,
+} from "@/lib/server/db/game-library";
 import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -13,7 +16,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireUploader(request);
+  const auth = await requireAdmin(request);
 
   if ("response" in auth) {
     return auth.response;
@@ -22,18 +25,24 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
     const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
-    const archiveVersion = await moveArchiveVersionToTrash(archiveVersionId, auth.user);
+    const formData = await request.formData();
+    const input = parseArchiveVersionEditForm(formData);
+
+    if (input.archiveVersionId !== archiveVersionId) {
+      throw new Error("ArchiveVersion id mismatch");
+    }
+
+    const archiveVersion = await updateArchiveVersionForAdmin(input);
 
     await writeAuthAuditLog({
       userId: auth.user.id,
       email: auth.user.email,
-      eventType: "archive_version_move_to_trash",
+      eventType: "admin_archive_version_update",
       detail: {
-        archiveVersionId,
-        workId: archiveVersion.workId,
+        archiveVersionId: archiveVersion.id,
         releaseId: archiveVersion.releaseId,
-        actorRole: auth.user.role,
-        uploaderId: archiveVersion.uploaderId,
+        workId: archiveVersion.workId,
+        status: archiveVersion.status,
       },
     });
 
@@ -44,9 +53,11 @@ export async function POST(request: Request, context: RouteContext) {
       });
     }
 
-    return redirectBack(request, "/admin/archive-versions");
+    return redirectResponse(
+      new URL(`/admin/archive-versions/${archiveVersion.id}`, request.url),
+    );
   } catch (error) {
-    return jsonError("ArchiveVersion delete failed", error);
+    return jsonError("ArchiveVersion update failed", error);
   }
 }
 
@@ -58,23 +69,4 @@ function parseArchiveVersionId(value: string): number {
   }
 
   return id;
-}
-
-function redirectBack(request: Request, fallbackPath: string): Response {
-  const requestUrl = new URL(request.url);
-  const referer = request.headers.get("referer");
-
-  if (referer) {
-    try {
-      const refererUrl = new URL(referer);
-
-      if (refererUrl.origin === requestUrl.origin) {
-        return redirectResponse(refererUrl);
-      }
-    } catch {
-      // Ignore malformed referer values and use the stable fallback.
-    }
-  }
-
-  return redirectResponse(new URL(fallbackPath, requestUrl));
 }

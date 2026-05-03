@@ -7,6 +7,16 @@ import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 const checks = [
   {
+    title: "游戏资料库",
+    description: "按作品浏览发布版本、归档快照、作者、标签和下载/在线游玩入口。",
+    href: "/games",
+  },
+  {
+    title: "作者与制作人员",
+    description: "浏览作者、汉化、校对、修图和整理人员的作品年表。",
+    href: "/creators",
+  },
+  {
     title: "管理端原型",
     description: "查看 D1/R2 canonical storage 当前计数和原型 API。",
     href: "/admin",

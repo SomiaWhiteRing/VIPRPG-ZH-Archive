@@ -45,6 +45,9 @@ export default async function UploadPage() {
         </div>
         <div className="session-panel">
           <span className="status-pill">{roleLabel(currentUser.role)}</span>
+          <Link className="button" href="/admin/archive-versions">
+            归档维护
+          </Link>
           <Link className="button" href="/">
             首页
           </Link>
