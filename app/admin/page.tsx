@@ -146,6 +146,15 @@ export default async function AdminPage() {
           <Link className="button" href="/admin/creators">
             作者资料
           </Link>
+          <Link className="button" href="/admin/characters">
+            角色资料
+          </Link>
+          <Link className="button" href="/admin/tags">
+            标签资料
+          </Link>
+          <Link className="button" href="/admin/series">
+            系列资料
+          </Link>
           {isSuperAdmin ? (
             <Link className="button" href="/admin/audit">
               审计日志

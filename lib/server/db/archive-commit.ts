@@ -112,6 +112,7 @@ export async function commitArchiveImport(
   await insertWorkTitles(workId, metadata);
   await upsertCreators(metadata);
   await insertWorkStaff(workId, metadata);
+  await insertWorkCharacters(workId, metadata);
   await insertWorkTags(workId, metadata.tags);
   await insertWorkExternalLinks(workId, metadata);
   await insertWorkMediaAssets(workId, metadata);
@@ -357,6 +358,22 @@ function normalizeMetadata(metadata: ArchiveCommitMetadata): ArchiveCommitMetada
         language: title.language?.trim() || null,
       }))
       .filter((title) => title.title.trim()),
+    characters: (metadata.characters ?? [])
+      .map((character, index) => ({
+        ...character,
+        name: character.name.trim(),
+        originalName: character.originalName?.trim() || null,
+        roleKey: character.roleKey || "supporting",
+        spoilerLevel: Number.isSafeInteger(character.spoilerLevel)
+          ? character.spoilerLevel
+          : 0,
+        sortOrder:
+          character.sortOrder !== null && Number.isFinite(character.sortOrder)
+            ? character.sortOrder
+            : index + 1,
+        notes: character.notes?.trim() || null,
+      }))
+      .filter((character) => character.name),
     creators: metadata.creators.filter((creator) => creator.slug.trim() && creator.name.trim()),
     workStaff: metadata.workStaff.filter((staff) => staff.creatorSlug.trim()),
     releaseStaff: metadata.releaseStaff.filter((staff) => staff.creatorSlug.trim()),
@@ -655,6 +672,62 @@ async function insertWorkStaff(
         )`,
       )
       .bind(workId, staff.creatorSlug, staff.roleKey, staff.roleLabel, staff.notes)
+      .run();
+  }
+}
+
+async function insertWorkCharacters(
+  workId: number,
+  metadata: ArchiveCommitMetadata,
+): Promise<void> {
+  for (const character of metadata.characters ?? []) {
+    await getD1()
+      .prepare(
+        `INSERT OR IGNORE INTO characters (
+          slug,
+          primary_name,
+          original_name,
+          extra_json
+        ) VALUES (?, ?, ?, '{}')`,
+      )
+      .bind(characterSlug(character.name), character.name, character.originalName)
+      .run();
+    await getD1()
+      .prepare(
+        `UPDATE characters
+        SET primary_name = ?,
+          original_name = COALESCE(?, original_name),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE slug = ?`,
+      )
+      .bind(character.name, character.originalName, characterSlug(character.name))
+      .run();
+    await getD1()
+      .prepare(
+        `INSERT OR REPLACE INTO work_characters (
+          work_id,
+          character_id,
+          role_key,
+          spoiler_level,
+          sort_order,
+          notes
+        ) VALUES (
+          ?,
+          (SELECT id FROM characters WHERE slug = ?),
+          ?,
+          ?,
+          ?,
+          ?
+        )`,
+      )
+      .bind(
+        workId,
+        characterSlug(character.name),
+        character.roleKey,
+        character.spoilerLevel,
+        character.sortOrder,
+        character.notes,
+      )
       .run();
   }
 }
@@ -1286,6 +1359,16 @@ function tagSlug(tag: string): string {
     .replace(/^-+|-+$/g, "");
 
   return normalized || `tag-${hashCode(tag)}`;
+}
+
+function characterSlug(name: string): string {
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || `character-${hashCode(name)}`;
 }
 
 function hashCode(value: string): string {

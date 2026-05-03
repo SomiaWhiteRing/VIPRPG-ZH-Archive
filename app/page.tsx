@@ -17,6 +17,21 @@ const checks = [
     href: "/creators",
   },
   {
+    title: "登场角色",
+    description: "按角色反查其出现过的作品，角色不再混入普通标签。",
+    href: "/characters",
+  },
+  {
+    title: "标签与系列",
+    description: "浏览普通标签；系列作品有单独入口。",
+    href: "/tags",
+  },
+  {
+    title: "系列作品",
+    description: "按系列统一查看正篇、外传、合集成员和同世界观作品。",
+    href: "/series",
+  },
+  {
     title: "管理端原型",
     description: "查看 D1/R2 canonical storage 当前计数和原型 API。",
     href: "/admin",

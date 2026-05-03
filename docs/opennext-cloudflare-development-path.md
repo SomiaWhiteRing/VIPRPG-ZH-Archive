@@ -794,6 +794,9 @@ Phase 5 MVP 回补：
 - 实现 `/admin/archive-versions/{archiveVersionId}`，让管理员维护 ArchiveVersion 层资料：名称、语言、校对、修图和发布状态；归档 key、manifest 和对象引用保持只读。
 - 实现 `/creators` 和 `/creators/{slug}`，公开展示作者、汉化、校对、修图和整理人员的资料、作品层职务和 Release 职务。
 - 实现 `/admin/creators` 和 `/admin/creators/{creatorId}`，让管理员维护 creator 本体资料；职务关联第一版只读展示。
+- 实现 `/characters`、`/tags`、`/series` 及其详情页，分别展示角色登场作品、标签关联作品和系列作品顺序。
+- 实现 `/admin/characters`、`/admin/tags`、`/admin/series`，让管理员维护角色、标签和系列本体资料，并支持角色/标签合并。
+- 作品编辑页补齐角色职务、浏览图 SHA-256、系列成员和相关作品关系维护。
 - 作品编辑写入 `auth_audit_logs`，方便超级管理员从审计页追踪资料变更。
 - Release 和 ArchiveVersion 编辑同样写入 `auth_audit_logs`。
 - Creator 编辑同样写入 `auth_audit_logs`。
@@ -809,6 +812,8 @@ Phase 5 MVP 回补：
 - `/creators` 能列出已有公开作品或公开 Release 关联的制作人员。
 - `/creators/{slug}` 能展示作者简介、个人链接、作品年表和发布参与记录。
 - 管理员可编辑 creator 名称、原名、个人链接和简介；普通用户和上传者不能访问 `/admin/creators`。
+- `/characters/{slug}` 能展示角色简介和登场作品；`/tags/{slug}` 能展示标签关联作品；`/series/{slug}` 能展示系列成员排序。
+- 管理员可维护角色、标签、系列，并可在 Work 编辑页维护角色、系列和相关作品关系。
 - 普通用户和上传者不能访问 `/admin/works`。
 
 当前落地：
@@ -820,9 +825,14 @@ Phase 5 MVP 回补：
 - 新增 `/admin/releases/{releaseId}`、`POST /api/admin/releases/{releaseId}/update`、`/admin/archive-versions/{archiveVersionId}` 和 `POST /api/admin/archive-versions/{archiveVersionId}/update`。
 - 新增 `lib/server/db/creator-library.ts`，集中处理 creator 公开查询、详情聚合和管理端编辑。
 - 新增 `/creators`、`/creators/{slug}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
+- 新增 `lib/server/db/taxonomy-library.ts`，集中处理角色、标签和系列的公开查询、管理端编辑、合并和系列创建。
+- 新增 `/characters`、`/characters/{slug}`、`/tags`、`/tags/{slug}`、`/series`、`/series/{slug}`。
+- 新增 `/admin/characters`、`/admin/characters/{characterId}`、`/admin/tags`、`/admin/tags/{tagId}`、`/admin/series`、`/admin/series/{seriesId}` 及对应管理 API。
+- `/admin/works/{workId}` 现在可维护 Work 图标/缩略图 SHA-256、浏览图列表、角色职务、系列成员和相关作品关系。
 - 作品详情页的 Work staff 和 Release staff 现在链接到 creator 公开页。
 - `/admin/archive-versions` 对管理员显示“编辑归档”和“编辑 Release”入口；上传者仍只显示自己归档的维护操作。
 - 首页新增“游戏资料库”和“作者与制作人员”入口，管理端新增“作品资料”和“作者资料”入口。
+- 首页新增登场角色、标签和系列作品入口；管理端新增角色资料、标签资料和系列资料入口。
 
 ## 11. 部署和环境流程
 

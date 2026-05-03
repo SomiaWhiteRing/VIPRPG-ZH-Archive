@@ -940,6 +940,14 @@ LIMIT 1;
 
 标签和登场角色都可以成为检索条件，但它们不共用同一张标签表。普通题材、类型、整理用标签进入 `tags`；登场角色进入 `characters` + `work_characters`，公开列表用独立的角色筛选参数反查作品。
 
+当前实现约定：
+
+- `/characters` 和 `/characters/{slug}` 展示角色本体与登场作品。
+- `/tags` 和 `/tags/{slug}` 展示普通标签与关联作品；角色不再作为普通标签录入。
+- `/series` 和 `/series/{slug}` 展示系列本体与成员排序。
+- `/admin/characters`、`/admin/tags`、`/admin/series` 维护本体资料；重复角色和重复标签通过合并到目标 slug 处理。
+- `/admin/works/{workId}` 维护 Work 和这些关系表的连接：`work_characters`、`work_series`、`work_relations`、`work_media_assets`。
+
 当数据量增大后，建议追加一个物化搜索表：
 
 ```text

@@ -48,7 +48,13 @@ export type AdminWorkEdit = {
   status: "draft" | "published" | "hidden" | "deleted";
   aliases: string[];
   tags: string[];
+  iconBlobSha256: string | null;
+  thumbnailBlobSha256: string | null;
   characters: string[];
+  characterCredits: GameCharacter[];
+  media: GameMediaAsset[];
+  series: GameSeriesMembership[];
+  outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
 };
 
@@ -230,6 +236,29 @@ export type GameSeriesMembership = {
   positionNumber: number | null;
   positionLabel: string | null;
   relationKind: string;
+};
+
+export type AdminWorkCharacterInput = {
+  name: string;
+  roleKey: string;
+  spoilerLevel: number;
+  sortOrder: number | null;
+  notes: string | null;
+};
+
+export type AdminWorkSeriesInput = {
+  slug: string;
+  title: string;
+  positionNumber: number | null;
+  positionLabel: string | null;
+  relationKind: string;
+  notes: string | null;
+};
+
+export type AdminWorkRelationInput = {
+  targetSlug: string;
+  relationType: string;
+  notes: string | null;
 };
 
 type WorkSummaryRow = {
@@ -695,6 +724,8 @@ export async function getWorkForAdminEdit(workId: number): Promise<AdminWorkEdit
         engine_family,
         engine_detail,
         uses_maniacs_patch,
+        icon_blob_sha256,
+        thumbnail_blob_sha256,
         status
       FROM works
       WHERE id = ?
@@ -713,6 +744,8 @@ export async function getWorkForAdminEdit(workId: number): Promise<AdminWorkEdit
       engine_family: string;
       engine_detail: string | null;
       uses_maniacs_patch: number;
+      icon_blob_sha256: string | null;
+      thumbnail_blob_sha256: string | null;
       status: AdminWorkEdit["status"];
     }>();
 
@@ -720,10 +753,13 @@ export async function getWorkForAdminEdit(workId: number): Promise<AdminWorkEdit
     return null;
   }
 
-  const [aliases, tags, characters, externalLinks] = await Promise.all([
+  const [aliases, tags, characters, media, series, outgoingRelations, externalLinks] = await Promise.all([
     listWorkAliases(row.id),
     listWorkTags(row.id),
     listWorkCharacters(row.id),
+    listWorkMedia(row.id),
+    listWorkSeriesAdmin(row.id),
+    listWorkOutgoingRelationsAdmin(row.id),
     listWorkExternalLinks(row.id),
   ]);
 
@@ -742,7 +778,13 @@ export async function getWorkForAdminEdit(workId: number): Promise<AdminWorkEdit
     status: row.status,
     aliases,
     tags: tags.map((tag) => tag.name),
+    iconBlobSha256: row.icon_blob_sha256,
+    thumbnailBlobSha256: row.thumbnail_blob_sha256,
     characters: characters.map((character) => character.primaryName),
+    characterCredits: characters,
+    media,
+    series,
+    outgoingRelations,
     externalLinks,
   };
 }
@@ -758,9 +800,14 @@ export async function updateWorkForAdmin(input: {
   engineDetail: string | null;
   usesManiacsPatch: boolean;
   status: string;
+  iconBlobSha256: string | null;
+  thumbnailBlobSha256: string | null;
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: AdminWorkCharacterInput[];
+  previewBlobSha256s: string[];
+  seriesMemberships: AdminWorkSeriesInput[];
+  outgoingRelations: AdminWorkRelationInput[];
   externalLinks: Array<{
     label: string;
     url: string;
@@ -792,6 +839,8 @@ export async function updateWorkForAdmin(input: {
         engine_family = ?,
         engine_detail = ?,
         uses_maniacs_patch = ?,
+        icon_blob_sha256 = ?,
+        thumbnail_blob_sha256 = ?,
         status = ?,
         updated_at = CURRENT_TIMESTAMP,
         published_at = CASE
@@ -809,6 +858,8 @@ export async function updateWorkForAdmin(input: {
       input.engineFamily,
       input.engineDetail,
       input.usesManiacsPatch ? 1 : 0,
+      input.iconBlobSha256,
+      input.thumbnailBlobSha256,
       input.status,
       input.status,
       input.workId,
@@ -818,6 +869,9 @@ export async function updateWorkForAdmin(input: {
   await replaceAliases(input.workId, input.aliases);
   await replaceWorkTags(input.workId, input.tags);
   await replaceWorkCharacters(input.workId, input.characters);
+  await replaceWorkMediaAssets(input.workId, input.previewBlobSha256s);
+  await replaceWorkSeries(input.workId, input.seriesMemberships);
+  await replaceWorkOutgoingRelations(input.workId, input.outgoingRelations);
   await replaceWorkExternalLinks(input.workId, input.externalLinks);
 
   const updated = await getWorkForAdminEdit(input.workId);
@@ -1738,6 +1792,64 @@ async function listWorkSeries(workId: number): Promise<GameSeriesMembership[]> {
   }));
 }
 
+async function listWorkSeriesAdmin(workId: number): Promise<GameSeriesMembership[]> {
+  const rows = await getD1()
+    .prepare(
+      `SELECT
+        s.id AS series_id,
+        s.slug,
+        s.title,
+        ws.position_number,
+        ws.position_label,
+        ws.relation_kind
+      FROM work_series ws
+      JOIN series s ON s.id = ws.series_id
+      WHERE ws.work_id = ?
+        AND s.status <> 'deleted'
+      ORDER BY ws.position_number ASC, ws.position_label ASC`,
+    )
+    .bind(workId)
+    .all<SeriesRow>();
+
+  return (rows.results ?? []).map((row) => ({
+    seriesId: row.series_id,
+    slug: row.slug,
+    title: row.title,
+    positionNumber: row.position_number,
+    positionLabel: row.position_label,
+    relationKind: row.relation_kind,
+  }));
+}
+
+async function listWorkOutgoingRelationsAdmin(workId: number): Promise<GameWorkRelation[]> {
+  const rows = await getD1()
+    .prepare(
+      `SELECT
+        'from' AS direction,
+        wr.relation_type,
+        wr.notes,
+        target.id AS work_id,
+        target.slug,
+        COALESCE(target.chinese_title, target.original_title) AS title
+      FROM work_relations wr
+      JOIN works target ON target.id = wr.to_work_id
+      WHERE wr.from_work_id = ?
+        AND target.status <> 'deleted'
+      ORDER BY wr.relation_type ASC, title ASC`,
+    )
+    .bind(workId)
+    .all<RelationRow>();
+
+  return (rows.results ?? []).map((row) => ({
+    direction: row.direction,
+    relationType: row.relation_type,
+    notes: row.notes,
+    workId: row.work_id,
+    slug: row.slug,
+    title: row.title,
+  }));
+}
+
 async function replaceAliases(workId: number, aliases: string[]): Promise<void> {
   await getD1().prepare(`DELETE FROM work_titles WHERE work_id = ?`).bind(workId).run();
 
@@ -1779,13 +1891,19 @@ async function replaceWorkTags(workId: number, tags: string[]): Promise<void> {
   }
 }
 
-async function replaceWorkCharacters(workId: number, characters: string[]): Promise<void> {
+async function replaceWorkCharacters(
+  workId: number,
+  characters: AdminWorkCharacterInput[],
+): Promise<void> {
   await getD1().prepare(`DELETE FROM work_characters WHERE work_id = ?`).bind(workId).run();
 
-  const cleaned = uniqueClean(characters);
+  const cleaned = dedupeBy(characters.filter((character) => character.name.trim()), (item) =>
+    characterSlug(item.name),
+  );
 
   for (const [index, character] of cleaned.entries()) {
-    const slug = characterSlug(character);
+    const slug = characterSlug(character.name);
+    assertEnum(character.roleKey, ["main", "supporting", "cameo", "mentioned", "other"], "角色职务");
     await getD1()
       .prepare(
         `INSERT INTO characters (slug, primary_name, extra_json)
@@ -1794,7 +1912,7 @@ async function replaceWorkCharacters(workId: number, characters: string[]): Prom
           primary_name = excluded.primary_name,
           updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(slug, character)
+      .bind(slug, character.name.trim())
       .run();
     await getD1()
       .prepare(
@@ -1803,10 +1921,160 @@ async function replaceWorkCharacters(workId: number, characters: string[]): Prom
           character_id,
           role_key,
           spoiler_level,
-          sort_order
-        ) VALUES (?, (SELECT id FROM characters WHERE slug = ?), 'supporting', 0, ?)`,
+          sort_order,
+          notes
+        ) VALUES (?, (SELECT id FROM characters WHERE slug = ?), ?, ?, ?, ?)`,
       )
-      .bind(workId, slug, index + 1)
+      .bind(
+        workId,
+        slug,
+        character.roleKey,
+        character.spoilerLevel,
+        character.sortOrder ?? index + 1,
+        character.notes,
+      )
+      .run();
+  }
+}
+
+async function replaceWorkMediaAssets(
+  workId: number,
+  previewBlobSha256s: string[],
+): Promise<void> {
+  await getD1()
+    .prepare(
+      `DELETE FROM work_media_assets
+      WHERE work_id = ?
+        AND media_asset_id IN (
+          SELECT id FROM media_assets WHERE kind = 'preview'
+        )`,
+    )
+    .bind(workId)
+    .run();
+
+  for (const [index, rawSha256] of uniqueClean(previewBlobSha256s).entries()) {
+    const sha256 = rawSha256.toLowerCase();
+    await getD1()
+      .prepare(
+        `INSERT OR IGNORE INTO media_assets (blob_sha256, kind)
+        VALUES (?, 'preview')`,
+      )
+      .bind(sha256)
+      .run();
+    await getD1()
+      .prepare(
+        `INSERT OR REPLACE INTO work_media_assets (
+          work_id,
+          media_asset_id,
+          sort_order,
+          is_primary
+        ) VALUES (?, (SELECT id FROM media_assets WHERE blob_sha256 = ? AND kind = 'preview'), ?, ?)`,
+      )
+      .bind(workId, sha256, index + 1, index === 0 ? 1 : 0)
+      .run();
+  }
+}
+
+async function replaceWorkSeries(
+  workId: number,
+  memberships: AdminWorkSeriesInput[],
+): Promise<void> {
+  await getD1().prepare(`DELETE FROM work_series WHERE work_id = ?`).bind(workId).run();
+
+  for (const membership of memberships.filter((item) => item.slug && item.title)) {
+    assertEnum(
+      membership.relationKind,
+      ["main", "side", "collection_member", "same_setting", "other"],
+      "系列关系",
+    );
+    await getD1()
+      .prepare(
+        `INSERT OR IGNORE INTO series (slug, title, status, extra_json, updated_at)
+        VALUES (?, ?, 'published', '{}', CURRENT_TIMESTAMP)`,
+      )
+      .bind(membership.slug, membership.title)
+      .run();
+    await getD1()
+      .prepare(
+        `UPDATE series
+        SET title = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE slug = ?`,
+      )
+      .bind(membership.title, membership.slug)
+      .run();
+    await getD1()
+      .prepare(
+        `INSERT OR REPLACE INTO work_series (
+          series_id,
+          work_id,
+          position_number,
+          position_label,
+          relation_kind,
+          notes
+        ) VALUES (
+          (SELECT id FROM series WHERE slug = ?),
+          ?,
+          ?,
+          ?,
+          ?,
+          ?
+        )`,
+      )
+      .bind(
+        membership.slug,
+        workId,
+        membership.positionNumber,
+        membership.positionLabel,
+        membership.relationKind,
+        membership.notes,
+      )
+      .run();
+  }
+}
+
+async function replaceWorkOutgoingRelations(
+  workId: number,
+  relations: AdminWorkRelationInput[],
+): Promise<void> {
+  await getD1().prepare(`DELETE FROM work_relations WHERE from_work_id = ?`).bind(workId).run();
+
+  for (const relation of relations.filter((item) => item.targetSlug.trim())) {
+    assertEnum(
+      relation.relationType,
+      [
+        "prequel",
+        "sequel",
+        "side_story",
+        "same_setting",
+        "remake",
+        "remaster",
+        "fan_disc",
+        "alternate_version",
+        "translation_source",
+        "inspired_by",
+        "other",
+      ],
+      "作品关系",
+    );
+    await getD1()
+      .prepare(
+        `INSERT OR IGNORE INTO work_relations (
+          from_work_id,
+          to_work_id,
+          relation_type,
+          notes
+        )
+        SELECT
+          ?,
+          id,
+          ?,
+          ?
+        FROM works
+        WHERE slug = ?
+          AND status <> 'deleted'`,
+      )
+      .bind(workId, relation.relationType, relation.notes, relation.targetSlug)
       .run();
   }
 }
@@ -2065,6 +2333,24 @@ function uniqueClean(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+function dedupeBy<T>(values: T[], keyFn: (value: T) => string): T[] {
+  const seen = new Set<string>();
+  const output: T[] = [];
+
+  for (const value of values) {
+    const key = keyFn(value);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    output.push(value);
+  }
+
+  return output;
+}
+
 function tagSlug(value: string): string {
   return value
     .trim()
@@ -2123,9 +2409,14 @@ export function parseWorkEditForm(formData: FormData): Parameters<typeof updateW
     engineDetail: cleanNullable(String(formData.get("engine_detail") ?? "")),
     usesManiacsPatch: formData.get("uses_maniacs_patch") === "1",
     status: String(formData.get("status") ?? "published"),
+    iconBlobSha256: cleanNullable(String(formData.get("icon_blob_sha256") ?? "")),
+    thumbnailBlobSha256: cleanNullable(String(formData.get("thumbnail_blob_sha256") ?? "")),
     aliases: splitLines(String(formData.get("aliases") ?? "")),
     tags: splitTagText(String(formData.get("tags") ?? "")),
-    characters: splitTagText(String(formData.get("characters") ?? "")),
+    characters: parseWorkCharacters(String(formData.get("characters") ?? "")),
+    previewBlobSha256s: splitLines(String(formData.get("preview_blob_sha256s") ?? "")),
+    seriesMemberships: parseWorkSeriesMemberships(String(formData.get("series_memberships") ?? "")),
+    outgoingRelations: parseWorkRelations(String(formData.get("outgoing_relations") ?? "")),
     externalLinks: parseExternalLinks(String(formData.get("external_links") ?? "")),
   };
 }
@@ -2192,6 +2483,68 @@ function splitTagText(value: string): string[] {
     .split(/[,，\r\n]/)
     .map((tag) => tag.trim())
     .filter(Boolean);
+}
+
+function parseWorkCharacters(value: string): AdminWorkCharacterInput[] {
+  return splitLines(value).map((line, index) => {
+    const [name = "", roleKey = "supporting", sortOrder = "", notes = ""] = line
+      .split("|")
+      .map((part) => part.trim());
+
+    return {
+      name,
+      roleKey: roleKey || "supporting",
+      spoilerLevel: 0,
+      sortOrder: numberOrNull(sortOrder) ?? index + 1,
+      notes: cleanNullable(notes),
+    };
+  });
+}
+
+function parseWorkSeriesMemberships(value: string): AdminWorkSeriesInput[] {
+  return splitLines(value).map((line) => {
+    const [
+      slug = "",
+      title = "",
+      positionNumber = "",
+      positionLabel = "",
+      relationKind = "main",
+      notes = "",
+    ] = line.split("|").map((part) => part.trim());
+
+    return {
+      slug,
+      title,
+      positionNumber: numberOrNull(positionNumber),
+      positionLabel: cleanNullable(positionLabel),
+      relationKind: relationKind || "main",
+      notes: cleanNullable(notes),
+    };
+  });
+}
+
+function parseWorkRelations(value: string): AdminWorkRelationInput[] {
+  return splitLines(value).map((line) => {
+    const [targetSlug = "", relationType = "other", notes = ""] = line
+      .split("|")
+      .map((part) => part.trim());
+
+    return {
+      targetSlug,
+      relationType: relationType || "other",
+      notes: cleanNullable(notes),
+    };
+  });
+}
+
+function numberOrNull(value: string): number | null {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseExternalLinks(value: string): Array<{
