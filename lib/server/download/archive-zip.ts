@@ -9,9 +9,13 @@ import {
 
 type CorePackEntries = Map<string, Uint8Array>;
 
+const blobReadCacheMaxEntryBytes = 2 * 1024 * 1024;
+const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
+
 export function createArchiveZipStream(manifest: ArchiveManifest): ReadableStream<Uint8Array> {
   const corePackCache = new Map<string, Promise<CorePackEntries>>();
-  const entries = buildArchiveZipEntries(manifest, corePackCache);
+  const blobReadCache = new BlobReadCache();
+  const entries = buildArchiveZipEntries(manifest, corePackCache, blobReadCache);
 
   return createZipStream(entries);
 }
@@ -45,6 +49,7 @@ export function estimateArchiveZipSize(manifest: ArchiveManifest): number {
 function buildArchiveZipEntries(
   manifest: ArchiveManifest,
   corePackCache?: Map<string, Promise<CorePackEntries>>,
+  blobReadCache?: BlobReadCache,
 ): ZipStreamEntry[] {
   return manifest.files.slice().sort(compareManifestFiles).map((file) => ({
     path: file.path,
@@ -56,7 +61,11 @@ function buildArchiveZipEntries(
         throw new Error("ZIP entry stream was opened during size estimation");
       }
 
-      return openManifestFile(file, manifest, corePackCache);
+      if (!blobReadCache) {
+        throw new Error("ZIP entry stream was opened without a blob cache");
+      }
+
+      return openManifestFile(file, manifest, corePackCache, blobReadCache);
     },
   }));
 }
@@ -74,17 +83,12 @@ async function openManifestFile(
   file: ArchiveManifestFile,
   manifest: ArchiveManifest,
   corePackCache: Map<string, Promise<CorePackEntries>>,
+  blobReadCache: BlobReadCache,
 ): Promise<ReadableStream<Uint8Array>> {
   const storage = file.storage;
 
   if (storage.kind === "blob") {
-    const object = await getBlob(storage.blobSha256);
-
-    if (!object?.body) {
-      throw new Error(`Missing blob object: ${storage.blobSha256}`);
-    }
-
-    return object.body;
+    return blobReadCache.open(storage.blobSha256, file.size);
   }
 
   const corePack = manifest.corePacks.find((item) => item.id === storage.packId);
@@ -108,6 +112,65 @@ async function openManifestFile(
   }
 
   return streamBytes(bytes);
+}
+
+class BlobReadCache {
+  private readonly promises = new Map<string, Promise<Uint8Array>>();
+  private reservedBytes = 0;
+
+  async open(sha256: string, size: number): Promise<ReadableStream<Uint8Array>> {
+    if (!this.shouldCache(size)) {
+      const object = await getBlob(sha256);
+
+      if (!object?.body) {
+        throw new Error(`Missing blob object: ${sha256}`);
+      }
+
+      return object.body;
+    }
+
+    let promise = this.promises.get(sha256);
+
+    if (!promise) {
+      this.reservedBytes += size;
+      promise = this.loadBytes(sha256, size).catch((error: unknown) => {
+        this.reservedBytes -= size;
+        this.promises.delete(sha256);
+        throw error;
+      });
+      promise.catch(() => undefined);
+      this.promises.set(sha256, promise);
+    }
+
+    return streamBytes(await promise);
+  }
+
+  private shouldCache(size: number): boolean {
+    return (
+      Number.isSafeInteger(size) &&
+      size >= 0 &&
+      size <= blobReadCacheMaxEntryBytes &&
+      this.reservedBytes + size <= blobReadCacheMaxTotalBytes
+    );
+  }
+
+  private async loadBytes(sha256: string, expectedSize: number): Promise<Uint8Array> {
+    const object = await getBlob(sha256);
+
+    if (!object) {
+      throw new Error(`Missing blob object: ${sha256}`);
+    }
+
+    const bytes = new Uint8Array(await object.arrayBuffer());
+
+    if (bytes.byteLength !== expectedSize) {
+      throw new Error(
+        `Blob size mismatch for ${sha256}: expected ${expectedSize}, got ${bytes.byteLength}`,
+      );
+    }
+
+    return bytes;
+  }
 }
 
 async function loadCorePackEntries(sha256: string): Promise<CorePackEntries> {

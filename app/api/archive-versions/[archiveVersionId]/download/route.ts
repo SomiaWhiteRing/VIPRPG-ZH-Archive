@@ -57,7 +57,8 @@ export async function GET(request: Request, context: RouteContext) {
     const cacheRequest = downloadCacheRequest(request, record);
     const cacheKey = cacheKeyFromRequest(cacheRequest);
     failureCacheKey = cacheKey;
-    const cached = await matchDownloadCache(cacheRequest);
+    const bypassDownloadCache = shouldBypassDownloadCache(request);
+    const cached = bypassDownloadCache ? null : await matchDownloadCache(cacheRequest);
 
     if (cached) {
       queueRecordDownloadAccess({
@@ -76,25 +77,28 @@ export async function GET(request: Request, context: RouteContext) {
 
     const manifest = await loadManifest(record.manifestSha256);
     const zipSizeBytes = estimateArchiveZipSize(manifest);
+    const cacheStatus = bypassDownloadCache ? "BYPASS" : "MISS";
     const response = new Response(
       createFixedLengthArchiveZipStream(manifest, zipSizeBytes),
       {
-        headers: downloadHeaders(record, "MISS", zipSizeBytes),
+        headers: downloadHeaders(record, cacheStatus, zipSizeBytes),
       },
     );
 
-    putDownloadCache(
-      cacheRequest,
-      withCacheHeader(response.clone(), "HIT"),
-      record.totalSizeBytes,
-      cacheKey,
-    );
+    if (!bypassDownloadCache) {
+      putDownloadCache(
+        cacheRequest,
+        withCacheHeader(response.clone(), "HIT"),
+        record.totalSizeBytes,
+        cacheKey,
+      );
+    }
 
     queueRecordDownloadAccess({
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,
       cacheKey,
-      cacheStatus: "MISS",
+      cacheStatus,
       sizeBytes: zipSizeBytes,
       estimatedR2GetCount: record.estimatedR2GetCount,
       actualR2GetCount: record.estimatedR2GetCount,
@@ -305,6 +309,15 @@ function queueRecordDownloadFailure(
 
 function shouldTryWorkersCache(totalSizeBytes: number): boolean {
   return totalSizeBytes > 0 && totalSizeBytes <= 500 * 1024 * 1024;
+}
+
+function shouldBypassDownloadCache(request: Request): boolean {
+  const url = new URL(request.url);
+
+  return (
+    url.searchParams.get("debug_download_cache") === "bypass" &&
+    String(getCloudflareContext().env.APP_ORIGIN ?? "").includes("staging")
+  );
 }
 
 function numberHeader(value: string | null): number | null {

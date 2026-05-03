@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { unzipSync, zipSync } from "fflate";
+import { inflate, zip } from "fflate";
 import {
   classifyArchivePath,
   contentTypeForArchivePath,
@@ -46,6 +46,7 @@ type IncludedFile = {
   contentType: string;
   packEntryPath: string | null;
   source: SourceFile;
+  cachedBytes?: Uint8Array;
 };
 
 type BlobObject = {
@@ -62,6 +63,30 @@ type CorePackObject = {
   uncompressedSize: number;
   fileCount: number;
 };
+
+type ZipCentralEntry = {
+  normalizedPath: string;
+  compressedSize: number;
+  uncompressedSize: number;
+  compression: number;
+  flags: number;
+  localHeaderOffset: number;
+  mtimeMs: number | null;
+};
+
+type ScanFileResult =
+  | {
+      kind: "excluded";
+      source: SourceFile;
+      fileType: string;
+    }
+  | {
+      kind: "included";
+      source: SourceFile;
+      included: IncludedFile;
+    };
+
+type LegacyZipEncoding = "utf-8" | "shift_jis" | "gb18030";
 
 const stageWeights: Record<UploadTaskPhase, { base: number; weight: number }> = {
   created: { base: 0, weight: 0 },
@@ -81,6 +106,24 @@ const stageWeights: Record<UploadTaskPhase, { base: number; weight: number }> = 
 const pausedTasks = new Set<string>();
 const canceledTasks = new Set<string>();
 const lastEmitAt = new Map<string, number>();
+const utf8ZipTextDecoder = new TextDecoder("utf-8");
+const fatalUtf8ZipTextDecoder = new TextDecoder("utf-8", { fatal: true });
+const shiftJisZipTextDecoder = new TextDecoder("shift_jis");
+const gb18030ZipTextDecoder = new TextDecoder("gb18030");
+const localFileHeaderSignature = 0x04034b50;
+const centralDirectorySignature = 0x02014b50;
+const endOfCentralDirectorySignature = 0x06054b50;
+const zipUtf8Flag = 0x0800;
+const zipMethodStore = 0;
+const zipMethodDeflate = 8;
+const zipEncryptedFlag = 0x0001;
+const maxHashConcurrency = 16;
+const minHashConcurrency = 4;
+const hashConcurrencyPerHardwareThread = 2;
+const maxUploadConcurrency = 16;
+const minUploadConcurrency = 6;
+const uploadConcurrencyPerHardwareThread = 2;
+const hashByteBudgetBytes = 256 * 1024 * 1024;
 
 self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
   const message = event.data;
@@ -252,32 +295,7 @@ async function enumerateSourceFiles(
   sourceKind: UploadSourceKind,
 ): Promise<SourceFile[]> {
   if (sourceKind === "zip") {
-    const zipFile = files[0];
-
-    if (!zipFile) {
-      throw new Error("未选择 ZIP 文件");
-    }
-
-    const entries = unzipSync(new Uint8Array(await zipFile.arrayBuffer()));
-    const paths = stripCommonRoot(
-      Object.keys(entries)
-        .filter((path) => !path.endsWith("/"))
-        .map(normalizeArchivePath),
-    );
-
-    return Object.entries(entries)
-      .filter(([path]) => !path.endsWith("/"))
-      .map(([path, bytes]) => {
-        const normalized = normalizeArchivePath(path);
-        return {
-          path: paths.get(normalized) ?? normalized,
-          size: bytes.byteLength,
-          mtimeMs: null,
-          contentType: contentTypeForArchivePath(normalized),
-          bytes: async () => bytes,
-        };
-      })
-      .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
+    return enumerateZipSourceFiles(files);
   }
 
   const rawPaths = files.map((file) => rawRelativePath(file));
@@ -295,6 +313,31 @@ async function enumerateSourceFiles(
         contentType: file.type || contentTypeForArchivePath(path),
         bytes: async () => new Uint8Array(await file.arrayBuffer()),
       };
+    })
+    .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
+}
+
+async function enumerateZipSourceFiles(files: File[]): Promise<SourceFile[]> {
+  const zipFile = files[0];
+
+  if (!zipFile) {
+    throw new Error("未选择 ZIP 文件");
+  }
+
+  const entries = await readZipCentralDirectory(zipFile);
+  const paths = stripCommonRoot(entries.map((entry) => entry.normalizedPath));
+
+  return entries
+    .map((entry) => {
+      const path = paths.get(entry.normalizedPath) ?? entry.normalizedPath;
+
+      return {
+        path,
+        size: entry.uncompressedSize,
+        mtimeMs: entry.mtimeMs,
+        contentType: contentTypeForArchivePath(path),
+        bytes: async () => readZipEntryBytes(zipFile, entry),
+      } satisfies SourceFile;
     })
     .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
 }
@@ -317,75 +360,64 @@ async function scanAndHash(
   let processedFiles = 0;
   let includedSize = 0;
   let excludedSize = 0;
+  let recordResult = Promise.resolve();
 
-  for (const source of sourceFiles) {
-    await waitIfPaused(task.localTaskId);
-    assertNotCanceled(task.localTaskId);
+  await runWithByteBudget(
+    sourceFiles,
+    resolveHashConcurrency(),
+    hashByteBudgetBytes,
+    async (source) => scanOneFile(task.localTaskId, source),
+    async (result) => {
+      recordResult = recordResult.then(async () => {
+        processedFiles += 1;
+        processedBytes += result.source.size;
 
-    const classification = classifyArchivePath(source.path);
-    processedFiles += 1;
+        if (result.kind === "excluded") {
+          excludedSize += result.source.size;
+          addExcluded(excluded, result.fileType, result.source);
+        } else {
+          includedFiles.push(result.included);
+          includedSize += result.included.size;
 
-    if (!classification.included) {
-      processedBytes += source.size;
-      excludedSize += source.size;
-      addExcluded(excluded, classification.fileType, source);
-      task = updateHashProgress(task, {
-        processedBytes,
-        processedFiles,
-        currentPath: source.path,
-        includedFileCount: includedFiles.length,
-        includedSizeBytes: includedSize,
-        excludedFileCount: processedFiles - includedFiles.length,
-        excludedSizeBytes: excludedSize,
-        excludedFileTypes: [...excluded.values()],
+          if (result.included.storageKind === "core_pack") {
+            coreFiles.push(result.included);
+          }
+        }
+
+        task = updateHashProgress(task, {
+          processedBytes,
+          processedFiles,
+          currentPath: result.source.path,
+          includedFileCount: includedFiles.length,
+          includedSizeBytes: includedSize,
+          excludedFileCount: processedFiles - includedFiles.length,
+          excludedSizeBytes: excludedSize,
+          excludedFileTypes: [...excluded.values()],
+        });
+        task = await persistAndPost(task);
       });
-      await persistAndPost(task);
+
+      await recordResult;
+    },
+  );
+
+  await recordResult;
+
+  includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
+  coreFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
+
+  for (const included of includedFiles) {
+    if (included.storageKind !== "blob" || blobObjects.has(included.sha256)) {
       continue;
     }
 
-    const bytes = await source.bytes();
-    const sha256 = await sha256Bytes(bytes);
-    const included: IncludedFile = {
-      path: source.path,
-      pathSortKey: source.path.toLowerCase(),
-      role: classification.role,
-      storageKind: classification.storageKind,
-      sha256,
-      crc32: crc32(bytes),
-      size: source.size,
-      mtimeMs: source.mtimeMs,
-      contentType: source.contentType,
-      packEntryPath: classification.packEntryPath,
-      source,
-    };
-
-    includedFiles.push(included);
-    includedSize += source.size;
-
-    if (included.storageKind === "core_pack") {
-      coreFiles.push(included);
-    } else if (!blobObjects.has(sha256)) {
-      blobObjects.set(sha256, {
-        sha256,
-        size: source.size,
-        contentType: source.contentType,
-        source,
-        uploaded: false,
-      });
-    }
-
-    processedBytes += source.size;
-    task = updateHashProgress(task, {
-      processedBytes,
-      processedFiles,
-      currentPath: source.path,
-      includedFileCount: includedFiles.length,
-      includedSizeBytes: includedSize,
-      excludedFileCount: processedFiles - includedFiles.length,
-      excludedSizeBytes: excludedSize,
-      excludedFileTypes: [...excluded.values()],
+    blobObjects.set(included.sha256, {
+      sha256: included.sha256,
+      size: included.size,
+      contentType: included.contentType,
+      source: included.source,
+      uploaded: false,
     });
-    await persistAndPost(task);
   }
 
   const uniqueBlobSize = [...blobObjects.values()].reduce(
@@ -417,6 +449,47 @@ async function scanAndHash(
   };
 }
 
+async function scanOneFile(
+  localTaskId: string,
+  source: SourceFile,
+): Promise<ScanFileResult> {
+  await waitIfPaused(localTaskId);
+  assertNotCanceled(localTaskId);
+
+  const classification = classifyArchivePath(source.path);
+
+  if (!classification.included) {
+    return {
+      kind: "excluded",
+      source,
+      fileType: classification.fileType,
+    };
+  }
+
+  const bytes = await source.bytes();
+  const sha256 = await sha256Bytes(bytes);
+  const included: IncludedFile = {
+    path: source.path,
+    pathSortKey: source.path.toLowerCase(),
+    role: classification.role,
+    storageKind: classification.storageKind,
+    sha256,
+    crc32: crc32(bytes),
+    size: source.size,
+    mtimeMs: source.mtimeMs,
+    contentType: source.contentType,
+    packEntryPath: classification.packEntryPath,
+    source,
+    cachedBytes: classification.storageKind === "core_pack" ? bytes : undefined,
+  };
+
+  return {
+    kind: "included",
+    source,
+    included,
+  };
+}
+
 async function buildCorePack(
   initialTask: BrowserUploadTaskSnapshot,
   coreFiles: IncludedFile[],
@@ -426,18 +499,27 @@ async function buildCorePack(
   const zipEntries: Record<string, Uint8Array> = {};
   let rawSize = 0;
   let processed = 0;
+  const sortedCoreFiles = coreFiles
+    .slice()
+    .sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
 
-  for (const file of coreFiles) {
+  for (const file of sortedCoreFiles) {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
-    zipEntries[file.packEntryPath ?? file.path] = await file.source.bytes();
+    zipEntries[file.packEntryPath ?? file.path] =
+      file.cachedBytes ?? (await file.source.bytes());
     rawSize += file.size;
     processed += 1;
-    task = setPhase(task, "building_core_pack", processed / Math.max(coreFiles.length, 1), file.path);
+    task = setPhase(
+      task,
+      "building_core_pack",
+      processed / Math.max(sortedCoreFiles.length, 1),
+      file.path,
+    );
     task = await persistAndPost(task);
   }
 
-  const bytes = zipSync(zipEntries, { level: 1 });
+  const bytes = await zipEntriesAsync(zipEntries);
   const sha256 = await sha256Bytes(bytes);
 
   return {
@@ -673,7 +755,7 @@ async function uploadMissingObjects(input: {
     .filter((item): item is BlobObject => Boolean(item))
     .sort((a, b) => b.size - a.size);
 
-  await runWithConcurrency(missingBlobObjects, 4, async (blob) => {
+  await runWithConcurrency(missingBlobObjects, resolveUploadConcurrency(), async (blob) => {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
     await uploadBlob(blob, task.serverImportJobId);
@@ -734,7 +816,7 @@ async function uploadCorePack(
         "x-core-pack-file-count": String(corePack.fileCount),
         "x-core-pack-uncompressed-size": String(corePack.uncompressedSize),
       },
-      body: toArrayBuffer(corePack.bytes),
+      body: asArrayBufferView(corePack.bytes),
     });
 
     if (!response.ok) {
@@ -752,7 +834,7 @@ async function uploadBlob(blob: BlobObject, importJobId: number | null): Promise
       headers: {
         "content-type": blob.contentType,
       },
-      body: toArrayBuffer(bytes),
+      body: asArrayBufferView(bytes),
     });
 
     if (!response.ok) {
@@ -999,6 +1081,112 @@ async function runWithConcurrency<T>(
   );
 }
 
+async function runWithByteBudget<T extends { size: number }, R>(
+  items: T[],
+  concurrency: number,
+  maxActiveBytes: number,
+  worker: (item: T) => Promise<R>,
+  onResult: (result: R) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  let activeCount = 0;
+  let activeBytes = 0;
+  let completedCount = 0;
+  let failed = false;
+
+  await new Promise<void>((resolve, reject) => {
+    const schedule = () => {
+      if (failed) {
+        return;
+      }
+
+      while (nextIndex < items.length && activeCount < concurrency) {
+        const item = items[nextIndex];
+        const itemBytes = Math.max(1, item.size);
+
+        if (
+          activeCount > 0 &&
+          (itemBytes > maxActiveBytes || activeBytes + itemBytes > maxActiveBytes)
+        ) {
+          break;
+        }
+
+        nextIndex += 1;
+        activeCount += 1;
+        activeBytes += itemBytes;
+
+        void worker(item)
+          .then(onResult)
+          .then(() => {
+            completedCount += 1;
+          })
+          .catch((error: unknown) => {
+            failed = true;
+            reject(error);
+          })
+          .finally(() => {
+            activeCount -= 1;
+            activeBytes -= itemBytes;
+
+            if (failed) {
+              return;
+            }
+
+            if (completedCount >= items.length) {
+              resolve();
+              return;
+            }
+
+            schedule();
+          });
+      }
+    };
+
+    if (items.length === 0) {
+      resolve();
+      return;
+    }
+
+    schedule();
+  });
+}
+
+function resolveHashConcurrency(): number {
+  const hardwareConcurrency =
+    typeof navigator.hardwareConcurrency === "number"
+      ? navigator.hardwareConcurrency
+      : minHashConcurrency / hashConcurrencyPerHardwareThread;
+
+  return Math.max(
+    1,
+    Math.min(
+      maxHashConcurrency,
+      Math.max(
+        minHashConcurrency,
+        Math.ceil(hardwareConcurrency * hashConcurrencyPerHardwareThread),
+      ),
+    ),
+  );
+}
+
+function resolveUploadConcurrency(): number {
+  const hardwareConcurrency =
+    typeof navigator.hardwareConcurrency === "number"
+      ? navigator.hardwareConcurrency
+      : minUploadConcurrency / uploadConcurrencyPerHardwareThread;
+
+  return Math.max(
+    1,
+    Math.min(
+      maxUploadConcurrency,
+      Math.max(
+        minUploadConcurrency,
+        Math.ceil(hardwareConcurrency * uploadConcurrencyPerHardwareThread),
+      ),
+    ),
+  );
+}
+
 async function waitIfPaused(localTaskId: string): Promise<void> {
   while (pausedTasks.has(localTaskId)) {
     await sleep(250);
@@ -1015,17 +1203,49 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function zipEntriesAsync(entries: Record<string, Uint8Array>): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    zip(entries, { level: 1, consume: true }, (error, data) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(data);
+    });
+  });
+}
+
+async function inflateBytes(bytes: Uint8Array, size: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    inflate(bytes, { size, consume: true }, (error, data) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(data);
+    });
+  });
+}
+
 async function sha256Bytes(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
+  const digest = await crypto.subtle.digest("SHA-256", asArrayBufferView(bytes));
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
 
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+function asArrayBufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes as Uint8Array<ArrayBuffer>;
+  }
+
   const copy = new Uint8Array(bytes.byteLength);
+
   copy.set(bytes);
-  return copy.buffer;
+
+  return copy;
 }
 
 async function sha256Text(value: string): Promise<string> {
@@ -1036,23 +1256,17 @@ async function fingerprintSource(
   files: SourceFile[],
   sourceKind: UploadSourceKind,
 ): Promise<string> {
-  const stableNames = ["RPG_RT.ini", "RPG_RT.ldb", "RPG_RT.lmt"];
   const parts = [
     sourceKind,
     String(files.length),
     String(files.reduce((sum, file) => sum + file.size, 0)),
   ];
+  const sampleFiles = [
+    ...files.slice(0, 20),
+    ...files.slice(Math.max(20, files.length - 20)),
+  ];
 
-  for (const name of stableNames) {
-    const file = files.find((item) => item.path.toLowerCase() === name.toLowerCase());
-    if (!file) {
-      continue;
-    }
-
-    parts.push(`${file.path}:${file.size}:${await sha256Bytes(await file.bytes())}`);
-  }
-
-  for (const file of files.slice(0, 20)) {
+  for (const file of sampleFiles) {
     parts.push(`${file.path}:${file.size}:${file.mtimeMs ?? ""}`);
   }
 
@@ -1078,6 +1292,313 @@ function addExcluded(
 
   existing.fileCount += 1;
   existing.totalSizeBytes += source.size;
+
+  if (source.path.localeCompare(existing.examplePath) < 0) {
+    existing.examplePath = source.path;
+  }
+}
+
+async function readZipCentralDirectory(zipFile: File): Promise<ZipCentralEntry[]> {
+  const tailLength = Math.min(zipFile.size, 22 + 65535);
+  const tailStart = zipFile.size - tailLength;
+  const tail = new Uint8Array(await zipFile.slice(tailStart).arrayBuffer());
+  const eocdOffset = findEndOfCentralDirectory(tail);
+  const diskNumber = readUint16(tail, eocdOffset + 4);
+  const centralDirectoryDisk = readUint16(tail, eocdOffset + 6);
+  const entryCount = readUint16(tail, eocdOffset + 10);
+  const centralDirectorySize = readUint32(tail, eocdOffset + 12);
+  const centralDirectoryOffset = readUint32(tail, eocdOffset + 16);
+
+  if (diskNumber !== 0 || centralDirectoryDisk !== 0) {
+    throw new Error("暂不支持分卷 ZIP 上传。");
+  }
+
+  if (
+    entryCount === 0xffff ||
+    centralDirectorySize === 0xffffffff ||
+    centralDirectoryOffset === 0xffffffff
+  ) {
+    throw new Error("暂不支持 ZIP64 上传。");
+  }
+
+  const central = new Uint8Array(
+    await zipFile
+      .slice(centralDirectoryOffset, centralDirectoryOffset + centralDirectorySize)
+      .arrayBuffer(),
+  );
+  const legacyEncoding = chooseLegacyZipEncoding(central);
+  const entries: ZipCentralEntry[] = [];
+  let offset = 0;
+
+  while (offset < central.byteLength) {
+    if (offset + 46 > central.byteLength) {
+      throw new Error("ZIP 中央目录截断。");
+    }
+
+    if (readUint32(central, offset) !== centralDirectorySignature) {
+      throw new Error("ZIP 中央目录损坏。");
+    }
+
+    const flags = readUint16(central, offset + 8);
+    const compression = readUint16(central, offset + 10);
+    const modifiedTime = readUint16(central, offset + 12);
+    const modifiedDate = readUint16(central, offset + 14);
+    const compressedSize = readUint32(central, offset + 20);
+    const uncompressedSize = readUint32(central, offset + 24);
+    const nameLength = readUint16(central, offset + 28);
+    const extraLength = readUint16(central, offset + 30);
+    const commentLength = readUint16(central, offset + 32);
+    const localHeaderOffset = readUint32(central, offset + 42);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + nameLength;
+
+    if (nameEnd + extraLength + commentLength > central.byteLength) {
+      throw new Error("ZIP 中央目录文件名截断。");
+    }
+
+    if (
+      compressedSize === 0xffffffff ||
+      uncompressedSize === 0xffffffff ||
+      localHeaderOffset === 0xffffffff
+    ) {
+      throw new Error("暂不支持包含 ZIP64 entry 的上传包。");
+    }
+
+    if ((flags & zipEncryptedFlag) !== 0) {
+      throw new Error("暂不支持加密 ZIP 上传。");
+    }
+
+    if (compression !== zipMethodStore && compression !== zipMethodDeflate) {
+      throw new Error(`暂不支持 ZIP 压缩方法 ${compression}。`);
+    }
+
+    const name = decodeZipPath(
+      central.subarray(nameStart, nameEnd),
+      flags,
+      legacyEncoding,
+    );
+    const normalizedPath = normalizeArchivePath(name);
+
+    if (normalizedPath && !normalizedPath.endsWith("/")) {
+      entries.push({
+        normalizedPath,
+        compressedSize,
+        uncompressedSize,
+        compression,
+        flags,
+        localHeaderOffset,
+        mtimeMs: dosDateTimeToMs(modifiedDate, modifiedTime),
+      });
+    }
+
+    offset = nameEnd + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+async function readZipEntryBytes(
+  zipFile: File,
+  entry: ZipCentralEntry,
+): Promise<Uint8Array> {
+  const fixed = new Uint8Array(
+    await zipFile
+      .slice(entry.localHeaderOffset, entry.localHeaderOffset + 30)
+      .arrayBuffer(),
+  );
+
+  if (fixed.byteLength !== 30 || readUint32(fixed, 0) !== localFileHeaderSignature) {
+    throw new Error(`ZIP local header 损坏：${entry.normalizedPath}`);
+  }
+
+  const nameLength = readUint16(fixed, 26);
+  const extraLength = readUint16(fixed, 28);
+  const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength;
+  const compressed = new Uint8Array(
+    await zipFile.slice(dataOffset, dataOffset + entry.compressedSize).arrayBuffer(),
+  );
+
+  if (compressed.byteLength !== entry.compressedSize) {
+    throw new Error(`ZIP entry 数据截断：${entry.normalizedPath}`);
+  }
+
+  if (entry.compression === zipMethodStore) {
+    if (compressed.byteLength !== entry.uncompressedSize) {
+      throw new Error(`ZIP store entry 大小异常：${entry.normalizedPath}`);
+    }
+
+    return compressed;
+  }
+
+  return inflateBytes(compressed, entry.uncompressedSize);
+}
+
+function findEndOfCentralDirectory(bytes: Uint8Array): number {
+  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
+    if (readUint32(bytes, offset) === endOfCentralDirectorySignature) {
+      return offset;
+    }
+  }
+
+  throw new Error("未找到 ZIP 中央目录。");
+}
+
+function chooseLegacyZipEncoding(central: Uint8Array): LegacyZipEncoding {
+  const scores: Record<LegacyZipEncoding, number> = {
+    "utf-8": 0,
+    shift_jis: 0,
+    gb18030: 0,
+  };
+  let offset = 0;
+  let sampled = 0;
+
+  while (offset < central.byteLength && sampled < 1000) {
+    if (offset + 46 > central.byteLength) {
+      break;
+    }
+
+    if (readUint32(central, offset) !== centralDirectorySignature) {
+      break;
+    }
+
+    const flags = readUint16(central, offset + 8);
+    const nameLength = readUint16(central, offset + 28);
+    const extraLength = readUint16(central, offset + 30);
+    const commentLength = readUint16(central, offset + 32);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + nameLength;
+
+    if (nameEnd + extraLength + commentLength > central.byteLength) {
+      break;
+    }
+
+    if ((flags & zipUtf8Flag) === 0) {
+      const bytes = central.subarray(nameStart, nameEnd);
+      const utf8 = tryDecodeUtf8(bytes);
+
+      scores["utf-8"] += utf8 ? scoreLegacyZipPath(utf8) : -1000;
+      scores.shift_jis += scoreLegacyZipPath(shiftJisZipTextDecoder.decode(bytes));
+      scores.gb18030 += scoreLegacyZipPath(gb18030ZipTextDecoder.decode(bytes));
+      sampled += 1;
+    }
+
+    offset = nameEnd + extraLength + commentLength;
+  }
+
+  if (sampled === 0) {
+    return "utf-8";
+  }
+
+  return (Object.entries(scores) as Array<[LegacyZipEncoding, number]>).sort(
+    (left, right) => right[1] - left[1],
+  )[0]?.[0] ?? "shift_jis";
+}
+
+function decodeZipPath(
+  bytes: Uint8Array,
+  flags: number,
+  legacyEncoding: LegacyZipEncoding,
+): string {
+  if ((flags & zipUtf8Flag) !== 0) {
+    return utf8ZipTextDecoder.decode(bytes);
+  }
+
+  switch (legacyEncoding) {
+    case "utf-8":
+      return utf8ZipTextDecoder.decode(bytes);
+    case "gb18030":
+      return gb18030ZipTextDecoder.decode(bytes);
+    case "shift_jis":
+      return shiftJisZipTextDecoder.decode(bytes);
+  }
+}
+
+function tryDecodeUtf8(bytes: Uint8Array): string | null {
+  try {
+    return fatalUtf8ZipTextDecoder.decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function scoreLegacyZipPath(value: string): number {
+  let score = 0;
+
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+
+    if (char === "\uFFFD" || code === 0 || (code < 0x20 && char !== "\t")) {
+      score -= 100;
+      continue;
+    }
+
+    if (isHiragana(code) || isKatakana(code)) {
+      score += 8;
+      continue;
+    }
+
+    if (isCjk(code)) {
+      score += 2;
+      continue;
+    }
+
+    if (code >= 0x20 && code <= 0x7e) {
+      score += 1;
+      continue;
+    }
+
+    score -= 1;
+  }
+
+  return score;
+}
+
+function isHiragana(code: number): boolean {
+  return code >= 0x3040 && code <= 0x309f;
+}
+
+function isKatakana(code: number): boolean {
+  return (
+    (code >= 0x30a0 && code <= 0x30ff) ||
+    (code >= 0xff65 && code <= 0xff9f)
+  );
+}
+
+function isCjk(code: number): boolean {
+  return (
+    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0xf900 && code <= 0xfaff)
+  );
+}
+
+function dosDateTimeToMs(date: number, time: number): number | null {
+  if (date === 0) {
+    return null;
+  }
+
+  const year = ((date >> 9) & 0x7f) + 1980;
+  const month = ((date >> 5) & 0x0f) - 1;
+  const day = date & 0x1f;
+  const hour = (time >> 11) & 0x1f;
+  const minute = (time >> 5) & 0x3f;
+  const second = (time & 0x1f) * 2;
+  const value = new Date(year, month, day, hour, minute, second).getTime();
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function readUint16(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+function readUint32(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  ) >>> 0;
 }
 
 function rawRelativePath(file: File): string {

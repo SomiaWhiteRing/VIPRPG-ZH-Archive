@@ -623,6 +623,8 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，`archive_version_files = 9073`；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
 - staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
 - commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
+- 2026-05-03 追加上传性能优化：上传 worker 不再在 ZIP 模式下 `unzipSync` 全量解包，而是读取中央目录并按需切片解压 entry；hash / CRC 阶段改为有字节预算的自适应并发；core pack 生成复用扫描阶段已读 core 字节并改为 `fflate` 异步 ZIP；缺失 blob 上传并发改为按浏览器能力自适应。
+- 2026-05-03 ZIP 路径编码修复：本地 ZIP 上传读取中央目录时遵守 UTF-8 flag；对未标记 UTF-8 的 legacy ZIP 在样本上选择统一编码，覆盖日文 Shift-JIS/CP932 路径，避免 manifest 固化乱码路径和 Web Play 安装时出现 EasyRPG 路径冲突。
 
 ### Phase E：下载重组
 
@@ -654,6 +656,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 公开下载链接也携带 `zip_builder={download_zip_builder_version}` 查询参数，避免浏览器或边缘节点继续复用旧版无 `Content-Length` 响应头。
 - 因最终 ZIP 使用 STORE 且文件大小、UTF-8 路径和 ZIP header 长度都可从 manifest 推导，下载响应会在开始前精确计算 ZIP 总字节数，并用 Cloudflare `FixedLengthStream` 包装响应体，让运行时真正发出 `Content-Length`，从而让浏览器原生下载栏能显示百分比进度。只手动设置 `Content-Length` 但继续返回普通 `ReadableStream` 不够，Cloudflare 会把 GET 降回 chunked 响应。
 - 下载端点在 `worker.mjs` 原生 Worker 入口层拦截，再把非下载请求交还 `.open-next/worker.js`。这是因为 Next App Route / OpenNext 会二次包装响应流，导致 `FixedLengthStream` 无法穿透到最终网络响应。
+- 冷下载重组已加入 R2 读取优化：ZIP 输出顺序仍按 manifest 固定，但下载端提前并发打开后续 32 个 entry；同一请求内对小于等于约 2 MB 的重复 blob 缓存字节，总缓存上限约 64 MB。该优化减少串行 R2 等待和重复 `bucket.get()`，不改变 canonical R2 对象，也不写入完整 ZIP。
 - Phase E MVP 会把单个 core pack 解压到 Worker 内存后按需写入最终 ZIP。当前 staging 样本 core pack 规模为 `#2` 约 1.41 MB 压缩 / 5.19 MB 解压、`#6` 约 3.54 MB 压缩 / 9.87 MB 解压，可接受；当 core pack 规模明显增大时，需要改为真正的 entry streaming 或增加更细粒度打包。
 - staging 验收：`ArchiveVersion #2` 下载 ZIP 为 132,788,001 bytes，3018 个 entry，payload 132,333,569 bytes；`ArchiveVersion #6` 下载 ZIP 为 288,344,604 bytes，9073 个 entry，payload 287,052,082 bytes；两者均可由本地 ZIP 读取器打开，且未发现路径穿越 entry。
 - 追加验收：新上传的 `ArchiveVersion #7`（もしもコレクション3）GET 响应已返回 `Content-Length: 36823763` 且不再返回 `Transfer-Encoding: chunked`；完整下载后 ZIP 可打开，629 个 entry，payload 36,747,329 bytes。
@@ -747,6 +750,9 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 2026-05-02 追加优化：Web Play installer 提升为 `opfs-v7-skip-non-web-runtime-local-write`，本地 OPFS 写入和 EasyRPG 索引生成阶段跳过所有 `.txt`、`.exe`、`.dll` 文件；普通下载 ZIP 和 canonical manifest 不变。
 - 2026-05-03 B + Pack 改造：下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，manifest/`archive_version_files` 固定保存每个文件 CRC32；Web Play installer 提升为 `opfs-v8-stream-pack-index`，不再逐文件写 OPFS，而是边下载边写 `packs/*.pack` 并生成 `pack-index.json`；Service Worker 从 pack byte range 返回资源。
 - 2026-05-03 B + Pack staging 部署版本：`cc468319-8522-49db-9882-dda07d52f618`。staging D1 已应用 `0004_streamable_zip_crc32.sql`，旧测试 ArchiveVersion 标为 `deleted`，并以新 manifest 重新导入 `ArchiveVersion #8`。验收结果：下载响应 `X-Download-Zip-Builder: zip-store-v7-local-crc-no-descriptor`、`Content-Length: 132739713`；首个 local header flag 为 `0x0800` 且无 data descriptor bit；Web Play 安装生成 `index.json`、`pack-index.json` 和 1 个 `assets-000.pack`，pack 索引 2153 个文件且 `.txt/.exe/.dll` 为 0；EasyRPG 可进入标题菜单。
+- 2026-05-03 `/play/13` 安装性能诊断：首次日志显示 `X-Download-Cache: HIT`、`CF-Cache-Status: HIT`，服务端和 R2 不是瓶颈；107.10 MB 本地安装耗时 37.08s，其中 OPFS write 等待 33.14s、write 调用 7185 次。安装器加入约 1 MB OPFS 写入缓冲后，staging 部署版本 `997bf818-5b2f-4b48-96d1-8f507812618b` 复测耗时 23.26s，OPFS write 等待降至 1.47s、write 调用降至 106 次，游戏可启动。小于 256 MB 的安装生成 1 个 pack 是正常结果，不代表偏离 B + Pack 设计。
+- 2026-05-03 `/play/13` 网络失败重试修正：staging 部署版本 `c5ff1bd9-15c3-4590-adae-841eb94a870e` 加入 Web Play 安装自动重试。通过 Playwright 强制第一次下载请求 `Failed to fetch`，页面日志显示 `1.50s 后自动重试（2/3）`，第二次尝试清理半成品缓存后完成安装。
+- 2026-05-03 `/play/13` 冷下载优化：staging 部署版本 `aaf2c4d4-6120-444f-8634-1c4e348d0abb` 加入下载端 R2 预取和单请求小 blob 缓存。使用 staging-only `debug_download_cache=bypass` 绕过 Workers Cache 测试，130,098,240 byte ZIP 的冷下载耗时从优化前 `188.75s / 0.69 MB/s` 降至 `39.91s / 3.26 MB/s`；随后一次完整 ZIP 校验下载为 `24.57s / 5.30 MB/s`，可由 .NET ZipArchive 打开，entry 数 `5743`、文件长度 `130098240`。同轮缓存命中请求受本地网络影响为 `36.25s / 3.59 MB/s`。
 
 ## 11. 部署和环境流程
 

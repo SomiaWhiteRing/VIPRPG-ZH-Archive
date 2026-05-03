@@ -11,6 +11,9 @@ const zipMethodStore = 0;
 const zipVersion20 = 20;
 const uint16Max = 0xffff;
 const uint32Max = 0xffffffff;
+const zipEntryOpenPrefetch = 32;
+const blobReadCacheMaxEntryBytes = 2 * 1024 * 1024;
+const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
   const startedAt = Date.now();
@@ -44,8 +47,9 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     const cacheRequest = downloadCacheRequest(request, record);
     cacheKey = downloadBuildCacheKey(cacheRequest);
+    const bypassDownloadCache = shouldBypassDownloadCache(request, env);
 
-    if (request.method === "GET") {
+    if (request.method === "GET" && !bypassDownloadCache) {
       const cached = await caches.default.match(cacheRequest);
 
       if (cached) {
@@ -67,7 +71,9 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
     const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET);
     const zipSizeBytes = estimateZipStreamSize(zipEntries);
-    const headers = downloadHeaders(record, request.method === "HEAD" ? "BYPASS" : "MISS", zipSizeBytes);
+    const cacheStatus =
+      request.method === "HEAD" || bypassDownloadCache ? "BYPASS" : "MISS";
+    const headers = downloadHeaders(record, cacheStatus, zipSizeBytes);
 
     if (request.method === "HEAD") {
       return new Response(null, { headers });
@@ -79,13 +85,13 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     const recordMissAccess = recordDownloadAccess(env.DB, {
       record,
       cacheKey,
-      cacheStatus: "MISS",
+      cacheStatus,
       sizeBytes: zipSizeBytes,
       actualR2GetCount: record.estimatedR2GetCount,
       durationMs: Date.now() - startedAt,
     });
 
-    if (shouldTryWorkersCache(record.totalSizeBytes)) {
+    if (!bypassDownloadCache && shouldTryWorkersCache(record.totalSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
@@ -203,6 +209,7 @@ async function loadManifest(bucket, manifestSha256) {
 
 function buildZipEntries(manifest, bucket) {
   const corePackCache = new Map();
+  const blobReadCache = new BlobReadCache(bucket);
 
   return manifest.files
     .slice()
@@ -212,7 +219,7 @@ function buildZipEntries(manifest, bucket) {
       size: file.size,
       crc32: file.crc32,
       mtimeMs: file.mtimeMs,
-      open: () => openManifestFile(file, manifest, bucket, corePackCache),
+      open: () => openManifestFile(file, manifest, bucket, corePackCache, blobReadCache),
     }));
 }
 
@@ -222,17 +229,11 @@ function compareManifestFiles(left, right) {
   );
 }
 
-async function openManifestFile(file, manifest, bucket, corePackCache) {
+async function openManifestFile(file, manifest, bucket, corePackCache, blobReadCache) {
   const storage = file.storage;
 
   if (storage.kind === "blob") {
-    const object = await bucket.get(blobKey(storage.blobSha256));
-
-    if (!object?.body) {
-      throw new Error(`Missing blob object: ${storage.blobSha256}`);
-    }
-
-    return object.body;
+    return blobReadCache.open(storage.blobSha256, file.size);
   }
 
   const corePack = manifest.corePacks.find((item) => item.id === storage.packId);
@@ -256,6 +257,68 @@ async function openManifestFile(file, manifest, bucket, corePackCache) {
   }
 
   return streamBytes(bytes);
+}
+
+class BlobReadCache {
+  constructor(bucket) {
+    this.bucket = bucket;
+    this.promises = new Map();
+    this.reservedBytes = 0;
+  }
+
+  async open(sha256, size) {
+    if (!this.shouldCache(size)) {
+      const object = await this.bucket.get(blobKey(sha256));
+
+      if (!object?.body) {
+        throw new Error(`Missing blob object: ${sha256}`);
+      }
+
+      return object.body;
+    }
+
+    let promise = this.promises.get(sha256);
+
+    if (!promise) {
+      this.reservedBytes += size;
+      promise = this.loadBytes(sha256, size).catch((error) => {
+        this.reservedBytes -= size;
+        this.promises.delete(sha256);
+        throw error;
+      });
+      promise.catch(() => undefined);
+      this.promises.set(sha256, promise);
+    }
+
+    return streamBytes(await promise);
+  }
+
+  shouldCache(size) {
+    return (
+      Number.isSafeInteger(size) &&
+      size >= 0 &&
+      size <= blobReadCacheMaxEntryBytes &&
+      this.reservedBytes + size <= blobReadCacheMaxTotalBytes
+    );
+  }
+
+  async loadBytes(sha256, expectedSize) {
+    const object = await this.bucket.get(blobKey(sha256));
+
+    if (!object) {
+      throw new Error(`Missing blob object: ${sha256}`);
+    }
+
+    const bytes = new Uint8Array(await object.arrayBuffer());
+
+    if (bytes.byteLength !== expectedSize) {
+      throw new Error(
+        `Blob size mismatch for ${sha256}: expected ${expectedSize}, got ${bytes.byteLength}`,
+      );
+    }
+
+    return bytes;
+  }
 }
 
 async function loadCorePackEntries(bucket, sha256) {
@@ -301,13 +364,31 @@ function createZipStream(entries) {
 async function writeZip(writer, entries) {
   let offset = 0;
   const centralEntries = [];
+  const openPromises = new Array(entries.length);
+  let nextToPrefetch = 0;
 
   async function write(bytes) {
     await writer.write(bytes);
     offset += bytes.byteLength;
   }
 
-  for (const entry of entries) {
+  function prefetchThrough(exclusiveIndex) {
+    while (nextToPrefetch < entries.length && nextToPrefetch < exclusiveIndex) {
+      const promise = entries[nextToPrefetch].open();
+
+      promise.catch(() => undefined);
+      openPromises[nextToPrefetch] = promise;
+      nextToPrefetch += 1;
+    }
+  }
+
+  prefetchThrough(zipEntryOpenPrefetch);
+
+  for (let index = 0; index < entries.length; index += 1) {
+    prefetchThrough(index + zipEntryOpenPrefetch + 1);
+
+    const entry = entries[index];
+
     validateZipPath(entry.path);
 
     const pathBytes = textEncoder.encode(entry.path);
@@ -321,7 +402,7 @@ async function writeZip(writer, entries) {
     await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
     let actualSize = 0;
-    const stream = await entry.open();
+    const stream = await (openPromises[index] ?? entry.open());
     const reader = stream.getReader();
 
     try {
@@ -581,6 +662,15 @@ function numberHeader(value) {
 
 function shouldTryWorkersCache(totalSizeBytes) {
   return totalSizeBytes > 0 && totalSizeBytes <= 500 * 1024 * 1024;
+}
+
+function shouldBypassDownloadCache(request, env) {
+  const url = new URL(request.url);
+
+  return (
+    url.searchParams.get("debug_download_cache") === "bypass" &&
+    String(env.APP_ORIGIN ?? "").includes("staging")
+  );
 }
 
 async function recordDownloadAccess(db, input) {

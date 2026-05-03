@@ -66,6 +66,14 @@ type PackEntryLocation = {
   offset: number;
 };
 
+type StreamZipDiagnostics = {
+  durationMs: number;
+  entriesSeen: number;
+  packWriteCalls: number;
+  packWriteDurationMs: number;
+  fileRecordsDurationMs: number;
+};
+
 type ByteChunk = Uint8Array<ArrayBufferLike>;
 
 const canceledPlayKeys = new Set<string>();
@@ -77,8 +85,12 @@ const endOfCentralDirectorySignature = 0x06054b50;
 const zipDataDescriptorFlag = 0x0008;
 const zipMethodStore = 0;
 const progressEmitIntervalMs = 80;
+const diagnosticLogIntervalMs = 5000;
 const fileRecordBatchSize = 1000;
 const packTargetSizeBytes = 256 * 1024 * 1024;
+const packWriteBufferTargetBytes = 1024 * 1024;
+const maxInstallAttempts = 3;
+const retryBaseDelayMs = 1500;
 const easyRpgResourceAliasExtensions = new Set([
   "bmp",
   "gif",
@@ -118,93 +130,43 @@ async function runInstall(
   storageSnapshot?: WebPlayStorageSnapshot,
 ): Promise<void> {
   let installation = createInitialInstallation(metadata);
+  const installStartedAt = nowMs();
 
   try {
     installation = await requestStorage(installation, storageSnapshot);
-    await resetGameOpfsDirectory(metadata.playKey);
-    await clearWebPlayFileRecords(metadata.playKey);
 
-    installation = await persistAndPost(
-      {
-        ...installation,
-        status: "installing",
-        phase: "downloading_zip",
-        updatedAt: new Date().toISOString(),
-      },
-      true,
-    );
+    for (let attempt = 1; attempt <= maxInstallAttempts; attempt += 1) {
+      try {
+        installation = await runInstallAttempt({
+          metadata,
+          installation,
+          installStartedAt,
+          attempt,
+        });
+        return;
+      } catch (error) {
+        if (canceledPlayKeys.has(metadata.playKey) || !isRetryableInstallError(error)) {
+          throw error;
+        }
 
-    const indexRoot: EasyRpgCacheNode = {};
-    const response = await fetch(metadata.downloadUrl, {
-      credentials: "same-origin",
-    });
+        if (attempt >= maxInstallAttempts) {
+          throw error;
+        }
 
-    if (!response.ok) {
-      throw new Error(`下载 ZIP 失败：HTTP ${response.status}`);
+        const delayMs = retryDelayMs(attempt);
+        const message = error instanceof Error ? error.message : "安装失败";
+
+        postLog(
+          metadata.playKey,
+          "warning",
+          `安装遇到可重试错误：${message}。${formatDuration(
+            delayMs,
+          )} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
+        );
+        await delay(delayMs);
+        assertNotCanceled(metadata.playKey);
+      }
     }
-
-    const headerLength = numberHeader(response.headers.get("Content-Length"));
-    installation = await persistAndPost(
-      {
-        ...installation,
-        downloadBytesTotal: headerLength ?? metadata.totalSizeBytes,
-        updatedAt: new Date().toISOString(),
-      },
-      true,
-    );
-
-    const result = await streamZipToPacks({
-      metadata,
-      response,
-      installation,
-      indexRoot,
-    });
-    installation = result.installation;
-
-    assertNotCanceled(metadata.playKey);
-    installation = await persistAndPost(
-      {
-        ...installation,
-        phase: "writing_index",
-        currentPath: "index.json",
-        updatedAt: new Date().toISOString(),
-      },
-      true,
-    );
-    await writeGameIndexJson(
-      metadata.playKey,
-      JSON.stringify({
-        cache: indexRoot,
-        metadata: {
-          version: 3,
-          storage: "pack-index",
-          archiveVersionId: metadata.archiveVersionId,
-          manifestSha256: metadata.manifestSha256,
-        },
-      }),
-    );
-    await writeGamePackIndexJson(metadata.playKey, JSON.stringify(result.packIndex));
-
-    installation = await persistAndPost(
-      {
-        ...installation,
-        status: "ready",
-        phase: "ready",
-        readyAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        currentPath: null,
-        error: null,
-      },
-      true,
-    );
-
-    postLog(
-      metadata.playKey,
-      "info",
-      `浏览器本地安装完成，资源写入 ${result.packIndex.packs.length.toLocaleString(
-        "zh-CN",
-      )} 个 pack 文件。`,
-    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "安装失败";
     const failed: WebPlayInstallation = {
@@ -221,6 +183,146 @@ async function runInstall(
     } satisfies WebPlayInstallWorkerOutput);
     postLog(metadata.playKey, "error", message);
   }
+}
+
+async function runInstallAttempt(input: {
+  metadata: WebPlayMetadata;
+  installation: WebPlayInstallation;
+  installStartedAt: number;
+  attempt: number;
+}): Promise<WebPlayInstallation> {
+  const { metadata, installStartedAt, attempt } = input;
+  let installation = input.installation;
+
+  assertNotCanceled(metadata.playKey);
+
+  if (attempt > 1) {
+    postLog(
+      metadata.playKey,
+      "info",
+      `开始第 ${attempt}/${maxInstallAttempts} 次安装尝试，先清理上一次半成品缓存。`,
+    );
+  }
+
+  await resetGameOpfsDirectory(metadata.playKey);
+  await clearWebPlayFileRecords(metadata.playKey);
+
+  installation = await persistAndPost(
+    {
+      ...installation,
+      status: "installing",
+      phase: "downloading_zip",
+      downloadedBytes: 0,
+      downloadBytesTotal: 0,
+      installedFiles: 0,
+      installedBytes: 0,
+      currentPath: null,
+      error: null,
+      updatedAt: new Date().toISOString(),
+    },
+    true,
+  );
+
+  const indexRoot: EasyRpgCacheNode = {};
+  const fetchStartedAt = nowMs();
+  const response = await fetch(metadata.downloadUrl, {
+    credentials: "same-origin",
+  });
+  const responseHeaderMs = nowMs() - fetchStartedAt;
+
+  if (!response.ok) {
+    throw new Error(`下载 ZIP 失败：HTTP ${response.status}`);
+  }
+
+  const headerLength = numberHeader(response.headers.get("Content-Length"));
+  postLog(
+    metadata.playKey,
+    "info",
+    `ZIP 响应头已收到：${formatBytes(
+      headerLength ?? metadata.totalSizeBytes,
+    )}，X-Download-Cache=${
+      response.headers.get("X-Download-Cache") ?? "unknown"
+    }，CF-Cache-Status=${
+      response.headers.get("CF-Cache-Status") ?? "unknown"
+    }，预计 R2 Get=${metadata.estimatedR2GetCount.toLocaleString(
+      "zh-CN",
+    )}，等待 ${formatDuration(responseHeaderMs)}。`,
+  );
+  installation = await persistAndPost(
+    {
+      ...installation,
+      downloadBytesTotal: headerLength ?? metadata.totalSizeBytes,
+      updatedAt: new Date().toISOString(),
+    },
+    true,
+  );
+
+  const result = await streamZipToPacks({
+    metadata,
+    response,
+    installation,
+    indexRoot,
+  });
+  installation = result.installation;
+
+  assertNotCanceled(metadata.playKey);
+  installation = await persistAndPost(
+    {
+      ...installation,
+      phase: "writing_index",
+      currentPath: "index.json",
+      updatedAt: new Date().toISOString(),
+    },
+    true,
+  );
+  const indexStartedAt = nowMs();
+  await writeGameIndexJson(
+    metadata.playKey,
+    JSON.stringify({
+      cache: indexRoot,
+      metadata: {
+        version: 3,
+        storage: "pack-index",
+        archiveVersionId: metadata.archiveVersionId,
+        manifestSha256: metadata.manifestSha256,
+      },
+    }),
+  );
+  await writeGamePackIndexJson(metadata.playKey, JSON.stringify(result.packIndex));
+  const indexDurationMs = nowMs() - indexStartedAt;
+
+  installation = await persistAndPost(
+    {
+      ...installation,
+      status: "ready",
+      phase: "ready",
+      readyAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      currentPath: null,
+      error: null,
+    },
+    true,
+  );
+
+  postLog(
+    metadata.playKey,
+    "info",
+    `浏览器本地安装完成，资源写入 ${result.packIndex.packs.length.toLocaleString(
+      "zh-CN",
+    )} 个 pack 文件。总耗时 ${formatDuration(
+      nowMs() - installStartedAt,
+    )}；ZIP 流处理 ${formatDuration(
+      result.diagnostics.durationMs,
+    )}；OPFS write 等待 ${formatDuration(
+      result.diagnostics.packWriteDurationMs,
+    )} / ${result.diagnostics.packWriteCalls.toLocaleString(
+      "zh-CN",
+    )} 次；IndexedDB 文件记录 ${formatDuration(
+      result.diagnostics.fileRecordsDurationMs,
+    )}；索引写入 ${formatDuration(indexDurationMs)}。`,
+  );
+
+  return installation;
 }
 
 async function requestStorage(
@@ -263,7 +365,12 @@ async function streamZipToPacks(input: {
   response: Response;
   installation: WebPlayInstallation;
   indexRoot: EasyRpgCacheNode;
-}): Promise<{ installation: WebPlayInstallation; packIndex: WebPlayPackIndex }> {
+}): Promise<{
+  installation: WebPlayInstallation;
+  packIndex: WebPlayPackIndex;
+  diagnostics: StreamZipDiagnostics;
+}> {
+  const streamStartedAt = nowMs();
   let installation = await persistAndPost(
     {
       ...input.installation,
@@ -279,7 +386,14 @@ async function streamZipToPacks(input: {
   let currentPath: string | null = null;
   let skippedLocalFiles = 0;
   let skippedLocalBytes = 0;
+  let entriesSeen = 0;
+  let firstChunkAt: number | null = null;
   let lastProgressAt = 0;
+  let lastDiagnosticAt = streamStartedAt;
+  let lastDiagnosticDownloadedBytes = downloadedBytes;
+  let lastDiagnosticInstalledBytes = installedBytes;
+  let lastDiagnosticPackWriteDurationMs = 0;
+  let lastDiagnosticPackWriteCalls = 0;
   let progressWrite = Promise.resolve();
   const fileRecords: WebPlayFileRecord[] = [];
   const packWriter = new PackWriter(input.metadata.playKey);
@@ -326,6 +440,46 @@ async function streamZipToPacks(input: {
     });
   };
 
+  const logDiagnostics = (force = false) => {
+    const now = nowMs();
+    const elapsedMs = now - lastDiagnosticAt;
+
+    if (!force && elapsedMs < diagnosticLogIntervalMs) {
+      return;
+    }
+
+    const downloadedDelta = downloadedBytes - lastDiagnosticDownloadedBytes;
+    const installedBytesDelta = installedBytes - lastDiagnosticInstalledBytes;
+    const writeDurationDelta =
+      packWriter.writeDurationMs - lastDiagnosticPackWriteDurationMs;
+    const writeCallsDelta = packWriter.writeCalls - lastDiagnosticPackWriteCalls;
+
+    postLog(
+      input.metadata.playKey,
+      "info",
+      `安装诊断：ZIP ${formatBytes(downloadedBytes)} / ${formatBytes(
+        installation.downloadBytesTotal || input.metadata.totalSizeBytes,
+      )}（${formatRate(downloadedDelta, elapsedMs)}）；本地 ${installedFiles.toLocaleString(
+        "zh-CN",
+      )} / ${input.metadata.installTotalFiles.toLocaleString("zh-CN")} 文件，${formatBytes(
+        installedBytes,
+      )} / ${formatBytes(input.metadata.installTotalSizeBytes)}（${formatRate(
+        installedBytesDelta,
+        elapsedMs,
+      )}）；OPFS write 等待 ${formatDuration(
+        writeDurationDelta,
+      )} / ${writeCallsDelta.toLocaleString("zh-CN")} 次；已读 entry ${entriesSeen.toLocaleString(
+        "zh-CN",
+      )}；当前 ${currentPath ?? "-"}。`,
+    );
+
+    lastDiagnosticAt = now;
+    lastDiagnosticDownloadedBytes = downloadedBytes;
+    lastDiagnosticInstalledBytes = installedBytes;
+    lastDiagnosticPackWriteDurationMs = packWriter.writeDurationMs;
+    lastDiagnosticPackWriteCalls = packWriter.writeCalls;
+  };
+
   let body: ReadableStream<ByteChunk> | null = input.response.body;
 
   if (!body) {
@@ -340,14 +494,30 @@ async function streamZipToPacks(input: {
   }
 
   const reader = new ZipStreamReader(input.metadata.playKey, body, (bytes) => {
+    if (firstChunkAt === null && bytes > 0) {
+      firstChunkAt = nowMs();
+      postLog(
+        input.metadata.playKey,
+        "info",
+        `ZIP 首个数据块已到达，距离开始流处理 ${formatDuration(
+          firstChunkAt - streamStartedAt,
+        )}。`,
+      );
+    }
+
     downloadedBytes = bytes;
     queueProgress();
+    logDiagnostics();
   });
 
   postLog(
     input.metadata.playKey,
     "info",
-    "使用 ZIP local header 顺序解析，并写入 OPFS pack。",
+    `使用 ZIP local header 顺序解析，并写入 OPFS pack。单个 pack 目标上限 ${formatBytes(
+      packTargetSizeBytes,
+    )}，低于该体积的安装通常只会生成 1 个 pack；OPFS 写入会先聚合到约 ${formatBytes(
+      packWriteBufferTargetBytes,
+    )} 再落盘。`,
   );
 
   try {
@@ -359,6 +529,7 @@ async function streamZipToPacks(input: {
         await reader.drainToEnd();
         break;
       }
+      entriesSeen += 1;
 
       const normalizedPath = normalizeZipEntryPath(entry.name);
 
@@ -372,6 +543,7 @@ async function streamZipToPacks(input: {
 
       if (!normalizedPath) {
         await reader.discardBytes(entry.compressedSize);
+        logDiagnostics();
         continue;
       }
 
@@ -379,9 +551,12 @@ async function streamZipToPacks(input: {
         skippedLocalFiles += 1;
         skippedLocalBytes += entry.uncompressedSize;
         await reader.discardBytes(entry.compressedSize);
+        logDiagnostics();
         continue;
       }
 
+      currentPath = normalizedPath;
+      queueProgress();
       addToEasyRpgIndex(input.indexRoot, normalizedPath);
       const location = await packWriter.beginEntry(entry.uncompressedSize);
       const lookupKey = packLookupKey(normalizedPath);
@@ -414,11 +589,12 @@ async function streamZipToPacks(input: {
       });
       installedFiles += 1;
       installedBytes += entry.uncompressedSize;
-      currentPath = normalizedPath;
       queueProgress();
+      logDiagnostics();
     }
   } finally {
     await packWriter.close();
+    await progressWrite.catch(() => undefined);
   }
 
   if (skippedLocalFiles > 0) {
@@ -433,7 +609,10 @@ async function streamZipToPacks(input: {
 
   queueProgress(true);
   await progressWrite;
+  const fileRecordsStartedAt = nowMs();
   await saveFileRecordsInBatches(fileRecords);
+  const fileRecordsDurationMs = nowMs() - fileRecordsStartedAt;
+  logDiagnostics(true);
 
   return {
     installation: await persistAndPost(
@@ -451,14 +630,25 @@ async function streamZipToPacks(input: {
       true,
     ),
     packIndex,
+    diagnostics: {
+      durationMs: nowMs() - streamStartedAt,
+      entriesSeen,
+      packWriteCalls: packWriter.writeCalls,
+      packWriteDurationMs: packWriter.writeDurationMs,
+      fileRecordsDurationMs,
+    },
   };
 }
 
 class PackWriter {
   readonly packs: Array<{ name: string; size: number }> = [];
+  writeCalls = 0;
+  writeDurationMs = 0;
 
   private writable: FileSystemWritableFileStream | null = null;
   private currentPack: { name: string; size: number } | null = null;
+  private pendingChunks: ByteChunk[] = [];
+  private pendingBytes = 0;
   private nextPackIndex = 0;
 
   constructor(private readonly playKey: string) {}
@@ -483,12 +673,17 @@ class PackWriter {
   }
 
   async write(chunk: ByteChunk): Promise<void> {
-    if (!this.writable || !this.currentPack) {
+    if (!this.currentPack) {
       throw new Error("Pack writer is not open");
     }
 
-    await this.writable.write(toWriteBuffer(chunk));
+    this.pendingChunks.push(chunk);
+    this.pendingBytes += chunk.byteLength;
     this.currentPack.size += chunk.byteLength;
+
+    if (this.pendingBytes >= packWriteBufferTargetBytes) {
+      await this.flush();
+    }
   }
 
   async close(): Promise<void> {
@@ -496,6 +691,7 @@ class PackWriter {
       return;
     }
 
+    await this.flush();
     const writable = this.writable;
 
     this.writable = null;
@@ -512,6 +708,27 @@ class PackWriter {
     this.currentPack = { name, size: 0 };
     this.packs.push(this.currentPack);
     this.writable = await createGamePackWritable(this.playKey, name);
+  }
+
+  private async flush(): Promise<void> {
+    if (!this.writable) {
+      throw new Error("Pack writer is not open");
+    }
+
+    if (this.pendingBytes === 0) {
+      return;
+    }
+
+    const bytes = coalesceChunks(this.pendingChunks, this.pendingBytes);
+
+    this.pendingChunks = [];
+    this.pendingBytes = 0;
+
+    const writeStartedAt = nowMs();
+
+    await this.writable.write(bytes);
+    this.writeCalls += 1;
+    this.writeDurationMs += nowMs() - writeStartedAt;
   }
 }
 
@@ -843,6 +1060,51 @@ function assertNotCanceled(playKey: string): void {
   }
 }
 
+function isRetryableInstallError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message === "安装已取消。") {
+    return false;
+  }
+
+  if (/下载 ZIP 失败：HTTP (408|429|5\d\d)/.test(message)) {
+    return true;
+  }
+
+  if (
+    message.includes("ZIP 数据被截断") ||
+    message.includes("ZIP entry 数据被截断") ||
+    message.includes("ZIP 数据在文件头处截断")
+  ) {
+    return true;
+  }
+
+  const lower = message.toLowerCase();
+
+  return [
+    "network error",
+    "failed to fetch",
+    "load failed",
+    "networkerror",
+    "the network connection was lost",
+    "connection closed",
+    "connection reset",
+    "err_http2",
+    "err_quic",
+    "http2 protocol error",
+  ].some((pattern) => lower.includes(pattern));
+}
+
+function retryDelayMs(attempt: number): number {
+  return retryBaseDelayMs * 2 ** Math.max(0, attempt - 1);
+}
+
+async function delay(durationMs: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+}
+
 function numberHeader(value: string | null): number | null {
   if (!value || !/^\d+$/.test(value)) {
     return null;
@@ -875,16 +1137,45 @@ function streamBytes(bytes: ByteChunk): ReadableStream<ByteChunk> {
   });
 }
 
-function toWriteBuffer(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (bytes.buffer instanceof ArrayBuffer) {
-    return bytes as Uint8Array<ArrayBuffer>;
+function coalesceChunks(
+  chunks: ByteChunk[],
+  totalBytes: number,
+): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   }
 
-  const copy = new Uint8Array(bytes.byteLength);
+  return bytes;
+}
 
-  copy.set(bytes);
+function nowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
 
-  return copy;
+function formatDuration(valueMs: number): string {
+  if (!Number.isFinite(valueMs) || valueMs <= 0) {
+    return "0ms";
+  }
+
+  if (valueMs < 1000) {
+    return `${Math.round(valueMs)}ms`;
+  }
+
+  return `${(valueMs / 1000).toFixed(2)}s`;
+}
+
+function formatRate(bytes: number, durationMs: number): string {
+  if (!Number.isFinite(bytes) || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return "0 B/s";
+  }
+
+  return `${formatBytes((bytes / durationMs) * 1000)}/s`;
 }
 
 function formatBytes(value: number): string {
@@ -896,7 +1187,7 @@ function formatBytes(value: number): string {
 
   for (const unit of ["B", "KB", "MB", "GB"]) {
     if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
+      return unit === "B" ? `${Math.round(next)} B` : `${next.toFixed(2)} ${unit}`;
     }
 
     next /= 1024;

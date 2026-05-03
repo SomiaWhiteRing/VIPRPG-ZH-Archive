@@ -347,7 +347,6 @@ needs_metadata
 - 总文件数。
 - 总大小。
 - 若干稳定文件的 path + size + mtime。
-- `RPG_RT.ini`、`RPG_RT.ldb`、`RPG_RT.lmt` 的 size + hash。
 
 不要把完整文件 hash 全部作为首次恢复判断，否则恢复前还要重新 hash 所有文件。
 
@@ -382,10 +381,13 @@ preflight 是恢复流程的事实来源。
 
 ### 9.1 并发控制
 
-初版建议：
+当前建议：
 
-- 小文件 blob 并发：4 到 8。
-- 大文件 blob 并发：1 到 2。
+- hash / CRC 阶段使用 Dedicated Worker 内的有界并发，按 `navigator.hardwareConcurrency` 自适应，上限 16 路，并额外设置活跃读取字节预算，避免多个大文件同时进入内存。
+- 本地 ZIP 输入只读取中央目录；entry 在 hash 或上传时按需从原 ZIP 切片并解压，禁止在枚举阶段 `unzipSync` 全量解包。
+- ZIP 文件名必须按 entry 的 UTF-8 flag 解码；未设置 UTF-8 flag 的 legacy ZIP 需要在中央目录样本上选择统一的 legacy 编码。RPG Maker 2000/2003 日文 ZIP 常见 Shift-JIS/CP932 路径，不能默认按 UTF-8 解码，否则 manifest 会固化乱码路径并破坏公共根目录剥离。
+- core pack 生成复用 hash 阶段已经读入的 core 文件字节，使用 `fflate` 异步 ZIP 构建，避免同步压缩长时间阻塞 worker。
+- blob 上传并发按浏览器能力自适应，建议 6 到 16 路；如果后续遇到 Worker/R2 限流，再按错误率动态回退。
 - core pack 上传：单独队列，优先级高于普通 blob。
 - preflight 分块：每批不超过 100 个 hash。
 - commit 分块：`archive_version_files` 大量写入时分批提交。
