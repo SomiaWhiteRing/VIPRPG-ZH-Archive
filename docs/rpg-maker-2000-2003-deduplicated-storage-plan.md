@@ -872,6 +872,8 @@ GET /api/archive-versions/{archiveVersionId}/download
 - 当最终 ZIP 使用 `STORE` 时，应在响应前精确计算最终 ZIP 字节数，并在 Cloudflare Workers 中使用 `FixedLengthStream` 返回固定长度 body，让运行时发出真实 `Content-Length`；仅手动设置 header 而 body 仍是普通 `ReadableStream` 时，GET 仍可能被降为 chunked，浏览器不会显示百分比进度。
 - 最终 ZIP local file header 必须包含明确 CRC32、compressed size 和 uncompressed size；不能使用 data descriptor。这样普通下载仍是标准 ZIP，Web Play 也能边下载边定位 entry 并写入 pack。
 - 如果 OpenNext / Next.js 路由层会重新包装响应流，则下载端点应放在 Worker 原生入口层拦截，避免 `FixedLengthStream` 在框架层丢失。
+- 冷下载重组必须避免逐 entry 串行等待 R2。ZIP 输出顺序仍按 manifest 固定，但下载端应提前并发打开后续少量 entry 的 R2 对象，并在单次请求内缓存重复出现的小 blob 字节；这不改变最终 ZIP 字节顺序，也不把完整 ZIP 写入 R2。
+- 单次请求内的小 blob 缓存必须有内存上限，例如单个 blob 只缓存到约 2 MB、总缓存约 64 MB。超过阈值的大 blob 仍以 R2 body stream 方式输出，避免 Worker 内存风险。
 - 正式扩大前，读取 core pack 时应优先流式处理，不把大 pack 整体解到内存；Phase E MVP 可在 core pack 已由实测证明较小时整包解压，并把该限制写入风险记录。
 - 实时下载前必须估算 R2 Get 次数、Worker subrequest、预计输出大小和是否适合边缘缓存；接近限制时进入异步下载/排队流程，不写入 R2 完整 ZIP。
 

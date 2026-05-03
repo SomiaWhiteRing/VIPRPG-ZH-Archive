@@ -24,6 +24,7 @@ const zipMethodStore = 0;
 const zipVersion20 = 20;
 const uint32Max = 0xffffffff;
 const uint16Max = 0xffff;
+const zipEntryOpenPrefetch = 32;
 
 export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8Array> {
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
@@ -75,13 +76,33 @@ async function writeZip(
 ): Promise<void> {
   let offset = 0;
   const centralEntries: CentralDirectoryEntry[] = [];
+  const openPromises = new Array<Promise<ReadableStream<Uint8Array>> | undefined>(
+    entries.length,
+  );
+  let nextToPrefetch = 0;
 
   async function write(bytes: Uint8Array): Promise<void> {
     await writer.write(bytes);
     offset += bytes.byteLength;
   }
 
-  for (const entry of entries) {
+  function prefetchThrough(exclusiveIndex: number): void {
+    while (nextToPrefetch < entries.length && nextToPrefetch < exclusiveIndex) {
+      const promise = entries[nextToPrefetch].open();
+
+      promise.catch(() => undefined);
+      openPromises[nextToPrefetch] = promise;
+      nextToPrefetch += 1;
+    }
+  }
+
+  prefetchThrough(zipEntryOpenPrefetch);
+
+  for (let index = 0; index < entries.length; index += 1) {
+    prefetchThrough(index + zipEntryOpenPrefetch + 1);
+
+    const entry = entries[index];
+
     validateZipPath(entry.path);
 
     const pathBytes = textEncoder.encode(entry.path);
@@ -95,7 +116,7 @@ async function writeZip(
     await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
     let actualSize = 0;
-    const stream = await entry.open();
+    const stream = await (openPromises[index] ?? entry.open());
     const reader = stream.getReader();
 
     try {
