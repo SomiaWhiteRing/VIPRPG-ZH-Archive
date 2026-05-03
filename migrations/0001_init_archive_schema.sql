@@ -373,6 +373,7 @@ CREATE TABLE IF NOT EXISTS archive_version_files (
     role IN ('map', 'database', 'asset', 'runtime', 'metadata', 'other')
   ),
   file_sha256 TEXT NOT NULL,
+  crc32 INTEGER NOT NULL,
   size_bytes INTEGER NOT NULL,
   storage_kind TEXT NOT NULL CHECK (storage_kind IN ('blob', 'core_pack')),
   blob_sha256 TEXT REFERENCES blobs(sha256),

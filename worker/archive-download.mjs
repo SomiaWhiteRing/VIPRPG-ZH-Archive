@@ -1,18 +1,16 @@
 import { unzipSync } from "fflate";
 
-const downloadZipBuilderVersion = "zip-store-v6-native-fixed-length-cache-hit-header";
+const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
-const dataDescriptorSignature = 0x08074b50;
 const localFileHeaderSignature = 0x04034b50;
 const centralDirectorySignature = 0x02014b50;
 const endOfCentralDirectorySignature = 0x06054b50;
-const zipFlagUtf8WithDescriptor = 0x0808;
+const zipFlagUtf8 = 0x0800;
 const zipMethodStore = 0;
 const zipVersion20 = 20;
 const uint16Max = 0xffff;
 const uint32Max = 0xffffffff;
-const crcTable = buildCrcTable();
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
   const startedAt = Date.now();
@@ -212,6 +210,7 @@ function buildZipEntries(manifest, bucket) {
     .map((file) => ({
       path: file.path,
       size: file.size,
+      crc32: file.crc32,
       mtimeMs: file.mtimeMs,
       open: () => openManifestFile(file, manifest, bucket, corePackCache),
     }));
@@ -316,11 +315,11 @@ async function writeZip(writer, entries) {
     const localHeaderOffset = offset;
 
     assertZip32Value(entry.size, "ZIP entry size");
+    assertZip32Value(entry.crc32, "ZIP entry CRC32");
     assertZip32Value(localHeaderOffset, "ZIP local header offset");
 
-    await write(localFileHeader(pathBytes, dosTime, dosDate));
+    await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
-    const crc = new Crc32();
     let actualSize = 0;
     const stream = await entry.open();
     const reader = stream.getReader();
@@ -335,7 +334,6 @@ async function writeZip(writer, entries) {
 
         const chunk = normalizeChunk(result.value);
         actualSize += chunk.byteLength;
-        crc.update(chunk);
         await write(chunk);
       }
     } finally {
@@ -348,12 +346,9 @@ async function writeZip(writer, entries) {
       );
     }
 
-    const crc32 = crc.digest();
-    await write(dataDescriptor(crc32, actualSize));
-
     centralEntries.push({
       pathBytes,
-      crc32,
+      crc32: entry.crc32,
       size: actualSize,
       localHeaderOffset,
       dosTime,
@@ -388,11 +383,11 @@ function estimateZipStreamSize(entries) {
 
     assertZip16Value(pathBytes.byteLength, "ZIP path length");
     assertZip32Value(entry.size, "ZIP entry size");
+    assertZip32Value(entry.crc32, "ZIP entry CRC32");
     assertZip32Value(offset, "ZIP local header offset");
 
     offset += 30 + pathBytes.byteLength;
     offset += entry.size;
-    offset += 16;
     centralDirectorySize += 46 + pathBytes.byteLength;
 
     assertSafeZipSize(offset, "ZIP local data size");
@@ -410,38 +405,26 @@ function estimateZipStreamSize(entries) {
   return totalSize;
 }
 
-function localFileHeader(pathBytes, dosTime, dosDate) {
+function localFileHeader(pathBytes, crc32, size, dosTime, dosDate) {
   assertZip16Value(pathBytes.byteLength, "ZIP path length");
+  assertZip32Value(crc32, "ZIP entry CRC32");
+  assertZip32Value(size, "ZIP entry size");
 
   const bytes = new Uint8Array(30 + pathBytes.byteLength);
   const view = new DataView(bytes.buffer);
 
   view.setUint32(0, localFileHeaderSignature, true);
   view.setUint16(4, zipVersion20, true);
-  view.setUint16(6, zipFlagUtf8WithDescriptor, true);
+  view.setUint16(6, zipFlagUtf8, true);
   view.setUint16(8, zipMethodStore, true);
   view.setUint16(10, dosTime, true);
   view.setUint16(12, dosDate, true);
-  view.setUint32(14, 0, true);
-  view.setUint32(18, 0, true);
-  view.setUint32(22, 0, true);
+  view.setUint32(14, crc32, true);
+  view.setUint32(18, size, true);
+  view.setUint32(22, size, true);
   view.setUint16(26, pathBytes.byteLength, true);
   view.setUint16(28, 0, true);
   bytes.set(pathBytes, 30);
-
-  return bytes;
-}
-
-function dataDescriptor(crc32, size) {
-  assertZip32Value(size, "ZIP entry size");
-
-  const bytes = new Uint8Array(16);
-  const view = new DataView(bytes.buffer);
-
-  view.setUint32(0, dataDescriptorSignature, true);
-  view.setUint32(4, crc32, true);
-  view.setUint32(8, size, true);
-  view.setUint32(12, size, true);
 
   return bytes;
 }
@@ -455,7 +438,7 @@ function centralDirectoryHeader(entry) {
   view.setUint32(0, centralDirectorySignature, true);
   view.setUint16(4, zipVersion20, true);
   view.setUint16(6, zipVersion20, true);
-  view.setUint16(8, zipFlagUtf8WithDescriptor, true);
+  view.setUint16(8, zipFlagUtf8, true);
   view.setUint16(10, zipMethodStore, true);
   view.setUint16(12, entry.dosTime, true);
   view.setUint16(14, entry.dosDate, true);
@@ -760,38 +743,4 @@ function assertSafeZipSize(value, label) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${label} is not a safe integer`);
   }
-}
-
-class Crc32 {
-  value = 0xffffffff;
-
-  update(bytes) {
-    let next = this.value;
-
-    for (const byte of bytes) {
-      next = crcTable[(next ^ byte) & 0xff] ^ (next >>> 8);
-    }
-
-    this.value = next;
-  }
-
-  digest() {
-    return (this.value ^ 0xffffffff) >>> 0;
-  }
-}
-
-function buildCrcTable() {
-  const table = new Uint32Array(256);
-
-  for (let index = 0; index < 256; index += 1) {
-    let value = index;
-
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-    }
-
-    table[index] = value >>> 0;
-  }
-
-  return table;
 }

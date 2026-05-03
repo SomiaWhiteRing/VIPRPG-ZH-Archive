@@ -19,6 +19,8 @@ export type WebPlayMetadata = {
   downloadUrl: string;
   totalFiles: number;
   totalSizeBytes: number;
+  installTotalFiles: number;
+  installTotalSizeBytes: number;
   estimatedR2GetCount: number;
   engineFamily: string;
   usesManiacsPatch: boolean;

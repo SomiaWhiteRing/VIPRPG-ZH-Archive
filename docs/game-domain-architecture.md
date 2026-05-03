@@ -418,6 +418,7 @@ CREATE TABLE archive_version_files (
     role IN ('map', 'database', 'asset', 'runtime', 'metadata', 'other')
   ),
   file_sha256 TEXT NOT NULL,
+  crc32 INTEGER NOT NULL,
   size_bytes INTEGER NOT NULL,
   storage_kind TEXT NOT NULL CHECK (storage_kind IN ('blob', 'core_pack')),
   blob_sha256 TEXT REFERENCES blobs(sha256),
@@ -458,6 +459,7 @@ CREATE INDEX idx_archive_version_files_core_pack
 - 路径只属于某个 ArchiveVersion。
 - blob 表不记录“它曾经叫什么文件名”，避免静态资源索引膨胀和语义混乱。
 - 若同一内容在 A 游戏叫 `Monster.png`，在 B 游戏叫 `Enemy.png`，它们仍应指向同一个 blob。
+- `file_sha256` 是内容身份；`crc32` 只服务于 STORE ZIP local header 和 Web Play pack 切片校验，不参与内容寻址。
 
 ### 4.5 角色、作者、活动、标签
 

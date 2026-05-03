@@ -1,6 +1,6 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 
-export const webPlayInstallerVersion = "opfs-v7-skip-non-web-runtime-local-write";
+export const webPlayInstallerVersion = "opfs-v8-stream-pack-index";
 export const easyRpgRuntimeVersion = "0.8.1.1";
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 

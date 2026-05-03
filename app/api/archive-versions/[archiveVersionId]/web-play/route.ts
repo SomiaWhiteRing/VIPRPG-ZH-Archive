@@ -8,6 +8,7 @@ import {
 } from "@/lib/archive/web-play";
 import {
   getPublishedArchiveDownloadRecord,
+  getWebPlayInstallTargetTotals,
   parseArchiveVersionId,
 } from "@/lib/server/db/archive-downloads";
 import { json, jsonError } from "@/lib/server/http/json";
@@ -36,6 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
       );
     }
 
+    const installTarget = await getWebPlayInstallTargetTotals(record.id);
     const playKey = buildWebPlayKey({
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,
@@ -62,6 +64,8 @@ export async function GET(_request: Request, context: RouteContext) {
       downloadUrl: buildArchiveDownloadUrl(record.id),
       totalFiles: record.totalFiles,
       totalSizeBytes: record.totalSizeBytes,
+      installTotalFiles: installTarget.totalFiles,
+      installTotalSizeBytes: installTarget.totalSizeBytes,
       estimatedR2GetCount: record.estimatedR2GetCount,
       engineFamily: record.engineFamily,
       usesManiacsPatch: record.usesManiacsPatch,

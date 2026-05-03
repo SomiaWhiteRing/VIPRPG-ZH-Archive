@@ -20,6 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable
@@ -110,6 +111,7 @@ class FileEntry:
     role: str
     storage_kind: str
     sha256: str
+    crc32: int
     size_bytes: int
     mtime_ms: int
     content_type_hint: str
@@ -173,6 +175,14 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def crc32_file(path: Path) -> int:
+    value = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            value = zlib.crc32(chunk, value)
+    return value & 0xFFFFFFFF
 
 
 def file_type_key(name: str) -> str:
@@ -304,6 +314,7 @@ def scan_source(root: Path, config: dict) -> tuple[list[FileEntry], list[Exclude
                 role=role,
                 storage_kind=storage_kind,
                 sha256=sha256_file(path),
+                crc32=crc32_file(path),
                 size_bytes=size,
                 mtime_ms=int(stat.st_mtime * 1000),
                 content_type_hint=content_type_for(rel_path),
@@ -392,6 +403,7 @@ def build_manifest(
                 "pathSortKey": entry.rel_path.lower(),
                 "role": entry.role,
                 "sha256": entry.sha256,
+                "crc32": entry.crc32,
                 "size": entry.size_bytes,
                 "mtimeMs": entry.mtime_ms,
                 "storage": storage,
@@ -402,16 +414,23 @@ def build_manifest(
         "schema": "viprpg-archive.manifest.v1",
         "work": {
             "slug": config["work"]["slug"],
-            "title": config["work"]["primaryTitle"],
-            "originalTitle": config["work"].get("originalTitle"),
+            "originalTitle": config["work"].get("originalTitle") or config["work"].get("primaryTitle"),
+            "chineseTitle": config["work"].get("chineseTitle"),
         },
         "release": {
+            "key": release_key(config),
             "label": config["release"]["label"],
             "type": config["release"]["type"],
-            "language": config["release"].get("language"),
+            "baseVariant": config["release"].get("baseVariant", "original"),
+            "variantLabel": config["release"].get("variantLabel", "default"),
         },
         "archiveVersion": {
+            "key": archive_key(config),
             "label": archive_config["label"],
+            "variantLabel": archive_config.get("variantLabel", "default"),
+            "language": archive_config.get("language") or config["release"].get("language", "zh-Hans"),
+            "isProofread": bool(config["release"].get("isProofread")),
+            "isImageEdited": bool(config["release"].get("isImageEdited")),
             "createdAt": created_at,
             "filePolicyVersion": config.get("filePolicyVersion", FILE_POLICY_VERSION),
             "packerVersion": config["packerVersion"],
@@ -453,6 +472,24 @@ def json_sql(value: object) -> str:
     return sql_quote(json.dumps(value if value is not None else {}, ensure_ascii=False, separators=(",", ":")))
 
 
+def stable_key(value: object, fallback: str = "default") -> str:
+    source = str(value or fallback).strip().lower()
+    key = re.sub(r"[^a-z0-9]+", "-", source).strip("-")
+    if key:
+        return key
+    return hashlib.sha1(source.encode("utf-8")).hexdigest()[:12]
+
+
+def release_key(config: dict) -> str:
+    release = config["release"]
+    return str(release.get("key") or stable_key(release.get("label"), "release"))
+
+
+def archive_key(config: dict) -> str:
+    archive = config["archiveVersion"]
+    return str(archive.get("key") or stable_key(archive.get("label"), "archive"))
+
+
 def work_id(config: dict) -> str:
     return f"(SELECT id FROM works WHERE slug = {sql_quote(config['work']['slug'])})"
 
@@ -461,7 +498,7 @@ def release_id(config: dict) -> str:
     return (
         "(SELECT r.id FROM releases r "
         f"JOIN works w ON w.id = r.work_id WHERE w.slug = {sql_quote(config['work']['slug'])} "
-        f"AND r.release_label = {sql_quote(config['release']['label'])})"
+        f"AND r.release_key = {sql_quote(release_key(config))})"
     )
 
 
@@ -469,6 +506,7 @@ def archive_version_id(config: dict, manifest_sha256: str) -> str:
     return (
         "(SELECT av.id FROM archive_versions av "
         f"WHERE av.release_id = {release_id(config)} "
+        f"AND av.archive_key = {sql_quote(archive_key(config))} "
         f"AND av.manifest_sha256 = {sql_quote(manifest_sha256)})"
     )
 
@@ -523,24 +561,25 @@ def build_sql(
     lines.append(
         """
 INSERT OR IGNORE INTO works (
-  slug, primary_title, original_title, sort_title, description,
+  slug, original_title, chinese_title, sort_title, description,
   original_release_date, original_release_precision, engine_family, engine_detail,
-  status, extra_json, published_at
+  uses_maniacs_patch, status, extra_json, published_at
 ) VALUES (
-  {slug}, {primary_title}, {original_title}, {sort_title}, {description},
+  {slug}, {original_title}, {chinese_title}, {sort_title}, {description},
   {original_release_date}, {original_release_precision}, {engine_family}, {engine_detail},
-  {status}, {extra_json}, {published_at}
+  {uses_maniacs_patch}, {status}, {extra_json}, {published_at}
 );
 """.format(
             slug=sql_quote(work["slug"]),
-            primary_title=sql_quote(work["primaryTitle"]),
-            original_title=sql_quote(work.get("originalTitle")),
+            original_title=sql_quote(work.get("originalTitle") or work.get("primaryTitle")),
+            chinese_title=sql_quote(work.get("chineseTitle")),
             sort_title=sql_quote(work.get("sortTitle")),
             description=sql_quote(work.get("description")),
             original_release_date=sql_quote(work.get("originalReleaseDate")),
             original_release_precision=sql_quote(work.get("originalReleasePrecision", "unknown")),
             engine_family=sql_quote(work.get("engineFamily", "unknown")),
             engine_detail=sql_quote(work.get("engineDetail")),
+            uses_maniacs_patch=sql_quote(bool(work.get("usesManiacsPatch", release.get("usesManiacsPatch")))),
             status=sql_quote(work.get("status", "draft")),
             extra_json=json_sql(work.get("extra", {})),
             published_at=published_at,
@@ -548,6 +587,9 @@ INSERT OR IGNORE INTO works (
     )
 
     for title in config.get("workTitles", []):
+        title_type = title.get("titleType")
+        if title_type != "alias":
+            continue
         lines.append(
             """
 INSERT OR IGNORE INTO work_titles (
@@ -559,7 +601,7 @@ INSERT OR IGNORE INTO work_titles (
                 work_id=work_id(config),
                 title=sql_quote(title["title"]),
                 language=sql_quote(title.get("language")),
-                title_type=sql_quote(title["titleType"]),
+                title_type=sql_quote(title_type),
             ).strip()
         )
 
@@ -621,26 +663,25 @@ INSERT OR IGNORE INTO tags (
     lines.append(
         """
 INSERT OR IGNORE INTO releases (
-  work_id, release_label, release_type, language, release_date, release_date_precision,
-  source_name, source_url, uses_maniacs_patch, is_proofread, is_image_edited,
+  work_id, release_key, release_label, base_variant, variant_label, release_type,
+  release_date, release_date_precision, source_name, source_url,
   executable_path, rights_notes, status, extra_json, published_at
 ) VALUES (
-  {work_id}, {release_label}, {release_type}, {language}, {release_date}, {release_date_precision},
-  {source_name}, {source_url}, {uses_maniacs_patch}, {is_proofread}, {is_image_edited},
+  {work_id}, {release_key}, {release_label}, {base_variant}, {variant_label}, {release_type},
+  {release_date}, {release_date_precision}, {source_name}, {source_url},
   {executable_path}, {rights_notes}, {status}, {extra_json}, {published_at}
 );
 """.format(
             work_id=work_id(config),
+            release_key=sql_quote(release_key(config)),
             release_label=sql_quote(release["label"]),
+            base_variant=sql_quote(release.get("baseVariant", "original")),
+            variant_label=sql_quote(release.get("variantLabel", "default")),
             release_type=sql_quote(release["type"]),
-            language=sql_quote(release.get("language")),
             release_date=sql_quote(release.get("releaseDate")),
             release_date_precision=sql_quote(release.get("releaseDatePrecision", "unknown")),
             source_name=sql_quote(release.get("sourceName")),
             source_url=sql_quote(release.get("sourceUrl")),
-            uses_maniacs_patch=sql_quote(bool(release.get("usesManiacsPatch"))),
-            is_proofread=sql_quote(bool(release.get("isProofread"))),
-            is_image_edited=sql_quote(bool(release.get("isImageEdited"))),
             executable_path=sql_quote(release.get("executablePath")),
             rights_notes=sql_quote(release.get("rightsNotes")),
             status=sql_quote(release.get("status", "draft")),
@@ -749,14 +790,16 @@ WHERE NOT EXISTS (
     lines.append(
         """
 INSERT OR IGNORE INTO archive_versions (
-  release_id, archive_label, manifest_sha256, manifest_r2_key,
+  release_id, archive_key, archive_label, archive_variant_label, language,
+  is_proofread, is_image_edited, manifest_sha256, manifest_r2_key,
   file_policy_version, packer_version, source_type, source_name,
   source_file_count, source_size_bytes, excluded_file_count, excluded_size_bytes,
   total_files, total_size_bytes, unique_blob_size_bytes,
   core_pack_count, core_pack_size_bytes, estimated_r2_get_count,
   is_current, status, published_at
 ) VALUES (
-  {release_id}, {archive_label}, {manifest_sha256}, {manifest_r2_key},
+  {release_id}, {archive_key}, {archive_label}, {archive_variant_label}, {language},
+  {is_proofread}, {is_image_edited}, {manifest_sha256}, {manifest_r2_key},
   {file_policy_version}, {packer_version}, {source_type}, {source_name},
   {source_file_count}, {source_size_bytes}, {excluded_file_count}, {excluded_size_bytes},
   {total_files}, {total_size_bytes}, {unique_blob_size_bytes},
@@ -765,7 +808,12 @@ INSERT OR IGNORE INTO archive_versions (
 );
 """.format(
             release_id=release_id(config),
+            archive_key=sql_quote(archive_key(config)),
             archive_label=sql_quote(archive["label"]),
+            archive_variant_label=sql_quote(archive.get("variantLabel", "default")),
+            language=sql_quote(archive.get("language") or release.get("language", "zh-Hans")),
+            is_proofread=sql_quote(bool(release.get("isProofread"))),
+            is_image_edited=sql_quote(bool(release.get("isImageEdited"))),
             manifest_sha256=sql_quote(manifest_sha256),
             manifest_r2_key=sql_quote(manifest_r2_key),
             file_policy_version=sql_quote(config.get("filePolicyVersion", FILE_POLICY_VERSION)),
@@ -840,11 +888,11 @@ INSERT OR IGNORE INTO core_packs (
             """
 INSERT OR IGNORE INTO archive_version_files (
   archive_version_id, path, path_sort_key, path_bytes_b64, role,
-  file_sha256, size_bytes, storage_kind, blob_sha256, core_pack_id,
+  file_sha256, crc32, size_bytes, storage_kind, blob_sha256, core_pack_id,
   pack_entry_path, mtime_ms, file_mode
 ) VALUES (
   {archive_version_id}, {path}, {path_sort_key}, NULL, {role},
-  {file_sha256}, {size_bytes}, {storage_kind}, {blob_sha256}, {core_pack_id},
+  {file_sha256}, {crc32}, {size_bytes}, {storage_kind}, {blob_sha256}, {core_pack_id},
   {pack_entry_path}, {mtime_ms}, NULL
 );
 """.format(
@@ -853,6 +901,7 @@ INSERT OR IGNORE INTO archive_version_files (
                 path_sort_key=sql_quote(entry.rel_path.lower()),
                 role=sql_quote(entry.role),
                 file_sha256=sql_quote(entry.sha256),
+                crc32=entry.crc32,
                 size_bytes=entry.size_bytes,
                 storage_kind=sql_quote(entry.storage_kind),
                 blob_sha256=blob_sha,
@@ -1482,7 +1531,7 @@ def build_reset_sql(config: dict, plan: dict) -> str:
         "SELECT r.id FROM releases r "
         "JOIN works w ON w.id = r.work_id "
         f"WHERE w.slug = {sql_quote(config['work']['slug'])} "
-        f"AND r.release_label = {sql_quote(config['release']['label'])}"
+        f"AND r.release_key = {sql_quote(release_key(config))}"
     )
     work_subquery = f"SELECT id FROM works WHERE slug = {sql_quote(config['work']['slug'])}"
     archive_subquery = f"SELECT id FROM archive_versions WHERE release_id IN ({release_subquery})"

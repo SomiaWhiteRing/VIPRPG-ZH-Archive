@@ -49,6 +49,7 @@ function buildArchiveZipEntries(
   return manifest.files.slice().sort(compareManifestFiles).map((file) => ({
     path: file.path,
     size: file.size,
+    crc32: file.crc32,
     mtimeMs: file.mtimeMs,
     open: () => {
       if (!corePackCache) {

@@ -6,11 +6,11 @@ import {
   saveWebPlayInstallation,
 } from "@/app/play/[archiveVersionId]/web-play-db";
 import {
-  createGameOpfsWriteContext,
+  createGamePackWritable,
   ensureOpfsSupported,
   resetGameOpfsDirectory,
-  writeGameFileWithContext,
   writeGameIndexJson,
+  writeGamePackIndexJson,
 } from "@/app/play/[archiveVersionId]/web-play-opfs";
 import type {
   WebPlayFileRecord,
@@ -20,42 +20,65 @@ import type {
   WebPlayMetadata,
   WebPlayStorageSnapshot,
 } from "@/app/play/[archiveVersionId]/web-play-types";
+import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
+import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 
 type EasyRpgCacheNode = {
   _dirname?: string;
   [name: string]: string | EasyRpgCacheNode | undefined;
 };
 
-type ZipCentralEntry = {
+type LocalZipEntry = {
   name: string;
+  flags: number;
   compression: number;
+  crc32: number;
   compressedSize: number;
   uncompressedSize: number;
-  dataOffset: number;
 };
 
-type PreparedZipEntry = {
-  path: string;
-  compressedSize: number;
-  uncompressedSize: number;
-  dataOffset: number;
+type WebPlayPackIndex = {
+  version: 1;
+  archiveVersionId: number;
+  manifestSha256: string;
+  downloadZipBuilderVersion: string;
+  webPlayInstallerVersion: string;
+  easyRpgRuntimeVersion: string;
+  packs: Array<{
+    name: string;
+    size: number;
+  }>;
+  files: Record<
+    string,
+    {
+      path: string;
+      pack: string;
+      offset: number;
+      length: number;
+      crc32: number;
+      contentType: string;
+    }
+  >;
 };
+
+type PackEntryLocation = {
+  pack: string;
+  offset: number;
+};
+
+type ByteChunk = Uint8Array<ArrayBufferLike>;
 
 const canceledPlayKeys = new Set<string>();
 const lastEmitAt = new Map<string, number>();
 const zipTextDecoder = new TextDecoder();
+const localFileHeaderSignature = 0x04034b50;
 const centralDirectorySignature = 0x02014b50;
 const endOfCentralDirectorySignature = 0x06054b50;
-const localFileHeaderSignature = 0x04034b50;
-const maxWriteConcurrency = 64;
-const minWriteConcurrency = 16;
-const writeConcurrencyPerHardwareThread = 4;
-const initialWriteConcurrency = 8;
-const writeConcurrencyRampStep = 4;
-const writeConcurrencyRampIntervalMs = 80;
+const zipDataDescriptorFlag = 0x0008;
+const zipMethodStore = 0;
 const progressEmitIntervalMs = 80;
 const fileRecordBatchSize = 1000;
-const localWriteSkippedExtensions = new Set(["dll", "exe", "txt"]);
+const packTargetSizeBytes = 256 * 1024 * 1024;
 const easyRpgResourceAliasExtensions = new Set([
   "bmp",
   "gif",
@@ -125,11 +148,12 @@ async function runInstall(
       {
         ...installation,
         downloadBytesTotal: headerLength ?? metadata.totalSizeBytes,
+        updatedAt: new Date().toISOString(),
       },
       true,
     );
 
-    const result = await extractZipToOpfs({
+    const result = await streamZipToPacks({
       metadata,
       response,
       installation,
@@ -152,12 +176,14 @@ async function runInstall(
       JSON.stringify({
         cache: indexRoot,
         metadata: {
-          version: 2,
+          version: 3,
+          storage: "pack-index",
           archiveVersionId: metadata.archiveVersionId,
           manifestSha256: metadata.manifestSha256,
         },
       }),
     );
+    await writeGamePackIndexJson(metadata.playKey, JSON.stringify(result.packIndex));
 
     installation = await persistAndPost(
       {
@@ -172,7 +198,13 @@ async function runInstall(
       true,
     );
 
-    postLog(metadata.playKey, "info", "浏览器本地安装完成。");
+    postLog(
+      metadata.playKey,
+      "info",
+      `浏览器本地安装完成，资源写入 ${result.packIndex.packs.length.toLocaleString(
+        "zh-CN",
+      )} 个 pack 文件。`,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "安装失败";
     const failed: WebPlayInstallation = {
@@ -226,77 +258,12 @@ async function requestStorage(
   );
 }
 
-async function extractZipToOpfs(input: {
+async function streamZipToPacks(input: {
   metadata: WebPlayMetadata;
   response: Response;
   installation: WebPlayInstallation;
   indexRoot: EasyRpgCacheNode;
-}): Promise<{ installation: WebPlayInstallation }> {
-  const download = await downloadZipBytes(input);
-
-  return extractStoredZipBytesToOpfs({
-    metadata: input.metadata,
-    zipBytes: download.bytes,
-    installation: download.installation,
-    indexRoot: input.indexRoot,
-  });
-}
-
-async function downloadZipBytes(input: {
-  metadata: WebPlayMetadata;
-  response: Response;
-  installation: WebPlayInstallation;
-}): Promise<{ bytes: Uint8Array; installation: WebPlayInstallation }> {
-  let installation = input.installation;
-  const chunks: Uint8Array[] = [];
-  let downloadedBytes = 0;
-
-  if (!input.response.body) {
-    const bytes = new Uint8Array(await input.response.arrayBuffer());
-    installation = await updateDownloadProgress(
-      installation,
-      input.metadata,
-      bytes.byteLength,
-      bytes.byteLength,
-      true,
-    );
-
-    return { bytes, installation };
-  }
-
-  const reader = input.response.body.getReader();
-
-  while (true) {
-    assertNotCanceled(input.metadata.playKey);
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    downloadedBytes += value.byteLength;
-    chunks.push(value);
-    installation = await updateDownloadProgress(
-      installation,
-      input.metadata,
-      downloadedBytes,
-      installation.downloadBytesTotal,
-      false,
-    );
-  }
-
-  return {
-    bytes: concatChunks(chunks, downloadedBytes),
-    installation,
-  };
-}
-
-async function extractStoredZipBytesToOpfs(input: {
-  metadata: WebPlayMetadata;
-  zipBytes: Uint8Array;
-  installation: WebPlayInstallation;
-  indexRoot: EasyRpgCacheNode;
-}): Promise<{ installation: WebPlayInstallation }> {
+}): Promise<{ installation: WebPlayInstallation; packIndex: WebPlayPackIndex }> {
   let installation = await persistAndPost(
     {
       ...input.installation,
@@ -306,107 +273,26 @@ async function extractStoredZipBytesToOpfs(input: {
     },
     true,
   );
-  const entries = readStoredZipCentralDirectory(input.zipBytes);
-  const preparedEntries: PreparedZipEntry[] = [];
-  let skippedLocalFiles = 0;
-  let skippedLocalBytes = 0;
-
-  for (const entry of entries) {
-    assertNotCanceled(input.metadata.playKey);
-
-    const normalizedPath = normalizeZipEntryPath(entry.name);
-
-    if (!normalizedPath) {
-      continue;
-    }
-
-    if (shouldSkipLocalWrite(normalizedPath)) {
-      skippedLocalFiles += 1;
-      skippedLocalBytes += entry.uncompressedSize;
-      continue;
-    }
-
-    if (entry.compression !== 0) {
-      throw new Error(`当前安装器只支持 store ZIP entry：${normalizedPath}`);
-    }
-
-    if (entry.compressedSize !== entry.uncompressedSize) {
-      throw new Error(`ZIP entry 大小异常：${normalizedPath}`);
-    }
-
-    addToEasyRpgIndex(input.indexRoot, normalizedPath);
-    preparedEntries.push({
-      path: normalizedPath,
-      compressedSize: entry.compressedSize,
-      uncompressedSize: entry.uncompressedSize,
-      dataOffset: entry.dataOffset,
-    });
-  }
-
-  const installTotalSizeBytes = sumPreparedEntryBytes(preparedEntries);
-  installation = await persistAndPost(
-    {
-      ...installation,
-      totalFiles: preparedEntries.length,
-      totalSizeBytes: installTotalSizeBytes,
-      updatedAt: new Date().toISOString(),
-    },
-    true,
-  );
-
-  if (skippedLocalFiles > 0) {
-    postLog(
-      input.metadata.playKey,
-      "info",
-      `本地写入跳过 ${skippedLocalFiles.toLocaleString(
-        "zh-CN",
-      )} 个 TXT / EXE / DLL 文件，约 ${formatBytes(skippedLocalBytes)}。`,
-    );
-  }
-
-  const writeConcurrency = resolveWriteConcurrency(preparedEntries.length);
-
-  postLog(
-    input.metadata.playKey,
-    "info",
-    `本地写入使用滚动调度，目标 ${writeConcurrency} 路并发。`,
-  );
-
-  installation = await writePreparedEntriesToOpfs({
-    metadata: input.metadata,
-    zipBytes: input.zipBytes,
-    installation,
-    entries: preparedEntries,
-    writeConcurrency,
-  });
-
-  return { installation };
-}
-
-async function writePreparedEntriesToOpfs(input: {
-  metadata: WebPlayMetadata;
-  zipBytes: Uint8Array;
-  installation: WebPlayInstallation;
-  entries: PreparedZipEntry[];
-  writeConcurrency: number;
-}): Promise<WebPlayInstallation> {
-  let cursor = 0;
-  let activeWrites = 0;
-  let completedWrites = 0;
-  let failed = false;
-  let desiredConcurrency = Math.min(
-    input.writeConcurrency,
-    initialWriteConcurrency,
-    input.entries.length,
-  );
+  let downloadedBytes = installation.downloadedBytes;
   let installedFiles = 0;
   let installedBytes = 0;
   let currentPath: string | null = null;
-  let installation = input.installation;
+  let skippedLocalFiles = 0;
+  let skippedLocalBytes = 0;
   let lastProgressAt = 0;
   let progressWrite = Promise.resolve();
-  const writeContext = await createGameOpfsWriteContext(input.metadata.playKey);
-  const fileRecords: WebPlayFileRecord[] = new Array(input.entries.length);
+  const fileRecords: WebPlayFileRecord[] = [];
+  const packWriter = new PackWriter(input.metadata.playKey);
+  const packIndex: WebPlayPackIndex = {
+    version: 1,
+    archiveVersionId: input.metadata.archiveVersionId,
+    manifestSha256: input.metadata.manifestSha256,
+    downloadZipBuilderVersion: input.metadata.downloadZipBuilderVersion,
+    webPlayInstallerVersion: input.metadata.webPlayInstallerVersion,
+    easyRpgRuntimeVersion: input.metadata.easyRpgRuntimeVersion,
+    packs: packWriter.packs,
+    files: {},
+  };
 
   const queueProgress = (force = false) => {
     const now = Date.now();
@@ -417,6 +303,7 @@ async function writePreparedEntriesToOpfs(input: {
 
     lastProgressAt = now;
     const snapshot = {
+      downloadedBytes,
       installedFiles,
       installedBytes,
       currentPath,
@@ -428,6 +315,7 @@ async function writePreparedEntriesToOpfs(input: {
         {
           ...installation,
           phase: "extracting_zip",
+          downloadedBytes: snapshot.downloadedBytes,
           installedFiles: snapshot.installedFiles,
           installedBytes: snapshot.installedBytes,
           currentPath: snapshot.currentPath,
@@ -438,139 +326,345 @@ async function writePreparedEntriesToOpfs(input: {
     });
   };
 
-  if (input.entries.length === 0) {
-    return installation;
+  let body: ReadableStream<ByteChunk> | null = input.response.body;
+
+  if (!body) {
+    const bytes = new Uint8Array(await input.response.arrayBuffer());
+    downloadedBytes = bytes.byteLength;
+    queueProgress(true);
+    body = streamBytes(bytes);
   }
 
-  await new Promise<void>((resolve, reject) => {
-    let rampTimer: ReturnType<typeof setInterval> | null = null;
+  if (!body) {
+    throw new Error("浏览器未提供 ZIP 响应流。");
+  }
 
-    const cleanup = () => {
-      if (rampTimer) {
-        clearInterval(rampTimer);
-        rampTimer = null;
-      }
-    };
-    const finishIfDone = () => {
-      if (completedWrites >= input.entries.length && activeWrites === 0) {
-        cleanup();
-        resolve();
-      }
-    };
-    const fail = (error: unknown) => {
-      if (!failed) {
-        failed = true;
-        cleanup();
-        reject(error);
-      }
-    };
-    const runOne = async (index: number) => {
+  const reader = new ZipStreamReader(input.metadata.playKey, body, (bytes) => {
+    downloadedBytes = bytes;
+    queueProgress();
+  });
+
+  postLog(
+    input.metadata.playKey,
+    "info",
+    "使用 ZIP local header 顺序解析，并写入 OPFS pack。",
+  );
+
+  try {
+    while (true) {
       assertNotCanceled(input.metadata.playKey);
-      const entry = input.entries[index];
-      const fileBytes = input.zipBytes.subarray(
-        entry.dataOffset,
-        entry.dataOffset + entry.compressedSize,
-      );
+      const entry = await reader.readNextEntry();
 
-      await writeGameFileWithContext(writeContext, entry.path, fileBytes);
+      if (!entry) {
+        await reader.drainToEnd();
+        break;
+      }
+
+      const normalizedPath = normalizeZipEntryPath(entry.name);
+
+      if (entry.compression !== zipMethodStore) {
+        throw new Error(`当前安装器只支持 store ZIP entry：${normalizedPath ?? entry.name}`);
+      }
+
+      if (entry.compressedSize !== entry.uncompressedSize) {
+        throw new Error(`ZIP entry 大小异常：${normalizedPath ?? entry.name}`);
+      }
+
+      if (!normalizedPath) {
+        await reader.discardBytes(entry.compressedSize);
+        continue;
+      }
+
+      if (shouldSkipWebPlayLocalWrite(normalizedPath)) {
+        skippedLocalFiles += 1;
+        skippedLocalBytes += entry.uncompressedSize;
+        await reader.discardBytes(entry.compressedSize);
+        continue;
+      }
+
+      addToEasyRpgIndex(input.indexRoot, normalizedPath);
+      const location = await packWriter.beginEntry(entry.uncompressedSize);
+      const lookupKey = packLookupKey(normalizedPath);
+
+      if (packIndex.files[lookupKey]) {
+        throw new Error(`Web Play pack 路径冲突：${normalizedPath}`);
+      }
+
+      await reader.pipeBytes(entry.compressedSize, async (chunk) => {
+        await packWriter.write(chunk);
+      });
+
+      packIndex.files[lookupKey] = {
+        path: normalizedPath,
+        pack: location.pack,
+        offset: location.offset,
+        length: entry.uncompressedSize,
+        crc32: entry.crc32,
+        contentType: contentTypeForArchivePath(normalizedPath),
+      };
 
       const updatedAt = new Date().toISOString();
 
-      fileRecords[index] = {
-        id: `${input.metadata.playKey}:${entry.path}`,
+      fileRecords.push({
+        id: `${input.metadata.playKey}:${normalizedPath}`,
         playKey: input.metadata.playKey,
-        path: entry.path,
+        path: normalizedPath,
         size: entry.uncompressedSize,
         updatedAt,
-      };
+      });
       installedFiles += 1;
       installedBytes += entry.uncompressedSize;
-      currentPath = entry.path;
+      currentPath = normalizedPath;
       queueProgress();
-    };
-    const schedule = () => {
-      if (failed) {
-        return;
-      }
+    }
+  } finally {
+    await packWriter.close();
+  }
 
-      while (activeWrites < desiredConcurrency && cursor < input.entries.length) {
-        const index = cursor;
-        cursor += 1;
-        activeWrites += 1;
-
-        void runOne(index)
-          .then(() => {
-            completedWrites += 1;
-          })
-          .catch(fail)
-          .finally(() => {
-            activeWrites -= 1;
-
-            if (!failed) {
-              schedule();
-              finishIfDone();
-            }
-          });
-      }
-
-      finishIfDone();
-    };
-
-    rampTimer = setInterval(() => {
-      if (failed || desiredConcurrency >= input.writeConcurrency) {
-        cleanup();
-        return;
-      }
-
-      desiredConcurrency = Math.min(
-        input.writeConcurrency,
-        desiredConcurrency + writeConcurrencyRampStep,
-      );
-      schedule();
-    }, writeConcurrencyRampIntervalMs);
-
-    schedule();
-  }).catch(async (error: unknown) => {
-    await progressWrite;
-    throw error;
-  });
+  if (skippedLocalFiles > 0) {
+    postLog(
+      input.metadata.playKey,
+      "info",
+      `本地写入跳过 ${skippedLocalFiles.toLocaleString(
+        "zh-CN",
+      )} 个 TXT / EXE / DLL 文件，约 ${formatBytes(skippedLocalBytes)}。`,
+    );
+  }
 
   queueProgress(true);
   await progressWrite;
   await saveFileRecordsInBatches(fileRecords);
 
-  return persistAndPost(
-    {
-      ...installation,
-      phase: "extracting_zip",
-      installedFiles,
-      installedBytes,
-      currentPath,
-      updatedAt: new Date().toISOString(),
-    },
-    true,
-  );
+  return {
+    installation: await persistAndPost(
+      {
+        ...installation,
+        phase: "extracting_zip",
+        totalFiles: installedFiles,
+        totalSizeBytes: installedBytes,
+        downloadedBytes,
+        installedFiles,
+        installedBytes,
+        currentPath,
+        updatedAt: new Date().toISOString(),
+      },
+      true,
+    ),
+    packIndex,
+  };
 }
 
-async function updateDownloadProgress(
-  installation: WebPlayInstallation,
-  metadata: WebPlayMetadata,
-  downloadedBytes: number,
-  downloadBytesTotal: number,
-  force: boolean,
-): Promise<WebPlayInstallation> {
-  assertNotCanceled(metadata.playKey);
+class PackWriter {
+  readonly packs: Array<{ name: string; size: number }> = [];
 
-  return persistAndPost(
-    {
-      ...installation,
-      phase: "downloading_zip",
-      downloadedBytes,
-      downloadBytesTotal,
-      updatedAt: new Date().toISOString(),
-    },
-    force,
-  );
+  private writable: FileSystemWritableFileStream | null = null;
+  private currentPack: { name: string; size: number } | null = null;
+  private nextPackIndex = 0;
+
+  constructor(private readonly playKey: string) {}
+
+  async beginEntry(length: number): Promise<PackEntryLocation> {
+    if (
+      !this.currentPack ||
+      (this.currentPack.size > 0 &&
+        this.currentPack.size + length > packTargetSizeBytes)
+    ) {
+      await this.rotatePack();
+    }
+
+    if (!this.currentPack) {
+      throw new Error("Pack writer is not open");
+    }
+
+    return {
+      pack: this.currentPack.name,
+      offset: this.currentPack.size,
+    };
+  }
+
+  async write(chunk: ByteChunk): Promise<void> {
+    if (!this.writable || !this.currentPack) {
+      throw new Error("Pack writer is not open");
+    }
+
+    await this.writable.write(toWriteBuffer(chunk));
+    this.currentPack.size += chunk.byteLength;
+  }
+
+  async close(): Promise<void> {
+    if (!this.writable) {
+      return;
+    }
+
+    const writable = this.writable;
+
+    this.writable = null;
+    this.currentPack = null;
+    await writable.close();
+  }
+
+  private async rotatePack(): Promise<void> {
+    await this.close();
+
+    const name = `assets-${String(this.nextPackIndex).padStart(3, "0")}.pack`;
+
+    this.nextPackIndex += 1;
+    this.currentPack = { name, size: 0 };
+    this.packs.push(this.currentPack);
+    this.writable = await createGamePackWritable(this.playKey, name);
+  }
+}
+
+class ZipStreamReader {
+  private readonly reader: ReadableStreamDefaultReader<ByteChunk>;
+  private buffer: ByteChunk = new Uint8Array(0);
+  private done = false;
+  private downloadedBytes = 0;
+
+  constructor(
+    private readonly playKey: string,
+    body: ReadableStream<ByteChunk>,
+    private readonly onDownload: (downloadedBytes: number) => void,
+  ) {
+    this.reader = body.getReader();
+  }
+
+  async readNextEntry(): Promise<LocalZipEntry | null> {
+    const hasSignature = await this.ensure(4, true);
+
+    if (!hasSignature && this.buffer.byteLength === 0) {
+      return null;
+    }
+
+    if (this.buffer.byteLength < 4) {
+      throw new Error("ZIP 数据在文件头处截断。");
+    }
+
+    const signature = readUint32(this.buffer, 0);
+
+    if (
+      signature === centralDirectorySignature ||
+      signature === endOfCentralDirectorySignature
+    ) {
+      return null;
+    }
+
+    if (signature !== localFileHeaderSignature) {
+      throw new Error(`ZIP local header 损坏：0x${signature.toString(16)}`);
+    }
+
+    const fixed = await this.readBytes(30);
+    const flags = readUint16(fixed, 6);
+    const compression = readUint16(fixed, 8);
+    const crc32 = readUint32(fixed, 14);
+    const compressedSize = readUint32(fixed, 18);
+    const uncompressedSize = readUint32(fixed, 22);
+    const nameLength = readUint16(fixed, 26);
+    const extraLength = readUint16(fixed, 28);
+
+    if ((flags & zipDataDescriptorFlag) !== 0) {
+      throw new Error("ZIP entry 使用 data descriptor，无法边下载边定位 entry。");
+    }
+
+    const nameBytes = await this.readBytes(nameLength);
+    const name = decodeZipPath(this.playKey, nameBytes, flags);
+
+    await this.discardBytes(extraLength);
+
+    return {
+      name,
+      flags,
+      compression,
+      crc32,
+      compressedSize,
+      uncompressedSize,
+    };
+  }
+
+  async discardBytes(length: number): Promise<void> {
+    await this.pipeBytes(length, async () => undefined);
+  }
+
+  async drainToEnd(): Promise<void> {
+    this.consume(this.buffer.byteLength);
+
+    while (!this.done) {
+      await this.readChunk();
+      this.consume(this.buffer.byteLength);
+    }
+  }
+
+  async pipeBytes(
+    length: number,
+    onChunk: (chunk: ByteChunk) => Promise<void>,
+  ): Promise<void> {
+    let remaining = length;
+
+    while (remaining > 0) {
+      if (this.buffer.byteLength === 0) {
+        await this.readChunk();
+      }
+
+      if (this.buffer.byteLength === 0) {
+        throw new Error("ZIP entry 数据被截断。");
+      }
+
+      const take = Math.min(remaining, this.buffer.byteLength);
+      const chunk = this.buffer.subarray(0, take);
+
+      await onChunk(chunk);
+      this.consume(take);
+      remaining -= take;
+    }
+  }
+
+  private async readBytes(length: number): Promise<ByteChunk> {
+    await this.ensure(length);
+
+    const bytes = this.buffer.slice(0, length);
+
+    this.consume(length);
+
+    return bytes;
+  }
+
+  private async ensure(length: number, allowEof = false): Promise<boolean> {
+    while (this.buffer.byteLength < length && !this.done) {
+      await this.readChunk();
+    }
+
+    if (this.buffer.byteLength < length) {
+      if (allowEof) {
+        return false;
+      }
+
+      throw new Error("ZIP 数据被截断。");
+    }
+
+    return true;
+  }
+
+  private async readChunk(): Promise<void> {
+    if (this.done) {
+      return;
+    }
+
+    const result = await this.reader.read();
+
+    if (result.done) {
+      this.done = true;
+      return;
+    }
+
+    this.downloadedBytes += result.value.byteLength;
+    this.onDownload(this.downloadedBytes);
+    this.buffer = appendChunk(this.buffer, result.value);
+  }
+
+  private consume(length: number): void {
+    this.buffer =
+      length >= this.buffer.byteLength ? new Uint8Array(0) : this.buffer.subarray(length);
+  }
 }
 
 function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallation {
@@ -592,8 +686,8 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     updatedAt: now,
     readyAt: null,
     lastPlayedAt: null,
-    totalFiles: metadata.totalFiles,
-    totalSizeBytes: metadata.totalSizeBytes,
+    totalFiles: metadata.installTotalFiles,
+    totalSizeBytes: metadata.installTotalSizeBytes,
     downloadedBytes: 0,
     downloadBytesTotal: 0,
     installedFiles: 0,
@@ -604,23 +698,6 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     storageUsageBytes: null,
     error: null,
   };
-}
-
-function resolveWriteConcurrency(entryCount: number): number {
-  if (entryCount <= 0) {
-    return 1;
-  }
-
-  const hardwareConcurrency =
-    typeof navigator.hardwareConcurrency === "number"
-      ? navigator.hardwareConcurrency
-      : minWriteConcurrency / writeConcurrencyPerHardwareThread;
-  const target = Math.max(
-    minWriteConcurrency,
-    Math.ceil(hardwareConcurrency * writeConcurrencyPerHardwareThread),
-  );
-
-  return Math.max(1, Math.min(entryCount, maxWriteConcurrency, target));
 }
 
 async function saveFileRecordsInBatches(
@@ -732,39 +809,6 @@ function easyRpgResourceAliasForFile(fileName: string): string | null {
   return fileName.slice(0, dotIndex);
 }
 
-function shouldSkipLocalWrite(path: string): boolean {
-  const fileName = path.split("/").at(-1) ?? "";
-  const dotIndex = fileName.lastIndexOf(".");
-
-  if (dotIndex < 0 || dotIndex === fileName.length - 1) {
-    return false;
-  }
-
-  return localWriteSkippedExtensions.has(fileName.slice(dotIndex + 1).toLowerCase());
-}
-
-function sumPreparedEntryBytes(entries: PreparedZipEntry[]): number {
-  return entries.reduce((total, entry) => total + entry.uncompressedSize, 0);
-}
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0 B";
-  }
-
-  let next = value;
-
-  for (const unit of ["B", "KB", "MB", "GB"]) {
-    if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
-    }
-
-    next /= 1024;
-  }
-
-  return `${value} B`;
-}
-
 function normalizeZipEntryPath(path: string): string | null {
   const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "");
 
@@ -789,6 +833,10 @@ function normalizeZipEntryPath(path: string): string | null {
     .join("/");
 }
 
+function packLookupKey(path: string): string {
+  return path.toLowerCase();
+}
+
 function assertNotCanceled(playKey: string): void {
   if (canceledPlayKeys.has(playKey)) {
     throw new Error("安装已取消。");
@@ -805,83 +853,62 @@ function numberHeader(value: string | null): number | null {
   return Number.isSafeInteger(number) ? number : null;
 }
 
-function concatChunks(chunks: Uint8Array[], totalBytes: number): Uint8Array {
-  const result = new Uint8Array(totalBytes);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
+function appendChunk(left: ByteChunk, right: ByteChunk): ByteChunk {
+  if (left.byteLength === 0) {
+    return right;
   }
+
+  const result = new Uint8Array(left.byteLength + right.byteLength);
+
+  result.set(left, 0);
+  result.set(right, left.byteLength);
 
   return result;
 }
 
-function readStoredZipCentralDirectory(zipBytes: Uint8Array): ZipCentralEntry[] {
-  const eocdOffset = findEndOfCentralDirectory(zipBytes);
-  const entryCount = readUint16(zipBytes, eocdOffset + 10);
-  const centralDirectoryOffset = readUint32(zipBytes, eocdOffset + 16);
-  const entries: ZipCentralEntry[] = [];
-  let offset = centralDirectoryOffset;
-
-  for (let index = 0; index < entryCount; index += 1) {
-    if (readUint32(zipBytes, offset) !== centralDirectorySignature) {
-      throw new Error("ZIP 中央目录损坏。");
-    }
-
-    const flags = readUint16(zipBytes, offset + 8);
-    const compression = readUint16(zipBytes, offset + 10);
-    const compressedSize = readUint32(zipBytes, offset + 20);
-    const uncompressedSize = readUint32(zipBytes, offset + 24);
-    const nameLength = readUint16(zipBytes, offset + 28);
-    const extraLength = readUint16(zipBytes, offset + 30);
-    const commentLength = readUint16(zipBytes, offset + 32);
-    const localHeaderOffset = readUint32(zipBytes, offset + 42);
-    const nameStart = offset + 46;
-    const nameBytes = zipBytes.subarray(nameStart, nameStart + nameLength);
-    const name = decodeZipPath(nameBytes, flags);
-
-    if (readUint32(zipBytes, localHeaderOffset) !== localFileHeaderSignature) {
-      throw new Error(`ZIP local header 损坏：${name}`);
-    }
-
-    const localNameLength = readUint16(zipBytes, localHeaderOffset + 26);
-    const localExtraLength = readUint16(zipBytes, localHeaderOffset + 28);
-    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
-
-    if (dataOffset + compressedSize > zipBytes.byteLength) {
-      throw new Error(`ZIP entry 超出文件边界：${name}`);
-    }
-
-    entries.push({
-      name,
-      compression,
-      compressedSize,
-      uncompressedSize,
-      dataOffset,
-    });
-    offset = nameStart + nameLength + extraLength + commentLength;
-  }
-
-  return entries;
+function streamBytes(bytes: ByteChunk): ReadableStream<ByteChunk> {
+  return new ReadableStream<ByteChunk>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
 }
 
-function findEndOfCentralDirectory(zipBytes: Uint8Array): number {
-  const minOffset = Math.max(0, zipBytes.byteLength - 22 - 65535);
-
-  for (let offset = zipBytes.byteLength - 22; offset >= minOffset; offset -= 1) {
-    if (readUint32(zipBytes, offset) === endOfCentralDirectorySignature) {
-      return offset;
-    }
+function toWriteBuffer(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes as Uint8Array<ArrayBuffer>;
   }
 
-  throw new Error("未找到 ZIP 中央目录。");
+  const copy = new Uint8Array(bytes.byteLength);
+
+  copy.set(bytes);
+
+  return copy;
 }
 
-function decodeZipPath(bytes: Uint8Array, flags: number): string {
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  let next = value;
+
+  for (const unit of ["B", "KB", "MB", "GB"]) {
+    if (next < 1024 || unit === "GB") {
+      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
+    }
+
+    next /= 1024;
+  }
+
+  return `${value} B`;
+}
+
+function decodeZipPath(playKey: string, bytes: Uint8Array, flags: number): string {
   if ((flags & 0x0800) === 0) {
     postLog(
-      "zip",
+      playKey,
       "warning",
       "ZIP entry 未标记 UTF-8，仍按 UTF-8 解码。若路径异常，需要重新评估路径字节策略。",
     );

@@ -1,1 +1,1 @@
-export const downloadZipBuilderVersion = "zip-store-v6-native-fixed-length-cache-hit-header";
+export const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";

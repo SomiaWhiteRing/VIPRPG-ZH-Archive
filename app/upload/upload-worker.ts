@@ -8,6 +8,7 @@ import {
   normalizeArchivePath,
   PACKER_VERSION,
 } from "@/lib/archive/file-policy";
+import { crc32 } from "@/lib/archive/crc32";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
@@ -39,6 +40,7 @@ type IncludedFile = {
   role: ArchiveManifestFile["role"];
   storageKind: "blob" | "core_pack";
   sha256: string;
+  crc32: number;
   size: number;
   mtimeMs: number | null;
   contentType: string;
@@ -349,6 +351,7 @@ async function scanAndHash(
       role: classification.role,
       storageKind: classification.storageKind,
       sha256,
+      crc32: crc32(bytes),
       size: source.size,
       mtimeMs: source.mtimeMs,
       contentType: source.contentType,
@@ -468,6 +471,7 @@ async function buildManifest(input: {
       pathSortKey: file.pathSortKey,
       role: file.role,
       sha256: file.sha256,
+      crc32: file.crc32,
       size: file.size,
       mtimeMs: file.mtimeMs,
       storage:

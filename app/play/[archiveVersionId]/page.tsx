@@ -10,6 +10,7 @@ import {
 } from "@/lib/archive/web-play";
 import {
   getPublishedArchiveDownloadRecord,
+  getWebPlayInstallTargetTotals,
   parseArchiveVersionId,
 } from "@/lib/server/db/archive-downloads";
 import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
@@ -39,6 +40,8 @@ export default async function WebPlayPage({ params }: PageProps) {
     notFound();
   }
 
+  const installTarget = await getWebPlayInstallTargetTotals(record.id);
+
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,
@@ -63,6 +66,8 @@ export default async function WebPlayPage({ params }: PageProps) {
     downloadUrl: buildArchiveDownloadUrl(record.id),
     totalFiles: record.totalFiles,
     totalSizeBytes: record.totalSizeBytes,
+    installTotalFiles: installTarget.totalFiles,
+    installTotalSizeBytes: installTarget.totalSizeBytes,
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
     usesManiacsPatch: record.usesManiacsPatch,
