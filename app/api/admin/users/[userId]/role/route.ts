@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/server/auth/guards";
 import { isUserRole } from "@/lib/server/auth/roles";
+import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { changeUserRole } from "@/lib/server/db/inbox";
 import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
@@ -34,6 +35,16 @@ export async function POST(request: Request, context: RouteContext) {
       targetUserId: userId,
       newRole: role,
       reason: "admin_role_update",
+    });
+
+    await writeAuthAuditLog({
+      userId: auth.user.id,
+      email: auth.user.email,
+      eventType: "admin_user_role_update",
+      detail: {
+        targetUserId: user.id,
+        newRole: user.role,
+      },
     });
 
     if (request.headers.get("accept")?.includes("application/json")) {

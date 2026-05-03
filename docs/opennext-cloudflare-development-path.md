@@ -714,18 +714,18 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 Phase 5 MVP 回补：
 
-- 新增 `/admin/archive-versions` 归档维护页，展示非回收站 ArchiveVersion，支持删除和设为 current；新增 `/admin/archive-versions/trash` 回收站页，支持还原。
-- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/delete`：把 ArchiveVersion 放入回收站，技术上标记为 `deleted`、写入 `deleted_at` 并清空 `is_current`，不删除 R2 对象。
+- 新增 `/admin/archive-versions` 归档维护页，管理员可查看全部非回收站 ArchiveVersion，上传者只能查看自己上传的非回收站 ArchiveVersion；新增 `/admin/archive-versions/trash` 回收站页，仅管理员和超级管理员可访问并还原。
+- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/delete`：把 ArchiveVersion 放入回收站，技术上标记为 `deleted`、写入 `deleted_at` 并清空 `is_current`，不删除 R2 对象。上传者只能删除自己上传的归档，管理员和超级管理员可删除全部归档。
 - 新增 `POST /api/admin/archive-versions/{archiveVersionId}/restore`：把回收站 ArchiveVersion 恢复为 `published`；若同组没有 current，则自动设为 current。
 - 新增 `POST /api/admin/archive-versions/{archiveVersionId}/current`：在同一 `release_id + archive_key` 下切换当前 published 版本。
 - 删除 current 版本时，会自动在同一组中选择最新 published 版本接任；没有可用版本则保持无 current。
 - 新增迁移 `0005_archive_version_purge.sql`，为 ArchiveVersion 增加 `purged_at`。回收站 ArchiveVersion 在最终清理前可以还原；最终清理后删除文件引用和 manifest，不能再还原。
-- 新增 `POST /api/admin/gc/sweep`：需要 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用 active blob/core pack；管理员手动执行时可以传 `graceDays = 0` 立即最终清理当前回收站 ArchiveVersion 并清理因此变成零引用的对象。
+- 新增 `POST /api/admin/gc/sweep`：仅超级管理员可调用，需要 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用 active blob/core pack；手动执行时可以传 `graceDays = 0` 立即最终清理当前回收站 ArchiveVersion 并清理因此变成零引用的对象。
 - GC sweep 对候选对象使用 `active -> purging -> purged` 状态转换；R2 删除失败则恢复为 `active`。
 - `findExistingObjects` 只把 `status = 'active'` 的 blob/core pack 视为存在；被 purged 的同 hash 对象后续可重新上传并恢复 active。
 - 用户管理页新增禁用/启用操作；认证入口每次都会重新读取 D1 用户状态，被禁用用户的旧 cookie 不再通过认证。
 - `worker.mjs` 新增 Cloudflare Scheduled handler，staging/prod 在 `wrangler.jsonc` 中统一配置 `17 19 * * *`，即每天 UTC 19:17 / 香港时间 03:17 自动执行 7 天 GC sweep，每类最多 1000 个对象。
-- 手动与自动 GC 都写入 `auth_audit_logs`，作为 MVP 审计线索；完整管理员审计页和服务端 session 撤销留到后续。
+- 新增 `/admin/audit` 审计页，仅超级管理员可访问，展示最近 `auth_audit_logs` 和 `user_role_events`；手动与自动 GC 都写入 `auth_audit_logs`，服务端 session 撤销留到后续。
 
 ### Phase G：EasyRPG 在线游玩
 
@@ -779,6 +779,50 @@ Phase 5 MVP 回补：
 - 2026-05-03 `/play/13` 安装性能诊断：首次日志显示 `X-Download-Cache: HIT`、`CF-Cache-Status: HIT`，服务端和 R2 不是瓶颈；107.10 MB 本地安装耗时 37.08s，其中 OPFS write 等待 33.14s、write 调用 7185 次。安装器加入约 1 MB OPFS 写入缓冲后，staging 部署版本 `997bf818-5b2f-4b48-96d1-8f507812618b` 复测耗时 23.26s，OPFS write 等待降至 1.47s、write 调用降至 106 次，游戏可启动。小于 256 MB 的安装生成 1 个 pack 是正常结果，不代表偏离 B + Pack 设计。
 - 2026-05-03 `/play/13` 网络失败重试修正：staging 部署版本 `c5ff1bd9-15c3-4590-adae-841eb94a870e` 加入 Web Play 安装自动重试。通过 Playwright 强制第一次下载请求 `Failed to fetch`，页面日志显示 `1.50s 后自动重试（2/3）`，第二次尝试清理半成品缓存后完成安装。
 - 2026-05-03 `/play/13` 冷下载优化：staging 部署版本 `aaf2c4d4-6120-444f-8634-1c4e348d0abb` 加入下载端 R2 预取和单请求小 blob 缓存。使用 staging-only `debug_download_cache=bypass` 绕过 Workers Cache 测试，130,098,240 byte ZIP 的冷下载耗时从优化前 `188.75s / 0.69 MB/s` 降至 `39.91s / 3.26 MB/s`；随后一次完整 ZIP 校验下载为 `24.57s / 5.30 MB/s`，可由 .NET ZipArchive 打开，entry 数 `5743`、文件长度 `130098240`。同轮缓存命中请求受本地网络影响为 `36.25s / 3.59 MB/s`。
+
+### Phase H：游戏资料库产品化
+
+目标：用户不再只看到 ArchiveVersion 列表，而是按 Work 浏览作品资料、发布分支和归档快照。
+
+任务：
+
+- 实现 `/games` 公开资料库列表，支持标题、别名、作者、标签、登场角色搜索，以及引擎、标签和登场角色筛选。
+- 实现 `/games/{slug}` 作品详情页，展示原名、中文名、别名、作者、标签、登场角色、外部链接、系列/关联作品、发布版本和归档下载/在线游玩入口。
+- 实现公开图片读取端点，只允许读取 `image/*` 类型的 active blob，用于作品缩略图和浏览图展示。
+- 实现 `/admin/works` 和 `/admin/works/{workId}`，让管理员维护 Work 层基础资料、别名、标签、登场角色和外部链接。
+- 实现 `/admin/releases/{releaseId}`，让管理员维护 Release 层资料：名称、基底版本、分支、类型、发布日期、来源、入口、标签、外链和版权备注。
+- 实现 `/admin/archive-versions/{archiveVersionId}`，让管理员维护 ArchiveVersion 层资料：名称、语言、校对、修图和发布状态；归档 key、manifest 和对象引用保持只读。
+- 实现 `/creators` 和 `/creators/{slug}`，公开展示作者、汉化、校对、修图和整理人员的资料、作品层职务和 Release 职务。
+- 实现 `/admin/creators` 和 `/admin/creators/{creatorId}`，让管理员维护 creator 本体资料；职务关联第一版只读展示。
+- 作品编辑写入 `auth_audit_logs`，方便超级管理员从审计页追踪资料变更。
+- Release 和 ArchiveVersion 编辑同样写入 `auth_audit_logs`。
+- Creator 编辑同样写入 `auth_audit_logs`。
+
+验收：
+
+- 首页提供游戏资料库入口。
+- `/games` 能列出已发布作品，按标签文本或登场角色筛选后仍能进入详情页。
+- `/games/{slug}` 的下载按钮复用现有下载端点；未使用 Maniacs Patch 的归档显示在线游玩入口。
+- 管理员可编辑作品中文名、简介、发布日期、引擎、Maniacs Patch 标记、状态、别名、标签、登场角色和外链。
+- 管理员可从作品编辑页进入 Release 编辑，并从 Release 编辑页进入 ArchiveVersion 编辑。
+- 管理员可修正 Release 的发布资料和 ArchiveVersion 的语言、校对、修图状态；上传者不能访问这些编辑页。
+- `/creators` 能列出已有公开作品或公开 Release 关联的制作人员。
+- `/creators/{slug}` 能展示作者简介、个人链接、作品年表和发布参与记录。
+- 管理员可编辑 creator 名称、原名、个人链接和简介；普通用户和上传者不能访问 `/admin/creators`。
+- 普通用户和上传者不能访问 `/admin/works`。
+
+当前落地：
+
+- 新增 `lib/server/db/game-library.ts`，集中处理资料库查询、详情聚合和 Work 编辑。
+- 新增 `/api/media/blobs/{sha256}`，只返回 active 且 `Content-Type` 为 `image/*` 的 blob，并设置长期 immutable 缓存。
+- 新增 `/games`、`/games/{slug}`、`/admin/works`、`/admin/works/{workId}` 和 `POST /api/admin/works/{workId}/update`。
+- `/games` 现在支持独立标签文本搜索和登场角色筛选；登场角色使用 `characters` + `work_characters`，不会混入普通 `tags`。
+- 新增 `/admin/releases/{releaseId}`、`POST /api/admin/releases/{releaseId}/update`、`/admin/archive-versions/{archiveVersionId}` 和 `POST /api/admin/archive-versions/{archiveVersionId}/update`。
+- 新增 `lib/server/db/creator-library.ts`，集中处理 creator 公开查询、详情聚合和管理端编辑。
+- 新增 `/creators`、`/creators/{slug}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
+- 作品详情页的 Work staff 和 Release staff 现在链接到 creator 公开页。
+- `/admin/archive-versions` 对管理员显示“编辑归档”和“编辑 Release”入口；上传者仍只显示自己归档的维护操作。
+- 首页新增“游戏资料库”和“作者与制作人员”入口，管理端新增“作品资料”和“作者资料”入口。
 
 ## 11. 部署和环境流程
 

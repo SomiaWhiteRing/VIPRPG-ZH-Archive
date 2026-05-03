@@ -23,7 +23,11 @@ type ApiPayload = {
   report?: unknown;
 };
 
-export function AdminOperationPanel() {
+export function AdminOperationPanel({
+  canRunFinalCleanup,
+}: {
+  canRunFinalCleanup: boolean;
+}) {
   const [state, setState] = useState<OperationState>({
     kind: null,
     loading: false,
@@ -106,37 +110,43 @@ export function AdminOperationPanel() {
           运行清理预演
         </button>
       </div>
-      <div className="danger-inline-controls">
-        <label htmlFor="gc-sweep-confirm">
-          最终清理
-          <span className="muted-line">
-            自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
-            手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
-          </span>
-        </label>
-        <input
-          aria-label="最终清理手动保留天数"
-          min="0"
-          step="1"
-          type="number"
-          value={sweepGraceDays}
-          onChange={(event) => setSweepGraceDays(event.target.value)}
-        />
-        <input
-          id="gc-sweep-confirm"
-          value={sweepConfirm}
-          onChange={(event) => setSweepConfirm(event.target.value)}
-          placeholder="SWEEP"
-        />
-        <button
-          className="button"
-          disabled={state.loading || sweepConfirm !== "SWEEP"}
-          onClick={() => run("sweep")}
-          type="button"
-        >
-          执行最终清理
-        </button>
-      </div>
+      {canRunFinalCleanup ? (
+        <div className="danger-inline-controls">
+          <label htmlFor="gc-sweep-confirm">
+            最终清理
+            <span className="muted-line">
+              自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
+              手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
+            </span>
+          </label>
+          <input
+            aria-label="最终清理手动保留天数"
+            min="0"
+            step="1"
+            type="number"
+            value={sweepGraceDays}
+            onChange={(event) => setSweepGraceDays(event.target.value)}
+          />
+          <input
+            id="gc-sweep-confirm"
+            value={sweepConfirm}
+            onChange={(event) => setSweepConfirm(event.target.value)}
+            placeholder="SWEEP"
+          />
+          <button
+            className="button"
+            disabled={state.loading || sweepConfirm !== "SWEEP"}
+            onClick={() => run("sweep")}
+            type="button"
+          >
+            执行最终清理
+          </button>
+        </div>
+      ) : (
+        <p className="muted-line">
+          最终清理会永久删除回收站版本的文件引用和零引用 R2 对象，只有超级管理员可手动执行。
+        </p>
+      )}
       {state.loading ? <p className="muted-line">检查运行中</p> : null}
       {state.error ? <p className="error-message compact">{state.error}</p> : null}
       {state.result ? (

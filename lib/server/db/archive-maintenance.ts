@@ -1,4 +1,6 @@
 import { getD1 } from "@/lib/server/db/d1";
+import { canManageUsersRole } from "@/lib/server/auth/roles";
+import type { ArchiveUser } from "@/lib/server/db/users";
 
 export type AdminArchiveVersion = {
   id: number;
@@ -20,6 +22,7 @@ export type AdminArchiveVersion = {
   publishedAt: string | null;
   deletedAt: string | null;
   purgedAt: string | null;
+  uploaderId: number | null;
   uploaderName: string | null;
 };
 
@@ -43,6 +46,7 @@ type ArchiveVersionRow = {
   published_at: string | null;
   deleted_at: string | null;
   purged_at: string | null;
+  uploader_id: number | null;
   uploader_name: string | null;
 };
 
@@ -53,6 +57,7 @@ type ArchiveVersionIdentityRow = {
   status: AdminArchiveVersion["status"];
   is_current: number;
   purged_at: string | null;
+  uploader_id: number | null;
 };
 
 type IdRow = {
@@ -64,13 +69,23 @@ type ArchiveVersionListFilter = "all" | "active" | "trash";
 export async function listArchiveVersionsForAdmin(
   limit = 100,
   filter: ArchiveVersionListFilter = "all",
+  actor?: ArchiveUser,
 ): Promise<AdminArchiveVersion[]> {
-  const whereSql =
-    filter === "active"
-      ? "WHERE av.status <> 'deleted'"
-      : filter === "trash"
-        ? "WHERE av.status = 'deleted'"
-        : "";
+  const whereClauses: string[] = [];
+  const bindValues: Array<string | number> = [];
+
+  if (filter === "active") {
+    whereClauses.push("av.status <> 'deleted'");
+  } else if (filter === "trash") {
+    whereClauses.push("av.status = 'deleted'");
+  }
+
+  if (actor && !canManageUsersRole(actor.role)) {
+    whereClauses.push("av.uploader_id = ?");
+    bindValues.push(actor.id);
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
   const orderSql =
     filter === "trash"
       ? `ORDER BY
@@ -109,6 +124,7 @@ export async function listArchiveVersionsForAdmin(
         av.published_at,
         av.deleted_at,
         av.purged_at,
+        av.uploader_id,
         u.display_name AS uploader_name
       FROM archive_versions av
       JOIN releases r ON r.id = av.release_id
@@ -118,7 +134,7 @@ export async function listArchiveVersionsForAdmin(
       ${orderSql}
       LIMIT ?`,
     )
-    .bind(clampLimit(limit))
+    .bind(...bindValues, clampLimit(limit))
     .all<ArchiveVersionRow>();
 
   return (rows.results ?? []).map(mapArchiveVersionRow);
@@ -126,6 +142,7 @@ export async function listArchiveVersionsForAdmin(
 
 export async function moveArchiveVersionToTrash(
   archiveVersionId: number,
+  actor?: ArchiveUser,
 ): Promise<AdminArchiveVersion> {
   const target = await getArchiveVersionIdentity(archiveVersionId);
 
@@ -135,6 +152,14 @@ export async function moveArchiveVersionToTrash(
 
   if (target.status === "deleted") {
     return requiredAdminArchiveVersion(archiveVersionId);
+  }
+
+  if (
+    actor &&
+    !canManageUsersRole(actor.role) &&
+    (!target.uploader_id || target.uploader_id !== actor.id)
+  ) {
+    throw new Error("只能删除自己上传的归档快照");
   }
 
   await getD1()
@@ -278,6 +303,7 @@ async function requiredAdminArchiveVersion(
         av.published_at,
         av.deleted_at,
         av.purged_at,
+        av.uploader_id,
         u.display_name AS uploader_name
       FROM archive_versions av
       JOIN releases r ON r.id = av.release_id
@@ -303,7 +329,7 @@ async function getArchiveVersionIdentity(
 ): Promise<ArchiveVersionIdentityRow | null> {
   const row = await getD1()
     .prepare(
-      `SELECT id, release_id, archive_key, status, is_current, purged_at
+      `SELECT id, release_id, archive_key, status, is_current, purged_at, uploader_id
       FROM archive_versions
       WHERE id = ?
       LIMIT 1`,
@@ -335,6 +361,7 @@ function mapArchiveVersionRow(row: ArchiveVersionRow): AdminArchiveVersion {
     publishedAt: row.published_at,
     deletedAt: row.deleted_at,
     purgedAt: row.purged_at,
+    uploaderId: row.uploader_id,
     uploaderName: row.uploader_name,
   };
 }

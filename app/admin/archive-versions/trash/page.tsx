@@ -42,7 +42,11 @@ export default async function AdminArchiveVersionTrashPage() {
         </div>
       </header>
 
-      <ArchiveVersionTable archiveVersions={archiveVersions} mode="trash" />
+      <ArchiveVersionTable
+        actor={adminUser}
+        archiveVersions={archiveVersions}
+        mode="trash"
+      />
     </main>
   );
 }

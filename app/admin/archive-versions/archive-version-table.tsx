@@ -1,9 +1,14 @@
+import Link from "next/link";
 import type { AdminArchiveVersion } from "@/lib/server/db/archive-maintenance";
+import { canManageUsersRole } from "@/lib/server/auth/roles";
+import type { ArchiveUser } from "@/lib/server/db/users";
 
 export function ArchiveVersionTable({
+  actor,
   archiveVersions,
   mode,
 }: {
+  actor: ArchiveUser;
   archiveVersions: AdminArchiveVersion[];
   mode: "active" | "trash";
 }) {
@@ -84,7 +89,11 @@ export function ArchiveVersionTable({
                 ) : null}
               </td>
               <td>
-                <ArchiveActions archiveVersion={archiveVersion} mode={mode} />
+                <ArchiveActions
+                  actor={actor}
+                  archiveVersion={archiveVersion}
+                  mode={mode}
+                />
               </td>
             </tr>
           ))}
@@ -95,15 +104,23 @@ export function ArchiveVersionTable({
 }
 
 function ArchiveActions({
+  actor,
   archiveVersion,
   mode,
 }: {
+  actor: ArchiveUser;
   archiveVersion: AdminArchiveVersion;
   mode: "active" | "trash";
 }) {
+  const isAdmin = canManageUsersRole(actor.role);
+
   if (archiveVersion.status === "deleted") {
     if (archiveVersion.purgedAt) {
       return <span className="muted-line">已最终清理，不能还原</span>;
+    }
+
+    if (!isAdmin) {
+      return <span className="muted-line">需要管理员还原</span>;
     }
 
     return (
@@ -119,9 +136,23 @@ function ArchiveActions({
     );
   }
 
+  const canDelete =
+    mode === "active" &&
+    (isAdmin || (archiveVersion.uploaderId !== null && archiveVersion.uploaderId === actor.id));
+
   return (
     <div className="actions compact-actions">
-      {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
+      {isAdmin ? (
+        <>
+          <Link className="button primary" href={`/admin/archive-versions/${archiveVersion.id}`}>
+            编辑归档
+          </Link>
+          <Link className="button" href={`/admin/releases/${archiveVersion.releaseId}`}>
+            编辑 Release
+          </Link>
+        </>
+      ) : null}
+      {isAdmin && archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
         <form
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
           method="post"
@@ -132,7 +163,7 @@ function ArchiveActions({
           </button>
         </form>
       ) : null}
-      {mode === "active" ? (
+      {canDelete ? (
         <form
           action={`/api/admin/archive-versions/${archiveVersion.id}/delete`}
           method="post"

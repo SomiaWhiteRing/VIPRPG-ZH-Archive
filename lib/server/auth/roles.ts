@@ -30,6 +30,10 @@ export function canManageUsersRole(role: UserRole): boolean {
   return roleWeight(role) >= roleWeight("admin");
 }
 
+export function canAccessSuperAdminRole(role: UserRole): boolean {
+  return roleWeight(role) >= roleWeight("super_admin");
+}
+
 export function canManageRole(actorRole: UserRole, targetRole: UserRole): boolean {
   return roleWeight(actorRole) > roleWeight(targetRole);
 }
