@@ -1,0 +1,2 @@
+ALTER TABLE archive_version_files
+  ADD COLUMN crc32 INTEGER NOT NULL DEFAULT 0;

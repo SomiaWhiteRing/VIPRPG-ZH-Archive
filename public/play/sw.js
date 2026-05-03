@@ -3,6 +3,7 @@ const DB_VERSION = 1;
 const STORE_INSTALLATIONS = "web_play_installations";
 const APP_ROOT = "viprpg-archive";
 const GAMES_ROOT = "games";
+const packIndexCache = new Map();
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -51,15 +52,7 @@ async function handleGameRequest(gameRequest) {
       });
     }
 
-    const file = await readGameFile(gameRequest.playKey, gameRequest.path);
-
-    return new Response(file.stream(), {
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Length": String(file.size),
-        "Content-Type": contentTypeForPath(gameRequest.path),
-      },
-    });
+    return readGameResponse(gameRequest.playKey, gameRequest.path);
   } catch (error) {
     notifyFileProblem(
       gameRequest.playKey,
@@ -146,7 +139,7 @@ function normalizeGamePath(path) {
     .join("/");
 }
 
-async function readGameFile(playKey, path) {
+async function readGameResponse(playKey, path) {
   const storage = self.navigator.storage;
 
   if (!storage || typeof storage.getDirectory !== "function") {
@@ -159,22 +152,81 @@ async function readGameFile(playKey, path) {
   const gameRoot = await gamesRoot.getDirectoryHandle(playKey);
 
   if (path === "index.json") {
-    return (await gameRoot.getFileHandle("index.json")).getFile();
+    const file = await (await gameRoot.getFileHandle("index.json")).getFile();
+
+    return fileResponse(file, "application/json; charset=utf-8");
   }
 
-  let directory = await gameRoot.getDirectoryHandle("files");
-  const parts = path.split("/");
-  const fileName = parts.pop();
+  const packIndex = await loadPackIndex(playKey, gameRoot);
+  const record = packIndex.files[packLookupKey(path)];
 
-  if (!fileName) {
-    throw new Error("Missing file name");
+  if (!record) {
+    throw new Error(`Pack index entry not found: ${path}`);
   }
 
-  for (const part of parts) {
-    directory = await directory.getDirectoryHandle(part);
+  const packFile = await getPackFile(gameRoot, record.pack);
+  const start = record.offset;
+  const end = record.offset + record.length;
+
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start ||
+    end > packFile.size
+  ) {
+    throw new Error(`Pack index range is invalid: ${path}`);
   }
 
-  return (await directory.getFileHandle(fileName)).getFile();
+  const slice = packFile.slice(start, end, record.contentType || contentTypeForPath(path));
+
+  return fileResponse(slice, record.contentType || contentTypeForPath(path));
+}
+
+function fileResponse(file, contentType) {
+  return new Response(file.stream(), {
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Length": String(file.size),
+      "Content-Type": contentType,
+    },
+  });
+}
+
+async function loadPackIndex(playKey, gameRoot) {
+  let promise = packIndexCache.get(playKey);
+
+  if (!promise) {
+    promise = readPackIndex(gameRoot);
+    packIndexCache.set(playKey, promise);
+  }
+
+  return promise;
+}
+
+async function readPackIndex(gameRoot) {
+  const file = await (await gameRoot.getFileHandle("pack-index.json")).getFile();
+  const index = JSON.parse(await file.text());
+
+  if (index?.version !== 1 || !index.files || !Array.isArray(index.packs)) {
+    throw new Error("Pack index is invalid");
+  }
+
+  return index;
+}
+
+async function getPackFile(gameRoot, packName) {
+  if (!/^[a-z0-9][a-z0-9._-]*\.pack$/.test(packName)) {
+    throw new Error(`Invalid pack name: ${packName}`);
+  }
+
+  const packsRoot = await gameRoot.getDirectoryHandle("packs");
+
+  return (await packsRoot.getFileHandle(packName)).getFile();
+}
+
+function packLookupKey(path) {
+  return path.toLowerCase();
 }
 
 async function isReadyInstallation(playKey) {

@@ -108,6 +108,19 @@ export async function createGameFileWritable(
   return file.createWritable();
 }
 
+export async function createGamePackWritable(
+  playKey: string,
+  packName: string,
+): Promise<FileSystemWritableFileStream> {
+  const gameRoot = await getGameRootDirectory(playKey, true);
+  const packsRoot = await gameRoot.getDirectoryHandle("packs", { create: true });
+  const file = await packsRoot.getFileHandle(normalizePackName(packName), {
+    create: true,
+  });
+
+  return file.createWritable();
+}
+
 async function getGameFileHandle(
   context: GameOpfsWriteContext,
   relativePath: string,
@@ -129,11 +142,26 @@ export async function writeGameIndexJson(
   playKey: string,
   indexJson: string,
 ): Promise<void> {
+  await writeGameRootTextFile(playKey, "index.json", indexJson);
+}
+
+export async function writeGamePackIndexJson(
+  playKey: string,
+  indexJson: string,
+): Promise<void> {
+  await writeGameRootTextFile(playKey, "pack-index.json", indexJson);
+}
+
+async function writeGameRootTextFile(
+  playKey: string,
+  fileName: string,
+  text: string,
+): Promise<void> {
   const gameRoot = await getGameRootDirectory(playKey, true);
-  const file = await gameRoot.getFileHandle("index.json", { create: true });
+  const file = await gameRoot.getFileHandle(fileName, { create: true });
   const writable = await file.createWritable();
 
-  await writable.write(indexJson);
+  await writable.write(text);
   await writable.close();
 }
 
@@ -184,6 +212,14 @@ function normalizeGameRelativePath(path: string): string {
     .split("/")
     .filter(Boolean)
     .join("/");
+}
+
+function normalizePackName(name: string): string {
+  if (!/^[a-z0-9][a-z0-9._-]*\.pack$/.test(name)) {
+    throw new Error(`非法 pack 文件名：${name}`);
+  }
+
+  return name;
 }
 
 function getCachedDirectory(

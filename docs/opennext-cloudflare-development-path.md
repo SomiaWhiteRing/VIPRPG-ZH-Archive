@@ -658,7 +658,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - staging 验收：`ArchiveVersion #2` 下载 ZIP 为 132,788,001 bytes，3018 个 entry，payload 132,333,569 bytes；`ArchiveVersion #6` 下载 ZIP 为 288,344,604 bytes，9073 个 entry，payload 287,052,082 bytes；两者均可由本地 ZIP 读取器打开，且未发现路径穿越 entry。
 - 追加验收：新上传的 `ArchiveVersion #7`（もしもコレクション3）GET 响应已返回 `Content-Length: 36823763` 且不再返回 `Transfer-Encoding: chunked`；完整下载后 ZIP 可打开，629 个 entry，payload 36,747,329 bytes。
 - 可运行验收：`ArchiveVersion #2` 下载解压到本地后，`本地样本游戏` 可启动并正常游玩。
-- 缓存验收：`ArchiveVersion #7` 使用 `zip-store-v6-native-fixed-length-cache-hit-header` 下载 builder。第一次 GET 返回 `X-Download-Cache: MISS`、`Content-Length: 36823763`、无 `Transfer-Encoding: chunked`；第二次同 URL GET 返回 `X-Download-Cache: HIT`、`CF-Cache-Status: HIT`，两次下载 ZIP 的 SHA-256 均为 `1b6ed8beefec9227ec4cfbcdb819550eb53cbbf24f183bbde247b50551d097c3`。
+- 缓存验收：`ArchiveVersion #7` 曾使用 `zip-store-v6-native-fixed-length-cache-hit-header` 下载 builder 完成固定长度响应验证。B + Pack 改造后下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，cache key 会自然失效，后续验收以 v7 响应头和 ZIP local header 为准。
 - R2 存储边界验收：staging bucket 共 3963 个对象，其中 `blobs/sha256/` 3949 个、`core-packs/sha256/` 7 个、`manifests/sha256/` 7 个；其他前缀 0 个，`core-packs/` 之外的 `.zip` 0 个。
 - Windows 部署修正：当前 Windows + Node 22 环境下 `fs.cpSync` 递归复制目录会触发 `EIO Access is denied`，`scripts/open-next.mjs` 通过仅 Windows 生效的 `scripts/win32-fs-cp-sync-workaround.mjs` 预加载补丁把 OpenNext 的目录复制改走 PowerShell，以保证 staging 部署可重复执行。
 - 最新 Phase E staging 部署版本：`78a3e836-b9ef-4983-9f78-728b9b1b80e0`。
@@ -706,10 +706,10 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 下载并固定 EasyRPG Web Player runtime，放入 `public/play/runtime/easyrpg/{version}/index.js` 和 `index.wasm`。
 - 配置 `index.wasm` 的 `Content-Type: application/wasm` 和 runtime 静态资源长期缓存。
-- 实现 `GET /api/archive-versions/{archiveVersionId}/web-play`，返回下载 URL、`playKey`、manifest SHA-256、下载 ZIP builder 版本、Web Play installer 版本、EasyRPG runtime 版本、预计安装大小和 Maniacs Patch 可用性。
+- 实现 `GET /api/archive-versions/{archiveVersionId}/web-play`，返回下载 URL、`playKey`、manifest SHA-256、下载 ZIP builder 版本、Web Play installer 版本、EasyRPG runtime 版本、归档总量、本地安装目标总量和 Maniacs Patch 可用性。本地安装目标总量必须排除 `.txt`、`.exe`、`.dll`，并作为本地写入进度分母。
 - 实现 `/play/{archiveVersionId}` 页面：未安装、安装中、安装失败、已安装、运行中五种状态。
 - 实现浏览器 IndexedDB 存储：`web_play_installations` 和 `web_play_files`。
-- 实现 Web Worker 安装器：fetch 现有下载 ZIP URL、显示下载进度、把 ZIP 字节保存在 Worker 内存中、解析 ZIP 中央目录、跳过 `.txt`、`.exe`、`.dll` 文件、滚动窗口式高并发写 OPFS、生成 EasyRPG `index.json`、批量更新 IndexedDB。
+- 实现 Web Worker 安装器：fetch 现有下载 ZIP URL、显示下载进度、顺序解析 ZIP local file header、跳过 `.txt`、`.exe`、`.dll` 文件、追加写入 OPFS pack、生成 EasyRPG `index.json` 和 `pack-index.json`、批量更新 IndexedDB。
 - 实现 `/play/sw.js` Service Worker：拦截 `/play/games/{playKey}/...`，只从 OPFS 返回文件。
 - 在线游玩页注册 Service Worker，加载同源 EasyRPG runtime，并把 canvas 嵌入项目 UI。
 - 安装时由页面主线程调用 `navigator.storage.estimate()` 和 `navigator.storage.persist()`，显示浏览器存储容量和持久化结果，并把结果传给 Web Worker 安装任务。
@@ -719,8 +719,8 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 验收：
 
 - Web Play fetch 的下载 URL 与普通下载按钮相同；命中 Workers Cache/CDN 时不增加 R2 Get。
-- ZIP 不写入 OPFS；解包后 OPFS 中只有 Web Play 运行目录和生成的 `index.json`，运行目录跳过 `.txt`、`.exe`、`.dll` 文件。当前下载 ZIP 使用 STORE + data descriptor，Web Play MVP 不使用流式 unzip 库，而是依赖中央目录定位 entry。
-- 小文件安装必须使用滚动窗口式并发 OPFS 写入、目录 handle cache、IndexedDB 文件记录批量提交和进度节流；并发从较低值逐步爬升到目标上限，避免 3000 个小文件串行写入，也避免固定 64 个文件一批的可见停顿。
+- ZIP 不写入 OPFS；解包后 OPFS 中只有 Web Play 运行目录、生成的 `index.json`、`pack-index.json` 和少量 `packs/*.pack`，pack 索引跳过 `.txt`、`.exe`、`.dll` 文件。下载 ZIP 使用 STORE + local header 明确 size/CRC，Web Play 安装器可以边下载边写 pack，不依赖中央目录。
+- 小文件安装不再逐文件写入 OPFS；安装性能目标转为顺序 pack 写入、IndexedDB 文件记录批量提交和进度节流，避免 3000 个小文件触发大量 `createWritable/close`。
 - 刷新页面后，已安装游戏无需重新请求云端即可启动。
 - 删除本地缓存后再次进入会重新安装。
 - 安装中关闭或浏览器崩溃后，再进入页面可以继续或清理重装。
@@ -739,12 +739,14 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - `ArchiveVersion #2` 问题收束：EasyRPG 无扩展名资源查询通过 installer 生成别名解决；canvas 聚焦解决无法操作；外层播放器容器 fullscreen 解决全屏黑屏。
 - 2026-05-02 MVP 收束部署版本：`4f4542e2-592b-44c1-bae9-0952ba77b55e`。
 - `ArchiveVersion #2` MVP 复测通过：已安装状态可直接启动，canvas 自动聚焦，方向键可操作；全屏元素为 `web-player-frame`，canvas 尺寸非零；运行中删除本地缓存和重新安装按钮禁用。
-- `ArchiveVersion #2` OPFS 边界验收通过：游戏根目录只有 `index.json` 和 `files/`，`files/` 下 3018 个文件，完整 ZIP 数量为 0。
+- `ArchiveVersion #2` 旧 OPFS 边界验收通过：游戏根目录只有 `index.json` 和 `files/`，`files/` 下 3018 个文件，完整 ZIP 数量为 0。B + Pack 后新的验收口径改为根目录只有 `index.json`、`pack-index.json` 和 `packs/`，完整 ZIP 数量为 0。
 - Service Worker 错误验收通过：缺失文件返回 404 并写入页面日志；编码后的路径穿越请求返回 400 并写入页面日志。
 - `ArchiveVersion #7` 重新安装验收通过：下载 URL 与普通下载按钮一致，安装完成 `629 / 629` 文件，OPFS 中完整 ZIP 数量为 0；刷新页面后无需请求下载 URL 即可显示已安装并启动。
 - 中断安装验收通过：模拟 IndexedDB 遗留 `installing` 后，页面显示上次安装未完成，并只提供“清理并重装”入口。
 - staging 当前没有 `uses_maniacs_patch = true` 的已发布 current 样本；Maniacs Patch 入口屏蔽逻辑已在首页和 `/play/{archiveVersionId}` 按字段实现，但真实数据验收暂未覆盖。
 - 2026-05-02 追加优化：Web Play installer 提升为 `opfs-v7-skip-non-web-runtime-local-write`，本地 OPFS 写入和 EasyRPG 索引生成阶段跳过所有 `.txt`、`.exe`、`.dll` 文件；普通下载 ZIP 和 canonical manifest 不变。
+- 2026-05-03 B + Pack 改造：下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，manifest/`archive_version_files` 固定保存每个文件 CRC32；Web Play installer 提升为 `opfs-v8-stream-pack-index`，不再逐文件写 OPFS，而是边下载边写 `packs/*.pack` 并生成 `pack-index.json`；Service Worker 从 pack byte range 返回资源。
+- 2026-05-03 B + Pack staging 部署版本：`cc468319-8522-49db-9882-dda07d52f618`。staging D1 已应用 `0004_streamable_zip_crc32.sql`，旧测试 ArchiveVersion 标为 `deleted`，并以新 manifest 重新导入 `ArchiveVersion #8`。验收结果：下载响应 `X-Download-Zip-Builder: zip-store-v7-local-crc-no-descriptor`、`Content-Length: 132739713`；首个 local header flag 为 `0x0800` 且无 data descriptor bit；Web Play 安装生成 `index.json`、`pack-index.json` 和 1 个 `assets-000.pack`，pack 索引 2153 个文件且 `.txt/.exe/.dll` 为 0；EasyRPG 可进入标题菜单。
 
 ## 11. 部署和环境流程
 

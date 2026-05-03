@@ -1,3 +1,4 @@
+import { webPlayLocalSkippedExtensions } from "@/lib/archive/web-play-local-policy";
 import { getD1 } from "@/lib/server/db/d1";
 
 export type ArchiveDownloadRecord = {
@@ -40,6 +41,11 @@ type ArchiveDownloadRow = {
   uses_maniacs_patch: number;
 };
 
+export type WebPlayInstallTargetTotals = {
+  totalFiles: number;
+  totalSizeBytes: number;
+};
+
 export function parseArchiveVersionId(value: string): number {
   if (!/^\d+$/.test(value)) {
     throw new Error("Invalid archive version id");
@@ -52,6 +58,36 @@ export function parseArchiveVersionId(value: string): number {
   }
 
   return id;
+}
+
+export async function getWebPlayInstallTargetTotals(
+  archiveVersionId: number,
+): Promise<WebPlayInstallTargetTotals> {
+  const skippedExtensionClauses = webPlayLocalSkippedExtensions
+    .map(() => "AND LOWER(path) NOT LIKE ?")
+    .join("\n        ");
+  const skippedExtensionPatterns = webPlayLocalSkippedExtensions.map(
+    (extension) => `%.${extension}`,
+  );
+  const row = await getD1()
+    .prepare(
+      `SELECT
+        COUNT(*) AS total_files,
+        COALESCE(SUM(size_bytes), 0) AS total_size_bytes
+      FROM archive_version_files
+      WHERE archive_version_id = ?
+        ${skippedExtensionClauses}`,
+    )
+    .bind(archiveVersionId, ...skippedExtensionPatterns)
+    .first<{
+      total_files: number | null;
+      total_size_bytes: number | null;
+    }>();
+
+  return {
+    totalFiles: row?.total_files ?? 0,
+    totalSizeBytes: row?.total_size_bytes ?? 0,
+  };
 }
 
 export async function getPublishedArchiveDownloadRecord(

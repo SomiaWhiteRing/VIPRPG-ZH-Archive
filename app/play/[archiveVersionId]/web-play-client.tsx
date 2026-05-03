@@ -364,6 +364,13 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
             <dd>{metadata.totalFiles.toLocaleString("zh-CN")}</dd>
           </div>
           <div>
+            <dt>本地写入</dt>
+            <dd>
+              {formatBytes(metadata.installTotalSizeBytes)} /{" "}
+              {metadata.installTotalFiles.toLocaleString("zh-CN")} 文件
+            </dd>
+          </div>
+          <div>
             <dt>Release</dt>
             <dd>{metadata.releaseLabel}</dd>
           </div>

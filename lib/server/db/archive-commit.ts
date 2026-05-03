@@ -274,6 +274,7 @@ function validateManifest(
   for (const file of manifest.files) {
     validateManifestPath(file.path);
     normalizeSha256(file.sha256);
+    validateCrc32(file.crc32, file.path);
 
     if (paths.has(file.path)) {
       throw new Error(`Duplicate file path: ${file.path}`);
@@ -301,6 +302,12 @@ function validateManifestPath(path: string): void {
     path.split("/").some((part) => part === "" || part === "." || part === "..")
   ) {
     throw new Error(`Invalid manifest path: ${path}`);
+  }
+}
+
+function validateCrc32(value: number, path: string): void {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new Error(`Invalid CRC32 for manifest file: ${path}`);
   }
 }
 
@@ -1102,7 +1109,7 @@ async function insertArchiveVersionFiles(input: {
 
   for (const chunk of chunkArray(input.manifest.files, 8)) {
     const placeholders = chunk
-      .map(() => "(?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
+      .map(() => "(?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
       .join(", ");
     const values: Array<string | number | null> = [];
 
@@ -1114,6 +1121,7 @@ async function insertArchiveVersionFiles(input: {
           file.pathSortKey,
           file.role,
           file.sha256,
+          file.crc32,
           file.size,
           "blob",
           file.storage.blobSha256,
@@ -1128,6 +1136,7 @@ async function insertArchiveVersionFiles(input: {
           file.pathSortKey,
           file.role,
           file.sha256,
+          file.crc32,
           file.size,
           "core_pack",
           null,
@@ -1147,6 +1156,7 @@ async function insertArchiveVersionFiles(input: {
           path_bytes_b64,
           role,
           file_sha256,
+          crc32,
           size_bytes,
           storage_kind,
           blob_sha256,

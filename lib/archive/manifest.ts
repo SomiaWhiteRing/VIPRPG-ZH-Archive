@@ -52,6 +52,7 @@ export type ArchiveManifestFile = {
   pathSortKey: string;
   role: ArchiveFileRole;
   sha256: string;
+  crc32: number;
   size: number;
   mtimeMs: number | null;
   storage:
