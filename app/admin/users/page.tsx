@@ -47,6 +47,7 @@ export default async function AdminUsersPage() {
             <tr>
               <th>用户</th>
               <th>角色</th>
+              <th>状态</th>
               <th>注册时间</th>
               <th>操作</th>
             </tr>
@@ -63,31 +64,57 @@ export default async function AdminUsersPage() {
                     {roleLabel(user.role)}
                   </span>
                 </td>
+                <td>
+                  <span className={`badge ${user.status === "active" ? "approved" : "rejected"}`}>
+                    {user.status === "active" ? "启用" : "禁用"}
+                  </span>
+                </td>
                 <td>{formatDate(user.createdAt)}</td>
                 <td>
-                  <form
-                    action={`/api/admin/users/${user.id}/role`}
-                    method="post"
-                    className="inline-form role-form"
-                  >
-                    <label className="sr-only" htmlFor={`role-${user.id}`}>
-                      调整 {user.displayName} 的角色
-                    </label>
-                    <select
-                      id={`role-${user.id}`}
-                      name="role"
-                      defaultValue={user.role}
+                  <div className="actions compact-actions">
+                    <form
+                      action={`/api/admin/users/${user.id}/role`}
+                      method="post"
+                      className="inline-form role-form"
                     >
-                      {assignableRoles.map((role) => (
-                        <option key={role} value={role}>
-                          {roleLabel(role)}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="button primary" type="submit">
-                      保存
-                    </button>
-                  </form>
+                      <label className="sr-only" htmlFor={`role-${user.id}`}>
+                        调整 {user.displayName} 的角色
+                      </label>
+                      <select
+                        id={`role-${user.id}`}
+                        name="role"
+                        defaultValue={user.role}
+                        disabled={user.status !== "active"}
+                      >
+                        {assignableRoles.map((role) => (
+                          <option key={role} value={role}>
+                            {roleLabel(role)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="button primary"
+                        disabled={user.status !== "active"}
+                        type="submit"
+                      >
+                        保存
+                      </button>
+                    </form>
+                    <form
+                      action={`/api/admin/users/${user.id}/status`}
+                      method="post"
+                      className="inline-form"
+                    >
+                      <input
+                        name="status"
+                        type="hidden"
+                        value={user.status === "active" ? "disabled" : "active"}
+                      />
+                      <button className="button" type="submit">
+                        {user.status === "active" ? "禁用" : "启用"}
+                      </button>
+                    </form>
+                  </div>
                 </td>
               </tr>
             ))}

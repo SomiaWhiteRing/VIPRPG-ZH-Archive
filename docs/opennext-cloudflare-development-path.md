@@ -226,6 +226,11 @@ export default defineCloudflareConfig({});
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "triggers": {
+    "crons": [
+      "17 19 * * *"
+    ]
+  },
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -276,6 +281,11 @@ export default defineCloudflareConfig({});
   "env": {
     "staging": {
       "name": "<staging-worker-name>",
+      "triggers": {
+        "crons": [
+          "17 19 * * *"
+        ]
+      },
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",
@@ -332,8 +342,9 @@ export default defineCloudflareConfig({});
 
 - `main` 固定为 `worker.mjs`；该入口先处理需要原生 Workers 能力的下载端点，再把其他请求交给 `.open-next/worker.js`。
 - `assets.directory` 固定为 `.open-next/assets`。
+- `triggers.crons` 固定为 `17 19 * * *`，staging/prod 每天 UTC 19:17 / 香港时间 03:17 执行 Phase 5 自动 GC。
 - `compatibility_date` 必须不早于 `2024-09-23`。
-- `d1_databases`、`r2_buckets` 等环境绑定不要依赖继承，在 `staging` 中显式写出。
+- `d1_databases`、`r2_buckets`、`triggers` 等环境相关配置不要依赖继承，在 `staging` 中显式写出。
 - 不要把 `ARCHIVE_BUCKET` 命名为 `NEXT_INC_CACHE_R2_BUCKET`；两者语义完全不同。
 - 初版不配置 Cloudflare Images binding；图标和浏览图按普通 blob/metadata 资产处理，等确实需要图像变换服务时再加入。
 - 正式账户体系接入后，`send_email`、`ratelimits` 和 `vars` 也要在 `staging` 中显式写出；Rate Limiting 的 `namespace_id` 不要让 staging/prod 共用，避免测试流量影响生产发送额度。
@@ -676,7 +687,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 记录下载耗时、R2 Get 数、Workers Cache 命中/未命中。
 - 添加管理端成本估算视图。
 - 添加 D1/R2 一致性检查。
-- 添加 GC dry-run。
+- 添加 GC dry-run（清理预演）。
 
 验收：
 
@@ -691,15 +702,30 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 新增 `GET /api/admin/observability`，返回导入任务状态、累计排除容量、缺失对象数、下载次数、缓存命中/未命中、累计 R2 Get、缓存节省的预计 R2 Get、近期下载和高成本归档。
 - 新增 `GET /api/admin/consistency`，执行有界 D1/R2 一致性检查：抽样验证 D1 中 blob/core pack/manifest 的 R2 对象是否存在、大小是否匹配，并扫描 R2 对象样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`。
 - 新增 `GET /api/admin/gc/dry-run`，只生成候选报告，不删除对象。MVP 只把完全没有 `archive_version_files` 引用且超过宽限期的 blob/core pack 标为可清理；仅被 `deleted` ArchiveVersion 引用的对象单独统计，不自动删除。
-- `/admin` 页面新增 Phase F 摘要：下载观测、导入观测、GC dry-run、高成本归档和近期下载；一致性检查保留为显式 API，避免每次打开管理页都触发 R2 扫描。
+- `/admin` 页面新增 Phase F 摘要：下载观测、导入观测、清理预演、高成本归档和近期下载；一致性检查保留为显式 API，避免每次打开管理页都触发 R2 扫描。
 - MVP 运维改进：新增迁移 `0003_phase_f_mvp_operability.sql`，把导入侧观测补到 `import_jobs`：缺失对象容量、实际上传 blob/core pack 数量与容量、manifest 写入量、R2 Put 数、预检/上传/提交耗时和失败阶段。
 - 下载失败观测：`download_builds.failure_count` 记录失败次数，下载端捕获 manifest/R2/ZIP 构建阶段异常后写入最近错误和耗时；成功下载仍继续聚合 hit/miss 和实际 R2 Get。
-- `/admin` 页面新增“运行一致性检查”和“运行 GC dry-run”按钮，管理员可以手动触发有界检查并直接查看摘要结果。
+- `/admin` 页面新增“运行一致性检查”和“运行清理预演”按钮，管理员可以手动触发有界检查并直接查看摘要结果。
 - staging 已应用 0002/0003 迁移并部署版本 `b21c5561-0c33-44b2-a3ef-3bdc3e8f6d00`。
 - staging 下载观测验收：对 `ArchiveVersion #7` 执行 GET，响应 `Content-Length: 36823763`、`X-Download-Cache: HIT`、`CF-Cache-Status: HIT`；D1 `download_builds` 已累计 `download_count = 3`、`cache_hit_count = 3`、`failure_count = 0`、`total_r2_get_count = 0`。
 - staging 导入观测字段验收：0003 字段已可查询；历史导入任务不会回填实际 R2 Put 和阶段耗时，后续新导入会开始记录。
 - staging dry-run 验收：当前完全无归档引用的候选为 `1` 个测试 blob（21 B）和 `2` 个 core pack（约 7.09 MB）；没有执行删除。
 - 未带管理员会话访问 `GET /api/admin/observability`、`GET /api/admin/consistency`、`GET /api/admin/gc/dry-run` 均返回 401，权限边界有效。
+
+Phase 5 MVP 回补：
+
+- 新增 `/admin/archive-versions` 归档维护页，展示非回收站 ArchiveVersion，支持删除和设为 current；新增 `/admin/archive-versions/trash` 回收站页，支持还原。
+- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/delete`：把 ArchiveVersion 放入回收站，技术上标记为 `deleted`、写入 `deleted_at` 并清空 `is_current`，不删除 R2 对象。
+- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/restore`：把回收站 ArchiveVersion 恢复为 `published`；若同组没有 current，则自动设为 current。
+- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/current`：在同一 `release_id + archive_key` 下切换当前 published 版本。
+- 删除 current 版本时，会自动在同一组中选择最新 published 版本接任；没有可用版本则保持无 current。
+- 新增迁移 `0005_archive_version_purge.sql`，为 ArchiveVersion 增加 `purged_at`。回收站 ArchiveVersion 在最终清理前可以还原；最终清理后删除文件引用和 manifest，不能再还原。
+- 新增 `POST /api/admin/gc/sweep`：需要 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用 active blob/core pack；管理员手动执行时可以传 `graceDays = 0` 立即最终清理当前回收站 ArchiveVersion 并清理因此变成零引用的对象。
+- GC sweep 对候选对象使用 `active -> purging -> purged` 状态转换；R2 删除失败则恢复为 `active`。
+- `findExistingObjects` 只把 `status = 'active'` 的 blob/core pack 视为存在；被 purged 的同 hash 对象后续可重新上传并恢复 active。
+- 用户管理页新增禁用/启用操作；认证入口每次都会重新读取 D1 用户状态，被禁用用户的旧 cookie 不再通过认证。
+- `worker.mjs` 新增 Cloudflare Scheduled handler，staging/prod 在 `wrangler.jsonc` 中统一配置 `17 19 * * *`，即每天 UTC 19:17 / 香港时间 03:17 自动执行 7 天 GC sweep，每类最多 1000 个对象。
+- 手动与自动 GC 都写入 `auth_audit_logs`，作为 MVP 审计线索；完整管理员审计页和服务端 session 撤销留到后续。
 
 ### Phase G：EasyRPG 在线游玩
 

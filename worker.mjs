@@ -5,6 +5,7 @@ import {
   DOShardedTagCache,
 } from "./.open-next/worker.js";
 import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
+import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 
 export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
@@ -17,6 +18,20 @@ const worker = {
     }
 
     return openNextWorker.fetch(request, env, ctx);
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      runScheduledArchiveGc(env, {
+        trigger: "scheduled",
+        cron: controller.cron,
+      })
+        .then((report) => {
+          console.log("Scheduled archive GC completed", JSON.stringify(report));
+        })
+        .catch((error) => {
+          console.error("Scheduled archive GC failed", error?.message ?? error);
+        }),
+    );
   },
 };
 

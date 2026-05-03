@@ -1,8 +1,13 @@
 "use client";
 
+import {
+  gcDefaultGraceDays,
+  gcDefaultSweepLimitPerType,
+  gcManualSweepGraceDays,
+} from "@/lib/archive/gc-policy";
 import { useState } from "react";
 
-type OperationKind = "consistency" | "gc";
+type OperationKind = "consistency" | "gc" | "sweep";
 
 type OperationState = {
   kind: OperationKind | null;
@@ -25,12 +30,13 @@ export function AdminOperationPanel() {
     error: null,
     result: null,
   });
+  const [sweepConfirm, setSweepConfirm] = useState("");
+  const [sweepGraceDays, setSweepGraceDays] = useState(
+    String(gcManualSweepGraceDays),
+  );
 
   async function run(kind: OperationKind): Promise<void> {
-    const url =
-      kind === "consistency"
-        ? "/api/admin/consistency?db_limit=150&r2_limit=1000"
-        : "/api/admin/gc/dry-run?grace_days=30&limit=25";
+    const url = operationUrl(kind);
 
     setState({
       kind,
@@ -40,9 +46,23 @@ export function AdminOperationPanel() {
     });
 
     try {
-      const response = await fetch(url, {
-        credentials: "same-origin",
-      });
+      const response =
+        kind === "sweep"
+          ? await fetch(url, {
+              method: "POST",
+              credentials: "same-origin",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                confirm: sweepConfirm,
+                graceDays: parseIntegerInput(sweepGraceDays, gcManualSweepGraceDays),
+                limitPerType: gcDefaultSweepLimitPerType,
+              }),
+            })
+          : await fetch(url, {
+              credentials: "same-origin",
+            });
       const payload = (await response.json()) as ApiPayload;
 
       if (!response.ok || payload.ok === false) {
@@ -83,7 +103,38 @@ export function AdminOperationPanel() {
           onClick={() => run("gc")}
           type="button"
         >
-          运行 GC dry-run
+          运行清理预演
+        </button>
+      </div>
+      <div className="danger-inline-controls">
+        <label htmlFor="gc-sweep-confirm">
+          最终清理
+          <span className="muted-line">
+            自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
+            手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
+          </span>
+        </label>
+        <input
+          aria-label="最终清理手动保留天数"
+          min="0"
+          step="1"
+          type="number"
+          value={sweepGraceDays}
+          onChange={(event) => setSweepGraceDays(event.target.value)}
+        />
+        <input
+          id="gc-sweep-confirm"
+          value={sweepConfirm}
+          onChange={(event) => setSweepConfirm(event.target.value)}
+          placeholder="SWEEP"
+        />
+        <button
+          className="button"
+          disabled={state.loading || sweepConfirm !== "SWEEP"}
+          onClick={() => run("sweep")}
+          type="button"
+        >
+          执行最终清理
         </button>
       </div>
       {state.loading ? <p className="muted-line">检查运行中</p> : null}
@@ -93,6 +144,24 @@ export function AdminOperationPanel() {
       ) : null}
     </section>
   );
+}
+
+function operationUrl(kind: OperationKind): string {
+  if (kind === "consistency") {
+    return "/api/admin/consistency?db_limit=150&r2_limit=1000";
+  }
+
+  if (kind === "gc") {
+    return `/api/admin/gc/dry-run?grace_days=${gcDefaultGraceDays}&limit=${gcDefaultSweepLimitPerType}`;
+  }
+
+  return "/api/admin/gc/sweep";
+}
+
+function parseIntegerInput(value: string, fallback: number): number {
+  const parsed = Number.parseInt(value, 10);
+
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 }
 
 function summarize(kind: OperationKind, report: unknown): unknown {
@@ -129,21 +198,42 @@ function summarize(kind: OperationKind, report: unknown): unknown {
   const value = report as {
     checkedAt?: string;
     graceDays?: number;
+    limitPerType?: number;
+    archiveVersions?: {
+      eligibleCount?: number;
+      eligibleFileCount?: number;
+      eligibleSizeBytes?: number;
+      purgedCount?: number;
+      purgedFileCount?: number;
+      purgedSizeBytes?: number;
+      failedCount?: number;
+      skippedCount?: number;
+    };
     blobs?: {
       eligibleCount?: number;
       eligibleSizeBytes?: number;
       deletedOnlyReferenceCount?: number;
+      purgedCount?: number;
+      purgedSizeBytes?: number;
+      failedCount?: number;
+      skippedCount?: number;
     };
     corePacks?: {
       eligibleCount?: number;
       eligibleSizeBytes?: number;
       deletedOnlyReferenceCount?: number;
+      purgedCount?: number;
+      purgedSizeBytes?: number;
+      failedCount?: number;
+      skippedCount?: number;
     };
   };
 
   return {
     checkedAt: value.checkedAt,
     graceDays: value.graceDays,
+    limitPerType: value.limitPerType,
+    archiveVersions: value.archiveVersions,
     blobs: value.blobs,
     corePacks: value.corePacks,
   };

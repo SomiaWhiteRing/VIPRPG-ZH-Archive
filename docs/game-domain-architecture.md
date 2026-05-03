@@ -963,9 +963,11 @@ work_search_documents
 - 同一 Release 下 `archive_key + archive_label` 唯一。
 - 同一 Release 的同一 `archive_key` 同时只能有一个 published current ArchiveVersion。
 - ArchiveVersion 发布后 manifest 不可变。
-- ArchiveVersion 删除应软删除，不应立即删除 blob 或 core pack。
+- ArchiveVersion 删除应进入回收站，不应立即删除 blob 或 core pack；技术上写入 `status = 'deleted'`。删除 current ArchiveVersion 后，服务层应在同一 `release_id + archive_key` 中自动选择最新 published 版本接任。
+- 还原回收站中的 ArchiveVersion 时恢复为 `published`，但不抢占已有 current；仅在同组没有 current 时自动补为 current。
 - 删除 Work 时应先确认 Release 和 ArchiveVersion 的处理策略。
 - blob 和 core pack 的 GC 必须通过引用扫描决定，不能因为某个 Work 删除就直接删除 R2 对象。
+- 回收站中的 ArchiveVersion 在最终清理前仍保留 `archive_version_files`，可以还原；最终清理后写入 `purged_at`、删除文件引用和 manifest，不能再还原。之后对应 blob/core pack 若没有其他引用，会进入 GC sweep。
 - 文件路径只在 ArchiveVersion 文件清单和 manifest 中管理。
 - 完整游戏 ZIP 不进入 R2。
 

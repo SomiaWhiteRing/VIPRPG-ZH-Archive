@@ -1,3 +1,9 @@
+import {
+  gcDefaultArchiveVersionPurgeLimit,
+  gcDefaultGraceDays,
+  gcDefaultSweepLimitPerType,
+  gcMaxSweepLimitPerType,
+} from "@/lib/archive/gc-policy";
 import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
 import { getArchiveBucket } from "@/lib/server/storage/archive-bucket";
@@ -54,8 +60,47 @@ export type GcDryRunReport = {
   checkedAt: string;
   graceDays: number;
   sampleLimit: number;
+  archiveVersions: GcArchiveVersionPurgeSummary;
   blobs: GcObjectSummary;
   corePacks: GcObjectSummary;
+};
+
+export type GcSweepReport = {
+  checkedAt: string;
+  graceDays: number;
+  limitPerType: number;
+  archiveVersions: GcArchiveVersionPurgeResult;
+  blobs: GcSweepObjectSummary;
+  corePacks: GcSweepObjectSummary;
+};
+
+export type GcArchiveVersionPurgeSummary = {
+  eligibleCount: number;
+  eligibleFileCount: number;
+  eligibleSizeBytes: number;
+  sample: GcArchiveVersionPurgeCandidate[];
+};
+
+export type GcArchiveVersionPurgeCandidate = {
+  id: number;
+  archiveLabel: string;
+  archiveKey: string;
+  deletedAt: string;
+  totalFiles: number;
+  totalSizeBytes: number;
+  manifestR2Key: string;
+};
+
+export type GcArchiveVersionPurgeResult = {
+  scannedCount: number;
+  purgedCount: number;
+  purgedFileCount: number;
+  purgedSizeBytes: number;
+  skippedCount: number;
+  failedCount: number;
+  purged: GcArchiveVersionPurgeCandidate[];
+  skipped: GcArchiveVersionPurgeCandidate[];
+  failed: Array<GcArchiveVersionPurgeCandidate & { error: string }>;
 };
 
 export type GcObjectSummary = {
@@ -76,6 +121,28 @@ export type GcObjectCandidate = {
   liveReferenceCount: number;
   deletedReferenceCount: number;
   eligibleNow: boolean;
+};
+
+export type GcSweepObjectSummary = {
+  scannedCount: number;
+  purgedCount: number;
+  purgedSizeBytes: number;
+  skippedCount: number;
+  failedCount: number;
+  purged: GcSweepObject[];
+  skipped: GcSweepObject[];
+  failed: GcSweepFailure[];
+};
+
+export type GcSweepObject = {
+  type: "blob" | "core_pack";
+  id: string;
+  r2Key: string;
+  sizeBytes: number;
+};
+
+export type GcSweepFailure = GcSweepObject & {
+  error: string;
 };
 
 type R2KeyInfo =
@@ -106,6 +173,22 @@ type GcCandidateRow = {
   total_reference_count: number;
   live_reference_count: number;
   deleted_reference_count: number;
+};
+
+type GcArchiveVersionPurgeCandidateRow = {
+  id: number;
+  archive_label: string;
+  archive_key: string;
+  deleted_at: string;
+  total_files: number;
+  total_size_bytes: number;
+  manifest_r2_key: string;
+};
+
+type GcArchiveVersionPurgeSummaryRow = {
+  count: number | null;
+  file_count: number | null;
+  size_bytes: number | null;
 };
 
 const maxReturnedIssues = 50;
@@ -156,10 +239,11 @@ export async function runGcDryRun(input: {
   graceDays?: number;
   sampleLimit?: number;
 } = {}): Promise<GcDryRunReport> {
-  const graceDays = clampInteger(input.graceDays ?? 30, 0, 3650);
+  const graceDays = clampInteger(input.graceDays ?? gcDefaultGraceDays, 0, 3650);
   const sampleLimit = clampInteger(input.sampleLimit ?? 50, 1, 200);
 
-  const [blobSummary, corePackSummary] = await Promise.all([
+  const [archiveVersionSummary, blobSummary, corePackSummary] = await Promise.all([
+    getArchiveVersionPurgeSummary(graceDays, sampleLimit),
     getGcObjectSummary("blob", graceDays, sampleLimit),
     getGcObjectSummary("core_pack", graceDays, sampleLimit),
   ]);
@@ -168,8 +252,43 @@ export async function runGcDryRun(input: {
     checkedAt: new Date().toISOString(),
     graceDays,
     sampleLimit,
+    archiveVersions: archiveVersionSummary,
     blobs: blobSummary,
     corePacks: corePackSummary,
+  };
+}
+
+export async function runGcSweep(input: {
+  graceDays?: number;
+  limitPerType?: number;
+} = {}): Promise<GcSweepReport> {
+  const graceDays = clampInteger(input.graceDays ?? gcDefaultGraceDays, 0, 3650);
+  const limitPerType = clampInteger(
+    input.limitPerType ?? gcDefaultSweepLimitPerType,
+    1,
+    gcMaxSweepLimitPerType,
+  );
+  const archiveVersions = await purgeDeletedArchiveVersions(
+    graceDays,
+    Math.max(limitPerType, gcDefaultArchiveVersionPurgeLimit),
+  );
+  const [blobRows, corePackRows] = await Promise.all([
+    listEligibleGcRows("blob", graceDays, limitPerType),
+    listEligibleGcRows("core_pack", graceDays, limitPerType),
+  ]);
+
+  const [blobs, corePacks] = await Promise.all([
+    sweepGcRows("blob", blobRows, graceDays),
+    sweepGcRows("core_pack", corePackRows, graceDays),
+  ]);
+
+  return {
+    checkedAt: new Date().toISOString(),
+    graceDays,
+    limitPerType,
+    archiveVersions,
+    blobs,
+    corePacks,
   };
 }
 
@@ -430,6 +549,161 @@ async function getGcObjectSummary(
   };
 }
 
+async function getArchiveVersionPurgeSummary(
+  graceDays: number,
+  sampleLimit: number,
+): Promise<GcArchiveVersionPurgeSummary> {
+  const [summary, sample] = await Promise.all([
+    getArchiveVersionPurgeSummaryRow(graceDays),
+    listArchiveVersionPurgeCandidates(graceDays, sampleLimit),
+  ]);
+
+  return {
+    eligibleCount: summary.count ?? 0,
+    eligibleFileCount: summary.file_count ?? 0,
+    eligibleSizeBytes: summary.size_bytes ?? 0,
+    sample: sample.map(mapArchiveVersionPurgeCandidate),
+  };
+}
+
+async function getArchiveVersionPurgeSummaryRow(
+  graceDays: number,
+): Promise<GcArchiveVersionPurgeSummaryRow> {
+  const row = await getD1()
+    .prepare(
+      `SELECT
+        COUNT(*) AS count,
+        COALESCE(SUM(total_files), 0) AS file_count,
+        COALESCE(SUM(total_size_bytes), 0) AS size_bytes
+      FROM archive_versions
+      WHERE status = 'deleted'
+        AND purged_at IS NULL
+        AND deleted_at IS NOT NULL
+        AND datetime(deleted_at) <= datetime('now', ?)`,
+    )
+    .bind(`-${graceDays} days`)
+    .first<GcArchiveVersionPurgeSummaryRow>();
+
+  return row ?? { count: 0, file_count: 0, size_bytes: 0 };
+}
+
+async function listArchiveVersionPurgeCandidates(
+  graceDays: number,
+  limit: number,
+): Promise<GcArchiveVersionPurgeCandidateRow[]> {
+  const rows = await getD1()
+    .prepare(
+      `SELECT
+        id,
+        archive_label,
+        archive_key,
+        deleted_at,
+        total_files,
+        total_size_bytes,
+        manifest_r2_key
+      FROM archive_versions
+      WHERE status = 'deleted'
+        AND purged_at IS NULL
+        AND deleted_at IS NOT NULL
+        AND datetime(deleted_at) <= datetime('now', ?)
+      ORDER BY datetime(deleted_at) ASC, id ASC
+      LIMIT ?`,
+    )
+    .bind(`-${graceDays} days`, limit)
+    .all<GcArchiveVersionPurgeCandidateRow>();
+
+  return rows.results ?? [];
+}
+
+async function purgeDeletedArchiveVersions(
+  graceDays: number,
+  limit: number,
+): Promise<GcArchiveVersionPurgeResult> {
+  const rows = await listArchiveVersionPurgeCandidates(graceDays, limit);
+  const bucket = getArchiveBucket();
+  const purged: GcArchiveVersionPurgeCandidate[] = [];
+  const skipped: GcArchiveVersionPurgeCandidate[] = [];
+  const failed: Array<GcArchiveVersionPurgeCandidate & { error: string }> = [];
+
+  for (const row of rows) {
+    const candidate = mapArchiveVersionPurgeCandidate(row);
+    const reserved = await markArchiveVersionPurged(row.id, graceDays);
+
+    if (!reserved) {
+      skipped.push(candidate);
+      continue;
+    }
+
+    try {
+      await deleteArchiveVersionFiles(row.id);
+      await bucket.delete(row.manifest_r2_key);
+      purged.push(candidate);
+    } catch (error) {
+      failed.push({
+        ...candidate,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return {
+    scannedCount: rows.length,
+    purgedCount: purged.length,
+    purgedFileCount: purged.reduce((sum, candidate) => sum + candidate.totalFiles, 0),
+    purgedSizeBytes: purged.reduce((sum, candidate) => sum + candidate.totalSizeBytes, 0),
+    skippedCount: skipped.length,
+    failedCount: failed.length,
+    purged: purged.slice(0, maxReturnedIssues),
+    skipped: skipped.slice(0, maxReturnedIssues),
+    failed: failed.slice(0, maxReturnedIssues),
+  };
+}
+
+async function markArchiveVersionPurged(
+  archiveVersionId: number,
+  graceDays: number,
+): Promise<boolean> {
+  const result = await getD1()
+    .prepare(
+      `UPDATE archive_versions
+      SET purged_at = CURRENT_TIMESTAMP,
+        is_current = 0
+      WHERE id = ?
+        AND status = 'deleted'
+        AND purged_at IS NULL
+        AND deleted_at IS NOT NULL
+        AND datetime(deleted_at) <= datetime('now', ?)`,
+    )
+    .bind(archiveVersionId, `-${graceDays} days`)
+    .run();
+
+  return (result.meta.changes ?? 0) > 0;
+}
+
+async function deleteArchiveVersionFiles(archiveVersionId: number): Promise<void> {
+  await getD1()
+    .prepare(
+      `DELETE FROM archive_version_files
+      WHERE archive_version_id = ?`,
+    )
+    .bind(archiveVersionId)
+    .run();
+}
+
+function mapArchiveVersionPurgeCandidate(
+  row: GcArchiveVersionPurgeCandidateRow,
+): GcArchiveVersionPurgeCandidate {
+  return {
+    id: row.id,
+    archiveLabel: row.archive_label,
+    archiveKey: row.archive_key,
+    deletedAt: row.deleted_at,
+    totalFiles: row.total_files,
+    totalSizeBytes: row.total_size_bytes,
+    manifestR2Key: row.manifest_r2_key,
+  };
+}
+
 async function getEligibleGcSummary(
   type: "blob" | "core_pack",
   graceDays: number,
@@ -463,6 +737,189 @@ async function getEligibleGcSummary(
     .first<GcSummaryRow>();
 
   return row ?? { count: 0, size_bytes: 0 };
+}
+
+async function listEligibleGcRows(
+  type: "blob" | "core_pack",
+  graceDays: number,
+  limit: number,
+): Promise<GcCandidateRow[]> {
+  const sql =
+    type === "blob"
+      ? `SELECT
+          b.sha256 AS id,
+          b.r2_key,
+          b.size_bytes,
+          b.created_at,
+          0 AS total_reference_count,
+          0 AS live_reference_count,
+          0 AS deleted_reference_count
+        FROM blobs b
+        WHERE b.status = 'active'
+          AND datetime(b.created_at) <= datetime('now', ?)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM archive_version_files avf
+            WHERE avf.storage_kind = 'blob'
+              AND avf.blob_sha256 = b.sha256
+          )
+        ORDER BY b.created_at ASC, b.sha256 ASC
+        LIMIT ?`
+      : `SELECT
+          CAST(cp.id AS TEXT) AS id,
+          cp.r2_key,
+          cp.size_bytes,
+          cp.created_at,
+          0 AS total_reference_count,
+          0 AS live_reference_count,
+          0 AS deleted_reference_count
+        FROM core_packs cp
+        WHERE cp.status = 'active'
+          AND datetime(cp.created_at) <= datetime('now', ?)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM archive_version_files avf
+            WHERE avf.storage_kind = 'core_pack'
+              AND avf.core_pack_id = cp.id
+          )
+        ORDER BY cp.created_at ASC, cp.id ASC
+        LIMIT ?`;
+
+  const rows = await getD1()
+    .prepare(sql)
+    .bind(`-${graceDays} days`, limit)
+    .all<GcCandidateRow>();
+
+  return rows.results ?? [];
+}
+
+async function sweepGcRows(
+  type: "blob" | "core_pack",
+  rows: GcCandidateRow[],
+  graceDays: number,
+): Promise<GcSweepObjectSummary> {
+  const bucket = getArchiveBucket();
+  const purged: GcSweepObject[] = [];
+  const skipped: GcSweepObject[] = [];
+  const failed: GcSweepFailure[] = [];
+
+  for (const row of rows) {
+    const object = {
+      type,
+      id: row.id,
+      r2Key: row.r2_key,
+      sizeBytes: row.size_bytes,
+    };
+    const reserved = await markGcCandidatePurging(type, row.id, graceDays);
+
+    if (!reserved) {
+      skipped.push(object);
+      continue;
+    }
+
+    try {
+      await bucket.delete(row.r2_key);
+      await markGcCandidatePurged(type, row.id);
+      purged.push(object);
+    } catch (error) {
+      await restoreGcCandidateActive(type, row.id);
+      failed.push({
+        ...object,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return {
+    scannedCount: rows.length,
+    purgedCount: purged.length,
+    purgedSizeBytes: purged.reduce((sum, object) => sum + object.sizeBytes, 0),
+    skippedCount: skipped.length,
+    failedCount: failed.length,
+    purged: purged.slice(0, maxReturnedIssues),
+    skipped: skipped.slice(0, maxReturnedIssues),
+    failed: failed.slice(0, maxReturnedIssues),
+  };
+}
+
+async function markGcCandidatePurging(
+  type: "blob" | "core_pack",
+  id: string,
+  graceDays: number,
+): Promise<boolean> {
+  const sql =
+    type === "blob"
+      ? `UPDATE blobs
+        SET status = 'purging'
+        WHERE sha256 = ?
+          AND status = 'active'
+          AND datetime(created_at) <= datetime('now', ?)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM archive_version_files avf
+            WHERE avf.storage_kind = 'blob'
+              AND avf.blob_sha256 = blobs.sha256
+          )`
+      : `UPDATE core_packs
+        SET status = 'purging'
+        WHERE id = ?
+          AND status = 'active'
+          AND datetime(created_at) <= datetime('now', ?)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM archive_version_files avf
+            WHERE avf.storage_kind = 'core_pack'
+              AND avf.core_pack_id = core_packs.id
+          )`;
+
+  const result = await getD1()
+    .prepare(sql)
+    .bind(type === "blob" ? id : Number(id), `-${graceDays} days`)
+    .run();
+
+  return (result.meta.changes ?? 0) > 0;
+}
+
+async function markGcCandidatePurged(
+  type: "blob" | "core_pack",
+  id: string,
+): Promise<void> {
+  const sql =
+    type === "blob"
+      ? `UPDATE blobs
+        SET status = 'purged'
+        WHERE sha256 = ?
+          AND status = 'purging'`
+      : `UPDATE core_packs
+        SET status = 'purged'
+        WHERE id = ?
+          AND status = 'purging'`;
+
+  await getD1()
+    .prepare(sql)
+    .bind(type === "blob" ? id : Number(id))
+    .run();
+}
+
+async function restoreGcCandidateActive(
+  type: "blob" | "core_pack",
+  id: string,
+): Promise<void> {
+  const sql =
+    type === "blob"
+      ? `UPDATE blobs
+        SET status = 'active'
+        WHERE sha256 = ?
+          AND status = 'purging'`
+      : `UPDATE core_packs
+        SET status = 'active'
+        WHERE id = ?
+          AND status = 'purging'`;
+
+  await getD1()
+    .prepare(sql)
+    .bind(type === "blob" ? id : Number(id))
+    .run();
 }
 
 async function getDeletedOnlyGcSummary(
