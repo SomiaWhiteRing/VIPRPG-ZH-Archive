@@ -1,0 +1,58 @@
+{
+  "runId": "example-game",
+  "environment": "staging",
+  "bucketName": "<staging-r2-bucket-name>",
+  "d1Binding": "DB",
+  "sourcePath": "D:\\path\\to\\game-folder",
+  "filePolicyVersion": "rpgm2000-2003-whitelist-v3",
+  "packerVersion": "rpgm-archive-importer-example",
+  "work": {
+    "slug": "example-game",
+    "primaryTitle": "Example Game",
+    "originalTitle": "Example Game",
+    "sortTitle": "example game",
+    "description": "Public example metadata. Replace this with local project data in an ignored sample file.",
+    "originalReleaseDate": null,
+    "originalReleasePrecision": "unknown",
+    "engineFamily": "rpg_maker_2003",
+    "engineDetail": "rpg_maker_2003",
+    "status": "draft",
+    "extra": {}
+  },
+  "workTitles": [
+    {
+      "title": "Example Game",
+      "language": "und",
+      "titleType": "primary"
+    }
+  ],
+  "release": {
+    "label": "local test release",
+    "type": "original",
+    "language": "und",
+    "releaseDate": null,
+    "releaseDatePrecision": "unknown",
+    "sourceName": "local folder",
+    "sourceUrl": null,
+    "usesManiacsPatch": false,
+    "isProofread": false,
+    "isImageEdited": false,
+    "executablePath": "RPG_RT.exe",
+    "rightsNotes": "Replace with project-specific rights notes before importing real content.",
+    "status": "draft",
+    "extra": {}
+  },
+  "archiveVersion": {
+    "label": "local-preindex-example",
+    "sourceType": "preindexed_manifest",
+    "sourceName": "local folder"
+  },
+  "creators": [],
+  "tags": [],
+  "events": [],
+  "externalLinks": {
+    "work": [],
+    "release": []
+  },
+  "mediaAssets": []
+}

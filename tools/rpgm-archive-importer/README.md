@@ -13,15 +13,15 @@
 
 它不会上传完整游戏 ZIP，也不会把原始完整包写入 R2。
 
-## 当前样本
+## 本地样本配置
 
-`samples/tokyo-butouhen-ova.staging.json` 对应本地目录：
+公开仓库只保留 `samples/example.staging.example.json` 作为占位模板。实际导入配置应复制为被 Git 忽略的本地文件，例如：
 
 ```text
-D:\path\to\game-folder
+tools/rpgm-archive-importer/samples/my-game.staging.json
 ```
 
-最近一次 staging 导入结果：
+示例结果：
 
 | 指标 | 结果 |
 |---|---:|

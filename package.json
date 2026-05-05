@@ -15,7 +15,7 @@
     "cf-typegen": "node scripts/cf-typegen.mjs",
     "lint": "eslint .",
     "check": "tsc --noEmit && eslint .",
-    "smoke:staging": "node scripts/smoke.mjs https://<staging-worker-domain>"
+    "smoke:staging": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",

@@ -98,7 +98,7 @@ manifest JSON 已经记录每个文件的 path、file_sha256、crc32、size、ro
 
 ### 4.6 验收
 
-- 全量样本（`rpg-maker-2000-2003-deduplicated-storage-plan.md` §2.7 的「本地样本游戏」）重导后，下载 ZIP 字节级一致。
+- 全量样本（`rpg-maker-2000-2003-deduplicated-storage-plan.md` §2.7 的本地样本）重导后，下载 ZIP 字节级一致。
 - GC 在新表上能正确识别孤儿 blob / core_pack。
 - D1 `pragma_page_count * pragma_page_size` 在导入相同样本后比旧 schema 小一个数量级。
 - 现有 e2e（`npm run smoke:staging`）通过。

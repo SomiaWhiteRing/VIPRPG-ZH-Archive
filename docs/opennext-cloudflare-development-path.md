@@ -75,9 +75,9 @@ VIPRPG-ZH-Archive/
 
 | 用途 | Binding | Staging 资源名 | Production 资源名 |
 |---|---|---|---|
-| Worker | - | `<staging-worker-name>` | `viprpg-zh-archive` |
-| D1 数据库 | `DB` | `<staging-resource-name>` | `<production-resource-name>` |
-| 归档 R2 bucket | `ARCHIVE_BUCKET` | `<staging-resource-name>` | `<production-resource-name>` |
+| Worker | - | `<staging-worker-name>` | `<production-worker-name>` |
+| D1 数据库 | `DB` | `<staging-d1-name>` | `<production-d1-name>` |
+| 归档 R2 bucket | `ARCHIVE_BUCKET` | `<staging-r2-bucket-name>` | `<production-r2-bucket-name>` |
 | OpenNext 静态资产 | `ASSETS` | `.open-next/assets` | `.open-next/assets` |
 | Worker 自引用 | `WORKER_SELF_REFERENCE` | 同 Worker 名 | 同 Worker 名 |
 | OpenNext incremental cache | `NEXT_INC_CACHE_R2_BUCKET` | 暂不启用 | 暂不启用 |
@@ -85,11 +85,11 @@ VIPRPG-ZH-Archive/
 资源创建命令示例：
 
 ```powershell
-npx wrangler d1 create <staging-resource-name>
-npx wrangler d1 create <production-resource-name>
+npx wrangler d1 create <staging-d1-name>
+npx wrangler d1 create <production-d1-name>
 
-npx wrangler r2 bucket create <staging-resource-name>
-npx wrangler r2 bucket create <production-resource-name>
+npx wrangler r2 bucket create <staging-r2-bucket-name>
+npx wrangler r2 bucket create <production-r2-bucket-name>
 ```
 
 执行后把 D1 返回的 `database_id` 写入 `wrangler.jsonc`。R2 bucket 名必须是小写字母、数字和连字符。
@@ -234,13 +234,13 @@ export default defineCloudflareConfig({});
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "viprpg-zh-archive"
+      "service": "<production-worker-name>"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "<production-resource-name>",
+      "database_name": "<production-d1-name>",
       "database_id": "<PROD_D1_DATABASE_ID>",
       "migrations_dir": "migrations"
     }
@@ -248,7 +248,7 @@ export default defineCloudflareConfig({});
   "r2_buckets": [
     {
       "binding": "ARCHIVE_BUCKET",
-      "bucket_name": "<production-resource-name>"
+      "bucket_name": "<production-r2-bucket-name>"
     }
   ],
   "send_email": [
@@ -295,7 +295,7 @@ export default defineCloudflareConfig({});
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "<staging-resource-name>",
+          "database_name": "<staging-d1-name>",
           "database_id": "<STAGING_D1_DATABASE_ID>",
           "migrations_dir": "migrations"
         }
@@ -303,7 +303,7 @@ export default defineCloudflareConfig({});
       "r2_buckets": [
         {
           "binding": "ARCHIVE_BUCKET",
-          "bucket_name": "<staging-resource-name>"
+          "bucket_name": "<staging-r2-bucket-name>"
         }
       ],
       "send_email": [
@@ -599,7 +599,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
 - 已新增 `tools/rpgm-archive-importer/` 受控导入工具，用于在浏览器 commit UI 完成前模拟本地预索引、core pack、manifest、R2 上传和 D1 commit。
-- 已用 `本地样本游戏` 在 staging 完成一次真实样本导入：3018 个归档文件，1705 个唯一 blob，1 个 core pack，manifest/core pack/blob 的 R2 SHA-256 抽验通过。
+- 已用本地样本在 staging 完成一次真实样本导入：3018 个归档文件，1705 个唯一 blob，1 个 core pack，manifest/core pack/blob 的 R2 SHA-256 抽验通过。
 - 本次样本固定了 `rpgm2000-2003-whitelist-v3` 路径覆盖规则：`StringScripts*` 的 `.txt` 进入 core pack，`screenshots/`、根目录 `screenshot*` 和根目录 `null.txt` 强制排除。
 
 ### Phase D：浏览器预索引导入
@@ -630,7 +630,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、浮标进度、IndexedDB 任务快照和同浏览器恢复。
 - 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
-- 已用 `D:\path\to\game-folder` 在 staging 完成浏览器端导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
+- 已用本地浏览器端样本在 staging 完成导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
 - staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，对象引用表写入完成；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
 - staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
 - commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
@@ -671,7 +671,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - Phase E MVP 会把单个 core pack 解压到 Worker 内存后按需写入最终 ZIP。当前 staging 样本 core pack 规模为 `#2` 约 1.41 MB 压缩 / 5.19 MB 解压、`#6` 约 3.54 MB 压缩 / 9.87 MB 解压，可接受；当 core pack 规模明显增大时，需要改为真正的 entry streaming 或增加更细粒度打包。
 - staging 验收：`ArchiveVersion #2` 下载 ZIP 为 132,788,001 bytes，3018 个 entry，payload 132,333,569 bytes；`ArchiveVersion #6` 下载 ZIP 为 288,344,604 bytes，9073 个 entry，payload 287,052,082 bytes；两者均可由本地 ZIP 读取器打开，且未发现路径穿越 entry。
 - 追加验收：新上传的 `ArchiveVersion #7`（もしもコレクション3）GET 响应已返回 `Content-Length: 36823763` 且不再返回 `Transfer-Encoding: chunked`；完整下载后 ZIP 可打开，629 个 entry，payload 36,747,329 bytes。
-- 可运行验收：`ArchiveVersion #2` 下载解压到本地后，`本地样本游戏` 可启动并正常游玩。
+- 可运行验收：`ArchiveVersion #2` 下载解压到本地后，样本游戏可启动并正常游玩。
 - 缓存验收：`ArchiveVersion #7` 曾使用 `zip-store-v6-native-fixed-length-cache-hit-header` 下载 builder 完成固定长度响应验证。B + Pack 改造后下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，cache key 会自然失效，后续验收以 v7 响应头和 ZIP local header 为准。
 - R2 存储边界验收：staging bucket 共 3963 个对象，其中 `blobs/sha256/` 3949 个、`core-packs/sha256/` 7 个、`manifests/sha256/` 7 个；其他前缀 0 个，`core-packs/` 之外的 `.zip` 0 个。
 - Windows 部署修正：当前 Windows + Node 22 环境下 `fs.cpSync` 递归复制目录会触发 `EIO Access is denied`，`scripts/open-next.mjs` 通过仅 Windows 生效的 `scripts/win32-fs-cp-sync-workaround.mjs` 预加载补丁把 OpenNext 的目录复制改走 PowerShell，以保证 staging 部署可重复执行。

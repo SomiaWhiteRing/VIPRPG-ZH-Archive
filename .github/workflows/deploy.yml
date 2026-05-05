@@ -45,6 +45,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Restore Wrangler config
+        run: |
+          if [ -z "$WRANGLER_CONFIG_JSONC" ]; then
+            echo "WRANGLER_CONFIG_JSONC secret is required because wrangler.jsonc is local-only."
+            exit 1
+          fi
+          printf '%s' "$WRANGLER_CONFIG_JSONC" > wrangler.jsonc
+        env:
+          WRANGLER_CONFIG_JSONC: ${{ secrets.WRANGLER_CONFIG_JSONC }}
+
       - name: Check
         run: npm run check
 
@@ -56,6 +66,8 @@ jobs:
 
       - name: Smoke test staging
         run: npm run smoke:staging
+        env:
+          SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
 
   production:
     name: Deploy production
@@ -78,6 +90,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Restore Wrangler config
+        run: |
+          if [ -z "$WRANGLER_CONFIG_JSONC" ]; then
+            echo "WRANGLER_CONFIG_JSONC secret is required because wrangler.jsonc is local-only."
+            exit 1
+          fi
+          printf '%s' "$WRANGLER_CONFIG_JSONC" > wrangler.jsonc
+        env:
+          WRANGLER_CONFIG_JSONC: ${{ secrets.WRANGLER_CONFIG_JSONC }}
 
       - name: Check
         run: npm run check
