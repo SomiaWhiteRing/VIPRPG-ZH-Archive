@@ -50,6 +50,7 @@ export type ArchiveManifestCorePack = {
 export type ArchiveManifestFile = {
   path: string;
   pathSortKey: string;
+  pathBytesB64?: string | null;
   role: ArchiveFileRole;
   sha256: string;
   crc32: number;

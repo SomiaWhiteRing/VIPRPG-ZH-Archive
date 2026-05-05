@@ -401,7 +401,7 @@ migrations/
 第一版 migration 直接承接主架构文档中的表结构，但在落地时做一次字段清理：
 
 - `blobs` 不保存文件名或路径。
-- 文件路径只存在于 `archive_version_files` 和 manifest。
+- 文件路径只存在于 R2 manifest；D1 只保存对象引用表和常用统计。
 - `download_builds.cache_key` 是边缘缓存 key，不是 R2 key。
 
 ### 7.2 创建和应用 migration
@@ -595,7 +595,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现 `PUT /api/blobs/{sha256}`，会重新计算请求体 SHA-256，匹配后写入 R2 `blobs/sha256/{aa}/{bb}/{sha256}` 和 D1 `blobs`。
 - 已实现 `PUT /api/core-packs/{sha256}`，会校验请求体 SHA-256、基础 ZIP magic、`x-core-pack-file-count` 和 `x-core-pack-uncompressed-size`。
 - 已实现 `POST /api/imports/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
-- 当前初始 schema 已压平为 `0001_init_archive_schema.sql`，本地和 staging D1 均为 `works` / `releases` / `archive_versions` / `archive_version_files` 数据模型；production 在正式发布前应使用同一份初始 schema 创建或重建。
+- 当前 schema 已通过迁移收束为 `works` / `releases` / `archive_versions` / `archive_version_blob_refs` / `archive_version_core_pack_refs` 数据模型；production 在正式发布前应使用同一组迁移创建或重建。
 - 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
 - 已新增 `tools/rpgm-archive-importer/` 受控导入工具，用于在浏览器 commit UI 完成前模拟本地预索引、core pack、manifest、R2 上传和 D1 commit。
@@ -622,16 +622,16 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 验收：
 
-- 导入成功后 D1 有 `works`、`releases`、`archive_versions`、`archive_version_files`。
+- 导入成功后 D1 有 `works`、`releases`、`archive_versions` 和对象引用表。
 - manifest 可从 R2 `manifests/` 读取。
-- 文件路径只在 manifest 和 `archive_version_files` 中出现。
+- 文件路径只在 R2 manifest 中出现。
 
 实施记录：
 
 - 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、浮标进度、IndexedDB 任务快照和同浏览器恢复。
 - 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
 - 已用 `D:\path\to\game-folder` 在 staging 完成浏览器端导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
-- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，`archive_version_files = 9073`；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
+- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，对象引用表写入完成；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
 - staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
 - commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
 - 2026-05-03 追加上传性能优化：上传 worker 不再在 ZIP 模式下 `unzipSync` 全量解包，而是读取中央目录并按需切片解压 entry；hash / CRC 阶段改为有字节预算的自适应并发；core pack 生成复用扫描阶段已读 core 字节并改为 `fflate` 异步 ZIP；缺失 blob 上传并发改为按浏览器能力自适应。
@@ -701,7 +701,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 下载端在 `worker/archive-download.mjs` 原生入口写入 `download_builds` 聚合记录：缓存命中记 `cache_hit_count + 1` 且 `actual_r2_get_count = 0`；缓存未命中记 `cache_miss_count + 1` 且按 ArchiveVersion 的 `estimated_r2_get_count` 计入累计 R2 Get。Next App Route 版本也保留同样的 best-effort 记录逻辑。
 - 新增 `GET /api/admin/observability`，返回导入任务状态、累计排除容量、缺失对象数、下载次数、缓存命中/未命中、累计 R2 Get、缓存节省的预计 R2 Get、近期下载和高成本归档。
 - 新增 `GET /api/admin/consistency`，执行有界 D1/R2 一致性检查：抽样验证 D1 中 blob/core pack/manifest 的 R2 对象是否存在、大小是否匹配，并扫描 R2 对象样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`。
-- 新增 `GET /api/admin/gc/dry-run`，只生成候选报告，不删除对象。MVP 只把完全没有 `archive_version_files` 引用且超过宽限期的 blob/core pack 标为可清理；仅被 `deleted` ArchiveVersion 引用的对象单独统计，不自动删除。
+- 新增 `GET /api/admin/gc/dry-run`，只生成候选报告，不删除对象。MVP 只把完全没有归档对象引用且超过宽限期的 blob/core pack 标为可清理；blob 还必须确认未被资料库媒体字段引用。仅被 `deleted` ArchiveVersion 引用的对象单独统计，不自动删除。
 - `/admin` 页面新增 Phase F 摘要：下载观测、导入观测、清理预演、高成本归档和近期下载；一致性检查保留为显式 API，避免每次打开管理页都触发 R2 扫描。
 - MVP 运维改进：新增迁移 `0003_phase_f_mvp_operability.sql`，把导入侧观测补到 `import_jobs`：缺失对象容量、实际上传 blob/core pack 数量与容量、manifest 写入量、R2 Put 数、预检/上传/提交耗时和失败阶段。
 - 下载失败观测：`download_builds.failure_count` 记录失败次数，下载端捕获 manifest/R2/ZIP 构建阶段异常后写入最近错误和耗时；成功下载仍继续聚合 hit/miss 和实际 R2 Get。
@@ -774,7 +774,7 @@ Phase 5 MVP 回补：
 - 中断安装验收通过：模拟 IndexedDB 遗留 `installing` 后，页面显示上次安装未完成，并只提供“清理并重装”入口。
 - staging 当前没有 `uses_maniacs_patch = true` 的已发布 current 样本；Maniacs Patch 入口屏蔽逻辑已在首页和 `/play/{archiveVersionId}` 按字段实现，但真实数据验收暂未覆盖。
 - 2026-05-02 追加优化：Web Play installer 提升为 `opfs-v7-skip-non-web-runtime-local-write`，本地 OPFS 写入和 EasyRPG 索引生成阶段跳过所有 `.txt`、`.exe`、`.dll` 文件；普通下载 ZIP 和 canonical manifest 不变。
-- 2026-05-03 B + Pack 改造：下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，manifest/`archive_version_files` 固定保存每个文件 CRC32；Web Play installer 提升为 `opfs-v8-stream-pack-index`，不再逐文件写 OPFS，而是边下载边写 `packs/*.pack` 并生成 `pack-index.json`；Service Worker 从 pack byte range 返回资源。
+- 2026-05-03 B + Pack 改造：下载 builder 提升为 `zip-store-v7-local-crc-no-descriptor`，manifest 固定保存每个文件 CRC32；Web Play installer 提升为 `opfs-v8-stream-pack-index`，不再逐文件写 OPFS，而是边下载边写 `packs/*.pack` 并生成 `pack-index.json`；Service Worker 从 pack byte range 返回资源。
 - 2026-05-03 B + Pack staging 部署版本：`cc468319-8522-49db-9882-dda07d52f618`。staging D1 已应用 `0004_streamable_zip_crc32.sql`，旧测试 ArchiveVersion 标为 `deleted`，并以新 manifest 重新导入 `ArchiveVersion #8`。验收结果：下载响应 `X-Download-Zip-Builder: zip-store-v7-local-crc-no-descriptor`、`Content-Length: 132739713`；首个 local header flag 为 `0x0800` 且无 data descriptor bit；Web Play 安装生成 `index.json`、`pack-index.json` 和 1 个 `assets-000.pack`，pack 索引 2153 个文件且 `.txt/.exe/.dll` 为 0；EasyRPG 可进入标题菜单。
 - 2026-05-03 `/play/13` 安装性能诊断：首次日志显示 `X-Download-Cache: HIT`、`CF-Cache-Status: HIT`，服务端和 R2 不是瓶颈；107.10 MB 本地安装耗时 37.08s，其中 OPFS write 等待 33.14s、write 调用 7185 次。安装器加入约 1 MB OPFS 写入缓冲后，staging 部署版本 `997bf818-5b2f-4b48-96d1-8f507812618b` 复测耗时 23.26s，OPFS write 等待降至 1.47s、write 调用降至 106 次，游戏可启动。小于 256 MB 的安装生成 1 个 pack 是正常结果，不代表偏离 B + Pack 设计。
 - 2026-05-03 `/play/13` 网络失败重试修正：staging 部署版本 `c5ff1bd9-15c3-4590-adae-841eb94a870e` 加入 Web Play 安装自动重试。通过 Playwright 强制第一次下载请求 `Failed to fetch`，页面日志显示 `1.50s 后自动重试（2/3）`，第二次尝试清理半成品缓存后完成安装。

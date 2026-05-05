@@ -131,7 +131,7 @@ ArchiveVersion 发布后应当不可变。若需要修正，应创建新的 Arch
 重要边界：
 
 - 静态资源索引不应该包含文件名。
-- 文件名和相对路径只存在于 `archive_version_files` 和 manifest 中。
+- 文件名和相对路径只存在于 R2 manifest 中；D1 不再镜像完整文件行。
 - 同一个 blob 可以在不同 ArchiveVersion 中以不同文件名出现。
 - R2 不保存完整游戏 ZIP。
 
@@ -155,11 +155,9 @@ releases
   1 ── n release_tags n ── 1 tags
 
 archive_versions
-  1 ── n archive_version_files
+  1 ── n archive_version_blob_refs n ── 1 blobs
+  1 ── n archive_version_core_pack_refs n ── 1 core_packs
   n ── 1 releases
-
-archive_version_files
-  n ── 1 blobs 或 core_packs
 ```
 
 ## 4. D1 表结构
@@ -371,6 +369,8 @@ CREATE TABLE archive_versions (
   core_pack_count INTEGER NOT NULL DEFAULT 0,
   core_pack_size_bytes INTEGER NOT NULL DEFAULT 0,
   estimated_r2_get_count INTEGER NOT NULL DEFAULT 0,
+  web_play_file_count INTEGER NOT NULL DEFAULT 0,
+  web_play_size_bytes INTEGER NOT NULL DEFAULT 0,
   is_current INTEGER NOT NULL DEFAULT 0,
   uploader_id INTEGER REFERENCES users(id),
   status TEXT NOT NULL CHECK (
@@ -405,61 +405,36 @@ CREATE UNIQUE INDEX idx_archive_versions_one_current
 - `is_current` 表示某个 Release 下某个 `archive_key` 当前默认下载的归档快照。
 - 发布后的 ArchiveVersion 不应原地改 manifest。修正导入应创建新行，再切换 `is_current`。
 
-### 4.4 归档文件清单
+### 4.4 归档对象引用
 
 ```sql
-CREATE TABLE archive_version_files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE archive_version_blob_refs (
   archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
-  path TEXT NOT NULL,
-  path_sort_key TEXT NOT NULL,
-  path_bytes_b64 TEXT,
-  role TEXT NOT NULL CHECK (
-    role IN ('map', 'database', 'asset', 'runtime', 'metadata', 'other')
-  ),
-  file_sha256 TEXT NOT NULL,
-  crc32 INTEGER NOT NULL,
-  size_bytes INTEGER NOT NULL,
-  storage_kind TEXT NOT NULL CHECK (storage_kind IN ('blob', 'core_pack')),
-  blob_sha256 TEXT REFERENCES blobs(sha256),
-  core_pack_id INTEGER REFERENCES core_packs(id),
-  pack_entry_path TEXT,
-  mtime_ms INTEGER,
-  file_mode INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (archive_version_id, path),
-  CHECK (
-    (storage_kind = 'blob'
-      AND blob_sha256 IS NOT NULL
-      AND core_pack_id IS NULL
-      AND pack_entry_path IS NULL)
-    OR
-    (storage_kind = 'core_pack'
-      AND blob_sha256 IS NULL
-      AND core_pack_id IS NOT NULL
-      AND pack_entry_path IS NOT NULL)
-  )
-);
+  blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
+  PRIMARY KEY (archive_version_id, blob_sha256)
+) WITHOUT ROWID;
 
-CREATE INDEX idx_archive_version_files_version
-  ON archive_version_files(archive_version_id, path_sort_key);
+CREATE INDEX idx_archive_version_blob_refs_blob
+  ON archive_version_blob_refs(blob_sha256);
 
-CREATE INDEX idx_archive_version_files_file_sha256
-  ON archive_version_files(file_sha256);
+CREATE TABLE archive_version_core_pack_refs (
+  archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
+  core_pack_id INTEGER NOT NULL REFERENCES core_packs(id),
+  PRIMARY KEY (archive_version_id, core_pack_id)
+) WITHOUT ROWID;
 
-CREATE INDEX idx_archive_version_files_blob_sha256
-  ON archive_version_files(blob_sha256);
-
-CREATE INDEX idx_archive_version_files_core_pack
-  ON archive_version_files(core_pack_id);
+CREATE INDEX idx_archive_version_core_pack_refs_core_pack
+  ON archive_version_core_pack_refs(core_pack_id);
 ```
 
 说明：
 
-- 路径只属于某个 ArchiveVersion。
+- 文件级路径、CRC32、文件 SHA-256、文件大小、mtime 和 core pack entry 只属于 R2 manifest。
+- 引用表只表达 ArchiveVersion 对 blob / core pack 的保活关系，用于 GC、清理预演和对象一致性检查。
 - blob 表不记录“它曾经叫什么文件名”，避免静态资源索引膨胀和语义混乱。
 - 若同一内容在 A 游戏叫 `Monster.png`，在 B 游戏叫 `Enemy.png`，它们仍应指向同一个 blob。
-- `file_sha256` 是内容身份；`crc32` 只服务于 STORE ZIP local header 和 Web Play pack 切片校验，不参与内容寻址。
+- `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 是从 manifest 派生的常用统计，避免在线游玩元数据接口每次读取 R2 manifest。
+- GC 不能只看归档引用；Work 图标、缩略图和 `media_assets` 引用也必须保活对应 blob。
 
 ### 4.5 角色、作者、活动、标签
 
@@ -735,7 +710,7 @@ custom_field_values
 6. 前端调用 preflight，询问哪些 blob / core pack 已存在。
 7. 前端只上传缺失 blob 和本次 core pack。
 8. 前端提交 ArchiveVersion commit。
-9. 服务端写入 `archive_versions`、`archive_version_files`、manifest R2 对象和统计信息。
+9. 服务端写入 `archive_versions`、对象引用表、manifest R2 对象和统计信息。
 10. 管理员或有权限用户发布 Work / Release / ArchiveVersion。
 
 关键规则：
@@ -856,8 +831,8 @@ commit 的目标是 `work_id`、`release_id` 和新建的 `archive_version`。
 已经固定的落地方式：
 
 1. `0001_init_archive_schema.sql` 直接创建当前账户、站内信、存储和游戏领域完整 schema。
-2. 上传 commit 写入 `works + releases + archive_versions + archive_version_files`。
-3. 下载重组从 `archive_versions` 读取 manifest 和文件索引。
+2. 上传 commit 写入 `works + releases + archive_versions + archive_version_blob_refs + archive_version_core_pack_refs`。
+3. 下载重组从 `archive_versions` 定位 R2 manifest，再由 manifest 读取文件级清单。
 4. 公开 URL 可以继续叫 `/games`，但内部领域命名使用 `works`。
 
 ## 10. 查询示例
@@ -978,8 +953,8 @@ work_search_documents
 - 还原回收站中的 ArchiveVersion 时恢复为 `published`，但不抢占已有 current；仅在同组没有 current 时自动补为 current。
 - 删除 Work 时应先确认 Release 和 ArchiveVersion 的处理策略。
 - blob 和 core pack 的 GC 必须通过引用扫描决定，不能因为某个 Work 删除就直接删除 R2 对象。
-- 回收站中的 ArchiveVersion 在最终清理前仍保留 `archive_version_files`，可以还原；最终清理后写入 `purged_at`、删除文件引用和 manifest，不能再还原。之后对应 blob/core pack 若没有其他引用，会进入 GC sweep。
-- 文件路径只在 ArchiveVersion 文件清单和 manifest 中管理。
+- 回收站中的 ArchiveVersion 在最终清理前仍保留对象引用表和 manifest，可以还原；最终清理后写入 `purged_at`、删除对象引用和 manifest，不能再还原。之后对应 blob/core pack 若没有其他归档或媒体引用，会进入 GC sweep。
+- 文件路径只在 ArchiveVersion manifest 中管理。
 - 完整游戏 ZIP 不进入 R2。
 
 ## 13. 推荐默认决策
@@ -1003,7 +978,7 @@ work_search_documents
 1. 新增 `works` / `releases` / `archive_versions` 的 DB helper。
 2. 管理端增加 Work 草稿创建和列表。
 3. 上传 commit 先要求选择 Work 和 Release。
-4. commit 写入 `archive_versions` 和 `archive_version_files`。
+4. commit 写入 `archive_versions` 和对象引用表。
 5. 下载端从 `archive_versions` 读取 manifest。
 6. 增加 Series 管理。
 7. 增加 Work relations。

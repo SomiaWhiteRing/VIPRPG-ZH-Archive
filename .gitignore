@@ -25,3 +25,7 @@ pnpm-debug.log*
 Thumbs.db
 .DS_Store
 .vscode/
+
+# Claude/browser automation artifacts
+.claude/screenshots/
+.playwright-mcp/
