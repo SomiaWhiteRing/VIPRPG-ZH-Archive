@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { UploadTaskProvider } from "@/app/upload/upload-task-provider";
+import { SiteHeader } from "@/app/components/site-header";
+import { SiteFooter } from "@/app/components/site-footer";
+import { ThemeBodyClass } from "@/app/components/theme-body-class";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,8 +20,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-Hans">
-      <body>
-        <UploadTaskProvider>{children}</UploadTaskProvider>
+      <body className="theme-festival">
+        <ThemeBodyClass />
+        <UploadTaskProvider>
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+        </UploadTaskProvider>
       </body>
     </html>
   );

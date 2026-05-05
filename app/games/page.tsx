@@ -1,13 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   listGameWorks,
   listPublicCharacters,
   listPublicTags,
   type GameWorkSummary,
 } from "@/lib/server/db/game-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +20,10 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const tag = stringParam(params.tag);
   const tagQuery = stringParam(params.tag_q);
   const character = stringParam(params.character);
-  const currentUser = await getCurrentUserFromCookies();
-  const [works, tags, characters, unreadInboxCount] = await Promise.all([
+  const [works, tags, characters] = await Promise.all([
     listGameWorks({ query, engine, tag, tagQuery, character }),
     listPublicTags(120),
     listPublicCharacters(120),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
   ]);
 
   return (
@@ -39,25 +35,6 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           <p className="subtitle">
             按作品浏览已归档的 RPG Maker 2000/2003 游戏。下载和在线游玩入口挂在各作品的发布版本与归档快照下。
           </p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/">
-            返回首页
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : (
-            <Link className="button" href="/login?next=/games">
-              登录
-            </Link>
-          )}
         </div>
       </header>
 
@@ -229,10 +206,6 @@ function engineLabel(value: string): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
 
 function formatBytes(bytes: number): string {

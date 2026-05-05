@@ -54,9 +54,6 @@ export default async function InboxPage() {
               用户层级
             </Link>
           ) : null}
-          <Link className="button" href="/">
-            返回首页
-          </Link>
         </div>
       </header>
 
