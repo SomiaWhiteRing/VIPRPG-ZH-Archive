@@ -44,9 +44,19 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'blob'
-              AND avf.blob_sha256 = b.sha256
+            FROM archive_version_blob_refs avbr
+            WHERE avbr.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = b.sha256
+              OR w.thumbnail_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = b.sha256
           )
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
@@ -59,9 +69,8 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'core_pack'
-              AND avf.core_pack_id = cp.id
+            FROM archive_version_core_pack_refs avcpr
+            WHERE avcpr.core_pack_id = cp.id
           )
         ORDER BY cp.created_at ASC, cp.id ASC
         LIMIT ?`;
@@ -112,7 +121,13 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
 
     try {
       await env.DB.prepare(
-        `DELETE FROM archive_version_files
+        `DELETE FROM archive_version_blob_refs
+        WHERE archive_version_id = ?`,
+      )
+        .bind(row.id)
+        .run();
+      await env.DB.prepare(
+        `DELETE FROM archive_version_core_pack_refs
         WHERE archive_version_id = ?`,
       )
         .bind(row.id)
@@ -224,9 +239,19 @@ async function markCandidatePurging(db, type, id, graceDays) {
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'blob'
-              AND avf.blob_sha256 = blobs.sha256
+            FROM archive_version_blob_refs avbr
+            WHERE avbr.blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = blobs.sha256
+              OR w.thumbnail_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = blobs.sha256
           )`
       : `UPDATE core_packs
         SET status = 'purging'
@@ -235,9 +260,8 @@ async function markCandidatePurging(db, type, id, graceDays) {
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'core_pack'
-              AND avf.core_pack_id = core_packs.id
+            FROM archive_version_core_pack_refs avcpr
+            WHERE avcpr.core_pack_id = core_packs.id
           )`;
   const result = await db
     .prepare(sql)

@@ -89,7 +89,7 @@ GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBu
 - `Content-Disposition: attachment` 不影响 `fetch()` 读取响应体，不需要为了 Web Play 改出另一条 URL。
 - 不要添加 `web_play=1` 之类会改变 cache key 的查询参数，除非下载端显式把它归一化到同一 cache key。
 - Web Play 下载 URL 不改变，普通下载 ZIP 仍包含 `RPG_RT.exe`、DLL 和 `.txt` 文件；但 OPFS 本地运行目录会跳过所有 `.txt`、`.exe`、`.dll` 文件，减少不参与 EasyRPG Web 运行的本地写入。
-- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_version_files` 排除 `.txt`、`.exe`、`.dll` 后预先统计，安装进度条的文件数和写入体积必须使用这个口径。
+- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 排除 `.txt`、`.exe`、`.dll` 后预先统计，安装进度条的文件数和写入体积必须使用这个口径。
 - ZIP 下载进度来自 `Content-Length`；下载端必须继续保证固定长度响应。
 - 下载 ZIP 必须使用 STORE，并在 local file header 中写入明确 `crc32`、compressed size 和 uncompressed size；不能使用 data descriptor。这样浏览器安装器可以顺序解析 entry，不需要等待中央目录。
 - ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe`、`.dll` entry 在本地写入和 EasyRPG 索引生成阶段跳过。

@@ -134,7 +134,7 @@ Cloudflare Worker
 D1 / R2
   -> import_jobs
   -> blobs / core_packs
-  -> works / releases / archive_versions / archive_version_files
+  -> works / releases / archive_versions / archive_version_blob_refs / archive_version_core_pack_refs
   -> manifests/
 ```
 
@@ -390,7 +390,7 @@ preflight 是恢复流程的事实来源。
 - blob 上传并发按浏览器能力自适应，建议 6 到 16 路；如果后续遇到 Worker/R2 限流，再按错误率动态回退。
 - core pack 上传：单独队列，优先级高于普通 blob。
 - preflight 分块：每批不超过 100 个 hash。
-- commit 分块：`archive_version_files` 大量写入时分批提交。
+- commit 分块：只写 ArchiveVersion 对 blob / core pack 的去重引用，不把完整文件行写入 D1；完整文件清单以 manifest 为准。
 
 ### 9.2 进度计算
 
@@ -579,7 +579,7 @@ Phase D 最小可用版本已落地：
 - 文件策略：`rpgm2000-2003-whitelist-v3`，包含 `StringScripts*`、`screenshots*`、根目录 `null.txt` 的覆盖规则。
 - 打包策略：每个导入生成 1 个 `core-main` ZIP core pack，使用 `fflate` 低压缩等级。
 - 服务端 API：`POST /api/imports`、`GET /api/imports/{id}`、`POST /api/imports/{id}/preflight`、`POST /api/imports/{id}/commit`、`POST /api/imports/{id}/cancel`，以及 blob/core pack 上传端点。
-- commit 策略：`archive_version_files` 分块写入，避免 D1 SQL 变量上限；同 manifest 或同 archive label 的失败草稿可清理后重试。
+- commit 策略：对象引用表分块写入，避免 D1 SQL 变量上限；同 manifest 或同 archive label 的失败草稿可清理后重试。
 
 2026-05-01 staging 验收样本：
 
@@ -587,7 +587,7 @@ Phase D 最小可用版本已落地：
 - 浏览器源文件：9081 个，390.51 MB。
 - 归档结果：9073 个文件，273.75 MB。
 - 排除结果：8 个文件，122.42 MB，主要是原始分卷压缩包、无扩展名音频异常项、`.bat` 和 `.r3proj`。
-- D1：`ArchiveVersion #4` published/current，`archive_version_files = 9073`。
+- D1：`ArchiveVersion #4` published/current，对象引用表写入完成；文件级清单以 R2 manifest 为准。
 - R2：manifest 对象 SHA-256 与 D1 `manifest_sha256` 一致。
 
 ## 15. 参考资料

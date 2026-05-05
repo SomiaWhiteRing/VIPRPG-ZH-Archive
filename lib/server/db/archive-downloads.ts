@@ -1,4 +1,3 @@
-import { webPlayLocalSkippedExtensions } from "@/lib/archive/web-play-local-policy";
 import { getD1 } from "@/lib/server/db/d1";
 
 export type ArchiveDownloadRecord = {
@@ -63,22 +62,16 @@ export function parseArchiveVersionId(value: string): number {
 export async function getWebPlayInstallTargetTotals(
   archiveVersionId: number,
 ): Promise<WebPlayInstallTargetTotals> {
-  const skippedExtensionClauses = webPlayLocalSkippedExtensions
-    .map(() => "AND LOWER(path) NOT LIKE ?")
-    .join("\n        ");
-  const skippedExtensionPatterns = webPlayLocalSkippedExtensions.map(
-    (extension) => `%.${extension}`,
-  );
   const row = await getD1()
     .prepare(
       `SELECT
-        COUNT(*) AS total_files,
-        COALESCE(SUM(size_bytes), 0) AS total_size_bytes
-      FROM archive_version_files
-      WHERE archive_version_id = ?
-        ${skippedExtensionClauses}`,
+        web_play_file_count AS total_files,
+        web_play_size_bytes AS total_size_bytes
+      FROM archive_versions
+      WHERE id = ?
+      LIMIT 1`,
     )
-    .bind(archiveVersionId, ...skippedExtensionPatterns)
+    .bind(archiveVersionId)
     .first<{
       total_files: number | null;
       total_size_bytes: number | null;

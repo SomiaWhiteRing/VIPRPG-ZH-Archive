@@ -4,6 +4,7 @@ import type {
   ArchiveManifest,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
+import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
 import { getD1 } from "@/lib/server/db/d1";
@@ -47,7 +48,6 @@ type ArchiveVersionLookupRow = {
   id: number;
   status: string;
   total_files: number;
-  inserted_file_count: number;
 };
 
 type ArchiveVersionLabelRow = {
@@ -179,7 +179,7 @@ export async function commitArchiveImport(
 
   const corePackIds = await loadCorePackIds(corePackHashes);
   await updateObjectFirstSeen(archiveVersionId, blobHashes, corePackHashes);
-  await insertArchiveVersionFiles({
+  await insertArchiveVersionRefs({
     archiveVersionId,
     manifest,
     corePackIds,
@@ -908,8 +908,7 @@ async function findReusableArchiveVersionByManifest(
       `SELECT
         av.id,
         av.status,
-        av.total_files,
-        (SELECT COUNT(*) FROM archive_version_files avf WHERE avf.archive_version_id = av.id) AS inserted_file_count
+        av.total_files
       FROM archive_versions av
       WHERE av.release_id = ?
         AND av.archive_key = ?
@@ -923,7 +922,7 @@ async function findReusableArchiveVersionByManifest(
     return null;
   }
 
-  if (row.status === "published" && row.inserted_file_count === expectedFileCount) {
+  if (row.status === "published" && row.total_files === expectedFileCount) {
     return row.id;
   }
 
@@ -983,10 +982,7 @@ async function deleteArchiveVersionDraft(archiveVersionId: number): Promise<void
     )
     .bind(archiveVersionId)
     .run();
-  await getD1()
-    .prepare(`DELETE FROM archive_version_files WHERE archive_version_id = ?`)
-    .bind(archiveVersionId)
-    .run();
+  await deleteArchiveVersionRefs(archiveVersionId);
   await getD1()
     .prepare(`DELETE FROM archive_versions WHERE id = ?`)
     .bind(archiveVersionId)
@@ -1045,6 +1041,7 @@ async function insertArchiveVersion(input: {
   uploaderId: number;
 }): Promise<number> {
   const manifest = input.manifest;
+  const webPlayTotals = calculateWebPlayTotals(manifest);
 
   await getD1()
     .prepare(
@@ -1072,10 +1069,12 @@ async function insertArchiveVersion(input: {
         core_pack_count,
         core_pack_size_bytes,
         estimated_r2_get_count,
+        web_play_file_count,
+        web_play_size_bytes,
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
     )
     .bind(
       input.releaseId,
@@ -1101,6 +1100,8 @@ async function insertArchiveVersion(input: {
       manifest.corePacks.length,
       input.corePackSizeBytes,
       input.estimatedR2GetCount,
+      webPlayTotals.fileCount,
+      webPlayTotals.sizeBytes,
       input.uploaderId,
     )
     .run();
@@ -1166,82 +1167,76 @@ async function updateObjectFirstSeen(
   }
 }
 
-async function insertArchiveVersionFiles(input: {
+async function insertArchiveVersionRefs(input: {
   archiveVersionId: number;
   manifest: ArchiveManifest;
   corePackIds: Map<string, number>;
 }): Promise<void> {
-  const corePackSha256 = input.manifest.corePacks[0]?.sha256;
-  const corePackId = corePackSha256
-    ? input.corePackIds.get(corePackSha256)
-    : undefined;
+  const blobHashes = unique(
+    input.manifest.files
+      .filter((file) => file.storage.kind === "blob")
+      .map((file) => (file.storage.kind === "blob" ? file.storage.blobSha256 : "")),
+  );
+  const corePackIds = uniqueNumbers(
+    input.manifest.corePacks.map((corePack) => {
+      const id = input.corePackIds.get(corePack.sha256);
 
-  if (!corePackId) {
-    throw new Error("Core pack id missing");
-  }
-
-  for (const chunk of chunkArray(input.manifest.files, 8)) {
-    const placeholders = chunk
-      .map(() => "(?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
-      .join(", ");
-    const values: Array<string | number | null> = [];
-
-    for (const file of chunk) {
-      if (file.storage.kind === "blob") {
-        values.push(
-          input.archiveVersionId,
-          file.path,
-          file.pathSortKey,
-          file.role,
-          file.sha256,
-          file.crc32,
-          file.size,
-          "blob",
-          file.storage.blobSha256,
-          null,
-          null,
-          file.mtimeMs,
-        );
-      } else {
-        values.push(
-          input.archiveVersionId,
-          file.path,
-          file.pathSortKey,
-          file.role,
-          file.sha256,
-          file.crc32,
-          file.size,
-          "core_pack",
-          null,
-          corePackId,
-          file.storage.entry,
-          file.mtimeMs,
-        );
+      if (!id) {
+        throw new Error(`Core pack id missing: ${corePack.sha256}`);
       }
+
+      return id;
+    }),
+  );
+
+  for (const chunk of chunkArray(blobHashes, 50)) {
+    if (chunk.length === 0) {
+      continue;
     }
+
+    const placeholders = chunk.map(() => "(?, ?)").join(", ");
+    const values = chunk.flatMap((sha256) => [input.archiveVersionId, sha256]);
 
     await getD1()
       .prepare(
-        `INSERT OR IGNORE INTO archive_version_files (
+        `INSERT OR IGNORE INTO archive_version_blob_refs (
           archive_version_id,
-          path,
-          path_sort_key,
-          path_bytes_b64,
-          role,
-          file_sha256,
-          crc32,
-          size_bytes,
-          storage_kind,
-          blob_sha256,
-          core_pack_id,
-          pack_entry_path,
-          mtime_ms,
-          file_mode
+          blob_sha256
         ) VALUES ${placeholders}`,
       )
       .bind(...values)
       .run();
   }
+
+  for (const chunk of chunkArray(corePackIds, 50)) {
+    if (chunk.length === 0) {
+      continue;
+    }
+
+    const placeholders = chunk.map(() => "(?, ?)").join(", ");
+    const values = chunk.flatMap((corePackId) => [input.archiveVersionId, corePackId]);
+
+    await getD1()
+      .prepare(
+        `INSERT OR IGNORE INTO archive_version_core_pack_refs (
+          archive_version_id,
+          core_pack_id
+        ) VALUES ${placeholders}`,
+      )
+      .bind(...values)
+      .run();
+  }
+}
+
+async function deleteArchiveVersionRefs(archiveVersionId: number): Promise<void> {
+  await getD1()
+    .prepare(`DELETE FROM archive_version_blob_refs WHERE archive_version_id = ?`)
+    .bind(archiveVersionId)
+    .run();
+  await getD1()
+    .prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id = ?`)
+    .bind(archiveVersionId)
+    .run();
 }
 
 async function completeImportJob(input: {
@@ -1351,6 +1346,28 @@ function sumUniqueBlobBytes(manifest: ArchiveManifest): number {
   return total;
 }
 
+function calculateWebPlayTotals(manifest: ArchiveManifest): {
+  fileCount: number;
+  sizeBytes: number;
+} {
+  let fileCount = 0;
+  let sizeBytes = 0;
+
+  for (const file of manifest.files) {
+    if (shouldSkipWebPlayLocalWrite(file.path)) {
+      continue;
+    }
+
+    fileCount += 1;
+    sizeBytes += file.size;
+  }
+
+  return {
+    fileCount,
+    sizeBytes,
+  };
+}
+
 function tagSlug(tag: string): string {
   const normalized = tag
     .trim()
@@ -1386,6 +1403,10 @@ function jsonText(value: Record<string, unknown>): string {
 }
 
 function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function uniqueNumbers(values: number[]): number[] {
   return [...new Set(values)];
 }
 

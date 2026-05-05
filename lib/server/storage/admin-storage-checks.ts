@@ -635,7 +635,7 @@ async function purgeDeletedArchiveVersions(
     }
 
     try {
-      await deleteArchiveVersionFiles(row.id);
+      await deleteArchiveVersionRefs(row.id);
       await bucket.delete(row.manifest_r2_key);
       purged.push(candidate);
     } catch (error) {
@@ -680,10 +680,17 @@ async function markArchiveVersionPurged(
   return (result.meta.changes ?? 0) > 0;
 }
 
-async function deleteArchiveVersionFiles(archiveVersionId: number): Promise<void> {
+async function deleteArchiveVersionRefs(archiveVersionId: number): Promise<void> {
   await getD1()
     .prepare(
-      `DELETE FROM archive_version_files
+      `DELETE FROM archive_version_blob_refs
+      WHERE archive_version_id = ?`,
+    )
+    .bind(archiveVersionId)
+    .run();
+  await getD1()
+    .prepare(
+      `DELETE FROM archive_version_core_pack_refs
       WHERE archive_version_id = ?`,
     )
     .bind(archiveVersionId)
@@ -716,9 +723,19 @@ async function getEligibleGcSummary(
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'blob'
-              AND avf.blob_sha256 = b.sha256
+            FROM archive_version_blob_refs avbr
+            WHERE avbr.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = b.sha256
+              OR w.thumbnail_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = b.sha256
           )`
       : `SELECT COUNT(*) AS count, SUM(cp.size_bytes) AS size_bytes
         FROM core_packs cp
@@ -726,9 +743,8 @@ async function getEligibleGcSummary(
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'core_pack'
-              AND avf.core_pack_id = cp.id
+            FROM archive_version_core_pack_refs avcpr
+            WHERE avcpr.core_pack_id = cp.id
           )`;
 
   const row = await getD1()
@@ -759,9 +775,19 @@ async function listEligibleGcRows(
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'blob'
-              AND avf.blob_sha256 = b.sha256
+            FROM archive_version_blob_refs avbr
+            WHERE avbr.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = b.sha256
+              OR w.thumbnail_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = b.sha256
           )
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
@@ -778,9 +804,8 @@ async function listEligibleGcRows(
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'core_pack'
-              AND avf.core_pack_id = cp.id
+            FROM archive_version_core_pack_refs avcpr
+            WHERE avcpr.core_pack_id = cp.id
           )
         ORDER BY cp.created_at ASC, cp.id ASC
         LIMIT ?`;
@@ -856,9 +881,19 @@ async function markGcCandidatePurging(
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'blob'
-              AND avf.blob_sha256 = blobs.sha256
+            FROM archive_version_blob_refs avbr
+            WHERE avbr.blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = blobs.sha256
+              OR w.thumbnail_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = blobs.sha256
           )`
       : `UPDATE core_packs
         SET status = 'purging'
@@ -867,9 +902,8 @@ async function markGcCandidatePurging(
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
-            FROM archive_version_files avf
-            WHERE avf.storage_kind = 'core_pack'
-              AND avf.core_pack_id = core_packs.id
+            FROM archive_version_core_pack_refs avcpr
+            WHERE avcpr.core_pack_id = core_packs.id
           )`;
 
   const result = await getD1()
@@ -931,11 +965,21 @@ async function getDeletedOnlyGcSummary(
         FROM (
           SELECT b.sha256, b.size_bytes
           FROM blobs b
-          JOIN archive_version_files avf
-            ON avf.storage_kind = 'blob'
-            AND avf.blob_sha256 = b.sha256
-          JOIN archive_versions av ON av.id = avf.archive_version_id
+          JOIN archive_version_blob_refs avbr
+            ON avbr.blob_sha256 = b.sha256
+          JOIN archive_versions av ON av.id = avbr.archive_version_id
           WHERE b.status = 'active'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM works w
+              WHERE w.icon_blob_sha256 = b.sha256
+                OR w.thumbnail_blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM media_assets ma
+              WHERE ma.blob_sha256 = b.sha256
+            )
           GROUP BY b.sha256
           HAVING SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) = 0
         )`
@@ -943,10 +987,9 @@ async function getDeletedOnlyGcSummary(
         FROM (
           SELECT cp.id, cp.size_bytes
           FROM core_packs cp
-          JOIN archive_version_files avf
-            ON avf.storage_kind = 'core_pack'
-            AND avf.core_pack_id = cp.id
-          JOIN archive_versions av ON av.id = avf.archive_version_id
+          JOIN archive_version_core_pack_refs avcpr
+            ON avcpr.core_pack_id = cp.id
+          JOIN archive_versions av ON av.id = avcpr.archive_version_id
           WHERE cp.status = 'active'
           GROUP BY cp.id
           HAVING SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) = 0
@@ -968,15 +1011,25 @@ async function listGcCandidateRows(
           b.r2_key,
           b.size_bytes,
           b.created_at,
-          COUNT(avf.id) AS total_reference_count,
-          SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) AS live_reference_count,
-          SUM(CASE WHEN av.status = 'deleted' THEN 1 ELSE 0 END) AS deleted_reference_count
+          COUNT(avbr.blob_sha256) AS total_reference_count,
+          COALESCE(SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END), 0) AS live_reference_count,
+          COALESCE(SUM(CASE WHEN av.status = 'deleted' THEN 1 ELSE 0 END), 0) AS deleted_reference_count
         FROM blobs b
-        LEFT JOIN archive_version_files avf
-          ON avf.storage_kind = 'blob'
-          AND avf.blob_sha256 = b.sha256
-        LEFT JOIN archive_versions av ON av.id = avf.archive_version_id
+        LEFT JOIN archive_version_blob_refs avbr
+          ON avbr.blob_sha256 = b.sha256
+        LEFT JOIN archive_versions av ON av.id = avbr.archive_version_id
         WHERE b.status = 'active'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM works w
+            WHERE w.icon_blob_sha256 = b.sha256
+              OR w.thumbnail_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM media_assets ma
+            WHERE ma.blob_sha256 = b.sha256
+          )
         GROUP BY b.sha256
         HAVING live_reference_count = 0
         ORDER BY total_reference_count ASC, b.created_at ASC
@@ -986,14 +1039,13 @@ async function listGcCandidateRows(
           cp.r2_key,
           cp.size_bytes,
           cp.created_at,
-          COUNT(avf.id) AS total_reference_count,
-          SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) AS live_reference_count,
-          SUM(CASE WHEN av.status = 'deleted' THEN 1 ELSE 0 END) AS deleted_reference_count
+          COUNT(avcpr.core_pack_id) AS total_reference_count,
+          COALESCE(SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END), 0) AS live_reference_count,
+          COALESCE(SUM(CASE WHEN av.status = 'deleted' THEN 1 ELSE 0 END), 0) AS deleted_reference_count
         FROM core_packs cp
-        LEFT JOIN archive_version_files avf
-          ON avf.storage_kind = 'core_pack'
-          AND avf.core_pack_id = cp.id
-        LEFT JOIN archive_versions av ON av.id = avf.archive_version_id
+        LEFT JOIN archive_version_core_pack_refs avcpr
+          ON avcpr.core_pack_id = cp.id
+        LEFT JOIN archive_versions av ON av.id = avcpr.archive_version_id
         WHERE cp.status = 'active'
         GROUP BY cp.id
         HAVING live_reference_count = 0
