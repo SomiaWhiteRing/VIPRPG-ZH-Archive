@@ -8,6 +8,11 @@ out/
 
 # Cloudflare local state
 .wrangler/
+.dev.vars
+.dev.vars.*
+
+# Local Cloudflare deployment config
+wrangler.jsonc
 
 # Local environment files
 .env
@@ -27,5 +32,11 @@ Thumbs.db
 .vscode/
 
 # Claude/browser automation artifacts
-.claude/screenshots/
+.claude/
 .playwright-mcp/
+
+# Local importer samples
+tools/rpgm-archive-importer/samples/*.local.json
+tools/rpgm-archive-importer/samples/*.staging.json
+tools/rpgm-archive-importer/samples/*.production.json
+!tools/rpgm-archive-importer/samples/*.example.json

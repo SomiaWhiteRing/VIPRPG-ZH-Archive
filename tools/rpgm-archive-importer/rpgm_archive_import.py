@@ -1022,7 +1022,7 @@ def render_report(
     blob_raw = sum(entry.size_bytes for entry in blob_entries)
     storage_total = sum(entry.size_bytes for entry in blob_unique.values()) + core_pack_size
     lines = [
-        "# 本地样本游戏 Phase C 受控导入报告",
+        f"# {config['work']['primaryTitle']} 受控导入报告",
         "",
         f"Generated: {now_iso()}",
         "",

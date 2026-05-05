@@ -1,0 +1,123 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "viprpg-zh-archive",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-04-30",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "triggers": {
+    "crons": [
+      "17 19 * * *"
+    ]
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "<production-worker-name>"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "<production-d1-name>",
+      "database_id": "<production-d1-database-id>",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVE_BUCKET",
+      "bucket_name": "<production-r2-bucket-name>"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": [
+        "noreply@example.com"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "AUTH_EMAIL_RATE_LIMITER",
+      "namespace_id": "<production-rate-limit-namespace-id>",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "TURNSTILE_SITE_KEY": "<production-turnstile-site-key>",
+    "EMAIL_FROM": "noreply@example.com",
+    "APP_ORIGIN": "https://example.com"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "env": {
+    "staging": {
+      "name": "<staging-worker-name>",
+      "triggers": {
+        "crons": [
+          "17 19 * * *"
+        ]
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "<staging-worker-name>"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "<staging-d1-name>",
+          "database_id": "<staging-d1-database-id>",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ARCHIVE_BUCKET",
+          "bucket_name": "<staging-r2-bucket-name>"
+        }
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": [
+            "noreply@example.com"
+          ]
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "AUTH_EMAIL_RATE_LIMITER",
+          "namespace_id": "<staging-rate-limit-namespace-id>",
+          "simple": {
+            "limit": 5,
+            "period": 60
+          }
+        }
+      ],
+      "vars": {
+        "TURNSTILE_SITE_KEY": "<staging-turnstile-site-key>",
+        "EMAIL_FROM": "noreply@example.com",
+        "APP_ORIGIN": "https://staging.example.com"
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.25
+      }
+    }
+  }
+}
