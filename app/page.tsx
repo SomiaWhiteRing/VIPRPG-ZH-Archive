@@ -1,246 +1,211 @@
 import Link from "next/link";
-import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { canUploadRole, roleLabel } from "@/lib/server/auth/roles";
-import { listCurrentArchiveDownloadRecords } from "@/lib/server/db/archive-downloads";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-
-const checks = [
-  {
-    title: "游戏资料库",
-    description: "按作品浏览发布版本、归档快照、作者、标签和下载/在线游玩入口。",
-    href: "/games",
-  },
-  {
-    title: "作者与制作人员",
-    description: "浏览作者、汉化、校对、修图和整理人员的作品年表。",
-    href: "/creators",
-  },
-  {
-    title: "登场角色",
-    description: "按角色反查其出现过的作品，角色不再混入普通标签。",
-    href: "/characters",
-  },
-  {
-    title: "标签与系列",
-    description: "浏览普通标签；系列作品有单独入口。",
-    href: "/tags",
-  },
-  {
-    title: "系列作品",
-    description: "按系列统一查看正篇、外传、合集成员和同世界观作品。",
-    href: "/series",
-  },
-  {
-    title: "管理端原型",
-    description: "查看 D1/R2 canonical storage 当前计数和原型 API。",
-    href: "/admin",
-  },
-  {
-    title: "浏览器导入",
-    description: "在本地浏览器完成预索引、去重上传和 ArchiveVersion commit。",
-    href: "/upload",
-  },
-  {
-    title: "D1 连接",
-    description: "验证 Worker binding 是否能访问元数据数据库。",
-    href: "/api/health/db",
-  },
-  {
-    title: "R2 连接",
-    description: "验证归档 bucket binding 是否可读，不写入对象。",
-    href: "/api/health/r2",
-  },
-  {
-    title: "运行时",
-    description: "返回应用版本和 Cloudflare runtime 的基础状态。",
-    href: "/api/health",
-  },
-];
+import { canManageUsersRole, canUploadRole } from "@/lib/server/auth/roles";
+import {
+  getPublicArchiveCounts,
+  listRecentlyUpdatedWorks,
+} from "@/lib/server/db/public-overview";
 
 export const dynamic = "force-dynamic";
 
+const ENTRIES = [
+  {
+    href: "/games",
+    icon: "🎮",
+    title: "作品",
+    description: "按标题、引擎、标签、角色筛选已归档的 RPG Maker 2000/2003 游戏。",
+    countKey: "works",
+  },
+  {
+    href: "/creators",
+    icon: "🖌️",
+    title: "作者与制作人员",
+    description: "按作者、汉化、校对、修图、整理人员浏览参与作品。",
+    countKey: "creators",
+  },
+  {
+    href: "/characters",
+    icon: "👥",
+    title: "登场角色",
+    description: "按角色反查其出现过的作品，独立于普通标签。",
+    countKey: "characters",
+  },
+  {
+    href: "/tags",
+    icon: "🏷️",
+    title: "标签",
+    description: "按风格、玩法、来源筛选作品，与系列分开管理。",
+    countKey: "tags",
+  },
+  {
+    href: "/series",
+    icon: "📚",
+    title: "系列",
+    description: "查看正篇、外传、合集成员、同世界观作品的归属。",
+    countKey: "series",
+  },
+] as const;
+
 export default async function HomePage() {
-  const currentUser = await getCurrentUserFromCookies();
-  const unreadInboxCount = currentUser
-    ? await countUnreadInboxItemsForUser(currentUser)
-    : 0;
-  const downloads = await listCurrentArchiveDownloadRecords();
+  const [currentUser, counts, recent] = await Promise.all([
+    getCurrentUserFromCookies(),
+    getPublicArchiveCounts(),
+    listRecentlyUpdatedWorks(8),
+  ]);
+
+  const canUpload = currentUser ? canUploadRole(currentUser.role) : false;
+  const canAdmin = currentUser ? canManageUsersRole(currentUser.role) : false;
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">VIPRPG-ZH-Archive</p>
-          <h1>RPG Maker 2000/2003 去重归档系统</h1>
-          <p className="subtitle">
-            当前原型已经支持浏览器端预索引导入、D1/R2 canonical
-            storage 写入，以及从 manifest、core pack 和 blob 流式重组 ZIP。
+      <section className="festival-hero" aria-label="站点入口">
+        <p className="eyebrow">VIPRPG Chinese Archive</p>
+        <h1>VIPRPG 中文归档</h1>
+        <p>
+          收录、整理、保存以 VIPRPG 祭典为中心的 RPG Maker 2000/2003 中文化作品。
+          可在线游玩、下载归档、查阅作者与角色资料。
+        </p>
+        <form className="festival-hero-search" action="/games" method="get">
+          <input
+            aria-label="搜索作品、作者、角色、标签"
+            name="q"
+            placeholder="搜索作品 / 作者 / 角色 / 标签"
+            type="search"
+          />
+          <button type="submit">搜索</button>
+        </form>
+      </section>
+
+      <section className="festival-zone" aria-label="项目简介">
+        <div className="notice-pane">
+          <h2>这是什么</h2>
+          <p>
+            VIPRPG 中文归档把社区流转中的 VIPRPG 系作品（含汉化版、原版、修正版、活动投稿等）
+            按「作品 → 发布版本 → 归档快照」的结构整理，并尽可能保留原文件结构与元信息。
+            浏览者可以在线游玩支持的作品、下载完整 ZIP，或按角色、标签、系列回溯整个发布脉络。
+          </p>
+          <p>
+            想了解技术原理（去重存储、浏览器预索引导入、Cloudflare D1/R2）和保存边界，
+            请阅读 <Link href="/about">关于本归档</Link>。
           </p>
         </div>
-        <div className="session-panel">
-          <span className="status-pill">{sessionLabel(currentUser)}</span>
-          {currentUser ? (
-            <>
-              <Link className="button" href="/inbox">
-                站内信
-                {unreadInboxCount > 0 ? (
-                  <span className="notification-badge">
-                    {formatUnreadCount(unreadInboxCount)}
-                  </span>
-                ) : null}
+      </section>
+
+      <section className="festival-zone" aria-label="主要入口">
+        <div className="festival-zone-heading">
+          <h2>浏览板</h2>
+          <Link href="/games">查看全部作品 →</Link>
+        </div>
+        <div className="entry-grid">
+          {ENTRIES.map((entry) => {
+            const count = counts[entry.countKey];
+            return (
+              <Link key={entry.href} className="entry-card" href={entry.href}>
+                <span className="entry-card-icon" aria-hidden>
+                  {entry.icon}
+                </span>
+                <h3>{entry.title}</h3>
+                <p>{entry.description}</p>
+                <span className="entry-card-count">
+                  {formatNumber(count)} 条
+                </span>
               </Link>
-              <form action="/api/auth/logout" method="post" className="inline-form">
-                <input type="hidden" name="next" value="/" />
-                <button className="button" type="submit">
-                  退出
-                </button>
-              </form>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="festival-zone" aria-label="参与贡献">
+        <div className="festival-zone-heading">
+          <h2>参与贡献</h2>
+        </div>
+        <div className="contribute-grid">
+          {!currentUser ? (
+            <>
+              <Link className="entry-card" href="/login">
+                <span className="entry-card-icon" aria-hidden>🔑</span>
+                <h3>登录</h3>
+                <p>已有账号请登录后访问站内信、申请上传权限。</p>
+              </Link>
+              <Link className="entry-card" href="/register">
+                <span className="entry-card-icon" aria-hidden>📝</span>
+                <h3>注册账号</h3>
+                <p>注册后可以申请成为上传者、参与归档贡献。</p>
+              </Link>
             </>
-          ) : (
-            <Link className="button primary" href="/login">
-              登录
+          ) : null}
+          {currentUser && !canUpload ? (
+            <Link className="entry-card" href="/me">
+              <span className="entry-card-icon" aria-hidden>📨</span>
+              <h3>申请上传权限</h3>
+              <p>
+                当前账户为普通用户。在「我的账户」中提交申请，管理员会通过站内信回复。
+              </p>
             </Link>
+          ) : null}
+          {currentUser && canUpload ? (
+            <>
+              <Link className="entry-card" href="/upload">
+                <span className="entry-card-icon" aria-hidden>📤</span>
+                <h3>上传归档</h3>
+                <p>在浏览器内完成扫描、去重、preflight、commit，无需上传完整 ZIP。</p>
+              </Link>
+              <Link className="entry-card" href="/upload/tasks">
+                <span className="entry-card-icon" aria-hidden>🧾</span>
+                <h3>我的导入任务</h3>
+                <p>查看正在进行和最近完成的导入任务、错误信息与状态。</p>
+              </Link>
+            </>
+          ) : null}
+          {canAdmin ? (
+            <Link className="entry-card" href="/admin">
+              <span className="entry-card-icon" aria-hidden>🛠️</span>
+              <h3>管理控制台</h3>
+              <p>进入管理仪表盘，处理待办、内容审核、维护与危险操作。</p>
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="festival-zone" aria-label="最近更新">
+        <div className="festival-zone-heading">
+          <h2>最近更新</h2>
+          <Link href="/games">前往作品资料库 →</Link>
+        </div>
+        <div className="notice-pane">
+          {recent.length > 0 ? (
+            <ul className="recent-update-list">
+              {recent.map((item) => (
+                <li key={item.slug}>
+                  <Link href={`/games/${item.slug}`}>{item.title}</Link>
+                  <time dateTime={item.updatedAt}>
+                    {formatDate(item.updatedAt)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted-line">还没有公开作品。</p>
           )}
         </div>
-      </header>
-
-      <section className="grid" aria-label="基础设施检查">
-        {checks.map((check) => (
-          <article className="card" key={check.href}>
-            <h2>{check.title}</h2>
-            <p>{check.description}</p>
-            <div className="actions">
-              <a className="button" href={check.href}>
-                打开检查
-              </a>
-            </div>
-          </article>
-        ))}
       </section>
-
-      <section className="card" style={{ marginTop: 16 }}>
-        <h2>当前存储边界</h2>
-        <p>
-          R2 只保存 <span className="mono">blobs/</span>、
-          <span className="mono">core-packs/</span> 和{" "}
-          <span className="mono">manifests/</span>。完整游戏 ZIP
-          只能作为响应流或 Workers Cache/CDN 边缘缓存存在。
-        </p>
-      </section>
-
-      <section className="card download-section">
-        <h2>当前可下载归档</h2>
-        {downloads.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table download-table">
-              <thead>
-                <tr>
-                  <th>作品</th>
-                  <th>Release</th>
-                  <th>ArchiveVersion</th>
-                  <th>规模</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {downloads.map((download) => (
-                  <tr key={download.id}>
-                    <td>
-                      <strong>
-                        {download.workChineseTitle || download.workOriginalTitle}
-                      </strong>
-                      {download.workChineseTitle ? (
-                        <span className="muted-line">
-                          {download.workOriginalTitle}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>{download.releaseLabel}</td>
-                    <td>
-                      {download.archiveLabel}
-                      <span className="muted-line mono">{download.archiveKey}</span>
-                    </td>
-                    <td>
-                      {formatNumber(download.totalFiles)} 文件
-                      <span className="muted-line">
-                        {formatBytes(download.totalSizeBytes)} / 约{" "}
-                        {formatNumber(download.estimatedR2GetCount)} 次 R2 读取
-                      </span>
-                    </td>
-                    <td>
-                      <a
-                        className="button primary"
-                        href={`/api/archive-versions/${download.id}/download?zip_builder=${downloadZipBuilderVersion}`}
-                      >
-                        下载 ZIP
-                      </a>
-                      {!download.usesManiacsPatch ? (
-                        <Link className="button" href={`/play/${download.id}`}>
-                          在线游玩
-                        </Link>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p>当前没有已发布且标记为 current 的归档。</p>
-        )}
-      </section>
-
-      {currentUser && !canUploadRole(currentUser.role) ? (
-        <section className="card" style={{ marginTop: 16 }}>
-          <h2>上传者权限</h2>
-          <p>当前账户是普通用户。申请会进入站内信系统，由管理员处理。</p>
-          <form
-            action="/api/account/request-upload-access"
-            method="post"
-            className="actions"
-          >
-            <button className="button primary" type="submit">
-              申请成为上传者
-            </button>
-          </form>
-        </section>
-      ) : null}
     </main>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
 }
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
 }
 
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function sessionLabel(
-  user: Awaited<ReturnType<typeof getCurrentUserFromCookies>>,
-): string {
-  if (!user) {
-    return "未登录";
+function formatDate(value: string): string {
+  if (!value) {
+    return "";
   }
-
-  return `${roleLabel(user.role)}：${user.displayName}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+  }).format(date);
 }

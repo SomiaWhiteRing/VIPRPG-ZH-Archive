@@ -19,6 +19,13 @@ claude mcp add chrome-devtools --scope user -- cmd /c npx -y chrome-devtools-mcp
 
 ## Recommended Commands
 
+Use this before a large interaction/navigation rewrite:
+
+```text
+/ux-rebuild 首页、游戏列表、作品详情、上传入口、管理入口
+目标：保留现有系统功能，但重新设计信息架构和主要任务流。不要先改代码；先给功能清单、角色任务流、迁移矩阵和分阶段方案。
+```
+
 Use this when asking Claude to redesign pages:
 
 ```text
@@ -37,8 +44,8 @@ Use this after UI edits:
 For a larger redesign, start with public pages first:
 
 ```text
-/ui-redesign 首页、游戏列表、作品详情页
-不要动管理端和数据库逻辑。先统一公共页的视觉系统和导航。
+/ux-rebuild 首页、游戏列表、作品详情页
+不要动管理端和数据库逻辑。先统一公共浏览体验和导航，列出所有现有入口迁移到哪里。
 ```
 
 ## What Claude Should Verify
@@ -50,3 +57,5 @@ For a larger redesign, start with public pages first:
 - layout overflow and text overlap
 - focus/hover states
 - fidelity to `docs/ui-viprpg-festival-design-brief.md`
+- fidelity to `docs/ux-rebuild-brief.md`
+- primary task paths still work after interaction changes

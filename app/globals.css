@@ -8,6 +8,739 @@
   --accent: #0f766e;
   --accent-strong: #115e59;
   --code: #334155;
+
+  /* Festival theme tokens (modern translation of vipsummer2024). */
+  --vip-bg: #052367;
+  --vip-sky: #2a78d4;
+  --vip-sky-soft: #4ea1ec;
+  --vip-text: #f0faff;
+  --vip-warm: #ffebcd;
+  --vip-yellow: #fffd87;
+  --vip-border: #ebf7ff;
+  --vip-shadow: #1d1d1e;
+  --vip-pane-gradient: linear-gradient(
+    180deg,
+    #507d5f 0%,
+    #3f6c4e 35%,
+    #2c593b 70%,
+    #1a4729 100%
+  );
+  --vip-pane-deep: linear-gradient(
+    180deg,
+    #1a4729 0%,
+    #073416 100%
+  );
+  --vip-focus: #38bdf8;
+  --vip-danger: #ef4444;
+  --vip-action: #f97316;
+}
+
+/* ---- Festival site shell ---------------------------------------------- */
+
+body.theme-festival {
+  background:
+    radial-gradient(
+      ellipse at top,
+      rgb(74 158 234 / 60%) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, #0a3a8c 0%, var(--vip-bg) 60%, #02143f 100%);
+  background-attachment: fixed;
+  color: var(--vip-text);
+}
+
+body.theme-admin {
+  background:
+    linear-gradient(180deg, #0c1722 0%, #0a1219 100%);
+  background-attachment: fixed;
+  color: #e6edf3;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 2px solid var(--vip-border);
+  background:
+    linear-gradient(180deg, #0a3a8c 0%, #052367 100%);
+  box-shadow: 0 4px 0 rgb(0 0 0 / 35%);
+  color: var(--vip-text);
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  width: min(1180px, calc(100vw - 24px));
+  margin: 0 auto;
+  padding: 12px 0;
+}
+
+.site-brand {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin-right: 8px;
+  color: var(--vip-yellow);
+  font-weight: 800;
+  font-size: 18px;
+  text-decoration: none;
+  text-shadow: 2px 2px 0 var(--vip-shadow);
+}
+
+.site-brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--vip-border);
+  border-radius: 6px;
+  background: var(--vip-pane-gradient);
+  color: var(--vip-yellow);
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 1px 1px 0 var(--vip-shadow);
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  flex: 1 1 auto;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--vip-text);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  border-color: var(--vip-border);
+  background: rgb(255 255 255 / 8%);
+  color: var(--vip-yellow);
+}
+
+.site-nav a.active {
+  border-color: var(--vip-yellow);
+  background: rgb(255 253 135 / 12%);
+  color: var(--vip-yellow);
+}
+
+.site-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.site-session .button {
+  background: rgb(255 255 255 / 90%);
+  color: #052367;
+}
+
+.site-session .button.primary {
+  background: var(--vip-action);
+  border-color: var(--vip-action);
+  color: #1d1300;
+}
+
+.site-session .session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--vip-border);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--vip-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.site-header.admin {
+  background: linear-gradient(180deg, #1a2332 0%, #0a1219 100%);
+  border-bottom-color: #4b5563;
+}
+
+.site-header.admin .site-brand {
+  color: #f0b429;
+  text-shadow: 1px 1px 0 #000;
+}
+
+.site-header.admin .site-nav a {
+  color: #d1d5db;
+}
+
+.site-header.admin .site-nav a:hover,
+.site-header.admin .site-nav a.active {
+  border-color: #f0b429;
+  background: rgb(240 180 41 / 10%);
+  color: #f0b429;
+}
+
+.site-footer {
+  margin-top: 48px;
+  padding: 24px 16px 32px;
+  background: rgb(0 0 0 / 25%);
+  color: rgb(255 255 255 / 75%);
+  text-align: center;
+  font-size: 13px;
+}
+
+.site-footer a {
+  color: var(--vip-warm);
+}
+
+/* ---- Festival panes & headings (used inside content area) -------------- */
+
+body.theme-festival main h1,
+body.theme-festival main h2,
+body.theme-festival main h3 {
+  color: var(--vip-yellow);
+  text-shadow: 2px 2px 0 var(--vip-shadow);
+}
+
+body.theme-festival main p {
+  color: var(--vip-text);
+}
+
+body.theme-festival main .subtitle,
+body.theme-festival main .muted-line {
+  color: rgb(240 250 255 / 80%);
+}
+
+body.theme-festival main .eyebrow {
+  color: var(--vip-warm);
+}
+
+body.theme-festival .page-header {
+  border-bottom-color: rgb(235 247 255 / 35%);
+}
+
+body.theme-festival .card,
+body.theme-festival .creator-card,
+body.theme-festival .game-card,
+body.theme-festival .release-block,
+body.theme-festival .metric,
+body.theme-festival .table-wrap {
+  border: 2px solid color-mix(in srgb, var(--vip-border) 80%, #94a3b8);
+  border-radius: 8px;
+  background: var(--vip-pane-gradient);
+  color: var(--vip-text);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 45%);
+}
+
+body.theme-festival .game-card-media,
+body.theme-festival .work-hero-media {
+  background: rgb(0 0 0 / 35%);
+  color: var(--vip-warm);
+}
+
+body.theme-festival .game-card-stats div,
+body.theme-festival .upload-source-summary div,
+body.theme-festival .upload-task-metrics div,
+body.theme-festival .web-play-storage div {
+  background: rgb(0 0 0 / 25%);
+  border-color: rgb(235 247 255 / 35%);
+  color: var(--vip-text);
+}
+
+body.theme-festival .game-card-stats dt,
+body.theme-festival .upload-source-summary dt,
+body.theme-festival .upload-task-metrics dt {
+  color: var(--vip-warm);
+}
+
+body.theme-festival .chip-list span,
+body.theme-festival .chip-list a {
+  background: rgb(0 0 0 / 35%);
+  border-color: rgb(235 247 255 / 50%);
+  color: var(--vip-text);
+}
+
+body.theme-festival .game-card-title,
+body.theme-festival .creator-card-title {
+  color: var(--vip-yellow);
+  text-shadow: 1px 1px 0 var(--vip-shadow);
+}
+
+body.theme-festival a {
+  color: var(--vip-warm);
+}
+
+body.theme-festival main a:hover {
+  color: var(--vip-yellow);
+}
+
+body.theme-festival .button {
+  background: rgb(255 255 255 / 92%);
+  color: #052367;
+  border-color: rgb(255 255 255 / 80%);
+}
+
+body.theme-festival .button.primary {
+  background: var(--vip-action);
+  border-color: var(--vip-action);
+  color: #1d1300;
+}
+
+body.theme-festival .field input,
+body.theme-festival .field select,
+body.theme-festival .field textarea,
+body.theme-festival .library-toolbar input,
+body.theme-festival .library-toolbar select {
+  background: rgb(255 255 255 / 95%);
+  color: var(--foreground);
+  border-color: rgb(235 247 255 / 60%);
+}
+
+body.theme-festival .library-toolbar {
+  background: rgb(0 0 0 / 30%);
+  border-color: rgb(235 247 255 / 50%);
+}
+
+body.theme-festival .data-table th {
+  color: var(--vip-warm);
+}
+
+body.theme-festival .data-table th,
+body.theme-festival .data-table td {
+  border-bottom-color: rgb(235 247 255 / 25%);
+}
+
+body.theme-festival .badge.user {
+  background: rgb(255 255 255 / 18%);
+  color: var(--vip-text);
+}
+
+body.theme-festival input,
+body.theme-festival select,
+body.theme-festival textarea {
+  font-family: inherit;
+}
+
+body.theme-festival :focus-visible {
+  outline: 2px solid var(--vip-yellow);
+  outline-offset: 2px;
+}
+
+/* Festival entry board (home zones) */
+
+.festival-hero {
+  position: relative;
+  margin-top: 16px;
+  padding: 32px 24px;
+  border: 2px solid var(--vip-border);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgb(7 95 212 / 80%) 0%, rgb(5 35 103 / 80%) 100%),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / 6%) 0 12px,
+      transparent 12px 24px
+    );
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 50%);
+  text-align: center;
+}
+
+.festival-hero h1 {
+  margin: 0;
+  color: var(--vip-yellow);
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: 0.04em;
+  text-shadow: 4px 4px 0 var(--vip-shadow);
+}
+
+.festival-hero p {
+  max-width: 720px;
+  margin: 12px auto 0;
+  color: var(--vip-warm);
+}
+
+.festival-hero-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 680px;
+  margin: 20px auto 0;
+}
+
+.festival-hero-search input {
+  flex: 1 1 280px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--vip-border);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 95%);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 16px;
+}
+
+.festival-hero-search button {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 2px solid var(--vip-yellow);
+  border-radius: 6px;
+  background: var(--vip-yellow);
+  color: #1d1300;
+  font: inherit;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--vip-shadow);
+}
+
+.festival-zone {
+  margin-top: 28px;
+}
+
+.festival-zone-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 14px;
+}
+
+.festival-zone-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--vip-yellow);
+  text-shadow: 2px 2px 0 var(--vip-shadow);
+}
+
+.festival-zone-heading a {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--vip-warm);
+}
+
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.entry-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 18px;
+  border: 2px solid var(--vip-border);
+  border-radius: 10px;
+  background: var(--vip-pane-gradient);
+  color: var(--vip-text);
+  text-decoration: none;
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 45%);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.entry-card:hover {
+  transform: translate(-1px, -2px);
+  box-shadow: 4px 5px 0 rgb(0 0 0 / 55%);
+}
+
+.entry-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.entry-card h3 {
+  margin: 0;
+  color: var(--vip-yellow);
+  font-size: 18px;
+  text-shadow: 1px 1px 0 var(--vip-shadow);
+}
+
+.entry-card p {
+  margin: 0;
+  color: rgb(240 250 255 / 90%);
+  font-size: 14px;
+}
+
+.entry-card-count {
+  display: inline-flex;
+  align-items: center;
+  align-self: start;
+  gap: 4px;
+  padding: 2px 10px;
+  border: 1px solid var(--vip-border);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 35%);
+  color: var(--vip-warm);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notice-pane {
+  padding: 18px 20px;
+  border: 2px solid var(--vip-border);
+  border-radius: 10px;
+  background: var(--vip-pane-gradient);
+  color: var(--vip-text);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 45%);
+}
+
+.notice-pane h2 {
+  margin: 0 0 10px;
+  color: var(--vip-yellow);
+  text-shadow: 2px 2px 0 var(--vip-shadow);
+}
+
+.recent-update-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-update-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 4px;
+  border-bottom: 1px dashed rgb(235 247 255 / 30%);
+}
+
+.recent-update-list li:last-child {
+  border-bottom: 0;
+}
+
+.recent-update-list a {
+  color: var(--vip-warm);
+  font-weight: 800;
+}
+
+.recent-update-list time {
+  color: rgb(240 250 255 / 70%);
+  font-size: 13px;
+}
+
+.contribute-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+/* ---- Work detail primary action bar ----------------------------------- */
+
+.work-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 2px solid var(--vip-border);
+  border-radius: 10px;
+  background: var(--vip-pane-deep);
+  color: var(--vip-text);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 45%);
+}
+
+.work-action-bar > .work-action-meta {
+  flex: 1 1 240px;
+  min-width: 0;
+  color: var(--vip-warm);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.work-action-bar .button.primary {
+  background: var(--vip-action);
+  border-color: var(--vip-action);
+  color: #1d1300;
+}
+
+/* ---- Admin shell tweaks ----------------------------------------------- */
+
+body.theme-admin a {
+  color: #93c5fd;
+}
+
+body.theme-admin main h1,
+body.theme-admin main h2,
+body.theme-admin main h3 {
+  color: #f0b429;
+}
+
+body.theme-admin main .subtitle,
+body.theme-admin main .muted-line {
+  color: #94a3b8;
+}
+
+body.theme-admin .card,
+body.theme-admin .metric,
+body.theme-admin .table-wrap,
+body.theme-admin .release-block {
+  border: 1px solid #2d3a4a;
+  background: #11181f;
+  color: #e6edf3;
+}
+
+body.theme-admin .data-table th {
+  color: #94a3b8;
+}
+
+body.theme-admin .data-table th,
+body.theme-admin .data-table td {
+  border-bottom-color: #2d3a4a;
+}
+
+body.theme-admin .button {
+  background: #1f2a36;
+  color: #e6edf3;
+  border-color: #334155;
+}
+
+body.theme-admin .button.primary {
+  background: #f0b429;
+  color: #1d1300;
+  border-color: #f0b429;
+}
+
+body.theme-admin .button.danger {
+  background: #7f1d1d;
+  border-color: #b91c1c;
+  color: #fee2e2;
+}
+
+body.theme-admin .field input,
+body.theme-admin .field select,
+body.theme-admin .field textarea {
+  background: #0c1219;
+  color: #e6edf3;
+  border-color: #2d3a4a;
+}
+
+body.theme-admin .badge.user {
+  background: #1f2a36;
+  color: #cbd5e1;
+}
+
+.danger-zone {
+  margin-top: 24px;
+  padding: 16px;
+  border: 2px dashed #b91c1c;
+  border-radius: 10px;
+  background: rgb(127 29 29 / 14%);
+}
+
+.danger-zone h2 {
+  margin: 0 0 8px;
+  color: #fca5a5 !important;
+  text-shadow: none !important;
+}
+
+.danger-zone p {
+  margin: 0 0 12px;
+  color: #fecaca;
+}
+
+.admin-quick-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.health-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.health-line.ok {
+  background: rgb(34 197 94 / 18%);
+  color: #86efac;
+}
+
+.health-line.warn {
+  background: rgb(234 179 8 / 18%);
+  color: #fde68a;
+}
+
+.health-line.fail {
+  background: rgb(239 68 68 / 18%);
+  color: #fca5a5;
+}
+
+/* ---- Account shell ---------------------------------------------------- */
+
+.me-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.me-card-stack {
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .me-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .site-session {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Long IDs / titles in admin tables and detail rows must wrap. */
+.data-table td,
+.data-table th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.data-table .mono,
+.detail-list .mono {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* Make admin quick nav pill-like and wrap on mobile. */
+.admin-quick-nav .button {
+  flex: 0 1 auto;
 }
 
 * {

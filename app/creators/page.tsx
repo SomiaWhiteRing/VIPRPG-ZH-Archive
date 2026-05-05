@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   listPublicCreators,
   type PublicCreatorSummary,
 } from "@/lib/server/db/creator-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +13,7 @@ type CreatorsPageProps = {
 export default async function CreatorsPage({ searchParams }: CreatorsPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q);
-  const currentUser = await getCurrentUserFromCookies();
-  const [creators, unreadInboxCount] = await Promise.all([
-    listPublicCreators({ query }),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
-  ]);
+  const creators = await listPublicCreators({ query });
 
   return (
     <main>
@@ -30,25 +24,6 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
           <p className="subtitle">
             浏览已入库作品关联到的作者、汉化者、校对、修图和整理人员。
           </p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/games">
-            返回资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : (
-            <Link className="button" href="/login?next=/creators">
-              登录
-            </Link>
-          )}
         </div>
       </header>
 
@@ -125,8 +100,4 @@ function stringParam(value: string | string[] | undefined): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

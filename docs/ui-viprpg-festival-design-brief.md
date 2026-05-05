@@ -8,6 +8,8 @@ Build a modern archive UI that visually echoes VIPRPG festival pages while keepi
 
 This is not a pixel-perfect clone. The reference page supplies mood, colors, density, and structure. The implementation must use modern semantic HTML, responsive CSS, accessible interaction states, and maintainable components.
 
+For interaction and navigation rebuilds, also follow `docs/ux-rebuild-brief.md`. The festival look should support the task architecture, not decorate a cluttered feature dump.
+
 ## Reference Visual DNA
 
 The VIPRPG夏の陣2024 page uses:

@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import {
   listPublicSeries,
   type PublicSeriesSummary,
@@ -15,11 +13,7 @@ type SeriesPageProps = {
 export default async function SeriesPage({ searchParams }: SeriesPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q);
-  const currentUser = await getCurrentUserFromCookies();
-  const [series, unreadInboxCount] = await Promise.all([
-    listPublicSeries({ query }),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
-  ]);
+  const series = await listPublicSeries({ query });
 
   return (
     <main>
@@ -28,21 +22,6 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
           <p className="eyebrow">Series</p>
           <h1>系列作品</h1>
           <p className="subtitle">按系列统一查看正篇、外传、同合集作品和排序信息。</p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/games">
-            返回资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : null}
         </div>
       </header>
 
@@ -108,8 +87,4 @@ function stringParam(value: string | string[] | undefined): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listPublicTags, type PublicTagSummary } from "@/lib/server/db/taxonomy-library";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +10,7 @@ type TagsPageProps = {
 export default async function TagsPage({ searchParams }: TagsPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q);
-  const currentUser = await getCurrentUserFromCookies();
-  const [tags, unreadInboxCount] = await Promise.all([
-    listPublicTags({ query }),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
-  ]);
+  const tags = await listPublicTags({ query });
 
   return (
     <main>
@@ -25,21 +19,6 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
           <p className="eyebrow">Tags</p>
           <h1>标签</h1>
           <p className="subtitle">普通检索标签与登场角色分开管理；角色请走登场角色页面。</p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/games">
-            返回资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : null}
         </div>
       </header>
 
@@ -122,8 +101,4 @@ function stringParam(value: string | string[] | undefined): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

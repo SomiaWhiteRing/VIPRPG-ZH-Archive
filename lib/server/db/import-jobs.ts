@@ -140,6 +140,54 @@ export function assertImportJobAccess(job: ImportJobRow, user: ArchiveUser): voi
   throw new Error("Import job access denied");
 }
 
+export async function listImportJobsForUser(
+  user: ArchiveUser,
+  limit = 20,
+): Promise<ImportJobRow[]> {
+  const result = await getD1()
+    .prepare(
+      `SELECT
+        id,
+        work_id,
+        release_id,
+        archive_version_id,
+        uploader_id,
+        status,
+        source_name,
+        source_size_bytes,
+        file_count,
+        excluded_file_count,
+        excluded_size_bytes,
+        file_policy_version,
+        missing_blob_count,
+        missing_core_pack_count,
+        missing_blob_size_bytes,
+        missing_core_pack_size_bytes,
+        uploaded_blob_count,
+        uploaded_blob_size_bytes,
+        uploaded_core_pack_count,
+        uploaded_core_pack_size_bytes,
+        manifest_put_count,
+        manifest_size_bytes,
+        r2_put_count,
+        preflight_duration_ms,
+        upload_duration_ms,
+        commit_duration_ms,
+        failed_stage,
+        error_message,
+        created_at,
+        updated_at,
+        completed_at
+      FROM import_jobs
+      WHERE uploader_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?`,
+    )
+    .bind(user.id, Math.max(1, Math.min(limit, 100)))
+    .all<ImportJobRow>();
+  return result.results ?? [];
+}
+
 export async function markImportJobPreflighted(input: {
   id: number;
   missingBlobCount: number;

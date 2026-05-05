@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   listPublicCharacters,
   type PublicCharacterSummary,
 } from "@/lib/server/db/taxonomy-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +13,7 @@ type CharactersPageProps = {
 export default async function CharactersPage({ searchParams }: CharactersPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q);
-  const currentUser = await getCurrentUserFromCookies();
-  const [characters, unreadInboxCount] = await Promise.all([
-    listPublicCharacters({ query }),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
-  ]);
+  const characters = await listPublicCharacters({ query });
 
   return (
     <main>
@@ -30,21 +24,6 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
           <p className="subtitle">
             角色是独立于标签的资料类型，可反查所有登场作品。
           </p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/games">
-            返回资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : null}
         </div>
       </header>
 
@@ -112,8 +91,4 @@ function stringParam(value: string | string[] | undefined): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

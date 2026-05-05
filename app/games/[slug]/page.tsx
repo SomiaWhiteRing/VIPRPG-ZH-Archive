@@ -2,9 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getGameWorkDetail } from "@/lib/server/db/game-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { WorkActionBar } from "./work-action-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +15,7 @@ type GameDetailPageProps = {
 
 export default async function GameDetailPage({ params }: GameDetailPageProps) {
   const { slug } = await params;
-  const currentUser = await getCurrentUserFromCookies();
-  const [work, unreadInboxCount] = await Promise.all([
-    getGameWorkDetail(slug),
-    currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
-  ]);
+  const work = await getGameWorkDetail(slug);
 
   if (!work) {
     notFound();
@@ -28,6 +23,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
 
   const title = work.chineseTitle || work.originalTitle;
   const primaryMedia = work.media[0]?.blobSha256 ?? work.previewBlobSha256;
+  const currentArchive = pickCurrentArchive(work);
 
   return (
     <main>
@@ -40,21 +36,28 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           ) : null}
         </div>
         <div className="actions header-actions">
-          <Link className="button primary" href="/games">
-            返回资料库
+          <Link className="button" href="/games">
+            返回作品资料库
           </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
-            </Link>
-          ) : null}
         </div>
       </header>
+
+      {currentArchive ? (
+        <WorkActionBar
+          archiveId={currentArchive.id}
+          archiveLabel={currentArchive.archiveLabel}
+          downloadHref={`/api/archive-versions/${currentArchive.id}/download?zip_builder=${downloadZipBuilderVersion}`}
+          totalFiles={currentArchive.totalFiles}
+          totalSizeBytes={currentArchive.totalSizeBytes}
+          canPlayInBrowser={!work.usesManiacsPatch}
+        />
+      ) : (
+        <section className="work-action-bar" aria-label="主操作">
+          <span className="work-action-meta">
+            该作品当前没有标记为「current」的归档；可以在下方版本列表中下载具体快照。
+          </span>
+        </section>
+      )}
 
       <section className="work-hero">
         <div className="work-hero-media">
@@ -434,8 +437,30 @@ function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
 }
 
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
+function pickCurrentArchive(work: {
+  releases: Array<{
+    archiveVersions: Array<{
+      id: number;
+      archiveLabel: string;
+      isCurrent: boolean;
+      totalFiles: number;
+      totalSizeBytes: number;
+    }>;
+  }>;
+}): {
+  id: number;
+  archiveLabel: string;
+  totalFiles: number;
+  totalSizeBytes: number;
+} | null {
+  for (const release of work.releases) {
+    for (const archive of release.archiveVersions) {
+      if (archive.isCurrent) {
+        return archive;
+      }
+    }
+  }
+  return null;
 }
 
 function formatBytes(bytes: number): string {
