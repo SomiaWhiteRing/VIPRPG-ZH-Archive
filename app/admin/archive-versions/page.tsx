@@ -4,6 +4,7 @@ import { requireUploaderPageUser } from "@/lib/server/auth/guards";
 import { canManageUsersRole } from "@/lib/server/auth/roles";
 import { listArchiveVersionsForAdmin } from "@/lib/server/db/archive-maintenance";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,8 @@ export default async function AdminArchiveVersionsPage() {
           <h1>归档快照维护</h1>
           <p className="subtitle">
             {canAccessTrash
-              ? "删除会把 ArchiveVersion 放入回收站，不会立即删除 R2 对象。回收站内的版本可以还原；超过保留期并被最终清理后才会失去还原能力。"
-              : "这里列出你上传的归档快照。删除会把归档放入回收站，需要管理员在回收站中还原。"}
+              ? "删除的归档快照会移入回收站，最终清理后无法还原。"
+              : "删除的归档快照会移入回收站，还原需联系管理员。"}
           </p>
         </div>
         <div className="actions header-actions">
@@ -59,8 +60,4 @@ export default async function AdminArchiveVersionsPage() {
       />
     </main>
   );
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   canManageUsersRole,
-  roleLabel,
   type UserRole,
 } from "@/lib/server/auth/roles";
 import {
@@ -11,6 +10,12 @@ import {
   listInboxItemsForUser,
   type InboxItem,
 } from "@/lib/server/db/inbox";
+import { formatUnreadCount, formatDate } from "@/lib/format";
+import {
+  inboxStatusBadgeClass,
+  inboxStatusLabel,
+  roleLabel,
+} from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +42,7 @@ export default async function InboxPage() {
               </span>
             ) : null}
           </h1>
-          <p className="subtitle">
-            当前层级：{roleLabel(currentUser.role)}。角色申请、处理结果和系统通知都会在这里显示。
-          </p>
+          <p className="subtitle">当前层级：{roleLabel(currentUser.role)}</p>
         </div>
         <div className="actions header-actions">
           {unreadInboxCount > 0 ? (
@@ -84,8 +87,8 @@ export default async function InboxPage() {
                   </td>
                   <td>{typeLabel(item.type)}</td>
                   <td>
-                    <span className={`badge ${statusBadgeClass(item.status)}`}>
-                      {statusLabel(item.status)}
+                    <span className={`badge ${inboxStatusBadgeClass(item.status)}`}>
+                      {inboxStatusLabel(item.status)}
                     </span>
                   </td>
                   <td>{formatDate(item.createdAt)}</td>
@@ -98,10 +101,6 @@ export default async function InboxPage() {
       </section>
     </main>
   );
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
 
 function renderActions(item: InboxItem, currentRole: UserRole) {
@@ -162,38 +161,4 @@ function typeLabel(type: InboxItem["type"]): string {
     case "system_notice":
       return "系统通知";
   }
-}
-
-function statusLabel(status: InboxItem["status"]): string {
-  switch (status) {
-    case "open":
-      return "未处理";
-    case "pending":
-      return "待处理";
-    case "approved":
-      return "已通过";
-    case "rejected":
-      return "已驳回";
-    case "archived":
-      return "已归档";
-  }
-}
-
-function statusBadgeClass(status: InboxItem["status"]): string {
-  if (status === "approved") {
-    return "approved";
-  }
-
-  if (status === "rejected") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }

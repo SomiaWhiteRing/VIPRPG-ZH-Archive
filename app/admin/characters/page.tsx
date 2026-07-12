@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,6 @@ export default async function AdminCharactersPage() {
         <div>
           <p className="eyebrow">Admin Characters</p>
           <h1>登场角色维护</h1>
-          <p className="subtitle">角色独立于标签；可维护简介，也可把重复角色合并到目标 slug。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -79,12 +79,4 @@ export default async function AdminCharactersPage() {
       </section>
     </main>
   );
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

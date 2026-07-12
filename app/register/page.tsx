@@ -1,9 +1,10 @@
 import Link from "next/link";
 import Script from "next/script";
 import { redirect } from "next/navigation";
-import { getEmailFrom, getTurnstileSiteKey } from "@/lib/server/auth/config";
+import { getTurnstileSiteKeyOrNull } from "@/lib/server/auth/config";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const params = await searchParams;
   const nextPath = sanitizeRedirectPath(params.next);
   const currentUser = await getCurrentUserFromCookies();
-  const emailFrom = getEmailFrom();
+  const turnstileKey = getTurnstileSiteKeyOrNull();
 
   if (currentUser) {
     redirect(nextPath);
@@ -28,7 +29,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   return (
     <main className="narrow-main">
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      {turnstileKey ? (
+        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      ) : null}
       <header className="page-header">
         <div>
           <p className="eyebrow">Account</p>
@@ -40,13 +43,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       <section className="card form-card">
         {params.error ? <p className="error-message">{params.error}</p> : null}
         {params.sent ? (
-          <VerificationForm
-            email={params.email ?? ""}
-            emailFrom={emailFrom}
-            nextPath={nextPath}
-          />
+          <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
         ) : (
-          <RegisterStartForm nextPath={nextPath} />
+          <RegisterStartForm nextPath={nextPath} turnstileKey={turnstileKey} />
         )}
         <div className="form-links">
           <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
@@ -56,7 +55,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   );
 }
 
-function RegisterStartForm({ nextPath }: { nextPath: string }) {
+function RegisterStartForm({ nextPath, turnstileKey }: { nextPath: string; turnstileKey: string | null }) {
   return (
     <form action="/api/auth/register/start" method="post" className="stack-form">
       <input type="hidden" name="next" value={nextPath} />
@@ -81,9 +80,11 @@ function RegisterStartForm({ nextPath }: { nextPath: string }) {
           type="password"
         />
       </label>
-      <div className="turnstile-box">
-        <div className="cf-turnstile" data-sitekey={getTurnstileSiteKey()} />
-      </div>
+      {turnstileKey ? (
+        <div className="turnstile-box">
+          <div className="cf-turnstile" data-sitekey={turnstileKey} />
+        </div>
+      ) : null}
       <button className="button primary" type="submit">
         发送验证码
       </button>
@@ -93,18 +94,15 @@ function RegisterStartForm({ nextPath }: { nextPath: string }) {
 
 function VerificationForm({
   email,
-  emailFrom,
   nextPath,
 }: {
   email: string;
-  emailFrom: string;
   nextPath: string;
 }) {
   return (
     <form action="/api/auth/register/verify" method="post" className="stack-form">
       <p className="success-message">
-        验证码已发送到 {email}。如果几分钟内没收到，请检查垃圾邮件或广告邮件，并确认发件人{" "}
-        {emailFrom} 未被拦截。
+        {VERIFICATION_EMAIL_HINT.replace("{email}", email)}
       </p>
       <input type="hidden" name="next" value={nextPath} />
       <input type="hidden" name="email" value={email} />

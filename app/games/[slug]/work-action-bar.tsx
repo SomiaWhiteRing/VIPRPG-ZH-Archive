@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { formatNumber, formatBytes } from "@/lib/format";
 
 type Props = {
   archiveId: number;
@@ -46,27 +47,14 @@ export function WorkActionBar({
         <Link className="button" href={`/play/${archiveId}`}>
           ▶ 在线游玩
         </Link>
-      ) : null}
+      ) : (
+        <span className="muted-line">
+          该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
+        </span>
+      )}
       <button className="button" type="button" onClick={copyId}>
         {copied ? "已复制 ✓" : `复制 ID #${archiveId}`}
       </button>
     </section>
   );
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = bytes / 1024 ** exponent;
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

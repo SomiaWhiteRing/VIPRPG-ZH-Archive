@@ -5,13 +5,18 @@ import {
   canAccessSuperAdminRole,
   canManageUsersRole,
   canUploadRole,
-  roleLabel,
 } from "@/lib/server/auth/roles";
 import {
   countUnreadInboxItemsForUser,
   listInboxItemsForUser,
 } from "@/lib/server/db/inbox";
 import { listImportJobsForUser } from "@/lib/server/db/import-jobs";
+import { formatNumber, formatDate } from "@/lib/format";
+import {
+  importTaskStageLabel,
+  importTaskStatusLabel,
+  roleLabel,
+} from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +49,6 @@ export default async function MePage() {
         <div>
           <p className="eyebrow">My Account</p>
           <h1>我的账户</h1>
-          <p className="subtitle">
-            欢迎，{currentUser.displayName}（{roleLabel(currentUser.role)}）。
-            站内信、上传权限、最近导入任务都在这里集中管理。
-          </p>
         </div>
       </header>
 
@@ -87,28 +88,27 @@ export default async function MePage() {
             {canUploadRole(currentUser.role) ? (
               <>
                 <p className="muted-line">
-                  当前已是上传者，可使用浏览器预索引导入。
+                  当前账户已有上传权限。
                 </p>
                 <div className="actions">
                   <Link className="button primary" href="/upload">
-                    进入上传工作区
+                    上传归档
                   </Link>
                   <Link className="button" href="/upload/tasks">
-                    我的导入任务
+                    查看导入任务
                   </Link>
                 </div>
               </>
             ) : pendingUploadRequest ? (
               <p className="muted-line">
-                上传者权限申请已提交，等待管理员处理。可以在
+                申请已提交，等待处理。结果会通过
                 <Link href="/inbox"> 站内信 </Link>
-                跟踪进度。
+                通知。
               </p>
             ) : (
               <>
                 <p>
-                  当前账户为普通用户，需要上传者层级才能上传归档。
-                  申请会进入站内信系统，由管理员处理。
+                  当前为普通用户。提交上传者申请后，管理员会通过站内信回复结果。
                 </p>
                 <form
                   action="/api/account/request-upload-access"
@@ -116,7 +116,7 @@ export default async function MePage() {
                   className="actions"
                 >
                   <button className="button primary" type="submit">
-                    申请成为上传者
+                    提交申请
                   </button>
                 </form>
               </>
@@ -126,9 +126,6 @@ export default async function MePage() {
           {canManageUsersRole(currentUser.role) ? (
             <section className="card">
               <h2>管理</h2>
-              <p className="muted-line">
-                管理员入口与用户层级、审计日志相关功能。
-              </p>
               <div className="actions">
                 <Link className="button primary" href="/admin">
                   进入控制台
@@ -169,9 +166,9 @@ export default async function MePage() {
 
           {canUploadRole(currentUser.role) ? (
             <>
-              <h2 style={{ marginTop: 24 }}>最近导入任务</h2>
+              <h2 className="section-divider">最近导入任务</h2>
               {jobs.length === 0 ? (
-                <p className="muted-line">还没有导入任务。前往上传工作区开始。</p>
+                <p className="muted-line">还没有导入任务。</p>
               ) : (
                 <ul className="plain-list">
                   {jobs.map((job) => (
@@ -180,10 +177,12 @@ export default async function MePage() {
                         #{job.id} {job.source_name ?? "未命名"}
                       </strong>
                       <span className="muted-line">
-                        状态：{job.status}
-                        {job.failed_stage ? ` · ${job.failed_stage}` : ""}
+                        状态：{importTaskStatusLabel(job.status)}
+                        {job.failed_stage
+                          ? ` · ${importTaskStageLabel(job.failed_stage)}`
+                          : ""}
                         {job.archive_version_id
-                          ? ` · ArchiveVersion #${job.archive_version_id}`
+                          ? ` · 归档快照 #${job.archive_version_id}`
                           : ""}
                       </span>
                       <span className="muted-line">
@@ -195,7 +194,7 @@ export default async function MePage() {
               )}
               <div className="actions">
                 <Link className="button" href="/upload/tasks">
-                  全部任务
+                  查看全部任务
                 </Link>
                 <Link className="button primary" href="/upload">
                   开始新上传
@@ -207,22 +206,4 @@ export default async function MePage() {
       </div>
     </main>
   );
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatDate(value: string): string {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
 }

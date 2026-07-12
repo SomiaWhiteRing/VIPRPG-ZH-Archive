@@ -24,7 +24,7 @@ export async function ensureOpfsSupported(): Promise<void> {
   };
 
   if (!storage.getDirectory) {
-    throw new Error("当前浏览器不支持 OPFS，本地安装不可用。");
+    throw new Error("当前浏览器不支持所需的本地存储，无法安装游戏。");
   }
 }
 

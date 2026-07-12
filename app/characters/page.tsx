@@ -3,6 +3,8 @@ import {
   listPublicCharacters,
   type PublicCharacterSummary,
 } from "@/lib/server/db/taxonomy-library";
+import { formatNumber } from "@/lib/format";
+import { stringParam } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +23,6 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
         <div>
           <p className="eyebrow">Characters</p>
           <h1>登场角色</h1>
-          <p className="subtitle">
-            角色是独立于标签的资料类型，可反查所有登场作品。
-          </p>
         </div>
       </header>
 
@@ -43,8 +42,8 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
       </form>
 
       <section className="library-summary" aria-label="角色摘要">
-        <strong>{formatNumber(characters.length)}</strong>
-        <span>位角色符合当前条件</span>
+        <strong>共 {formatNumber(characters.length)} </strong>
+        <span>位角色</span>
       </section>
 
       {characters.length > 0 ? (
@@ -54,9 +53,8 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
           ))}
         </section>
       ) : (
-        <section className="card empty-card" style={{ marginTop: 16 }}>
-          <h2>没有找到角色</h2>
-          <p>调整关键词后再试。</p>
+        <section className="card empty-card">
+          <h2>没有找到匹配的角色。</h2>
         </section>
       )}
     </main>
@@ -74,7 +72,7 @@ function CharacterCard({ character }: { character: PublicCharacterSummary }) {
           <span className="muted-line">{character.originalName}</span>
         ) : null}
       </div>
-      <p>{character.description || "暂无简介。"}</p>
+      {character.description ? <p>{character.description}</p> : null}
       <dl className="game-card-stats">
         <div>
           <dt>登场作品</dt>
@@ -83,12 +81,4 @@ function CharacterCard({ character }: { character: PublicCharacterSummary }) {
       </dl>
     </article>
   );
-}
-
-function stringParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
 }

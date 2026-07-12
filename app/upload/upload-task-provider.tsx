@@ -21,6 +21,8 @@ import type {
   UploadWorkerInput,
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
+import { formatBytes } from "@/lib/format";
+import { uploadTaskStatusLabel } from "@/lib/labels";
 
 type StartUploadInput = {
   sourceKind: UploadSourceKind;
@@ -273,7 +275,7 @@ function UploadFloatingDock({
             <article className="upload-task-item" key={task.localTaskId}>
               <div className="upload-task-title">
                 <strong>{task.sourceName}</strong>
-                <span>{statusLabel(task.status)} / {phaseLabel(task.phase)}</span>
+                <span>{uploadTaskStatusLabel(task.status)} / {phaseLabel(task.phase)}</span>
               </div>
               <div className="upload-progress">
                 <span style={{ width: `${Math.min(100, task.progress.percent)}%` }} />
@@ -287,7 +289,7 @@ function UploadFloatingDock({
                   </dd>
                 </div>
                 <div>
-                  <dt>对象</dt>
+                  <dt>文件</dt>
                   <dd>
                     {task.progress.uploadedObjects.toLocaleString("zh-CN")} /{" "}
                     {task.progress.totalUploadObjects.toLocaleString("zh-CN")}
@@ -304,10 +306,15 @@ function UploadFloatingDock({
               ) : null}
               {task.result ? (
                 <p className="success-message compact">
-                  ArchiveVersion #{task.result.archiveVersionId} 已提交
+                  归档快照 #{task.result.archiveVersionId} 已入库
                 </p>
               ) : null}
               <div className="actions compact-actions">
+                {task.status === "needs_source_reselect" ? (
+                  <a className="button primary" href="/upload">
+                    重新选择来源
+                  </a>
+                ) : null}
                 {task.status === "running" ? (
                   <button
                     className="button"
@@ -372,64 +379,29 @@ function isUnfinished(task: BrowserUploadTaskSnapshot): boolean {
   return !["completed", "failed_terminal", "canceled"].includes(task.status);
 }
 
-function statusLabel(status: BrowserUploadTaskSnapshot["status"]): string {
-  switch (status) {
-    case "running":
-      return "处理中";
-    case "paused":
-      return "已暂停";
-    case "needs_source_reselect":
-      return "需要重选源";
-    case "completed":
-      return "完成";
-    case "failed_recoverable":
-      return "可重试失败";
-    case "failed_terminal":
-      return "终止失败";
-    case "canceled":
-      return "已取消";
-    default:
-      return "已创建";
-  }
-}
-
 function phaseLabel(phase: BrowserUploadTaskSnapshot["phase"]): string {
   switch (phase) {
     case "enumerating":
-      return "枚举";
+      return "读取文件";
     case "hashing":
-      return "哈希";
+      return "校验文件";
     case "building_core_pack":
-      return "打包";
+      return "整理文件";
     case "manifest_ready":
-      return "清单";
+      return "检查完成";
     case "creating_import_job":
       return "创建任务";
     case "preflighting":
-      return "预检";
+      return "上传前检查";
     case "uploading_missing_objects":
-      return "上传";
+      return "上传文件";
     case "verifying_objects":
-      return "复核";
+      return "校验上传";
     case "committing":
-      return "提交";
+      return "提交入库";
     case "completed":
       return "完成";
     default:
       return "准备";
   }
-}
-
-function formatBytes(value: number): string {
-  let next = value;
-
-  for (const unit of ["B", "KB", "MB", "GB"]) {
-    if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
-    }
-
-    next /= 1024;
-  }
-
-  return `${value} B`;
 }

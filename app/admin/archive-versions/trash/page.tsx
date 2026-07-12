@@ -3,6 +3,7 @@ import { ArchiveVersionTable } from "@/app/admin/archive-versions/archive-versio
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { listArchiveVersionsForAdmin } from "@/lib/server/db/archive-maintenance";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,7 @@ export default async function AdminArchiveVersionTrashPage() {
           <p className="eyebrow">Archive Trash</p>
           <h1>归档回收站</h1>
           <p className="subtitle">
-            这里列出已删除但尚未最终清理的 ArchiveVersion。还原后会重新发布；
-            如果同组没有当前版本，系统会自动把它设为当前版本。
+            还原后会重新发布；同组没有最新快照时，会自动成为最新快照。
           </p>
         </div>
         <div className="actions header-actions">
@@ -49,8 +49,4 @@ export default async function AdminArchiveVersionTrashPage() {
       />
     </main>
   );
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

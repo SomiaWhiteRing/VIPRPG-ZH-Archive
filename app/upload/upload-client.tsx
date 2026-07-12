@@ -9,9 +9,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import { useUploadTasks } from "@/app/upload/upload-task-provider";
+import { formatBytes } from "@/lib/format";
 
 type FileInputMode = "folder" | "zip";
 type EngineFamily = "rpg_maker_2000" | "rpg_maker_2003";
@@ -185,6 +185,7 @@ export function UploadClient() {
   const selectedWork =
     lookupState.results.find((work) => work.id === lookupState.selectedWorkId) ?? null;
   const releaseOptions = selectedWork?.releases ?? [];
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_admin";
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -310,7 +311,7 @@ export function UploadClient() {
     }
 
     if (!form.variantLabel.trim()) {
-      setSubmitError("请填写版本标识。");
+      setSubmitError("请填写版本名称。");
       return;
     }
 
@@ -320,7 +321,7 @@ export function UploadClient() {
     }
 
     if (!form.archiveVariantLabel.trim()) {
-      setSubmitError("请填写归档标识。");
+      setSubmitError("请填写归档名称。");
       return;
     }
 
@@ -346,11 +347,7 @@ export function UploadClient() {
   return (
     <div className="upload-layout">
       <section className="card upload-source-card">
-        <h2>源文件</h2>
-        <p>
-          当前策略：<span className="mono">{FILE_POLICY_VERSION}</span> /{" "}
-          <span className="mono">{PACKER_VERSION}</span>
-        </p>
+        <h2>游戏文件</h2>
         <div className="segmented-control" role="tablist" aria-label="源类型">
           <button
             className={mode === "folder" ? "active" : ""}
@@ -391,7 +388,7 @@ export function UploadClient() {
             <dd>{selectedFiles.length.toLocaleString("zh-CN")} 个文件</dd>
           </div>
           <div>
-            <dt>源大小</dt>
+            <dt>总大小</dt>
             <dd>{formatBytes(selectedSourceSize)}</dd>
           </div>
         </dl>
@@ -418,10 +415,9 @@ export function UploadClient() {
         <section className="card upload-form-card">
           <header className="upload-section-header">
             <div>
-              <p className="eyebrow">Work</p>
+              <p className="eyebrow">第一步</p>
               <h2>作品</h2>
             </div>
-            <span>2 个必填项</span>
           </header>
 
           <div className="upload-form-grid">
@@ -457,15 +453,15 @@ export function UploadClient() {
               setForm={setForm}
             />
             <label className="field readonly-field">
-              <span>自动 slug</span>
+              <span>网址标识</span>
               <input readOnly type="text" value={form.workSlug} />
             </label>
           </div>
 
-          {lookupState.loading ? <p className="muted-line">正在检测库内作品...</p> : null}
+          {lookupState.loading ? <p className="muted-line">正在查找同名作品…</p> : null}
           {lookupState.results.length > 0 && !selectedWork ? (
             <div className="lookup-panel">
-              <strong>库内可能已有同名作品</strong>
+              <strong>资料库中可能已有同名作品</strong>
               {lookupState.results.map((work) => (
                 <div className="lookup-row" key={work.id}>
                   <div>
@@ -473,7 +469,7 @@ export function UploadClient() {
                     <small>{work.slug}</small>
                   </div>
                   <button onClick={() => applyExistingWork(work)} type="button">
-                    是，同一作品
+                    关联此作品
                   </button>
                 </div>
               ))}
@@ -481,7 +477,7 @@ export function UploadClient() {
           ) : null}
           {selectedWork ? (
             <p className="success-message compact">
-              已关联库内作品：{selectedWork.originalTitle}
+              已关联已有作品：{selectedWork.originalTitle}
             </p>
           ) : null}
 
@@ -509,7 +505,7 @@ export function UploadClient() {
               }
             />
             <ImageField
-              label="缩略图"
+              label="预览图"
               onChange={(file) =>
                 setImageSelections((current) => ({ ...current, thumbnail: file }))
               }
@@ -535,7 +531,7 @@ export function UploadClient() {
             <div className="upload-form-grid">
               <TextField form={form} label="排序标题" name="sortTitle" setForm={setForm} />
               <TextAreaField form={form} label="别名" name="aliasTitles" setForm={setForm} />
-              <TextField form={form} label="标签文本" name="tags" setForm={setForm} />
+              <TextField form={form} label="标签" name="tags" setForm={setForm} />
               <TextAreaField
                 form={form}
                 label="登场角色"
@@ -561,23 +557,22 @@ export function UploadClient() {
         <section className="card upload-form-card">
           <header className="upload-section-header">
             <div>
-              <p className="eyebrow">Release</p>
+              <p className="eyebrow">第二步</p>
               <h2>发布版本</h2>
             </div>
-            <span>3 个必填项</span>
           </header>
 
           {releaseOptions.length > 0 ? (
             <label className="field">
-              <span>使用已有 Release</span>
+              <span>使用已有发布版本</span>
               <select
                 onChange={(event) => applyExistingRelease(event.target.value)}
                 value={lookupState.selectedReleaseId ? String(lookupState.selectedReleaseId) : ""}
               >
-                <option value="">创建新的 Release</option>
+                <option value="">创建新发布版本</option>
                 {releaseOptions.map((release) => (
                   <option key={release.id} value={release.id}>
-                    {release.label} / {release.key}
+                    {release.label}{isAdmin ? ` / ${release.key}` : ""}
                   </option>
                 ))}
               </select>
@@ -624,7 +619,7 @@ export function UploadClient() {
               </select>
             </label>
             <label className="field">
-              <span>版本标识 *</span>
+              <span>版本名称 *</span>
               <input
                 onChange={(event) =>
                   setForm((current) => ({
@@ -632,7 +627,7 @@ export function UploadClient() {
                     variantLabel: event.target.value,
                   }))
                 }
-                placeholder="A方案、B方案、官方、默认版等"
+                placeholder="例：默认版"
                 required
                 type="text"
                 value={form.variantLabel}
@@ -660,13 +655,15 @@ export function UploadClient() {
               />
             </label>
             <label className="field readonly-field">
-              <span>自动 Release 标签</span>
+              <span>自动版本名称</span>
               <input readOnly type="text" value={buildReleaseLabel(form)} />
             </label>
-            <label className="field readonly-field wide-field">
-              <span>稳定 Release Key</span>
-              <input readOnly type="text" value={buildReleaseKey(form)} />
-            </label>
+            {isAdmin ? (
+              <label className="field readonly-field wide-field">
+                <span>版本代码</span>
+                <input readOnly type="text" value={buildReleaseKey(form)} />
+              </label>
+            ) : null}
           </div>
 
           <details className="upload-details">
@@ -692,10 +689,9 @@ export function UploadClient() {
         <section className="card upload-form-card">
           <header className="upload-section-header">
             <div>
-              <p className="eyebrow">ArchiveVersion</p>
+              <p className="eyebrow">第三步</p>
               <h2>归档快照</h2>
             </div>
-            <span>2 个必填项</span>
           </header>
           <div className="upload-form-grid">
             <label className="field">
@@ -721,7 +717,7 @@ export function UploadClient() {
               </datalist>
             </label>
             <label className="field">
-              <span>归档标识 *</span>
+              <span>归档名称 *</span>
               <input
                 onChange={(event) =>
                   setForm((current) => ({
@@ -729,20 +725,22 @@ export function UploadClient() {
                     archiveVariantLabel: event.target.value,
                   }))
                 }
-                placeholder="默认版、A方案、B方案等"
+                placeholder="例：默认版"
                 required
                 type="text"
                 value={form.archiveVariantLabel}
               />
             </label>
             <label className="field readonly-field">
-              <span>自动归档标签</span>
+              <span>自动归档名称</span>
               <input readOnly type="text" value={buildArchiveVersionLabel(form)} />
             </label>
-            <label className="field readonly-field wide-field">
-              <span>稳定 Archive Key</span>
-              <input readOnly type="text" value={buildArchiveVersionKey(form)} />
-            </label>
+            {isAdmin ? (
+              <label className="field readonly-field wide-field">
+                <span>归档代码</span>
+                <input readOnly type="text" value={buildArchiveVersionKey(form)} />
+              </label>
+            ) : null}
           </div>
           <div className="checkbox-grid">
             <label>
@@ -769,24 +767,10 @@ export function UploadClient() {
               已修图
             </label>
           </div>
-          <dl className="upload-source-summary">
-            <div>
-              <dt>策略</dt>
-              <dd>{FILE_POLICY_VERSION}</dd>
-            </div>
-            <div>
-              <dt>打包器</dt>
-              <dd>{PACKER_VERSION}</dd>
-            </div>
-          </dl>
-          <p className="muted-line">
-            文件数、大小、manifest、core pack、排除项和 ArchiveVersion 标签会在导入任务中自动生成。
-          </p>
-
           {submitError ? <p className="error-message compact">{submitError}</p> : null}
           <div className="actions">
             <button className="button primary" disabled={preparing} type="submit">
-              {preparing ? "准备中..." : "开始导入"}
+              {preparing ? "正在准备…" : "开始导入"}
             </button>
           </div>
         </section>
@@ -885,7 +869,7 @@ function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCom
       : [];
   const releaseLabel = buildReleaseLabel(form);
   const releaseKey = buildReleaseKey(form);
-  const archiveVersionLabel = `${buildArchiveVersionLabel(form)}・browser-${timestampLabel()}`;
+  const archiveVersionLabel = buildArchiveVersionLabel(form);
   const archiveVersionKey = buildArchiveVersionKey(form);
   const sortTitle = cleanNullable(form.sortTitle) ?? (chineseTitle || originalTitle);
 
@@ -1184,32 +1168,4 @@ function localDateString(): string {
   const day = String(now.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
-}
-
-function timestampLabel(): string {
-  const now = new Date();
-  const parts = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-    String(now.getSeconds()).padStart(2, "0"),
-  ];
-
-  return `${parts[0]}${parts[1]}${parts[2]}-${parts[3]}${parts[4]}${parts[5]}`;
-}
-
-function formatBytes(value: number): string {
-  let next = value;
-
-  for (const unit of ["B", "KB", "MB", "GB"]) {
-    if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
-    }
-
-    next /= 1024;
-  }
-
-  return `${value} B`;
 }

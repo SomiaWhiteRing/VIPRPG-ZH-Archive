@@ -6,6 +6,13 @@ import {
   listAdminReleasesForWork,
 } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount, formatNumber } from "@/lib/format";
+import {
+  baseVariantLabel,
+  releaseTypeLabel,
+  workStatusBadgeClass,
+  workStatusLabel,
+} from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +42,6 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
         <div>
           <p className="eyebrow">Edit Work</p>
           <h1>{work.chineseTitle || work.originalTitle}</h1>
-          <p className="subtitle">
-            作品原名和 slug 暂不在这里修改，避免破坏已有公开 URL 和导入识别。
-          </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/works">
@@ -67,10 +71,12 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
             <label className="field">
               原名
               <input readOnly value={work.originalTitle} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
               Slug
               <input readOnly value={work.slug} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
               中文名
@@ -194,11 +200,11 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                   )
                   .join("\n")}
                 name="characters"
+                placeholder="艾露莎|main|1|初代主角"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个：角色名|职务|排序|备注。职务可用 main / supporting / cameo / mentioned / other。
-                角色独立写入角色表，不再作为标签保存。
+                每行一个角色，字段用 | 分隔；职务：main、supporting、cameo、mentioned、other。
               </span>
             </label>
             <label className="field">
@@ -229,11 +235,11 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                   )
                   .join("\n")}
                 name="series_memberships"
+                placeholder="勇者系列|勇者系列|1|第一作|main|正篇"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个：系列slug|系列名|排序数字|排序标签|关系|备注。关系可用 main / side /
-                collection_member / same_setting / other。
+                每行一个系列，字段用 | 分隔；关系：main、side、collection_member、same_setting、other。
               </span>
             </label>
             <label className="field wide-field">
@@ -245,12 +251,11 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                   )
                   .join("\n")}
                 name="outgoing_relations"
+                placeholder="勇者传说-前篇|sequel|承接前作"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个：目标作品slug|关系|备注。关系可用 prequel / sequel / side_story /
-                same_setting / remake / remaster / fan_disc / alternate_version /
-                translation_source / inspired_by / other。
+                每行一个作品，字段用 | 分隔；关系：prequel、sequel、side_story、same_setting、remake、remaster、fan_disc、alternate_version、translation_source、inspired_by、other。
               </span>
             </label>
             <label className="field wide-field">
@@ -260,10 +265,11 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                   .map((link) => `${link.label}|${link.url}|${link.linkType}`)
                   .join("\n")}
                 name="external_links"
+                placeholder="官方网站|https://example.com|official"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个：标题|URL|类型。类型可用 official / wiki / source / video / download_page / other。
+                每行一个链接，字段用 | 分隔；类型：official、wiki、source、video、download_page、other。
               </span>
             </label>
           </div>
@@ -285,7 +291,7 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
         <table className="data-table">
           <thead>
             <tr>
-              <th>Release</th>
+              <th>发布版本</th>
               <th>状态</th>
               <th>归档</th>
               <th>操作</th>
@@ -303,8 +309,8 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                   </span>
                 </td>
                 <td>
-                  <span className={`badge ${statusBadgeClass(release.status)}`}>
-                    {statusLabel(release.status)}
+                  <span className={`badge ${workStatusBadgeClass(release.status)}`}>
+                    {workStatusLabel(release.status)}
                   </span>
                 </td>
                 <td>
@@ -315,7 +321,7 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                 </td>
                 <td>
                   <Link className="button primary" href={`/admin/releases/${release.id}`}>
-                    编辑 Release
+                    编辑发布版本
                   </Link>
                 </td>
               </tr>
@@ -335,64 +341,4 @@ function parseWorkId(value: string): number {
   }
 
   return workId;
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "已删除";
-    default:
-      return value;
-  }
-}
-
-function statusBadgeClass(value: string): string {
-  if (value === "published") {
-    return "approved";
-  }
-
-  if (value === "hidden" || value === "deleted") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function baseVariantLabel(value: string): string {
-  const labels: Record<string, string> = {
-    original: "原版",
-    remake: "重制版",
-    other: "其他基底",
-  };
-
-  return labels[value] ?? value;
-}
-
-function releaseTypeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    original: "原始发布",
-    translation: "汉化版",
-    revision: "修正版",
-    localized_revision: "本地化修正版",
-    demo: "试玩版",
-    event_submission: "活动投稿",
-    patch_applied_full_release: "补丁整合版",
-    repack: "重打包",
-  };
-
-  return labels[value] ?? "其他";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
 }

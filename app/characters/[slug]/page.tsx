@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getPublicCharacterDetail } from "@/lib/server/db/taxonomy-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { engineLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -53,10 +55,12 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
       </header>
 
       <section className="section-grid creator-profile-grid" aria-label="角色资料">
-        <section className="card">
-          <h2>简介</h2>
-          <p>{character.description || "暂无简介。"}</p>
-        </section>
+        {character.description ? (
+          <section className="card">
+            <h2>简介</h2>
+            <p>{character.description}</p>
+          </section>
+        ) : null}
         <section className="card">
           <h2>关联统计</h2>
           <dl className="detail-list">
@@ -104,27 +108,4 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
       </section>
     </main>
   );
-}
-
-function engineLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_2000":
-      return "RPG Maker 2000";
-    case "rpg_maker_2003":
-      return "RPG Maker 2003";
-    case "mixed":
-      return "混合引擎";
-    case "other":
-      return "其他引擎";
-    default:
-      return "引擎未知";
-  }
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

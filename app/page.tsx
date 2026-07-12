@@ -5,6 +5,7 @@ import {
   getPublicArchiveCounts,
   listRecentlyUpdatedWorks,
 } from "@/lib/server/db/public-overview";
+import { formatNumber, formatDateOnly } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -13,35 +14,35 @@ const ENTRIES = [
     href: "/games",
     icon: "🎮",
     title: "作品",
-    description: "按标题、引擎、标签、角色筛选已归档的 RPG Maker 2000/2003 游戏。",
+    description: "查找归档作品",
     countKey: "works",
   },
   {
     href: "/creators",
     icon: "🖌️",
     title: "作者与制作人员",
-    description: "按作者、汉化、校对、修图、整理人员浏览参与作品。",
+    description: "查看参与人员",
     countKey: "creators",
   },
   {
     href: "/characters",
     icon: "👥",
     title: "登场角色",
-    description: "按角色反查其出现过的作品，独立于普通标签。",
+    description: "按角色找作品",
     countKey: "characters",
   },
   {
     href: "/tags",
     icon: "🏷️",
     title: "标签",
-    description: "按风格、玩法、来源筛选作品，与系列分开管理。",
+    description: "按标签找作品",
     countKey: "tags",
   },
   {
     href: "/series",
     icon: "📚",
     title: "系列",
-    description: "查看正篇、外传、合集成员、同世界观作品的归属。",
+    description: "查看系列归属",
     countKey: "series",
   },
 ] as const;
@@ -62,8 +63,7 @@ export default async function HomePage() {
         <p className="eyebrow">VIPRPG Chinese Archive</p>
         <h1>VIPRPG 中文归档</h1>
         <p>
-          收录、整理、保存以 VIPRPG 祭典为中心的 RPG Maker 2000/2003 中文化作品。
-          可在线游玩、下载归档、查阅作者与角色资料。
+          保存 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，可在线游玩与下载。
         </p>
         <form className="festival-hero-search" action="/games" method="get">
           <input
@@ -78,15 +78,12 @@ export default async function HomePage() {
 
       <section className="festival-zone" aria-label="项目简介">
         <div className="notice-pane">
-          <h2>这是什么</h2>
+          <h2>收录范围</h2>
           <p>
-            VIPRPG 中文归档把社区流转中的 VIPRPG 系作品（含汉化版、原版、修正版、活动投稿等）
-            按「作品 → 发布版本 → 归档快照」的结构整理，并尽可能保留原文件结构与元信息。
-            浏览者可以在线游玩支持的作品、下载完整 ZIP，或按角色、标签、系列回溯整个发布脉络。
+            收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，包括原版、汉化版、修正版与活动投稿。
           </p>
           <p>
-            想了解技术原理（去重存储、浏览器预索引导入、Cloudflare D1/R2）和保存边界，
-            请阅读 <Link href="/about">关于本归档</Link>。
+            技术细节与保存边界见 <Link href="/about">关于本归档</Link>。
           </p>
         </div>
       </section>
@@ -125,12 +122,12 @@ export default async function HomePage() {
               <Link className="entry-card" href="/login">
                 <span className="entry-card-icon" aria-hidden>🔑</span>
                 <h3>登录</h3>
-                <p>已有账号请登录后访问站内信、申请上传权限。</p>
+                <p>查看站内信与账户状态。</p>
               </Link>
               <Link className="entry-card" href="/register">
                 <span className="entry-card-icon" aria-hidden>📝</span>
                 <h3>注册账号</h3>
-                <p>注册后可以申请成为上传者、参与归档贡献。</p>
+                <p>注册后可申请上传权限。</p>
               </Link>
             </>
           ) : null}
@@ -138,9 +135,7 @@ export default async function HomePage() {
             <Link className="entry-card" href="/me">
               <span className="entry-card-icon" aria-hidden>📨</span>
               <h3>申请上传权限</h3>
-              <p>
-                当前账户为普通用户。在「我的账户」中提交申请，管理员会通过站内信回复。
-              </p>
+              <p>上传需要上传者权限，可在「我的账户」申请。</p>
             </Link>
           ) : null}
           {currentUser && canUpload ? (
@@ -148,12 +143,12 @@ export default async function HomePage() {
               <Link className="entry-card" href="/upload">
                 <span className="entry-card-icon" aria-hidden>📤</span>
                 <h3>上传归档</h3>
-                <p>在浏览器内完成扫描、去重、preflight、commit，无需上传完整 ZIP。</p>
+                <p>在浏览器内直接导入本地游戏目录，只上传缺少的文件。</p>
               </Link>
               <Link className="entry-card" href="/upload/tasks">
                 <span className="entry-card-icon" aria-hidden>🧾</span>
                 <h3>我的导入任务</h3>
-                <p>查看正在进行和最近完成的导入任务、错误信息与状态。</p>
+                <p>查看导入进度与结果。</p>
               </Link>
             </>
           ) : null}
@@ -161,7 +156,7 @@ export default async function HomePage() {
             <Link className="entry-card" href="/admin">
               <span className="entry-card-icon" aria-hidden>🛠️</span>
               <h3>管理控制台</h3>
-              <p>进入管理仪表盘，处理待办、内容审核、维护与危险操作。</p>
+              <p>处理内容、用户与维护事项。</p>
             </Link>
           ) : null}
         </div>
@@ -170,7 +165,7 @@ export default async function HomePage() {
       <section className="festival-zone" aria-label="最近更新">
         <div className="festival-zone-heading">
           <h2>最近更新</h2>
-          <Link href="/games">前往作品资料库 →</Link>
+          <Link href="/games">查看全部作品 →</Link>
         </div>
         <div className="notice-pane">
           {recent.length > 0 ? (
@@ -179,7 +174,7 @@ export default async function HomePage() {
                 <li key={item.slug}>
                   <Link href={`/games/${item.slug}`}>{item.title}</Link>
                   <time dateTime={item.updatedAt}>
-                    {formatDate(item.updatedAt)}
+                    {formatDateOnly(item.updatedAt)}
                   </time>
                 </li>
               ))}
@@ -191,21 +186,4 @@ export default async function HomePage() {
       </section>
     </main>
   );
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatDate(value: string): string {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-  }).format(date);
 }

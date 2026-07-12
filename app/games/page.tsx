@@ -6,6 +6,9 @@ import {
   listPublicTags,
   type GameWorkSummary,
 } from "@/lib/server/db/game-library";
+import { formatNumber, formatBytes } from "@/lib/format";
+import { engineLabel } from "@/lib/labels";
+import { stringParam } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +35,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
         <div>
           <p className="eyebrow">Game Library</p>
           <h1>游戏资料库</h1>
-          <p className="subtitle">
-            按作品浏览已归档的 RPG Maker 2000/2003 游戏。下载和在线游玩入口挂在各作品的发布版本与归档快照下。
-          </p>
+          <p className="subtitle">按作品浏览已归档的游戏。</p>
         </div>
       </header>
 
@@ -101,8 +102,9 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
       </form>
 
       <section className="library-summary" aria-label="资料库摘要">
+        <span>共</span>
         <strong>{formatNumber(works.length)}</strong>
-        <span>个作品符合当前条件</span>
+        <span>个作品</span>
       </section>
 
       {works.length > 0 ? (
@@ -112,9 +114,8 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           ))}
         </section>
       ) : (
-        <section className="card empty-card" style={{ marginTop: 16 }}>
-          <h2>没有找到作品</h2>
-          <p>调整关键词、引擎或标签后再试。</p>
+        <section className="card empty-card">
+          <h2>没有找到匹配的作品。</h2>
         </section>
       )}
     </main>
@@ -148,7 +149,7 @@ function GameCard({ work }: { work: GameWorkSummary }) {
             <span className="muted-line">{work.originalTitle}</span>
           ) : null}
         </div>
-        <p>{work.description || "暂无简介。"}</p>
+        {work.description ? <p>{work.description}</p> : null}
         <div className="chip-list">
           <span>{engineLabel(work.engineFamily)}</span>
           {work.usesManiacsPatch ? <span>Maniacs Patch</span> : null}
@@ -183,39 +184,4 @@ function GameCard({ work }: { work: GameWorkSummary }) {
       </div>
     </article>
   );
-}
-
-function stringParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function engineLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_2000":
-      return "RPG Maker 2000";
-    case "rpg_maker_2003":
-      return "RPG Maker 2003";
-    case "mixed":
-      return "混合引擎";
-    case "other":
-      return "其他引擎";
-    default:
-      return "引擎未知";
-  }
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

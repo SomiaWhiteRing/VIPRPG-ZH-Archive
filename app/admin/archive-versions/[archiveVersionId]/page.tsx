@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatDate, formatNumber, formatUnreadCount, formatBytes } from "@/lib/format";
+import { archiveStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -33,16 +35,15 @@ export default async function AdminArchiveVersionEditPage({
     <main>
       <header className="page-header">
         <div>
-          <p className="eyebrow">Edit ArchiveVersion</p>
+          <p className="eyebrow">编辑归档快照</p>
           <h1>{archiveVersion.archiveLabel}</h1>
           <p className="subtitle">
-            所属作品：{archiveVersion.workTitle} / {archiveVersion.releaseLabel}。
-            Archive key、manifest 和对象引用不在这里修改。
+            所属作品：{archiveVersion.workTitle} / {archiveVersion.releaseLabel}
           </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href={`/admin/releases/${archiveVersion.releaseId}`}>
-            返回 Release
+            返回发布版本
           </Link>
           <Link className="button" href="/admin/archive-versions">
             归档维护
@@ -72,11 +73,12 @@ export default async function AdminArchiveVersionEditPage({
           <h2>归档快照资料</h2>
           <div className="upload-form-grid">
             <label className="field">
-              Archive key
+              归档快照 key
               <input readOnly value={archiveVersion.archiveKey} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
-              ArchiveVersion 名称
+              归档快照名称
               <input
                 defaultValue={archiveVersion.archiveLabel}
                 name="archive_label"
@@ -133,7 +135,7 @@ export default async function AdminArchiveVersionEditPage({
 
         <div className="actions">
           <button className="button primary" type="submit">
-            保存 ArchiveVersion
+            保存归档快照
           </button>
           {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
             <button
@@ -162,7 +164,7 @@ export default async function AdminArchiveVersionEditPage({
           <dl className="detail-list">
             <div>
               <dt>状态</dt>
-              <dd>{statusLabel(archiveVersion.status)}</dd>
+              <dd>{archiveStatusLabel(archiveVersion.status, null)}</dd>
             </div>
             <div>
               <dt>当前版本</dt>
@@ -191,7 +193,7 @@ export default async function AdminArchiveVersionEditPage({
               <dd>{formatBytes(archiveVersion.totalSizeBytes)}</dd>
             </div>
             <div>
-              <dt>预计 R2 读</dt>
+              <dt>预计对象存储读取</dt>
               <dd>{formatNumber(archiveVersion.estimatedR2GetCount)}</dd>
             </div>
             <div>
@@ -202,14 +204,14 @@ export default async function AdminArchiveVersionEditPage({
         </section>
 
         <section className="card">
-          <h2>Manifest</h2>
+          <h2>文件清单</h2>
           <dl className="detail-list">
             <div>
               <dt>SHA-256</dt>
               <dd className="mono">{archiveVersion.manifestSha256}</dd>
             </div>
             <div>
-              <dt>R2 key</dt>
+              <dt>对象存储 key</dt>
               <dd className="mono">{archiveVersion.manifestR2Key}</dd>
             </div>
             <div>
@@ -217,7 +219,7 @@ export default async function AdminArchiveVersionEditPage({
               <dd>{archiveVersion.filePolicyVersion}</dd>
             </div>
             <div>
-              <dt>Packer</dt>
+              <dt>打包器</dt>
               <dd>{archiveVersion.packerVersion}</dd>
             </div>
           </dl>
@@ -228,7 +230,7 @@ export default async function AdminArchiveVersionEditPage({
           <dl className="detail-list">
             <div>
               <dt>来源类型</dt>
-              <dd>{archiveVersion.sourceType}</dd>
+              <dd>{sourceTypeLabel(archiveVersion.sourceType)}</dd>
             </div>
             <div>
               <dt>来源名称</dt>
@@ -266,42 +268,15 @@ function parseArchiveVersionId(value: string): number {
   return archiveVersionId;
 }
 
-function statusLabel(value: string): string {
+function sourceTypeLabel(value: string): string {
   switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
+    case "browser_folder":
+      return "浏览器文件夹上传";
+    case "browser_zip":
+      return "浏览器 ZIP 上传";
+    case "preindexed_manifest":
+      return "预生成文件清单";
     default:
-      return value;
+      return "未知";
   }
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

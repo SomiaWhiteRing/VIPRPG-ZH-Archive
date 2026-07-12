@@ -13,28 +13,23 @@ export default function AboutPage() {
         <div>
           <p className="eyebrow">About</p>
           <h1>关于本归档</h1>
-          <p className="subtitle">
-            项目背景、保存范围、技术架构与边界。
-          </p>
         </div>
       </header>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>项目目标</h2>
         <p>
-          VIPRPG 中文归档以 VIPRPG 祭典系列（VIPRPG 紅白、VIPRPG 夏の陣等）为中心，
-          收录与之相关的 RPG Maker 2000 / 2003 作品，包括原版、汉化版、修正版与活动投稿。
-          目标是建立一个可长期检索的中文化资料库：尽可能保留原始文件结构、元数据、
-          作者与角色脉络，并提供稳定的下载/在线游玩入口。
+          VIPRPG 中文归档收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，
+          包括原版、汉化版、修正版与活动投稿。归档保留原始文件、作品资料、
+          作者与角色信息，并提供下载与在线游玩入口。
         </p>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>资料结构</h2>
         <p>
-          每个作品（Work）下挂多个发布版本（Release，例如原版、汉化 v1.0、修正版），
-          每个发布版本下挂多个归档快照（ArchiveVersion，对应特定的目录结构与文件集合）。
-          下载与在线游玩入口都挂在归档快照层级上，便于追溯具体来源。
+          同一作品可收录原版、汉化版与修正版等多个发布版本；每个版本可保留多个归档快照。
+          下载与在线游玩入口对应具体快照，便于追溯来源。
         </p>
         <p>
           作者与制作人员、登场角色、标签、系列分别独立索引，可以在
@@ -45,50 +40,47 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>技术架构</h2>
         <p>
-          归档运行在 Cloudflare Workers 上，使用 D1 作为元数据数据库、R2 作为对象存储。
-          上传走浏览器端预索引：浏览器对本地目录做扫描、SHA-256、core pack 计算，
-          再向服务器提交 preflight，只补传缺失的 blob 与 core pack，
-          最后在服务端 commit 出 ArchiveVersion。
+          网站运行在 Cloudflare Workers 上，D1 保存作品资料，R2 保存游戏文件。
+          上传时，浏览器会完成上传前检查，只补传对象存储中缺少的文件；服务器随后完成入库。
         </p>
         <p>
-          R2 只持久化以下三类对象：
+          R2 保存以下三类内容：
         </p>
         <ul>
           <li>
-            <span className="mono">blobs/</span>：去重后的原始文件内容（按 SHA-256）。
+            <span className="mono">原始文件</span>：校验后去重保存的游戏文件。
           </li>
           <li>
-            <span className="mono">core-packs/</span>：常见 RTP/引擎共享文件的整包。
+            <span className="mono">引擎公共文件</span>：作品共用的 RTP 与引擎文件。
           </li>
           <li>
-            <span className="mono">manifests/</span>：归档快照的目录与文件清单。
+            <span className="mono">文件清单</span>：每个归档快照的目录与文件记录。
           </li>
         </ul>
         <p>
-          完整游戏 ZIP <strong>不会</strong>常驻 R2；下载请求时由 Workers 流式按
-          manifest 重组，并借助 Workers Cache / CDN 边缘缓存命中重复下载。
+          完整游戏 ZIP <strong>不会</strong>常驻 R2；下载时由 Workers 根据文件清单流式生成，
+          并通过 Workers Cache / CDN 缓存重复请求。
         </p>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>保存边界</h2>
         <ul>
           <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 2000/2003 作品。</li>
           <li>对原作权利人提出删除/限制要求的内容，会从公开列表移除。</li>
-          <li>含 Maniacs Patch 的作品暂不提供在线游玩，仅可下载。</li>
-          <li>归档不会篡改原始文件内容；汉化文本以独立 Release 形式并存。</li>
+          <li>使用 Maniacs Patch 的作品暂不支持在线游玩，请下载 ZIP。</li>
+          <li>归档不会修改原始文件；汉化版以独立发布版本并存。</li>
         </ul>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>反馈与贡献</h2>
         <p>
-          想要补充作品、纠正资料、或申请成为上传者，可以
-          <Link href="/login">登录</Link>
-          后在 <Link href="/me">我的账户</Link> 提交申请。
+          补充作品、纠正资料或申请上传权限，可先 <Link href="/login">登录</Link>，
+          再前往 <Link href="/me">我的账户</Link>。
         </p>
       </section>
     </main>

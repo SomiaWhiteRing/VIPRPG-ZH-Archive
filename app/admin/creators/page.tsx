@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { listCreatorsForAdmin } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,6 @@ export default async function AdminCreatorsPage() {
         <div>
           <p className="eyebrow">Admin Creators</p>
           <h1>作者与制作人员维护</h1>
-          <p className="subtitle">
-            这里维护 creator 本体资料。作品和 Release 的职务关联来自导入数据，第一版先作为只读年表展示。
-          </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -62,7 +60,7 @@ export default async function AdminCreatorsPage() {
                 </td>
                 <td>
                   {formatNumber(creator.workCreditCount)} 作品 /{" "}
-                  {formatNumber(creator.releaseCreditCount)} Release
+                  {formatNumber(creator.releaseCreditCount)} 发布版本
                   {creator.latestReleaseCreditAt ? (
                     <span className="muted-line">
                       最近关联：{creator.latestReleaseCreditAt}
@@ -95,12 +93,4 @@ export default async function AdminCreatorsPage() {
       </section>
     </main>
   );
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { AdminArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { canManageUsersRole } from "@/lib/server/auth/roles";
 import type { ArchiveUser } from "@/lib/server/db/users";
+import { formatNumber, formatDate, formatBytes } from "@/lib/format";
+import { archiveStatusBadgeClass, archiveStatusLabel } from "@/lib/labels";
 
 export function ArchiveVersionTable({
   actor,
@@ -14,13 +16,8 @@ export function ArchiveVersionTable({
 }) {
   if (archiveVersions.length === 0) {
     return (
-      <section className="card empty-card" style={{ marginTop: 24 }}>
+      <section className="card empty-card">
         <h2>{mode === "trash" ? "回收站为空" : "暂无归档快照"}</h2>
-        <p>
-          {mode === "trash"
-            ? "当前没有可还原的归档快照。"
-            : "上传并提交游戏后，归档快照会显示在这里。"}
-        </p>
       </section>
     );
   }
@@ -52,12 +49,12 @@ export function ArchiveVersionTable({
               </td>
               <td>
                 <span
-                  className={`badge ${statusBadgeClass(
+                  className={`badge ${archiveStatusBadgeClass(
                     archiveVersion.status,
                     archiveVersion.purgedAt,
                   )}`}
                 >
-                  {statusLabel(archiveVersion.status, archiveVersion.purgedAt)}
+                  {archiveStatusLabel(archiveVersion.status, archiveVersion.purgedAt)}
                 </span>
                 {archiveVersion.isCurrent ? (
                   <span className="muted-line">当前版本</span>
@@ -67,7 +64,7 @@ export function ArchiveVersionTable({
                 {formatNumber(archiveVersion.totalFiles)} 文件
                 <span className="muted-line">
                   {formatBytes(archiveVersion.totalSizeBytes)} / 约{" "}
-                  {formatNumber(archiveVersion.estimatedR2GetCount)} 次 R2 读
+                  {formatNumber(archiveVersion.estimatedR2GetCount)} 次对象存储读取
                 </span>
               </td>
               <td>
@@ -148,7 +145,7 @@ function ArchiveActions({
             编辑归档
           </Link>
           <Link className="button" href={`/admin/releases/${archiveVersion.releaseId}`}>
-            编辑 Release
+            编辑发布版本
           </Link>
         </>
       ) : null}
@@ -176,66 +173,4 @@ function ArchiveActions({
       ) : null}
     </div>
   );
-}
-
-function statusLabel(
-  status: AdminArchiveVersion["status"],
-  purgedAt: string | null,
-): string {
-  if (purgedAt) {
-    return "已最终清理";
-  }
-
-  switch (status) {
-    case "draft":
-      return "草稿";
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "deleted":
-      return "回收站";
-  }
-}
-
-function statusBadgeClass(
-  status: AdminArchiveVersion["status"],
-  purgedAt: string | null,
-): string {
-  if (purgedAt) {
-    return "rejected";
-  }
-
-  if (status === "published") {
-    return "approved";
-  }
-
-  if (status === "deleted") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

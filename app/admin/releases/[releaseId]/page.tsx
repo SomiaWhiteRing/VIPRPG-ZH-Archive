@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getReleaseForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatNumber, formatUnreadCount, formatBytes } from "@/lib/format";
+import { archiveStatusBadgeClass, archiveStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +33,9 @@ export default async function AdminReleaseEditPage({
     <main>
       <header className="page-header">
         <div>
-          <p className="eyebrow">Edit Release</p>
+          <p className="eyebrow">编辑发布版本</p>
           <h1>{release.label}</h1>
-          <p className="subtitle">
-            所属作品：{release.workTitle}。Release key 暂不在这里修改，避免破坏导入识别。
-          </p>
+          <p className="subtitle">所属作品：{release.workTitle}</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href={`/admin/works/${release.workId}`}>
@@ -66,11 +66,12 @@ export default async function AdminReleaseEditPage({
           <h2>发布版本资料</h2>
           <div className="upload-form-grid">
             <label className="field">
-              Release key
+              发布版本 key
               <input readOnly value={release.key} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
-              Release 名称
+              发布版本名称
               <input
                 defaultValue={release.label}
                 name="release_label"
@@ -96,7 +97,7 @@ export default async function AdminReleaseEditPage({
               />
             </label>
             <label className="field">
-              Release 类型
+              发布版本类型
               <select defaultValue={release.type} name="release_type">
                 <option value="original">原始发布</option>
                 <option value="translation">汉化版</option>
@@ -157,8 +158,13 @@ export default async function AdminReleaseEditPage({
             </label>
             <label className="field">
               标签
-              <textarea defaultValue={release.tags.join("\n")} name="tags" rows={5} />
-              <span className="muted-line">每行一个，或使用逗号分隔。</span>
+              <textarea
+                defaultValue={release.tags.join("\n")}
+                name="tags"
+                placeholder="短篇"
+                rows={5}
+              />
+              <span className="muted-line">每行一个标签；也可用逗号分隔。</span>
             </label>
             <label className="field wide-field">
               版权/授权备注
@@ -175,10 +181,11 @@ export default async function AdminReleaseEditPage({
                   .map((link) => `${link.label}|${link.url}|${link.linkType}`)
                   .join("\n")}
                 name="external_links"
+                placeholder="补丁说明|https://example.com/patch|patch_note"
                 rows={5}
               />
               <span className="muted-line">
-                每行一个：标题|URL|类型。类型可用 official / source / download_page / patch_note / other。
+                每行一个链接，字段用 | 分隔；类型：official、source、download_page、patch_note、other。
               </span>
             </label>
           </div>
@@ -186,7 +193,7 @@ export default async function AdminReleaseEditPage({
 
         <div className="actions">
           <button className="button primary" type="submit">
-            保存 Release
+            保存发布版本
           </button>
         </div>
       </form>
@@ -214,8 +221,8 @@ export default async function AdminReleaseEditPage({
                   ) : null}
                 </td>
                 <td>
-                  <span className={`badge ${statusBadgeClass(archive.status)}`}>
-                    {statusLabel(archive.status)}
+                  <span className={`badge ${archiveStatusBadgeClass(archive.status, null)}`}>
+                    {archiveStatusLabel(archive.status, null)}
                   </span>
                   {archive.isCurrent ? <span className="muted-line">当前版本</span> : null}
                   <span className="muted-line">
@@ -249,51 +256,4 @@ function parseReleaseId(value: string): number {
   }
 
   return releaseId;
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "回收站";
-    default:
-      return value;
-  }
-}
-
-function statusBadgeClass(value: string): string {
-  if (value === "published") {
-    return "approved";
-  }
-
-  if (value === "hidden" || value === "deleted") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

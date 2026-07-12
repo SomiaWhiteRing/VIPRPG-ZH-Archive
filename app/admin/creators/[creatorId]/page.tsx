@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount } from "@/lib/format";
+import {
+  creatorRoleLabel,
+  workStatusLabel,
+} from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +38,6 @@ export default async function AdminCreatorEditPage({
         <div>
           <p className="eyebrow">Edit Creator</p>
           <h1>{creator.name}</h1>
-          <p className="subtitle">
-            Creator slug 暂不在这里修改，避免破坏公开 URL 和导入识别。
-          </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/creators">
@@ -68,6 +70,7 @@ export default async function AdminCreatorEditPage({
             <label className="field">
               Slug
               <input readOnly value={creator.slug} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
               名称
@@ -92,9 +95,6 @@ export default async function AdminCreatorEditPage({
             <label className="field wide-field">
               简介
               <textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
-              <span className="muted-line">
-                简介写入 creators.extra_json.bio，不新增迁移；后续需要索引时再提升为独立字段。
-              </span>
             </label>
           </div>
         </section>
@@ -115,7 +115,7 @@ export default async function AdminCreatorEditPage({
                 <li key={`${credit.workId}-${credit.roleKey}`}>
                   <Link href={`/admin/works/${credit.workId}`}>{credit.workTitle}</Link>
                   <span className="muted-line">
-                    {creatorRoleLabel(credit.roleKey)} / {statusLabel(credit.status)}
+                    {creatorRoleLabel(credit.roleKey)} / {workStatusLabel(credit.status)}
                     {credit.notes ? ` / ${credit.notes}` : ""}
                   </span>
                 </li>
@@ -127,7 +127,7 @@ export default async function AdminCreatorEditPage({
         </section>
 
         <section className="card">
-          <h2>Release 职务</h2>
+          <h2>发布版本职务</h2>
           {creator.adminReleaseCredits.length > 0 ? (
             <ul className="plain-list">
               {creator.adminReleaseCredits.map((credit) => (
@@ -136,14 +136,14 @@ export default async function AdminCreatorEditPage({
                     {credit.workTitle} / {credit.releaseLabel}
                   </Link>
                   <span className="muted-line">
-                    {creatorRoleLabel(credit.roleKey)} / {statusLabel(credit.status)}
+                    {creatorRoleLabel(credit.roleKey)} / {workStatusLabel(credit.status)}
                     {credit.notes ? ` / ${credit.notes}` : ""}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="muted-line">暂无 Release 职务。</p>
+            <p className="muted-line">暂无发布版本职务。</p>
           )}
         </section>
       </section>
@@ -159,40 +159,4 @@ function parseCreatorId(value: string): number {
   }
 
   return creatorId;
-}
-
-function creatorRoleLabel(value: string): string {
-  const labels: Record<string, string> = {
-    author: "作者",
-    scenario: "剧本",
-    graphics: "图像",
-    music: "音乐",
-    translator: "翻译",
-    proofreader: "校对",
-    image_editor: "修图",
-    publisher: "发布",
-    repacker: "整理",
-    editor: "编辑",
-  };
-
-  return labels[value] ?? value;
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "已删除";
-    default:
-      return value;
-  }
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
