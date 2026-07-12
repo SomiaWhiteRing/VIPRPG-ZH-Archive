@@ -34,6 +34,12 @@ Thumbs.db
 # Claude/browser automation artifacts
 .claude/
 .playwright-mcp/
+.playwright-cli/
+
+# Root-level browser audit artifacts
+/screenshot-*.png
+/audit-*.png
+/baseline-*.png
 
 # Local importer samples
 tools/rpgm-archive-importer/samples/*.local.json

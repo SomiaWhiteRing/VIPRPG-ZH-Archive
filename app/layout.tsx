@@ -20,7 +20,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-Hans">
-      <body className="theme-festival">
+      <body className="theme-festival" suppressHydrationWarning>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.body.className=location.pathname.startsWith('/admin')?'theme-admin':'theme-festival'",
+          }}
+        />
         <ThemeBodyClass />
         <UploadTaskProvider>
           <SiteHeader />
