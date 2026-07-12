@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getPublicCreatorDetail } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -28,35 +35,23 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Creator</p>
-          <h1>{creator.name}</h1>
-          {creator.originalName ? <p className="subtitle">{creator.originalName}</p> : null}
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/creators">
-            返回作者列表
-          </Link>
-          <Link className="button" href="/games">
-            游戏资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
+      <PageHeader
+        actions={
+          <>
+            <BackLink href="/creators" label="返回作者列表" />
+            <Link className="button" href="/games">
+              游戏资料库
             </Link>
-          ) : null}
-        </div>
-      </header>
+            {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
+          </>
+        }
+        eyebrow="Creator"
+        subtitle={creator.originalName}
+        title={creator.name}
+      />
 
       <section className="section-grid creator-profile-grid" aria-label="作者资料">
-        <section className="card">
-          <h2>简介</h2>
+        <Pane heading="简介">
           {creator.bio ? <p>{creator.bio}</p> : null}
           {creator.websiteUrl ? (
             <div className="actions">
@@ -65,91 +60,79 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
               </a>
             </div>
           ) : null}
-        </section>
-        <section className="card">
-          <h2>关联统计</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>作品层职务</dt>
-              <dd>{formatNumber(creator.workCreditCount)}</dd>
-            </div>
-            <div>
-              <dt>发布版本职务</dt>
-              <dd>{formatNumber(creator.releaseCreditCount)}</dd>
-            </div>
-            <div>
-              <dt>最近发布关联</dt>
-              <dd>{creator.latestReleaseCreditAt ?? "暂无"}</dd>
-            </div>
-          </dl>
-        </section>
+        </Pane>
+        <Pane heading="关联统计">
+          <StatList
+            items={[
+              { label: "作品层职务", value: formatNumber(creator.workCreditCount) },
+              { label: "发布版本职务", value: formatNumber(creator.releaseCreditCount) },
+              { label: "最近发布关联", value: creator.latestReleaseCreditAt ?? "暂无" },
+            ]}
+          />
+        </Pane>
       </section>
 
       <section className="creator-credit-section" aria-label="作品年表">
-        <h2>作品年表</h2>
+        <SectionHeading title="作品年表" />
         {creator.workCredits.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table creator-credit-table">
-              <thead>
-                <tr>
-                  <th>作品</th>
-                  <th>职务</th>
-                  <th>日期</th>
+          <TableWrap compact label="作品年表" minWidth={760}>
+            <thead>
+              <tr>
+                <th>作品</th>
+                <th>职务</th>
+                <th>日期</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creator.workCredits.map((credit) => (
+                <tr key={`${credit.workId}-${credit.roleKey}`}>
+                  <td>
+                    <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
+                    {credit.workTitle !== credit.workOriginalTitle ? (
+                      <span className="muted-line">{credit.workOriginalTitle}</span>
+                    ) : null}
+                  </td>
+                  <td>
+                    {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
+                    {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
+                  </td>
+                  <td>{credit.originalReleaseDate ?? "未知"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {creator.workCredits.map((credit) => (
-                  <tr key={`${credit.workId}-${credit.roleKey}`}>
-                    <td>
-                      <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
-                      {credit.workTitle !== credit.workOriginalTitle ? (
-                        <span className="muted-line">{credit.workOriginalTitle}</span>
-                      ) : null}
-                    </td>
-                    <td>
-                      {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                      {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
-                    </td>
-                    <td>{credit.originalReleaseDate ?? "未知"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </TableWrap>
         ) : (
           <p className="muted-line">暂无作品层职务记录。</p>
         )}
       </section>
 
       <section className="creator-credit-section" aria-label="发布参与">
-        <h2>发布参与</h2>
+        <SectionHeading title="发布参与" />
         {creator.releaseCredits.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table creator-credit-table">
-              <thead>
-                <tr>
-                  <th>作品 / 发布版本</th>
-                  <th>职务</th>
-                  <th>日期</th>
+          <TableWrap compact label="发布参与" minWidth={760}>
+            <thead>
+              <tr>
+                <th>作品 / 发布版本</th>
+                <th>职务</th>
+                <th>日期</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creator.releaseCredits.map((credit) => (
+                <tr key={`${credit.releaseId}-${credit.roleKey}`}>
+                  <td>
+                    <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
+                    <span className="muted-line">{credit.releaseLabel}</span>
+                  </td>
+                  <td>
+                    {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
+                    {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
+                  </td>
+                  <td>{credit.releaseDate ?? "未知"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {creator.releaseCredits.map((credit) => (
-                  <tr key={`${credit.releaseId}-${credit.roleKey}`}>
-                    <td>
-                      <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
-                      <span className="muted-line">{credit.releaseLabel}</span>
-                    </td>
-                    <td>
-                      {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                      {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
-                    </td>
-                    <td>{credit.releaseDate ?? "未知"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </TableWrap>
         ) : (
           <p className="muted-line">暂无发布版本职务记录。</p>
         )}

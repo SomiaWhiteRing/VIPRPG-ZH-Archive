@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getPublicSeriesDetail } from "@/lib/server/db/taxonomy-library";
-import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -27,67 +32,53 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Series</p>
-          <h1>{series.title}</h1>
-          {series.titleOriginal ? <p className="subtitle">{series.titleOriginal}</p> : null}
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/series">
-            返回系列列表
-          </Link>
-          <Link className="button" href="/games">
-            游戏资料库
-          </Link>
-          {currentUser ? (
-            <Link className="button" href="/inbox">
-              站内信
-              {unreadInboxCount > 0 ? (
-                <span className="notification-badge">
-                  {formatUnreadCount(unreadInboxCount)}
-                </span>
-              ) : null}
+      <PageHeader
+        actions={
+          <>
+            <BackLink href="/series" label="返回系列列表" />
+            <Link className="button" href="/games">
+              游戏资料库
             </Link>
-          ) : null}
-        </div>
-      </header>
+            {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
+          </>
+        }
+        eyebrow="Series"
+        subtitle={series.titleOriginal}
+        title={series.title}
+      />
 
-      <section className="card">
-        <h2>简介</h2>
+      <Pane heading="简介">
         <p>{series.description || "—"}</p>
-      </section>
+      </Pane>
 
       <section className="creator-credit-section" aria-label="系列作品">
-        <h2>系列作品</h2>
+        <SectionHeading title="系列作品" />
         {series.works.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table creator-credit-table">
-              <thead>
-                <tr>
-                  <th>顺序</th>
-                  <th>作品</th>
-                  <th>关系</th>
-                  <th>备注</th>
+          <TableWrap compact label="系列作品" minWidth={760}>
+            <thead>
+              <tr>
+                <th>顺序</th>
+                <th>作品</th>
+                <th>关系</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              {series.works.map((work) => (
+                <tr key={work.workId}>
+                  <td>{work.positionLabel || work.positionNumber || "-"}</td>
+                  <td>
+                    <Link href={`/games/${work.slug}`}>{work.title}</Link>
+                    {work.title !== work.originalTitle ? (
+                      <span className="muted-line">{work.originalTitle}</span>
+                    ) : null}
+                  </td>
+                  <td>{seriesRelationLabel(work.relationKind)}</td>
+                  <td>{work.notes || "无"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {series.works.map((work) => (
-                  <tr key={work.workId}>
-                    <td>{work.positionLabel || work.positionNumber || "-"}</td>
-                    <td>
-                      <Link href={`/games/${work.slug}`}>{work.title}</Link>
-                      {work.title !== work.originalTitle ? (
-                        <span className="muted-line">{work.originalTitle}</span>
-                      ) : null}
-                    </td>
-                    <td>{seriesRelationLabel(work.relationKind)}</td>
-                    <td>{work.notes || "无"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </TableWrap>
         ) : (
           <p className="muted-line">暂无公开系列作品。</p>
         )}

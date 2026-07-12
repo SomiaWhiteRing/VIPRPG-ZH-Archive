@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listTagsForAdmin } from "@/lib/server/db/taxonomy-library";
-import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { namespaceLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -16,31 +20,21 @@ export default async function AdminTagsPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Tags</p>
-          <h1>标签维护</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/tags">
-            公开列表
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin Tags"
+        title="标签维护"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <Link className="button" href="/tags">
+              公开列表
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
-      <section className="table-wrap" aria-label="标签列表">
-        <table className="data-table admin-creators-table">
+      <TableWrap label="标签列表" minWidth={900}>
           <thead>
             <tr>
               <th>标签</th>
@@ -73,8 +67,7 @@ export default async function AdminTagsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

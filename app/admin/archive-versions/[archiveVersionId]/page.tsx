@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
+import { StatusBadge } from "@/app/components/ui/status-badge";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatDate, formatNumber, formatUnreadCount, formatBytes } from "@/lib/format";
-import { archiveStatusLabel } from "@/lib/labels";
+import { formatDate, formatNumber, formatBytes } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -33,34 +40,26 @@ export default async function AdminArchiveVersionEditPage({
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">编辑归档快照</p>
-          <h1>{archiveVersion.archiveLabel}</h1>
-          <p className="subtitle">
-            所属作品：{archiveVersion.workTitle} / {archiveVersion.releaseLabel}
-          </p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href={`/admin/releases/${archiveVersion.releaseId}`}>
-            返回发布版本
-          </Link>
-          <Link className="button" href="/admin/archive-versions">
-            归档维护
-          </Link>
-          <Link className="button" href={`/games/${archiveVersion.workSlug}`}>
-            查看公开页
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="编辑归档快照"
+        title={archiveVersion.archiveLabel}
+        subtitle={`所属作品：${archiveVersion.workTitle} / ${archiveVersion.releaseLabel}`}
+        actions={
+          <>
+            <BackLink
+              href={`/admin/releases/${archiveVersion.releaseId}`}
+              label="返回发布版本"
+            />
+            <Link className="button" href="/admin/archive-versions">
+              归档维护
+            </Link>
+            <Link className="button" href={`/games/${archiveVersion.workSlug}`}>
+              查看公开页
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/archive-versions/${archiveVersion.id}/update`}
@@ -70,48 +69,42 @@ export default async function AdminArchiveVersionEditPage({
         <input name="archive_version_id" type="hidden" value={archiveVersion.id} />
 
         <section className="form-section">
-          <h2>归档快照资料</h2>
+          <SectionHeading title="归档快照资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              归档快照 key
+            <FormField hint="不可修改" label="归档快照 key">
               <input readOnly value={archiveVersion.archiveKey} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              归档快照名称
+            </FormField>
+            <FormField label="归档快照名称">
               <input
                 defaultValue={archiveVersion.archiveLabel}
                 name="archive_label"
                 required
                 type="text"
               />
-            </label>
-            <label className="field">
-              快照分支
+            </FormField>
+            <FormField label="快照分支">
               <input
                 defaultValue={archiveVersion.archiveVariantLabel}
                 name="archive_variant_label"
                 required
                 type="text"
               />
-            </label>
-            <label className="field">
-              语言
+            </FormField>
+            <FormField label="语言">
               <input
                 defaultValue={archiveVersion.language}
                 name="language"
                 required
                 type="text"
               />
-            </label>
-            <label className="field">
-              状态
+            </FormField>
+            <FormField label="状态">
               <select defaultValue={archiveVersion.status} name="status">
                 <option value="published">已发布</option>
                 <option value="hidden">隐藏</option>
                 <option value="draft">草稿</option>
               </select>
-            </label>
+            </FormField>
             <label className="checkbox-line">
               <input
                 defaultChecked={archiveVersion.isProofread}
@@ -159,100 +152,72 @@ export default async function AdminArchiveVersionEditPage({
       ) : null}
 
       <section className="section-grid admin-archive-detail-grid" aria-label="归档只读信息">
-        <section className="card">
-          <h2>当前状态</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>状态</dt>
-              <dd>{archiveStatusLabel(archiveVersion.status, null)}</dd>
-            </div>
-            <div>
-              <dt>当前版本</dt>
-              <dd>{archiveVersion.isCurrent ? "是" : "否"}</dd>
-            </div>
-            <div>
-              <dt>上传者</dt>
-              <dd>{archiveVersion.uploaderName ?? "未知"}</dd>
-            </div>
-            <div>
-              <dt>发布时间</dt>
-              <dd>{archiveVersion.publishedAt ? formatDate(archiveVersion.publishedAt) : "未发布"}</dd>
-            </div>
-          </dl>
-        </section>
+        <Pane heading="当前状态">
+          <StatList
+            items={[
+              {
+                label: "状态",
+                value: <StatusBadge kind="archive" value={archiveVersion.status} />,
+              },
+              { label: "当前版本", value: archiveVersion.isCurrent ? "是" : "否" },
+              { label: "上传者", value: archiveVersion.uploaderName ?? "未知" },
+              {
+                label: "发布时间",
+                value: archiveVersion.publishedAt
+                  ? formatDate(archiveVersion.publishedAt)
+                  : "未发布",
+              },
+            ]}
+          />
+        </Pane>
 
-        <section className="card">
-          <h2>规模</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>文件数</dt>
-              <dd>{formatNumber(archiveVersion.totalFiles)}</dd>
-            </div>
-            <div>
-              <dt>容量</dt>
-              <dd>{formatBytes(archiveVersion.totalSizeBytes)}</dd>
-            </div>
-            <div>
-              <dt>预计对象存储读取</dt>
-              <dd>{formatNumber(archiveVersion.estimatedR2GetCount)}</dd>
-            </div>
-            <div>
-              <dt>创建时间</dt>
-              <dd>{formatDate(archiveVersion.createdAt)}</dd>
-            </div>
-          </dl>
-        </section>
+        <Pane heading="规模">
+          <StatList
+            items={[
+              { label: "文件数", value: formatNumber(archiveVersion.totalFiles) },
+              { label: "容量", value: formatBytes(archiveVersion.totalSizeBytes) },
+              {
+                label: "预计对象存储读取",
+                value: formatNumber(archiveVersion.estimatedR2GetCount),
+              },
+              { label: "创建时间", value: formatDate(archiveVersion.createdAt) },
+            ]}
+          />
+        </Pane>
 
-        <section className="card">
-          <h2>文件清单</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>SHA-256</dt>
-              <dd className="mono">{archiveVersion.manifestSha256}</dd>
-            </div>
-            <div>
-              <dt>对象存储 key</dt>
-              <dd className="mono">{archiveVersion.manifestR2Key}</dd>
-            </div>
-            <div>
-              <dt>文件策略</dt>
-              <dd>{archiveVersion.filePolicyVersion}</dd>
-            </div>
-            <div>
-              <dt>打包器</dt>
-              <dd>{archiveVersion.packerVersion}</dd>
-            </div>
-          </dl>
-        </section>
+        <Pane heading="文件清单">
+          <StatList
+            items={[
+              {
+                label: "SHA-256",
+                value: <span className="mono">{archiveVersion.manifestSha256}</span>,
+              },
+              {
+                label: "对象存储 key",
+                value: <span className="mono">{archiveVersion.manifestR2Key}</span>,
+              },
+              { label: "文件策略", value: archiveVersion.filePolicyVersion },
+              { label: "打包器", value: archiveVersion.packerVersion },
+            ]}
+          />
+        </Pane>
 
-        <section className="card">
-          <h2>来源</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>来源类型</dt>
-              <dd>{sourceTypeLabel(archiveVersion.sourceType)}</dd>
-            </div>
-            <div>
-              <dt>来源名称</dt>
-              <dd>{archiveVersion.sourceName ?? "未知"}</dd>
-            </div>
-            <div>
-              <dt>源文件</dt>
-              <dd>{formatNumber(archiveVersion.sourceFileCount)}</dd>
-            </div>
-            <div>
-              <dt>源容量</dt>
-              <dd>{formatBytes(archiveVersion.sourceSizeBytes)}</dd>
-            </div>
-            <div>
-              <dt>排除文件</dt>
-              <dd>
-                {formatNumber(archiveVersion.excludedFileCount)} /{" "}
-                {formatBytes(archiveVersion.excludedSizeBytes)}
-              </dd>
-            </div>
-          </dl>
-        </section>
+        <Pane heading="来源">
+          <StatList
+            items={[
+              { label: "来源类型", value: sourceTypeLabel(archiveVersion.sourceType) },
+              { label: "来源名称", value: archiveVersion.sourceName ?? "未知" },
+              { label: "源文件", value: formatNumber(archiveVersion.sourceFileCount) },
+              { label: "源容量", value: formatBytes(archiveVersion.sourceSizeBytes) },
+              {
+                label: "排除文件",
+                value: `${formatNumber(archiveVersion.excludedFileCount)} / ${formatBytes(
+                  archiveVersion.excludedSizeBytes,
+                )}`,
+              },
+            ]}
+          />
+        </Pane>
       </section>
     </main>
   );

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import type { AdminArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { canManageUsersRole } from "@/lib/server/auth/roles";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { formatNumber, formatDate, formatBytes } from "@/lib/format";
-import { archiveStatusBadgeClass, archiveStatusLabel } from "@/lib/labels";
 
 export function ArchiveVersionTable({
   actor,
@@ -15,16 +17,11 @@ export function ArchiveVersionTable({
   mode: "active" | "trash";
 }) {
   if (archiveVersions.length === 0) {
-    return (
-      <section className="card empty-card">
-        <h2>{mode === "trash" ? "回收站为空" : "暂无归档快照"}</h2>
-      </section>
-    );
+    return <EmptyState title={mode === "trash" ? "回收站为空" : "暂无归档快照"} />;
   }
 
   return (
-    <section className="table-wrap" aria-label="归档快照列表">
-      <table className="data-table admin-archive-table">
+    <TableWrap label="归档快照列表" minWidth={1040}>
         <thead>
           <tr>
             <th>归档</th>
@@ -48,14 +45,11 @@ export function ArchiveVersionTable({
                 </span>
               </td>
               <td>
-                <span
-                  className={`badge ${archiveStatusBadgeClass(
-                    archiveVersion.status,
-                    archiveVersion.purgedAt,
-                  )}`}
-                >
-                  {archiveStatusLabel(archiveVersion.status, archiveVersion.purgedAt)}
-                </span>
+                <StatusBadge
+                  kind="archive"
+                  purgedAt={archiveVersion.purgedAt}
+                  value={archiveVersion.status}
+                />
                 {archiveVersion.isCurrent ? (
                   <span className="muted-line">当前版本</span>
                 ) : null}
@@ -95,8 +89,7 @@ export function ArchiveVersionTable({
             </tr>
           ))}
         </tbody>
-      </table>
-    </section>
+    </TableWrap>
   );
 }
 

@@ -1,9 +1,15 @@
 import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listSeriesForAdmin } from "@/lib/server/db/taxonomy-library";
-import { formatNumber, formatUnreadCount } from "@/lib/format";
-import { workStatusBadgeClass, workStatusLabel } from "@/lib/labels";
+import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -16,28 +22,19 @@ export default async function AdminSeriesPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Series</p>
-          <h1>系列作品维护</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/series">
-            公开列表
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin Series"
+        title="系列作品维护"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <Link className="button" href="/series">
+              公开列表
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action="/api/admin/series/create"
@@ -45,20 +42,17 @@ export default async function AdminSeriesPage() {
         method="post"
       >
         <section className="form-section">
-          <h2>新建系列</h2>
+          <SectionHeading title="新建系列" />
           <div className="upload-form-grid">
-            <label className="field">
-              系列名
+            <FormField label="系列名">
               <input name="title" required />
-            </label>
-            <label className="field">
-              原名
+            </FormField>
+            <FormField label="原名">
               <input name="title_original" />
-            </label>
-            <label className="field">
-              Slug
+            </FormField>
+            <FormField label="Slug">
               <input name="slug" placeholder="留空自动生成" />
-            </label>
+            </FormField>
           </div>
         </section>
         <div className="actions">
@@ -68,8 +62,7 @@ export default async function AdminSeriesPage() {
         </div>
       </form>
 
-      <section className="table-wrap admin-related-table" aria-label="系列列表">
-        <table className="data-table admin-creators-table">
+      <TableWrap label="系列列表" minWidth={900}>
           <thead>
             <tr>
               <th>系列</th>
@@ -89,9 +82,7 @@ export default async function AdminSeriesPage() {
                   <span className="mono muted-line">{item.slug}</span>
                 </td>
                 <td>
-                  <span className={`badge ${workStatusBadgeClass(item.status)}`}>
-                    {workStatusLabel(item.status)}
-                  </span>
+                  <StatusBadge kind="publication" value={item.status} />
                 </td>
                 <td>{formatNumber(item.workCount)}</td>
                 <td>
@@ -109,8 +100,7 @@ export default async function AdminSeriesPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

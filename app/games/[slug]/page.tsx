@@ -1,6 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { ChipList } from "@/app/components/ui/chip-list";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getGameWorkDetail } from "@/lib/server/db/game-library";
 import { formatNumber, formatBytes } from "@/lib/format";
@@ -34,20 +41,12 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Game Work</p>
-          <h1>{title}</h1>
-          {work.chineseTitle ? (
-            <p className="subtitle">{work.originalTitle}</p>
-          ) : null}
-        </div>
-        <div className="actions header-actions">
-          <Link className="button" href="/games">
-            返回作品资料库
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        actions={<BackLink href="/games" label="返回作品资料库" />}
+        eyebrow="Game Work"
+        subtitle={work.chineseTitle ? work.originalTitle : undefined}
+        title={title}
+      />
 
       {currentArchive ? (
         <WorkActionBar
@@ -81,58 +80,46 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           )}
         </div>
         <div className="work-hero-info">
-          <div className="chip-list">
-            <span>{engineLabel(work.engineFamily)}</span>
-            {work.usesManiacsPatch ? <span>Maniacs Patch</span> : null}
-            {work.tags.map((tag) => (
-              <Link href={`/games?tag=${encodeURIComponent(tag.slug)}`} key={tag.slug}>
-                {tag.name}
-              </Link>
-            ))}
-          </div>
+          <ChipList
+            items={[
+              { label: engineLabel(work.engineFamily) },
+              ...(work.usesManiacsPatch ? [{ label: "Maniacs Patch" }] : []),
+              ...work.tags.map((tag) => ({
+                href: `/games?tag=${encodeURIComponent(tag.slug)}`,
+                label: tag.name,
+              })),
+            ]}
+          />
           {work.description ? <p>{work.description}</p> : null}
-          <dl className="detail-list work-detail-list">
-            <div>
-              <dt>原作发布日期</dt>
-              <dd>{formatDateish(work.originalReleaseDate, work.originalReleasePrecision)}</dd>
-            </div>
-            <div>
-              <dt>发布分支</dt>
-              <dd>{formatNumber(work.releaseCount)}</dd>
-            </div>
-            <div>
-              <dt>归档快照</dt>
-              <dd>{formatNumber(work.archiveVersionCount)}</dd>
-            </div>
-            <div>
-              <dt>当前归档容量</dt>
-              <dd>{formatBytes(work.totalSizeBytes)}</dd>
-            </div>
-          </dl>
+          <StatList
+            items={[
+              {
+                label: "原作发布日期",
+                value: formatDateish(work.originalReleaseDate, work.originalReleasePrecision),
+              },
+              { label: "发布分支", value: formatNumber(work.releaseCount) },
+              { label: "归档快照", value: formatNumber(work.archiveVersionCount) },
+              { label: "当前归档容量", value: formatBytes(work.totalSizeBytes) },
+            ]}
+          />
         </div>
       </section>
 
       <section className="section-grid work-meta-grid" aria-label="作品资料">
-        <section className="card">
-          <h2>名称</h2>
-          <dl className="detail-list">
-            <div>
-              <dt>原名</dt>
-              <dd>{work.originalTitle}</dd>
-            </div>
-            <div>
-              <dt>中文名</dt>
-              <dd>{work.chineseTitle ?? "未填写"}</dd>
-            </div>
-            <div>
-              <dt>别名</dt>
-              <dd>{work.aliases.length > 0 ? work.aliases.join(" / ") : "未填写"}</dd>
-            </div>
-          </dl>
-        </section>
+        <Pane heading="名称">
+          <StatList
+            items={[
+              { label: "原名", value: work.originalTitle },
+              { label: "中文名", value: work.chineseTitle ?? "未填写" },
+              {
+                label: "别名",
+                value: work.aliases.length > 0 ? work.aliases.join(" / ") : "未填写",
+              },
+            ]}
+          />
+        </Pane>
 
-        <section className="card">
-          <h2>制作人员</h2>
+        <Pane heading="制作人员">
           {work.creators.length > 0 ? (
             <ul className="plain-list">
               {work.creators.map((creator) => (
@@ -150,28 +137,22 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           ) : (
             <p className="muted-line">未填写。</p>
           )}
-        </section>
+        </Pane>
 
-        <section className="card">
-          <h2>登场角色</h2>
+        <Pane heading="登场角色">
           {work.characters.length > 0 ? (
-            <div className="chip-list">
-              {work.characters.map((character) => (
-                <Link
-                  href={`/games?character=${encodeURIComponent(character.slug)}`}
-                  key={character.slug}
-                >
-                  {character.primaryName}
-                </Link>
-              ))}
-            </div>
+            <ChipList
+              items={work.characters.map((character) => ({
+                href: `/games?character=${encodeURIComponent(character.slug)}`,
+                label: character.primaryName,
+              }))}
+            />
           ) : (
             <p className="muted-line">未填写。</p>
           )}
-        </section>
+        </Pane>
 
-        <section className="card">
-          <h2>外部链接</h2>
+        <Pane heading="外部链接">
           {work.externalLinks.length > 0 ? (
             <ul className="plain-list">
               {work.externalLinks.map((link) => (
@@ -186,7 +167,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           ) : (
             <p className="muted-line">未填写。</p>
           )}
-        </section>
+        </Pane>
       </section>
 
       {work.media.length > 1 ? (
@@ -207,8 +188,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
       {(work.series.length > 0 || work.relations.length > 0) ? (
         <section className="section-grid work-meta-grid" aria-label="作品关系">
           {work.series.length > 0 ? (
-            <section className="card">
-              <h2>系列</h2>
+            <Pane heading="系列">
               <ul className="plain-list">
                 {work.series.map((item) => (
                   <li key={item.seriesId}>
@@ -221,11 +201,10 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Pane>
           ) : null}
           {work.relations.length > 0 ? (
-            <section className="card">
-              <h2>相关作品</h2>
+            <Pane heading="相关作品">
               <ul className="plain-list">
                 {work.relations.map((relation) => (
                   <li key={`${relation.direction}-${relation.workId}-${relation.relationType}`}>
@@ -236,111 +215,114 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                   </li>
                 ))}
               </ul>
-            </section>
+            </Pane>
           ) : null}
         </section>
       ) : null}
 
       <section className="release-list" aria-label="发布版本">
-        <h2>发布版本与归档</h2>
+        <SectionHeading title="发布版本与归档" />
         {work.releases.map((release) => (
-          <article className="release-block" key={release.id}>
-            <header>
-              <div>
-                <h3>{release.label}</h3>
-                <p className="muted-line">
-                  {releaseTypeLabel(release.type)} / {baseVariantLabel(release.baseVariant)}
-                  {" / "}
-                  {formatDateish(release.releaseDate, release.releaseDatePrecision)}
-                </p>
-              </div>
-              {release.sourceUrl ? (
+          <Pane
+            compact
+            heading={release.label}
+            headingAction={
+              release.sourceUrl ? (
                 <a className="button" href={release.sourceUrl} rel="noreferrer" target="_blank">
                   来源
                 </a>
-              ) : null}
-            </header>
+              ) : null
+            }
+            headingLevel={3}
+            key={release.id}
+          >
+            <p className="muted-line">
+              {releaseTypeLabel(release.type)} / {baseVariantLabel(release.baseVariant)}
+              {" / "}
+              {formatDateish(release.releaseDate, release.releaseDatePrecision)}
+            </p>
             {release.rightsNotes ? <p>{release.rightsNotes}</p> : null}
             {release.externalLinks.length > 0 ? (
-              <div className="chip-list">
-                {release.externalLinks.map((link) => (
-                  <a href={link.url} key={link.id} rel="noreferrer" target="_blank">
-                    {link.label}
-                  </a>
-                ))}
-              </div>
+              <ChipList
+                items={release.externalLinks.map((link) => ({
+                  external: true,
+                  href: link.url,
+                  label: link.label,
+                }))}
+              />
             ) : null}
             {release.staff.length > 0 || release.tags.length > 0 ? (
-              <div className="chip-list">
-                {release.staff.map((staff) => (
-                  <Link href={`/creators/${staff.slug}`} key={`${staff.slug}-${staff.roleKey}`}>
-                    {staff.roleLabel || creatorRoleLabel(staff.roleKey)}：{staff.name}
-                  </Link>
-                ))}
-                {release.tags.map((tag) => (
-                  <Link href={`/games?tag=${encodeURIComponent(tag.slug)}`} key={tag.slug}>
-                    {tag.name}
-                  </Link>
-                ))}
-              </div>
+              <ChipList
+                items={[
+                  ...release.staff.map((staff) => ({
+                    href: `/creators/${staff.slug}`,
+                    label: `${staff.roleLabel || creatorRoleLabel(staff.roleKey)}：${staff.name}`,
+                  })),
+                  ...release.tags.map((tag) => ({
+                    href: `/games?tag=${encodeURIComponent(tag.slug)}`,
+                    label: tag.name,
+                  })),
+                ]}
+              />
             ) : null}
-            <div className="table-wrap compact-table-wrap">
-              <table className="data-table release-archive-table">
-                <thead>
-                  <tr>
-                    <th>归档</th>
-                    <th>状态</th>
-                    <th>规模</th>
-                    <th>操作</th>
+            <TableWrap compact label={`${release.label}归档列表`} minWidth={980}>
+              <thead>
+                <tr>
+                  <th>归档</th>
+                  <th>状态</th>
+                  <th>规模</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {release.archiveVersions.map((archive) => (
+                  <tr key={archive.id}>
+                    <td>
+                      <strong>{archive.archiveLabel}</strong>
+                      <span className="mono muted-line">{archive.archiveKey}</span>
+                      {archive.uploaderName ? (
+                        <span className="muted-line">上传者：{archive.uploaderName}</span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <ChipList
+                        compact
+                        items={[
+                          ...(archive.isCurrent ? [{ label: "当前" }] : []),
+                          { label: archive.language },
+                          { label: archive.isProofread ? "已校对" : "未校对" },
+                          { label: archive.isImageEdited ? "已修图" : "未修图" },
+                        ]}
+                      />
+                    </td>
+                    <td>
+                      {formatNumber(archive.totalFiles)} 文件
+                      <span className="muted-line">
+                        {formatBytes(archive.totalSizeBytes)}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="actions compact-actions">
+                        <a
+                          className="button primary"
+                          href={`/api/archive-versions/${archive.id}/download?zip_builder=${downloadZipBuilderVersion}`}
+                        >
+                          下载 ZIP
+                        </a>
+                        {!work.usesManiacsPatch ? (
+                          <Link className="button" href={`/play/${archive.id}`}>
+                            在线游玩
+                          </Link>
+                        ) : (
+                          <span className="muted-line">暂不支持在线游玩</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {release.archiveVersions.map((archive) => (
-                    <tr key={archive.id}>
-                      <td>
-                        <strong>{archive.archiveLabel}</strong>
-                        <span className="mono muted-line">{archive.archiveKey}</span>
-                        {archive.uploaderName ? (
-                          <span className="muted-line">上传者：{archive.uploaderName}</span>
-                        ) : null}
-                      </td>
-                      <td>
-                        <div className="chip-list compact-chip-list">
-                          {archive.isCurrent ? <span>当前</span> : null}
-                          <span>{archive.language}</span>
-                          <span>{archive.isProofread ? "已校对" : "未校对"}</span>
-                          <span>{archive.isImageEdited ? "已修图" : "未修图"}</span>
-                        </div>
-                      </td>
-                      <td>
-                        {formatNumber(archive.totalFiles)} 文件
-                        <span className="muted-line">
-                          {formatBytes(archive.totalSizeBytes)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="actions compact-actions">
-                          <a
-                            className="button primary"
-                            href={`/api/archive-versions/${archive.id}/download?zip_builder=${downloadZipBuilderVersion}`}
-                          >
-                            下载 ZIP
-                          </a>
-                          {!work.usesManiacsPatch ? (
-                            <Link className="button" href={`/play/${archive.id}`}>
-                              在线游玩
-                            </Link>
-                          ) : (
-                            <span className="muted-line">暂不支持在线游玩</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </article>
+                ))}
+              </tbody>
+            </TableWrap>
+          </Pane>
         ))}
       </section>
     </main>

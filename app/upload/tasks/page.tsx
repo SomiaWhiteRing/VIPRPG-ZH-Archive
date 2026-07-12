@@ -4,11 +4,11 @@ import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { canUploadRole } from "@/lib/server/auth/roles";
 import { listImportJobsForUser } from "@/lib/server/db/import-jobs";
 import { formatNumber, formatBytes, formatDate } from "@/lib/format";
-import {
-  importTaskStageLabel,
-  importTaskStatusBadgeClass,
-  importTaskStatusLabel,
-} from "@/lib/labels";
+import { importTaskStageLabel } from "@/lib/labels";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 
 export const dynamic = "force-dynamic";
 
@@ -27,35 +27,25 @@ export default async function UploadTasksPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Upload Tasks</p>
-          <h1>我的导入任务</h1>
-          <p className="subtitle">正在进行和最近完成的导入任务。</p>
-        </div>
-        <div className="actions header-actions">
+      <PageHeader
+        actions={
           <Link className="button primary" href="/upload">
             新建上传
           </Link>
-        </div>
-      </header>
+        }
+        eyebrow="Upload Tasks"
+        subtitle="正在进行和最近完成的导入任务。"
+        title="我的导入任务"
+      />
 
       {jobs.length === 0 ? (
-        <section className="card">
-          <h2>还没有任务</h2>
-          <p>
-            进入上传工作区，选择本地游戏目录后会自动创建导入任务。
-          </p>
-          <div className="actions">
-            <Link className="button primary" href="/upload">
-              开始上传
-            </Link>
-          </div>
-        </section>
+        <EmptyState
+          action={{ href: "/upload", label: "开始上传" }}
+          title="还没有任务。进入上传工作区，选择本地游戏目录后会自动创建导入任务。"
+        />
       ) : (
-        <section className="table-wrap" aria-label="导入任务">
-          <table className="data-table admin-ops-table">
-            <thead>
+        <TableWrap label="导入任务" minWidth={760}>
+          <thead>
               <tr>
                 <th>任务</th>
                 <th>状态</th>
@@ -63,8 +53,8 @@ export default async function UploadTasksPage() {
                 <th>新增文件</th>
                 <th>时间</th>
               </tr>
-            </thead>
-            <tbody>
+          </thead>
+          <tbody>
               {jobs.map((job) => (
                 <tr key={job.id}>
                   <td>
@@ -77,9 +67,7 @@ export default async function UploadTasksPage() {
                     ) : null}
                   </td>
                   <td>
-                    <span className={`badge ${importTaskStatusBadgeClass(job.status)}`}>
-                      {importTaskStatusLabel(job.status)}
-                    </span>
+                    <StatusBadge kind="import-task" value={job.status} />
                     {job.failed_stage ? (
                       <span className="muted-line">
                         {/* ponytail: only two API stages exist; extend this mapping with the API. */}
@@ -117,9 +105,8 @@ export default async function UploadTasksPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </section>
+          </tbody>
+        </TableWrap>
       )}
     </main>
   );

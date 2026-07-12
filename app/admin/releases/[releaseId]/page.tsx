@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getReleaseForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatNumber, formatUnreadCount, formatBytes } from "@/lib/format";
-import { archiveStatusBadgeClass, archiveStatusLabel } from "@/lib/labels";
+import { formatNumber, formatBytes } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -31,29 +37,20 @@ export default async function AdminReleaseEditPage({
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">编辑发布版本</p>
-          <h1>{release.label}</h1>
-          <p className="subtitle">所属作品：{release.workTitle}</p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href={`/admin/works/${release.workId}`}>
-            返回作品资料
-          </Link>
-          <Link className="button" href={`/games/${release.workSlug}`}>
-            查看公开页
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="编辑发布版本"
+        title={release.label}
+        subtitle={`所属作品：${release.workTitle}`}
+        actions={
+          <>
+            <BackLink href={`/admin/works/${release.workId}`} label="返回作品资料" />
+            <Link className="button" href={`/games/${release.workSlug}`}>
+              查看公开页
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/releases/${release.id}/update`}
@@ -63,41 +60,35 @@ export default async function AdminReleaseEditPage({
         <input name="release_id" type="hidden" value={release.id} />
 
         <section className="form-section">
-          <h2>发布版本资料</h2>
+          <SectionHeading title="发布版本资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              发布版本 key
+            <FormField hint="不可修改" label="发布版本 key">
               <input readOnly value={release.key} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              发布版本名称
+            </FormField>
+            <FormField label="发布版本名称">
               <input
                 defaultValue={release.label}
                 name="release_label"
                 required
                 type="text"
               />
-            </label>
-            <label className="field">
-              基底版本
+            </FormField>
+            <FormField label="基底版本">
               <select defaultValue={release.baseVariant} name="base_variant">
                 <option value="original">原版</option>
                 <option value="remake">重制版</option>
                 <option value="other">其他基底</option>
               </select>
-            </label>
-            <label className="field">
-              分支标签
+            </FormField>
+            <FormField label="分支标签">
               <input
                 defaultValue={release.variantLabel}
                 name="variant_label"
                 required
                 type="text"
               />
-            </label>
-            <label className="field">
-              发布版本类型
+            </FormField>
+            <FormField label="发布版本类型">
               <select defaultValue={release.type} name="release_type">
                 <option value="original">原始发布</option>
                 <option value="translation">汉化版</option>
@@ -109,26 +100,23 @@ export default async function AdminReleaseEditPage({
                 <option value="repack">重打包</option>
                 <option value="other">其他</option>
               </select>
-            </label>
-            <label className="field">
-              状态
+            </FormField>
+            <FormField label="状态">
               <select defaultValue={release.status} name="status">
                 <option value="published">已发布</option>
                 <option value="hidden">隐藏</option>
                 <option value="draft">草稿</option>
               </select>
-            </label>
-            <label className="field">
-              发布日期
+            </FormField>
+            <FormField label="发布日期">
               <input
                 defaultValue={release.releaseDate ?? ""}
                 name="release_date"
                 placeholder="YYYY-MM-DD / YYYY-MM / YYYY"
                 type="text"
               />
-            </label>
-            <label className="field">
-              日期精度
+            </FormField>
+            <FormField label="日期精度">
               <select
                 defaultValue={release.releaseDatePrecision}
                 name="release_date_precision"
@@ -138,44 +126,41 @@ export default async function AdminReleaseEditPage({
                 <option value="month">月</option>
                 <option value="day">日</option>
               </select>
-            </label>
-            <label className="field">
-              来源名称
+            </FormField>
+            <FormField label="来源名称">
               <input defaultValue={release.sourceName ?? ""} name="source_name" type="text" />
-            </label>
-            <label className="field">
-              来源链接
+            </FormField>
+            <FormField label="来源链接">
               <input defaultValue={release.sourceUrl ?? ""} name="source_url" type="url" />
-            </label>
-            <label className="field">
-              可执行入口
+            </FormField>
+            <FormField label="可执行入口">
               <input
                 defaultValue={release.executablePath ?? ""}
                 name="executable_path"
                 placeholder="RPG_RT.exe"
                 type="text"
               />
-            </label>
-            <label className="field">
-              标签
+            </FormField>
+            <FormField hint="每行一个标签；也可用逗号分隔。" label="标签">
               <textarea
                 defaultValue={release.tags.join("\n")}
                 name="tags"
                 placeholder="短篇"
                 rows={5}
               />
-              <span className="muted-line">每行一个标签；也可用逗号分隔。</span>
-            </label>
-            <label className="field wide-field">
-              版权/授权备注
+            </FormField>
+            <FormField label="版权/授权备注" wide>
               <textarea
                 defaultValue={release.rightsNotes ?? ""}
                 name="rights_notes"
                 rows={4}
               />
-            </label>
-            <label className="field wide-field">
-              外部链接
+            </FormField>
+            <FormField
+              hint="每行一个链接，字段用 | 分隔；类型：official、source、download_page、patch_note、other。"
+              label="外部链接"
+              wide
+            >
               <textarea
                 defaultValue={release.externalLinks
                   .map((link) => `${link.label}|${link.url}|${link.linkType}`)
@@ -184,10 +169,7 @@ export default async function AdminReleaseEditPage({
                 placeholder="补丁说明|https://example.com/patch|patch_note"
                 rows={5}
               />
-              <span className="muted-line">
-                每行一个链接，字段用 | 分隔；类型：official、source、download_page、patch_note、other。
-              </span>
-            </label>
+            </FormField>
           </div>
         </section>
 
@@ -198,8 +180,7 @@ export default async function AdminReleaseEditPage({
         </div>
       </form>
 
-      <section className="table-wrap admin-related-table" aria-label="归档快照">
-        <table className="data-table">
+      <TableWrap label="归档快照">
           <thead>
             <tr>
               <th>归档</th>
@@ -221,9 +202,7 @@ export default async function AdminReleaseEditPage({
                   ) : null}
                 </td>
                 <td>
-                  <span className={`badge ${archiveStatusBadgeClass(archive.status, null)}`}>
-                    {archiveStatusLabel(archive.status, null)}
-                  </span>
+                  <StatusBadge kind="archive" value={archive.status} />
                   {archive.isCurrent ? <span className="muted-line">当前版本</span> : null}
                   <span className="muted-line">
                     {archive.isProofread ? "已校对" : "未校对"} /{" "}
@@ -242,8 +221,7 @@ export default async function AdminReleaseEditPage({
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

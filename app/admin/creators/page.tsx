@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { listCreatorsForAdmin } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -15,31 +19,21 @@ export default async function AdminCreatorsPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Creators</p>
-          <h1>作者与制作人员维护</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/creators">
-            查看公开列表
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin Creators"
+        title="作者与制作人员维护"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <Link className="button" href="/creators">
+              查看公开列表
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
-      <section className="table-wrap" aria-label="作者列表">
-        <table className="data-table admin-creators-table">
+      <TableWrap label="作者列表" minWidth={900}>
           <thead>
             <tr>
               <th>作者</th>
@@ -89,8 +83,7 @@ export default async function AdminCreatorsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

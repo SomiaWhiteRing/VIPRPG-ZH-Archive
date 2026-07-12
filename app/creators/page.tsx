@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatList } from "@/app/components/ui/stat-list";
 import {
   listPublicCreators,
   type PublicCreatorSummary,
@@ -19,12 +22,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Creators</p>
-          <h1>作者与制作人员</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="Creators" title="作者与制作人员" />
 
       <form className="library-toolbar" action="/creators" method="get">
         <label>
@@ -58,9 +56,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
           ))}
         </section>
       ) : (
-        <section className="card empty-card">
-          <h2>没有找到匹配的作者。</h2>
-        </section>
+        <EmptyState title="没有找到匹配的作者。" />
       )}
     </main>
   );
@@ -78,16 +74,14 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
         ) : null}
       </div>
       {creator.bio ? <p>{creator.bio}</p> : null}
-      <dl className="game-card-stats">
-        <div>
-          <dt>作品</dt>
-          <dd>{formatNumber(creator.workCreditCount)}</dd>
-        </div>
-        <div>
-          <dt>发布</dt>
-          <dd>{formatNumber(creator.releaseCreditCount)}</dd>
-        </div>
-      </dl>
+      <StatList
+        columns={3}
+        items={[
+          { label: "作品", value: formatNumber(creator.workCreditCount) },
+          { label: "发布", value: formatNumber(creator.releaseCreditCount) },
+        ]}
+        variant="tiles"
+      />
     </article>
   );
 }

@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getSeriesForAdminEdit } from "@/lib/server/db/taxonomy-library";
-import { formatUnreadCount } from "@/lib/format";
-import { workStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -29,30 +34,21 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Edit Series</p>
-          <h1>{series.title}</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin/series">
-            返回系列维护
-          </Link>
-          {series.status === "published" ? (
-            <Link className="button" href={`/series/${series.slug}`}>
-              公开页
-            </Link>
-          ) : null}
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
+      <PageHeader
+        eyebrow="Edit Series"
+        title={series.title}
+        actions={
+          <>
+            <BackLink href="/admin/series" label="返回系列维护" />
+            {series.status === "published" ? (
+              <Link className="button" href={`/series/${series.slug}`}>
+                公开页
+              </Link>
             ) : null}
-          </Link>
-        </div>
-      </header>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/series/${series.id}/update`}
@@ -61,34 +57,28 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
       >
         <input name="series_id" type="hidden" value={series.id} />
         <section className="form-section">
-          <h2>系列资料</h2>
+          <SectionHeading title="系列资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              Slug
+            <FormField hint="不可修改" label="Slug">
               <input readOnly value={series.slug} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              系列名
+            </FormField>
+            <FormField label="系列名">
               <input defaultValue={series.title} name="title" required />
-            </label>
-            <label className="field">
-              原名
+            </FormField>
+            <FormField label="原名">
               <input defaultValue={series.titleOriginal ?? ""} name="title_original" />
-            </label>
-            <label className="field">
-              状态
+            </FormField>
+            <FormField label="状态">
               <select defaultValue={series.status} name="status">
                 <option value="published">已发布</option>
                 <option value="hidden">隐藏</option>
                 <option value="draft">草稿</option>
                 <option value="deleted">已删除</option>
               </select>
-            </label>
-            <label className="field wide-field">
-              简介
+            </FormField>
+            <FormField label="简介" wide>
               <textarea defaultValue={series.description ?? ""} name="description" rows={6} />
-            </label>
+            </FormField>
           </div>
         </section>
         <div className="actions">
@@ -98,9 +88,9 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
         </div>
       </form>
 
-      <section className="table-wrap admin-related-table" aria-label="系列成员">
+      <section aria-label="系列成员">
         <p className="muted-line">成员请在作品编辑页维护。</p>
-        <table className="data-table creator-credit-table">
+        <TableWrap compact label="系列成员" minWidth={760}>
           <thead>
             <tr>
               <th>顺序</th>
@@ -118,11 +108,13 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
                   <span className="muted-line">{work.originalTitle}</span>
                 </td>
                 <td>{seriesRelationLabel(work.relationKind)}</td>
-                <td>{workStatusLabel(work.status)}</td>
+                <td>
+                  <StatusBadge kind="publication" value={work.status} />
+                </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </TableWrap>
       </section>
     </main>
   );
