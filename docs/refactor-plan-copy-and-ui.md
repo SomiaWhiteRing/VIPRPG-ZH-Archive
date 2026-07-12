@@ -291,14 +291,14 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 ### Phase 2 —— CSS 令牌化与拆分（1–2 天，目标「视觉基本不变，结构彻底换血」）
 
-- [ ] **2.1 建 `app/styles/tokens.css`**，内容 = §2.3 初稿全文。`app/layout.tsx` 在现有 `globals.css` **之前** import 它（此时新旧共存，旧 :root 会覆盖同名变量，无视觉变化）。
-- [ ] **2.2 建其余四个空文件**（base/layout/components/pages.css）并按 §2.4 顺序 import。
-- [ ] **2.3 机械搬运。** 把 globals.css 的规则按桶搬家：reset/body/排版 → base.css；`site-*`、`page-header`、`festival-zone`、main 容器、页脚 → layout.css；`.card .button .field .badge .chip-list .data-table .status-pill .table-wrap` 等通用类 → components.css；`festival-hero`、`entry-*`、`upload-*`、`web-play-*`、`me-*`、`admin-*`、`library-*` → pages.css。搬运时**顺手完成**：(a) 附录 C 死代码不搬（等于删除）；(b) 重复选择器合并为一份；(c) 等宽字体栈 5 处替换为 `var(--font-mono)`。搬空后删除 `app/globals.css`。DoD：`npm run check`；全站截图与 Phase 1 结束时肉眼无差异。
-- [ ] **2.4 语义 token 替换（本 Phase 核心）。** 在 components/base/layout 三个文件里，把颜色相关声明替换为 §2.3 语义变量（映射表见附录 D）。然后**逐条消解** `body.theme-festival` / `body.theme-admin` 覆盖规则：若该规则只是改颜色/边框/阴影 → 语义 token 已覆盖，整条删除；若是结构差异（display/padding 不同）→ 保留并搬到对应文件末尾的「theme structural overrides」区。DoD：达到 §2.4 的验收指标（hex ≤ 40 且全在 tokens.css、festival 覆盖 ≤ 5 条、admin ≤ 10 条）。
-- [ ] **2.5 尺度 token 替换。** `font-size` 字面量 → `--text-*`（11 种值就近归入 6 档）；`margin-top: 16/24px` 等 → `--space-4/5`；`border-radius: 6/8/10/12px` → `--radius-sm/md`（10/12 归入 md）；8 种阴影 → 两种 token。允许 ±2px 的视觉漂移。
-- [ ] **2.6 补基础交互态。** 在 components.css 为 `.button`、`a`、`.chip-list a` 写基础 `:hover`（亮度提升）与全局 `:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }`（两主题共用，删除 festival 专属焦点规则）。对比度修复随 2.4 的 `--text-muted` 换色自动完成，用 DevTools 抽查 4 处曾不达标位置（游戏详情 dt、play 状态行、upload 路径行、admin metric 副文字）≥ 4.5:1。
-- [ ] **2.7 区块间距去补丁。** 删除 `.page-header + .card` 式相邻选择器补丁，改为 `main > * + * { margin-top: var(--space-5); }`（layout.css），个别需要紧凑的地方用局部类覆盖。注意两点：(a) `.festival-zone { margin-top: 28px }` 特异性高于新规则，必须一并删除，否则首页 zone 间距不会被 token 接管；(b) 旧补丁是 16px、新 token 是 24px，admin 列表页会整体变松——**属预期**，admin 密度在 4.10 统一收紧。已核实全部 39 个 `<main>` 的直接子元素均为 header/section/布局 div，无 fixed/hidden 元素受此规则误伤（upload-dock 渲染在 main 之外）。
-- [ ] **2.8 Phase 验证**：§6.1 全矩阵截图对比基线，允许差异：间距微调、对比度提升、焦点态出现；不允许：布局塌陷、颜色主题错乱。`festival-ui-reviewer` 复核。
+- [x] **2.1 建 `app/styles/tokens.css`**，内容 = §2.3 初稿全文。`app/layout.tsx` 在现有 `globals.css` **之前** import 它（此时新旧共存，旧 :root 会覆盖同名变量，无视觉变化）。
+- [x] **2.2 建其余四个空文件**（base/layout/components/pages.css）并按 §2.4 顺序 import。
+- [x] **2.3 机械搬运。** 把 globals.css 的规则按桶搬家：reset/body/排版 → base.css；`site-*`、`page-header`、`festival-zone`、main 容器、页脚 → layout.css；`.card .button .field .badge .chip-list .data-table .status-pill .table-wrap` 等通用类 → components.css；`festival-hero`、`entry-*`、`upload-*`、`web-play-*`、`me-*`、`admin-*`、`library-*` → pages.css。搬运时**顺手完成**：(a) 附录 C 死代码不搬（等于删除）；(b) 重复选择器合并为一份；(c) 等宽字体栈 5 处替换为 `var(--font-mono)`。搬空后删除 `app/globals.css`。DoD：`npm run check`；全站截图与 Phase 1 结束时肉眼无差异。
+- [x] **2.4 语义 token 替换（本 Phase 核心）。** 在 components/base/layout 三个文件里，把颜色相关声明替换为 §2.3 语义变量（映射表见附录 D）。然后**逐条消解** `body.theme-festival` / `body.theme-admin` 覆盖规则：若该规则只是改颜色/边框/阴影 → 语义 token 已覆盖，整条删除；若是结构差异（display/padding 不同）→ 保留并搬到对应文件末尾的「theme structural overrides」区。DoD：达到 §2.4 的验收指标（hex ≤ 40 且全在 tokens.css、festival 覆盖 ≤ 5 条、admin ≤ 10 条）。
+- [x] **2.5 尺度 token 替换。** `font-size` 字面量 → `--text-*`（11 种值就近归入 6 档）；`margin-top: 16/24px` 等 → `--space-4/5`；`border-radius: 6/8/10/12px` → `--radius-sm/md`（10/12 归入 md）；8 种阴影 → 两种 token。允许 ±2px 的视觉漂移。
+- [x] **2.6 补基础交互态。** 在 components.css 为 `.button`、`a`、`.chip-list a` 写基础 `:hover`（亮度提升）与全局 `:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }`（两主题共用，删除 festival 专属焦点规则）。对比度修复随 2.4 的 `--text-muted` 换色自动完成，用 DevTools 抽查 4 处曾不达标位置（游戏详情 dt、play 状态行、upload 路径行、admin metric 副文字）≥ 4.5:1。
+- [x] **2.7 区块间距去补丁。** 删除 `.page-header + .card` 式相邻选择器补丁，改为 `main > * + * { margin-top: var(--space-5); }`（layout.css），个别需要紧凑的地方用局部类覆盖。注意两点：(a) `.festival-zone { margin-top: 28px }` 特异性高于新规则，必须一并删除，否则首页 zone 间距不会被 token 接管；(b) 旧补丁是 16px、新 token 是 24px，admin 列表页会整体变松——**属预期**，admin 密度在 4.10 统一收紧。已核实全部 39 个 `<main>` 的直接子元素均为 header/section/布局 div，无 fixed/hidden 元素受此规则误伤（upload-dock 渲染在 main 之外）。
+- [x] **2.8 Phase 验证**：§6.1 全矩阵截图对比基线，允许差异：间距微调、对比度提升、焦点态出现；不允许：布局塌陷、颜色主题错乱。`festival-ui-reviewer` 复核。
 
 ### Phase 3 —— 共享组件抽取（1–2 天，纯等价替换，不改视觉）
 

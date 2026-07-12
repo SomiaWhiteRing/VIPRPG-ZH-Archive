@@ -3,7 +3,11 @@ import { UploadTaskProvider } from "@/app/upload/upload-task-provider";
 import { SiteHeader } from "@/app/components/site-header";
 import { SiteFooter } from "@/app/components/site-footer";
 import { ThemeBodyClass } from "@/app/components/theme-body-class";
-import "./globals.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/layout.css";
+import "./styles/components.css";
+import "./styles/pages.css";
 
 export const metadata: Metadata = {
   title: "VIPRPG 中文归档",

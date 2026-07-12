@@ -1,0 +1,245 @@
+:root {
+  color-scheme: light;
+  /* Festival primitives. */
+  --vip-bg: #052367;
+  --vip-sky: #2a78d4;
+  --vip-sky-deep: #0a3a8c;
+  --vip-sea-deep: #02143f;
+  --vip-text: #f0faff;
+  --vip-warm: #ffebcd;
+  --vip-yellow: #fffd87;
+  --vip-border: #ebf7ff;
+  --vip-ink: #1d1d1e;
+  --vip-pane-1: #507d5f;
+  --vip-pane-2: #3f6c4e;
+  --vip-pane-3: #2c593b;
+  --vip-pane-4: #1a4729;
+  --vip-pane-5: #073416;
+  --vip-focus: #38bdf8;
+  --vip-danger: #ef4444;
+  --vip-action: #f97316;
+  --vip-primary-hover: #fff59d;
+  --vip-control-muted: #475467;
+  --vip-badge-danger: #b42318;
+  --vip-pane-gradient: linear-gradient(
+    180deg,
+    var(--vip-pane-1) 0%,
+    var(--vip-pane-2) 35%,
+    var(--vip-pane-3) 70%,
+    var(--vip-pane-4) 100%
+  );
+  --vip-pane-deep: linear-gradient(
+    180deg,
+    var(--vip-pane-4) 0%,
+    var(--vip-pane-5) 100%
+  );
+  /* Admin console primitives. */
+  --console-bg: #0c1722;
+  --console-bg-deep: #0a1219;
+  --console-surface: #11181f;
+  --console-control: #0c1219;
+  --console-border: #2d3a4a;
+  --console-text: #e2e8f0;
+  --console-muted: #a7b4c4;
+  --console-accent: #f0b429;
+  --console-link: #93c5fd;
+  --console-header: #1a2332;
+  /* Shared status and media primitives. */
+  --status-ok: #86efac;
+  --status-danger: #fca5a5;
+  --status-warn: #fde68a;
+  --canvas-bg: #11181c;
+  --canvas-fullscreen: #000000;
+  /* Shared scale. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-pill: 999px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 24px;
+  --text-2xl: clamp(26px, 4vw, 34px);
+  --text-display: clamp(28px, 4vw, 44px);
+  --shadow-pane: 3px 3px 0 rgb(0 0 0 / 45%);
+  --shadow-pop: 4px 4px 0 var(--vip-ink);
+  --font-body: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --font-display: var(--font-body);
+  --container-max: 1120px;
+  --container-pad: 16px;
+  --z-header: 40;
+  --z-dock: 50;
+  /* Semantic defaults: public festival pages. */
+  --page-bg: var(--vip-bg);
+  --page-art:
+    radial-gradient(ellipse at top, rgb(74 158 234 / 60%) 0%, transparent 55%),
+    linear-gradient(
+      180deg,
+      var(--vip-sky-deep) 0%,
+      var(--vip-bg) 60%,
+      var(--vip-sea-deep) 100%
+    );
+  --surface: var(--vip-pane-gradient);
+  --surface-solid: var(--vip-pane-3);
+  --surface-deep: var(--vip-pane-deep);
+  --surface-border: rgb(235 247 255 / 50%);
+  --surface-border-soft: rgb(235 247 255 / 30%);
+  --surface-border-strong: var(--vip-border);
+  --surface-border-width: 2px;
+  --surface-shadow: var(--shadow-pane);
+  --surface-inset: rgb(0 0 0 / 25%);
+  --surface-inset-strong: rgb(0 0 0 / 35%);
+  --surface-hover: rgb(255 255 255 / 10%);
+  --surface-hover-shadow: var(--shadow-pop);
+  --text: var(--vip-text);
+  --text-muted: rgb(201 220 207);
+  --heading: var(--vip-warm);
+  --heading-strong: var(--vip-yellow);
+  --heading-shadow: var(--shadow-pane);
+  --link: var(--vip-warm);
+  --link-hover: var(--vip-yellow);
+  --focus-ring: var(--vip-yellow);
+  --focus-ring-contrast: var(--vip-ink);
+  --accent: var(--vip-action);
+  --accent-text: var(--vip-ink);
+  --code-text: var(--vip-warm);
+  --code-bg: var(--surface-inset);
+  --control-bg: rgb(255 255 255 / 95%);
+  --control-text: var(--vip-ink);
+  --control-border: rgb(235 247 255 / 60%);
+  --control-readonly-bg: rgb(255 255 255 / 82%);
+  --control-muted-text: var(--vip-control-muted);
+  --btn-bg: rgb(255 255 255 / 14%);
+  --btn-hover-bg: rgb(255 255 255 / 22%);
+  --btn-border: var(--surface-border);
+  --btn-text: var(--vip-text);
+  --btn-hover-text: var(--vip-yellow);
+  --btn-primary-bg: var(--vip-yellow);
+  --btn-primary-hover-bg: var(--vip-primary-hover);
+  --btn-primary-text: var(--vip-ink);
+  --header-bg: linear-gradient(
+    180deg,
+    var(--vip-sky-deep) 0%,
+    var(--vip-bg) 100%
+  );
+  --header-border: var(--vip-border);
+  --header-shadow: var(--shadow-pane);
+  --header-text: var(--vip-text);
+  --header-brand: var(--vip-yellow);
+  --header-link-hover-bg: rgb(255 255 255 / 8%);
+  --header-link-active-bg: rgb(255 253 135 / 12%);
+  --footer-bg: rgb(0 0 0 / 25%);
+  --footer-text: rgb(255 255 255 / 75%);
+  --table-border: rgb(235 247 255 / 25%);
+  --subsurface-bg: var(--surface-inset);
+  --subsurface-border: rgb(235 247 255 / 35%);
+  --toolbar-bg: rgb(0 0 0 / 30%);
+  --media-bg: var(--surface-inset-strong);
+  --row-unread-bg: rgb(255 253 135 / 8%);
+  --danger: var(--vip-danger);
+  --notification-bg: var(--vip-badge-danger);
+  --notification-text: var(--vip-text);
+  --danger-bg: rgb(153 27 27 / 35%);
+  --danger-border: rgb(252 165 165 / 50%);
+  --danger-text: var(--status-danger);
+  --success-bg: rgb(22 101 52 / 35%);
+  --success-border: rgb(134 239 172 / 50%);
+  --success-text: var(--status-ok);
+  --pending-bg: rgb(255 253 135 / 20%);
+  --pending-text: var(--vip-yellow);
+  --approved-bg: rgb(134 239 172 / 18%);
+  --approved-text: var(--status-ok);
+  --rejected-bg: rgb(239 68 68 / 20%);
+  --rejected-text: var(--status-danger);
+  --user-bg: rgb(255 255 255 / 18%);
+  --user-text: var(--text);
+  --admin-bg: rgb(147 197 253 / 18%);
+  --admin-text: var(--console-link);
+  --warning-bg: rgb(234 179 8 / 18%);
+  --warning-text: var(--status-warn);
+  --progress-track: var(--surface-inset-strong);
+}
+body.theme-admin {
+  color-scheme: dark;
+  --page-bg: var(--console-bg);
+  --page-art: linear-gradient(
+    180deg,
+    var(--console-bg) 0%,
+    var(--console-bg-deep) 100%
+  );
+  --surface: var(--console-surface);
+  --surface-solid: var(--console-surface);
+  --surface-deep: var(--console-bg-deep);
+  --surface-border: var(--console-border);
+  --surface-border-soft: var(--console-border);
+  --surface-border-strong: var(--console-border);
+  --surface-border-width: 1px;
+  --surface-shadow: none;
+  --surface-inset: rgb(255 255 255 / 4%);
+  --surface-inset-strong: var(--console-control);
+  --surface-hover: rgb(255 255 255 / 7%);
+  --surface-hover-shadow: none;
+  --text: var(--console-text);
+  --text-muted: var(--console-muted);
+  --heading: var(--console-text);
+  --heading-strong: var(--console-accent);
+  --heading-shadow: none;
+  --link: var(--console-link);
+  --link-hover: var(--console-accent);
+  --focus-ring: var(--vip-focus);
+  --focus-ring-contrast: var(--console-bg-deep);
+  --accent: var(--console-accent);
+  --accent-text: var(--vip-ink);
+  --code-text: var(--console-link);
+  --code-bg: var(--console-control);
+  --control-bg: var(--console-control);
+  --control-text: var(--console-text);
+  --control-border: var(--console-border);
+  --control-readonly-bg: var(--console-bg-deep);
+  --control-muted-text: var(--console-muted);
+  --btn-bg: rgb(255 255 255 / 8%);
+  --btn-hover-bg: rgb(255 255 255 / 14%);
+  --btn-border: var(--console-border);
+  --btn-text: var(--console-text);
+  --btn-hover-text: var(--console-accent);
+  --btn-primary-bg: var(--console-accent);
+  --btn-primary-hover-bg: color-mix(
+    in srgb,
+    var(--console-accent) 86%,
+    white
+  );
+  --btn-primary-text: var(--vip-ink);
+  --header-bg: linear-gradient(
+    180deg,
+    var(--console-header) 0%,
+    var(--console-bg-deep) 100%
+  );
+  --header-border: var(--console-border);
+  --header-shadow: var(--shadow-pane);
+  --header-text: var(--console-text);
+  --header-brand: var(--console-accent);
+  --header-link-hover-bg: rgb(240 180 41 / 10%);
+  --header-link-active-bg: rgb(240 180 41 / 10%);
+  --footer-bg: rgb(0 0 0 / 25%);
+  --footer-text: var(--console-muted);
+  --table-border: var(--console-border);
+  --subsurface-bg: var(--console-control);
+  --subsurface-border: var(--console-border);
+  --toolbar-bg: var(--console-control);
+  --media-bg: var(--console-control);
+  --row-unread-bg: rgb(240 180 41 / 8%);
+  --danger-bg: rgb(127 29 29 / 30%);
+  --danger-border: var(--vip-danger);
+  --success-bg: rgb(22 101 52 / 30%);
+  --success-border: rgb(22 163 74 / 80%);
+  --user-bg: rgb(255 255 255 / 8%);
+  --progress-track: var(--console-control);
+}
