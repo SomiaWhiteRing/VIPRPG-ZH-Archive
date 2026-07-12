@@ -188,7 +188,7 @@
 .chip-list a {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 40px;
   padding: 0 var(--space-2);
   border: 1px solid var(--subsurface-border);
   border-radius: var(--radius-pill);
