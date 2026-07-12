@@ -2,6 +2,8 @@
 
 制定日期：2026-07-06。基于对当前工作区（main 分支 + 未提交改动）的三份全量审计（路由/组件/CSS 结构盘点、全站文案审计、UI 实现层审计），并经过一轮对照仓库的事实核查修订。
 
+执行状态：已完成（2026-07-13）。
+
 本计划解决三个问题：
 
 1. **AI 味冗余文案**——每页模板化解说、内部术语泄漏进 UI、跨页复制句式。
@@ -393,10 +395,10 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 ### Phase 6 —— 终验与收尾（半天）
 
-- [ ] **6.1 全量验收**：§6.1 完整矩阵截图存 `docs/audit/2026-07-after/`；与 baseline 并排对比。
-- [ ] **6.2 清单核销**：两份 brief 的 Acceptance Checklist、§2.1 文案宪法抽查 10 页、§2.4 CSS 指标复测、本文档所有 checkbox。
-- [ ] **6.3 文档更新**：若组件库/样式结构与 `docs/claude-code-ui-workflow.md`、CLAUDE.md 描述不符，更新之；本计划文档标记「已完成」并把 §7 遗留项转为 issue 或 docs 待办。
-- [ ] **6.4 最终 `npm run check` + `npm run build` 通过。**
+- [x] **6.1 全量验收**：§6.1 完整矩阵截图存 `docs/audit/2026-07-after/`；与 baseline 并排对比。
+- [x] **6.2 清单核销**：两份 brief 的 Acceptance Checklist、§2.1 文案宪法抽查 10 页、§2.4 CSS 指标复测、本文档所有 checkbox。
+- [x] **6.3 文档更新**：若组件库/样式结构与 `docs/claude-code-ui-workflow.md`、CLAUDE.md 描述不符，更新之；本计划文档标记「已完成」并把 §7 遗留项转为 issue 或 docs 待办。
+- [x] **6.4 最终 `npm run check` + `npm run build` 通过。**
 
 ---
 
