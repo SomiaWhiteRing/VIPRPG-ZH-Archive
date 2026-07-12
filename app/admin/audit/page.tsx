@@ -1,11 +1,16 @@
-import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireSuperAdminPageUser } from "@/lib/server/auth/guards";
 import {
   listAdminAuditLogs,
   listAdminRoleEvents,
 } from "@/lib/server/db/admin-audit";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatUnreadCount, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { roleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -20,31 +25,20 @@ export default async function AdminAuditPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Super Admin Audit</p>
-          <h1>审计日志</h1>
-          <p className="subtitle">登录、归档维护与权限调整的审计日志。</p>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Super Admin Audit"
+        title="审计日志"
+        subtitle="登录、归档维护与权限调整的审计日志。"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
-      <section className="card">
-        <h2>权限清单</h2>
-        <div className="table-wrap compact-table-wrap">
-          <table className="data-table admin-ops-table">
+      <Pane heading="权限清单">
+        <TableWrap compact label="权限清单" minWidth={760}>
             <thead>
               <tr>
                 <th>能力</th>
@@ -65,15 +59,12 @@ export default async function AdminAuditPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
-      </section>
+        </TableWrap>
+      </Pane>
 
-      <section className="card">
-        <h2>用户层级事件</h2>
+      <Pane heading="用户层级事件">
         {roleEvents.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table admin-audit-table">
+          <TableWrap compact label="用户层级事件" minWidth={980}>
               <thead>
                 <tr>
                   <th>时间</th>
@@ -113,18 +104,15 @@ export default async function AdminAuditPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </TableWrap>
         ) : (
-          <p className="muted-line">暂无用户层级事件。</p>
+          <EmptyState title="暂无用户层级事件。" />
         )}
-      </section>
+      </Pane>
 
-      <section className="card">
-        <h2>系统审计日志</h2>
+      <Pane heading="系统审计日志">
         {auditLogs.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table admin-audit-table">
+          <TableWrap compact label="系统审计日志" minWidth={980}>
               <thead>
                 <tr>
                   <th>时间</th>
@@ -156,12 +144,11 @@ export default async function AdminAuditPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </TableWrap>
         ) : (
-          <p className="muted-line">暂无系统审计日志。</p>
+          <EmptyState title="暂无系统审计日志。" />
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

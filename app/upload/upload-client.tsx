@@ -12,6 +12,10 @@ import {
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import { useUploadTasks } from "@/app/upload/upload-task-provider";
 import { formatBytes } from "@/lib/format";
+import { FormField } from "@/app/components/ui/form-field";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
 
 type FileInputMode = "folder" | "zip";
 type EngineFamily = "rpg_maker_2000" | "rpg_maker_2003";
@@ -346,8 +350,8 @@ export function UploadClient() {
 
   return (
     <div className="upload-layout">
-      <section className="card upload-source-card">
-        <h2>游戏文件</h2>
+      <div className="upload-source-card">
+        <Pane heading="游戏文件">
         <div className="segmented-control" role="tablist" aria-label="源类型">
           <button
             className={mode === "folder" ? "active" : ""}
@@ -382,20 +386,20 @@ export function UploadClient() {
           </label>
         )}
 
-        <dl className="upload-source-summary">
-          <div>
-            <dt>已选择</dt>
-            <dd>{selectedFiles.length.toLocaleString("zh-CN")} 个文件</dd>
-          </div>
-          <div>
-            <dt>总大小</dt>
-            <dd>{formatBytes(selectedSourceSize)}</dd>
-          </div>
-        </dl>
+        <StatList
+          columns={2}
+          items={[
+            {
+              label: "已选择",
+              value: `${selectedFiles.length.toLocaleString("zh-CN")} 个文件`,
+            },
+            { label: "总大小", value: formatBytes(selectedSourceSize) },
+          ]}
+          variant="tiles"
+        />
 
         {recoverableTasks.length > 0 ? (
-          <label className="field">
-            <span>恢复任务</span>
+          <FormField label="恢复任务">
             <select
               onChange={(event) => setResumeLocalTaskId(event.target.value)}
               value={resumeLocalTaskId}
@@ -407,31 +411,26 @@ export function UploadClient() {
                 </option>
               ))}
             </select>
-          </label>
+          </FormField>
         ) : null}
-      </section>
+        </Pane>
+      </div>
 
       <form className="upload-form-stack" onSubmit={onSubmit}>
-        <section className="card upload-form-card">
-          <header className="upload-section-header">
-            <div>
-              <p className="eyebrow">第一步</p>
-              <h2>作品</h2>
-            </div>
-          </header>
+        <div className="upload-form-card">
+          <Pane>
+          <SectionHeading eyebrow="第一步" title="作品" />
 
           <div className="upload-form-grid">
-            <label className="field">
-              <span>原名 *</span>
+            <FormField label="原名 *">
               <input
                 onChange={(event) => onOriginalTitleChange(event.target.value)}
                 required
                 type="text"
                 value={form.originalTitle}
               />
-            </label>
-            <label className="field">
-              <span>游戏引擎 *</span>
+            </FormField>
+            <FormField label="游戏引擎 *">
               <select
                 onChange={(event) =>
                   setForm((current) => ({
@@ -445,17 +444,18 @@ export function UploadClient() {
                 <option value="rpg_maker_2000">RPG Maker 2000</option>
                 <option value="rpg_maker_2003">RPG Maker 2003</option>
               </select>
-            </label>
+            </FormField>
             <TextField
               form={form}
               label="中文名"
               name="chineseTitle"
               setForm={setForm}
             />
-            <label className="field readonly-field">
-              <span>网址标识</span>
-              <input readOnly type="text" value={form.workSlug} />
-            </label>
+            <div className="readonly-field">
+              <FormField label="网址标识">
+                <input readOnly type="text" value={form.workSlug} />
+              </FormField>
+            </div>
           </div>
 
           {lookupState.loading ? <p className="muted-line">正在查找同名作品…</p> : null}
@@ -510,8 +510,7 @@ export function UploadClient() {
                 setImageSelections((current) => ({ ...current, thumbnail: file }))
               }
             />
-            <label className="field wide-field">
-              <span>浏览图</span>
+            <FormField label="浏览图" wide>
               <input
                 accept="image/*"
                 multiple
@@ -523,7 +522,7 @@ export function UploadClient() {
                 }
                 type="file"
               />
-            </label>
+            </FormField>
           </div>
 
           <details className="upload-details">
@@ -541,8 +540,7 @@ export function UploadClient() {
               <TextField form={form} label="作者名" name="creatorName" setForm={setForm} />
               <TextField form={form} label="作者链接" name="creatorUrl" setForm={setForm} />
             </div>
-            <label className="field">
-              <span>简介</span>
+            <FormField label="简介">
               <textarea
                 onChange={(event) =>
                   setForm((current) => ({ ...current, description: event.target.value }))
@@ -550,21 +548,17 @@ export function UploadClient() {
                 rows={4}
                 value={form.description}
               />
-            </label>
+            </FormField>
           </details>
-        </section>
+          </Pane>
+        </div>
 
-        <section className="card upload-form-card">
-          <header className="upload-section-header">
-            <div>
-              <p className="eyebrow">第二步</p>
-              <h2>发布版本</h2>
-            </div>
-          </header>
+        <div className="upload-form-card">
+          <Pane>
+          <SectionHeading eyebrow="第二步" title="发布版本" />
 
           {releaseOptions.length > 0 ? (
-            <label className="field">
-              <span>使用已有发布版本</span>
+            <FormField label="使用已有发布版本">
               <select
                 onChange={(event) => applyExistingRelease(event.target.value)}
                 value={lookupState.selectedReleaseId ? String(lookupState.selectedReleaseId) : ""}
@@ -576,12 +570,11 @@ export function UploadClient() {
                   </option>
                 ))}
               </select>
-            </label>
+            </FormField>
           ) : null}
 
           <div className="upload-form-grid">
-            <label className="field">
-              <span>基底版本 *</span>
+            <FormField label="基底版本 *">
               <select
                 onChange={(event) =>
                   setForm((current) => ({
@@ -598,9 +591,8 @@ export function UploadClient() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>发布类型 *</span>
+            </FormField>
+            <FormField label="发布类型 *">
               <select
                 onChange={(event) =>
                   setForm((current) => ({
@@ -617,9 +609,8 @@ export function UploadClient() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="field">
-              <span>版本名称 *</span>
+            </FormField>
+            <FormField label="版本名称 *">
               <input
                 onChange={(event) =>
                   setForm((current) => ({
@@ -632,9 +623,8 @@ export function UploadClient() {
                 type="text"
                 value={form.variantLabel}
               />
-            </label>
-            <label className="field">
-              <span>发布日期</span>
+            </FormField>
+            <FormField label="发布日期">
               <input
                 onChange={(event) =>
                   setForm((current) => ({
@@ -645,24 +635,27 @@ export function UploadClient() {
                 type="date"
                 value={form.releaseDate}
               />
-            </label>
-            <label className="field readonly-field">
-              <span>上传者</span>
-              <input
-                readOnly
-                type="text"
-                value={currentUser?.displayName || currentUser?.email || "当前登录账户"}
-              />
-            </label>
-            <label className="field readonly-field">
-              <span>自动版本名称</span>
-              <input readOnly type="text" value={buildReleaseLabel(form)} />
-            </label>
+            </FormField>
+            <div className="readonly-field">
+              <FormField label="上传者">
+                <input
+                  readOnly
+                  type="text"
+                  value={currentUser?.displayName || currentUser?.email || "当前登录账户"}
+                />
+              </FormField>
+            </div>
+            <div className="readonly-field">
+              <FormField label="自动版本名称">
+                <input readOnly type="text" value={buildReleaseLabel(form)} />
+              </FormField>
+            </div>
             {isAdmin ? (
-              <label className="field readonly-field wide-field">
-                <span>版本代码</span>
-                <input readOnly type="text" value={buildReleaseKey(form)} />
-              </label>
+              <div className="readonly-field wide-field">
+                <FormField label="版本代码">
+                  <input readOnly type="text" value={buildReleaseKey(form)} />
+                </FormField>
+              </div>
             ) : null}
           </div>
 
@@ -673,8 +666,7 @@ export function UploadClient() {
               <TextField form={form} label="来源链接" name="sourceUrl" setForm={setForm} />
               <TextField form={form} label="可执行入口" name="executablePath" setForm={setForm} />
             </div>
-            <label className="field">
-              <span>版权/授权备注</span>
+            <FormField label="版权/授权备注">
               <textarea
                 onChange={(event) =>
                   setForm((current) => ({ ...current, rightsNotes: event.target.value }))
@@ -682,20 +674,16 @@ export function UploadClient() {
                 rows={3}
                 value={form.rightsNotes}
               />
-            </label>
+            </FormField>
           </details>
-        </section>
+          </Pane>
+        </div>
 
-        <section className="card upload-form-card">
-          <header className="upload-section-header">
-            <div>
-              <p className="eyebrow">第三步</p>
-              <h2>归档快照</h2>
-            </div>
-          </header>
+        <div className="upload-form-card">
+          <Pane>
+          <SectionHeading eyebrow="第三步" title="归档快照" />
           <div className="upload-form-grid">
-            <label className="field">
-              <span>归档语言 *</span>
+            <FormField label="归档语言 *">
               <input
                 list="upload-language-options"
                 onChange={(event) =>
@@ -715,9 +703,8 @@ export function UploadClient() {
                   </option>
                 ))}
               </datalist>
-            </label>
-            <label className="field">
-              <span>归档名称 *</span>
+            </FormField>
+            <FormField label="归档名称 *">
               <input
                 onChange={(event) =>
                   setForm((current) => ({
@@ -730,16 +717,18 @@ export function UploadClient() {
                 type="text"
                 value={form.archiveVariantLabel}
               />
-            </label>
-            <label className="field readonly-field">
-              <span>自动归档名称</span>
-              <input readOnly type="text" value={buildArchiveVersionLabel(form)} />
-            </label>
+            </FormField>
+            <div className="readonly-field">
+              <FormField label="自动归档名称">
+                <input readOnly type="text" value={buildArchiveVersionLabel(form)} />
+              </FormField>
+            </div>
             {isAdmin ? (
-              <label className="field readonly-field wide-field">
-                <span>归档代码</span>
-                <input readOnly type="text" value={buildArchiveVersionKey(form)} />
-              </label>
+              <div className="readonly-field wide-field">
+                <FormField label="归档代码">
+                  <input readOnly type="text" value={buildArchiveVersionKey(form)} />
+                </FormField>
+              </div>
             ) : null}
           </div>
           <div className="checkbox-grid">
@@ -773,7 +762,8 @@ export function UploadClient() {
               {preparing ? "正在准备…" : "开始导入"}
             </button>
           </div>
-        </section>
+          </Pane>
+        </div>
       </form>
     </div>
   );
@@ -791,8 +781,7 @@ function TextField({
   setForm: Dispatch<SetStateAction<FlatMetadata>>;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
+    <FormField label={label}>
       <input
         name={name}
         onChange={(event) =>
@@ -801,7 +790,7 @@ function TextField({
         type="text"
         value={String(form[name])}
       />
-    </label>
+    </FormField>
   );
 }
 
@@ -817,8 +806,7 @@ function TextAreaField({
   setForm: Dispatch<SetStateAction<FlatMetadata>>;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
+    <FormField label={label}>
       <textarea
         name={name}
         onChange={(event) =>
@@ -827,7 +815,7 @@ function TextAreaField({
         rows={3}
         value={String(form[name])}
       />
-    </label>
+    </FormField>
   );
 }
 
@@ -839,14 +827,13 @@ function ImageField({
   onChange: (file: File | null) => void;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
+    <FormField label={label}>
       <input
         accept="image/*"
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
         type="file"
       />
-    </label>
+    </FormField>
   );
 }
 

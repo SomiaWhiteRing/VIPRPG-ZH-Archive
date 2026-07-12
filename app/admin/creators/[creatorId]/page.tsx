@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatUnreadCount } from "@/lib/format";
 import {
   creatorRoleLabel,
   workStatusLabel,
@@ -34,28 +40,19 @@ export default async function AdminCreatorEditPage({
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Edit Creator</p>
-          <h1>{creator.name}</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin/creators">
-            返回作者维护
-          </Link>
-          <Link className="button" href={`/creators/${creator.slug}`}>
-            查看公开页
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Edit Creator"
+        title={creator.name}
+        actions={
+          <>
+            <BackLink href="/admin/creators" label="返回作者维护" />
+            <Link className="button" href={`/creators/${creator.slug}`}>
+              查看公开页
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/creators/${creator.id}/update`}
@@ -65,37 +62,31 @@ export default async function AdminCreatorEditPage({
         <input name="creator_id" type="hidden" value={creator.id} />
 
         <section className="form-section">
-          <h2>作者资料</h2>
+          <SectionHeading title="作者资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              Slug
+            <FormField hint="不可修改" label="Slug">
               <input readOnly value={creator.slug} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              名称
+            </FormField>
+            <FormField label="名称">
               <input defaultValue={creator.name} name="name" required type="text" />
-            </label>
-            <label className="field">
-              原名
+            </FormField>
+            <FormField label="原名">
               <input
                 defaultValue={creator.originalName ?? ""}
                 name="original_name"
                 type="text"
               />
-            </label>
-            <label className="field">
-              个人链接
+            </FormField>
+            <FormField label="个人链接">
               <input
                 defaultValue={creator.websiteUrl ?? ""}
                 name="website_url"
                 type="url"
               />
-            </label>
-            <label className="field wide-field">
-              简介
+            </FormField>
+            <FormField label="简介" wide>
               <textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
-            </label>
+            </FormField>
           </div>
         </section>
 
@@ -107,8 +98,7 @@ export default async function AdminCreatorEditPage({
       </form>
 
       <section className="section-grid admin-creator-credit-grid" aria-label="作者关联">
-        <section className="card">
-          <h2>作品层职务</h2>
+        <Pane heading="作品层职务">
           {creator.adminWorkCredits.length > 0 ? (
             <ul className="plain-list">
               {creator.adminWorkCredits.map((credit) => (
@@ -122,12 +112,11 @@ export default async function AdminCreatorEditPage({
               ))}
             </ul>
           ) : (
-            <p className="muted-line">暂无作品层职务。</p>
+            <EmptyState title="暂无作品层职务。" />
           )}
-        </section>
+        </Pane>
 
-        <section className="card">
-          <h2>发布版本职务</h2>
+        <Pane heading="发布版本职务">
           {creator.adminReleaseCredits.length > 0 ? (
             <ul className="plain-list">
               {creator.adminReleaseCredits.map((credit) => (
@@ -143,9 +132,9 @@ export default async function AdminCreatorEditPage({
               ))}
             </ul>
           ) : (
-            <p className="muted-line">暂无发布版本职务。</p>
+            <EmptyState title="暂无发布版本职务。" />
           )}
-        </section>
+        </Pane>
       </section>
     </main>
   );

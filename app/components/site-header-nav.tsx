@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { InboxLink } from "@/app/components/ui/inbox-link";
 
 type Session = {
   displayName: string;
@@ -95,14 +96,7 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
         <div className="site-session">
           {session ? (
             <>
-              <Link className="button" href="/inbox">
-                站内信
-                {session.unread > 0 ? (
-                  <span className="notification-badge">
-                    {formatUnread(session.unread)}
-                  </span>
-                ) : null}
-              </Link>
+              <InboxLink unread={session.unread} variant="nav" />
               <Link className="button" href="/me">
                 <span aria-hidden>👤</span>
                 {session.displayName}
@@ -137,8 +131,4 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
       </div>
     </header>
   );
-}
-
-function formatUnread(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

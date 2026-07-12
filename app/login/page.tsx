@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { FormField } from "@/app/components/ui/form-field";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 
@@ -25,21 +28,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="narrow-main">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Account</p>
-          <h1>登录</h1>
-          <p className="subtitle">使用邮箱和密码进入账户。</p>
-        </div>
-      </header>
+      <PageHeader eyebrow="Account" title="登录" subtitle="使用邮箱和密码进入账户。" />
 
-      <section className="card form-card">
+      <Pane>
         {params.reset ? <p className="success-message">密码已更新，请重新登录。</p> : null}
         {params.error ? <p className="error-message">{params.error}</p> : null}
         <form action="/api/auth/login" method="post" className="stack-form">
           <input type="hidden" name="next" value={nextPath} />
-          <label className="field">
-            <span>邮箱</span>
+          <FormField label="邮箱">
             <input
               autoComplete="email"
               defaultValue={params.email ?? ""}
@@ -49,16 +45,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               required
               type="email"
             />
-          </label>
-          <label className="field">
-            <span>密码</span>
+          </FormField>
+          <FormField label="密码">
             <input
               autoComplete="current-password"
               name="password"
               required
               type="password"
             />
-          </label>
+          </FormField>
           <button className="button primary" type="submit">
             登录
           </button>
@@ -69,7 +64,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             找回密码
           </Link>
         </div>
-      </section>
+      </Pane>
     </main>
   );
 }

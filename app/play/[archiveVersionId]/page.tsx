@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
@@ -15,6 +14,8 @@ import {
 } from "@/lib/server/db/archive-downloads";
 import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
+import { BackLink } from "@/app/components/ui/back-link";
+import { PageHeader } from "@/app/components/ui/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -76,27 +77,27 @@ export default async function WebPlayPage({ params }: PageProps) {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Online Play</p>
-          <h1>{metadata.title}</h1>
-          <p className="subtitle">
+      <PageHeader
+        actions={
+          <>
+            <BackLink href="/" label="返回首页" />
+            <a
+              className="button"
+              href={`/api/archive-versions/${record.id}/download?zip_builder=${downloadZipBuilderVersion}`}
+            >
+              下载 ZIP
+            </a>
+          </>
+        }
+        eyebrow="Online Play"
+        subtitle={
+          <>
             {metadata.releaseLabel} / {metadata.archiveLabel}
             {metadata.chineseTitle ? ` / ${metadata.originalTitle}` : ""}
-          </p>
-        </div>
-        <div className="header-actions">
-          <Link className="button" href="/">
-            返回首页
-          </Link>
-          <a
-            className="button"
-            href={`/api/archive-versions/${record.id}/download?zip_builder=${downloadZipBuilderVersion}`}
-          >
-            下载 ZIP
-          </a>
-        </div>
-      </header>
+          </>
+        }
+        title={metadata.title}
+      />
 
       <WebPlayClient metadata={metadata} />
     </main>

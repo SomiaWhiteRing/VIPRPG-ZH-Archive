@@ -16,6 +16,9 @@ import type {
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { formatBytes } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
 
 type WebPlayLog = {
   id: string;
@@ -323,74 +326,64 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
     }
 
     return [
-      ["本地状态", installStatusLabel(installation.status)],
-      ["长期保存", installation.persistedStorage === null ? "未请求" : installation.persistedStorage ? "已允许" : "未允许"],
-      ["浏览器用量", formatBytes(installation.storageUsageBytes ?? 0)],
-      ["浏览器额度", formatBytes(installation.storageQuotaBytes ?? 0)],
+      { label: "本地状态", value: installStatusLabel(installation.status) },
+      {
+        label: "长期保存",
+        value:
+          installation.persistedStorage === null
+            ? "未请求"
+            : installation.persistedStorage
+              ? "已允许"
+              : "未允许",
+      },
+      { label: "浏览器用量", value: formatBytes(installation.storageUsageBytes ?? 0) },
+      { label: "浏览器额度", value: formatBytes(installation.storageQuotaBytes ?? 0) },
     ];
   }, [installation]);
 
   if (!metadata.canPlay) {
     return (
-      <section className="card web-play-card">
-        <h2>在线游玩不可用</h2>
-        <p>
-          该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
-        </p>
-      </section>
+      <div className="web-play-card">
+        <Pane heading="在线游玩不可用">
+          <p>该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。</p>
+        </Pane>
+      </div>
     );
   }
 
   return (
     <div className="web-play-layout">
-      <section className="card web-play-card">
-        <div className="web-play-header">
-          <div>
-            <p className="eyebrow">EasyRPG Web Player</p>
-            <h2>浏览器本地安装</h2>
-          </div>
-          <span className="status-pill">
-            {loadingLocalState
-              ? "读取中"
-              : installStatusLabel(installation?.status ?? "deleted")}
-          </span>
-        </div>
+      <div className="web-play-card">
+        <Pane>
+        <SectionHeading
+          action={
+            <span className="status-pill">
+              {loadingLocalState
+                ? "读取中"
+                : installStatusLabel(installation?.status ?? "deleted")}
+            </span>
+          }
+          eyebrow="EasyRPG Web Player"
+          title="浏览器本地安装"
+        />
 
-        <dl className="upload-source-summary">
-          <div>
-            <dt>归档大小</dt>
-            <dd>{formatBytes(metadata.totalSizeBytes)}</dd>
-          </div>
-          <div>
-            <dt>文件数</dt>
-            <dd>{metadata.totalFiles.toLocaleString("zh-CN")}</dd>
-          </div>
-          <div>
-            <dt>安装内容</dt>
-            <dd>
-              {formatBytes(metadata.installTotalSizeBytes)} /{" "}
-              {metadata.installTotalFiles.toLocaleString("zh-CN")} 文件
-            </dd>
-          </div>
-          <div>
-            <dt>发布版本</dt>
-            <dd>{metadata.releaseLabel}</dd>
-          </div>
-          <div>
-            <dt>归档快照</dt>
-            <dd>{metadata.archiveLabel}</dd>
-          </div>
-        </dl>
+        <StatList
+          columns={2}
+          items={[
+            { label: "归档大小", value: formatBytes(metadata.totalSizeBytes) },
+            { label: "文件数", value: metadata.totalFiles.toLocaleString("zh-CN") },
+            {
+              label: "安装内容",
+              value: `${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`,
+            },
+            { label: "发布版本", value: metadata.releaseLabel },
+            { label: "归档快照", value: metadata.archiveLabel },
+          ]}
+          variant="tiles"
+        />
 
         {storageSummary ? (
-          <dl className="web-play-storage">
-            {storageSummary.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <StatList columns={2} items={storageSummary} variant="tiles" />
         ) : null}
 
         {installation ? <InstallProgress installation={installation} /> : null}
@@ -454,24 +447,32 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
             </>
           ) : null}
         </div>
-      </section>
+        </Pane>
+      </div>
 
-      <section className="card web-player-card">
-        <div className="web-player-frame" id="web-player-frame">
-          <canvas id="canvas" tabIndex={0} />
-        </div>
-        <div id="status" className="web-player-status">
-          {running ? "EasyRPG 正在运行" : "未启动"}
-        </div>
-      </section>
+      <div>
+        <Pane>
+          <div className="web-player-card">
+            <div className="web-player-frame" id="web-player-frame">
+              <canvas id="canvas" tabIndex={0} />
+            </div>
+            <div id="status" className="web-player-status">
+              {running ? "EasyRPG 正在运行" : "未启动"}
+            </div>
+          </div>
+        </Pane>
+      </div>
 
-      <section className="card web-play-log-card">
-        <div className="web-play-header">
-          <h2>日志</h2>
-          <button className="button" onClick={() => setLogs([])} type="button">
-            清空
-          </button>
-        </div>
+      <div className="web-play-log-card">
+        <Pane>
+        <SectionHeading
+          action={
+            <button className="button" onClick={() => setLogs([])} type="button">
+              清空
+            </button>
+          }
+          title="日志"
+        />
         {logs.length > 0 ? (
           <ol className="web-play-log-list">
             {logs.map((log) => (
@@ -484,7 +485,8 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
         ) : (
           <p>暂无日志。</p>
         )}
-      </section>
+        </Pane>
+      </div>
     </div>
   );
 }

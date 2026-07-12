@@ -304,16 +304,16 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 > 每个组件一步：建组件 → grep 全部旧写法 → 逐文件替换 → 删旧 CSS 变体。顺序从机械到需判断。
 
-- [ ] **3.1 `BackLink` + `InboxLink`**（先建这两个，3.2 的 PageHeader 替换要用）。BackLink 永远普通样式（消灭「返回按钮标 primary」错误——这是语义修复，视觉允许变化）；InboxLink 内部含未读徽章逻辑。DoD：组件存在且 `npm run check` 通过（调用点在 3.2 一并替换）。
-- [ ] **3.2 `PageHeader`**。替换 39 处手写 header。替换时同步执行两条纪律：actions 里「返回 XX」一律换成 `BackLink` 且排最前；「站内信」按钮换成 `InboxLink`。DoD：`grep -rln '"page-header"' app --include=*.tsx` 只剩组件自身；grep `notification-badge` 的 tsx 命中只剩 InboxLink 组件。
-- [ ] **3.3 `EmptyState`**。替换 6 处 `card empty-card`、inbox 的 colSpan 空行、admin 的 muted-line 空态；在 components.css 定义 `.empty-state`（此前 `.empty-card` 从未被定义过，顺带解决）。
-- [ ] **3.4 `StatusBadge` + labels 联动**。三份 statusBadgeClass 拷贝并入 `lib/labels.ts` 的单一映射；badge 样式类按语义重命名（发布状态不再借用 approved/rejected）。play 页 `.status-pill` 判断是否与 badge 合并：若视觉可统一则并入 StatusBadge 的一个 variant，不能则保留但写明理由。
-- [ ] **3.5 `Pane` + `SectionHeading`**。公共页 8 套面板类收敛到 `.pane`（tone 变体）；festival 群举刷漆选择器（`body.theme-festival .card, .creator-card, ...`）随之删除。admin 的 card 也走 Pane（靠 token 呈现深色）。
-- [ ] **3.6 `StatList`**。替换 4 套 dt/dd 统计块。
-- [ ] **3.7 `FormField`**。替换公共表单 `label.field` 变体与 upload 私有 TextField；admin 编辑页表单行统一。hint/error 渲染位置固定（label 下、控件上 hint；控件下 error）。
-- [ ] **3.8 `TableWrap` + 表格类收敛**。8 个 min-width 修饰类改为 `TableWrap` 的 `minWidth` prop；「admin 标签页借用 .admin-creators-table」这类错借随之消失。
-- [ ] **3.9 `ChipList`**。
-- [ ] **3.10 Phase 验证**：`npm run check`；grep 验收每个组件对应旧类名/旧片段归零；§6.1 矩阵截图，视觉应与 Phase 2 结束时基本一致；`git diff --stat` 确认 CSS 净减少。
+- [x] **3.1 `BackLink` + `InboxLink`**（先建这两个，3.2 的 PageHeader 替换要用）。BackLink 永远普通样式（消灭「返回按钮标 primary」错误——这是语义修复，视觉允许变化）；InboxLink 内部含未读徽章逻辑。DoD：组件存在且 `npm run check` 通过（调用点在 3.2 一并替换）。
+- [x] **3.2 `PageHeader`**。替换 39 处手写 header。替换时同步执行两条纪律：actions 里「返回 XX」一律换成 `BackLink` 且排最前；「站内信」按钮换成 `InboxLink`。DoD：`grep -rln '"page-header"' app --include=*.tsx` 只剩组件自身；grep `notification-badge` 的 tsx 命中只剩 InboxLink 组件。
+- [x] **3.3 `EmptyState`**。替换 6 处 `card empty-card`、inbox 的 colSpan 空行、admin 的 muted-line 空态；在 components.css 定义 `.empty-state`（此前 `.empty-card` 从未被定义过，顺带解决）。
+- [x] **3.4 `StatusBadge` + labels 联动**。三份 statusBadgeClass 拷贝并入 `lib/labels.ts` 的单一映射；badge 样式类按语义重命名（发布状态不再借用 approved/rejected）。play 页 `.status-pill` 判断是否与 badge 合并：若视觉可统一则并入 StatusBadge 的一个 variant，不能则保留但写明理由。
+- [x] **3.5 `Pane` + `SectionHeading`**。公共页 8 套面板类收敛到 `.pane`（tone 变体）；festival 群举刷漆选择器（`body.theme-festival .card, .creator-card, ...`）随之删除。admin 的 card 也走 Pane（靠 token 呈现深色）。
+- [x] **3.6 `StatList`**。替换 4 套 dt/dd 统计块。
+- [x] **3.7 `FormField`**。替换公共表单 `label.field` 变体与 upload 私有 TextField；admin 编辑页表单行统一。hint/error 渲染位置固定（label 下、控件上 hint；控件下 error）。
+- [x] **3.8 `TableWrap` + 表格类收敛**。8 个 min-width 修饰类改为 `TableWrap` 的 `minWidth` prop；「admin 标签页借用 .admin-creators-table」这类错借随之消失。
+- [x] **3.9 `ChipList`**。
+- [x] **3.10 Phase 验证**：`npm run check`；grep 验收每个组件对应旧类名/旧片段归零；§6.1 矩阵截图，视觉应与 Phase 2 结束时基本一致；`git diff --stat` 确认 CSS 净减少。
 
 ### Phase 4 —— 逐页视觉与结构重构（3–5 天，真正的「变好看」阶段）
 

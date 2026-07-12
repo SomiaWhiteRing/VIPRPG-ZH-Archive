@@ -1,13 +1,15 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getAdminSummary } from "@/lib/server/db/admin-summary";
 import { getAdminObservability } from "@/lib/server/db/admin-observability";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { canAccessSuperAdminRole } from "@/lib/server/auth/roles";
 import { formatNumber, formatNullableDuration, formatBytes } from "@/lib/format";
-import {
-  importTaskStageLabel,
-  importTaskStatusLabel,
-} from "@/lib/labels";
+import { importTaskStageLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +46,7 @@ export default async function AdminPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Console</p>
-          <h1>管理控制台</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="Admin Console" title="管理控制台" />
 
       <section className="metric-grid" aria-label="存储摘要">
         {metrics.map(([label, value]) => (
@@ -60,8 +57,7 @@ export default async function AdminPage() {
         ))}
       </section>
 
-      <section className="card">
-        <h2>待办与告警</h2>
+      <Pane heading="待办与告警">
         <ul className="plain-list">
           <li>
             <strong>导入任务</strong>
@@ -88,10 +84,9 @@ export default async function AdminPage() {
             </Link>
           ) : null}
         </div>
-      </section>
+      </Pane>
 
-      <section className="card">
-        <h2>内容管理</h2>
+      <Pane heading="内容管理">
         <div className="admin-quick-nav">
           <Link className="button primary" href="/admin/works">
             作品
@@ -115,10 +110,9 @@ export default async function AdminPage() {
             系列
           </Link>
         </div>
-      </section>
+      </Pane>
 
-      <section className="card">
-        <h2>用户与权限</h2>
+      <Pane heading="用户与权限">
         <div className="admin-quick-nav">
           <Link className="button primary" href="/admin/users">
             用户层级
@@ -132,13 +126,11 @@ export default async function AdminPage() {
             </Link>
           ) : null}
         </div>
-      </section>
+      </Pane>
 
-      <section className="card">
-        <h2>近期导入</h2>
+      <Pane heading="近期导入">
         {observability.imports.recent.length > 0 ? (
-          <div className="table-wrap compact-table-wrap">
-            <table className="data-table admin-ops-table">
+          <TableWrap compact label="近期导入" minWidth={760}>
               <thead>
                 <tr>
                   <th>任务</th>
@@ -159,7 +151,7 @@ export default async function AdminPage() {
                       </span>
                     </td>
                     <td>
-                      {importTaskStatusLabel(job.status)}
+                      <StatusBadge kind="import-task" value={job.status} />
                       {job.failedStage ? (
                         <span className="muted-line">
                           {importTaskStageLabel(job.failedStage)}
@@ -185,12 +177,11 @@ export default async function AdminPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </TableWrap>
         ) : (
-          <p className="muted-line">暂无导入任务。</p>
+          <EmptyState title="暂无导入任务。" />
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

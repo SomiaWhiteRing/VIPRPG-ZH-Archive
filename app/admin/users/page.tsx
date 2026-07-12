@@ -1,15 +1,14 @@
-import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { lowerRoles } from "@/lib/server/auth/roles";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listUsersForAdmin } from "@/lib/server/db/users";
-import { formatUnreadCount, formatDate } from "@/lib/format";
-import {
-  roleLabel,
-  userRoleBadgeClass,
-  userStatusBadgeClass,
-  userStatusLabel,
-} from "@/lib/labels";
+import { formatDate } from "@/lib/format";
+import { roleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -21,31 +20,19 @@ export default async function AdminUsersPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Users</p>
-          <h1>用户与上传权限</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-          <Link className="button" href="/">
-            返回首页
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin Users"
+        title="用户与上传权限"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <BackLink href="/" label="返回首页" />
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
-      <section className="table-wrap" aria-label="用户列表">
-        <table className="data-table">
+      <TableWrap label="用户列表">
           <thead>
             <tr>
               <th>用户</th>
@@ -63,14 +50,10 @@ export default async function AdminUsersPage() {
                   <span className="mono muted-line">#{user.id}</span>
                 </td>
                 <td>
-                  <span className={`badge ${userRoleBadgeClass(user.role)}`}>
-                    {roleLabel(user.role)}
-                  </span>
+                  <StatusBadge kind="role" value={user.role} />
                 </td>
                 <td>
-                  <span className={`badge ${userStatusBadgeClass(user.status)}`}>
-                    {userStatusLabel(user.status)}
-                  </span>
+                  <StatusBadge kind="account" value={user.status} />
                 </td>
                 <td>{formatDate(user.createdAt)}</td>
                 <td>
@@ -122,8 +105,7 @@ export default async function AdminUsersPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

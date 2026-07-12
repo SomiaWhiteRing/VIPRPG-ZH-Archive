@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionHeading } from "@/app/components/ui/section-heading";
 import {
   gcDefaultGraceDays,
   gcDefaultSweepLimitPerType,
@@ -90,8 +91,8 @@ export function AdminOperationPanel({
   }
 
   return (
-    <section className="card" style={{ marginTop: 16 }}>
-      <h2>运维检查</h2>
+    <div className="admin-operation-panel">
+      <SectionHeading level={3} title="运维检查" />
       <div className="actions">
         <button
           className="button primary"
@@ -152,7 +153,7 @@ export function AdminOperationPanel({
       {state.result ? (
         <pre className="code-block compact-code">{JSON.stringify(state.result, null, 2)}</pre>
       ) : null}
-    </section>
+    </div>
   );
 }
 

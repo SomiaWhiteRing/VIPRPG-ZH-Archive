@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { SectionHeading } from "@/app/components/ui/section-heading";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getTagForAdminEdit } from "@/lib/server/db/taxonomy-library";
-import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -28,28 +32,19 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Edit Tag</p>
-          <h1>{tag.name}</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin/tags">
-            返回标签维护
-          </Link>
-          <Link className="button" href={`/tags/${tag.slug}`}>
-            公开页
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Edit Tag"
+        title={tag.name}
+        actions={
+          <>
+            <BackLink href="/admin/tags" label="返回标签维护" />
+            <Link className="button" href={`/tags/${tag.slug}`}>
+              公开页
+            </Link>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/tags/${tag.id}/update`}
@@ -58,19 +53,15 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
       >
         <input name="tag_id" type="hidden" value={tag.id} />
         <section className="form-section">
-          <h2>标签资料</h2>
+          <SectionHeading title="标签资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              Slug
+            <FormField hint="不可修改" label="Slug">
               <input readOnly value={tag.slug} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              名称
+            </FormField>
+            <FormField label="名称">
               <input defaultValue={tag.name} name="name" required />
-            </label>
-            <label className="field">
-              命名空间
+            </FormField>
+            <FormField label="命名空间">
               <select defaultValue={tag.namespace} name="namespace">
                 <option value="genre">类型</option>
                 <option value="theme">主题</option>
@@ -79,23 +70,21 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
                 <option value="content">内容</option>
                 <option value="other">其他</option>
               </select>
-            </label>
-            <label className="field wide-field">
-              描述
+            </FormField>
+            <FormField label="描述" wide>
               <textarea defaultValue={tag.description ?? ""} name="description" rows={6} />
-            </label>
+            </FormField>
           </div>
         </section>
 
         <section className="form-section">
-          <h2>合并重复标签</h2>
-          <label className="field">
-            目标标签 slug
+          <SectionHeading title="合并重复标签" />
+          <FormField
+            hint="提交后，作品与发布版本关联会移至目标标签，当前标签会被删除。"
+            label="目标标签 slug"
+          >
             <input name="merge_target_slug" placeholder="留空则不合并" />
-            <span className="muted-line">
-              提交后，作品与发布版本关联会移至目标标签，当前标签会被删除。
-            </span>
-          </label>
+          </FormField>
         </section>
 
         <div className="actions">

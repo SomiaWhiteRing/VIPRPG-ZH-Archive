@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/app/components/ui/back-link";
+import { FormField } from "@/app/components/ui/form-field";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { SectionHeading } from "@/app/components/ui/section-heading";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit } from "@/lib/server/db/taxonomy-library";
-import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -30,30 +34,21 @@ export default async function AdminCharacterEditPage({
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Edit Character</p>
-          <h1>{character.primaryName}</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin/characters">
-            返回角色维护
-          </Link>
-          {character.workCount > 0 ? (
-            <Link className="button" href={`/characters/${character.slug}`}>
-              公开页
-            </Link>
-          ) : null}
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
+      <PageHeader
+        eyebrow="Edit Character"
+        title={character.primaryName}
+        actions={
+          <>
+            <BackLink href="/admin/characters" label="返回角色维护" />
+            {character.workCount > 0 ? (
+              <Link className="button" href={`/characters/${character.slug}`}>
+                公开页
+              </Link>
             ) : null}
-          </Link>
-        </div>
-      </header>
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
       <form
         action={`/api/admin/characters/${character.id}/update`}
@@ -62,37 +57,31 @@ export default async function AdminCharacterEditPage({
       >
         <input name="character_id" type="hidden" value={character.id} />
         <section className="form-section">
-          <h2>角色资料</h2>
+          <SectionHeading title="角色资料" />
           <div className="upload-form-grid">
-            <label className="field">
-              Slug
+            <FormField hint="不可修改" label="Slug">
               <input readOnly value={character.slug} />
-              <span className="muted-line">不可修改</span>
-            </label>
-            <label className="field">
-              名称
+            </FormField>
+            <FormField label="名称">
               <input defaultValue={character.primaryName} name="primary_name" required />
-            </label>
-            <label className="field">
-              原名
+            </FormField>
+            <FormField label="原名">
               <input defaultValue={character.originalName ?? ""} name="original_name" />
-            </label>
-            <label className="field wide-field">
-              简介
+            </FormField>
+            <FormField label="简介" wide>
               <textarea defaultValue={character.description ?? ""} name="description" rows={6} />
-            </label>
+            </FormField>
           </div>
         </section>
 
         <section className="form-section">
-          <h2>合并重复角色</h2>
-          <label className="field">
-            目标角色 slug
+          <SectionHeading title="合并重复角色" />
+          <FormField
+            hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
+            label="目标角色 slug"
+          >
             <input name="merge_target_slug" placeholder="留空则不合并" />
-            <span className="muted-line">
-              提交后，登场关系会移至目标角色，当前角色会被删除。
-            </span>
-          </label>
+          </FormField>
         </section>
 
         <div className="actions">

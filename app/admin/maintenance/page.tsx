@@ -1,5 +1,8 @@
-import Link from "next/link";
 import { AdminOperationPanel } from "@/app/admin/admin-operation-panel";
+import { BackLink } from "@/app/components/ui/back-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { StatList } from "@/app/components/ui/stat-list";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { canAccessSuperAdminRole } from "@/lib/server/auth/roles";
 import { getAdminObservability } from "@/lib/server/db/admin-observability";
@@ -65,20 +68,13 @@ export default async function AdminMaintenancePage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Maintenance</p>
-          <h1>维护与一致性</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button" href="/admin">
-            返回控制台
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Maintenance"
+        title="维护与一致性"
+        actions={<BackLink href="/admin" label="返回控制台" />}
+      />
 
-      <section className="card">
-        <h2>健康检查</h2>
+      <Pane heading="健康检查">
         <div className="actions">
           {HEALTH_LINKS.map((link) => (
             <a className="button" href={link.href} key={link.href}>
@@ -86,42 +82,27 @@ export default async function AdminMaintenancePage() {
             </a>
           ))}
         </div>
-      </section>
+      </Pane>
 
       <section className="section-grid" aria-label="观测摘要">
-        <section className="card">
-          <h2>下载观测</h2>
-          <dl className="detail-list">
-            {downloadMetrics.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        <Pane heading="下载观测">
+          <StatList
+            items={downloadMetrics.map(([label, value]) => ({ label, value }))}
+          />
+        </Pane>
 
-        <section className="card">
-          <h2>清理预演</h2>
+        <Pane heading="清理预演">
           <p className="muted-line">
             预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。
           </p>
-          <dl className="detail-list">
-            {gcMetrics.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+          <StatList items={gcMetrics.map(([label, value]) => ({ label, value }))} />
+        </Pane>
       </section>
 
-      <section className="danger-zone" aria-label="危险操作">
-        <h2>危险区</h2>
+      <Pane heading="危险区" tone="danger">
         <p>最终清理会永久删除对象，无法撤销。</p>
         <AdminOperationPanel canRunFinalCleanup={isSuperAdmin} />
-      </section>
+      </Pane>
     </main>
   );
 }

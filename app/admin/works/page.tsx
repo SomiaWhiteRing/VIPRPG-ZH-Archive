@@ -1,9 +1,14 @@
 import Link from "next/link";
+import { BackLink } from "@/app/components/ui/back-link";
+import { ChipList } from "@/app/components/ui/chip-list";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { listEditableWorksForAdmin } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatUnreadCount, formatNumber, formatBytes } from "@/lib/format";
-import { workStatusBadgeClass, workStatusLabel } from "@/lib/labels";
+import { formatNumber, formatBytes } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -16,28 +21,18 @@ export default async function AdminWorksPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Admin Works</p>
-          <h1>作品资料维护</h1>
-        </div>
-        <div className="actions header-actions">
-          <Link className="button primary" href="/admin">
-            返回管理端
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-            {unreadInboxCount > 0 ? (
-              <span className="notification-badge">
-                {formatUnreadCount(unreadInboxCount)}
-              </span>
-            ) : null}
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin Works"
+        title="作品资料维护"
+        actions={
+          <>
+            <BackLink href="/admin" label="返回管理端" />
+            <InboxLink unread={unreadInboxCount} />
+          </>
+        }
+      />
 
-      <section className="table-wrap" aria-label="作品列表">
-        <table className="data-table admin-works-table">
+      <TableWrap label="作品列表" minWidth={980}>
           <thead>
             <tr>
               <th>作品</th>
@@ -58,9 +53,7 @@ export default async function AdminWorksPage() {
                   <span className="mono muted-line">{work.slug}</span>
                 </td>
                 <td>
-                  <span className={`badge ${workStatusBadgeClass(work.status)}`}>
-                    {workStatusLabel(work.status)}
-                  </span>
+                  <StatusBadge kind="publication" value={work.status} />
                   {work.usesManiacsPatch ? (
                     <span className="muted-line">Maniacs Patch</span>
                   ) : null}
@@ -72,11 +65,10 @@ export default async function AdminWorksPage() {
                 </td>
                 <td>
                   {work.tags.length > 0 ? (
-                    <div className="chip-list compact-chip-list">
-                      {work.tags.slice(0, 6).map((tag) => (
-                        <span key={tag.slug}>{tag.name}</span>
-                      ))}
-                    </div>
+                    <ChipList
+                      compact
+                      items={work.tags.slice(0, 6).map((tag) => ({ label: tag.name }))}
+                    />
                   ) : (
                     <span className="muted-line">未填写</span>
                   )}
@@ -96,8 +88,7 @@ export default async function AdminWorksPage() {
               </tr>
             ))}
           </tbody>
-        </table>
-      </section>
+      </TableWrap>
     </main>
   );
 }

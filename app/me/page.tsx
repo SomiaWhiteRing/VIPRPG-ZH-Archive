@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { InboxLink } from "@/app/components/ui/inbox-link";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   canAccessSuperAdminRole,
@@ -45,35 +50,20 @@ export default async function MePage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">My Account</p>
-          <h1>我的账户</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="My Account" title="我的账户" />
 
       <div className="me-grid">
         <aside className="me-card-stack" aria-label="账户摘要">
-          <section className="card">
-            <h2>账户</h2>
-            <dl className="detail-list">
-              <div>
-                <dt>显示名</dt>
-                <dd>{currentUser.displayName}</dd>
-              </div>
-              <div>
-                <dt>当前层级</dt>
-                <dd>{roleLabel(currentUser.role)}</dd>
-              </div>
-              <div>
-                <dt>站内信未读</dt>
-                <dd>{formatNumber(unread)}</dd>
-              </div>
-            </dl>
+          <Pane heading="账户">
+            <StatList
+              items={[
+                { label: "显示名", value: currentUser.displayName },
+                { label: "当前层级", value: roleLabel(currentUser.role) },
+                { label: "站内信未读", value: formatNumber(unread) },
+              ]}
+            />
             <div className="actions">
-              <Link className="button" href="/inbox">
-                打开站内信
-              </Link>
+              <InboxLink unread={unread} />
               <form action="/api/auth/logout" method="post" className="inline-form">
                 <input type="hidden" name="next" value="/" />
                 <button className="button" type="submit">
@@ -81,10 +71,9 @@ export default async function MePage() {
                 </button>
               </form>
             </div>
-          </section>
+          </Pane>
 
-          <section className="card">
-            <h2>权限与上传</h2>
+          <Pane heading="权限与上传">
             {canUploadRole(currentUser.role) ? (
               <>
                 <p className="muted-line">
@@ -121,11 +110,10 @@ export default async function MePage() {
                 </form>
               </>
             )}
-          </section>
+          </Pane>
 
           {canManageUsersRole(currentUser.role) ? (
-            <section className="card">
-              <h2>管理</h2>
+            <Pane heading="管理">
               <div className="actions">
                 <Link className="button primary" href="/admin">
                   进入控制台
@@ -136,12 +124,11 @@ export default async function MePage() {
                   </Link>
                 ) : null}
               </div>
-            </section>
+            </Pane>
           ) : null}
         </aside>
 
-        <section className="card" aria-label="最近站内信">
-          <h2>最近站内信</h2>
+        <Pane heading="最近站内信">
           {inbox.length === 0 ? (
             <p className="muted-line">暂时没有站内信。</p>
           ) : (
@@ -166,7 +153,7 @@ export default async function MePage() {
 
           {canUploadRole(currentUser.role) ? (
             <>
-              <h2 className="section-divider">最近导入任务</h2>
+              <SectionHeading divided title="最近导入任务" />
               {jobs.length === 0 ? (
                 <p className="muted-line">还没有导入任务。</p>
               ) : (
@@ -202,7 +189,7 @@ export default async function MePage() {
               </div>
             </>
           ) : null}
-        </section>
+        </Pane>
       </div>
     </main>
   );

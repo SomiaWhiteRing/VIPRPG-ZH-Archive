@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatList } from "@/app/components/ui/stat-list";
 import {
   listPublicCharacters,
   type PublicCharacterSummary,
@@ -19,12 +22,7 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Characters</p>
-          <h1>登场角色</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="Characters" title="登场角色" />
 
       <form className="library-toolbar" action="/characters" method="get">
         <label>
@@ -53,9 +51,7 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
           ))}
         </section>
       ) : (
-        <section className="card empty-card">
-          <h2>没有找到匹配的角色。</h2>
-        </section>
+        <EmptyState title="没有找到匹配的角色。" />
       )}
     </main>
   );
@@ -73,12 +69,11 @@ function CharacterCard({ character }: { character: PublicCharacterSummary }) {
         ) : null}
       </div>
       {character.description ? <p>{character.description}</p> : null}
-      <dl className="game-card-stats">
-        <div>
-          <dt>登场作品</dt>
-          <dd>{formatNumber(character.workCount)}</dd>
-        </div>
-      </dl>
+      <StatList
+        columns={3}
+        items={[{ label: "登场作品", value: formatNumber(character.workCount) }]}
+        variant="tiles"
+      />
     </article>
   );
 }

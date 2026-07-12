@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   canManageUsersRole,
@@ -11,11 +15,7 @@ import {
   type InboxItem,
 } from "@/lib/server/db/inbox";
 import { formatUnreadCount, formatDate } from "@/lib/format";
-import {
-  inboxStatusBadgeClass,
-  inboxStatusLabel,
-  roleLabel,
-} from "@/lib/labels";
+import { roleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -31,37 +31,41 @@ export default async function InboxPage() {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Inbox</p>
-          <h1>
+      <PageHeader
+        actions={
+          <>
+            {unreadInboxCount > 0 ? (
+              <form action="/api/inbox/read-all" method="post" className="inline-form">
+                <button className="button primary" type="submit">
+                  全部标记已读
+                </button>
+              </form>
+            ) : null}
+            {canManageUsersRole(currentUser.role) ? (
+              <Link className="button" href="/admin/users">
+                用户层级
+              </Link>
+            ) : null}
+          </>
+        }
+        eyebrow="Inbox"
+        subtitle={`当前层级：${roleLabel(currentUser.role)}`}
+        title={
+          <>
             站内信
             {unreadInboxCount > 0 ? (
               <span className="title-badge">
                 {formatUnreadCount(unreadInboxCount)}
               </span>
             ) : null}
-          </h1>
-          <p className="subtitle">当前层级：{roleLabel(currentUser.role)}</p>
-        </div>
-        <div className="actions header-actions">
-          {unreadInboxCount > 0 ? (
-            <form action="/api/inbox/read-all" method="post" className="inline-form">
-              <button className="button primary" type="submit">
-                全部标记已读
-              </button>
-            </form>
-          ) : null}
-          {canManageUsersRole(currentUser.role) ? (
-            <Link className="button" href="/admin/users">
-              用户层级
-            </Link>
-          ) : null}
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <section className="table-wrap" aria-label="站内信列表">
-        <table className="data-table">
+      {items.length === 0 ? (
+        <EmptyState title="暂无站内信。" />
+      ) : (
+        <TableWrap label="站内信列表" minWidth={820}>
           <thead>
             <tr>
               <th>标题</th>
@@ -72,33 +76,25 @@ export default async function InboxPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={5}>暂无站内信。</td>
+            {items.map((item) => (
+              <tr className={item.readAt ? undefined : "unread-row"} key={item.id}>
+                <td>
+                  <strong>{item.title}</strong>
+                  {!item.readAt ? <span className="inline-unread-dot">未读</span> : null}
+                  <span className="muted-line">{describeItem(item)}</span>
+                  <span className="muted-line">{item.body}</span>
+                </td>
+                <td>{typeLabel(item.type)}</td>
+                <td>
+                  <StatusBadge kind="approval" value={item.status} />
+                </td>
+                <td>{formatDate(item.createdAt)}</td>
+                <td>{renderActions(item, currentUser.role)}</td>
               </tr>
-            ) : (
-              items.map((item) => (
-                <tr className={item.readAt ? undefined : "unread-row"} key={item.id}>
-                  <td>
-                    <strong>{item.title}</strong>
-                    {!item.readAt ? <span className="inline-unread-dot">未读</span> : null}
-                    <span className="muted-line">{describeItem(item)}</span>
-                    <span className="muted-line">{item.body}</span>
-                  </td>
-                  <td>{typeLabel(item.type)}</td>
-                  <td>
-                    <span className={`badge ${inboxStatusBadgeClass(item.status)}`}>
-                      {inboxStatusLabel(item.status)}
-                    </span>
-                  </td>
-                  <td>{formatDate(item.createdAt)}</td>
-                  <td>{renderActions(item, currentUser.role)}</td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
-        </table>
-      </section>
+        </TableWrap>
+      )}
     </main>
   );
 }

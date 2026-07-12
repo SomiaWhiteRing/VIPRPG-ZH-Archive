@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Pane } from "@/app/components/ui/pane";
+import { SectionHeading } from "@/app/components/ui/section-heading";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { canManageUsersRole, canUploadRole } from "@/lib/server/auth/roles";
 import {
@@ -77,22 +79,21 @@ export default async function HomePage() {
       </section>
 
       <section className="festival-zone" aria-label="项目简介">
-        <div className="notice-pane">
-          <h2>收录范围</h2>
+        <Pane heading="收录范围">
           <p>
             收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，包括原版、汉化版、修正版与活动投稿。
           </p>
           <p>
             技术细节与保存边界见 <Link href="/about">关于本归档</Link>。
           </p>
-        </div>
+        </Pane>
       </section>
 
       <section className="festival-zone" aria-label="主要入口">
-        <div className="festival-zone-heading">
-          <h2>浏览板</h2>
-          <Link href="/games">查看全部作品 →</Link>
-        </div>
+        <SectionHeading
+          action={<Link href="/games">查看全部作品 →</Link>}
+          title="浏览板"
+        />
         <div className="entry-grid">
           {ENTRIES.map((entry) => {
             const count = counts[entry.countKey];
@@ -113,9 +114,7 @@ export default async function HomePage() {
       </section>
 
       <section className="festival-zone" aria-label="参与贡献">
-        <div className="festival-zone-heading">
-          <h2>参与贡献</h2>
-        </div>
+        <SectionHeading title="参与贡献" />
         <div className="contribute-grid">
           {!currentUser ? (
             <>
@@ -163,11 +162,11 @@ export default async function HomePage() {
       </section>
 
       <section className="festival-zone" aria-label="最近更新">
-        <div className="festival-zone-heading">
-          <h2>最近更新</h2>
-          <Link href="/games">查看全部作品 →</Link>
-        </div>
-        <div className="notice-pane">
+        <SectionHeading
+          action={<Link href="/games">查看全部作品 →</Link>}
+          title="最近更新"
+        />
+        <Pane>
           {recent.length > 0 ? (
             <ul className="recent-update-list">
               {recent.map((item) => (
@@ -182,7 +181,7 @@ export default async function HomePage() {
           ) : (
             <p className="muted-line">还没有公开作品。</p>
           )}
-        </div>
+        </Pane>
       </section>
     </main>
   );

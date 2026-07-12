@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { FormField } from "@/app/components/ui/form-field";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 
@@ -21,15 +24,9 @@ export default async function ResetPasswordPage({
 
   return (
     <main className="narrow-main">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Account</p>
-          <h1>重置密码</h1>
-          <p className="subtitle">输入邮箱验证码和新密码。</p>
-        </div>
-      </header>
+      <PageHeader eyebrow="Account" title="重置密码" subtitle="输入邮箱验证码和新密码。" />
 
-      <section className="card form-card">
+      <Pane>
         {params.sent ? (
           <p className="success-message">
             {VERIFICATION_EMAIL_HINT.replace("{email}", params.email ?? "")}
@@ -42,8 +39,7 @@ export default async function ResetPasswordPage({
           className="stack-form"
         >
           <input type="hidden" name="next" value={nextPath} />
-          <label className="field">
-            <span>邮箱</span>
+          <FormField label="邮箱">
             <input
               autoComplete="email"
               defaultValue={params.email ?? ""}
@@ -53,9 +49,8 @@ export default async function ResetPasswordPage({
               required
               type="email"
             />
-          </label>
-          <label className="field">
-            <span>验证码</span>
+          </FormField>
+          <FormField label="验证码">
             <input
               autoComplete="one-time-code"
               inputMode="numeric"
@@ -66,9 +61,8 @@ export default async function ResetPasswordPage({
               required
               type="text"
             />
-          </label>
-          <label className="field">
-            <span>新密码</span>
+          </FormField>
+          <FormField label="新密码">
             <input
               autoComplete="new-password"
               minLength={10}
@@ -76,7 +70,7 @@ export default async function ResetPasswordPage({
               required
               type="password"
             />
-          </label>
+          </FormField>
           <button className="button primary" type="submit">
             更新密码
           </button>
@@ -87,7 +81,7 @@ export default async function ResetPasswordPage({
           </Link>
           <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
         </div>
-      </section>
+      </Pane>
     </main>
   );
 }

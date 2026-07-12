@@ -23,6 +23,7 @@ import type {
 } from "@/app/upload/upload-types";
 import { formatBytes } from "@/lib/format";
 import { uploadTaskStatusLabel } from "@/lib/labels";
+import { StatList } from "@/app/components/ui/stat-list";
 
 type StartUploadInput = {
   sourceKind: UploadSourceKind;
@@ -260,7 +261,7 @@ function UploadFloatingDock({
         <span>上传</span>
         <strong>{Math.round(totalPercent)}%</strong>
         {activeTasks.length > 0 ? (
-          <span className="notification-badge">{activeTasks.length}</span>
+          <span className="task-count-badge">{activeTasks.length}</span>
         ) : null}
       </button>
       {open ? (
@@ -280,26 +281,21 @@ function UploadFloatingDock({
               <div className="upload-progress">
                 <span style={{ width: `${Math.min(100, task.progress.percent)}%` }} />
               </div>
-              <dl className="upload-task-metrics">
-                <div>
-                  <dt>文件</dt>
-                  <dd>
-                    {task.progress.processedFiles.toLocaleString("zh-CN")} /{" "}
-                    {task.progress.totalFiles.toLocaleString("zh-CN")}
-                  </dd>
-                </div>
-                <div>
-                  <dt>文件</dt>
-                  <dd>
-                    {task.progress.uploadedObjects.toLocaleString("zh-CN")} /{" "}
-                    {task.progress.totalUploadObjects.toLocaleString("zh-CN")}
-                  </dd>
-                </div>
-                <div>
-                  <dt>归档</dt>
-                  <dd>{formatBytes(task.stats.includedSizeBytes)}</dd>
-                </div>
-              </dl>
+              <StatList
+                columns={2}
+                items={[
+                  {
+                    label: "文件",
+                    value: `${task.progress.processedFiles.toLocaleString("zh-CN")} / ${task.progress.totalFiles.toLocaleString("zh-CN")}`,
+                  },
+                  {
+                    label: "文件",
+                    value: `${task.progress.uploadedObjects.toLocaleString("zh-CN")} / ${task.progress.totalUploadObjects.toLocaleString("zh-CN")}`,
+                  },
+                  { label: "归档", value: formatBytes(task.stats.includedSizeBytes) },
+                ]}
+                variant="tiles"
+              />
               {task.error ? <p className="error-message compact">{task.error}</p> : null}
               {task.progress.currentPath ? (
                 <p className="upload-current-path">{task.progress.currentPath}</p>

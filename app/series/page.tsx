@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatList } from "@/app/components/ui/stat-list";
 import {
   listPublicSeries,
   type PublicSeriesSummary,
@@ -19,12 +22,7 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Series</p>
-          <h1>系列作品</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="Series" title="系列作品" />
 
       <form className="library-toolbar" action="/series" method="get">
         <label>
@@ -53,9 +51,7 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
           ))}
         </section>
       ) : (
-        <section className="card empty-card">
-          <h2>没有找到匹配的系列。</h2>
-        </section>
+        <EmptyState title="没有找到匹配的系列。" />
       )}
     </main>
   );
@@ -71,12 +67,11 @@ function SeriesCard({ item }: { item: PublicSeriesSummary }) {
         {item.titleOriginal ? <span className="muted-line">{item.titleOriginal}</span> : null}
       </div>
       {item.description ? <p>{item.description}</p> : null}
-      <dl className="game-card-stats">
-        <div>
-          <dt>作品</dt>
-          <dd>{formatNumber(item.workCount)}</dd>
-        </div>
-      </dl>
+      <StatList
+        columns={3}
+        items={[{ label: "作品", value: formatNumber(item.workCount) }]}
+        variant="tiles"
+      />
     </article>
   );
 }

@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatList } from "@/app/components/ui/stat-list";
 import { listPublicTags, type PublicTagSummary } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { namespaceLabel } from "@/lib/labels";
@@ -17,12 +20,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
 
   return (
     <main>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Tags</p>
-          <h1>标签</h1>
-        </div>
-      </header>
+      <PageHeader eyebrow="Tags" title="标签" />
 
       <form className="library-toolbar" action="/tags" method="get">
         <label>
@@ -52,9 +50,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
           ))}
         </section>
       ) : (
-        <section className="card empty-card">
-          <h2>没有找到匹配的标签。</h2>
-        </section>
+        <EmptyState title="没有找到匹配的标签。" />
       )}
     </main>
   );
@@ -70,16 +66,14 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
         <span className="mono muted-line">{tag.slug}</span>
       </div>
       <p>{tag.description || namespaceLabel(tag.namespace)}</p>
-      <dl className="game-card-stats">
-        <div>
-          <dt>作品</dt>
-          <dd>{formatNumber(tag.workCount)}</dd>
-        </div>
-        <div>
-          <dt>发布版本</dt>
-          <dd>{formatNumber(tag.releaseCount)}</dd>
-        </div>
-      </dl>
+      <StatList
+        columns={3}
+        items={[
+          { label: "作品", value: formatNumber(tag.workCount) },
+          { label: "发布版本", value: formatNumber(tag.releaseCount) },
+        ]}
+        variant="tiles"
+      />
     </article>
   );
 }

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import Script from "next/script";
 import { redirect } from "next/navigation";
+import { FormField } from "@/app/components/ui/form-field";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
 import { getTurnstileSiteKeyOrNull } from "@/lib/server/auth/config";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
@@ -32,15 +35,13 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       {turnstileKey ? (
         <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       ) : null}
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Account</p>
-          <h1>注册</h1>
-          <p className="subtitle">注册后需要管理员批准才可以上传游戏。</p>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Account"
+        title="注册"
+        subtitle="注册后需要管理员批准才可以上传游戏。"
+      />
 
-      <section className="card form-card">
+      <Pane>
         {params.error ? <p className="error-message">{params.error}</p> : null}
         {params.sent ? (
           <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
@@ -50,7 +51,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         <div className="form-links">
           <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
         </div>
-      </section>
+      </Pane>
     </main>
   );
 }
@@ -59,8 +60,7 @@ function RegisterStartForm({ nextPath, turnstileKey }: { nextPath: string; turns
   return (
     <form action="/api/auth/register/start" method="post" className="stack-form">
       <input type="hidden" name="next" value={nextPath} />
-      <label className="field">
-        <span>邮箱</span>
+      <FormField label="邮箱">
         <input
           autoComplete="email"
           inputMode="email"
@@ -69,9 +69,8 @@ function RegisterStartForm({ nextPath, turnstileKey }: { nextPath: string; turns
           required
           type="email"
         />
-      </label>
-      <label className="field">
-        <span>密码</span>
+      </FormField>
+      <FormField label="密码">
         <input
           autoComplete="new-password"
           minLength={10}
@@ -79,7 +78,7 @@ function RegisterStartForm({ nextPath, turnstileKey }: { nextPath: string; turns
           required
           type="password"
         />
-      </label>
+      </FormField>
       {turnstileKey ? (
         <div className="turnstile-box">
           <div className="cf-turnstile" data-sitekey={turnstileKey} />
@@ -106,8 +105,7 @@ function VerificationForm({
       </p>
       <input type="hidden" name="next" value={nextPath} />
       <input type="hidden" name="email" value={email} />
-      <label className="field">
-        <span>验证码</span>
+      <FormField label="验证码">
         <input
           autoComplete="one-time-code"
           inputMode="numeric"
@@ -118,7 +116,7 @@ function VerificationForm({
           required
           type="text"
         />
-      </label>
+      </FormField>
       <button className="button primary" type="submit">
         完成注册
       </button>
