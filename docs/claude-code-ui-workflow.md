@@ -29,7 +29,7 @@ Use this before a large interaction/navigation rewrite:
 Use this when asking Claude to redesign pages:
 
 ```text
-/ui-redesign app/page.tsx app/globals.css
+/ui-redesign app/page.tsx app/styles/pages.css app/styles/components.css
 目标：把首页改成现代化 VIPRPG 祭典入口页，保留现有登录、站内信、下载、在线游玩和上传入口。
 先给 2-3 个视觉方向，等我确认后再改代码。
 ```
@@ -37,7 +37,7 @@ Use this when asking Claude to redesign pages:
 Use this after UI edits:
 
 ```text
-/ui-audit app/page.tsx app/globals.css
+/ui-audit app/page.tsx app/styles/pages.css app/styles/components.css
 请用 Playwright 或 Chrome DevTools MCP 检查桌面和移动端截图，按严重程度列出问题。
 ```
 
@@ -59,3 +59,9 @@ For a larger redesign, start with public pages first:
 - fidelity to `docs/ui-viprpg-festival-design-brief.md`
 - fidelity to `docs/ux-rebuild-brief.md`
 - primary task paths still work after interaction changes
+
+## Current UI Structure
+
+- Shared React primitives live in `app/components/ui/`.
+- Global CSS is split into `tokens.css`, `base.css`, `layout.css`, `components.css`, and `pages.css` under `app/styles/`.
+- Phase and final screenshot matrices live under `docs/audit/`; the completed redesign comparison is `2026-07-baseline/` versus `2026-07-after/`.
