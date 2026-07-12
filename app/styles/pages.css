@@ -399,7 +399,7 @@
 .lookup-row div { display: grid; gap: var(--space-1); }
 .lookup-row small { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .lookup-row button {
-  min-height: calc(var(--space-6) + var(--space-1));
+  min-height: 40px;
   padding: 0 var(--space-3);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
@@ -597,6 +597,11 @@
 .web-player-frame:fullscreen canvas,
 .web-player-frame:fullscreen img { width: 100vw; height: 100vh; max-height: none; }
 .web-player-frame canvas:focus { outline: none; }
+.web-player-frame:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--focus-ring-contrast);
+}
 .web-player-status {
   min-height: var(--space-6);
   color: var(--text-muted);
@@ -626,9 +631,21 @@
 .web-play-log-list span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .web-play-log-list p { margin: 0; overflow-wrap: anywhere; }
 @media (min-width: 761px) and (max-width: 960px) {
-  .entry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .entry-grid,
+  .directory-card-grid,
+  .game-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .me-dashboard,
+  .upload-layout { grid-template-columns: 1fr; }
+  .upload-source-card { position: static; }
+  .work-hero { grid-template-areas: "overview" "visual"; grid-template-columns: 1fr; }
+  .web-play-layout {
+    grid-template-areas: "player" "sidebar";
+    grid-template-columns: 1fr;
+  }
+  .web-play-sidebar { position: static; }
 }
 @media (max-width: 760px) {
+  .festival-hero { padding: clamp(var(--space-4), 7vw, var(--space-6)) var(--space-4); }
   .me-dashboard,
   .entry-grid,
   .contribute-grid,

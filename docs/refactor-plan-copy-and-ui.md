@@ -384,12 +384,12 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 ### Phase 5 —— 响应式与可访问性专项（1 天）
 
-- [ ] **5.1 平板断点补齐。** 在 761–960px 区间：`.game-card-grid`/`.creator-card-grid` 降为 2 列；`me-grid`/`work-hero`/`upload-layout`/`web-play-layout` 双列布局在此区间评估是否提前塌为单列。
-- [ ] **5.2 窄手机检查（390 与 480 以下）。** festival-hero padding 随屏缩（clamp）；`.data-table th/td` 在 ≤760 收紧 padding；确认 Phase 4.4 的移动端版本卡片生效。
-- [ ] **5.3 点击区。** `.chip-list a`、`.site-nav a`、`.lookup-row button` 等 min-height 提到 ≥ 40px（通过 padding，不破布局）。
-- [ ] **5.4 键盘走查。** 每类页面（首页/列表/详情/表单/admin 表格）纯 Tab 走一遍：焦点顺序符合任务顺序、焦点环可见、无焦点陷阱；`.web-player-frame canvas` 保持现状但给外层容器加可见焦点样式。
-- [ ] **5.5 对比度终审。** DevTools 逐主题抽查正文/muted/链接/徽章底色组合 ≥ 4.5:1（大标题 ≥ 3:1），不达标改 token 值而不是加特例。
-- [ ] **5.6 Phase 验证**：三视口（390/820/1440）× 代表页面截图，无横滚、无重叠。
+- [x] **5.1 平板断点补齐。** 在 761–960px 区间：`.game-card-grid`/`.creator-card-grid` 降为 2 列；`me-grid`/`work-hero`/`upload-layout`/`web-play-layout` 双列布局在此区间评估是否提前塌为单列。
+- [x] **5.2 窄手机检查（390 与 480 以下）。** festival-hero padding 随屏缩（clamp）；`.data-table th/td` 在 ≤760 收紧 padding；确认 Phase 4.4 的移动端版本卡片生效。
+- [x] **5.3 点击区。** `.chip-list a`、`.site-nav a`、`.lookup-row button` 等 min-height 提到 ≥ 40px（通过 padding，不破布局）。
+- [x] **5.4 键盘走查。** 每类页面（首页/列表/详情/表单/admin 表格）纯 Tab 走一遍：焦点顺序符合任务顺序、焦点环可见、无焦点陷阱；`.web-player-frame canvas` 保持现状但给外层容器加可见焦点样式。
+- [x] **5.5 对比度终审。** DevTools 逐主题抽查正文/muted/链接/徽章底色组合 ≥ 4.5:1（大标题 ≥ 3:1），不达标改 token 值而不是加特例。
+- [x] **5.6 Phase 验证**：三视口（390/820/1440）× 代表页面截图，无横滚、无重叠。
 
 ### Phase 6 —— 终验与收尾（半天）
 
