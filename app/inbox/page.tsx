@@ -65,35 +65,68 @@ export default async function InboxPage() {
       {items.length === 0 ? (
         <EmptyState title="暂无站内信。" />
       ) : (
-        <TableWrap label="站内信列表" minWidth={820}>
-          <thead>
-            <tr>
-              <th>标题</th>
-              <th>类型</th>
-              <th>状态</th>
-              <th>时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          <div className="inbox-table-view">
+            <TableWrap label="站内信列表" minWidth={820}>
+              <thead>
+                <tr>
+                  <th>标题</th>
+                  <th>类型</th>
+                  <th>状态</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr className={item.readAt ? undefined : "unread-row"} key={item.id}>
+                    <td>
+                      <strong>{item.title}</strong>
+                      {!item.readAt ? <span className="inline-unread-dot">未读</span> : null}
+                      <span className="muted-line">{describeItem(item)}</span>
+                      <span className="muted-line">{item.body}</span>
+                    </td>
+                    <td>{typeLabel(item.type)}</td>
+                    <td>
+                      <StatusBadge kind="approval" value={item.status} />
+                    </td>
+                    <td>{formatDate(item.createdAt)}</td>
+                    <td>{renderActions(item, currentUser.role)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          </div>
+
+          <ul className="inbox-card-list" aria-label="站内信列表">
             {items.map((item) => (
-              <tr className={item.readAt ? undefined : "unread-row"} key={item.id}>
-                <td>
-                  <strong>{item.title}</strong>
-                  {!item.readAt ? <span className="inline-unread-dot">未读</span> : null}
-                  <span className="muted-line">{describeItem(item)}</span>
-                  <span className="muted-line">{item.body}</span>
-                </td>
-                <td>{typeLabel(item.type)}</td>
-                <td>
+              <li className={`inbox-card${item.readAt ? "" : " unread"}`} key={item.id}>
+                <header>
+                  <div>
+                    <strong>{item.title}</strong>
+                    {!item.readAt ? <span className="inline-unread-dot">未读</span> : null}
+                  </div>
                   <StatusBadge kind="approval" value={item.status} />
-                </td>
-                <td>{formatDate(item.createdAt)}</td>
-                <td>{renderActions(item, currentUser.role)}</td>
-              </tr>
+                </header>
+                <p className="muted-line">{describeItem(item)}</p>
+                <p>{item.body}</p>
+                <dl className="inbox-card-meta">
+                  <div>
+                    <dt>类型</dt>
+                    <dd>{typeLabel(item.type)}</dd>
+                  </div>
+                  <div>
+                    <dt>时间</dt>
+                    <dd>{formatDate(item.createdAt)}</dd>
+                  </div>
+                </dl>
+                <div className="inbox-card-actions">
+                  {renderActions(item, currentUser.role)}
+                </div>
+              </li>
             ))}
-          </tbody>
-        </TableWrap>
+          </ul>
+        </>
       )}
     </main>
   );

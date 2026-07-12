@@ -86,48 +86,6 @@ export default async function AdminPage() {
         </div>
       </Pane>
 
-      <Pane heading="内容管理">
-        <div className="admin-quick-nav">
-          <Link className="button primary" href="/admin/works">
-            作品
-          </Link>
-          <Link className="button" href="/admin/archive-versions">
-            归档快照
-          </Link>
-          <Link className="button" href="/admin/archive-versions/trash">
-            归档回收站
-          </Link>
-          <Link className="button" href="/admin/creators">
-            作者
-          </Link>
-          <Link className="button" href="/admin/characters">
-            角色
-          </Link>
-          <Link className="button" href="/admin/tags">
-            标签
-          </Link>
-          <Link className="button" href="/admin/series">
-            系列
-          </Link>
-        </div>
-      </Pane>
-
-      <Pane heading="用户与权限">
-        <div className="admin-quick-nav">
-          <Link className="button primary" href="/admin/users">
-            用户层级
-          </Link>
-          <Link className="button" href="/inbox">
-            站内信
-          </Link>
-          {isSuperAdmin ? (
-            <Link className="button" href="/admin/audit">
-              审计日志
-            </Link>
-          ) : null}
-        </div>
-      </Pane>
-
       <Pane heading="近期导入">
         {observability.imports.recent.length > 0 ? (
           <TableWrap compact label="近期导入" minWidth={760}>

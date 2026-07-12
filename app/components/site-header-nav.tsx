@@ -66,19 +66,24 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
             <Link
               href="/"
               className={pathname === "/" ? "active" : undefined}
+              aria-current={pathname === "/" ? "page" : undefined}
             >
               首页
             </Link>
           ) : null}
           {links.map((link) => {
-            const active =
-              pathname === link.href ||
-              (link.href !== "/" && pathname.startsWith(`${link.href}/`));
+            const exact = pathname === link.href;
+            const sectionActive =
+              link.href !== "/" &&
+              link.href !== "/admin" &&
+              pathname.startsWith(`${link.href}/`);
+            const active = exact || sectionActive;
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 className={active ? "active" : undefined}
+                aria-current={exact ? "page" : sectionActive ? "location" : undefined}
               >
                 {link.label}
               </Link>
@@ -88,6 +93,13 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
             <Link
               href="/upload"
               className={pathname.startsWith("/upload") ? "active" : undefined}
+              aria-current={
+                pathname === "/upload"
+                  ? "page"
+                  : pathname.startsWith("/upload/")
+                    ? "location"
+                    : undefined
+              }
             >
               上传
             </Link>

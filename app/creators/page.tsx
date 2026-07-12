@@ -50,7 +50,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
       </section>
 
       {creators.length > 0 ? (
-        <section className="creator-card-grid" aria-label="作者列表">
+        <section className="directory-card-grid" aria-label="作者列表">
           {creators.map((creator) => (
             <CreatorCard creator={creator} key={creator.id} />
           ))}
@@ -64,9 +64,9 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
 
 function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
   return (
-    <article className="creator-card">
+    <article className="directory-card">
       <div>
-        <Link className="creator-card-title" href={`/creators/${creator.slug}`}>
+        <Link className="directory-card-title" href={`/creators/${creator.slug}`}>
           {creator.name}
         </Link>
         {creator.originalName ? (

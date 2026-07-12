@@ -22,8 +22,8 @@ import type {
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
 import { formatBytes } from "@/lib/format";
-import { uploadTaskStatusLabel } from "@/lib/labels";
 import { StatList } from "@/app/components/ui/stat-list";
+import { StatusBadge } from "@/app/components/ui/status-badge";
 
 type StartUploadInput = {
   sourceKind: UploadSourceKind;
@@ -257,7 +257,13 @@ function UploadFloatingDock({
 
   return (
     <aside className="upload-dock" aria-label="上传任务">
-      <button className="upload-dock-button" onClick={open ? onClose : onOpen} type="button">
+      <button
+        aria-controls="upload-task-panel"
+        aria-expanded={open}
+        className="upload-dock-button"
+        onClick={open ? onClose : onOpen}
+        type="button"
+      >
         <span>上传</span>
         <strong>{Math.round(totalPercent)}%</strong>
         {activeTasks.length > 0 ? (
@@ -265,9 +271,12 @@ function UploadFloatingDock({
         ) : null}
       </button>
       {open ? (
-        <div className="upload-panel">
+        <div className="upload-panel" id="upload-task-panel">
           <div className="upload-panel-header">
-            <strong>上传任务</strong>
+            <div>
+              <strong>上传任务</strong>
+              <span>{value.tasks.length} 个任务</span>
+            </div>
             <button className="button" onClick={onClose} type="button">
               收起
             </button>
@@ -276,9 +285,17 @@ function UploadFloatingDock({
             <article className="upload-task-item" key={task.localTaskId}>
               <div className="upload-task-title">
                 <strong>{task.sourceName}</strong>
-                <span>{uploadTaskStatusLabel(task.status)} / {phaseLabel(task.phase)}</span>
+                <StatusBadge kind="upload-task" value={task.status} />
               </div>
-              <div className="upload-progress">
+              <span className="upload-task-phase">{phaseLabel(task.phase)}</span>
+              <div
+                aria-label={`${task.sourceName} 上传进度`}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={Math.round(Math.min(100, task.progress.percent))}
+                className="upload-progress"
+                role="progressbar"
+              >
                 <span style={{ width: `${Math.min(100, task.progress.percent)}%` }} />
               </div>
               <StatList
@@ -289,7 +306,7 @@ function UploadFloatingDock({
                     value: `${task.progress.processedFiles.toLocaleString("zh-CN")} / ${task.progress.totalFiles.toLocaleString("zh-CN")}`,
                   },
                   {
-                    label: "文件",
+                    label: "上传对象",
                     value: `${task.progress.uploadedObjects.toLocaleString("zh-CN")} / ${task.progress.totalUploadObjects.toLocaleString("zh-CN")}`,
                   },
                   { label: "归档", value: formatBytes(task.stats.includedSizeBytes) },

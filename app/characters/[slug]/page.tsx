@@ -4,7 +4,6 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
@@ -50,21 +49,14 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
         title={character.primaryName}
       />
 
-      <section className="section-grid creator-profile-grid" aria-label="角色资料">
-        {character.description ? (
-          <Pane heading="简介">
-            <p>{character.description}</p>
-          </Pane>
-        ) : null}
-        <Pane heading="关联统计">
-          <StatList items={[{ label: "登场作品", value: formatNumber(character.workCount) }]} />
-        </Pane>
-      </section>
+      <Pane heading="角色资料">
+        {character.description ? <p>{character.description}</p> : null}
+        <StatList items={[{ label: "登场作品", value: formatNumber(character.workCount) }]} />
+      </Pane>
 
-      <section className="creator-credit-section" aria-label="登场作品">
-        <SectionHeading title="登场作品" />
+      <Pane heading="登场作品">
         {character.works.length > 0 ? (
-          <TableWrap compact label="登场作品" minWidth={760}>
+          <TableWrap compact label="登场作品" minWidth={760} mobileCards>
             <thead>
               <tr>
                 <th>作品</th>
@@ -75,7 +67,7 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
             <tbody>
               {character.works.map((work) => (
                 <tr key={work.id}>
-                  <td>
+                  <td data-label="作品">
                     <Link href={`/games/${work.slug}`}>
                       {work.chineseTitle || work.originalTitle}
                     </Link>
@@ -83,8 +75,8 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
                       <span className="muted-line">{work.originalTitle}</span>
                     ) : null}
                   </td>
-                  <td>{engineLabel(work.engineFamily)}</td>
-                  <td>{formatNumber(work.archiveVersionCount)} 个归档</td>
+                  <td data-label="引擎">{engineLabel(work.engineFamily)}</td>
+                  <td data-label="归档">{formatNumber(work.archiveVersionCount)} 个归档</td>
                 </tr>
               ))}
             </tbody>
@@ -92,7 +84,7 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
         ) : (
           <p className="muted-line">暂无公开登场作品。</p>
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

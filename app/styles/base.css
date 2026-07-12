@@ -2,6 +2,9 @@
 html,
 body { min-height: 100%; }
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   margin: 0;
   background-color: var(--page-bg);
   background-image: var(--page-art);

@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
@@ -54,13 +54,12 @@ export default async function AdminReleaseEditPage({
 
       <form
         action={`/api/admin/releases/${release.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="release_id" type="hidden" value={release.id} />
 
-        <section className="form-section">
-          <SectionHeading title="发布版本资料" />
+        <Pane heading="发布版本资料">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="发布版本 key">
               <input readOnly value={release.key} />
@@ -171,7 +170,7 @@ export default async function AdminReleaseEditPage({
               />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
         <div className="actions">
           <button className="button primary" type="submit">

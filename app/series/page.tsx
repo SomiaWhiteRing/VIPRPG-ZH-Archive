@@ -45,7 +45,7 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
       </section>
 
       {series.length > 0 ? (
-        <section className="creator-card-grid" aria-label="系列列表">
+        <section className="directory-card-grid" aria-label="系列列表">
           {series.map((item) => (
             <SeriesCard item={item} key={item.id} />
           ))}
@@ -59,9 +59,9 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
 
 function SeriesCard({ item }: { item: PublicSeriesSummary }) {
   return (
-    <article className="creator-card">
+    <article className="directory-card">
       <div>
-        <Link className="creator-card-title" href={`/series/${item.slug}`}>
+        <Link className="directory-card-title" href={`/series/${item.slug}`}>
           {item.title}
         </Link>
         {item.titleOriginal ? <span className="muted-line">{item.titleOriginal}</span> : null}

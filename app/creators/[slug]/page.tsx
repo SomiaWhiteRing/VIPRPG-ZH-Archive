@@ -4,7 +4,6 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
@@ -50,32 +49,27 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         title={creator.name}
       />
 
-      <section className="section-grid creator-profile-grid" aria-label="作者资料">
-        <Pane heading="简介">
-          {creator.bio ? <p>{creator.bio}</p> : null}
-          {creator.websiteUrl ? (
-            <div className="actions">
-              <a className="button" href={creator.websiteUrl} rel="noreferrer" target="_blank">
-                个人链接
-              </a>
-            </div>
-          ) : null}
-        </Pane>
-        <Pane heading="关联统计">
-          <StatList
-            items={[
-              { label: "作品层职务", value: formatNumber(creator.workCreditCount) },
-              { label: "发布版本职务", value: formatNumber(creator.releaseCreditCount) },
-              { label: "最近发布关联", value: creator.latestReleaseCreditAt ?? "暂无" },
-            ]}
-          />
-        </Pane>
-      </section>
+      <Pane heading="作者资料">
+        {creator.bio ? <p>{creator.bio}</p> : null}
+        <StatList
+          items={[
+            { label: "作品层职务", value: formatNumber(creator.workCreditCount) },
+            { label: "发布版本职务", value: formatNumber(creator.releaseCreditCount) },
+            { label: "最近发布关联", value: creator.latestReleaseCreditAt ?? "暂无" },
+          ]}
+        />
+        {creator.websiteUrl ? (
+          <div className="actions">
+            <a className="button" href={creator.websiteUrl} rel="noreferrer" target="_blank">
+              个人链接
+            </a>
+          </div>
+        ) : null}
+      </Pane>
 
-      <section className="creator-credit-section" aria-label="作品年表">
-        <SectionHeading title="作品年表" />
+      <Pane heading="作品年表">
         {creator.workCredits.length > 0 ? (
-          <TableWrap compact label="作品年表" minWidth={760}>
+          <TableWrap compact label="作品年表" minWidth={760} mobileCards>
             <thead>
               <tr>
                 <th>作品</th>
@@ -86,17 +80,17 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             <tbody>
               {creator.workCredits.map((credit) => (
                 <tr key={`${credit.workId}-${credit.roleKey}`}>
-                  <td>
+                  <td data-label="作品">
                     <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
                     {credit.workTitle !== credit.workOriginalTitle ? (
                       <span className="muted-line">{credit.workOriginalTitle}</span>
                     ) : null}
                   </td>
-                  <td>
+                  <td data-label="职务">
                     {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
                     {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
                   </td>
-                  <td>{credit.originalReleaseDate ?? "未知"}</td>
+                  <td data-label="日期">{credit.originalReleaseDate ?? "未知"}</td>
                 </tr>
               ))}
             </tbody>
@@ -104,12 +98,11 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         ) : (
           <p className="muted-line">暂无作品层职务记录。</p>
         )}
-      </section>
+      </Pane>
 
-      <section className="creator-credit-section" aria-label="发布参与">
-        <SectionHeading title="发布参与" />
+      <Pane heading="发布参与">
         {creator.releaseCredits.length > 0 ? (
-          <TableWrap compact label="发布参与" minWidth={760}>
+          <TableWrap compact label="发布参与" minWidth={760} mobileCards>
             <thead>
               <tr>
                 <th>作品 / 发布版本</th>
@@ -120,15 +113,15 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             <tbody>
               {creator.releaseCredits.map((credit) => (
                 <tr key={`${credit.releaseId}-${credit.roleKey}`}>
-                  <td>
+                  <td data-label="作品 / 发布版本">
                     <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
                     <span className="muted-line">{credit.releaseLabel}</span>
                   </td>
-                  <td>
+                  <td data-label="职务">
                     {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
                     {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
                   </td>
-                  <td>{credit.releaseDate ?? "未知"}</td>
+                  <td data-label="日期">{credit.releaseDate ?? "未知"}</td>
                 </tr>
               ))}
             </tbody>
@@ -136,7 +129,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         ) : (
           <p className="muted-line">暂无发布版本职务记录。</p>
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

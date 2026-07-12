@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
+import { StatList } from "@/app/components/ui/stat-list";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
@@ -48,10 +49,19 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
         title={tag.name}
       />
 
-      <section className="creator-credit-section" aria-label="标签作品">
-        <SectionHeading title="关联作品" />
+      <Pane heading="标签资料">
+        <StatList
+          items={[
+            { label: "分类", value: namespaceLabel(tag.namespace) },
+            { label: "关联作品", value: formatNumber(tag.workCount) },
+            { label: "关联发布版本", value: formatNumber(tag.releaseCount) },
+          ]}
+        />
+      </Pane>
+
+      <Pane heading="关联作品">
         {tag.works.length > 0 ? (
-          <TableWrap compact label="关联作品" minWidth={760}>
+          <TableWrap compact label="关联作品" minWidth={760} mobileCards>
             <thead>
               <tr>
                 <th>作品</th>
@@ -62,7 +72,7 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
             <tbody>
               {tag.works.map((work) => (
                 <tr key={work.id}>
-                  <td>
+                  <td data-label="作品">
                     <Link href={`/games/${work.slug}`}>
                       {work.chineseTitle || work.originalTitle}
                     </Link>
@@ -70,8 +80,8 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
                       <span className="muted-line">{work.originalTitle}</span>
                     ) : null}
                   </td>
-                  <td>{engineLabel(work.engineFamily)}</td>
-                  <td>{formatNumber(work.archiveVersionCount)} 个归档</td>
+                  <td data-label="引擎">{engineLabel(work.engineFamily)}</td>
+                  <td data-label="归档">{formatNumber(work.archiveVersionCount)} 个归档</td>
                 </tr>
               ))}
             </tbody>
@@ -79,7 +89,7 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
         ) : (
           <p className="muted-line">暂无公开关联作品。</p>
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

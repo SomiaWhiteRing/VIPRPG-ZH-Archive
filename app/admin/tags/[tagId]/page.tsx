@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getTagForAdminEdit } from "@/lib/server/db/taxonomy-library";
@@ -48,12 +48,11 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
 
       <form
         action={`/api/admin/tags/${tag.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="tag_id" type="hidden" value={tag.id} />
-        <section className="form-section">
-          <SectionHeading title="标签资料" />
+        <Pane heading="基础信息">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="Slug">
               <input readOnly value={tag.slug} />
@@ -75,17 +74,16 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
               <textarea defaultValue={tag.description ?? ""} name="description" rows={6} />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
-        <section className="form-section">
-          <SectionHeading title="合并重复标签" />
+        <Pane heading="合并重复标签" tone="danger">
           <FormField
             hint="提交后，作品与发布版本关联会移至目标标签，当前标签会被删除。"
             label="目标标签 slug"
           >
             <input name="merge_target_slug" placeholder="留空则不合并" />
           </FormField>
-        </section>
+        </Pane>
 
         <div className="actions">
           <button className="button primary" type="submit">

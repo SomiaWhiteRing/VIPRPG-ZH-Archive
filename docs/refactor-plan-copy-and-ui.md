@@ -319,24 +319,68 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 > 每个 slice 独立可交付。**凡移动了入口/操作的 slice，先在本文档该步骤下写功能保全表再动手**（格式：现有能力 | 现位置 | 新位置 | 验证方式）。每个 slice 完成即跑 §0.3 页面级验证。
 
-- [ ] **4.1 公共壳。** site-header：品牌区加 festival 感（标题字用 `--heading-strong` + 硬阴影；`.site-brand-mark` 的字母 V 方块可保留）；导航当前位置高亮（`aria-current` + 样式）；移动端导航横滑加渐隐遮罩暗示。site-footer 排版对齐 pane 风格。
-- [ ] **4.2 首页。** 现有骨架（hero → 简介 → 浏览板 → 参与贡献 → 最近更新）保留，做三处修正：(a) hero 与 zone 间距统一到 `--space-6`；(b) 「参与贡献」未登录时 2 张卡被 auto-fit 拉宽 → 给 `contribute-grid` 设 `max-width` 或固定 `minmax(240px, 320px)`；(c) 简介 pane 文案已在 Phase 1 压缩，此处校验视觉密度。
-- [ ] **4.3 游戏列表页。** `.library-toolbar` 从写死 7 列 grid 改为 flex-wrap 流式布局（搜索框占满剩余宽度，筛选控件自然换行），移动端自动堆叠；结果计数行并入工具条尾部；卡片网格间距/圆角对齐 token。**不做分页功能**（记入 §7 遗留项）。
-- [ ] **4.4 游戏详情页（全站最重要页面）。** 现状 7 段无层次堆叠 + 980px 嵌套表格。目标结构：
+- [x] **4.1 公共壳。** site-header：品牌区加 festival 感（标题字用 `--heading-strong` + 硬阴影；`.site-brand-mark` 的字母 V 方块可保留）；导航当前位置高亮（`aria-current` + 样式）；移动端导航横滑加渐隐遮罩暗示。site-footer 排版对齐 pane 风格。
+- [x] **4.2 首页。** 现有骨架（hero → 简介 → 浏览板 → 参与贡献 → 最近更新）保留，做三处修正：(a) hero 与 zone 间距统一到 `--space-6`；(b) 「参与贡献」未登录时 2 张卡被 auto-fit 拉宽 → 给 `contribute-grid` 设 `max-width` 或固定 `minmax(240px, 320px)`；(c) 简介 pane 文案已在 Phase 1 压缩，此处校验视觉密度。
+- [x] **4.3 游戏列表页。** `.library-toolbar` 从写死 7 列 grid 改为 flex-wrap 流式布局（搜索框占满剩余宽度，筛选控件自然换行），移动端自动堆叠；结果计数行并入工具条尾部；卡片网格间距/圆角对齐 token。**不做分页功能**（记入 §7 遗留项）。
+- [x] **4.4 游戏详情页（全站最重要页面）。** 现状 7 段无层次堆叠 + 980px 嵌套表格。目标结构：
   1. PageHeader（标题 + 状态徽章）；
   2. hero 区两列：封面/预览 | StatList 关键信息 + WorkActionBar（下载/在线游玩为唯一 primary）；
   3. 「发布版本」区：每个 release 一个 Pane，**桌面保留表格，≤760px 切换为版本卡片列表**（每行快照 = 一张小卡：版本名/大小/日期/下载/游玩按钮），消灭公共页横滚表格；
   4. 制作人员/角色/标签/系列 合并为一个「资料」Pane 内的分组，替代现在的 4 张散卡；
   5. 空归档 fallback 复用 WorkActionBar 组件（删除 :56-61 的手写第二份）。
   功能保全表必填（下载/游玩/每个快照的操作一条不少）。
-- [ ] **4.5 目录页四件套（creators/characters/tags/series 及其详情）。** 统一「索引板」模板：PageHeader + 搜索条 + 卡片网格（复用同一卡片样式，只是字段不同）+ EmptyState。详情页 = PageHeader + StatList + 作品列表。这 8 个页面改完应该像一个系列。
-- [ ] **4.6 账号页（/me、/inbox、login/register/forgot/reset）。** 认证四页：单列窄 Pane（max-width ~420px）居中，按 brief「认证页不过度装饰」。/me 重排为三张 Pane：账号状态（含权限流程唯一完整解释）/ 站内信入口 / 最近任务。/inbox 表格移动端降级为消息卡片列表。
-- [ ] **4.7 上传工作区（/upload、/upload/tasks、upload-client、任务 dock）。** 不改流程逻辑，只做视觉与分组：upload-client 按现有阶段分组为带 SectionHeading 的 Pane 序列；进度/错误状态用 StatusBadge 统一；dock 样式对齐 token。1203 行的 upload-client.tsx 若替换组件时自然缩短则好，**不强行拆文件**（记入 §7 可选项）。
-- [ ] **4.8 在线游玩页。** 按 brief「模拟器区域主导」：游玩画布优先占宽，控制/日志收进侧栏或折叠区；日志文案已在 Phase 1 清洗；状态行用 StatusBadge。
-- [ ] **4.9 admin 壳与仪表盘。** (a) 删除 admin 首页与顶栏重复的「内容管理」快捷导航区，改为：顶栏 ADMIN_LINKS 是唯一模块导航，admin 首页只留 指标 metric-grid + 待办 + 近期导入（功能保全表必填：确认每个模块入口在顶栏仍可达）；(b) metric-grid 3+3+3+1 孤儿行 → `repeat(auto-fill, minmax(180px, 1fr))`；(c) 各 admin 页 PageHeader 的 actions 收敛为：BackLink + InboxLink + 该页专属操作（≤1 个）。
-- [ ] **4.10 admin 列表与编辑页。** 列表页：表头 sticky、行 hover、`.data-table th/td` padding 收紧为 admin 密度（`--space-2 --space-3`）；users 页操作列两个 form 竖排改横排小控件。编辑页（works/[workId] 为样板）：表单按「基础信息 / 关联数据 / 危险操作」分 Pane，枚举输入的格式说明用 `FormField` hint 呈现（Phase 1.2-H 已改好文案）；危险操作永远在最后一个 `tone="danger"` 的 Pane。改完 works/[workId] 后把同模式应用到其余 5 个编辑页。
-- [ ] **4.11（可选）像素显示字体。** 若维护者愿意：下载 [缝合怪像素字体 Fusion Pixel Font](https://github.com/TakWolf/fusion-pixel-font)（OFL 许可，含中文）到 `public/fonts/` 或 `app/fonts/`，用 `next/font/local` 挂到 `--font-display`，只用于 h1/h2/品牌区。**先向维护者确认再做**；不做则跳过，硬阴影 + 亮边已提供像素感。
-- [ ] **4.12 Phase 验证**：§6.1 全矩阵；`festival-ui-reviewer` + `ux-flow-reviewer` 双复核；对照两份 brief 的 Acceptance Checklist 逐条打勾。
+
+  | 现有能力 | 现位置 | 新位置 | 验证方式 |
+  |---|---|---|---|
+  | 返回作品资料库 | PageHeader actions | PageHeader actions 首位 | 详情页点击后到 `/games` |
+  | 当前推荐归档下载 | hero 上方 WorkActionBar | hero 信息列唯一 primary | 请求命中对应 archive download API |
+  | 当前推荐归档在线游玩 | hero 上方 WorkActionBar | hero 信息列次操作 | 跳转 `/play/[archiveId]` |
+  | 复制作品 ID | hero 上方 WorkActionBar | hero 信息列次操作 | 点击后按钮反馈“已复制” |
+  | 发布来源 | release Pane 标题右侧 | release Pane 标题右侧 | 新标签打开原来源 URL |
+  | 每个归档快照下载 | release 桌面表格操作列 | 桌面表格 / 移动快照卡操作区 | 每个 archive ID 均命中 download API |
+  | 每个可游玩快照在线游玩 | release 桌面表格操作列 | 桌面表格 / 移动快照卡操作区 | `canPlay` 条目均有 `/play/[id]` |
+  | 制作人员、角色、标签、系列、外链、相关作品跳转 | 6 个散置区块 | 资料 Pane 分组 | 逐组点击首项到对应详情/外链 |
+- [x] **4.5 目录页四件套（creators/characters/tags/series 及其详情）。** 统一「索引板」模板：PageHeader + 搜索条 + 卡片网格（复用同一卡片样式，只是字段不同）+ EmptyState。详情页 = PageHeader + StatList + 作品列表。这 8 个页面改完应该像一个系列。
+- [x] **4.6 账号页（/me、/inbox、login/register/forgot/reset）。** 认证四页：单列窄 Pane（max-width ~420px）居中，按 brief「认证页不过度装饰」。/me 重排为三张 Pane：账号状态（含权限流程唯一完整解释）/ 站内信入口 / 最近任务。/inbox 表格移动端降级为消息卡片列表。
+
+  | 现有能力 | 现位置 | 新位置 | 验证方式 |
+  |---|---|---|---|
+  | 登录、注册、找回、重置提交 | 各认证页 Pane | 居中窄 Pane 原表单内 | 各表单 action/method 与字段不变 |
+  | 退出登录 | `/me` 账户 Pane | 账号状态 Pane | 提交后回到未登录态 |
+  | 申请/撤回上传权限 | `/me` 权限 Pane | 账号状态 Pane 的权限区 | 两种角色分别检查可见按钮与 action |
+  | 上传、任务、控制台、审计入口 | `/me` 多张 Pane | 账号状态 / 最近任务 Pane | 对应角色逐一点击可达 |
+  | 全部标记已读、用户层级 | `/inbox` PageHeader actions | PageHeader actions | action 与角色可见性不变 |
+  | 单条批准、拒绝、标记已读 | `/inbox` 表格操作列 | 桌面表格 / 移动消息卡操作区 | 同一 item ID 的三个 form action 不变 |
+- [x] **4.7 上传工作区（/upload、/upload/tasks、upload-client、任务 dock）。** 不改流程逻辑，只做视觉与分组：upload-client 按现有阶段分组为带 SectionHeading 的 Pane 序列；进度/错误状态用 StatusBadge 统一；dock 样式对齐 token。1203 行的 upload-client.tsx 若替换组件时自然缩短则好，**不强行拆文件**（记入 §7 可选项）。
+
+  | 现有能力 | 现位置 | 新位置 | 验证方式 |
+  |---|---|---|---|
+  | 文件夹/ZIP 模式、源文件选择 | 游戏文件 Pane | 左侧源文件 Pane | 切换模式后 input 类型与已选统计更新 |
+  | 恢复本地任务、套用已有作品/发布 | 源 Pane / 查找结果 | 原分组内 | 选择后表单字段回填 |
+  | 三阶段元数据编辑与开始导入 | 右侧三个 Pane | 同顺序 Pane 序列 | 所有 name/value 与 submit handler 不变 |
+  | 查看导入任务、开始新上传 | PageHeader actions | PageHeader actions | `/upload` 与 `/upload/tasks` 双向可达 |
+  | dock 展开/关闭、继续上传、暂停、恢复、取消、清除 | 右下 dock | token 化 dock 原位置 | 每种任务状态对应按钮与 handler 不变 |
+- [x] **4.8 在线游玩页。** 按 brief「模拟器区域主导」：游玩画布优先占宽，控制/日志收进侧栏或折叠区；日志文案已在 Phase 1 清洗；状态行用 StatusBadge。
+
+  | 现有能力 | 现位置 | 新位置 | 验证方式 |
+  |---|---|---|---|
+  | 返回首页、下载 ZIP | PageHeader actions | PageHeader actions | 链接目标与 download API 不变 |
+  | 安装、取消、重试、更新本地内容 | 左侧安装 Pane | 控制侧栏 | 各安装状态逐一检查按钮与 handler |
+  | 启动、全屏、删除本地内容 | 左侧安装 Pane | 控制侧栏 | 已安装状态三个操作均可见 |
+  | 游戏画布与运行状态 | 右侧 player Pane | 主内容第一视觉区域 | iframe/canvas 容器与启动结果可见 |
+  | 清空日志 | 底部日志 Pane | 侧栏折叠日志区 | 点击后日志数组清空 |
+- [x] **4.9 admin 壳与仪表盘。** (a) 删除 admin 首页与顶栏重复的「内容管理」快捷导航区，改为：顶栏 ADMIN_LINKS 是唯一模块导航，admin 首页只留 指标 metric-grid + 待办 + 近期导入（功能保全表必填：确认每个模块入口在顶栏仍可达）；(b) metric-grid 3+3+3+1 孤儿行 → `repeat(auto-fill, minmax(180px, 1fr))`；(c) 各 admin 页 PageHeader 的 actions 收敛为：BackLink + InboxLink + 该页专属操作（≤1 个）。
+
+  | 现有能力 | 现位置 | 新位置 | 验证方式 |
+  |---|---|---|---|
+  | 仪表盘 | admin 顶栏 + 首页快捷区 | admin 顶栏 | `/admin` 可达且 aria-current 正确 |
+  | 作品、归档、作者、角色、标签、系列、用户、维护 | admin 顶栏 + 首页快捷区 | admin 顶栏唯一入口 | 8 个链接逐一点击并核对 pathname |
+  | 审计 | 超级管理员顶栏 + 首页快捷区 | 超级管理员顶栏唯一入口 | super-admin 可达 `/admin/audit` |
+  | 站内信与返回站点 | admin 顶栏 / 各 PageHeader | 顶栏保留，PageHeader 只保留上下文动作 | 两入口均可达且无重复专属按钮 |
+  | 待办中的维护、审计入口 | 仪表盘待办 Pane | 待办 Pane 保留 | 点击分别到维护、审计 |
+- [x] **4.10 admin 列表与编辑页。** 列表页：表头 sticky、行 hover、`.data-table th/td` padding 收紧为 admin 密度（`--space-2 --space-3`）；users 页操作列两个 form 竖排改横排小控件。编辑页（works/[workId] 为样板）：表单按「基础信息 / 关联数据 / 危险操作」分 Pane，枚举输入的格式说明用 `FormField` hint 呈现（Phase 1.2-H 已改好文案）；危险操作永远在最后一个 `tone="danger"` 的 Pane。改完 works/[workId] 后把同模式应用到其余 5 个编辑页。
+- [x] **4.11（可选）像素显示字体。** 未获得维护者明确确认，本轮按约束跳过下载与引入。若维护者愿意：下载 [缝合怪像素字体 Fusion Pixel Font](https://github.com/TakWolf/fusion-pixel-font)（OFL 许可，含中文）到 `public/fonts/` 或 `app/fonts/`，用 `next/font/local` 挂到 `--font-display`，只用于 h1/h2/品牌区。**先向维护者确认再做**；不做则跳过，硬阴影 + 亮边已提供像素感。
+- [x] **4.12 Phase 验证**：§6.1 全矩阵；`festival-ui-reviewer` + `ux-flow-reviewer` 双复核；对照两份 brief 的 Acceptance Checklist 逐条打勾。
 
 ### Phase 5 —— 响应式与可访问性专项（1 天）
 
@@ -427,6 +471,8 @@ grep -rn "empty-card" app                          # 0
 - （预置）`upload-client.tsx` 1203 行可拆分为阶段子组件——可选，Phase 4.7 后评估。
 - （预置）多数页面缺 per-page metadata（SEO）——独立小任务。
 - （预置）无 loading.tsx / error.tsx / not-found.tsx——独立小任务。
+- 开发种子的上传权限申请状态为 `open`，审批 UI 与 resolver 只接受真实申请 API 产生的 `pending`；需单独修正种子，当前只读截图无法覆盖批准/驳回按钮。
+- 当前上传权限流程没有撤回申请 API；保全表中的“撤回”不属于既有能力，本次未新增业务流程。
 
 ---
 

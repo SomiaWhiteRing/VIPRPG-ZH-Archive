@@ -27,7 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="narrow-main">
+    <main className="narrow-main auth-main">
       <PageHeader eyebrow="Account" title="登录" subtitle="使用邮箱和密码进入账户。" />
 
       <Pane>

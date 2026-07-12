@@ -42,7 +42,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
       />
 
       <form className="library-toolbar" action="/games" method="get">
-        <label>
+        <label className="library-search-field">
           <span>搜索</span>
           <input
             defaultValue={query}
@@ -101,13 +101,10 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
             清除
           </Link>
         ) : null}
+        <span className="library-summary" aria-label="资料库摘要">
+          共 <strong>{formatNumber(works.length)}</strong> 个作品
+        </span>
       </form>
-
-      <section className="library-summary" aria-label="资料库摘要">
-        <span>共</span>
-        <strong>{formatNumber(works.length)}</strong>
-        <span>个作品</span>
-      </section>
 
       {works.length > 0 ? (
         <section className="game-card-grid" aria-label="作品列表">
