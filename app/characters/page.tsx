@@ -45,7 +45,7 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
       </section>
 
       {characters.length > 0 ? (
-        <section className="creator-card-grid" aria-label="角色列表">
+        <section className="directory-card-grid" aria-label="角色列表">
           {characters.map((character) => (
             <CharacterCard character={character} key={character.id} />
           ))}
@@ -59,9 +59,9 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
 
 function CharacterCard({ character }: { character: PublicCharacterSummary }) {
   return (
-    <article className="creator-card">
+    <article className="directory-card">
       <div>
-        <Link className="creator-card-title" href={`/characters/${character.slug}`}>
+        <Link className="directory-card-title" href={`/characters/${character.slug}`}>
           {character.primaryName}
         </Link>
         {character.originalName ? (

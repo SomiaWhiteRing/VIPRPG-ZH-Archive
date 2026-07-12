@@ -31,7 +31,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   }
 
   return (
-    <main className="narrow-main">
+    <main className="narrow-main auth-main">
       {turnstileKey ? (
         <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       ) : null}

@@ -22,7 +22,7 @@ export default async function ForgotPasswordPage({
   const params = await searchParams;
   const nextPath = sanitizeRedirectPath(params.next, "/login");
   return (
-    <main className="narrow-main">
+    <main className="narrow-main auth-main">
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <PageHeader
         eyebrow="Account"

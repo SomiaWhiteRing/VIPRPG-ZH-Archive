@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { StatList } from "@/app/components/ui/stat-list";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
@@ -47,14 +47,14 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
         title={series.title}
       />
 
-      <Pane heading="简介">
-        <p>{series.description || "—"}</p>
+      <Pane heading="系列资料">
+        {series.description ? <p>{series.description}</p> : null}
+        <StatList items={[{ label: "收录作品", value: series.workCount }]} />
       </Pane>
 
-      <section className="creator-credit-section" aria-label="系列作品">
-        <SectionHeading title="系列作品" />
+      <Pane heading="系列作品">
         {series.works.length > 0 ? (
-          <TableWrap compact label="系列作品" minWidth={760}>
+          <TableWrap compact label="系列作品" minWidth={760} mobileCards>
             <thead>
               <tr>
                 <th>顺序</th>
@@ -66,15 +66,15 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
             <tbody>
               {series.works.map((work) => (
                 <tr key={work.workId}>
-                  <td>{work.positionLabel || work.positionNumber || "-"}</td>
-                  <td>
+                  <td data-label="顺序">{work.positionLabel || work.positionNumber || "-"}</td>
+                  <td data-label="作品">
                     <Link href={`/games/${work.slug}`}>{work.title}</Link>
                     {work.title !== work.originalTitle ? (
                       <span className="muted-line">{work.originalTitle}</span>
                     ) : null}
                   </td>
-                  <td>{seriesRelationLabel(work.relationKind)}</td>
-                  <td>{work.notes || "无"}</td>
+                  <td data-label="关系">{seriesRelationLabel(work.relationKind)}</td>
+                  <td data-label="备注">{work.notes || "无"}</td>
                 </tr>
               ))}
             </tbody>
@@ -82,7 +82,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
         ) : (
           <p className="muted-line">暂无公开系列作品。</p>
         )}
-      </section>
+      </Pane>
     </main>
   );
 }

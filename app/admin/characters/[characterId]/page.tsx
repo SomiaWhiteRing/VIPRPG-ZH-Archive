@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit } from "@/lib/server/db/taxonomy-library";
@@ -52,12 +52,11 @@ export default async function AdminCharacterEditPage({
 
       <form
         action={`/api/admin/characters/${character.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="character_id" type="hidden" value={character.id} />
-        <section className="form-section">
-          <SectionHeading title="角色资料" />
+        <Pane heading="基础信息">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="Slug">
               <input readOnly value={character.slug} />
@@ -72,17 +71,16 @@ export default async function AdminCharacterEditPage({
               <textarea defaultValue={character.description ?? ""} name="description" rows={6} />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
-        <section className="form-section">
-          <SectionHeading title="合并重复角色" />
+        <Pane heading="合并重复角色" tone="danger">
           <FormField
             hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
             label="目标角色 slug"
           >
             <input name="merge_target_slug" placeholder="留空则不合并" />
           </FormField>
-        </section>
+        </Pane>
 
         <div className="actions">
           <button className="button primary" type="submit">

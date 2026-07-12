@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
@@ -52,12 +52,11 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
 
       <form
         action={`/api/admin/series/${series.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="series_id" type="hidden" value={series.id} />
-        <section className="form-section">
-          <SectionHeading title="系列资料" />
+        <Pane heading="基础信息">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="Slug">
               <input readOnly value={series.slug} />
@@ -68,19 +67,24 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
             <FormField label="原名">
               <input defaultValue={series.titleOriginal ?? ""} name="title_original" />
             </FormField>
-            <FormField label="状态">
-              <select defaultValue={series.status} name="status">
-                <option value="published">已发布</option>
-                <option value="hidden">隐藏</option>
-                <option value="draft">草稿</option>
-                <option value="deleted">已删除</option>
-              </select>
-            </FormField>
             <FormField label="简介" wide>
               <textarea defaultValue={series.description ?? ""} name="description" rows={6} />
             </FormField>
           </div>
-        </section>
+        </Pane>
+        <Pane heading="发布与删除状态" tone="danger">
+          <FormField
+            hint="选择“已删除”后保存会将系列标记为删除；提交前请再次核对。"
+            label="状态"
+          >
+            <select defaultValue={series.status} name="status">
+              <option value="published">已发布</option>
+              <option value="hidden">隐藏</option>
+              <option value="draft">草稿</option>
+              <option value="deleted">已删除</option>
+            </select>
+          </FormField>
+        </Pane>
         <div className="actions">
           <button className="button primary" type="submit">
             保存系列资料

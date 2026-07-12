@@ -217,6 +217,8 @@ export function uploadTaskStatusLabel(value: string): string {
 
 export function installStatusLabel(value: string): string {
   switch (value) {
+    case "loading":
+      return "读取中";
     case "created":
       return "已创建";
     case "installing":

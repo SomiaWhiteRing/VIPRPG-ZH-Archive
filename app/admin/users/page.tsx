@@ -26,7 +26,6 @@ export default async function AdminUsersPage() {
         actions={
           <>
             <BackLink href="/admin" label="返回管理端" />
-            <BackLink href="/" label="返回首页" />
             <InboxLink unread={unreadInboxCount} />
           </>
         }

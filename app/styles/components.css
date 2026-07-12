@@ -1,7 +1,8 @@
 .card,
 .pane,
-.creator-card,
+.directory-card,
 .game-card,
+.inbox-card,
 .metric,
 .table-wrap,
 .entry-card {
@@ -167,7 +168,7 @@
 }
 .error-message.compact,
 .success-message.compact { margin: var(--space-2) 0 0; padding: var(--space-2); font-size: var(--text-sm); }
-.metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-3); }
 .metric { min-height: 92px; padding: var(--space-4); }
 .metric span {
   display: block;
@@ -269,6 +270,17 @@
 .data-table .mono { overflow-wrap: anywhere; word-break: break-all; }
 .compact-actions { margin-top: 0; }
 .compact-actions form { margin: 0; }
+body.theme-admin .data-table th,
+body.theme-admin .data-table td { padding: var(--space-2) var(--space-3); }
+body.theme-admin .data-table th {
+  position: sticky;
+  z-index: 2;
+  top: 104px;
+  background: var(--surface);
+}
+body.theme-admin .data-table tbody tr:hover td { background: var(--subsurface-bg); }
+body.theme-admin .compact-actions,
+body.theme-admin .compact-actions .inline-form { flex-wrap: nowrap; align-items: center; }
 .admin-operation-panel { margin-top: var(--space-5); }
 .danger-inline-controls {
   display: flex;
@@ -358,4 +370,38 @@
 @media (max-width: 760px) {
   .metric-grid,
   .section-grid { grid-template-columns: 1fr; }
+  body.theme-admin .data-table th { top: 132px; }
+  .table-wrap--cards { overflow: visible; }
+  .table-wrap--cards .data-table { min-width: 0; }
+  .table-wrap--cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table-wrap--cards tbody,
+  .table-wrap--cards tr,
+  .table-wrap--cards td { display: block; }
+  .table-wrap--cards tbody { display: grid; gap: var(--space-3); }
+  .table-wrap--cards tr {
+    padding: var(--space-3);
+    border: 1px solid var(--subsurface-border);
+    border-radius: var(--radius-sm);
+    background: var(--subsurface-bg);
+  }
+  .table-wrap--cards td {
+    display: grid;
+    grid-template-columns: minmax(88px, 32%) minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--table-border);
+  }
+  .table-wrap--cards td:last-child { border-bottom: 0; }
+  .table-wrap--cards td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
 }

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
@@ -52,53 +51,37 @@ export default async function MePage() {
     <main>
       <PageHeader eyebrow="My Account" title="我的账户" />
 
-      <div className="me-grid">
-        <aside className="me-card-stack" aria-label="账户摘要">
-          <Pane heading="账户">
-            <StatList
-              items={[
-                { label: "显示名", value: currentUser.displayName },
-                { label: "当前层级", value: roleLabel(currentUser.role) },
-                { label: "站内信未读", value: formatNumber(unread) },
-              ]}
-            />
-            <div className="actions">
-              <InboxLink unread={unread} />
-              <form action="/api/auth/logout" method="post" className="inline-form">
-                <input type="hidden" name="next" value="/" />
-                <button className="button" type="submit">
-                  退出登录
-                </button>
-              </form>
-            </div>
-          </Pane>
+      <div className="me-dashboard">
+        <Pane heading="账号状态">
+          <StatList
+            items={[
+              { label: "显示名", value: currentUser.displayName },
+              { label: "当前层级", value: roleLabel(currentUser.role) },
+              { label: "站内信未读", value: formatNumber(unread) },
+            ]}
+          />
+          <div className="actions">
+            <form action="/api/auth/logout" method="post" className="inline-form">
+              <input type="hidden" name="next" value="/" />
+              <button className="button" type="submit">
+                退出登录
+              </button>
+            </form>
+          </div>
 
-          <Pane heading="权限与上传">
+          <div className="account-permission-block">
+            <h3>上传权限</h3>
             {canUploadRole(currentUser.role) ? (
-              <>
-                <p className="muted-line">
-                  当前账户已有上传权限。
-                </p>
-                <div className="actions">
-                  <Link className="button primary" href="/upload">
-                    上传归档
-                  </Link>
-                  <Link className="button" href="/upload/tasks">
-                    查看导入任务
-                  </Link>
-                </div>
-              </>
+              <p>当前账户已有上传权限，可以提交归档并跟踪导入任务。</p>
             ) : pendingUploadRequest ? (
-              <p className="muted-line">
-                申请已提交，等待处理。结果会通过
-                <Link href="/inbox"> 站内信 </Link>
+              <p>
+                申请已提交，等待管理员处理。结果会通过
+                <Link href="/inbox">站内信</Link>
                 通知。
               </p>
             ) : (
               <>
-                <p>
-                  当前为普通用户。提交上传者申请后，管理员会通过站内信回复结果。
-                </p>
+                <p>当前为普通用户。提交上传者申请后，管理员会通过站内信回复结果。</p>
                 <form
                   action="/api/account/request-upload-access"
                   method="post"
@@ -110,10 +93,11 @@ export default async function MePage() {
                 </form>
               </>
             )}
-          </Pane>
+          </div>
 
           {canManageUsersRole(currentUser.role) ? (
-            <Pane heading="管理">
+            <div className="account-permission-block">
+              <h3>管理工具</h3>
               <div className="actions">
                 <Link className="button primary" href="/admin">
                   进入控制台
@@ -124,11 +108,11 @@ export default async function MePage() {
                   </Link>
                 ) : null}
               </div>
-            </Pane>
+            </div>
           ) : null}
-        </aside>
+        </Pane>
 
-        <Pane heading="最近站内信">
+        <Pane heading="站内信">
           {inbox.length === 0 ? (
             <p className="muted-line">暂时没有站内信。</p>
           ) : (
@@ -146,14 +130,13 @@ export default async function MePage() {
             </ul>
           )}
           <div className="actions">
-            <Link className="button" href="/inbox">
-              查看全部
-            </Link>
+            <InboxLink unread={unread} />
           </div>
+        </Pane>
 
+        <Pane heading="最近任务">
           {canUploadRole(currentUser.role) ? (
             <>
-              <SectionHeading divided title="最近导入任务" />
               {jobs.length === 0 ? (
                 <p className="muted-line">还没有导入任务。</p>
               ) : (
@@ -188,7 +171,9 @@ export default async function MePage() {
                 </Link>
               </div>
             </>
-          ) : null}
+          ) : (
+            <p className="muted-line">取得上传权限后，可在这里跟踪导入任务。</p>
+          )}
         </Pane>
       </div>
     </main>

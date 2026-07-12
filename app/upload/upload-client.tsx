@@ -350,8 +350,9 @@ export function UploadClient() {
 
   return (
     <div className="upload-layout">
-      <div className="upload-source-card">
-        <Pane heading="游戏文件">
+      <aside className="upload-source-card">
+        <Pane>
+        <SectionHeading eyebrow="上传来源" title="游戏文件" />
         <div className="segmented-control" role="tablist" aria-label="源类型">
           <button
             className={mode === "folder" ? "active" : ""}
@@ -414,11 +415,10 @@ export function UploadClient() {
           </FormField>
         ) : null}
         </Pane>
-      </div>
+      </aside>
 
       <form className="upload-form-stack" onSubmit={onSubmit}>
-        <div className="upload-form-card">
-          <Pane>
+        <Pane>
           <SectionHeading eyebrow="第一步" title="作品" />
 
           <div className="upload-form-grid">
@@ -550,11 +550,9 @@ export function UploadClient() {
               />
             </FormField>
           </details>
-          </Pane>
-        </div>
+        </Pane>
 
-        <div className="upload-form-card">
-          <Pane>
+        <Pane>
           <SectionHeading eyebrow="第二步" title="发布版本" />
 
           {releaseOptions.length > 0 ? (
@@ -676,11 +674,9 @@ export function UploadClient() {
               />
             </FormField>
           </details>
-          </Pane>
-        </div>
+        </Pane>
 
-        <div className="upload-form-card">
-          <Pane>
+        <Pane>
           <SectionHeading eyebrow="第三步" title="归档快照" />
           <div className="upload-form-grid">
             <FormField label="归档语言 *">
@@ -756,14 +752,13 @@ export function UploadClient() {
               已修图
             </label>
           </div>
-          {submitError ? <p className="error-message compact">{submitError}</p> : null}
-          <div className="actions">
+          <div className="upload-submit-bar">
+            {submitError ? <p className="error-message compact">{submitError}</p> : null}
             <button className="button primary" disabled={preparing} type="submit">
               {preparing ? "正在准备…" : "开始导入"}
             </button>
           </div>
-          </Pane>
-        </div>
+        </Pane>
       </form>
     </div>
   );

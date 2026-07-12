@@ -19,6 +19,7 @@ import { installStatusLabel } from "@/lib/labels";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
+import { StatusBadge } from "@/app/components/ui/status-badge";
 
 type WebPlayLog = {
   id: string;
@@ -353,15 +354,14 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
 
   return (
     <div className="web-play-layout">
-      <div className="web-play-card">
+      <aside className="web-play-sidebar">
         <Pane>
         <SectionHeading
           action={
-            <span className="status-pill">
-              {loadingLocalState
-                ? "读取中"
-                : installStatusLabel(installation?.status ?? "deleted")}
-            </span>
+            <StatusBadge
+              kind="browser-install"
+              value={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
+            />
           }
           eyebrow="EasyRPG Web Player"
           title="浏览器本地安装"
@@ -448,10 +448,47 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
           ) : null}
         </div>
         </Pane>
-      </div>
 
-      <div>
+        <details className="web-play-log-card">
+          <summary>
+            <span>运行日志</span>
+            <span className="task-count-badge">{logs.length}</span>
+          </summary>
+          <div className="web-play-log-body">
+            {logs.length > 0 ? (
+              <>
+                <div className="web-play-log-actions">
+                  <button className="button" onClick={() => setLogs([])} type="button">
+                    清空
+                  </button>
+                </div>
+                <ol className="web-play-log-list">
+                  {logs.map((log) => (
+                    <li className={log.level} key={log.id}>
+                      <span>{new Date(log.createdAt).toLocaleTimeString("zh-CN")}</span>
+                      <p>{log.message}</p>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : (
+              <p>暂无日志。</p>
+            )}
+          </div>
+        </details>
+      </aside>
+
+      <div className="web-player-pane">
         <Pane>
+          <SectionHeading
+            action={
+              <StatusBadge
+                kind="player"
+                value={running ? "running" : playerStarting ? "starting" : "idle"}
+              />
+            }
+            title="游戏画面"
+          />
           <div className="web-player-card">
             <div className="web-player-frame" id="web-player-frame">
               <canvas id="canvas" tabIndex={0} />
@@ -460,31 +497,6 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
               {running ? "EasyRPG 正在运行" : "未启动"}
             </div>
           </div>
-        </Pane>
-      </div>
-
-      <div className="web-play-log-card">
-        <Pane>
-        <SectionHeading
-          action={
-            <button className="button" onClick={() => setLogs([])} type="button">
-              清空
-            </button>
-          }
-          title="日志"
-        />
-        {logs.length > 0 ? (
-          <ol className="web-play-log-list">
-            {logs.map((log) => (
-              <li className={log.level} key={log.id}>
-                <span>{new Date(log.createdAt).toLocaleTimeString("zh-CN")}</span>
-                <p>{log.message}</p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p>暂无日志。</p>
-        )}
         </Pane>
       </div>
     </div>

@@ -44,7 +44,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       </section>
 
       {tags.length > 0 ? (
-        <section className="creator-card-grid" aria-label="标签列表">
+        <section className="directory-card-grid" aria-label="标签列表">
           {tags.map((tag) => (
             <TagCard key={tag.id} tag={tag} />
           ))}
@@ -58,9 +58,9 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
 
 function TagCard({ tag }: { tag: PublicTagSummary }) {
   return (
-    <article className="creator-card">
+    <article className="directory-card">
       <div>
-        <Link className="creator-card-title" href={`/tags/${tag.slug}`}>
+        <Link className="directory-card-title" href={`/tags/${tag.slug}`}>
           {tag.name}
         </Link>
         <span className="mono muted-line">{tag.slug}</span>

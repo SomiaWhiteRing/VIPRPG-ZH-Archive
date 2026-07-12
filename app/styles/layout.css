@@ -25,6 +25,7 @@
   align-items: center;
   margin-right: var(--space-2);
   color: var(--header-brand);
+  font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 800;
   text-decoration: none;
@@ -52,6 +53,7 @@
 }
 .site-nav a {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--space-6);
@@ -61,6 +63,7 @@
   color: var(--header-text);
   font-size: var(--text-base);
   font-weight: 700;
+  white-space: nowrap;
   text-decoration: none;
 }
 .site-nav a:hover {
@@ -68,7 +71,8 @@
   background: var(--header-link-hover-bg);
   color: var(--header-brand);
 }
-.site-nav a.active {
+.site-nav a.active,
+.site-nav a[aria-current="page"] {
   border-color: var(--header-brand);
   background: var(--header-link-active-bg);
   color: var(--header-brand);
@@ -94,14 +98,26 @@
 }
 .site-footer {
   margin-top: var(--space-7);
-  padding: var(--space-5) var(--space-4) var(--space-6);
-  background: var(--footer-bg);
+  padding: var(--space-5) var(--container-pad) var(--space-6);
+  border-top: 2px solid var(--surface-border);
+  background: var(--surface-deep);
   color: var(--footer-text);
   font-size: var(--text-sm);
-  text-align: center;
 }
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  justify-content: space-between;
+  width: min(var(--container-max), 100%);
+  margin: 0 auto;
+}
+.site-footer p { margin: 0; }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 .site-footer a { color: var(--link); }
 main {
+  flex: 1 0 auto;
   width: min(
     var(--container-max),
     calc(100vw - var(--container-pad) * 2)
@@ -139,7 +155,14 @@ main > * + * { margin-top: var(--space-5); }
 .inline-form { margin: 0; }
 @media (max-width: 760px) {
   .site-header-inner { flex-direction: column; align-items: flex-start; }
-  .site-nav { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .site-nav {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-right: var(--space-5);
+    mask-image: linear-gradient(to right, black 0, black calc(100% - 32px), transparent 100%);
+  }
   .site-session { width: 100%; justify-content: flex-end; }
+  .site-footer-inner { align-items: flex-start; flex-direction: column; }
   main { width: min(100vw - var(--space-5), var(--container-max)); padding: var(--space-5) 0; }
 }

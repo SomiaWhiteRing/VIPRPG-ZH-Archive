@@ -24,7 +24,6 @@ export default async function AdminArchiveVersionTrashPage() {
         actions={
           <>
             <BackLink href="/admin/archive-versions" label="返回归档维护" />
-            <BackLink href="/admin" label="返回管理端" />
             <InboxLink unread={unreadInboxCount} />
           </>
         }

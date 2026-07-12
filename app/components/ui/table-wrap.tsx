@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 type TableWrapProps = {
   minWidth?: number;
   compact?: boolean;
+  mobileCards?: boolean;
   label?: string;
   children: ReactNode;
 };
@@ -14,6 +15,7 @@ type TableWrapStyle = CSSProperties & {
 export function TableWrap({
   minWidth = 820,
   compact = false,
+  mobileCards = false,
   label,
   children,
 }: TableWrapProps) {
@@ -23,7 +25,7 @@ export function TableWrap({
 
   return (
     <div
-      className={`table-wrap table-wrap-component${compact ? " table-wrap--compact" : ""}`}
+      className={`table-wrap table-wrap-component${compact ? " table-wrap--compact" : ""}${mobileCards ? " table-wrap--cards" : ""}`}
       style={style}
     >
       <table className="data-table" aria-label={label}>

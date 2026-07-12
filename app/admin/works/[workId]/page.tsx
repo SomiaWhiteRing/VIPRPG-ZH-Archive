@@ -4,7 +4,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SectionHeading } from "@/app/components/ui/section-heading";
+import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
@@ -56,13 +56,12 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
 
       <form
         action={`/api/admin/works/${work.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="work_id" type="hidden" value={work.id} />
 
-        <section className="form-section">
-          <SectionHeading title="基础资料" />
+        <Pane heading="基础资料">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="原名">
               <input readOnly value={work.originalTitle} />
@@ -149,10 +148,9 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
-        <section className="form-section">
-          <SectionHeading title="检索辅助" />
+        <Pane heading="关联数据">
           <div className="upload-form-grid">
             <FormField hint="每行一个别名。" label="别名">
               <textarea
@@ -251,7 +249,7 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
         <div className="actions">
           <button className="button primary" type="submit">

@@ -6,7 +6,6 @@ import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
@@ -56,13 +55,12 @@ export default async function AdminCreatorEditPage({
 
       <form
         action={`/api/admin/creators/${creator.id}/update`}
-        className="card form-card stack-form"
+        className="stack-form admin-edit-form"
         method="post"
       >
         <input name="creator_id" type="hidden" value={creator.id} />
 
-        <section className="form-section">
-          <SectionHeading title="作者资料" />
+        <Pane heading="基础信息">
           <div className="upload-form-grid">
             <FormField hint="不可修改" label="Slug">
               <input readOnly value={creator.slug} />
@@ -88,7 +86,7 @@ export default async function AdminCreatorEditPage({
               <textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
             </FormField>
           </div>
-        </section>
+        </Pane>
 
         <div className="actions">
           <button className="button primary" type="submit">

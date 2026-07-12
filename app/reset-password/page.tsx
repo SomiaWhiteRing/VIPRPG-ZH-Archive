@@ -23,7 +23,7 @@ export default async function ResetPasswordPage({
   const nextPath = sanitizeRedirectPath(params.next, "/login");
 
   return (
-    <main className="narrow-main">
+    <main className="narrow-main auth-main">
       <PageHeader eyebrow="Account" title="重置密码" subtitle="输入邮箱验证码和新密码。" />
 
       <Pane>

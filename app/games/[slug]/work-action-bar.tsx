@@ -5,27 +5,29 @@ import { useState } from "react";
 import { formatNumber, formatBytes } from "@/lib/format";
 
 type Props = {
-  archiveId: number;
-  archiveLabel: string;
-  downloadHref: string;
-  totalFiles: number;
-  totalSizeBytes: number;
+  archive: {
+    id: number;
+    label: string;
+    downloadHref: string;
+    totalFiles: number;
+    totalSizeBytes: number;
+  } | null;
   canPlayInBrowser: boolean;
 };
 
 export function WorkActionBar({
-  archiveId,
-  archiveLabel,
-  downloadHref,
-  totalFiles,
-  totalSizeBytes,
+  archive,
   canPlayInBrowser,
 }: Props) {
   const [copied, setCopied] = useState(false);
 
   async function copyId() {
+    if (!archive) {
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(String(archiveId));
+      await navigator.clipboard.writeText(String(archive.id));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -35,26 +37,34 @@ export function WorkActionBar({
 
   return (
     <section className="work-action-bar" aria-label="主操作">
-      <span className="work-action-meta">
-        当前归档：<strong>{archiveLabel}</strong>
-        <br />
-        {formatNumber(totalFiles)} 文件 · {formatBytes(totalSizeBytes)}
-      </span>
-      <a className="button primary" href={downloadHref}>
-        ⬇ 下载 ZIP
-      </a>
-      {canPlayInBrowser ? (
-        <Link className="button" href={`/play/${archiveId}`}>
-          ▶ 在线游玩
-        </Link>
+      {archive ? (
+        <>
+          <span className="work-action-meta">
+            当前归档：<strong>{archive.label}</strong>
+            <br />
+            {formatNumber(archive.totalFiles)} 文件 · {formatBytes(archive.totalSizeBytes)}
+          </span>
+          <a className="button primary" href={archive.downloadHref}>
+            ⬇ 下载 ZIP
+          </a>
+          {canPlayInBrowser ? (
+            <Link className="button" href={`/play/${archive.id}`}>
+              ▶ 在线游玩
+            </Link>
+          ) : (
+            <span className="muted-line">
+              该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
+            </span>
+          )}
+          <button className="button" type="button" onClick={copyId}>
+            {copied ? "已复制 ✓" : `复制 ID #${archive.id}`}
+          </button>
+        </>
       ) : (
-        <span className="muted-line">
-          该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
+        <span className="work-action-meta">
+          该作品暂无可下载的最新快照，可在版本列表中选择历史快照。
         </span>
       )}
-      <button className="button" type="button" onClick={copyId}>
-        {copied ? "已复制 ✓" : `复制 ID #${archiveId}`}
-      </button>
     </section>
   );
 }
