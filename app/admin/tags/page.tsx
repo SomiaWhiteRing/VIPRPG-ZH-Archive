@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listTagsForAdmin } from "@/lib/server/db/taxonomy-library";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { namespaceLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,6 @@ export default async function AdminTagsPage() {
         <div>
           <p className="eyebrow">Admin Tags</p>
           <h1>标签维护</h1>
-          <p className="subtitle">管理普通标签的命名空间、描述和重复标签合并。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -57,7 +58,7 @@ export default async function AdminTagsPage() {
                 </td>
                 <td>{namespaceLabel(tag.namespace)}</td>
                 <td>
-                  {formatNumber(tag.workCount)} 作品 / {formatNumber(tag.releaseCount)} Release
+                  {formatNumber(tag.workCount)} 作品 / {formatNumber(tag.releaseCount)} 发布版本
                 </td>
                 <td>
                   <div className="actions compact-actions">
@@ -76,25 +77,4 @@ export default async function AdminTagsPage() {
       </section>
     </main>
   );
-}
-
-function namespaceLabel(value: string): string {
-  const labels: Record<string, string> = {
-    genre: "类型",
-    theme: "主题",
-    character: "角色相关",
-    technical: "技术",
-    content: "内容",
-    other: "其他",
-  };
-
-  return labels[value] ?? value;
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getSeriesForAdminEdit } from "@/lib/server/db/taxonomy-library";
+import { formatUnreadCount } from "@/lib/format";
+import { workStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,6 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
         <div>
           <p className="eyebrow">Edit Series</p>
           <h1>{series.title}</h1>
-          <p className="subtitle">系列 slug 暂不修改；系列成员在各作品编辑页维护。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/series">
@@ -65,6 +66,7 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
             <label className="field">
               Slug
               <input readOnly value={series.slug} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
               系列名
@@ -97,6 +99,7 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
       </form>
 
       <section className="table-wrap admin-related-table" aria-label="系列成员">
+        <p className="muted-line">成员请在作品编辑页维护。</p>
         <table className="data-table creator-credit-table">
           <thead>
             <tr>
@@ -115,7 +118,7 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
                   <span className="muted-line">{work.originalTitle}</span>
                 </td>
                 <td>{seriesRelationLabel(work.relationKind)}</td>
-                <td>{statusLabel(work.status)}</td>
+                <td>{workStatusLabel(work.status)}</td>
               </tr>
             ))}
           </tbody>
@@ -145,23 +148,4 @@ function seriesRelationLabel(value: string): string {
   };
 
   return labels[value] ?? value;
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "已删除";
-    default:
-      return value;
-  }
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

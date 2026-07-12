@@ -200,7 +200,7 @@ async function runInstallAttempt(input: {
     postLog(
       metadata.playKey,
       "info",
-      `开始第 ${attempt}/${maxInstallAttempts} 次安装尝试，先清理上一次半成品缓存。`,
+      `正在重新安装游戏文件（${attempt}/${maxInstallAttempts}）。`,
     );
   }
 
@@ -238,14 +238,8 @@ async function runInstallAttempt(input: {
   postLog(
     metadata.playKey,
     "info",
-    `ZIP 响应头已收到：${formatBytes(
+    `已连接下载源，文件大小 ${formatBytes(
       headerLength ?? metadata.totalSizeBytes,
-    )}，X-Download-Cache=${
-      response.headers.get("X-Download-Cache") ?? "unknown"
-    }，CF-Cache-Status=${
-      response.headers.get("CF-Cache-Status") ?? "unknown"
-    }，预计 R2 Get=${metadata.estimatedR2GetCount.toLocaleString(
-      "zh-CN",
     )}，等待 ${formatDuration(responseHeaderMs)}。`,
   );
   installation = await persistAndPost(
@@ -307,19 +301,17 @@ async function runInstallAttempt(input: {
   postLog(
     metadata.playKey,
     "info",
-    `浏览器本地安装完成，资源写入 ${result.packIndex.packs.length.toLocaleString(
-      "zh-CN",
-    )} 个 pack 文件。总耗时 ${formatDuration(
+    `游戏文件已安装到浏览器本地存储。总耗时 ${formatDuration(
       nowMs() - installStartedAt,
-    )}；ZIP 流处理 ${formatDuration(
+    )}；下载与解包 ${formatDuration(
       result.diagnostics.durationMs,
-    )}；OPFS write 等待 ${formatDuration(
+    )}；保存文件 ${formatDuration(
       result.diagnostics.packWriteDurationMs,
     )} / ${result.diagnostics.packWriteCalls.toLocaleString(
       "zh-CN",
-    )} 次；IndexedDB 文件记录 ${formatDuration(
+    )} 次；记录文件 ${formatDuration(
       result.diagnostics.fileRecordsDurationMs,
-    )}；索引写入 ${formatDuration(indexDurationMs)}。`,
+    )}；整理索引 ${formatDuration(indexDurationMs)}。`,
   );
 
   return installation;
@@ -457,20 +449,20 @@ async function streamZipToPacks(input: {
     postLog(
       input.metadata.playKey,
       "info",
-      `安装诊断：ZIP ${formatBytes(downloadedBytes)} / ${formatBytes(
+      `正在安装游戏文件：已下载 ${formatBytes(downloadedBytes)} / ${formatBytes(
         installation.downloadBytesTotal || input.metadata.totalSizeBytes,
-      )}（${formatRate(downloadedDelta, elapsedMs)}）；本地 ${installedFiles.toLocaleString(
+      )}（${formatRate(downloadedDelta, elapsedMs)}）；已保存 ${installedFiles.toLocaleString(
         "zh-CN",
       )} / ${input.metadata.installTotalFiles.toLocaleString("zh-CN")} 文件，${formatBytes(
         installedBytes,
       )} / ${formatBytes(input.metadata.installTotalSizeBytes)}（${formatRate(
         installedBytesDelta,
         elapsedMs,
-      )}）；OPFS write 等待 ${formatDuration(
+      )}）；本轮保存用时 ${formatDuration(
         writeDurationDelta,
-      )} / ${writeCallsDelta.toLocaleString("zh-CN")} 次；已读 entry ${entriesSeen.toLocaleString(
+      )} / ${writeCallsDelta.toLocaleString("zh-CN")} 次；已检查 ${entriesSeen.toLocaleString(
         "zh-CN",
-      )}；当前 ${currentPath ?? "-"}。`,
+      )} 个文件；当前 ${currentPath ?? "-"}。`,
     );
 
     lastDiagnosticAt = now;
@@ -490,7 +482,7 @@ async function streamZipToPacks(input: {
   }
 
   if (!body) {
-    throw new Error("浏览器未提供 ZIP 响应流。");
+    throw new Error("浏览器无法读取下载内容，请重试。");
   }
 
   const reader = new ZipStreamReader(input.metadata.playKey, body, (bytes) => {
@@ -499,7 +491,7 @@ async function streamZipToPacks(input: {
       postLog(
         input.metadata.playKey,
         "info",
-        `ZIP 首个数据块已到达，距离开始流处理 ${formatDuration(
+        `游戏文件开始下载，等待 ${formatDuration(
           firstChunkAt - streamStartedAt,
         )}。`,
       );
@@ -513,11 +505,7 @@ async function streamZipToPacks(input: {
   postLog(
     input.metadata.playKey,
     "info",
-    `使用 ZIP local header 顺序解析，并写入 OPFS pack。单个 pack 目标上限 ${formatBytes(
-      packTargetSizeBytes,
-    )}，低于该体积的安装通常只会生成 1 个 pack；OPFS 写入会先聚合到约 ${formatBytes(
-      packWriteBufferTargetBytes,
-    )} 再落盘。`,
+    "正在安装游戏文件…",
   );
 
   try {
@@ -534,11 +522,11 @@ async function streamZipToPacks(input: {
       const normalizedPath = normalizeZipEntryPath(entry.name);
 
       if (entry.compression !== zipMethodStore) {
-        throw new Error(`当前安装器只支持 store ZIP entry：${normalizedPath ?? entry.name}`);
+        throw new Error(`游戏压缩包使用了暂不支持的压缩方式：${normalizedPath ?? entry.name}`);
       }
 
       if (entry.compressedSize !== entry.uncompressedSize) {
-        throw new Error(`ZIP entry 大小异常：${normalizedPath ?? entry.name}`);
+        throw new Error(`游戏压缩包中的文件大小异常：${normalizedPath ?? entry.name}`);
       }
 
       if (!normalizedPath) {
@@ -562,7 +550,7 @@ async function streamZipToPacks(input: {
       const lookupKey = packLookupKey(normalizedPath);
 
       if (packIndex.files[lookupKey]) {
-        throw new Error(`Web Play pack 路径冲突：${normalizedPath}`);
+        throw new Error(`游戏文件路径冲突：${normalizedPath}`);
       }
 
       await reader.pipeBytes(entry.compressedSize, async (chunk) => {
@@ -601,9 +589,9 @@ async function streamZipToPacks(input: {
     postLog(
       input.metadata.playKey,
       "info",
-      `本地写入跳过 ${skippedLocalFiles.toLocaleString(
+      `已跳过 ${skippedLocalFiles.toLocaleString(
         "zh-CN",
-      )} 个 TXT / EXE / DLL 文件，约 ${formatBytes(skippedLocalBytes)}。`,
+      )} 个在线游玩不需要的文件，共 ${formatBytes(skippedLocalBytes)}。`,
     );
   }
 
@@ -754,7 +742,7 @@ class ZipStreamReader {
     }
 
     if (this.buffer.byteLength < 4) {
-      throw new Error("ZIP 数据在文件头处截断。");
+      throw new Error("ZIP 文件不完整（文件头被截断）。");
     }
 
     const signature = readUint32(this.buffer, 0);
@@ -767,7 +755,7 @@ class ZipStreamReader {
     }
 
     if (signature !== localFileHeaderSignature) {
-      throw new Error(`ZIP local header 损坏：0x${signature.toString(16)}`);
+      throw new Error(`ZIP 文件头损坏：0x${signature.toString(16)}`);
     }
 
     const fixed = await this.readBytes(30);
@@ -780,7 +768,7 @@ class ZipStreamReader {
     const extraLength = readUint16(fixed, 28);
 
     if ((flags & zipDataDescriptorFlag) !== 0) {
-      throw new Error("ZIP entry 使用 data descriptor，无法边下载边定位 entry。");
+      throw new Error("ZIP 使用了暂不支持的格式，无法边下载边安装。");
     }
 
     const nameBytes = await this.readBytes(nameLength);
@@ -823,7 +811,7 @@ class ZipStreamReader {
       }
 
       if (this.buffer.byteLength === 0) {
-        throw new Error("ZIP entry 数据被截断。");
+        throw new Error("ZIP 内的文件不完整。");
       }
 
       const take = Math.min(remaining, this.buffer.byteLength);
@@ -855,7 +843,7 @@ class ZipStreamReader {
         return false;
       }
 
-      throw new Error("ZIP 数据被截断。");
+      throw new Error("ZIP 文件不完整。");
     }
 
     return true;
@@ -979,7 +967,7 @@ function addEasyRpgIndexEntry(
 
       if (existing !== undefined) {
         if (strict) {
-          throw new Error(`EasyRPG 文件名大小写冲突：${sourcePath}`);
+          throw new Error(`游戏文件名大小写冲突：${sourcePath}`);
         }
 
         return;
@@ -992,7 +980,7 @@ function addEasyRpgIndexEntry(
     const existing = node[folded];
 
     if (typeof existing === "string") {
-      throw new Error(`EasyRPG 路径冲突：${sourcePath}`);
+      throw new Error(`游戏路径冲突：${sourcePath}`);
     }
 
     if (!existing) {
@@ -1003,7 +991,7 @@ function addEasyRpgIndexEntry(
     }
 
     if (existing._dirname !== part) {
-      throw new Error(`EasyRPG 目录名大小写冲突：${sourcePath}`);
+      throw new Error(`游戏目录名大小写冲突：${sourcePath}`);
     }
 
     node = existing;
@@ -1041,7 +1029,7 @@ function normalizeZipEntryPath(path: string): string | null {
     normalized === ".." ||
     /^[a-z]+:/i.test(normalized)
   ) {
-    throw new Error(`ZIP 内存在非法路径：${path}`);
+    throw new Error(`ZIP 中存在非法路径：${path}`);
   }
 
   return normalized
@@ -1072,9 +1060,8 @@ function isRetryableInstallError(error: unknown): boolean {
   }
 
   if (
-    message.includes("ZIP 数据被截断") ||
-    message.includes("ZIP entry 数据被截断") ||
-    message.includes("ZIP 数据在文件头处截断")
+    message.includes("ZIP 文件不完整") ||
+    message.includes("ZIP 内的文件不完整")
   ) {
     return true;
   }
@@ -1201,7 +1188,7 @@ function decodeZipPath(playKey: string, bytes: Uint8Array, flags: number): strin
     postLog(
       playKey,
       "warning",
-      "ZIP entry 未标记 UTF-8，仍按 UTF-8 解码。若路径异常，需要重新评估路径字节策略。",
+      "部分文件名可能无法正确显示。",
     );
   }
 

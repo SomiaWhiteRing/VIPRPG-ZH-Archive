@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getPublicTagDetail } from "@/lib/server/db/taxonomy-library";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { engineLabel, namespaceLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -88,40 +90,4 @@ export default async function TagDetailPage({ params }: TagDetailPageProps) {
       </section>
     </main>
   );
-}
-
-function namespaceLabel(value: string): string {
-  const labels: Record<string, string> = {
-    genre: "类型",
-    theme: "主题",
-    character: "角色相关",
-    technical: "技术",
-    content: "内容",
-    other: "其他",
-  };
-
-  return labels[value] ?? value;
-}
-
-function engineLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_2000":
-      return "RPG Maker 2000";
-    case "rpg_maker_2003":
-      return "RPG Maker 2003";
-    case "mixed":
-      return "混合引擎";
-    case "other":
-      return "其他引擎";
-    default:
-      return "引擎未知";
-  }
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

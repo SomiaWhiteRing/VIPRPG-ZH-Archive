@@ -3,6 +3,8 @@ import {
   listPublicSeries,
   type PublicSeriesSummary,
 } from "@/lib/server/db/taxonomy-library";
+import { formatNumber } from "@/lib/format";
+import { stringParam } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,6 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
         <div>
           <p className="eyebrow">Series</p>
           <h1>系列作品</h1>
-          <p className="subtitle">按系列统一查看正篇、外传、同合集作品和排序信息。</p>
         </div>
       </header>
 
@@ -41,8 +42,8 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
       </form>
 
       <section className="library-summary" aria-label="系列摘要">
-        <strong>{formatNumber(series.length)}</strong>
-        <span>个系列符合当前条件</span>
+        <strong>共 {formatNumber(series.length)} </strong>
+        <span>个系列</span>
       </section>
 
       {series.length > 0 ? (
@@ -52,9 +53,8 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
           ))}
         </section>
       ) : (
-        <section className="card empty-card" style={{ marginTop: 16 }}>
-          <h2>没有找到系列</h2>
-          <p>调整关键词后再试。</p>
+        <section className="card empty-card">
+          <h2>没有找到匹配的系列。</h2>
         </section>
       )}
     </main>
@@ -70,7 +70,7 @@ function SeriesCard({ item }: { item: PublicSeriesSummary }) {
         </Link>
         {item.titleOriginal ? <span className="muted-line">{item.titleOriginal}</span> : null}
       </div>
-      <p>{item.description || "暂无简介。"}</p>
+      {item.description ? <p>{item.description}</p> : null}
       <dl className="game-card-stats">
         <div>
           <dt>作品</dt>
@@ -79,12 +79,4 @@ function SeriesCard({ item }: { item: PublicSeriesSummary }) {
       </dl>
     </article>
   );
-}
-
-function stringParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
 }

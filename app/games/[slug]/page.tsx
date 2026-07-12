@@ -3,6 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getGameWorkDetail } from "@/lib/server/db/game-library";
+import { formatNumber, formatBytes } from "@/lib/format";
+import {
+  baseVariantLabel,
+  creatorRoleLabel,
+  engineLabel,
+  releaseTypeLabel,
+} from "@/lib/labels";
 import { WorkActionBar } from "./work-action-bar";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +61,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
       ) : (
         <section className="work-action-bar" aria-label="主操作">
           <span className="work-action-meta">
-            该作品当前没有标记为「current」的归档；可以在下方版本列表中下载具体快照。
+            该作品暂无可下载的最新快照，可在版本列表中选择历史快照。
           </span>
         </section>
       )}
@@ -83,7 +90,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
               </Link>
             ))}
           </div>
-          <p>{work.description || "暂无简介。"}</p>
+          {work.description ? <p>{work.description}</p> : null}
           <dl className="detail-list work-detail-list">
             <div>
               <dt>原作发布日期</dt>
@@ -308,8 +315,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                       <td>
                         {formatNumber(archive.totalFiles)} 文件
                         <span className="muted-line">
-                          {formatBytes(archive.totalSizeBytes)} / 约{" "}
-                          {formatNumber(archive.estimatedR2GetCount)} 次 R2 读
+                          {formatBytes(archive.totalSizeBytes)}
                         </span>
                       </td>
                       <td>
@@ -324,7 +330,9 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                             <Link className="button" href={`/play/${archive.id}`}>
                               在线游玩
                             </Link>
-                          ) : null}
+                          ) : (
+                            <span className="muted-line">暂不支持在线游玩</span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -339,38 +347,6 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
   );
 }
 
-function engineLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_2000":
-      return "RPG Maker 2000";
-    case "rpg_maker_2003":
-      return "RPG Maker 2003";
-    case "mixed":
-      return "混合引擎";
-    case "other":
-      return "其他引擎";
-    default:
-      return "引擎未知";
-  }
-}
-
-function creatorRoleLabel(value: string): string {
-  const labels: Record<string, string> = {
-    author: "作者",
-    scenario: "剧本",
-    graphics: "图像",
-    music: "音乐",
-    translator: "翻译",
-    proofreader: "校对",
-    image_editor: "修图",
-    publisher: "发布",
-    repacker: "整理",
-    editor: "编辑",
-  };
-
-  return labels[value] ?? value;
-}
-
 function linkTypeLabel(value: string): string {
   const labels: Record<string, string> = {
     official: "官方网站",
@@ -381,31 +357,6 @@ function linkTypeLabel(value: string): string {
   };
 
   return labels[value] ?? "其他";
-}
-
-function releaseTypeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    original: "原始发布",
-    translation: "汉化版",
-    revision: "修正版",
-    localized_revision: "本地化修正版",
-    demo: "试玩版",
-    event_submission: "活动投稿",
-    patch_applied_full_release: "补丁整合版",
-    repack: "重打包",
-  };
-
-  return labels[value] ?? "其他";
-}
-
-function baseVariantLabel(value: string): string {
-  const labels: Record<string, string> = {
-    original: "原版",
-    remake: "重制版",
-    other: "其他基底",
-  };
-
-  return labels[value] ?? value;
 }
 
 function relationLabel(value: string, direction: "from" | "to"): string {
@@ -433,10 +384,6 @@ function formatDateish(value: string | null, precision: string): string {
   return value;
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
 function pickCurrentArchive(work: {
   releases: Array<{
     archiveVersions: Array<{
@@ -461,16 +408,4 @@ function pickCurrentArchive(work: {
     }
   }
   return null;
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

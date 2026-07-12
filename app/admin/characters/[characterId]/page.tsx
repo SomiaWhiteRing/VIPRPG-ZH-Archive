@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit } from "@/lib/server/db/taxonomy-library";
+import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,6 @@ export default async function AdminCharacterEditPage({
         <div>
           <p className="eyebrow">Edit Character</p>
           <h1>{character.primaryName}</h1>
-          <p className="subtitle">角色 slug 暂不修改；重复项通过合并到目标 slug 处理。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin/characters">
@@ -67,6 +67,7 @@ export default async function AdminCharacterEditPage({
             <label className="field">
               Slug
               <input readOnly value={character.slug} />
+              <span className="muted-line">不可修改</span>
             </label>
             <label className="field">
               名称
@@ -89,7 +90,7 @@ export default async function AdminCharacterEditPage({
             目标角色 slug
             <input name="merge_target_slug" placeholder="留空则不合并" />
             <span className="muted-line">
-              提交后当前角色的登场关系会移动到目标角色，当前角色记录会被删除。
+              提交后，登场关系会移至目标角色，当前角色会被删除。
             </span>
           </label>
         </section>
@@ -112,8 +113,4 @@ function parseId(value: string): number {
   }
 
   return id;
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

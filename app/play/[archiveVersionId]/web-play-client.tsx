@@ -14,6 +14,8 @@ import type {
   WebPlayMetadata,
   WebPlayStorageSnapshot,
 } from "@/app/play/[archiveVersionId]/web-play-types";
+import { formatBytes } from "@/lib/format";
+import { installStatusLabel } from "@/lib/labels";
 
 type WebPlayLog = {
   id: string;
@@ -116,9 +118,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
 
       addLog(
         "error",
-        `EasyRPG 请求文件失败：${message.path ?? "unknown"}${
-          message.message ? `（${message.message}）` : ""
-        }`,
+        "游戏文件读取失败，请清理并重新安装。",
       );
     };
 
@@ -241,7 +241,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
       await deleteGameOpfsDirectory(metadata.playKey);
       await deleteWebPlayInstallation(metadata.playKey);
       setInstallation(null);
-      addLog("info", "已删除本地游戏缓存。EasyRPG 存档不随资源缓存删除。");
+      addLog("info", "已删除本地游戏文件。游戏存档不受影响。");
     } catch (error) {
       const message = error instanceof Error ? error.message : "删除本地缓存失败。";
       setOperationError(message);
@@ -266,11 +266,11 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
       await loadEasyRpgRuntime(metadata.runtimeBasePath);
 
       if (!window.createEasyRpgPlayer) {
-        throw new Error("EasyRPG runtime 未正确加载。");
+        throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
       }
 
       setRunning(true);
-      addLog("info", "EasyRPG runtime 已加载，正在启动游戏。");
+      addLog("info", "游戏运行组件已加载，正在启动游戏。");
       const playerModule = await window.createEasyRpgPlayer({
         game: metadata.playKey,
         locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
@@ -300,7 +300,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
     const frame = document.getElementById("web-player-frame");
 
     if (!frame?.requestFullscreen) {
-      addLog("warning", "当前浏览器不支持全屏 API。");
+      addLog("warning", "当前浏览器不支持全屏功能。");
       return;
     }
 
@@ -323,8 +323,8 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
     }
 
     return [
-      ["本地状态", statusLabel(installation.status)],
-      ["持久化", installation.persistedStorage === null ? "未请求" : installation.persistedStorage ? "已允许" : "未允许"],
+      ["本地状态", installStatusLabel(installation.status)],
+      ["长期保存", installation.persistedStorage === null ? "未请求" : installation.persistedStorage ? "已允许" : "未允许"],
       ["浏览器用量", formatBytes(installation.storageUsageBytes ?? 0)],
       ["浏览器额度", formatBytes(installation.storageQuotaBytes ?? 0)],
     ];
@@ -335,7 +335,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
       <section className="card web-play-card">
         <h2>在线游玩不可用</h2>
         <p>
-          该作品标记为 Maniacs Patch。MVP 阶段不展示 EasyRPG 在线游玩入口，请使用 ZIP 下载。
+          该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
         </p>
       </section>
     );
@@ -350,7 +350,9 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
             <h2>浏览器本地安装</h2>
           </div>
           <span className="status-pill">
-            {loadingLocalState ? "读取中" : statusLabel(installation?.status ?? "deleted")}
+            {loadingLocalState
+              ? "读取中"
+              : installStatusLabel(installation?.status ?? "deleted")}
           </span>
         </div>
 
@@ -364,18 +366,18 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
             <dd>{metadata.totalFiles.toLocaleString("zh-CN")}</dd>
           </div>
           <div>
-            <dt>本地写入</dt>
+            <dt>安装内容</dt>
             <dd>
               {formatBytes(metadata.installTotalSizeBytes)} /{" "}
               {metadata.installTotalFiles.toLocaleString("zh-CN")} 文件
             </dd>
           </div>
           <div>
-            <dt>Release</dt>
+            <dt>发布版本</dt>
             <dd>{metadata.releaseLabel}</dd>
           </div>
           <div>
-            <dt>ArchiveVersion</dt>
+            <dt>归档快照</dt>
             <dd>{metadata.archiveLabel}</dd>
           </div>
         </dl>
@@ -500,7 +502,7 @@ function InstallProgress({ installation }: { installation: WebPlayInstallation }
   return (
     <div className="web-play-progress-block">
       <div>
-        <span>ZIP 下载</span>
+        <span>下载进度</span>
         <strong>
           {formatBytes(installation.downloadedBytes)} /{" "}
           {formatBytes(installation.downloadBytesTotal)}
@@ -510,7 +512,7 @@ function InstallProgress({ installation }: { installation: WebPlayInstallation }
         <span style={{ width: `${downloadPercent}%` }} />
       </div>
       <div>
-        <span>本地写入</span>
+        <span>安装进度</span>
         <strong>
           {installation.installedFiles.toLocaleString("zh-CN")} /{" "}
           {installation.totalFiles.toLocaleString("zh-CN")} 文件
@@ -519,9 +521,6 @@ function InstallProgress({ installation }: { installation: WebPlayInstallation }
       <div className="upload-progress">
         <span style={{ width: `${extractPercent}%` }} />
       </div>
-      {installation.currentPath ? (
-        <p className="upload-current-path">{installation.currentPath}</p>
-      ) : null}
       {installation.error ? <p className="error-message compact">{installation.error}</p> : null}
     </div>
   );
@@ -529,7 +528,7 @@ function InstallProgress({ installation }: { installation: WebPlayInstallation }
 
 async function registerPlayServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator)) {
-    throw new Error("当前浏览器不支持 Service Worker。");
+    throw new Error("当前浏览器不支持在线游玩所需的后台功能。");
   }
 
   const registration = await navigator.serviceWorker.register("/play/sw.js", {
@@ -617,27 +616,13 @@ async function loadEasyRpgRuntime(runtimeBasePath: string): Promise<void> {
       script.dataset.loaded = "true";
       resolve();
     };
-    script.onerror = () => reject(new Error("EasyRPG runtime 加载失败。"));
+    script.onerror = () =>
+      reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
 
     if (!existing) {
       document.head.appendChild(script);
     }
   });
-}
-
-function statusLabel(status: WebPlayInstallation["status"] | "deleted"): string {
-  switch (status) {
-    case "created":
-      return "已创建";
-    case "installing":
-      return "安装中";
-    case "ready":
-      return "已安装";
-    case "failed":
-      return "安装失败";
-    case "deleted":
-      return "未安装";
-  }
 }
 
 function percent(done: number, total: number): number {
@@ -646,22 +631,4 @@ function percent(done: number, total: number): number {
   }
 
   return Math.max(0, Math.min(100, (done / total) * 100));
-}
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0 B";
-  }
-
-  let next = value;
-
-  for (const unit of ["B", "KB", "MB", "GB"]) {
-    if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${next} B` : `${next.toFixed(2)} ${unit}`;
-    }
-
-    next /= 1024;
-  }
-
-  return `${value} B`;
 }

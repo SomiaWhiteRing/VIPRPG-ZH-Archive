@@ -3,6 +3,8 @@ import {
   listPublicCreators,
   type PublicCreatorSummary,
 } from "@/lib/server/db/creator-library";
+import { formatNumber } from "@/lib/format";
+import { stringParam } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +23,6 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
         <div>
           <p className="eyebrow">Creators</p>
           <h1>作者与制作人员</h1>
-          <p className="subtitle">
-            浏览已入库作品关联到的作者、汉化者、校对、修图和整理人员。
-          </p>
         </div>
       </header>
 
@@ -48,8 +47,8 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
       </form>
 
       <section className="library-summary" aria-label="作者摘要">
-        <strong>{formatNumber(creators.length)}</strong>
-        <span>位作者或制作人员符合当前条件</span>
+        <strong>共 {formatNumber(creators.length)} </strong>
+        <span>位作者或制作人员</span>
       </section>
 
       {creators.length > 0 ? (
@@ -59,9 +58,8 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
           ))}
         </section>
       ) : (
-        <section className="card empty-card" style={{ marginTop: 16 }}>
-          <h2>没有找到作者</h2>
-          <p>调整关键词后再试。</p>
+        <section className="card empty-card">
+          <h2>没有找到匹配的作者。</h2>
         </section>
       )}
     </main>
@@ -79,7 +77,7 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
           <span className="muted-line">{creator.originalName}</span>
         ) : null}
       </div>
-      <p>{creator.bio || "暂无简介。"}</p>
+      {creator.bio ? <p>{creator.bio}</p> : null}
       <dl className="game-card-stats">
         <div>
           <dt>作品</dt>
@@ -92,12 +90,4 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
       </dl>
     </article>
   );
-}
-
-function stringParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
 }

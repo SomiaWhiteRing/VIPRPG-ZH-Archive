@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { listPublicTags, type PublicTagSummary } from "@/lib/server/db/taxonomy-library";
+import { formatNumber } from "@/lib/format";
+import { namespaceLabel } from "@/lib/labels";
+import { stringParam } from "@/lib/params";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +21,6 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
         <div>
           <p className="eyebrow">Tags</p>
           <h1>标签</h1>
-          <p className="subtitle">普通检索标签与登场角色分开管理；角色请走登场角色页面。</p>
         </div>
       </header>
 
@@ -38,8 +40,9 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       </form>
 
       <section className="library-summary" aria-label="标签摘要">
+        <span>共</span>
         <strong>{formatNumber(tags.length)}</strong>
-        <span>个标签符合当前条件</span>
+        <span>个标签</span>
       </section>
 
       {tags.length > 0 ? (
@@ -49,9 +52,8 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
           ))}
         </section>
       ) : (
-        <section className="card empty-card" style={{ marginTop: 16 }}>
-          <h2>没有找到标签</h2>
-          <p>调整关键词后再试。</p>
+        <section className="card empty-card">
+          <h2>没有找到匹配的标签。</h2>
         </section>
       )}
     </main>
@@ -74,31 +76,10 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
           <dd>{formatNumber(tag.workCount)}</dd>
         </div>
         <div>
-          <dt>Release</dt>
+          <dt>发布版本</dt>
           <dd>{formatNumber(tag.releaseCount)}</dd>
         </div>
       </dl>
     </article>
   );
-}
-
-function namespaceLabel(value: string): string {
-  const labels: Record<string, string> = {
-    genre: "类型",
-    theme: "主题",
-    character: "角色相关",
-    technical: "技术",
-    content: "内容",
-    other: "其他",
-  };
-
-  return labels[value] ?? value;
-}
-
-function stringParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
 }

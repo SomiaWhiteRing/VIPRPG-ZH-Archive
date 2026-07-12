@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getPublicCreatorDetail } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { creatorRoleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +57,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
       <section className="section-grid creator-profile-grid" aria-label="作者资料">
         <section className="card">
           <h2>简介</h2>
-          <p>{creator.bio || "暂无简介。"}</p>
+          {creator.bio ? <p>{creator.bio}</p> : null}
           {creator.websiteUrl ? (
             <div className="actions">
               <a className="button" href={creator.websiteUrl} rel="noreferrer" target="_blank">
@@ -126,7 +128,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             <table className="data-table creator-credit-table">
               <thead>
                 <tr>
-                  <th>作品 / Release</th>
+                  <th>作品 / 发布版本</th>
                   <th>职务</th>
                   <th>日期</th>
                 </tr>
@@ -154,29 +156,4 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
       </section>
     </main>
   );
-}
-
-function creatorRoleLabel(value: string): string {
-  const labels: Record<string, string> = {
-    author: "作者",
-    scenario: "剧本",
-    graphics: "图像",
-    music: "音乐",
-    translator: "翻译",
-    proofreader: "校对",
-    image_editor: "修图",
-    publisher: "发布",
-    repacker: "整理",
-    editor: "编辑",
-  };
-
-  return labels[value] ?? value;
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

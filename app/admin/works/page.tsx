@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { listEditableWorksForAdmin } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount, formatNumber, formatBytes } from "@/lib/format";
+import { workStatusBadgeClass, workStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +20,6 @@ export default async function AdminWorksPage() {
         <div>
           <p className="eyebrow">Admin Works</p>
           <h1>作品资料维护</h1>
-          <p className="subtitle">
-            这里维护作品层的基础资料：中文名、简介、别名、标签、外部链接、引擎和在线游玩兼容标记。
-          </p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -59,8 +58,8 @@ export default async function AdminWorksPage() {
                   <span className="mono muted-line">{work.slug}</span>
                 </td>
                 <td>
-                  <span className={`badge ${statusBadgeClass(work.status)}`}>
-                    {statusLabel(work.status)}
+                  <span className={`badge ${workStatusBadgeClass(work.status)}`}>
+                    {workStatusLabel(work.status)}
                   </span>
                   {work.usesManiacsPatch ? (
                     <span className="muted-line">Maniacs Patch</span>
@@ -101,51 +100,4 @@ export default async function AdminWorksPage() {
       </section>
     </main>
   );
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "已删除";
-    default:
-      return value;
-  }
-}
-
-function statusBadgeClass(value: string): string {
-  if (value === "published") {
-    return "approved";
-  }
-
-  if (value === "deleted" || value === "hidden") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** exponent;
-
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }

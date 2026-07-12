@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
-import { lowerRoles, roleLabel } from "@/lib/server/auth/roles";
+import { lowerRoles } from "@/lib/server/auth/roles";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { listUsersForAdmin, type ArchiveUser } from "@/lib/server/db/users";
+import { listUsersForAdmin } from "@/lib/server/db/users";
+import { formatUnreadCount, formatDate } from "@/lib/format";
+import {
+  roleLabel,
+  userRoleBadgeClass,
+  userStatusBadgeClass,
+  userStatusLabel,
+} from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +25,6 @@ export default async function AdminUsersPage() {
         <div>
           <p className="eyebrow">Admin Users</p>
           <h1>用户与上传权限</h1>
-          <p className="subtitle">
-            当前层级：{roleLabel(adminUser.role)}。这里只显示低于你层级的用户，
-            可调整为低于你层级的任意角色。
-          </p>
         </div>
         <div className="actions header-actions">
           <Link className="button" href="/admin">
@@ -60,13 +63,13 @@ export default async function AdminUsersPage() {
                   <span className="mono muted-line">#{user.id}</span>
                 </td>
                 <td>
-                  <span className={`badge ${roleBadgeClass(user.role)}`}>
+                  <span className={`badge ${userRoleBadgeClass(user.role)}`}>
                     {roleLabel(user.role)}
                   </span>
                 </td>
                 <td>
-                  <span className={`badge ${user.status === "active" ? "approved" : "rejected"}`}>
-                    {user.status === "active" ? "启用" : "禁用"}
+                  <span className={`badge ${userStatusBadgeClass(user.status)}`}>
+                    {userStatusLabel(user.status)}
                   </span>
                 </td>
                 <td>{formatDate(user.createdAt)}</td>
@@ -123,23 +126,4 @@ export default async function AdminUsersPage() {
       </section>
     </main>
   );
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function roleBadgeClass(role: ArchiveUser["role"]): string {
-  if (role === "super_admin") {
-    return "super-admin";
-  }
-
-  return role;
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }

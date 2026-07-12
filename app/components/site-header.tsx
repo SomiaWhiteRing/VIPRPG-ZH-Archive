@@ -4,9 +4,9 @@ import {
   canAccessSuperAdminRole,
   canManageUsersRole,
   canUploadRole,
-  roleLabel,
 } from "@/lib/server/auth/roles";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { roleLabel } from "@/lib/labels";
 import { SiteHeaderNav } from "./site-header-nav";
 
 export async function SiteHeader() {

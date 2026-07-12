@@ -271,23 +271,23 @@ app/styles/pages.css       ← 真正页面独有的样式（home hero、upload�
 
 > 本 Phase 只动字符串和重复的 label 函数，不动 className、不动 CSS。这是最快让站点「拿得出手」的一步。
 
-- [ ] **1.1 建 `lib/labels.ts`。** 新建文件，收编重复的展示映射函数。**两类处理方式，不可混淆：**
+- [x] **1.1 建 `lib/labels.ts`。** 新建文件，收编重复的展示映射函数。**两类处理方式，不可混淆：**
   - **同域重复 → 合并为单一导出**：`engineLabel`×4（四份逐字一致，直接合并）、`creatorRoleLabel`×3、`namespaceLabel`×3、`releaseTypeLabel`×2、`baseVariantLabel`×2。所有调用点改 import，删除本地拷贝。
   - **同名异域 → 按域拆分导出，禁止合并**：名为 `statusLabel` 的函数有 **12 份、横跨 6 个互不兼容的枚举域**（同键不同义：`deleted` 在不同域分别译为「已删除」「回收站」「未安装」）。拆为六个导出：`workStatusLabel`（内容发布状态 published/hidden/draft/deleted，7 份拷贝，deleted 分支有无不一，取含 deleted 的版本）、`archiveStatusLabel`（归档快照，含 `purgedAt` 参数，源自 archive-version-table.tsx）、`inboxStatusLabel`（站内信审批，inbox/page.tsx）、`importTaskStatusLabel`（导入任务，upload/tasks/page.tsx）、`uploadTaskStatusLabel`（浏览器上传任务，upload-task-provider.tsx）、`installStatusLabel`（在线游玩安装，web-play-client.tsx）。`statusBadgeClass` 同理有 **6 份**（archive-version-table、inbox、admin/works、admin/works/[workId]、admin/releases/[releaseId]、admin/series）+ users 页一处内联三元 + 独立的 `roleBadgeClass`，一并按域收编。
   - 角色文案注意：`roleLabel` 现存于 `lib/server/auth/roles.ts`（红线不改）。labels.ts 里如需角色展示映射，自建展示层副本并加注释「须与 lib/server/auth/roles.ts 的 roleLabel 保持一致」。
   - 同时迁入 register/reset 重复的验证码提示为常量 `VERIFICATION_EMAIL_HINT`。
   - DoD：`grep -rn "function engineLabel\|function releaseTypeLabel\|function statusLabel\|function baseVariantLabel\|function creatorRoleLabel\|function namespaceLabel\|function statusBadgeClass" app` 结果为 0；`npm run check` 通过。
-- [ ] **1.2 逐模式清洗（按 §1.1 的 A–H 顺序，重写规则与示例见附录 B）：**
-  - [ ] 1.2-A 全站 subtitle 过审：按附录 A 的逐页处置表执行（删 / 改 / 保三种处置，附录已逐页给出）。
-  - [ ] 1.2-B 清除全部「这里维护/都在这里/会显示在这里/这里只显示」类句式。**grep 口径：裸词「这里」全站搜索（约 14 行命中），逐行人工分流**——属于模式 C（暂不在这里修改）的留给 1.2-C 处理，其余凡是向用户解释「本页/本区是干嘛的」的句子全部删除或压缩。不要只搜「这里维护」等固定短语，变体（「都会在这里显示」「会显示在这里」）会漏网。
-  - [ ] 1.2-C 六个编辑页的「slug 暂不修改」句：从 subtitle 删除，将该信息降级为对应只读字段旁的一行 hint（如果页面上没有展示该字段，则在表单顶部保留一行，措辞统一为「原名与 slug 不可修改」）。
-  - [ ] 1.2-D 空状态统一措辞（本 Phase 先统一文字，Phase 3.3 再换组件）：列表页空态一律「没有找到匹配的{作品/作者/角色/标签/系列}。」，删除「调整关键词后再试」；「暂无简介。」统一改为不渲染该行（无简介就不显示占位文案，除非布局需要，需要时用「—」）。
-  - [ ] 1.2-E 「N 个 X 符合当前条件」→「共 N 个{作品/…}」（grep `符合当前条件`）。
-  - [ ] 1.2-F 按 §2.2 术语对照表全站替换（逐词 grep：`preflight`、`core pack`、`commit`、`manifest`、`current`、`OPFS`、`SHA-256`、`MVP`、`extra_json`；注意只改**中文 UI 字符串内**的出现，不改代码标识符）。web-play worker 的用户可见日志（`web-play-install-worker.ts` 中的中文串）改为用户语言或降为一句「正在安装游戏文件…」+ 详情折叠。
-  - [ ] 1.2-G 权限流程解释收敛：`/me` 保留完整版（两句以内），`app/page.tsx`、`app/upload/page.tsx` 各改为一句 + 链接（示例见附录 B-G）。
-  - [ ] 1.2-H admin 枚举 hint 重写：每条按「placeholder 放一行真实示例 + hint 只写示例外约束」改写（示例见附录 B-H）；删除 hint 中所有数据库解说句。
-- [ ] **1.3 重点文件复查。** 对文案最重的 5 个文件做整文件通读复查（不只 grep）：`app/page.tsx`、`app/about/page.tsx`、`app/me/page.tsx`、`app/upload/upload-client.tsx`、`app/admin/maintenance/page.tsx`。对照 §2.1 十条逐条过。About 页技术段保留但按对照表换词，宣言体（「目标是建立一个…」）改为事实句。
-- [ ] **1.4 Phase 验证**：`npm run check`；grep 验收——`调整关键词`/`符合当前条件`/`都在这里`/`暂不在这里修改`/`MVP`/`extra_json` 全站命中 0（限 UI 字符串）；抽查 6 个页面截图确认无因删句导致的布局塌陷；调用 `ux-flow-reviewer` 复核信息没有丢失（重点：权限门槛、危险操作警告仍可见）。
+- [x] **1.2 逐模式清洗（按 §1.1 的 A–H 顺序，重写规则与示例见附录 B）：**
+  - [x] 1.2-A 全站 subtitle 过审：按附录 A 的逐页处置表执行（删 / 改 / 保三种处置，附录已逐页给出）。
+  - [x] 1.2-B 清除全部「这里维护/都在这里/会显示在这里/这里只显示」类句式。**grep 口径：裸词「这里」全站搜索（约 14 行命中），逐行人工分流**——属于模式 C（暂不在这里修改）的留给 1.2-C 处理，其余凡是向用户解释「本页/本区是干嘛的」的句子全部删除或压缩。不要只搜「这里维护」等固定短语，变体（「都会在这里显示」「会显示在这里」）会漏网。
+  - [x] 1.2-C 六个编辑页的「slug 暂不修改」句：从 subtitle 删除，将该信息降级为对应只读字段旁的一行 hint（如果页面上没有展示该字段，则在表单顶部保留一行，措辞统一为「原名与 slug 不可修改」）。
+  - [x] 1.2-D 空状态统一措辞（本 Phase 先统一文字，Phase 3.3 再换组件）：列表页空态一律「没有找到匹配的{作品/作者/角色/标签/系列}。」，删除「调整关键词后再试」；「暂无简介。」统一改为不渲染该行（无简介就不显示占位文案，除非布局需要，需要时用「—」）。
+  - [x] 1.2-E 「N 个 X 符合当前条件」→「共 N 个{作品/…}」（grep `符合当前条件`）。
+  - [x] 1.2-F 按 §2.2 术语对照表全站替换（逐词 grep：`preflight`、`core pack`、`commit`、`manifest`、`current`、`OPFS`、`SHA-256`、`MVP`、`extra_json`；注意只改**中文 UI 字符串内**的出现，不改代码标识符）。web-play worker 的用户可见日志（`web-play-install-worker.ts` 中的中文串）改为用户语言或降为一句「正在安装游戏文件…」+ 详情折叠。
+  - [x] 1.2-G 权限流程解释收敛：`/me` 保留完整版（两句以内），`app/page.tsx`、`app/upload/page.tsx` 各改为一句 + 链接（示例见附录 B-G）。
+  - [x] 1.2-H admin 枚举 hint 重写：每条按「placeholder 放一行真实示例 + hint 只写示例外约束」改写（示例见附录 B-H）；删除 hint 中所有数据库解说句。
+- [x] **1.3 重点文件复查。** 对文案最重的 5 个文件做整文件通读复查（不只 grep）：`app/page.tsx`、`app/about/page.tsx`、`app/me/page.tsx`、`app/upload/upload-client.tsx`、`app/admin/maintenance/page.tsx`。对照 §2.1 十条逐条过。About 页技术段保留但按对照表换词，宣言体（「目标是建立一个…」）改为事实句。
+- [x] **1.4 Phase 验证**：`npm run check`；grep 验收——`调整关键词`/`符合当前条件`/`都在这里`/`暂不在这里修改`/`MVP`/`extra_json` 全站命中 0（限 UI 字符串）；抽查 6 个页面截图确认无因删句导致的布局塌陷；调用 `ux-flow-reviewer` 复核信息没有丢失（重点：权限门槛、危险操作警告仍可见）。
 
 ### Phase 2 —— CSS 令牌化与拆分（1–2 天，目标「视觉基本不变，结构彻底换血」）
 

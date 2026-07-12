@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getPublicSeriesDetail } from "@/lib/server/db/taxonomy-library";
+import { formatUnreadCount } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -52,9 +53,9 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
         </div>
       </header>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>简介</h2>
-        <p>{series.description || "暂无简介。"}</p>
+        <p>{series.description || "—"}</p>
       </section>
 
       <section className="creator-credit-section" aria-label="系列作品">
@@ -105,8 +106,4 @@ function seriesRelationLabel(value: string): string {
   };
 
   return labels[value] ?? value;
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

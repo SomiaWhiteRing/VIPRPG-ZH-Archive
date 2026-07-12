@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { requireSuperAdminPageUser } from "@/lib/server/auth/guards";
-import { roleLabel } from "@/lib/server/auth/roles";
 import {
   listAdminAuditLogs,
   listAdminRoleEvents,
 } from "@/lib/server/db/admin-audit";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { formatUnreadCount, formatDate } from "@/lib/format";
+import { roleLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,7 @@ export default async function AdminAuditPage() {
         <div>
           <p className="eyebrow">Super Admin Audit</p>
           <h1>审计日志</h1>
-          <p className="subtitle">
-            仅超级管理员可访问。这里集中查看登录/验证码/归档维护/最终清理等审计日志，
-            以及用户层级调整事件。
-          </p>
+          <p className="subtitle">登录、归档维护与权限调整的审计日志。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -43,7 +41,7 @@ export default async function AdminAuditPage() {
         </div>
       </header>
 
-      <section className="card" style={{ marginTop: 24 }}>
+      <section className="card">
         <h2>权限清单</h2>
         <div className="table-wrap compact-table-wrap">
           <table className="data-table admin-ops-table">
@@ -71,7 +69,7 @@ export default async function AdminAuditPage() {
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>用户层级事件</h2>
         {roleEvents.length > 0 ? (
           <div className="table-wrap compact-table-wrap">
@@ -107,7 +105,7 @@ export default async function AdminAuditPage() {
                     </td>
                     <td>
                       {event.sourceInboxItemId ? (
-                        <span className="mono">inbox #{event.sourceInboxItemId}</span>
+                        <span className="mono">站内信 #{event.sourceInboxItemId}</span>
                       ) : (
                         "直接调整"
                       )}
@@ -118,11 +116,11 @@ export default async function AdminAuditPage() {
             </table>
           </div>
         ) : (
-          <p className="muted-line">还没有用户层级事件。</p>
+          <p className="muted-line">暂无用户层级事件。</p>
         )}
       </section>
 
-      <section className="card" style={{ marginTop: 16 }}>
+      <section className="card">
         <h2>系统审计日志</h2>
         {auditLogs.length > 0 ? (
           <div className="table-wrap compact-table-wrap">
@@ -161,7 +159,7 @@ export default async function AdminAuditPage() {
             </table>
           </div>
         ) : (
-          <p className="muted-line">还没有系统审计日志。</p>
+          <p className="muted-line">暂无系统审计日志。</p>
         )}
       </section>
     </main>
@@ -170,7 +168,7 @@ export default async function AdminAuditPage() {
 
 const permissionRows = [
   {
-    name: "上传/导入游戏",
+    name: "上传与导入游戏",
     user: "否",
     uploader: "是",
     admin: "是",
@@ -184,21 +182,21 @@ const permissionRows = [
     superAdmin: "全部",
   },
   {
-    name: "查看回收站/还原",
+    name: "查看与还原回收站",
     user: "否",
     uploader: "否",
     admin: "是",
     superAdmin: "是",
   },
   {
-    name: "设为当前版本",
+    name: "设为最新快照",
     user: "否",
     uploader: "否",
     admin: "是",
     superAdmin: "是",
   },
   {
-    name: "最终清理/手动 GC sweep",
+    name: "手动最终清理",
     user: "否",
     uploader: "否",
     admin: "否",
@@ -219,17 +217,6 @@ const permissionRows = [
     superAdmin: "是",
   },
 ];
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 function formatDetail(value: unknown): string {
   if (value === null || value === undefined) {

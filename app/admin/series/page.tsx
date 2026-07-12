@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireAdminPageUser } from "@/lib/server/auth/guards";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listSeriesForAdmin } from "@/lib/server/db/taxonomy-library";
+import { formatNumber, formatUnreadCount } from "@/lib/format";
+import { workStatusBadgeClass, workStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,6 @@ export default async function AdminSeriesPage() {
         <div>
           <p className="eyebrow">Admin Series</p>
           <h1>系列作品维护</h1>
-          <p className="subtitle">创建和维护系列本体；作品加入系列在作品编辑页处理。</p>
         </div>
         <div className="actions header-actions">
           <Link className="button primary" href="/admin">
@@ -88,8 +89,8 @@ export default async function AdminSeriesPage() {
                   <span className="mono muted-line">{item.slug}</span>
                 </td>
                 <td>
-                  <span className={`badge ${statusBadgeClass(item.status)}`}>
-                    {statusLabel(item.status)}
+                  <span className={`badge ${workStatusBadgeClass(item.status)}`}>
+                    {workStatusLabel(item.status)}
                   </span>
                 </td>
                 <td>{formatNumber(item.workCount)}</td>
@@ -112,39 +113,4 @@ export default async function AdminSeriesPage() {
       </section>
     </main>
   );
-}
-
-function statusLabel(value: string): string {
-  switch (value) {
-    case "published":
-      return "已发布";
-    case "hidden":
-      return "隐藏";
-    case "draft":
-      return "草稿";
-    case "deleted":
-      return "已删除";
-    default:
-      return value;
-  }
-}
-
-function statusBadgeClass(value: string): string {
-  if (value === "published") {
-    return "approved";
-  }
-
-  if (value === "hidden" || value === "deleted") {
-    return "rejected";
-  }
-
-  return "pending";
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
-}
-
-function formatUnreadCount(count: number): string {
-  return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
