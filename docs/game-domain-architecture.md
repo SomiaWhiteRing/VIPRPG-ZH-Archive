@@ -352,7 +352,6 @@ CREATE TABLE archive_versions (
   is_proofread INTEGER NOT NULL DEFAULT 0,
   is_image_edited INTEGER NOT NULL DEFAULT 0,
   manifest_sha256 TEXT NOT NULL,
-  manifest_r2_key TEXT NOT NULL UNIQUE,
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
   source_type TEXT NOT NULL CHECK (
@@ -820,7 +819,7 @@ GET    /api/archive-versions/{id}/download
 ```text
 PUT  /api/blobs/{sha256}
 PUT  /api/core-packs/{sha256}
-POST /api/imports/preflight
+POST /api/imports/{importJobId}/preflight
 POST /api/imports/{id}/commit
 ```
 

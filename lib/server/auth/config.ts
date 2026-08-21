@@ -34,14 +34,22 @@ export function getTurnstileSecretKey(): string {
   return value;
 }
 
+export function getTurnstileSiteKeyOrNull(): string | null {
+  return readRuntimeVariable("TURNSTILE_SITE_KEY");
+}
+
 export function getTurnstileSiteKey(): string {
-  const value = readRuntimeVariable("TURNSTILE_SITE_KEY");
+  const value = getTurnstileSiteKeyOrNull();
 
   if (!value) {
     throw new Error("TURNSTILE_SITE_KEY is not configured");
   }
 
   return value;
+}
+
+export function isTurnstileEnabled(): boolean {
+  return readRuntimeVariable("TURNSTILE_ENABLED")?.toLowerCase() !== "false";
 }
 
 export function getEmailFrom(): string {
@@ -85,6 +93,7 @@ function readRuntimeVariable(
     | "AUTH_SECRET"
     | "BOOTSTRAP_ADMIN_EMAIL"
     | "TURNSTILE_SECRET_KEY"
+    | "TURNSTILE_ENABLED"
     | "TURNSTILE_SITE_KEY"
     | "EMAIL_FROM"
     | "APP_ORIGIN",

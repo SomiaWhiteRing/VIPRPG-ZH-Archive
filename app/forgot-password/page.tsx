@@ -3,7 +3,10 @@ import Script from "next/script";
 import { FormField } from "@/app/components/ui/form-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { getTurnstileSiteKey } from "@/lib/server/auth/config";
+import {
+  getTurnstileSiteKey,
+  isTurnstileEnabled,
+} from "@/lib/server/auth/config";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +24,13 @@ export default async function ForgotPasswordPage({
 }: ForgotPasswordPageProps) {
   const params = await searchParams;
   const nextPath = sanitizeRedirectPath(params.next, "/login");
+  const turnstileKey = isTurnstileEnabled() ? getTurnstileSiteKey() : null;
+
   return (
     <main className="narrow-main auth-main">
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      {turnstileKey ? (
+        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      ) : null}
       <PageHeader
         eyebrow="Account"
         title="找回密码"
@@ -45,9 +52,11 @@ export default async function ForgotPasswordPage({
               type="email"
             />
           </FormField>
-          <div className="turnstile-box">
-            <div className="cf-turnstile" data-sitekey={getTurnstileSiteKey()} />
-          </div>
+          {turnstileKey ? (
+            <div className="turnstile-box">
+              <div className="cf-turnstile" data-sitekey={turnstileKey} />
+            </div>
+          ) : null}
           <button className="button primary" type="submit">
             发送验证码
           </button>

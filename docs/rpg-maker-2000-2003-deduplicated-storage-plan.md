@@ -452,7 +452,7 @@ DownloadBuild
 - `archive_versions.archive_variant_label`：区分同语言、同校对/修图状态下的 A 方案、B 方案或不同整理方案。
 - `archive_versions.language`、`archive_versions.is_proofread`、`archive_versions.is_image_edited`：属于具体可下载归档的元数据。
 - `archive_versions.manifest_sha256`：对规范化 manifest JSON 计算哈希，用来判断文件快照是否变化。
-- `archive_versions.manifest_r2_key`：manifest 在 R2 中的实际对象位置。
+- manifest 的 R2 key 由 `manifest_sha256` 通过统一 key helper 派生。
 - `archive_versions.file_policy_version`：生成 manifest 时使用的强制白名单版本。
 - `archive_versions.total_files`、`archive_versions.total_size_bytes`：进入 canonical manifest 的白名单内文件数和归档大小。
 - `archive_versions.unique_blob_size_bytes`：本归档快照需要新增的 blob 大小统计，不包含已存在 blob。
@@ -474,9 +474,9 @@ DownloadBuild
 - `email_verification_challenges.pending_password_hash`：注册流程中临时保存已哈希的新密码；验证码验证通过后转入 `users.password_hash`，过期 challenge 应清理。
 - `user_sessions.session_hash`：正式实现若需要撤销单个会话，session cookie 中只保存随机 session token，D1 中保存 hash 和撤销状态。
 - `blobs.sha256`：独立文件内容的主键。
-- `blobs.r2_key`：独立文件 blob 的实际 R2 对象位置。
+- blob 的 R2 key 由 SHA-256 通过统一 key helper 派生。
 - `core_packs.sha256`：核心文件包自身的内容主键。
-- `core_packs.r2_key`：核心文件包的实际 R2 对象位置。
+- core pack 的 R2 key 由 SHA-256 通过统一 key helper 派生。
 - `import_job_excluded_file_types`：按文件类型记录白名单外排除统计和示例路径，供上传者和管理员审计。
 - `download_builds.cache_key`：Workers Cache/CDN 边缘缓存 key，只用于命中可丢弃缓存，不是 R2 对象路径。
 
@@ -736,7 +736,7 @@ Phase D 的浏览器端长期任务、浮标 UI、崩溃恢复和 IndexedDB 状�
   -> 浏览器计算 sha256/size/path
   -> 浏览器按规则分类 core/asset/runtime/excluded
   -> 浏览器生成 core pack
-  -> POST /api/imports/preflight
+  -> POST /api/imports/{id}/preflight
   -> Worker 查询 D1 blobs 和 core_packs
   -> 返回 missing asset/runtime blobs 和 missing core packs
   -> 浏览器只上传缺失 asset/runtime blobs 和 core pack
@@ -840,9 +840,9 @@ R2/S3 的 ETag 不应作为内容身份依据，尤其在 multipart 场景下。
 GET /api/archive-versions/{archiveVersionId}/download
   -> 读取 R2 manifest
   -> 按 manifest pathSortKey 排序
-  -> R2.get(core_pack.r2_key)
+  -> R2.get(corePackKey(core_pack.sha256))
   -> 流式读取 core pack entries
-  -> 对每个 asset/runtime blob 执行 R2.get(blob.r2_key)
+  -> 对每个 asset/runtime blob 执行 R2.get(blobKey(blob.sha256))
   -> 根据 manifest 文件大小、UTF-8 路径长度和 ZIP STORE header 公式计算 Content-Length
   -> 写入 local header（包含 CRC32 和 size）
   -> 写入 ZIP stream（无 data descriptor）
@@ -1350,8 +1350,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 当前实现状态：
 
 - 已建立 staging D1/R2 和 `works` / `releases` / `archive_versions` / 归档对象引用数据模型。
-- 已实现单个 blob、core pack 上传校验和 `/api/imports/preflight`。
-- 已新增 `tools/rpgm-archive-importer/` 作为 Phase C 受控导入工具。
+- 已实现单个 blob、core pack 上传校验和 `/api/imports/{id}/preflight`。
 - 已用本地样本完成 staging 试导入，证明 manifest、core pack、blob、D1 索引和排除统计链路可运行。
 
 暂不做：

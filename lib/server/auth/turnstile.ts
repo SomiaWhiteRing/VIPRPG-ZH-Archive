@@ -1,4 +1,7 @@
-import { getTurnstileSecretKey } from "@/lib/server/auth/config";
+import {
+  getTurnstileSecretKey,
+  isTurnstileEnabled,
+} from "@/lib/server/auth/config";
 
 type TurnstileResponse = {
   success: boolean;
@@ -9,12 +12,18 @@ export async function verifyTurnstile(input: {
   token: string;
   request: Request;
 }): Promise<void> {
+  if (!isTurnstileEnabled()) {
+    return;
+  }
+
+  const secret = getTurnstileSecretKey();
+
   if (!input.token) {
     throw new Error("请先完成人机验证");
   }
 
   const body = new FormData();
-  body.set("secret", getTurnstileSecretKey());
+  body.set("secret", secret);
   body.set("response", input.token);
 
   const remoteIp = input.request.headers.get("cf-connecting-ip");

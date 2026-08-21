@@ -6,16 +6,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "opennext": "node scripts/open-next.mjs",
     "preview": "node scripts/open-next.mjs build && node scripts/open-next.mjs preview",
     "deploy": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy",
     "deploy:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy --env staging",
-    "upload": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload",
-    "upload:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload --env staging",
+    "db:local:migrate": "wrangler d1 migrations apply viprpg-archive-prod --local",
+    "db:local:reset": "node scripts/local-d1-reset.mjs",
+    "db:local:seed": "node scripts/dev-seed.mjs",
     "cf-typegen": "node scripts/cf-typegen.mjs",
-    "lint": "eslint .",
     "check": "tsc --noEmit && eslint .",
-    "smoke:staging": "node scripts/smoke.mjs"
+    "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"
   },
   "dependencies": {
     "fflate": "^0.8.2",
