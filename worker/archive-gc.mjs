@@ -1,6 +1,9 @@
 const defaultGcGraceDays = 7;
 const scheduledGcLimitPerType = 1000;
 const maxReturnedIssues = 25;
+const blobKey = (sha256) => `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
+const corePackKey = (sha256) => `core-packs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.zip`;
+const manifestKey = (sha256) => `manifests/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.json`;
 
 export async function runScheduledArchiveGc(env, input = {}) {
   const startedAt = Date.now();
@@ -37,7 +40,7 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
     type === "blob"
       ? `SELECT
           b.sha256 AS id,
-          b.r2_key,
+          b.sha256,
           b.size_bytes
         FROM blobs b
         WHERE b.status = 'active'
@@ -61,8 +64,8 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
       : `SELECT
-          CAST(cp.id AS TEXT) AS id,
-          cp.r2_key,
+          cp.sha256 AS id,
+          cp.sha256,
           cp.size_bytes
         FROM core_packs cp
         WHERE cp.status = 'active'
@@ -89,7 +92,7 @@ async function listArchiveVersionPurgeCandidates(db, graceDays, limit) {
         deleted_at,
         total_files,
         total_size_bytes,
-        manifest_r2_key
+        manifest_sha256
       FROM archive_versions
       WHERE status = 'deleted'
         AND purged_at IS NULL
@@ -132,7 +135,7 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
       )
         .bind(row.id)
         .run();
-      await env.ARCHIVE_BUCKET.delete(row.manifest_r2_key);
+      await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
       purged.push(candidate);
     } catch (error) {
       failed.push({
@@ -181,7 +184,6 @@ function mapArchiveVersionPurgeCandidate(row) {
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
-    manifestR2Key: row.manifest_r2_key,
   };
 }
 
@@ -194,7 +196,7 @@ async function sweepRows(env, type, rows, graceDays) {
     const object = {
       type,
       id: String(row.id),
-      r2Key: row.r2_key,
+      r2Key: row.sha256,
       sizeBytes: row.size_bytes,
     };
     const reserved = await markCandidatePurging(env.DB, type, object.id, graceDays);
@@ -205,7 +207,7 @@ async function sweepRows(env, type, rows, graceDays) {
     }
 
     try {
-      await env.ARCHIVE_BUCKET.delete(object.r2Key);
+      await env.ARCHIVE_BUCKET.delete(type === "blob" ? blobKey(object.id) : corePackKey(object.id));
       await markCandidatePurged(env.DB, type, object.id);
       purged.push(object);
     } catch (error) {

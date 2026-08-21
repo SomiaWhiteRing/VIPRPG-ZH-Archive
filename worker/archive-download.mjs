@@ -146,7 +146,6 @@ async function getDownloadRecord(db, archiveVersionId) {
         av.archive_label,
         av.archive_key,
         av.manifest_sha256,
-        av.manifest_r2_key,
         av.packer_version,
         av.total_files,
         av.total_size_bytes,

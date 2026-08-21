@@ -1,3 +1,0 @@
--- Historical migration retained for databases that already applied it.
--- Current fresh schema already includes archive file CRC32 before
--- archive_version_files is dropped by 0006.

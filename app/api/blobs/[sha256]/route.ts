@@ -10,7 +10,6 @@ import {
 import { json, jsonError } from "@/lib/server/http/json";
 import { readContentType } from "@/lib/server/http/request";
 import { putBlob } from "@/lib/server/storage/archive-bucket";
-import { blobKey } from "@/lib/server/storage/archive-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +41,6 @@ export async function PUT(request: Request, context: RouteContext) {
         ok: true,
         status: "exists",
         sha256,
-        r2Key: blobKey(sha256),
       });
     }
 
@@ -62,14 +60,13 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const contentTypeHint = readContentType(request);
-    const r2Object = await putBlob(sha256, body, body.byteLength, contentTypeHint);
+    await putBlob(sha256, body, body.byteLength, contentTypeHint);
 
     await insertBlobRecord({
       sha256,
       sizeBytes: body.byteLength,
       contentTypeHint,
       observedExt: null,
-      r2Key: r2Object.key,
     });
 
     if (importJobId !== null) {
@@ -87,7 +84,6 @@ export async function PUT(request: Request, context: RouteContext) {
         status: "uploaded",
         sha256,
         sizeBytes: body.byteLength,
-        r2Key: r2Object.key,
       },
       { status: 201 },
     );

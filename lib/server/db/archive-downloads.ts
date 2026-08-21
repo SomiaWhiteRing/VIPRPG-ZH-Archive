@@ -7,7 +7,6 @@ export type ArchiveDownloadRecord = {
   archiveLabel: string;
   archiveKey: string;
   manifestSha256: string;
-  manifestR2Key: string;
   packerVersion: string;
   totalFiles: number;
   totalSizeBytes: number;
@@ -27,7 +26,6 @@ type ArchiveDownloadRow = {
   archive_label: string;
   archive_key: string;
   manifest_sha256: string;
-  manifest_r2_key: string;
   packer_version: string;
   total_files: number;
   total_size_bytes: number;
@@ -95,7 +93,6 @@ export async function getPublishedArchiveDownloadRecord(
         av.archive_label,
         av.archive_key,
         av.manifest_sha256,
-        av.manifest_r2_key,
         av.packer_version,
         av.total_files,
         av.total_size_bytes,
@@ -129,7 +126,6 @@ export async function getPublishedArchiveDownloadRecord(
     archiveLabel: row.archive_label,
     archiveKey: row.archive_key,
     manifestSha256: row.manifest_sha256,
-    manifestR2Key: row.manifest_r2_key,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
@@ -141,59 +137,4 @@ export async function getPublishedArchiveDownloadRecord(
     engineFamily: row.engine_family,
     usesManiacsPatch: row.uses_maniacs_patch === 1,
   };
-}
-
-export async function listCurrentArchiveDownloadRecords(): Promise<ArchiveDownloadRecord[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        av.id,
-        av.release_id,
-        w.id AS work_id,
-        av.archive_label,
-        av.archive_key,
-        av.manifest_sha256,
-        av.manifest_r2_key,
-        av.packer_version,
-        av.total_files,
-        av.total_size_bytes,
-        av.estimated_r2_get_count,
-        r.release_label,
-        w.slug AS work_slug,
-        w.original_title AS work_original_title,
-        w.chinese_title AS work_chinese_title,
-        w.engine_family,
-        w.uses_maniacs_patch
-      FROM archive_versions av
-      JOIN releases r ON r.id = av.release_id
-      JOIN works w ON w.id = r.work_id
-      WHERE av.status = 'published'
-        AND av.is_current = 1
-        AND r.status <> 'deleted'
-        AND w.status <> 'deleted'
-      ORDER BY COALESCE(w.chinese_title, w.original_title), r.release_label, av.archive_label`,
-    )
-    .all<ArchiveDownloadRow>();
-
-  return rows.results
-    .filter((row) => Boolean(row.work_original_title))
-    .map((row) => ({
-      id: row.id,
-      releaseId: row.release_id,
-      workId: row.work_id,
-      archiveLabel: row.archive_label,
-      archiveKey: row.archive_key,
-      manifestSha256: row.manifest_sha256,
-      manifestR2Key: row.manifest_r2_key,
-      packerVersion: row.packer_version,
-      totalFiles: row.total_files,
-      totalSizeBytes: row.total_size_bytes,
-      estimatedR2GetCount: row.estimated_r2_get_count,
-      releaseLabel: row.release_label,
-      workSlug: row.work_slug,
-      workOriginalTitle: row.work_original_title ?? "",
-      workChineseTitle: row.work_chinese_title,
-      engineFamily: row.engine_family,
-      usesManiacsPatch: row.uses_maniacs_patch === 1,
-    }));
 }

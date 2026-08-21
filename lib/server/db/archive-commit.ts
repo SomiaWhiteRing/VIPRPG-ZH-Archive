@@ -7,11 +7,11 @@ import type {
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
+import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
 import { assertImportJobAccess, requiredImportJob } from "@/lib/server/db/import-jobs";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { putManifest } from "@/lib/server/storage/archive-bucket";
-import { manifestKey } from "@/lib/server/storage/archive-keys";
 
 export type CommitArchiveImportInput = {
   importJobId: number;
@@ -28,7 +28,6 @@ export type CommitArchiveImportResult = {
   releaseId: number;
   archiveVersionId: number;
   manifestSha256: string;
-  manifestR2Key: string;
   fileCount: number;
   uniqueBlobCount: number;
   corePackCount: number;
@@ -104,8 +103,6 @@ export async function commitArchiveImport(
     );
   }
 
-  const manifestR2Key = manifestKey(manifestSha256);
-
   await putManifest(manifestSha256, input.manifestJson);
 
   const workId = await upsertWork(metadata, input.user.id);
@@ -145,7 +142,6 @@ export async function commitArchiveImport(
       releaseId,
       archiveVersionId: existingArchiveVersion,
       manifestSha256,
-      manifestR2Key,
       fileCount: manifest.files.length,
       uniqueBlobCount: blobHashes.length,
       corePackCount: corePackHashes.length,
@@ -170,7 +166,6 @@ export async function commitArchiveImport(
     manifest,
     metadata,
     manifestSha256,
-    manifestR2Key,
     uniqueBlobSizeBytes: sumUniqueBlobBytes(manifest),
     corePackSizeBytes: manifest.corePacks.reduce((sum, item) => sum + item.size, 0),
     estimatedR2GetCount: corePackHashes.length + blobHashes.length,
@@ -211,7 +206,6 @@ export async function commitArchiveImport(
     releaseId,
     archiveVersionId,
     manifestSha256,
-    manifestR2Key,
     fileCount: manifest.files.length,
     uniqueBlobCount: blobHashes.length,
     corePackCount: corePackHashes.length,
@@ -1034,7 +1028,6 @@ async function insertArchiveVersion(input: {
   manifest: ArchiveManifest;
   metadata: ArchiveCommitMetadata;
   manifestSha256: string;
-  manifestR2Key: string;
   uniqueBlobSizeBytes: number;
   corePackSizeBytes: number;
   estimatedR2GetCount: number;
@@ -1054,7 +1047,6 @@ async function insertArchiveVersion(input: {
         is_proofread,
         is_image_edited,
         manifest_sha256,
-        manifest_r2_key,
         file_policy_version,
         packer_version,
         source_type,
@@ -1074,7 +1066,7 @@ async function insertArchiveVersion(input: {
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
     )
     .bind(
       input.releaseId,
@@ -1085,7 +1077,6 @@ async function insertArchiveVersion(input: {
       input.metadata.archiveVersion.isProofread ? 1 : 0,
       input.metadata.archiveVersion.isImageEdited ? 1 : 0,
       input.manifestSha256,
-      input.manifestR2Key,
       manifest.archiveVersion.filePolicyVersion,
       manifest.archiveVersion.packerVersion,
       manifest.archiveVersion.sourceType,
@@ -1408,14 +1399,4 @@ function unique(values: string[]): string[] {
 
 function uniqueNumbers(values: number[]): number[] {
   return [...new Set(values)];
-}
-
-function chunkArray<T>(items: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-
-  return chunks;
 }

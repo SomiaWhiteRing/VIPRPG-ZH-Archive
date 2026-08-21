@@ -10,7 +10,6 @@ import {
 import { json, jsonError } from "@/lib/server/http/json";
 import { readIntegerHeader } from "@/lib/server/http/request";
 import { putCorePack } from "@/lib/server/storage/archive-bucket";
-import { corePackKey } from "@/lib/server/storage/archive-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +41,6 @@ export async function PUT(request: Request, context: RouteContext) {
         ok: true,
         status: "exists",
         sha256,
-        r2Key: corePackKey(sha256),
       });
     }
 
@@ -76,14 +74,13 @@ export async function PUT(request: Request, context: RouteContext) {
       );
     }
 
-    const r2Object = await putCorePack(sha256, body, body.byteLength);
+    await putCorePack(sha256, body, body.byteLength);
 
     await insertCorePackRecord({
       sha256,
       sizeBytes: body.byteLength,
       uncompressedSizeBytes,
       fileCount,
-      r2Key: r2Object.key,
     });
 
     if (importJobId !== null) {
@@ -103,7 +100,6 @@ export async function PUT(request: Request, context: RouteContext) {
         sizeBytes: body.byteLength,
         uncompressedSizeBytes,
         fileCount,
-        r2Key: r2Object.key,
       },
       { status: 201 },
     );

@@ -298,7 +298,6 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   is_proofread INTEGER NOT NULL DEFAULT 0,
   is_image_edited INTEGER NOT NULL DEFAULT 0,
   manifest_sha256 TEXT NOT NULL,
-  manifest_r2_key TEXT NOT NULL UNIQUE,
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
   source_type TEXT NOT NULL CHECK (
@@ -315,6 +314,8 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   core_pack_count INTEGER NOT NULL DEFAULT 0,
   core_pack_size_bytes INTEGER NOT NULL DEFAULT 0,
   estimated_r2_get_count INTEGER NOT NULL DEFAULT 0,
+  web_play_file_count INTEGER NOT NULL DEFAULT 0,
+  web_play_size_bytes INTEGER NOT NULL DEFAULT 0,
   is_current INTEGER NOT NULL DEFAULT 0,
   uploader_id INTEGER REFERENCES users(id),
   status TEXT NOT NULL CHECK (
@@ -323,6 +324,7 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
   deleted_at TEXT,
+  purged_at TEXT,
   UNIQUE (release_id, archive_key, archive_label),
   UNIQUE (release_id, archive_key, manifest_sha256)
 );
@@ -334,12 +336,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_archive_versions_one_current
   ON archive_versions(release_id, archive_key)
   WHERE is_current = 1 AND status = 'published';
 
+CREATE INDEX IF NOT EXISTS idx_archive_versions_deleted_purge
+  ON archive_versions(status, deleted_at, purged_at);
+
 CREATE TABLE IF NOT EXISTS blobs (
   sha256 TEXT PRIMARY KEY,
   size_bytes INTEGER NOT NULL,
   content_type_hint TEXT,
   observed_ext TEXT,
-  r2_key TEXT NOT NULL UNIQUE,
   storage_class TEXT NOT NULL DEFAULT 'standard',
   first_seen_archive_version_id INTEGER REFERENCES archive_versions(id),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -353,7 +357,6 @@ CREATE TABLE IF NOT EXISTS core_packs (
   size_bytes INTEGER NOT NULL,
   uncompressed_size_bytes INTEGER NOT NULL,
   file_count INTEGER NOT NULL,
-  r2_key TEXT NOT NULL UNIQUE,
   format TEXT NOT NULL DEFAULT 'zip',
   compression TEXT NOT NULL DEFAULT 'deflate-low',
   storage_class TEXT NOT NULL DEFAULT 'standard',
@@ -363,50 +366,23 @@ CREATE TABLE IF NOT EXISTS core_packs (
   status TEXT NOT NULL DEFAULT 'active'
 );
 
-CREATE TABLE IF NOT EXISTS archive_version_files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS archive_version_blob_refs (
   archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
-  path TEXT NOT NULL,
-  path_sort_key TEXT NOT NULL,
-  path_bytes_b64 TEXT,
-  role TEXT NOT NULL CHECK (
-    role IN ('map', 'database', 'asset', 'runtime', 'metadata', 'other')
-  ),
-  file_sha256 TEXT NOT NULL,
-  crc32 INTEGER NOT NULL,
-  size_bytes INTEGER NOT NULL,
-  storage_kind TEXT NOT NULL CHECK (storage_kind IN ('blob', 'core_pack')),
-  blob_sha256 TEXT REFERENCES blobs(sha256),
-  core_pack_id INTEGER REFERENCES core_packs(id),
-  pack_entry_path TEXT,
-  mtime_ms INTEGER,
-  file_mode INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (archive_version_id, path),
-  CHECK (
-    (storage_kind = 'blob'
-      AND blob_sha256 IS NOT NULL
-      AND core_pack_id IS NULL
-      AND pack_entry_path IS NULL)
-    OR
-    (storage_kind = 'core_pack'
-      AND blob_sha256 IS NULL
-      AND core_pack_id IS NOT NULL
-      AND pack_entry_path IS NOT NULL)
-  )
-);
+  blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
+  PRIMARY KEY (archive_version_id, blob_sha256)
+) WITHOUT ROWID;
 
-CREATE INDEX IF NOT EXISTS idx_archive_version_files_version
-  ON archive_version_files(archive_version_id, path_sort_key);
+CREATE INDEX IF NOT EXISTS idx_archive_version_blob_refs_blob
+  ON archive_version_blob_refs(blob_sha256);
 
-CREATE INDEX IF NOT EXISTS idx_archive_version_files_file_sha256
-  ON archive_version_files(file_sha256);
+CREATE TABLE IF NOT EXISTS archive_version_core_pack_refs (
+  archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
+  core_pack_id INTEGER NOT NULL REFERENCES core_packs(id),
+  PRIMARY KEY (archive_version_id, core_pack_id)
+) WITHOUT ROWID;
 
-CREATE INDEX IF NOT EXISTS idx_archive_version_files_blob_sha256
-  ON archive_version_files(blob_sha256);
-
-CREATE INDEX IF NOT EXISTS idx_archive_version_files_core_pack
-  ON archive_version_files(core_pack_id);
+CREATE INDEX IF NOT EXISTS idx_archive_version_core_pack_refs_core_pack
+  ON archive_version_core_pack_refs(core_pack_id);
 
 CREATE TABLE IF NOT EXISTS characters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -464,32 +440,6 @@ CREATE TABLE IF NOT EXISTS release_staff (
   PRIMARY KEY (release_id, creator_id, role_key)
 );
 
-CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  title_original TEXT,
-  event_type TEXT NOT NULL CHECK (
-    event_type IN ('viprpg', 'contest', 'collection', 'personal_release', 'other')
-  ) DEFAULT 'viprpg',
-  start_date TEXT,
-  end_date TEXT,
-  description TEXT,
-  source_url TEXT,
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS release_events (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-  entry_label TEXT,
-  entry_number TEXT,
-  notes TEXT,
-  PRIMARY KEY (release_id, event_id)
-);
-
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE,
@@ -540,14 +490,6 @@ CREATE TABLE IF NOT EXISTS work_media_assets (
   PRIMARY KEY (work_id, media_asset_id)
 );
 
-CREATE TABLE IF NOT EXISTS release_media_assets (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  media_asset_id INTEGER NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
-  sort_order INTEGER,
-  is_primary INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (release_id, media_asset_id)
-);
-
 CREATE TABLE IF NOT EXISTS work_external_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
@@ -585,6 +527,19 @@ CREATE TABLE IF NOT EXISTS import_jobs (
   file_policy_version TEXT,
   missing_blob_count INTEGER NOT NULL DEFAULT 0,
   missing_core_pack_count INTEGER NOT NULL DEFAULT 0,
+  missing_blob_size_bytes INTEGER NOT NULL DEFAULT 0,
+  missing_core_pack_size_bytes INTEGER NOT NULL DEFAULT 0,
+  uploaded_blob_count INTEGER NOT NULL DEFAULT 0,
+  uploaded_blob_size_bytes INTEGER NOT NULL DEFAULT 0,
+  uploaded_core_pack_count INTEGER NOT NULL DEFAULT 0,
+  uploaded_core_pack_size_bytes INTEGER NOT NULL DEFAULT 0,
+  manifest_put_count INTEGER NOT NULL DEFAULT 0,
+  manifest_size_bytes INTEGER NOT NULL DEFAULT 0,
+  r2_put_count INTEGER NOT NULL DEFAULT 0,
+  preflight_duration_ms INTEGER,
+  upload_duration_ms INTEGER NOT NULL DEFAULT 0,
+  commit_duration_ms INTEGER,
+  failed_stage TEXT,
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -622,6 +577,14 @@ CREATE TABLE IF NOT EXISTS download_builds (
   estimated_r2_get_count INTEGER,
   actual_r2_get_count INTEGER,
   download_count INTEGER NOT NULL DEFAULT 0,
+  cache_hit_count INTEGER NOT NULL DEFAULT 0,
+  cache_miss_count INTEGER NOT NULL DEFAULT 0,
+  cache_bypass_count INTEGER NOT NULL DEFAULT 0,
+  total_r2_get_count INTEGER NOT NULL DEFAULT 0,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  last_cache_status TEXT,
+  last_duration_ms INTEGER,
+  last_error_message TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_accessed_at TEXT,
   last_cache_put_at TEXT
@@ -629,3 +592,6 @@ CREATE TABLE IF NOT EXISTS download_builds (
 
 CREATE INDEX IF NOT EXISTS idx_download_builds_archive_version
   ON download_builds(archive_version_id, status, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_download_builds_cache_key
+  ON download_builds(cache_key);
