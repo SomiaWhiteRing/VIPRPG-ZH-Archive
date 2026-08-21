@@ -192,10 +192,6 @@ export default async function AdminArchiveVersionEditPage({
                 label: "SHA-256",
                 value: <span className="mono">{archiveVersion.manifestSha256}</span>,
               },
-              {
-                label: "对象存储 key",
-                value: <span className="mono">{archiveVersion.manifestR2Key}</span>,
-              },
               { label: "文件策略", value: archiveVersion.filePolicyVersion },
               { label: "打包器", value: archiveVersion.packerVersion },
             ]}

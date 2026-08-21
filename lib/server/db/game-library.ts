@@ -130,7 +130,6 @@ export type AdminArchiveVersionEdit = {
   totalSizeBytes: number;
   estimatedR2GetCount: number;
   manifestSha256: string;
-  manifestR2Key: string;
   filePolicyVersion: string;
   packerVersion: string;
   sourceType: string;
@@ -436,7 +435,6 @@ type AdminArchiveVersionEditRow = {
   total_size_bytes: number;
   estimated_r2_get_count: number;
   manifest_sha256: string;
-  manifest_r2_key: string;
   file_policy_version: string;
   packer_version: string;
   source_type: string;
@@ -1119,7 +1117,6 @@ export async function getArchiveVersionForAdminEdit(
         av.total_size_bytes,
         av.estimated_r2_get_count,
         av.manifest_sha256,
-        av.manifest_r2_key,
         av.file_policy_version,
         av.packer_version,
         av.source_type,
@@ -2288,7 +2285,6 @@ function mapAdminArchiveVersionEditRow(
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,
     manifestSha256: row.manifest_sha256,
-    manifestR2Key: row.manifest_r2_key,
     filePolicyVersion: row.file_policy_version,
     packerVersion: row.packer_version,
     sourceType: row.source_type,

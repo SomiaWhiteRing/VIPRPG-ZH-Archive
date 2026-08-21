@@ -24,7 +24,6 @@ export async function insertBlobRecord(input: {
   sizeBytes: number;
   contentTypeHint: string | null;
   observedExt: string | null;
-  r2Key: string;
 }): Promise<void> {
   await getD1()
     .prepare(
@@ -33,15 +32,13 @@ export async function insertBlobRecord(input: {
         size_bytes,
         content_type_hint,
         observed_ext,
-        r2_key,
         verified_at,
         status
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+      ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
       ON CONFLICT(sha256) DO UPDATE SET
         size_bytes = excluded.size_bytes,
         content_type_hint = excluded.content_type_hint,
         observed_ext = excluded.observed_ext,
-        r2_key = excluded.r2_key,
         verified_at = CURRENT_TIMESTAMP,
         status = 'active'`,
     )
@@ -50,7 +47,6 @@ export async function insertBlobRecord(input: {
       input.sizeBytes,
       input.contentTypeHint,
       input.observedExt,
-      input.r2Key,
     )
     .run();
 }
@@ -60,7 +56,6 @@ export async function insertCorePackRecord(input: {
   sizeBytes: number;
   uncompressedSizeBytes: number;
   fileCount: number;
-  r2Key: string;
 }): Promise<void> {
   await getD1()
     .prepare(
@@ -69,15 +64,13 @@ export async function insertCorePackRecord(input: {
         size_bytes,
         uncompressed_size_bytes,
         file_count,
-        r2_key,
         verified_at,
         status
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
+      ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
       ON CONFLICT(sha256) DO UPDATE SET
         size_bytes = excluded.size_bytes,
         uncompressed_size_bytes = excluded.uncompressed_size_bytes,
         file_count = excluded.file_count,
-        r2_key = excluded.r2_key,
         verified_at = CURRENT_TIMESTAMP,
         status = 'active'`,
     )
@@ -86,7 +79,6 @@ export async function insertCorePackRecord(input: {
       input.sizeBytes,
       input.uncompressedSizeBytes,
       input.fileCount,
-      input.r2Key,
     )
     .run();
 }

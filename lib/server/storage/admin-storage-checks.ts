@@ -7,10 +7,11 @@ import {
 import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
 import { getArchiveBucket } from "@/lib/server/storage/archive-bucket";
+import { blobKey, corePackKey, manifestKey } from "@/lib/server/storage/archive-keys";
 
 type D1ObjectRow = {
   sha256: string;
-  r2_key: string;
+  r2Key: string;
   size_bytes: number | null;
 };
 
@@ -88,7 +89,6 @@ export type GcArchiveVersionPurgeCandidate = {
   deletedAt: string;
   totalFiles: number;
   totalSizeBytes: number;
-  manifestR2Key: string;
 };
 
 export type GcArchiveVersionPurgeResult = {
@@ -167,7 +167,7 @@ type GcSummaryRow = {
 
 type GcCandidateRow = {
   id: string;
-  r2_key: string;
+  sha256: string;
   size_bytes: number;
   created_at: string;
   total_reference_count: number;
@@ -182,7 +182,7 @@ type GcArchiveVersionPurgeCandidateRow = {
   deleted_at: string;
   total_files: number;
   total_size_bytes: number;
-  manifest_r2_key: string;
+  manifest_sha256: string;
 };
 
 type GcArchiveVersionPurgeSummaryRow = {
@@ -295,7 +295,7 @@ export async function runGcSweep(input: {
 async function listBlobRows(limit: number): Promise<D1ObjectRow[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT sha256, r2_key, size_bytes
+      `SELECT sha256, size_bytes
       FROM blobs
       WHERE status = 'active'
       ORDER BY sha256
@@ -310,7 +310,7 @@ async function listBlobRows(limit: number): Promise<D1ObjectRow[]> {
 async function listCorePackRows(limit: number): Promise<D1ObjectRow[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT sha256, r2_key, size_bytes
+      `SELECT sha256, size_bytes
       FROM core_packs
       WHERE status = 'active'
       ORDER BY sha256
@@ -327,11 +327,10 @@ async function listManifestRows(limit: number): Promise<D1ObjectRow[]> {
     .prepare(
       `SELECT
         manifest_sha256 AS sha256,
-        manifest_r2_key AS r2_key,
         NULL AS size_bytes
       FROM archive_versions
       WHERE status <> 'deleted'
-      GROUP BY manifest_sha256, manifest_r2_key
+      GROUP BY manifest_sha256
       ORDER BY manifest_sha256
       LIMIT ?`,
     )
@@ -353,13 +352,14 @@ async function checkD1ObjectsInR2(
   const sizeMismatches: R2SizeMismatch[] = [];
 
   for (const row of rows) {
-    const object = await bucket.head(row.r2_key);
+    const r2Key = type === "blob" ? blobKey(row.sha256) : type === "core_pack" ? corePackKey(row.sha256) : manifestKey(row.sha256);
+    const object = await bucket.head(r2Key);
 
     if (!object) {
       missing.push({
         type,
         sha256: row.sha256,
-        r2Key: row.r2_key,
+        r2Key,
       });
       continue;
     }
@@ -368,7 +368,7 @@ async function checkD1ObjectsInR2(
       sizeMismatches.push({
         type,
         sha256: row.sha256,
-        r2Key: row.r2_key,
+        r2Key,
         d1SizeBytes: row.size_bytes,
         r2SizeBytes: object.size,
       });
@@ -537,7 +537,7 @@ async function getGcObjectSummary(
     sample: sampleRows.map((row) => ({
       type,
       id: row.id,
-      r2Key: row.r2_key,
+      r2Key: type === "blob" ? blobKey(row.id) : corePackKey(row.id),
       sizeBytes: row.size_bytes,
       createdAt: row.created_at,
       totalReferenceCount: row.total_reference_count,
@@ -600,7 +600,7 @@ async function listArchiveVersionPurgeCandidates(
         deleted_at,
         total_files,
         total_size_bytes,
-        manifest_r2_key
+        manifest_sha256
       FROM archive_versions
       WHERE status = 'deleted'
         AND purged_at IS NULL
@@ -636,7 +636,7 @@ async function purgeDeletedArchiveVersions(
 
     try {
       await deleteArchiveVersionRefs(row.id);
-      await bucket.delete(row.manifest_r2_key);
+      await bucket.delete(manifestKey(row.manifest_sha256));
       purged.push(candidate);
     } catch (error) {
       failed.push({
@@ -707,7 +707,6 @@ function mapArchiveVersionPurgeCandidate(
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
-    manifestR2Key: row.manifest_r2_key,
   };
 }
 
@@ -764,7 +763,7 @@ async function listEligibleGcRows(
     type === "blob"
       ? `SELECT
           b.sha256 AS id,
-          b.r2_key,
+          b.sha256,
           b.size_bytes,
           b.created_at,
           0 AS total_reference_count,
@@ -792,8 +791,8 @@ async function listEligibleGcRows(
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
       : `SELECT
-          CAST(cp.id AS TEXT) AS id,
-          cp.r2_key,
+          cp.sha256 AS id,
+          cp.sha256,
           cp.size_bytes,
           cp.created_at,
           0 AS total_reference_count,
@@ -832,7 +831,7 @@ async function sweepGcRows(
     const object = {
       type,
       id: row.id,
-      r2Key: row.r2_key,
+      r2Key: type === "blob" ? blobKey(row.id) : corePackKey(row.id),
       sizeBytes: row.size_bytes,
     };
     const reserved = await markGcCandidatePurging(type, row.id, graceDays);
@@ -843,7 +842,7 @@ async function sweepGcRows(
     }
 
     try {
-      await bucket.delete(row.r2_key);
+      await bucket.delete(type === "blob" ? blobKey(row.id) : corePackKey(row.id));
       await markGcCandidatePurged(type, row.id);
       purged.push(object);
     } catch (error) {
@@ -1008,7 +1007,7 @@ async function listGcCandidateRows(
     type === "blob"
       ? `SELECT
           b.sha256 AS id,
-          b.r2_key,
+          b.sha256,
           b.size_bytes,
           b.created_at,
           COUNT(avbr.blob_sha256) AS total_reference_count,
@@ -1035,8 +1034,8 @@ async function listGcCandidateRows(
         ORDER BY total_reference_count ASC, b.created_at ASC
         LIMIT ?`
       : `SELECT
-          CAST(cp.id AS TEXT) AS id,
-          cp.r2_key,
+          cp.sha256 AS id,
+          cp.sha256,
           cp.size_bytes,
           cp.created_at,
           COUNT(avcpr.core_pack_id) AS total_reference_count,
