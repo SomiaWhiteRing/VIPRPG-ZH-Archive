@@ -87,7 +87,6 @@ export type UploadTaskCommitResult = {
   releaseId: number;
   archiveVersionId: number;
   manifestSha256: string;
-  manifestR2Key: string;
   fileCount: number;
   uniqueBlobCount: number;
   corePackCount: number;

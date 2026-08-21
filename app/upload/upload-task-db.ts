@@ -1,13 +1,10 @@
 import type { BrowserUploadTaskSnapshot } from "@/app/upload/upload-types";
 
 const DB_NAME = "viprpg_upload_tasks_v1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_TASKS = "tasks";
-const STORE_TASK_FILES = "task_files";
-const STORE_TASK_OBJECTS = "task_objects";
-const STORE_TASK_EVENTS = "task_events";
-const STORE_TASK_ERRORS = "task_errors";
+const REMOVED_STORES = ["task_files", "task_objects", "task_events", "task_errors"];
 
 export async function saveTaskSnapshot(
   task: BrowserUploadTaskSnapshot,
@@ -25,38 +22,6 @@ export async function loadTaskSnapshots(): Promise<BrowserUploadTaskSnapshot[]> 
   return tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function saveTaskEvent(input: {
-  localTaskId: string;
-  phase: string;
-  message: string;
-}): Promise<void> {
-  const db = await openUploadTaskDb();
-  await putValue(db, STORE_TASK_EVENTS, {
-    id: `${input.localTaskId}:${Date.now()}:${Math.random().toString(16).slice(2)}`,
-    localTaskId: input.localTaskId,
-    phase: input.phase,
-    message: input.message,
-    createdAt: new Date().toISOString(),
-  });
-  db.close();
-}
-
-export async function saveTaskError(input: {
-  localTaskId: string;
-  phase: string;
-  message: string;
-}): Promise<void> {
-  const db = await openUploadTaskDb();
-  await putValue(db, STORE_TASK_ERRORS, {
-    id: `${input.localTaskId}:${Date.now()}:${Math.random().toString(16).slice(2)}`,
-    localTaskId: input.localTaskId,
-    phase: input.phase,
-    message: input.message,
-    createdAt: new Date().toISOString(),
-  });
-  db.close();
-}
-
 export async function clearTaskSnapshot(localTaskId: string): Promise<void> {
   const db = await openUploadTaskDb();
   await deleteValue(db, STORE_TASKS, localTaskId);
@@ -71,10 +36,11 @@ function openUploadTaskDb(): Promise<IDBDatabase> {
       const db = request.result;
 
       ensureStore(db, STORE_TASKS, "localTaskId");
-      ensureStore(db, STORE_TASK_FILES, "id");
-      ensureStore(db, STORE_TASK_OBJECTS, "id");
-      ensureStore(db, STORE_TASK_EVENTS, "id");
-      ensureStore(db, STORE_TASK_ERRORS, "id");
+      for (const storeName of REMOVED_STORES) {
+        if (db.objectStoreNames.contains(storeName)) {
+          db.deleteObjectStore(storeName);
+        }
+      }
     };
 
     request.onerror = () => reject(request.error);
@@ -84,11 +50,7 @@ function openUploadTaskDb(): Promise<IDBDatabase> {
 
 function ensureStore(db: IDBDatabase, name: string, keyPath: string): void {
   if (!db.objectStoreNames.contains(name)) {
-    const store = db.createObjectStore(name, { keyPath });
-
-    if (name !== STORE_TASKS) {
-      store.createIndex("localTaskId", "localTaskId", { unique: false });
-    }
+    db.createObjectStore(name, { keyPath });
   }
 }
 

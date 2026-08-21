@@ -8,7 +8,6 @@ import { InboxLink } from "@/app/components/ui/inbox-link";
 type Session = {
   displayName: string;
   roleLabel: string;
-  canUpload: boolean;
   canAdmin: boolean;
   canSuper: boolean;
   unread: number;

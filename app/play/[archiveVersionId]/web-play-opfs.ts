@@ -41,20 +41,6 @@ export async function resetGameOpfsDirectory(playKey: string): Promise<void> {
     });
 }
 
-export async function deleteGameOpfsDirectory(playKey: string): Promise<void> {
-  await resetGameOpfsDirectory(playKey);
-}
-
-export async function writeGameFile(
-  playKey: string,
-  relativePath: string,
-  bytes: Uint8Array,
-): Promise<void> {
-  const writeContext = await createGameOpfsWriteContext(playKey);
-
-  await writeGameFileWithContext(writeContext, relativePath, bytes);
-}
-
 export async function createGameOpfsWriteContext(
   playKey: string,
 ): Promise<GameOpfsWriteContext> {
@@ -96,16 +82,6 @@ export async function writeGameFileWithContext(
 
   await writable.write(writeBuffer);
   await writable.close();
-}
-
-export async function createGameFileWritable(
-  playKey: string,
-  relativePath: string,
-): Promise<FileSystemWritableFileStream> {
-  const writeContext = await createGameOpfsWriteContext(playKey);
-  const file = await getGameFileHandle(writeContext, relativePath);
-
-  return file.createWritable();
 }
 
 export async function createGamePackWritable(

@@ -34,7 +34,6 @@ type StartUploadInput = {
 
 type UploadTaskContextValue = {
   tasks: BrowserUploadTaskSnapshot[];
-  activeTask: BrowserUploadTaskSnapshot | null;
   startUpload: (input: StartUploadInput) => void;
   pauseTask: (localTaskId: string) => void;
   resumeTask: (localTaskId: string) => void;
@@ -194,18 +193,16 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
     setTasks((current) => current.filter((task) => task.localTaskId !== localTaskId));
   }, []);
 
-  const activeTask = tasks.find((task) => task.status === "running") ?? tasks[0] ?? null;
   const value = useMemo<UploadTaskContextValue>(
     () => ({
       tasks,
-      activeTask,
       startUpload,
       pauseTask,
       resumeTask,
       cancelTask,
       clearTask,
     }),
-    [activeTask, cancelTask, clearTask, pauseTask, resumeTask, startUpload, tasks],
+    [cancelTask, clearTask, pauseTask, resumeTask, startUpload, tasks],
   );
 
   return (

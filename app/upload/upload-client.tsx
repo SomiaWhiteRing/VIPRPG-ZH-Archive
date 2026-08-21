@@ -82,7 +82,6 @@ type WorkReleaseLookupResult = {
 };
 
 type CurrentUser = {
-  id: number;
   email: string;
   displayName: string;
   role: string;
@@ -152,7 +151,7 @@ const releaseTypeOptions: Array<{ value: ReleaseType; label: string }> = [
   { value: "other", label: "其他" },
 ];
 
-export function UploadClient() {
+export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   const { tasks, startUpload } = useUploadTasks();
   const [mode, setMode] = useState<FileInputMode>("folder");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -174,7 +173,6 @@ export function UploadClient() {
     selectedWorkId: null,
     selectedReleaseId: null,
   });
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
 
@@ -190,19 +188,6 @@ export function UploadClient() {
     lookupState.results.find((work) => work.id === lookupState.selectedWorkId) ?? null;
   const releaseOptions = selectedWork?.releases ?? [];
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_admin";
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then(async (response) =>
-        response.ok ? ((await response.json()) as { ok: true; user: CurrentUser }) : null,
-      )
-      .then((body) => {
-        if (body?.ok) {
-          setCurrentUser(body.user);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     const title = form.originalTitle.trim();
@@ -851,7 +836,7 @@ function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCom
       : [];
   const releaseLabel = buildReleaseLabel(form);
   const releaseKey = buildReleaseKey(form);
-  const archiveVersionLabel = buildArchiveVersionLabel(form);
+  const archiveVersionLabel = `${buildArchiveVersionLabel(form)}・${timestampLabel()}`;
   const archiveVersionKey = buildArchiveVersionKey(form);
   const sortTitle = cleanNullable(form.sortTitle) ?? (chineseTitle || originalTitle);
 
@@ -1143,11 +1128,20 @@ function slugFromTitle(title: string): string {
   return normalized || "untitled-work";
 }
 
-function localDateString(): string {
-  const now = new Date();
+function localDateString(now = new Date()): string {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function timestampLabel(): string {
+  const now = new Date();
+  const date = localDateString(now);
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+
+  return `${date} ${time}`;
 }

@@ -116,6 +116,7 @@ export function AdminOperationPanel({
           <label htmlFor="gc-sweep-confirm">
             最终清理
             <span className="muted-line">
+              此操作会永久删除且不可恢复。
               自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
               手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
             </span>

@@ -99,16 +99,6 @@ export function workStatusLabel(value: string): string {
   }
 }
 
-export function workStatusBadgeClass(value: string): string {
-  if (value === "published") {
-    return "approved";
-  }
-  if (value === "hidden" || value === "deleted") {
-    return "rejected";
-  }
-  return "pending";
-}
-
 export function archiveStatusLabel(
   value: string,
   purgedAt: string | null = null,
@@ -130,19 +120,6 @@ export function archiveStatusLabel(
   }
 }
 
-export function archiveStatusBadgeClass(
-  value: string,
-  purgedAt: string | null = null,
-): string {
-  if (purgedAt || value === "deleted") {
-    return "rejected";
-  }
-  if (value === "published") {
-    return "approved";
-  }
-  return "pending";
-}
-
 export function inboxStatusLabel(value: string): string {
   switch (value) {
     case "open":
@@ -160,28 +137,8 @@ export function inboxStatusLabel(value: string): string {
   }
 }
 
-export function inboxStatusBadgeClass(value: string): string {
-  if (value === "approved") {
-    return "approved";
-  }
-  if (value === "rejected") {
-    return "rejected";
-  }
-  return "pending";
-}
-
 export function importTaskStatusLabel(value: string): string {
   return IMPORT_TASK_STATUS_LABELS[value] ?? value;
-}
-
-export function importTaskStatusBadgeClass(value: string): string {
-  if (value === "completed" || value === "succeeded" || value === "committed") {
-    return "approved";
-  }
-  if (value === "failed" || value === "canceled") {
-    return "rejected";
-  }
-  return "pending";
 }
 
 export function importTaskStageLabel(value: string): string {
@@ -248,14 +205,6 @@ export function roleLabel(role: UserRole): string {
   }
 }
 
-export function userRoleBadgeClass(role: UserRole): string {
-  return role === "super_admin" ? "super-admin" : role;
-}
-
 export function userStatusLabel(value: string): string {
   return value === "active" ? "启用" : "禁用";
-}
-
-export function userStatusBadgeClass(value: string): string {
-  return value === "active" ? "approved" : "rejected";
 }

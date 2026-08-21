@@ -15,7 +15,7 @@ import type {
   ArchiveManifestFile,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
-import { saveTaskError, saveTaskSnapshot } from "@/app/upload/upload-task-db";
+import { saveTaskSnapshot } from "@/app/upload/upload-task-db";
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceKind,
@@ -274,11 +274,6 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
       error: messageText,
     };
 
-    await saveTaskError({
-      localTaskId,
-      phase: failedTask.phase,
-      message: messageText,
-    });
     await persistAndPost(failedTask, true);
 
     if (failedTask.serverImportJobId) {
@@ -673,7 +668,7 @@ async function preflightObjects(
   task = await persistAndPost(task, true);
 
   if (!task.serverImportJobId) {
-    throw new Error("Import job missing before preflight");
+    throw new Error("上传任务缺少导入记录，无法进行上传前检查。");
   }
 
   const response = await jsonFetch<{
@@ -746,7 +741,14 @@ async function uploadMissingObjects(input: {
     await uploadCorePack(input.corePack, task.serverImportJobId);
     uploadedObjects += 1;
     uploadedBytes += input.corePack.bytes.byteLength;
-    task = updateUploadProgress(task, uploadedObjects, totalObjects, uploadedBytes, totalBytes, "core pack");
+    task = updateUploadProgress(
+      task,
+      uploadedObjects,
+      totalObjects,
+      uploadedBytes,
+      totalBytes,
+      "引擎公共文件",
+    );
     task = await persistAndPost(task, true);
   }
 
@@ -783,7 +785,7 @@ async function commitTask(
   excludedFileTypes: ExcludedFileTypeSummary[],
 ): Promise<UploadTaskCommitResult> {
   if (!task.serverImportJobId || !task.manifestSha256 || !task.manifestJson) {
-    throw new Error("Task is not ready for commit");
+    throw new Error("上传任务尚未准备好，无法提交入库。");
   }
 
   const response = await jsonFetch<{
