@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { FormField } from "@/app/components/ui/form-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { getTurnstileSiteKeyOrNull } from "@/lib/server/auth/config";
+import {
+  getTurnstileSiteKey,
+  isTurnstileEnabled,
+} from "@/lib/server/auth/config";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
@@ -24,7 +27,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const params = await searchParams;
   const nextPath = sanitizeRedirectPath(params.next);
   const currentUser = await getCurrentUserFromCookies();
-  const turnstileKey = getTurnstileSiteKeyOrNull();
+  const turnstileKey = isTurnstileEnabled() ? getTurnstileSiteKey() : null;
 
   if (currentUser) {
     redirect(nextPath);

@@ -25,3 +25,16 @@ export function readIntegerHeader(
 export function readContentType(request: Request): string {
   return request.headers.get("content-type") ?? "application/octet-stream";
 }
+
+export function parsePositiveId(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error("Invalid id");
+  }
+
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Invalid id");
+  }
+
+  return id;
+}

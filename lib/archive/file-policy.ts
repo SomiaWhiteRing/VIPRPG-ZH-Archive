@@ -93,15 +93,11 @@ const contentTypes: Record<string, string> = {
   ".xyz": "application/octet-stream",
 };
 
-export function allowedFileTypes(): string[] {
-  return [...allowedFileTypeKeys].sort();
-}
-
 export function normalizeArchivePath(path: string): string {
   return path.replaceAll("\\", "/").replace(/^\/+/, "").replace(/\/+/g, "/");
 }
 
-export function fileTypeKey(path: string): string {
+function fileTypeKey(path: string): string {
   const lower = basename(path).toLowerCase();
 
   if (/\.7z\.\d{3}$/.test(lower)) {
@@ -159,7 +155,7 @@ export function classifyArchivePath(
   };
 }
 
-export function isCorePackFile(path: string): boolean {
+function isCorePackFile(path: string): boolean {
   return isCoreFile(path) || isStringScriptTxt(path);
 }
 

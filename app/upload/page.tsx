@@ -44,7 +44,13 @@ export default async function UploadPage() {
         subtitle="选择本地 RPG Maker 2000/2003 游戏目录，浏览器会完成检查并上传缺少的文件。"
         title="上传归档"
       />
-      <UploadClient />
+      <UploadClient
+        currentUser={{
+          displayName: currentUser.displayName,
+          email: currentUser.email,
+          role: currentUser.role,
+        }}
+      />
     </main>
   );
 }

@@ -3,7 +3,6 @@ import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import {
   canAccessSuperAdminRole,
   canManageUsersRole,
-  canUploadRole,
 } from "@/lib/server/auth/roles";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { roleLabel } from "@/lib/labels";
@@ -15,7 +14,6 @@ export async function SiteHeader() {
     ? await countUnreadInboxItemsForUser(currentUser)
     : 0;
 
-  const canUpload = currentUser ? canUploadRole(currentUser.role) : false;
   const canAdmin = currentUser ? canManageUsersRole(currentUser.role) : false;
   const canSuper = currentUser ? canAccessSuperAdminRole(currentUser.role) : false;
 
@@ -26,7 +24,6 @@ export async function SiteHeader() {
           ? {
               displayName: currentUser.displayName,
               roleLabel: roleLabel(currentUser.role),
-              canUpload,
               canAdmin,
               canSuper,
               unread,

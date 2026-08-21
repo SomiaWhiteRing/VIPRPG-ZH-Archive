@@ -6,7 +6,7 @@ import {
   getWebPlayInstallation,
   markWebPlayLastPlayed,
 } from "@/app/play/[archiveVersionId]/web-play-db";
-import { deleteGameOpfsDirectory } from "@/app/play/[archiveVersionId]/web-play-opfs";
+import { resetGameOpfsDirectory } from "@/app/play/[archiveVersionId]/web-play-opfs";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,
@@ -242,7 +242,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
         throw new Error("游戏运行中不能删除本地缓存。");
       }
 
-      await deleteGameOpfsDirectory(metadata.playKey);
+      await resetGameOpfsDirectory(metadata.playKey);
       await deleteWebPlayInstallation(metadata.playKey);
       setInstallation(null);
       addLog("info", "已删除本地游戏文件。游戏存档不受影响。");

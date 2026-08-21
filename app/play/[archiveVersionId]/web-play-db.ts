@@ -27,12 +27,6 @@ export async function getWebPlayInstallation(
   return value;
 }
 
-export async function saveWebPlayFileRecord(record: WebPlayFileRecord): Promise<void> {
-  const db = await openWebPlayDb();
-  await putValue(db, STORE_FILES, record);
-  db.close();
-}
-
 export async function saveWebPlayFileRecords(
   records: WebPlayFileRecord[],
 ): Promise<void> {

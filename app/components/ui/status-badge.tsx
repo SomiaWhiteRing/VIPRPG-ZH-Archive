@@ -1,16 +1,11 @@
 import {
-  archiveStatusBadgeClass,
   archiveStatusLabel,
-  importTaskStatusBadgeClass,
   importTaskStatusLabel,
-  inboxStatusBadgeClass,
   inboxStatusLabel,
   installStatusLabel,
   roleLabel,
   uploadTaskStatusLabel,
-  userStatusBadgeClass,
   userStatusLabel,
-  workStatusBadgeClass,
   workStatusLabel,
 } from "@/lib/labels";
 import type { WebPlayInstallStatus } from "@/app/play/[archiveVersionId]/web-play-types";
@@ -56,17 +51,17 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
     case "publication":
       return {
         label: workStatusLabel(props.value),
-        tone: toneFromLegacyClass(workStatusBadgeClass(props.value)),
+        tone: publicationTone(props.value),
       };
     case "archive":
       return {
         label: archiveStatusLabel(props.value, props.purgedAt ?? null),
-        tone: toneFromLegacyClass(archiveStatusBadgeClass(props.value, props.purgedAt ?? null)),
+        tone: archiveTone(props.value, props.purgedAt ?? null),
       };
     case "import-task":
       return {
         label: importTaskStatusLabel(props.value),
-        tone: toneFromLegacyClass(importTaskStatusBadgeClass(props.value)),
+        tone: importTaskTone(props.value),
       };
     case "upload-task":
       return {
@@ -91,12 +86,12 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
     case "approval":
       return {
         label: inboxStatusLabel(props.value),
-        tone: toneFromLegacyClass(inboxStatusBadgeClass(props.value)),
+        tone: approvalTone(props.value),
       };
     case "account":
       return {
         label: userStatusLabel(props.value),
-        tone: toneFromLegacyClass(userStatusBadgeClass(props.value)),
+        tone: props.value === "active" ? "positive" : "negative",
       };
     case "role": {
       return {
@@ -140,12 +135,27 @@ function browserInstallTone(value: WebPlayInstallStatus | "loading"): BadgeTone 
   return "pending";
 }
 
-function toneFromLegacyClass(value: string): BadgeTone {
-  if (value === "approved") {
+function publicationTone(value: string): BadgeTone {
+  if (value === "published") return "positive";
+  if (value === "hidden" || value === "deleted") return "negative";
+  return "pending";
+}
+
+function archiveTone(value: string, purgedAt: string | null): BadgeTone {
+  if (purgedAt || value === "deleted") return "negative";
+  return value === "published" ? "positive" : "pending";
+}
+
+function importTaskTone(value: string): BadgeTone {
+  if (value === "completed" || value === "succeeded" || value === "committed") {
     return "positive";
   }
-  if (value === "rejected") {
-    return "negative";
-  }
+  if (value === "failed" || value === "canceled") return "negative";
+  return "pending";
+}
+
+function approvalTone(value: string): BadgeTone {
+  if (value === "approved") return "positive";
+  if (value === "rejected") return "negative";
   return "pending";
 }
