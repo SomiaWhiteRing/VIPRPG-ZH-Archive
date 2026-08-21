@@ -64,7 +64,6 @@ VIPRPG-ZH-Archive/
     easyrpg-web-play-architecture.md
 
   tools/
-    rpgm-archive-scanner/
 ```
 
 仓库根目录就是 OpenNext 应用根目录。除非特别说明，本文命令都在仓库根目录执行。
@@ -142,13 +141,15 @@ Cloudflare API 如果在本机代理下超时，可以临时移除 `HTTP_PROXY` 
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "opennext": "node scripts/open-next.mjs",
     "preview": "node scripts/open-next.mjs build && node scripts/open-next.mjs preview",
     "deploy": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy",
     "deploy:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy --env staging",
-    "upload": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload",
-    "upload:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs upload --env staging",
-    "cf-typegen": "node scripts/cf-typegen.mjs"
+    "db:local:migrate": "wrangler d1 migrations apply viprpg-archive-prod --local",
+    "db:local:reset": "node scripts/local-d1-reset.mjs",
+    "db:local:seed": "node scripts/dev-seed.mjs",
+    "cf-typegen": "node scripts/cf-typegen.mjs",
+    "check": "tsc --noEmit && eslint .",
+    "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"
   }
 }
 ```
@@ -157,8 +158,12 @@ Cloudflare API 如果在本机代理下超时，可以临时移除 `HTTP_PROXY` 
 
 - `npm run dev` 用于日常 UI 和 API 开发。
 - `npm run preview` 用于在本地 Workers runtime 中验证 R2/D1 bindings 和 streaming 行为。
+- `npm run dev` 不承诺原生 Worker 下载能力；下载链路使用 `npm run preview` 或已部署 Worker。
 - `npm run deploy` 只用于明确部署 production。
 - `npm run deploy:staging` 用于部署 staging。
+- `npm run db:local:reset` 清空本地 D1 并应用当前基线，`npm run db:local:seed` 写入演示数据；需要一起执行时使用 `node scripts/dev-seed.mjs --reset`。
+- Turnstile 默认开启；本地开发如需关闭，必须显式设置 `TURNSTILE_ENABLED=false`。staging/production 应保持开启并提供 site key 与 secret key。
+- 下载只由原生 Worker 提供，R2 对象键由内容 SHA-256 通过 `archive-keys` 派生。
 - 修改 `wrangler.jsonc` 后运行 `npm run cf-typegen`。
 - `npm run build` 固定使用 `next build --webpack`，避免当前 OpenNext bundle 在 Turbopack server chunk 上出现运行时加载失败。
 
@@ -526,10 +531,10 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现基于 HTTP-only cookie 的邮箱登录原型，cookie 使用 `AUTH_SECRET` 做 HMAC 签名。
 - 已实现 `BOOTSTRAP_ADMIN_EMAIL`：该邮箱首次登录会自动创建或提升为 `super_admin`，并默认具备上传权限。
 - 已实现注册用户自动入库；非 bootstrap 用户默认为 `role_key = 'user'`。
-- 已实现 `/login`、`POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me`。
+- 已实现 `/login`、`POST /api/auth/login`、`POST /api/auth/logout`。
 - 已实现 `/admin/users`、`/inbox`、`POST /api/admin/users/{userId}/role`、`POST /api/inbox/{itemId}/resolve`、`POST /api/inbox/{itemId}/read` 和 `POST /api/inbox/read-all`。
 - 站内信入口显示当前用户未读角标；站内信页支持一键标记全部可见未读项为已读。
-- 已将 `/admin`、`GET /api/admin/summary`、`PUT /api/blobs/{sha256}`、`PUT /api/core-packs/{sha256}`、`POST /api/imports/preflight` 接入权限校验。
+- 已将 `/admin`、`GET /api/admin/summary`、`PUT /api/blobs/{sha256}`、`PUT /api/core-packs/{sha256}`、`POST /api/imports/{id}/preflight` 接入权限校验。
 - 这套登录方式是 Phase B 的最小可用认证壳，用于固定权限边界；后续替换为 OAuth 或更正式的身份服务时，应保留 `users.role_key`、站内信行动项和 route guard 语义。
 
 ### Phase B.1：正式密码账户和验证码
@@ -586,7 +591,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 重复上传同一 blob 不产生重复 D1 记录。
 - blob 表不保存文件名。
-- `/api/imports/preflight` 能在上传前返回 existing/missing blob 和 core pack。
+- `/api/imports/{id}/preflight` 能在上传前返回 existing/missing blob 和 core pack，并记录任务观测。
 - 管理端原型能展示当前 D1/R2 canonical storage 计数。
 - R2 中不存在完整游戏 ZIP 路径。
 
@@ -594,11 +599,10 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 - 已实现 `PUT /api/blobs/{sha256}`，会重新计算请求体 SHA-256，匹配后写入 R2 `blobs/sha256/{aa}/{bb}/{sha256}` 和 D1 `blobs`。
 - 已实现 `PUT /api/core-packs/{sha256}`，会校验请求体 SHA-256、基础 ZIP magic、`x-core-pack-file-count` 和 `x-core-pack-uncompressed-size`。
-- 已实现 `POST /api/imports/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
+- 已实现 `POST /api/imports/{id}/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
 - 当前 schema 已通过迁移收束为 `works` / `releases` / `archive_versions` / `archive_version_blob_refs` / `archive_version_core_pack_refs` 数据模型；production 在正式发布前应使用同一组迁移创建或重建。
 - 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口现在要求 `uploader`、`admin` 或 `super_admin`；未登录返回 401，普通用户返回 403。
-- 已新增 `tools/rpgm-archive-importer/` 受控导入工具，用于在浏览器 commit UI 完成前模拟本地预索引、core pack、manifest、R2 上传和 D1 commit。
 - 已用本地样本在 staging 完成一次真实样本导入：3018 个归档文件，1705 个唯一 blob，1 个 core pack，manifest/core pack/blob 的 R2 SHA-256 抽验通过。
 - 本次样本固定了 `rpgm2000-2003-whitelist-v3` 路径覆盖规则：`StringScripts*` 的 `.txt` 进入 core pack，`screenshots/`、根目录 `screenshot*` 和根目录 `null.txt` 强制排除。
 
@@ -616,7 +620,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 实现路径覆盖规则：`StringScripts/`、`StringScripts_Origin/` 只保留 `.txt` 并强制进入 core pack；`screenshots/` 目录、根目录 `screenshot` / `screenshots` 文件和根目录 `null.txt` 强制排除。
 - 实现浏览器 SHA-256。
 - 实现 core pack 生成。
-- 实现 `/api/imports/preflight`。
+- 实现 `/api/imports/{id}/preflight`。
 - 实现缺失 blob/core pack 上传。
 - 实现 `/api/imports/{id}/commit`。
 
@@ -897,7 +901,7 @@ $hashBytes = [System.Security.Cryptography.SHA256]::HashData($bytes)
 $hash = ($hashBytes | ForEach-Object { $_.ToString("x2") }) -join ""
 $preflightBody = @{ blobs = @($hash); corePacks = @() } | ConvertTo-Json -Compress
 
-Invoke-WebRequest "$base/api/imports/preflight" `
+Invoke-WebRequest "$base/api/imports/$importJobId/preflight" `
   -Method POST `
   -Body $preflightBody `
   -ContentType "application/json" `
@@ -909,7 +913,7 @@ Invoke-WebRequest "$base/api/blobs/$hash" `
   -ContentType "text/plain" `
   -UseBasicParsing
 
-Invoke-WebRequest "$base/api/imports/preflight" `
+Invoke-WebRequest "$base/api/imports/$importJobId/preflight" `
   -Method POST `
   -Body $preflightBody `
   -ContentType "application/json" `
@@ -928,7 +932,7 @@ Invoke-WebRequest "$base/api/imports/preflight" `
 先不急着做复杂 CI，最小检查包括：
 
 ```powershell
-npm run lint
+npm run check
 npm run build
 npm run cf-typegen
 npm run preview
@@ -936,8 +940,8 @@ npm run preview
 
 后续 CI 可拆成：
 
-- PR：lint、typecheck、unit tests、Next build。
-- staging branch：D1 migration list、OpenNext upload/deploy staging。
+- PR：`npm run check`、`npm run build`。
+- staging branch：D1 migration list、Worker deploy staging、`npm run smoke:staging`。
 - production：人工确认后执行 D1 migration + deploy。
 
 D1 production migration 不要在普通 PR preview 中自动执行。
@@ -978,13 +982,13 @@ D1 production migration 不要在普通 PR preview 中自动执行。
 2. 实现 D1 blob/core pack 查询和幂等 insert。
 3. 实现 `PUT /api/blobs/{sha256}`，验证 hash 后写入 R2 和 D1。
 4. 实现 `PUT /api/core-packs/{sha256}`，验证 hash、基础 ZIP 头和 core pack 统计 header。
-5. 实现 `POST /api/imports/preflight`，返回 existing/missing blob 和 core pack。
+5. 实现 `POST /api/imports/{id}/preflight`，返回 existing/missing blob 和 core pack。
 6. 实现 `GET /api/admin/summary`。
 7. 实现 `/admin` 最小管理端原型页面。
 8. 部署 staging。
 9. 用 staging API 验证 preflight 前后状态变化和 blob 幂等写入。
 
-第二轮结束时，系统已经能证明 canonical object storage 的基本写入、索引和查询链路可用，并且上传接口已接入 Phase B 的 `uploader`/`admin`/`super_admin` 角色权限边界。它仍不是完整导入系统：浏览器预索引、core pack 生成和 manifest commit 留到后续阶段。
+第二轮结束时，系统已经能证明 canonical object storage 的基本写入、索引和查询链路可用，并且上传接口已接入 `uploader`/`admin`/`super_admin` 角色权限边界。当前浏览器上传链已经覆盖预索引、core pack、manifest commit 和 job-scoped preflight；后续只补业务能力，不再保留旧的无任务接口或命令行导入路径。
 
 ## 16. 参考
 
