@@ -2,6 +2,8 @@
 
 ## 架构文档
 
+- [产品方向与精简重构计划](./product-direction-plan.md)
+
 - [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
 - [OpenNext 应用与 Cloudflare 基础设施开发路径](./opennext-cloudflare-development-path.md)
 - [GitHub Actions 自动部署](./github-actions-deployment.md)
