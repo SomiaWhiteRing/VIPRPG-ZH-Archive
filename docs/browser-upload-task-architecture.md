@@ -2,6 +2,8 @@
 
 本文档专门描述 Phase D 的浏览器端上传任务系统。
 
+> 认证、session、permission key、同源校验和导入任务 ownership 只以[认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)为准。本文只定义浏览器任务、上传协议和内容完整性约束。
+
 主存储架构见 [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)，游戏领域模型见 [游戏领域架构设计](./game-domain-architecture.md)。本文不重新讨论 Work / Release / ArchiveVersion 的领域关系，而是回答：
 
 - 用户选择本地文件夹或本地 ZIP 后，浏览器如何完成预索引。
@@ -451,15 +453,15 @@ preflight 是恢复流程的事实来源。
 
 ```text
 POST /api/imports
-  创建 import_job；要求 uploader/admin/super_admin
+  创建 import_job；授权见统一认证授权基线
 
 POST /api/imports/{id}/preflight
   输入 blob/core pack hash；返回 existing/missing
 
-PUT /api/blobs/{sha256}
+PUT /api/blobs/{sha256}?import_job_id={id}
   上传单个 blob；后端重算 SHA-256
 
-PUT /api/core-packs/{sha256}
+PUT /api/core-packs/{sha256}?import_job_id={id}
   上传 core pack；后端校验 ZIP、SHA-256、文件数、未压缩大小
 
 POST /api/imports/{id}/commit
@@ -494,9 +496,8 @@ commit 请求必须包含：
 
 ## 11. 安全和权限
 
-- 所有上传 API 都必须重新读取 D1 用户状态，不信任旧 cookie 中的角色。
-- 普通用户不能创建 import_job。
-- import_job 绑定 `uploader_id`，后续 preflight/upload/commit 必须校验同一用户或管理员。
+- 上传 API 的身份、permission key、Origin、用户状态和 import job ownership 校验全部由统一认证授权基线定义；本模块不按角色名推导能力。
+- `import_job` 保存服务端认定的 `uploader_id`，blob/core pack 上传和任务操作都必须携带任务上下文。
 - manifest 中禁止绝对路径、空路径、`..`。
 - manifest 的 `file_policy_version` 必须是服务端允许版本。
 - 后端必须重算上传内容 SHA-256。

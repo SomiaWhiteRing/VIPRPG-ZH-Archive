@@ -8,16 +8,16 @@ export async function sendRegistrationCodeEmail(input: {
 }): Promise<void> {
   await sendAuthEmail({
     to: input.to,
-    subject: "VIPRPG 中文归档注册验证码",
+    subject: "VIPRPG.org注册验证码",
     html: renderAuthEmailHtml({
       title: "注册验证码",
-      intro: "你正在注册 VIPRPG 中文归档账户。",
+      intro: "你正在注册 VIPRPG.org账户。",
       code: input.code,
       callbackUrl: input.callbackUrl,
       actionLabel: "继续注册",
     }),
     text: [
-      "你正在注册 VIPRPG 中文归档账户。",
+      "你正在注册 VIPRPG.org账户。",
       "",
       `验证码：${input.code}`,
       `继续注册：${input.callbackUrl}`,
@@ -34,16 +34,16 @@ export async function sendPasswordResetCodeEmail(input: {
 }): Promise<void> {
   await sendAuthEmail({
     to: input.to,
-    subject: "VIPRPG 中文归档找回密码验证码",
+    subject: "VIPRPG.org找回密码验证码",
     html: renderAuthEmailHtml({
       title: "找回密码验证码",
-      intro: "你正在找回 VIPRPG 中文归档账户密码。",
+      intro: "你正在找回 VIPRPG.org账户密码。",
       code: input.code,
       callbackUrl: input.callbackUrl,
       actionLabel: "继续重置密码",
     }),
     text: [
-      "你正在找回 VIPRPG 中文归档账户密码。",
+      "你正在找回 VIPRPG.org账户密码。",
       "",
       `验证码：${input.code}`,
       `继续重置密码：${input.callbackUrl}`,

@@ -6,6 +6,7 @@
 
 - [RPG Maker 2000/2003 去重存储库架构计划](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
 - [OpenNext 应用与 Cloudflare 基础设施开发路径](./opennext-cloudflare-development-path.md)
+- [认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)
 
 本文档定义当前唯一的游戏领域模型。
 
@@ -710,12 +711,12 @@ custom_field_values
 7. 前端只上传缺失 blob 和本次 core pack。
 8. 前端提交 ArchiveVersion commit。
 9. 服务端写入 `archive_versions`、对象引用表、manifest R2 对象和统计信息。
-10. 管理员或有权限用户发布 Work / Release / ArchiveVersion。
+10. 服务端在通过统一授权边界后发布 Work / Release / ArchiveVersion。
 
 关键规则：
 
-- 上传权限仍由用户角色决定，`uploader` 及以上可进入上传流程。
-- 注册账户审核、角色调整和通知由用户体系与站内信处理，不属于游戏领域表。
+- 上传、发布和私有内容读取能力只按统一认证授权基线的 permission key 与领域约束判定；游戏领域表不按角色名推导能力。
+- 注册账户审核、角色调整和通知由用户体系与站内信处理，不属于游戏领域表；具体规则只见统一认证授权基线。
 - 不上传完整游戏 ZIP 到 R2。
 - 不让 Worker 解完整游戏包作为主流程。
 - 导入阶段不设置固定文件数或大小上限，但必须保存文件数量、归档大小、排除统计和预计 R2 Get。

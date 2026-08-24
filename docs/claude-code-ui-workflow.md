@@ -30,7 +30,7 @@ Use this when asking Claude to redesign pages:
 Use this after UI edits:
 
 ```text
-/ui-audit app/page.tsx app/styles/pages.css app/styles/components.css
+/ui-audit app/page.tsx app/globals.css
 请用当前可用的原生 Chrome 控制检查桌面和移动端，按任务完成、溢出、重叠、焦点态和控制台错误列出问题。
 ```
 
@@ -54,6 +54,8 @@ For a larger redesign, start with public pages first:
 
 ## Current UI Structure
 
-- Shared React primitives live in `app/components/ui/`.
-- Global CSS is split into `tokens.css`, `base.css`, `layout.css`, `components.css`, and `pages.css` under `app/styles/`.
+- Shared primitives live in `app/components/ui/` and use Tailwind utility classes with Radix behavior.
+- `app/globals.css` is the only application stylesheet. It contains the Tailwind import and design tokens; page styles do not use authored CSS selectors.
+- Visible controls consume the shared `Button`, `Input`, `Textarea`, `Label`, `Checkbox`, `SelectField`, `Progress`, `AlertDialog`, `Badge`, `Card`, and `Table` primitives. Native controls are limited to hidden protocol inputs, file pickers, datalists, canvas, and iframe/runtime elements.
+- Home tabs intentionally remain an `Rm2kButton` hash-anchor button group because their product contract is scroll-linked navigation; the unused generic Radix Tabs scaffold is not retained.
 - 少量当前参考截图可放在 `docs/audit/reference/`；旧阶段截图不是当前验收标准。

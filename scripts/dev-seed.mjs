@@ -2,23 +2,23 @@
 // 用法：
 //   node scripts/dev-seed.mjs          # 向空库插入测试数据
 //   node scripts/dev-seed.mjs --reset  # 先重置本地库（等价 npm run db:local:reset）再插入
-// 所有测试账号密码均为 dev1234567。
+// 所有测试账号密码均为 dev123456789。
 import { mkdirSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { createHash, webcrypto } from "node:crypto";
 import { deflateSync } from "node:zlib";
+import { runWrangler } from "./run-wrangler.mjs";
 
 const databaseName = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
 const bucketName = process.env.LOCAL_R2_BUCKET || "viprpg-archive-prod";
 const tmpDir = join(".wrangler", "tmp");
 const seedSqlPath = join(tmpDir, "dev-seed.sql");
 
-const SEED_PASSWORD = "dev1234567";
+const SEED_PASSWORD = "dev123456789";
 const NOW = "2026-07-01 12:00:00";
 
 if (process.argv.includes("--reset")) {
-  run("node", ["scripts/local-d1-reset.mjs"]);
+  await import("./local-d1-reset.mjs");
 }
 
 mkdirSync(tmpDir, { recursive: true });
@@ -159,17 +159,22 @@ insert("users", [
 ]);
 
 function user(id, email, displayName, roleKey) {
+  void roleKey;
   return {
     id,
     external_auth_id: `dev-${id}`,
     email,
     password_hash: passwordHash,
     display_name: displayName,
-    role_key: roleKey,
     status: "active",
     email_verified_at: NOW,
     created_at: NOW,
   };
+}
+
+for (const [id, roleKey] of [[1, "super_admin"], [2, "admin"], [3, "uploader"], [4, "user"]]) {
+  sql.push(`INSERT OR IGNORE INTO user_roles (user_id, role_id) SELECT ${id}, id FROM roles WHERE key = 'user';`);
+  if (roleKey !== "user") sql.push(`INSERT OR IGNORE INTO user_roles (user_id, role_id) SELECT ${id}, id FROM roles WHERE key = '${roleKey}';`);
 }
 
 insert("blobs", images.map((image) => ({
@@ -597,11 +602,13 @@ insert("inbox_items", [
   {
     id: 1,
     type: "role_change_request",
-    status: "open",
+    status: "pending",
     sender_user_id: 4,
-    audience_min_role_key: "admin",
+    required_permission_key: "user.role.assign",
     target_user_id: 4,
-    requested_role_key: "uploader",
+    requested_role_id: 2,
+    requested_role_key_snapshot: "uploader",
+    requested_role_name_snapshot: "上传者",
     title: "上传权限申请",
     body: "想帮忙补档几个夏之阵的作品，申请上传者权限。",
     created_at: "2026-06-29 12:00:00",
@@ -621,8 +628,7 @@ insert("inbox_items", [
 
 writeFileSync(seedSqlPath, `${sql.join("\n")}\n`);
 
-run("npx", [
-  "wrangler",
+await runWrangler([
   "d1",
   "execute",
   databaseName,
@@ -634,8 +640,7 @@ run("npx", [
 for (const image of images) {
   const imagePath = join(tmpDir, `dev-seed-${image.name}.png`);
   writeFileSync(imagePath, image.png);
-  run("npx", [
-    "wrangler",
+  await runWrangler([
     "r2",
     "object",
     "put",
@@ -649,19 +654,8 @@ for (const image of images) {
 }
 
 console.log("");
-console.log("本地测试数据已写入。测试账号（密码均为 dev1234567）：");
+console.log("本地测试数据已写入。测试账号（密码均为 dev123456789）：");
 console.log("  super@dev.local     super_admin");
 console.log("  admin@dev.local     admin");
 console.log("  uploader@dev.local  uploader");
 console.log("  user@dev.local      user");
-
-function run(command, args) {
-  const result = spawnSync(command, args, {
-    shell: process.platform === "win32",
-    stdio: "inherit",
-  });
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-}

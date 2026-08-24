@@ -1,11 +1,11 @@
+import { Input } from "@/app/components/ui/input";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatList } from "@/app/components/ui/stat-list";
-import {
-  listPublicCreators,
-  type PublicCreatorSummary,
-} from "@/lib/server/db/creator-library";
+import { listPublicCreators, type PublicCreatorSummary } from "@/lib/server/db/creator-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
 
@@ -24,33 +24,30 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
     <main>
       <PageHeader eyebrow="Creators" title="作者与制作人员" />
 
-      <form className="library-toolbar" action="/creators" method="get">
-        <label>
+      <form
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
+        action="/creators"
+        method="get"
+      >
+        <Label>
           <span>搜索</span>
-          <input
-            defaultValue={query}
-            name="q"
-            placeholder="作者名、原名"
-            type="search"
-          />
-        </label>
-        <button className="button primary" type="submit">
-          筛选
-        </button>
+          <Input defaultValue={query} name="q" placeholder="作者名、原名" type="search" />
+        </Label>
+        <Button type="submit">筛选</Button>
         {query ? (
-          <Link className="button" href="/creators">
+          <Link className={buttonVariants({ variant: "outline" })} href="/creators">
             清除
           </Link>
         ) : null}
       </form>
 
-      <section className="library-summary" aria-label="作者摘要">
+      <section className="text-sm text-muted" aria-label="作者摘要">
         <strong>共 {formatNumber(creators.length)} </strong>
         <span>位作者或制作人员</span>
       </section>
 
       {creators.length > 0 ? (
-        <section className="directory-card-grid" aria-label="作者列表">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="作者列表">
           {creators.map((creator) => (
             <CreatorCard creator={creator} key={creator.id} />
           ))}
@@ -64,14 +61,12 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
 
 function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
   return (
-    <article className="directory-card">
+    <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="directory-card-title" href={`/creators/${creator.slug}`}>
+        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/creators/${creator.slug}`}>
           {creator.name}
         </Link>
-        {creator.originalName ? (
-          <span className="muted-line">{creator.originalName}</span>
-        ) : null}
+        {creator.originalName ? <span className="text-sm text-muted">{creator.originalName}</span> : null}
       </div>
       {creator.bio ? <p>{creator.bio}</p> : null}
       <StatList

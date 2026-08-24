@@ -18,6 +18,7 @@ import type {
 import { saveTaskSnapshot } from "@/app/upload/upload-task-db";
 import type {
   BrowserUploadTaskSnapshot,
+  MetadataBlobUpload,
   UploadSourceKind,
   UploadTaskCommitResult,
   UploadTaskPhase,
@@ -227,6 +228,7 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
     task = await persistAndPost(task, true);
 
     task = await createImportJob(task);
+    await uploadMetadataBlobs(message.metadataBlobs, task.serverImportJobId);
     const preflight = await preflightObjects(
       task,
       [...scan.blobObjects.values()].map((blob) => ({
@@ -712,6 +714,8 @@ async function uploadMissingObjects(input: {
   missingBlobs: Set<string>;
   missingCorePacks: Set<string>;
 }): Promise<BrowserUploadTaskSnapshot> {
+  if (!input.task.serverImportJobId) throw new Error("上传任务缺少导入记录");
+  const importJobId = input.task.serverImportJobId;
   let task = setPhase(input.task, "uploading_missing_objects", 0, null);
   let uploadedObjects = 0;
   let uploadedBytes = 0;
@@ -738,7 +742,7 @@ async function uploadMissingObjects(input: {
   if (input.missingCorePacks.has(input.corePack.sha256)) {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
-    await uploadCorePack(input.corePack, task.serverImportJobId);
+    await uploadCorePack(input.corePack, importJobId);
     uploadedObjects += 1;
     uploadedBytes += input.corePack.bytes.byteLength;
     task = updateUploadProgress(
@@ -760,7 +764,7 @@ async function uploadMissingObjects(input: {
   await runWithConcurrency(missingBlobObjects, resolveUploadConcurrency(), async (blob) => {
     await waitIfPaused(task.localTaskId);
     assertNotCanceled(task.localTaskId);
-    await uploadBlob(blob, task.serverImportJobId);
+    await uploadBlob(blob, importJobId);
     blob.uploaded = true;
     uploadedObjects += 1;
     uploadedBytes += blob.size;
@@ -807,7 +811,7 @@ async function commitTask(
 
 async function uploadCorePack(
   corePack: CorePackObject,
-  importJobId: number | null,
+  importJobId: number,
 ): Promise<void> {
   await retry(async () => {
     const response = await fetch(uploadObjectUrl(`/api/core-packs/${corePack.sha256}`, importJobId), {
@@ -827,7 +831,7 @@ async function uploadCorePack(
   });
 }
 
-async function uploadBlob(blob: BlobObject, importJobId: number | null): Promise<void> {
+async function uploadBlob(blob: BlobObject, importJobId: number): Promise<void> {
   await retry(async () => {
     const bytes = await blob.source.bytes();
     const response = await fetch(uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId), {
@@ -845,11 +849,22 @@ async function uploadBlob(blob: BlobObject, importJobId: number | null): Promise
   });
 }
 
-function uploadObjectUrl(path: string, importJobId: number | null): string {
-  if (!importJobId) {
-    return path;
+async function uploadMetadataBlobs(blobs: MetadataBlobUpload[], importJobId: number | null): Promise<void> {
+  if (!importJobId) throw new Error("上传任务缺少导入记录");
+  for (const blob of blobs) {
+    await retry(async () => {
+      const response = await fetch(uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId), {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": blob.contentType },
+        body: await blob.file.arrayBuffer(),
+      });
+      if (!response.ok) throw new Error(`图片上传失败：${blob.file.name}`);
+    });
   }
+}
 
+function uploadObjectUrl(path: string, importJobId: number): string {
   return `${path}?import_job_id=${encodeURIComponent(String(importJobId))}`;
 }
 

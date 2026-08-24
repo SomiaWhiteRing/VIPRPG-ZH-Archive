@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -38,7 +39,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         actions={
           <>
             <BackLink href="/creators" label="返回作者列表" />
-            <Link className="button" href="/games">
+            <Link className={buttonVariants({ variant: "outline" })} href="/games">
               游戏资料库
             </Link>
             {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
@@ -53,14 +54,28 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         {creator.bio ? <p>{creator.bio}</p> : null}
         <StatList
           items={[
-            { label: "作品层职务", value: formatNumber(creator.workCreditCount) },
-            { label: "发布版本职务", value: formatNumber(creator.releaseCreditCount) },
-            { label: "最近发布关联", value: creator.latestReleaseCreditAt ?? "暂无" },
+            {
+              label: "作品层职务",
+              value: formatNumber(creator.workCreditCount),
+            },
+            {
+              label: "发布版本职务",
+              value: formatNumber(creator.releaseCreditCount),
+            },
+            {
+              label: "最近发布关联",
+              value: creator.latestReleaseCreditAt ?? "暂无",
+            },
           ]}
         />
         {creator.websiteUrl ? (
-          <div className="actions">
-            <a className="button" href={creator.websiteUrl} rel="noreferrer" target="_blank">
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              className={buttonVariants({ variant: "outline" })}
+              href={creator.websiteUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
               个人链接
             </a>
           </div>
@@ -69,7 +84,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
 
       <Pane heading="作品年表">
         {creator.workCredits.length > 0 ? (
-          <TableWrap compact label="作品年表" minWidth={760} mobileCards>
+          <TableWrap compact label="作品年表" minWidth={760}>
             <thead>
               <tr>
                 <th>作品</th>
@@ -83,12 +98,12 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
                   <td data-label="作品">
                     <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
                     {credit.workTitle !== credit.workOriginalTitle ? (
-                      <span className="muted-line">{credit.workOriginalTitle}</span>
+                      <span className="text-sm text-muted">{credit.workOriginalTitle}</span>
                     ) : null}
                   </td>
                   <td data-label="职务">
                     {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                    {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
+                    {credit.notes ? <span className="text-sm text-muted">{credit.notes}</span> : null}
                   </td>
                   <td data-label="日期">{credit.originalReleaseDate ?? "未知"}</td>
                 </tr>
@@ -96,13 +111,13 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             </tbody>
           </TableWrap>
         ) : (
-          <p className="muted-line">暂无作品层职务记录。</p>
+          <p className="text-sm text-muted">暂无作品层职务记录。</p>
         )}
       </Pane>
 
       <Pane heading="发布参与">
         {creator.releaseCredits.length > 0 ? (
-          <TableWrap compact label="发布参与" minWidth={760} mobileCards>
+          <TableWrap compact label="发布参与" minWidth={760}>
             <thead>
               <tr>
                 <th>作品 / 发布版本</th>
@@ -115,11 +130,11 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
                 <tr key={`${credit.releaseId}-${credit.roleKey}`}>
                   <td data-label="作品 / 发布版本">
                     <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
-                    <span className="muted-line">{credit.releaseLabel}</span>
+                    <span className="text-sm text-muted">{credit.releaseLabel}</span>
                   </td>
                   <td data-label="职务">
                     {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                    {credit.notes ? <span className="muted-line">{credit.notes}</span> : null}
+                    {credit.notes ? <span className="text-sm text-muted">{credit.notes}</span> : null}
                   </td>
                   <td data-label="日期">{credit.releaseDate ?? "未知"}</td>
                 </tr>
@@ -127,7 +142,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             </tbody>
           </TableWrap>
         ) : (
-          <p className="muted-line">暂无发布版本职务记录。</p>
+          <p className="text-sm text-muted">暂无发布版本职务记录。</p>
         )}
       </Pane>
     </main>

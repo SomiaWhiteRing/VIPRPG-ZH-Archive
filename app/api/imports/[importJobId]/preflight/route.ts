@@ -1,12 +1,11 @@
 import { normalizeSha256 } from "@/lib/server/crypto/sha256";
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
 import {
-  assertImportJobAccess,
   markImportJobFailed,
   markImportJobPreflighted,
   parseImportJobId,
-  requiredImportJob,
+  requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -31,7 +30,7 @@ type HashInput =
     };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "import_job.preflight_own");
 
   if ("response" in auth) {
     return auth.response;
@@ -44,8 +43,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { importJobId } = await context.params;
     parsedImportJobId = parseImportJobId(importJobId);
-    const job = await requiredImportJob(parsedImportJobId);
-    assertImportJobAccess(job, auth.user);
+    const job = await requiredOwnedImportJob(parsedImportJobId, auth.user);
     authorizedForJob = true;
 
     const payload = (await request.json()) as PreflightRequest;

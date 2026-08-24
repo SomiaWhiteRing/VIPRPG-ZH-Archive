@@ -1,23 +1,14 @@
 "use client";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Progress } from "@/app/components/ui/progress";
 
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import {
-  clearTaskSnapshot,
-  loadTaskSnapshots,
-} from "@/app/upload/upload-task-db";
+import { clearTaskSnapshot, loadTaskSnapshots } from "@/app/upload/upload-task-db";
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceKind,
+  MetadataBlobUpload,
   UploadWorkerInput,
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
@@ -29,6 +20,7 @@ type StartUploadInput = {
   sourceKind: UploadSourceKind;
   files: File[];
   metadata: ArchiveCommitMetadata;
+  metadataBlobs: MetadataBlobUpload[];
   resumeLocalTaskId?: string | null;
 };
 
@@ -77,9 +69,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const hasActiveTask = tasks.some((task) =>
-      ["running", "paused", "needs_source_reselect"].includes(task.status),
-    );
+    const hasActiveTask = tasks.some((task) => ["running", "paused", "needs_source_reselect"].includes(task.status));
 
     if (!hasActiveTask) {
       return;
@@ -90,7 +80,9 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
       event.returnValue = "";
     };
     const checkpoint = () => {
-      workerRef.current?.postMessage({ type: "checkpoint" } satisfies UploadWorkerInput);
+      workerRef.current?.postMessage({
+        type: "checkpoint",
+      } satisfies UploadWorkerInput);
     };
 
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -137,28 +129,24 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         sourceKind: input.sourceKind,
         files: input.files,
         metadata: input.metadata,
+        metadataBlobs: input.metadataBlobs,
       } satisfies UploadWorkerInput);
       setPanelOpen(true);
     },
     [ensureWorker],
   );
 
-  const pauseTask = useCallback(
-    (localTaskId: string) => {
-      workerRef.current?.postMessage({
-        type: "pause",
-        localTaskId,
-      } satisfies UploadWorkerInput);
-      setTasks((current) =>
-        current.map((task) =>
-          task.localTaskId === localTaskId
-            ? { ...task, status: "paused", updatedAt: new Date().toISOString() }
-            : task,
-        ),
-      );
-    },
-    [],
-  );
+  const pauseTask = useCallback((localTaskId: string) => {
+    workerRef.current?.postMessage({
+      type: "pause",
+      localTaskId,
+    } satisfies UploadWorkerInput);
+    setTasks((current) =>
+      current.map((task) =>
+        task.localTaskId === localTaskId ? { ...task, status: "paused", updatedAt: new Date().toISOString() } : task,
+      ),
+    );
+  }, []);
 
   const resumeTask = useCallback((localTaskId: string) => {
     workerRef.current?.postMessage({
@@ -167,9 +155,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
     } satisfies UploadWorkerInput);
     setTasks((current) =>
       current.map((task) =>
-        task.localTaskId === localTaskId
-          ? { ...task, status: "running", updatedAt: new Date().toISOString() }
-          : task,
+        task.localTaskId === localTaskId ? { ...task, status: "running", updatedAt: new Date().toISOString() } : task,
       ),
     );
   }, []);
@@ -181,9 +167,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
     } satisfies UploadWorkerInput);
     setTasks((current) =>
       current.map((task) =>
-        task.localTaskId === localTaskId
-          ? { ...task, status: "canceled", updatedAt: new Date().toISOString() }
-          : task,
+        task.localTaskId === localTaskId ? { ...task, status: "canceled", updatedAt: new Date().toISOString() } : task,
       ),
     );
   }, []);
@@ -249,52 +233,47 @@ function UploadFloatingDock({
   }
 
   const totalPercent =
-    value.tasks.reduce((sum, task) => sum + task.progress.percent, 0) /
-    Math.max(value.tasks.length, 1);
+    value.tasks.reduce((sum, task) => sum + task.progress.percent, 0) / Math.max(value.tasks.length, 1);
 
   return (
-    <aside className="upload-dock" aria-label="上传任务">
-      <button
+    <aside className="fixed bottom-4 right-4 z-40" aria-label="上传任务">
+      <Button
         aria-controls="upload-task-panel"
         aria-expanded={open}
-        className="upload-dock-button"
+        className="rounded-full"
         onClick={open ? onClose : onOpen}
         type="button"
       >
         <span>上传</span>
         <strong>{Math.round(totalPercent)}%</strong>
         {activeTasks.length > 0 ? (
-          <span className="task-count-badge">{activeTasks.length}</span>
+          <span className="inline-flex min-h-5 items-center rounded-full bg-primary/10 px-1.5 text-[11px] font-bold text-primary">
+            {activeTasks.length}
+          </span>
         ) : null}
-      </button>
+      </Button>
       {open ? (
-        <div className="upload-panel" id="upload-task-panel">
-          <div className="upload-panel-header">
+        <div
+          className="fixed bottom-4 right-4 z-40 w-[min(420px,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 shadow-surface"
+          id="upload-task-panel"
+        >
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <strong>上传任务</strong>
               <span>{value.tasks.length} 个任务</span>
             </div>
-            <button className="button" onClick={onClose} type="button">
+            <Button variant="outline" onClick={onClose} type="button">
               收起
-            </button>
+            </Button>
           </div>
           {visibleTasks.map((task) => (
-            <article className="upload-task-item" key={task.localTaskId}>
-              <div className="upload-task-title">
+            <article className="grid gap-2 border-t border-border py-3 first:border-0" key={task.localTaskId}>
+              <div className="font-semibold">
                 <strong>{task.sourceName}</strong>
                 <StatusBadge kind="upload-task" value={task.status} />
               </div>
-              <span className="upload-task-phase">{phaseLabel(task.phase)}</span>
-              <div
-                aria-label={`${task.sourceName} 上传进度`}
-                aria-valuemax={100}
-                aria-valuemin={0}
-                aria-valuenow={Math.round(Math.min(100, task.progress.percent))}
-                className="upload-progress"
-                role="progressbar"
-              >
-                <span style={{ width: `${Math.min(100, task.progress.percent)}%` }} />
-              </div>
+              <span className="text-xs text-muted">{phaseLabel(task.phase)}</span>
+              <Progress aria-label={`${task.sourceName} 上传进度`} value={Math.min(100, task.progress.percent)} />
               <StatList
                 columns={2}
                 items={[
@@ -306,59 +285,48 @@ function UploadFloatingDock({
                     label: "上传对象",
                     value: `${task.progress.uploadedObjects.toLocaleString("zh-CN")} / ${task.progress.totalUploadObjects.toLocaleString("zh-CN")}`,
                   },
-                  { label: "归档", value: formatBytes(task.stats.includedSizeBytes) },
+                  {
+                    label: "文件大小",
+                    value: formatBytes(task.stats.includedSizeBytes),
+                  },
                 ]}
                 variant="tiles"
               />
-              {task.error ? <p className="error-message compact">{task.error}</p> : null}
+              {task.error ? (
+                <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{task.error}</p>
+              ) : null}
               {task.progress.currentPath ? (
-                <p className="upload-current-path">{task.progress.currentPath}</p>
+                <p className="font-mono text-sm text-muted">{task.progress.currentPath}</p>
               ) : null}
               {task.result ? (
-                <p className="success-message compact">
-                  归档快照 #{task.result.archiveVersionId} 已入库
+                <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-800 text-sm">
+                  文件版本 #{task.result.archiveVersionId} 已处理
                 </p>
               ) : null}
-              <div className="actions compact-actions">
+              <div className="flex flex-wrap items-center gap-3">
                 {task.status === "needs_source_reselect" ? (
-                  <a className="button primary" href="/upload">
+                  <a className={buttonVariants()} href="/upload">
                     重新选择来源
                   </a>
                 ) : null}
                 {task.status === "running" ? (
-                  <button
-                    className="button"
-                    onClick={() => value.pauseTask(task.localTaskId)}
-                    type="button"
-                  >
+                  <Button variant="outline" onClick={() => value.pauseTask(task.localTaskId)} type="button">
                     暂停
-                  </button>
+                  </Button>
                 ) : null}
                 {task.status === "paused" ? (
-                  <button
-                    className="button primary"
-                    onClick={() => value.resumeTask(task.localTaskId)}
-                    type="button"
-                  >
+                  <Button onClick={() => value.resumeTask(task.localTaskId)} type="button">
                     继续
-                  </button>
+                  </Button>
                 ) : null}
                 {["running", "paused", "needs_source_reselect"].includes(task.status) ? (
-                  <button
-                    className="button"
-                    onClick={() => value.cancelTask(task.localTaskId)}
-                    type="button"
-                  >
+                  <Button variant="outline" onClick={() => value.cancelTask(task.localTaskId)} type="button">
                     取消
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    className="button"
-                    onClick={() => value.clearTask(task.localTaskId)}
-                    type="button"
-                  >
+                  <Button variant="outline" onClick={() => value.clearTask(task.localTaskId)} type="button">
                     清除
-                  </button>
+                  </Button>
                 )}
               </div>
             </article>

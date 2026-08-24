@@ -1,4 +1,4 @@
-# VIPRPG 中文归档
+# VIPRPG.org
 
 基于 Next.js、OpenNext 和 Cloudflare D1/R2 的 VIPRPG 游戏归档站。
 
@@ -30,7 +30,7 @@ npm run db:local:reset
 npm run db:local:seed
 ```
 
-这两个命令只操作 Wrangler 的本地资源，不会修改 Cloudflare 远端数据库或对象存储。演示账号密码均为 `dev1234567`：
+这两个命令只操作 Wrangler 的本地资源，不会修改 Cloudflare 远端数据库或对象存储。演示账号密码均为 `dev123456789`：
 
 | 账号 | 角色 |
 | --- | --- |
@@ -55,11 +55,22 @@ npm run dev -- -p 3001
 
 ```powershell
 npm run check            # TypeScript + ESLint
+npm run check:security   # typed 权限目录与领域边界自检
+npm run check:security:d1 # 已 seed 的本地 D1 安全集成检查
+npm run check:security:api # 本地服务运行时的 401/403/ownership 检查
 npm run build            # Next.js 生产构建
 npm run preview          # OpenNext/Cloudflare Workers 本地预览
 ```
 
 `npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
+
+唯一根账户只能通过受审计运维命令轮换。远程环境还必须提供与目标邮箱相同的 `--confirm`：
+
+```powershell
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --local
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --staging --confirm admin@example.com
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production --confirm admin@example.com
+```
 
 ## Cloudflare 部署
 

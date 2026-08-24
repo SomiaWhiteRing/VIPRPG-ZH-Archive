@@ -1,9 +1,8 @@
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import {
-  assertImportJobAccess,
   markImportJobCanceled,
   parseImportJobId,
-  requiredImportJob,
+  requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -16,7 +15,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "import_job.cancel_own");
 
   if ("response" in auth) {
     return auth.response;
@@ -24,8 +23,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { importJobId } = await context.params;
-    const job = await requiredImportJob(parseImportJobId(importJobId));
-    assertImportJobAccess(job, auth.user);
+    const job = await requiredOwnedImportJob(parseImportJobId(importJobId), auth.user);
     await markImportJobCanceled(job.id);
 
     return json({

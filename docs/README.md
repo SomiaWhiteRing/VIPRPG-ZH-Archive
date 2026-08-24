@@ -1,8 +1,9 @@
-# VIPRPG 中文归档项目文档入口
+# VIPRPG.org项目文档入口
 
 ## 架构文档
 
 - [产品方向与精简重构计划](./product-direction-plan.md)
+- [认证与权限管理系统统一基线及重构计划](./authentication-authorization-baseline-plan.md)
 
 - [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
 - [OpenNext 应用与 Cloudflare 基础设施开发路径](./opennext-cloudflare-development-path.md)

@@ -1,11 +1,11 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { json, jsonError } from "@/lib/server/http/json";
 import { runGcDryRun } from "@/lib/server/storage/admin-storage-checks";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "system.maintenance.run");
 
   if ("response" in auth) {
     return auth.response;

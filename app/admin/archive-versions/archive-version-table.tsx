@@ -1,9 +1,10 @@
+import { Button, buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import type { AdminArchiveVersion } from "@/lib/server/db/archive-maintenance";
-import { canManageUsersRole } from "@/lib/server/auth/roles";
+import { canDeleteArchiveVersion, type AdminArchiveVersion } from "@/lib/server/db/archive-maintenance";
+import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { formatNumber, formatDate, formatBytes } from "@/lib/format";
 
@@ -17,78 +18,61 @@ export function ArchiveVersionTable({
   mode: "active" | "trash";
 }) {
   if (archiveVersions.length === 0) {
-    return <EmptyState title={mode === "trash" ? "回收站为空" : "暂无归档快照"} />;
+    return <EmptyState title={mode === "trash" ? "回收站为空" : "暂无文件版本"} />;
   }
 
   return (
-    <TableWrap label="归档快照列表" minWidth={1040}>
-        <thead>
-          <tr>
-            <th>归档</th>
-            <th>状态</th>
-            <th>规模</th>
-            <th>时间</th>
-            <th>操作</th>
+    <TableWrap label="文件版本列表" minWidth={1040}>
+      <thead>
+        <tr>
+          <th>文件版本</th>
+          <th>状态</th>
+          <th>规模</th>
+          <th>时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {archiveVersions.map((archiveVersion) => (
+          <tr key={archiveVersion.id}>
+            <td>
+              <strong>{archiveVersion.workTitle}</strong>
+              <span className="text-sm text-muted">
+                {archiveVersion.releaseLabel} / {archiveVersion.archiveLabel}
+              </span>
+              <span className="font-mono text-sm text-primary text-sm text-muted">
+                #{archiveVersion.id} {archiveVersion.archiveKey} / {archiveVersion.language}
+              </span>
+            </td>
+            <td>
+              <StatusBadge kind="archive" purgedAt={archiveVersion.purgedAt} value={archiveVersion.status} />
+              {archiveVersion.isCurrent ? <span className="text-sm text-muted">当前版本</span> : null}
+            </td>
+            <td>
+              {formatNumber(archiveVersion.totalFiles)} 文件
+              <span className="text-sm text-muted">
+                {formatBytes(archiveVersion.totalSizeBytes)} / 约 {formatNumber(archiveVersion.estimatedR2GetCount)}{" "}
+                次对象存储读取
+              </span>
+            </td>
+            <td>
+              {formatDate(archiveVersion.createdAt)}
+              {archiveVersion.deletedAt ? (
+                <span className="text-sm text-muted">放入回收站：{formatDate(archiveVersion.deletedAt)}</span>
+              ) : null}
+              {archiveVersion.purgedAt ? (
+                <span className="text-sm text-muted">最终清理：{formatDate(archiveVersion.purgedAt)}</span>
+              ) : null}
+              {archiveVersion.uploaderName ? (
+                <span className="text-sm text-muted">上传者：{archiveVersion.uploaderName}</span>
+              ) : null}
+            </td>
+            <td>
+              <ArchiveActions actor={actor} archiveVersion={archiveVersion} mode={mode} />
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {archiveVersions.map((archiveVersion) => (
-            <tr key={archiveVersion.id}>
-              <td>
-                <strong>{archiveVersion.workTitle}</strong>
-                <span className="muted-line">
-                  {archiveVersion.releaseLabel} / {archiveVersion.archiveLabel}
-                </span>
-                <span className="mono muted-line">
-                  #{archiveVersion.id} {archiveVersion.archiveKey} /{" "}
-                  {archiveVersion.language}
-                </span>
-              </td>
-              <td>
-                <StatusBadge
-                  kind="archive"
-                  purgedAt={archiveVersion.purgedAt}
-                  value={archiveVersion.status}
-                />
-                {archiveVersion.isCurrent ? (
-                  <span className="muted-line">当前版本</span>
-                ) : null}
-              </td>
-              <td>
-                {formatNumber(archiveVersion.totalFiles)} 文件
-                <span className="muted-line">
-                  {formatBytes(archiveVersion.totalSizeBytes)} / 约{" "}
-                  {formatNumber(archiveVersion.estimatedR2GetCount)} 次对象存储读取
-                </span>
-              </td>
-              <td>
-                {formatDate(archiveVersion.createdAt)}
-                {archiveVersion.deletedAt ? (
-                  <span className="muted-line">
-                    放入回收站：{formatDate(archiveVersion.deletedAt)}
-                  </span>
-                ) : null}
-                {archiveVersion.purgedAt ? (
-                  <span className="muted-line">
-                    最终清理：{formatDate(archiveVersion.purgedAt)}
-                  </span>
-                ) : null}
-                {archiveVersion.uploaderName ? (
-                  <span className="muted-line">
-                    上传者：{archiveVersion.uploaderName}
-                  </span>
-                ) : null}
-              </td>
-              <td>
-                <ArchiveActions
-                  actor={actor}
-                  archiveVersion={archiveVersion}
-                  mode={mode}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
+        ))}
+      </tbody>
     </TableWrap>
   );
 }
@@ -102,66 +86,53 @@ function ArchiveActions({
   archiveVersion: AdminArchiveVersion;
   mode: "active" | "trash";
 }) {
-  const isAdmin = canManageUsersRole(actor.role);
+  const canRestore = hasPermission(actor, "archive_version.restore");
+  const canUpdateArchive = hasPermission(actor, "archive_version.update");
+  const canUpdateRelease = hasPermission(actor, "release.update");
+  const canSetCurrent = hasPermission(actor, "archive_version.set_current");
 
   if (archiveVersion.status === "deleted") {
     if (archiveVersion.purgedAt) {
-      return <span className="muted-line">已最终清理，不能还原</span>;
+      return <span className="text-sm text-muted">已最终清理，不能还原</span>;
     }
 
-    if (!isAdmin) {
-      return <span className="muted-line">需要管理员还原</span>;
+    if (!canRestore) {
+      return <span className="text-sm text-muted">需要管理员还原</span>;
     }
 
     return (
-      <form
-        action={`/api/admin/archive-versions/${archiveVersion.id}/restore`}
-        method="post"
-        className="inline-form"
-      >
-        <button className="button primary" type="submit">
-          还原
-        </button>
+      <form action={`/api/admin/archive-versions/${archiveVersion.id}/restore`} method="post" className="inline-flex">
+        <Button type="submit">还原</Button>
       </form>
     );
   }
 
-  const canDelete =
-    mode === "active" &&
-    (isAdmin || (archiveVersion.uploaderId !== null && archiveVersion.uploaderId === actor.id));
+  const canDelete = mode === "active" && canDeleteArchiveVersion(actor, archiveVersion.uploaderId);
 
   return (
-    <div className="actions compact-actions">
-      {isAdmin ? (
-        <>
-          <Link className="button primary" href={`/admin/archive-versions/${archiveVersion.id}`}>
-            编辑归档
-          </Link>
-          <Link className="button" href={`/admin/releases/${archiveVersion.releaseId}`}>
-            编辑发布版本
-          </Link>
-        </>
+    <div className="flex flex-wrap items-center gap-3">
+      {canUpdateArchive ? (
+        <Link className={buttonVariants()} href={`/admin/archive-versions/${archiveVersion.id}`}>
+          编辑版本
+        </Link>
       ) : null}
-      {isAdmin && archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
-        <form
-          action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
-          method="post"
-          className="inline-form"
-        >
-          <button className="button" type="submit">
+      {canUpdateRelease ? (
+        <Link className={buttonVariants({ variant: "outline" })} href={`/admin/releases/${archiveVersion.releaseId}`}>
+          编辑发布版本
+        </Link>
+      ) : null}
+      {canSetCurrent && archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
+        <form action={`/api/admin/archive-versions/${archiveVersion.id}/current`} method="post" className="inline-flex">
+          <Button variant="outline" type="submit">
             设为当前
-          </button>
+          </Button>
         </form>
       ) : null}
       {canDelete ? (
-        <form
-          action={`/api/admin/archive-versions/${archiveVersion.id}/delete`}
-          method="post"
-          className="inline-form"
-        >
-          <button className="button" type="submit">
+        <form action={`/api/admin/archive-versions/${archiveVersion.id}/delete`} method="post" className="inline-flex">
+          <Button variant="outline" type="submit">
             删除
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

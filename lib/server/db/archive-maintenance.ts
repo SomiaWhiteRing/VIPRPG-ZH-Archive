@@ -1,6 +1,7 @@
 import { getD1 } from "@/lib/server/db/d1";
-import { canManageUsersRole } from "@/lib/server/auth/roles";
+import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/server/db/users";
+import { HttpError } from "@/lib/server/http/json";
 
 export type AdminArchiveVersion = {
   id: number;
@@ -80,7 +81,7 @@ export async function listArchiveVersionsForAdmin(
     whereClauses.push("av.status = 'deleted'");
   }
 
-  if (actor && !canManageUsersRole(actor.role)) {
+  if (actor && !hasPermission(actor, "archive_version.delete_any")) {
     whereClauses.push("av.uploader_id = ?");
     bindValues.push(actor.id);
   }
@@ -147,7 +148,7 @@ export async function moveArchiveVersionToTrash(
   const target = await getArchiveVersionIdentity(archiveVersionId);
 
   if (!target) {
-    throw new Error("ArchiveVersion 不存在");
+    throw new HttpError(404, "ArchiveVersion 不存在");
   }
 
   if (target.status === "deleted") {
@@ -156,10 +157,9 @@ export async function moveArchiveVersionToTrash(
 
   if (
     actor &&
-    !canManageUsersRole(actor.role) &&
-    (!target.uploader_id || target.uploader_id !== actor.id)
+    !canDeleteArchiveVersion(actor, target.uploader_id)
   ) {
-    throw new Error("只能删除自己上传的归档快照");
+    throw new HttpError(404, "ArchiveVersion 不存在");
   }
 
   await getD1()
@@ -176,6 +176,12 @@ export async function moveArchiveVersionToTrash(
   await ensureCurrentArchiveVersion(target.release_id, target.archive_key);
 
   return requiredAdminArchiveVersion(archiveVersionId);
+}
+
+export function canDeleteArchiveVersion(actor: ArchiveUser, uploaderId: number | null): boolean {
+  return hasPermission(actor, "archive_version.delete_any") || (
+    hasPermission(actor, "archive_version.delete_own") && uploaderId === actor.id
+  );
 }
 
 export async function restoreArchiveVersion(

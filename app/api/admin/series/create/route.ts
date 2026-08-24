@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import {
   createSeriesForAdmin,
@@ -10,7 +10,7 @@ import { json, jsonError } from "@/lib/server/http/json";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "series.create");
 
   if ("response" in auth) {
     return auth.response;

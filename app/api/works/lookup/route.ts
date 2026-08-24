@@ -1,4 +1,4 @@
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { getD1 } from "@/lib/server/db/d1";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -51,7 +51,7 @@ type ReleaseLookupOutput = {
 };
 
 export async function GET(request: Request) {
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "work.lookup_non_deleted");
 
   if ("response" in auth) {
     return auth.response;

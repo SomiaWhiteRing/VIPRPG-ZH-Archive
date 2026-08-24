@@ -1,10 +1,11 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import { AdminOperationPanel } from "@/app/admin/admin-operation-panel";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { StatList } from "@/app/components/ui/stat-list";
-import { requireAdminPageUser } from "@/lib/server/auth/guards";
-import { canAccessSuperAdminRole } from "@/lib/server/auth/roles";
+import { requirePagePermission } from "@/lib/server/auth/authorize";
+import { hasPermission } from "@/lib/authz/permissions";
 import { getAdminObservability } from "@/lib/server/db/admin-observability";
 import { runGcDryRun } from "@/lib/server/storage/admin-storage-checks";
 import { formatNumber, formatBytes } from "@/lib/format";
@@ -22,13 +23,10 @@ const HEALTH_LINKS = [
 ];
 
 export default async function AdminMaintenancePage() {
-  const adminUser = await requireAdminPageUser("/admin/maintenance");
-  const isSuperAdmin = canAccessSuperAdminRole(adminUser.role);
+  const adminUser = await requirePagePermission("/admin/maintenance", "system.maintenance.run");
+  const canRunFinalCleanup = hasPermission(adminUser, "storage.gc.sweep");
 
-  const [observability, gcDryRun] = await Promise.all([
-    getAdminObservability(),
-    runGcDryRun({ sampleLimit: 5 }),
-  ]);
+  const [observability, gcDryRun] = await Promise.all([getAdminObservability(), runGcDryRun({ sampleLimit: 5 })]);
 
   const downloadMetrics: Array<[string, string]> = [
     ["总下载次数", formatNumber(observability.downloads.totalDownloadCount)],
@@ -36,16 +34,13 @@ export default async function AdminMaintenancePage() {
     ["缓存未命中", formatNumber(observability.downloads.cacheMissCount)],
     ["下载失败", formatNumber(observability.downloads.failureCount)],
     ["对象存储读取", formatNumber(observability.downloads.totalR2GetCount)],
-    [
-      "缓存减少读取",
-      formatNumber(observability.downloads.estimatedR2GetSavedByCache),
-    ],
+    ["缓存减少读取", formatNumber(observability.downloads.estimatedR2GetSavedByCache)],
     ["ZIP 下载流量", formatBytes(observability.downloads.totalBytesServed)],
   ];
 
   const gcMetrics: Array<[string, string]> = [
     [
-      "可最终清理的归档快照",
+      "可最终清理的文件版本",
       `${formatNumber(gcDryRun.archiveVersions.eligibleCount)} 个快照 / ${formatNumber(gcDryRun.archiveVersions.eligibleFileCount)} 个文件 / ${formatBytes(gcDryRun.archiveVersions.eligibleSizeBytes)}`,
     ],
     [
@@ -68,40 +63,32 @@ export default async function AdminMaintenancePage() {
 
   return (
     <main>
-      <PageHeader
-        eyebrow="Maintenance"
-        title="维护与一致性"
-        actions={<BackLink href="/admin" label="返回控制台" />}
-      />
+      <PageHeader eyebrow="Maintenance" title="维护与一致性" actions={<BackLink href="/admin" label="返回控制台" />} />
 
       <Pane heading="健康检查">
-        <div className="actions">
+        <div className="flex flex-wrap items-center gap-3">
           {HEALTH_LINKS.map((link) => (
-            <a className="button" href={link.href} key={link.href}>
+            <a className={buttonVariants({ variant: "outline" })} href={link.href} key={link.href}>
               {link.label}
             </a>
           ))}
         </div>
       </Pane>
 
-      <section className="section-grid" aria-label="观测摘要">
+      <section className="grid gap-3 md:grid-cols-3" aria-label="观测摘要">
         <Pane heading="下载观测">
-          <StatList
-            items={downloadMetrics.map(([label, value]) => ({ label, value }))}
-          />
+          <StatList items={downloadMetrics.map(([label, value]) => ({ label, value }))} />
         </Pane>
 
         <Pane heading="清理预演">
-          <p className="muted-line">
-            预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。
-          </p>
+          <p className="text-sm text-muted">预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。</p>
           <StatList items={gcMetrics.map(([label, value]) => ({ label, value }))} />
         </Pane>
       </section>
 
       <Pane heading="危险区" tone="danger">
         <p>最终清理会永久删除对象，无法撤销。</p>
-        <AdminOperationPanel canRunFinalCleanup={isSuperAdmin} />
+        <AdminOperationPanel canRunFinalCleanup={canRunFinalCleanup} />
       </Pane>
     </main>
   );

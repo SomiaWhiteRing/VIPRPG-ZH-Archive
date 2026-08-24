@@ -1,5 +1,7 @@
 # RPG Maker 2000/2003 去重存储库架构计划
 
+> 认证、session、角色和授权规则以 [认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md) 为唯一现行依据。本文只说明存储业务为何需要上传、归档维护和 GC 能力。
+
 本文把“游戏在浏览器端预索引后，把可复用静态资源去重存入 R2，游戏只保存独有数据和索引，下载时再按索引重组压缩包”的想法，整理成一套可实现的软件工程方案。
 
 游戏资料、系列、作品关系、发布版本和归档快照的领域模型单独维护在：[游戏领域架构设计](./game-domain-architecture.md)。EasyRPG 在线游玩的浏览器本地安装、OPFS、Service Worker 和 Web Player 细节单独维护在：[EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)。
@@ -462,17 +464,7 @@ DownloadBuild
 - `archive_version_blob_refs.blob_sha256`：本归档快照引用的独立 blob，用于对象保活和 GC。
 - `archive_version_core_pack_refs.core_pack_id`：本归档快照引用的 core pack，用于对象保活和 GC。
 - manifest 文件条目记录下载重建时的相对路径、文件角色、文件 SHA-256、CRC32、大小、物理来源和 core pack entry。若后续决定记录 ZIP 内原始文件名字节，也进入 manifest 的 `pathBytesB64`，不进入 D1。
-- `users.role_key`：账户层级，固定为 `super_admin`、`admin`、`uploader`、`user`。权限权重使用宽间隔数值：`user = 100`、`uploader = 400`、`admin = 700`、`super_admin = 1000`，数值越大权限越高，便于未来在中间插入新层级。
-- 上传权限由角色推导：`role_key >= uploader` 可以上传，`role_key >= admin` 可以进入用户管理。
-- 角色调整必须满足：操作者权重大于目标当前角色，且操作者权重大于目标新角色；操作者不能调整自己。
-- `inbox_items`：站内信和行动项。上传者权限申请不再是独立审批字段，而是 `role_change_request` 类型站内信。
-- `inbox_item_reads`：按用户记录站内信已读状态；所有站内信入口应显示当前用户未读角标，并支持一键将可见未读项标记为已读。
-- `user_role_events`：角色调整审计日志。站内信负责通知和待办展示，审计表负责长期追踪。
-- `users.password_hash`：正式账户体系的密码摘要；必须使用带盐、可迁移参数的密码哈希格式，不能保存明文或可逆加密密码。
-- `users.email_verified_at`：正式账户体系必须在邮箱验证通过后写入；仅有未验证邮箱不能获得上传能力。
-- `email_verification_challenges.code_hash`：只保存注册和找回密码验证码的服务端 HMAC/hash，不保存明文验证码。
-- `email_verification_challenges.pending_password_hash`：注册流程中临时保存已哈希的新密码；验证码验证通过后转入 `users.password_hash`，过期 challenge 应清理。
-- `user_sessions.session_hash`：正式实现若需要撤销单个会话，session cookie 中只保存随机 session token，D1 中保存 hash 和撤销状态。
+- 账户、站内信、角色事件、session 和安全审计表为上传归属与运维追踪提供业务支撑；字段、安全语义和写入原子性只按[认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)解释。
 - `blobs.sha256`：独立文件内容的主键。
 - blob 的 R2 key 由 SHA-256 通过统一 key helper 派生。
 - `core_packs.sha256`：核心文件包自身的内容主键。
@@ -730,7 +722,7 @@ Phase D 的浏览器端长期任务、浮标 UI、崩溃恢复和 IndexedDB 状�
 
 ```text
 用户选择游戏文件夹或本地 ZIP
-  -> Worker 校验用户角色为 uploader/admin/super_admin
+  -> Worker 按统一认证授权基线校验身份、permission key 和任务 ownership
   -> 浏览器枚举文件
   -> 浏览器按强制白名单区分 included/excluded
   -> 浏览器计算 sha256/size/path
@@ -755,7 +747,7 @@ Phase D 的浏览器端长期任务、浮标 UI、崩溃恢复和 IndexedDB 状�
 
 注意：
 
-- 上传接口只允许 `uploader`、`admin`、`super_admin` 调用，`uploader_id` 由服务端自动记录。
+- 上传接口按统一基线授权，`uploader_id` 始终由服务端 AuthContext 记录。
 - 不设置固定的单游戏文件数或大小硬上限；大型导入通过后台任务、分块提交、可恢复状态和管理端配额控制风险。
 - 导入前必须显示原目录大小、白名单内归档大小、白名单外排除大小、预计新增 R2 存储和预计下载 R2 Get 次数。
 - 浏览器端 hash 只能作为预检依据，后端仍要验证上传内容。
@@ -942,7 +934,7 @@ GET /play/{archiveVersionId}
 
 ```text
 POST /api/imports
-  创建导入任务；要求 uploader/admin/super_admin
+  创建导入任务；授权和 uploader ownership 见统一基线
 
 POST /api/imports/{id}/preflight
   输入文件 hash manifest 和上传元数据
@@ -1017,7 +1009,7 @@ GET /play/games/{playKey}/{path...}
 GET /api/admin/blobs/{sha256}/references
 GET /api/admin/core-packs/{sha256}/references
 GET /api/admin/users
-POST /api/admin/users/{userId}/role
+POST /api/admin/users/{userId}/roles
 GET /api/inbox
 POST /api/inbox/{itemId}/resolve
 POST /api/inbox/{itemId}/read
@@ -1030,7 +1022,7 @@ POST /api/admin/gc/sweep
 
 导入界面需要支持：
 
-- 仅 `uploader`、`admin`、`super_admin` 可进入上传流程；普通用户通过站内信提交上传者角色申请。
+- 上传入口受统一基线保护；本文只定义浏览器预索引和对象提交业务流程。
 - 选择文件夹。
 - 选择本地 ZIP，并在浏览器端解包预索引；完整 ZIP 不上传到 Worker/R2。
 - 显示原目录文件数和大小、白名单内归档文件数和大小、白名单外排除文件数和大小、已存在大小、需上传大小、预计节省空间。
@@ -1093,7 +1085,7 @@ RPG Maker 2000/2003 旧游戏经常涉及日文、中文和非 UTF-8 ZIP 文件�
 
 ```text
 自动 GC：7 天
-手动 GC：管理员可在管理端指定 0 天或更高天数
+手动 GC：管理端可指定 0 天或更高天数，调用授权见统一认证授权基线
 ```
 
 原因：
@@ -1207,7 +1199,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 ### 16.3 滥用防护
 
-- 上传接口需要登录和权限；`uploader`、`admin`、`super_admin` 可上传，普通用户必须先通过站内信申请调整为 `uploader`。
+- 上传接口的身份、permission key、任务所有权和角色申请规则见统一认证授权基线。
 - 单用户每日上传大小限制。
 - 单用户、单时间窗口、单队列的运营配额和并发限制。
 - 强制白名单文件类型和路径校验。
@@ -1216,102 +1208,11 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 ### 16.4 账户、验证码和发信
 
-当前实现中的“输入邮箱即登录”只能作为 Phase B 权限壳，不作为正式账户体系。正式账户体系固定为密码登录：
+业务摘要：公开账户流程为上传归属、通知和运维审计提供可信用户身份，Cloudflare Email/Turnstile/Rate Limiting 是其基础设施依赖。密码、验证码、session、同源保护和失败语义全部由[认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)定义，本文不再维护副本。
 
-- 常规登录使用邮箱 + 密码，不发送验证码，不使用 magic link。
-- 验证码只用于注册邮箱验证和找回密码；不作为日常登录的第二种入口，避免登录状态、验证码状态和密码状态之间产生竞态。
-- 注册和找回密码验证码有效期建议 10 分钟；同一 challenge 消费后立即失效。
-- 单个 challenge 最多允许 5 次验证尝试；超过后要求重新发起注册或找回密码流程。
-- 登录接口需要按邮箱、IP/UA 指纹做失败次数限制；连续失败后写入 `failed_login_count` 和 `locked_until`，短窗口可用 Workers Rate Limiting binding 辅助。
-- 注册、找回密码、重发验证码表单必须接入 Turnstile，并在 Worker 端调用 Siteverify 校验；常规密码登录可在失败次数较多时再要求 Turnstile。
-- 密码必须服务端哈希后保存。哈希字符串需要包含算法、参数、盐和摘要，便于后续提升参数或迁移算法；不能保存明文密码、可逆加密密码或裸 SHA-256。当前 Workers Web Crypto 对 PBKDF2 iteration 存在运行时上限，初版固定为 PBKDF2-SHA256 100000 次迭代。
-- 发信优先使用 Cloudflare Email Service 的 Workers Email binding，但前提是账户已经启用 Email Sending，并完成发送域验证；Cloudflare Email Routing/Email Workers 只适合转发或发送到已验证目标地址，不能作为公开注册验证码的发信方案。
-- 若 Cloudflare Email Service 当前账户不可用、无法向任意收件人投递，或后续投递率/模板/运营能力不足，应切换到 Resend、Postmark 等事务邮件服务。
-- 邮件发件域必须使用项目自有域名；`EMAIL_FROM` 固定为已验证 sender，不允许请求参数覆盖发件人。
-- 注册邮件包含验证码、过期时间、安全提示和返回注册验证页的回调链接；找回密码邮件包含验证码、过期时间、安全提示和返回密码重置页的回调链接。回调链接只用于把用户带回输入验证码的页面，不在 URL 中携带明文验证码或等价 token。
-- 邮件回调链接必须基于配置项 `APP_ORIGIN` 生成，不能直接信任请求的 `Host` header，避免 Host header injection 影响邮件链接。
-- 邮件不包含上传权限审批状态等后台信息；发码成功页需要提示用户检查垃圾邮件/广告邮件，并确认 `EMAIL_FROM` 发件人未被拦截。
-- 邮箱验证只证明账户归属，不等于上传权限；新注册用户默认为 `user`。
-- 管理员 bootstrap 仍可使用 `BOOTSTRAP_ADMIN_EMAIL`，但语义固定为初始超级管理员；该邮箱首次完成验证或登录时提升为 `super_admin`。正式系统中该邮箱也应设置密码并完成邮箱验证，bootstrap 不绕过长期登录安全。
+### 16.5 用户角色和站内信
 
-注册流程：
-
-```text
-用户提交邮箱 + 密码 + Turnstile token
-  -> Worker 调用 Turnstile Siteverify
-  -> Worker 校验密码强度和邮箱可用性
-  -> Worker 哈希密码，生成 6 位验证码
-  -> D1 写入 email_verification_challenges(code_hash, pending_password_hash)
-  -> Email binding 发送注册验证码
-  -> 用户输入验证码
-  -> Worker 校验 hash、过期时间、尝试次数和 consumed_at
-  -> 创建或激活 users，写入 password_hash、email_verified_at 和 last_login_at
-  -> 签发 session cookie
-```
-
-找回密码流程：
-
-```text
-用户提交邮箱 + Turnstile token
-  -> Worker 调用 Turnstile Siteverify
-  -> Rate Limiting binding 校验短窗口发送频率
-  -> D1 校验邮箱/IP 长窗口发送频率
-  -> 生成 6 位验证码并写入 email_verification_challenges(code_hash)
-  -> Email binding 发送找回密码验证码
-  -> 用户提交邮箱 + 验证码 + 新密码
-  -> Worker 校验验证码状态和新密码强度
-  -> Worker 更新 users.password_hash、password_updated_at，清空 failed_login_count/locked_until
-  -> 撤销该用户已有 session 或要求重新登录
-```
-
-正式 session 策略：
-
-- 初期可以继续使用签名 HTTP-only cookie，但 cookie payload 不应长期保存过多用户信息。
-- Phase 5 MVP 中，被管理员禁用的用户会在每次请求时重新从 D1 读取 `users.status`；禁用后旧 cookie 不再通过认证，也不能继续上传或访问后台。
-- Phase 5 MVP 还没有实现“撤销单个设备”或“退出所有设备”的服务端 session 管理；当前退出只清理当前浏览器 cookie。
-- 如果需要“退出所有设备”“撤销单个登录”“查看登录记录”，改为随机 session token + `user_sessions.session_hash`。
-- Cookie 必须设置 `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/`；生产环境禁止非 HTTPS cookie。
-- 管理员操作和上传提交必须重新从 D1 读取用户状态，不能只相信 cookie 中的旧角色。
-
-### 16.5 用户层级和站内信
-
-账户层级固定为四级：
-
-| 角色 | 权重 | 能力 |
-|---|---:|---|
-| `super_admin` | 1000 | 管理 `admin`、`uploader`、`user`，可上传，可访问审计日志，可手动执行最终清理 |
-| `admin` | 700 | 管理 `uploader`、`user`，可上传，可访问回收站和还原归档，可切换当前版本 |
-| `uploader` | 400 | 可上传和导入游戏，可删除自己上传的归档快照，但不能访问回收站 |
-| `user` | 100 | 普通账户，可申请成为上传者 |
-
-规则：
-
-- 权重越大权限越高；数值保留间隔，未来可以加入 `moderator = 600` 等中间层级。
-- 管理清单只展示低于当前操作者层级的用户。
-- 操作者只能把目标调整为低于自己层级的角色，不能调整自己。
-- 超级管理员不能通过后台被创建或提升；新增超级管理员必须走 bootstrap 或一次性运维迁移。
-- 上传者权限申请通过站内信 `role_change_request` 表达，不再维护独立的 `pending/approved/rejected` 上传审批字段。
-- 角色调整成功后写入 `user_role_events`，并向目标用户发送 `role_change_notice` 站内信，说明操作者、旧层级和新层级。
-- 申请被驳回时也发送站内信通知；站内信不是审计日志的替代品。
-- 首页、管理页和站内信页的站内信入口显示未读角标；站内信页提供“一键已读”，只标记当前用户可见的未读项。
-
-权限清单固定为：
-
-| 能力 | `user` | `uploader` | `admin` | `super_admin` |
-|---|---|---|---|---|
-| 上传/导入游戏 | 否 | 是 | 是 | 是 |
-| 删除归档快照 | 否 | 仅自己上传 | 全部 | 全部 |
-| 查看回收站/还原归档 | 否 | 否 | 是 | 是 |
-| 切换 current ArchiveVersion | 否 | 否 | 是 | 是 |
-| 手动最终清理 / GC sweep | 否 | 否 | 否 | 是 |
-| 用户层级管理 | 否 | 否 | 低于自己层级 | 低于自己层级 |
-| 查看审计日志 | 否 | 否 | 否 | 是 |
-
-审计边界：
-
-- 归档删除、还原、切换 current、用户状态调整、手动最终清理写入 `auth_audit_logs`。
-- 用户层级调整写入 `user_role_events`，并同步写入 `auth_audit_logs` 作为管理端审计入口。
-- `/admin/audit` 只允许超级管理员访问。
+业务摘要：站内信用于上传资格申请和操作结果通知，角色事件与安全审计用于长期追踪。角色模型、权限清单、层级、自定义角色、根账户和审计边界只见统一基线。
 
 ## 17. 实施阶段
 
@@ -1341,7 +1242,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 - 建立 D1 migration。
 - 建立 R2 bucket binding。
 - 实现 `blobs`、`core_packs`、`works`、`releases`、`archive_versions` 和归档对象引用表。
-- 实现 `users.role_key`、站内信和角色事件，支持四层角色与上传者申请。
+- 认证授权与站内信业务按统一基线落地，不在存储阶段维护第二套模型。
 - 实现管理端浏览器预索引导入路径。
 - 固定强制白名单和 `file_policy_version`。
 - 实现 core pack 生成、manifest 生成和 R2 保存。
@@ -1360,12 +1261,12 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 ### Phase 2：浏览器预索引上传
 
-目标：`uploader`、`admin`、`super_admin` 可以通过网页导入游戏。
+目标：获得统一基线上传能力的用户可以通过网页导入游戏。
 
 任务：
 
 - 将 Phase B 临时邮箱登录替换为密码登录；验证码只用于注册和找回密码。
-- 实现普通用户通过站内信申请上传者角色，管理员或超级管理员在站内信中处理申请。
+- 接入统一基线定义的上传资格申请与处理流程。
 - 前端选择文件夹或本地 ZIP；ZIP 只在浏览器端解包预索引。
 - 浏览器计算 SHA-256。
 - 浏览器生成 core pack。
@@ -1417,8 +1318,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 任务：
 
 - 完善 `email_verification_challenges`、`user_sessions` 和 `auth_audit_logs`。
-- 支持 session 撤销、禁用用户和登录审计。
-- 站内信通知、角色申请处理和角色调整审计。
+- 接入统一基线的 session 撤销、用户状态、通知和审计能力。
 - ArchiveVersion 删除进入回收站。
 - Blob mark-and-sweep GC。
 - Core pack mark-and-sweep GC。
@@ -1426,16 +1326,16 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 当前落地：
 
-- 新增管理员专用一致性检查 API：抽样检查 D1 指向的 R2 对象是否存在、大小是否匹配，并扫描 R2 样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`。
-- 新增管理员专用 GC dry-run API：作为清理预演只报告候选对象，不执行删除。
+- 新增受保护的一致性检查 API：抽样检查 D1 指向的 R2 对象是否存在、大小是否匹配，并扫描 R2 样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`；调用授权见统一基线。
+- 新增受保护的 GC dry-run API：作为清理预演只报告候选对象，不执行删除；调用授权见统一基线。
 - MVP 的可清理候选定义为：`status = active`、超过宽限期、且没有任何归档对象引用的 blob/core pack；blob 还需确认未被资料库媒体字段引用。
-- 新增超级管理员专用 GC sweep API：必须显式提交 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用对象；默认每类最多清理 1000 个超过 7 天的对象，超级管理员手动执行时可指定 `graceDays = 0` 立即清理。sweep 会删除 R2 blob/core pack，并把 D1 对象状态改为 `purged`；失败对象恢复 `active`。
+- 新增高危 GC sweep API：必须显式提交 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用对象；默认每类最多清理 1000 个超过 7 天的对象，手动执行时可指定 `graceDays = 0` 立即清理。sweep 会删除 R2 blob/core pack，并把 D1 对象状态改为 `purged`；失败对象恢复 `active`。调用授权只见统一基线。
 - 新增 Cloudflare Scheduled handler：staging/prod 统一每天 UTC 19:17（香港时间 03:17）自动执行一次 7 天 GC sweep，每类最多清理 1000 个对象，并写入 `auth_audit_logs`。
 - 新增 `/admin/archive-versions` 归档维护页，支持 ArchiveVersion 删除、设为 current，并提供 `/admin/archive-versions/trash` 回收站列表用于还原。
 - ArchiveVersion 删除会自动维护同组 current，不会立即删除 blob、core pack 或 manifest。
 - ArchiveVersion 最终清理后会删除 manifest R2 对象和文件引用；对应 blob/core pack 如无其他引用，会在同一轮或后续 GC sweep 中清理。
-- 用户管理页支持禁用/启用低于当前操作者层级的用户；禁用用户的旧 cookie 会在下一次请求中失效。
-- 新增 `/admin/audit` 审计页，仅超级管理员可访问，展示 `auth_audit_logs` 和 `user_role_events` 最近记录。
+- 用户管理页提供账户状态维护；授权、层级检查和 session 撤销语义只见统一基线。
+- 新增 `/admin/audit` 审计页；访问边界见统一基线。
 
 ### Phase 6：EasyRPG 在线游玩
 
@@ -1611,8 +1511,7 @@ lib/server/download/zip-builder.ts
 ### 20.1 已确认
 
 - 运行时文件完整保留：`RPG_RT.exe` 和 DLL 作为普通独立 blob，不做额外运行时策略；`RPG_RT.ini` 进入 core pack。
-- 用户层级：`super_admin = 1000`、`admin = 700`、`uploader = 400`、`user = 100`；上传权限由角色推导，`uploader` 及以上可上传。
-- 上传者申请：普通用户通过站内信创建 `role_change_request`，管理员或超级管理员处理后生成角色事件和通知。
+- 用户、角色、上传资格申请和 permission key 以统一认证授权基线为唯一决策源。
 - 规模限制：不设置固定的单游戏文件数或大小硬上限；通过强制白名单、导入队列、分块提交、下载成本预估、边缘缓存、下载排队和运营限流控制风险。
 - 文件类型策略：使用单一强制白名单，白名单外文件不进入 canonical manifest；每次导入记录 `file_policy_version` 和排除统计。
 - 导入方式：只支持浏览器预索引；本地 ZIP 可以被浏览器读取和索引，但完整 ZIP 不能上传到 Worker/R2，也不能作为临时对象进入 R2。
@@ -1639,7 +1538,7 @@ lib/server/download/zip-builder.ts
 1. 写一个本地扫描脚本，对现有样本游戏计算 SHA-256，先确认真实去重率。
 2. 用真实样本检查路径编码，决定最小实现是否需要写入 `path_bytes_b64`。
 3. 建 D1 schema、R2 blob key 和 core pack key 规则。
-4. 实现四层用户角色、站内信申请和角色调整审计。
+4. 接入统一认证授权基线，不在存储模块实现角色推导或重复写服务。
 5. 做导入页面，支持“文件夹/本地 ZIP + 浏览器预索引”，并执行强制白名单；完整 ZIP 不上传到 Worker/R2。
 6. 上传表单写入完整检索元数据，服务端自动记录上传者和上传时间。
 7. 导入时记录白名单外文件类型汇总、排除大小、示例路径和 `file_policy_version`。

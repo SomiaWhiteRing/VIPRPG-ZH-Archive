@@ -1,4 +1,4 @@
-import { requireSuperAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { json, jsonError } from "@/lib/server/http/json";
 import { runGcSweep } from "@/lib/server/storage/admin-storage-checks";
@@ -12,7 +12,7 @@ type SweepRequestBody = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireSuperAdmin(request);
+  const auth = await requirePermission(request, "storage.gc.sweep");
 
   if ("response" in auth) {
     return auth.response;

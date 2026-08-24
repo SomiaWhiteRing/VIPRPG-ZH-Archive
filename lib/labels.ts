@@ -48,7 +48,6 @@ const IMPORT_TASK_STATUS_LABELS: Record<string, string> = {
   canceled: "已取消",
 };
 
-type UserRole = "user" | "uploader" | "admin" | "super_admin";
 
 export const VERIFICATION_EMAIL_HINT =
   "验证码已发送至 {email}，未收到时请检查垃圾邮件。";
@@ -131,7 +130,7 @@ export function inboxStatusLabel(value: string): string {
     case "rejected":
       return "已驳回";
     case "archived":
-      return "已归档";
+      return "已处理";
     default:
       return value;
   }
@@ -191,19 +190,6 @@ export function installStatusLabel(value: string): string {
   }
 }
 
-// 须与 lib/server/auth/roles.ts 的 roleLabel 保持一致。
-export function roleLabel(role: UserRole): string {
-  switch (role) {
-    case "super_admin":
-      return "超级管理员";
-    case "admin":
-      return "管理员";
-    case "uploader":
-      return "上传者";
-    case "user":
-      return "普通用户";
-  }
-}
 
 export function userStatusLabel(value: string): string {
   return value === "active" ? "启用" : "禁用";

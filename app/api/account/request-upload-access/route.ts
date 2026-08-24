@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/server/auth/guards";
-import { canUploadRole } from "@/lib/server/auth/roles";
-import { createUploadRoleRequest } from "@/lib/server/db/inbox";
+import { hasPermission } from "@/lib/authz/permissions";
+import { requestUploaderRole } from "@/lib/server/db/permissions";
 import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (canUploadRole(auth.user.role)) {
+    if (hasPermission(auth.user, "import_job.create")) {
       if (!request.headers.get("accept")?.includes("application/json")) {
         return redirectResponse(new URL("/inbox", request.url));
       }
@@ -22,11 +22,11 @@ export async function POST(request: Request) {
       return json({
         ok: true,
         alreadyGranted: true,
-        role: auth.user.role,
+        roleKeys: auth.user.roleKeys,
       });
     }
 
-    const item = await createUploadRoleRequest(auth.user);
+    const item = await requestUploaderRole(auth.user);
 
     if (!request.headers.get("accept")?.includes("application/json")) {
       return redirectResponse(new URL("/inbox", request.url));

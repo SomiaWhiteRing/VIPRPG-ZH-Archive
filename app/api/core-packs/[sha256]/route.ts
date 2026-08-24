@@ -1,13 +1,12 @@
 import { normalizeSha256, sha256Hex, timingSafeEqualString } from "@/lib/server/crypto/sha256";
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { findExistingObjects, insertCorePackRecord } from "@/lib/server/db/archive-objects";
 import {
-  assertImportJobAccess,
   parseImportJobId,
   recordImportObjectUpload,
-  requiredImportJob,
+  requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
-import { json, jsonError } from "@/lib/server/http/json";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import { readIntegerHeader } from "@/lib/server/http/request";
 import { putCorePack } from "@/lib/server/storage/archive-bucket";
 
@@ -21,7 +20,7 @@ type RouteContext = {
 
 export async function PUT(request: Request, context: RouteContext) {
   const startedAt = Date.now();
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "storage_object.upload");
 
   if ("response" in auth) {
     return auth.response;
@@ -30,7 +29,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { sha256: rawSha256 } = await context.params;
     const sha256 = normalizeSha256(rawSha256);
-    const importJobId = await optionalAuthorizedImportJobId(request, auth.user);
+    const importJobId = await requiredAuthorizedImportJobId(request, auth.user);
     const existing = await findExistingObjects({
       blobSha256: [],
       corePackSha256: [sha256],
@@ -83,14 +82,12 @@ export async function PUT(request: Request, context: RouteContext) {
       fileCount,
     });
 
-    if (importJobId !== null) {
-      await recordImportObjectUpload({
-        id: importJobId,
-        objectKind: "core_pack",
-        sizeBytes: body.byteLength,
-        durationMs: Date.now() - startedAt,
-      });
-    }
+    await recordImportObjectUpload({
+      id: importJobId,
+      objectKind: "core_pack",
+      sizeBytes: body.byteLength,
+      durationMs: Date.now() - startedAt,
+    });
 
     return json(
       {
@@ -108,21 +105,15 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 }
 
-async function optionalAuthorizedImportJobId(
+async function requiredAuthorizedImportJobId(
   request: Request,
-  user: Parameters<typeof assertImportJobAccess>[1],
-): Promise<number | null> {
+  user: Parameters<typeof requiredOwnedImportJob>[1],
+): Promise<number> {
   const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
-
-  if (!rawImportJobId) {
-    return null;
-  }
+  if (!rawImportJobId) throw new HttpError(400, "import_job_id is required");
 
   const importJobId = parseImportJobId(rawImportJobId);
-  const job = await requiredImportJob(importJobId);
-
-  assertImportJobAccess(job, user);
-
+  await requiredOwnedImportJob(importJobId, user);
   return importJobId;
 }
 

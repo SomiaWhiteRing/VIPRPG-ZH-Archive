@@ -1,3 +1,6 @@
+import { Input } from "@/app/components/ui/input";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Textarea } from "@/app/components/ui/textarea";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -6,13 +9,10 @@ import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { requireAdminPageUser } from "@/lib/server/auth/guards";
+import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import {
-  creatorRoleLabel,
-  workStatusLabel,
-} from "@/lib/labels";
+import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +22,10 @@ type AdminCreatorEditPageProps = {
   }>;
 };
 
-export default async function AdminCreatorEditPage({
-  params,
-}: AdminCreatorEditPageProps) {
+export default async function AdminCreatorEditPage({ params }: AdminCreatorEditPageProps) {
   const { creatorId: rawCreatorId } = await params;
   const creatorId = parseCreatorId(rawCreatorId);
-  const adminUser = await requireAdminPageUser(`/admin/creators/${creatorId}`);
+  const adminUser = await requirePagePermission(`/admin/creators/${creatorId}`, "creator.update");
   const [creator, unreadInboxCount] = await Promise.all([
     getCreatorForAdminEdit(creatorId),
     countUnreadInboxItemsForUser(adminUser),
@@ -45,7 +43,7 @@ export default async function AdminCreatorEditPage({
         actions={
           <>
             <BackLink href="/admin/creators" label="返回作者维护" />
-            <Link className="button" href={`/creators/${creator.slug}`}>
+            <Link className={buttonVariants({ variant: "outline" })} href={`/creators/${creator.slug}`}>
               查看公开页
             </Link>
             <InboxLink unread={unreadInboxCount} />
@@ -53,56 +51,42 @@ export default async function AdminCreatorEditPage({
         }
       />
 
-      <form
-        action={`/api/admin/creators/${creator.id}/update`}
-        className="stack-form admin-edit-form"
-        method="post"
-      >
+      <form action={`/api/admin/creators/${creator.id}/update`} className="grid gap-4 grid gap-4" method="post">
         <input name="creator_id" type="hidden" value={creator.id} />
 
         <Pane heading="基础信息">
-          <div className="upload-form-grid">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField hint="不可修改" label="Slug">
-              <input readOnly value={creator.slug} />
+              <Input readOnly value={creator.slug} />
             </FormField>
             <FormField label="名称">
-              <input defaultValue={creator.name} name="name" required type="text" />
+              <Input defaultValue={creator.name} name="name" required type="text" />
             </FormField>
             <FormField label="原名">
-              <input
-                defaultValue={creator.originalName ?? ""}
-                name="original_name"
-                type="text"
-              />
+              <Input defaultValue={creator.originalName ?? ""} name="original_name" type="text" />
             </FormField>
             <FormField label="个人链接">
-              <input
-                defaultValue={creator.websiteUrl ?? ""}
-                name="website_url"
-                type="url"
-              />
+              <Input defaultValue={creator.websiteUrl ?? ""} name="website_url" type="url" />
             </FormField>
             <FormField label="简介" wide>
-              <textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
+              <Textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
             </FormField>
           </div>
         </Pane>
 
-        <div className="actions">
-          <button className="button primary" type="submit">
-            保存作者资料
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit">保存作者资料</Button>
         </div>
       </form>
 
-      <section className="section-grid admin-creator-credit-grid" aria-label="作者关联">
+      <section className="grid gap-3 md:grid-cols-3 grid gap-4 lg:grid-cols-2" aria-label="作者关联">
         <Pane heading="作品层职务">
           {creator.adminWorkCredits.length > 0 ? (
-            <ul className="plain-list">
+            <ul className="mt-3 grid gap-3">
               {creator.adminWorkCredits.map((credit) => (
                 <li key={`${credit.workId}-${credit.roleKey}`}>
                   <Link href={`/admin/works/${credit.workId}`}>{credit.workTitle}</Link>
-                  <span className="muted-line">
+                  <span className="text-sm text-muted">
                     {creatorRoleLabel(credit.roleKey)} / {workStatusLabel(credit.status)}
                     {credit.notes ? ` / ${credit.notes}` : ""}
                   </span>
@@ -116,13 +100,13 @@ export default async function AdminCreatorEditPage({
 
         <Pane heading="发布版本职务">
           {creator.adminReleaseCredits.length > 0 ? (
-            <ul className="plain-list">
+            <ul className="mt-3 grid gap-3">
               {creator.adminReleaseCredits.map((credit) => (
                 <li key={`${credit.releaseId}-${credit.roleKey}`}>
                   <Link href={`/admin/releases/${credit.releaseId}`}>
                     {credit.workTitle} / {credit.releaseLabel}
                   </Link>
-                  <span className="muted-line">
+                  <span className="text-sm text-muted">
                     {creatorRoleLabel(credit.roleKey)} / {workStatusLabel(credit.status)}
                     {credit.notes ? ` / ${credit.notes}` : ""}
                   </span>

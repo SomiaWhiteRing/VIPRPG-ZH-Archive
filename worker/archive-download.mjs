@@ -159,8 +159,8 @@ async function getDownloadRecord(db, archiveVersionId) {
       JOIN works w ON w.id = r.work_id
       WHERE av.id = ?
         AND av.status = 'published'
-        AND r.status <> 'deleted'
-        AND w.status <> 'deleted'
+        AND r.status = 'published'
+        AND w.status = 'published'
       LIMIT 1`,
     )
     .bind(archiveVersionId)

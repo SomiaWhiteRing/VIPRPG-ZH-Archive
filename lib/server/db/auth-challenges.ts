@@ -1,4 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
+import { timingSafeEqualString } from "@/lib/server/crypto/sha256";
 
 export type ChallengePurpose = "register" | "password_reset";
 
@@ -125,12 +126,12 @@ export async function consumeLatestEmailChallenge(input: {
     throw new Error("验证码尝试次数过多，请重新获取");
   }
 
-  if (row.code_hash !== input.codeHash) {
+  if (!timingSafeEqualString(row.code_hash, input.codeHash)) {
     await incrementChallengeAttempts(row.id);
     throw new Error("验证码不正确");
   }
 
-  await getD1()
+  const consumed = await getD1()
     .prepare(
       `UPDATE email_verification_challenges
       SET consumed_at = CURRENT_TIMESTAMP
@@ -138,6 +139,10 @@ export async function consumeLatestEmailChallenge(input: {
     )
     .bind(row.id)
     .run();
+
+  if (Number(consumed.meta.changes ?? 0) !== 1) {
+    throw new Error("验证码已被使用");
+  }
 
   return mapChallengeRow({
     ...row,

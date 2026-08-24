@@ -7,22 +7,19 @@ import {
 } from "@/lib/server/crypto/encoding";
 
 const PASSWORD_HASH_VERSION = "pbkdf2-sha256";
-const PASSWORD_HASH_ITERATIONS = 100_000;
+export const PASSWORD_HASH_ITERATIONS = 870_000;
 const SALT_BYTES = 16;
 const DERIVED_KEY_BITS = 256;
 
 export function validatePasswordStrength(password: string): void {
-  if (password.length < 10) {
-    throw new Error("密码长度至少需要 10 位");
+  if (password.length < 12) {
+    throw new Error("密码长度至少需要 12 位");
   }
 
   if (password.length > 256) {
     throw new Error("密码长度不能超过 256 位");
   }
 
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    throw new Error("密码至少需要同时包含字母和数字");
-  }
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -56,17 +53,31 @@ export async function verifyPassword(
 
   const iterations = Number.parseInt(parts[1], 10);
 
-  if (!Number.isSafeInteger(iterations) || iterations < 10_000) {
+  if (!Number.isSafeInteger(iterations) || iterations < 10_000 || iterations > 2_000_000) {
     return false;
   }
 
-  const salt = base64UrlDecodeBytes(parts[2]);
+  if (!/^[A-Za-z0-9_-]{22}$/.test(parts[2])) return false;
   const expected = parts[3];
-  const actual = base64UrlEncodeBytes(
-    await derivePasswordKey(password, salt, iterations),
-  );
+  if (!/^[A-Za-z0-9_-]{43}$/.test(expected)) return false;
+
+  let actual: string;
+  try {
+    const salt = base64UrlDecodeBytes(parts[2]);
+    if (salt.byteLength !== SALT_BYTES) return false;
+    actual = base64UrlEncodeBytes(await derivePasswordKey(password, salt, iterations));
+  } catch {
+    return false;
+  }
 
   return timingSafeEqualString(actual, expected);
+}
+
+export function passwordHashNeedsUpgrade(passwordHash: string | null): boolean {
+  if (!passwordHash) return false;
+  const [version, rawIterations] = passwordHash.split("$", 2);
+  const iterations = Number.parseInt(rawIterations ?? "", 10);
+  return version !== PASSWORD_HASH_VERSION || !Number.isSafeInteger(iterations) || iterations < PASSWORD_HASH_ITERATIONS;
 }
 
 async function derivePasswordKey(

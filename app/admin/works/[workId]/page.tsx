@@ -1,3 +1,8 @@
+import { Input } from "@/app/components/ui/input";
+import { SelectField } from "@/app/components/ui/select";
+import { CheckboxField } from "@/app/components/ui/checkbox-field";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Textarea } from "@/app/components/ui/textarea";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -7,17 +12,11 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { requireAdminPageUser } from "@/lib/server/auth/guards";
-import {
-  getWorkForAdminEdit,
-  listAdminReleasesForWork,
-} from "@/lib/server/db/game-library";
+import { requirePagePermission } from "@/lib/server/auth/authorize";
+import { getWorkForAdminEdit, listAdminReleasesForWork } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { formatNumber } from "@/lib/format";
-import {
-  baseVariantLabel,
-  releaseTypeLabel,
-} from "@/lib/labels";
+import { baseVariantLabel, releaseTypeLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +29,7 @@ type AdminWorkEditPageProps = {
 export default async function AdminWorkEditPage({ params }: AdminWorkEditPageProps) {
   const { workId: rawWorkId } = await params;
   const workId = parseWorkId(rawWorkId);
-  const adminUser = await requireAdminPageUser(`/admin/works/${workId}`);
+  const adminUser = await requirePagePermission(`/admin/works/${workId}`, "work.update");
   const [work, releases, unreadInboxCount] = await Promise.all([
     getWorkForAdminEdit(workId),
     listAdminReleasesForWork(workId),
@@ -54,33 +53,25 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
         }
       />
 
-      <form
-        action={`/api/admin/works/${work.id}/update`}
-        className="stack-form admin-edit-form"
-        method="post"
-      >
+      <form action={`/api/admin/works/${work.id}/update`} className="grid gap-4 grid gap-4" method="post">
         <input name="work_id" type="hidden" value={work.id} />
 
         <Pane heading="基础资料">
-          <div className="upload-form-grid">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField hint="不可修改" label="原名">
-              <input readOnly value={work.originalTitle} />
+              <Input readOnly value={work.originalTitle} />
             </FormField>
             <FormField hint="不可修改" label="Slug">
-              <input readOnly value={work.slug} />
+              <Input readOnly value={work.slug} />
             </FormField>
             <FormField label="中文名">
-              <input
-                defaultValue={work.chineseTitle ?? ""}
-                name="chinese_title"
-                type="text"
-              />
+              <Input defaultValue={work.chineseTitle ?? ""} name="chinese_title" type="text" />
             </FormField>
             <FormField label="排序名">
-              <input defaultValue={work.sortTitle ?? ""} name="sort_title" type="text" />
+              <Input defaultValue={work.sortTitle ?? ""} name="sort_title" type="text" />
             </FormField>
             <FormField label="原作发布日期">
-              <input
+              <Input
                 defaultValue={work.originalReleaseDate ?? ""}
                 name="original_release_date"
                 placeholder="YYYY-MM-DD / YYYY-MM / YYYY"
@@ -88,93 +79,79 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               />
             </FormField>
             <FormField label="日期精度">
-              <select
+              <SelectField
                 defaultValue={work.originalReleasePrecision}
                 name="original_release_precision"
-              >
-                <option value="unknown">未知</option>
-                <option value="year">年</option>
-                <option value="month">月</option>
-                <option value="day">日</option>
-              </select>
+                options={[
+                  { value: "unknown", label: "未知" },
+                  { value: "year", label: "年" },
+                  { value: "month", label: "月" },
+                  { value: "day", label: "日" },
+                ]}
+              />
             </FormField>
             <FormField label="引擎">
-              <select defaultValue={work.engineFamily} name="engine_family">
-                <option value="rpg_maker_2000">RPG Maker 2000</option>
-                <option value="rpg_maker_2003">RPG Maker 2003</option>
-                <option value="mixed">混合</option>
-                <option value="unknown">未知</option>
-                <option value="other">其他</option>
-              </select>
+              <SelectField
+                defaultValue={work.engineFamily}
+                name="engine_family"
+                options={[
+                  { value: "rpg_maker_2000", label: "RPG Maker 2000" },
+                  { value: "rpg_maker_2003", label: "RPG Maker 2003" },
+                  { value: "mixed", label: "混合" },
+                  { value: "unknown", label: "未知" },
+                  { value: "other", label: "其他" },
+                ]}
+              />
             </FormField>
             <FormField label="引擎备注">
-              <input defaultValue={work.engineDetail ?? ""} name="engine_detail" type="text" />
+              <Input defaultValue={work.engineDetail ?? ""} name="engine_detail" type="text" />
             </FormField>
             <FormField label="状态">
-              <select defaultValue={work.status} name="status">
-                <option value="published">已发布</option>
-                <option value="hidden">隐藏</option>
-                <option value="draft">草稿</option>
-              </select>
+              <SelectField
+                defaultValue={work.status}
+                name="status"
+                options={[
+                  { value: "published", label: "已发布" },
+                  { value: "hidden", label: "隐藏" },
+                  { value: "draft", label: "草稿" },
+                ]}
+              />
             </FormField>
-            <label className="checkbox-line">
-              <input
-                defaultChecked={work.usesManiacsPatch}
-                name="uses_maniacs_patch"
-                type="checkbox"
-                value="1"
-              />
-              使用 Maniacs Patch
-            </label>
+            <CheckboxField
+              defaultChecked={work.usesManiacsPatch}
+              label="使用 Maniacs Patch"
+              name="uses_maniacs_patch"
+            />
             <FormField label="图标 blob SHA-256">
-              <input
-                defaultValue={work.iconBlobSha256 ?? ""}
-                name="icon_blob_sha256"
-                type="text"
-              />
+              <Input defaultValue={work.iconBlobSha256 ?? ""} name="icon_blob_sha256" type="text" />
             </FormField>
             <FormField label="缩略图 blob SHA-256">
-              <input
-                defaultValue={work.thumbnailBlobSha256 ?? ""}
-                name="thumbnail_blob_sha256"
-                type="text"
-              />
+              <Input defaultValue={work.thumbnailBlobSha256 ?? ""} name="thumbnail_blob_sha256" type="text" />
             </FormField>
             <FormField label="简介" wide>
-              <textarea
-                defaultValue={work.description ?? ""}
-                name="description"
-                rows={6}
-              />
+              <Textarea defaultValue={work.description ?? ""} name="description" rows={6} />
             </FormField>
           </div>
         </Pane>
 
         <Pane heading="关联数据">
-          <div className="upload-form-grid">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField hint="每行一个别名。" label="别名">
-              <textarea
-                defaultValue={work.aliases.join("\n")}
-                name="aliases"
-                rows={5}
-              />
+              <Textarea defaultValue={work.aliases.join("\n")} name="aliases" rows={5} />
             </FormField>
             <FormField hint="每行一个，或使用逗号分隔。" label="标签">
-              <textarea defaultValue={work.tags.join("\n")} name="tags" rows={5} />
+              <Textarea defaultValue={work.tags.join("\n")} name="tags" rows={5} />
             </FormField>
             <FormField
               hint="每行一个角色，字段用 | 分隔；职务：main、supporting、cameo、mentioned、other。"
               label="登场角色"
             >
-              <textarea
+              <Textarea
                 defaultValue={work.characterCredits
                   .map((character) =>
-                    [
-                      character.primaryName,
-                      character.roleKey,
-                      character.sortOrder ?? "",
-                      character.notes ?? "",
-                    ].join("|"),
+                    [character.primaryName, character.roleKey, character.sortOrder ?? "", character.notes ?? ""].join(
+                      "|",
+                    ),
                   )
                   .join("\n")}
                 name="characters"
@@ -182,11 +159,8 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
                 rows={5}
               />
             </FormField>
-            <FormField
-              hint="每行一个图片 blob SHA-256；第一行作为主浏览图。"
-              label="浏览图 blob SHA-256"
-            >
-              <textarea
+            <FormField hint="每行一个图片 blob SHA-256；第一行作为主浏览图。" label="浏览图 blob SHA-256">
+              <Textarea
                 defaultValue={work.media
                   .filter((media) => media.kind === "preview")
                   .map((media) => media.blobSha256)
@@ -200,7 +174,7 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               label="系列成员"
               wide
             >
-              <textarea
+              <Textarea
                 defaultValue={work.series
                   .map((item) =>
                     [
@@ -223,11 +197,9 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               label="相关作品"
               wide
             >
-              <textarea
+              <Textarea
                 defaultValue={work.outgoingRelations
-                  .map((relation) =>
-                    [relation.slug, relation.relationType, relation.notes ?? ""].join("|"),
-                  )
+                  .map((relation) => [relation.slug, relation.relationType, relation.notes ?? ""].join("|"))
                   .join("\n")}
                 name="outgoing_relations"
                 placeholder="勇者传说-前篇|sequel|承接前作"
@@ -239,10 +211,8 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
               label="外部链接"
               wide
             >
-              <textarea
-                defaultValue={work.externalLinks
-                  .map((link) => `${link.label}|${link.url}|${link.linkType}`)
-                  .join("\n")}
+              <Textarea
+                defaultValue={work.externalLinks.map((link) => `${link.label}|${link.url}|${link.linkType}`).join("\n")}
                 name="external_links"
                 placeholder="官方网站|https://example.com|official"
                 rows={5}
@@ -251,12 +221,10 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
           </div>
         </Pane>
 
-        <div className="actions">
-          <button className="button primary" type="submit">
-            保存资料
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit">保存资料</Button>
           {work.status === "published" ? (
-            <Link className="button" href={`/games/${work.slug}`}>
+            <Link className={buttonVariants({ variant: "outline" })} href={`/games/${work.slug}`}>
               查看公开页
             </Link>
           ) : null}
@@ -264,42 +232,40 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
       </form>
 
       <TableWrap label="发布版本">
-          <thead>
-            <tr>
-              <th>发布版本</th>
-              <th>状态</th>
-              <th>归档</th>
-              <th>操作</th>
+        <thead>
+          <tr>
+            <th>发布版本</th>
+            <th>状态</th>
+            <th>文件版本</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {releases.map((release) => (
+            <tr key={release.id}>
+              <td>
+                <strong>{release.label}</strong>
+                <span className="font-mono text-sm text-primary text-sm text-muted">{release.key}</span>
+                <span className="text-sm text-muted">
+                  {baseVariantLabel(release.baseVariant)} / {releaseTypeLabel(release.type)}
+                  {release.releaseDate ? ` / ${release.releaseDate}` : ""}
+                </span>
+              </td>
+              <td>
+                <StatusBadge kind="publication" value={release.status} />
+              </td>
+              <td>
+                {formatNumber(release.archiveVersionCount)} 个快照
+                <span className="text-sm text-muted">当前：{formatNumber(release.currentArchiveVersionCount)}</span>
+              </td>
+              <td>
+                <Link className={buttonVariants()} href={`/admin/releases/${release.id}`}>
+                  编辑发布版本
+                </Link>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {releases.map((release) => (
-              <tr key={release.id}>
-                <td>
-                  <strong>{release.label}</strong>
-                  <span className="mono muted-line">{release.key}</span>
-                  <span className="muted-line">
-                    {baseVariantLabel(release.baseVariant)} / {releaseTypeLabel(release.type)}
-                    {release.releaseDate ? ` / ${release.releaseDate}` : ""}
-                  </span>
-                </td>
-                <td>
-                  <StatusBadge kind="publication" value={release.status} />
-                </td>
-                <td>
-                  {formatNumber(release.archiveVersionCount)} 个快照
-                  <span className="muted-line">
-                    当前：{formatNumber(release.currentArchiveVersionCount)}
-                  </span>
-                </td>
-                <td>
-                  <Link className="button primary" href={`/admin/releases/${release.id}`}>
-                    编辑发布版本
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          ))}
+        </tbody>
       </TableWrap>
     </main>
   );

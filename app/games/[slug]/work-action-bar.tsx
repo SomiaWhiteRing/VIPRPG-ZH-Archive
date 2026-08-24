@@ -1,8 +1,11 @@
 "use client";
+import { Button, buttonVariants } from "@/app/components/ui/button";
 
 import Link from "next/link";
 import { useState } from "react";
 import { formatNumber, formatBytes } from "@/lib/format";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { publicCopy } from "@/lib/public-copy";
 
 type Props = {
   archive: {
@@ -15,10 +18,7 @@ type Props = {
   canPlayInBrowser: boolean;
 };
 
-export function WorkActionBar({
-  archive,
-  canPlayInBrowser,
-}: Props) {
+export function WorkActionBar({ archive, canPlayInBrowser }: Props) {
   const [copied, setCopied] = useState(false);
 
   async function copyId() {
@@ -36,34 +36,31 @@ export function WorkActionBar({
   }
 
   return (
-    <section className="work-action-bar" aria-label="主操作">
+    <section
+      className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 shadow-sm"
+      aria-label="主操作"
+    >
       {archive ? (
         <>
-          <span className="work-action-meta">
-            当前归档：<strong>{archive.label}</strong>
+          <span className="text-sm text-muted">
+            当前下载版本：<strong>{publicCopy(archive.label)}</strong>
             <br />
             {formatNumber(archive.totalFiles)} 文件 · {formatBytes(archive.totalSizeBytes)}
           </span>
-          <a className="button primary" href={archive.downloadHref}>
-            ⬇ 下载 ZIP
-          </a>
+          <Rm2kButton href={archive.downloadHref}>下载游戏</Rm2kButton>
           {canPlayInBrowser ? (
-            <Link className="button" href={`/play/${archive.id}`}>
+            <Link className={buttonVariants({ variant: "outline" })} href={`/play/${archive.id}`}>
               ▶ 在线游玩
             </Link>
           ) : (
-            <span className="muted-line">
-              该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。
-            </span>
+            <span className="text-sm text-muted">该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。</span>
           )}
-          <button className="button" type="button" onClick={copyId}>
+          <Button variant="outline" type="button" onClick={copyId}>
             {copied ? "已复制 ✓" : `复制 ID #${archive.id}`}
-          </button>
+          </Button>
         </>
       ) : (
-        <span className="work-action-meta">
-          该作品暂无可下载的最新快照，可在版本列表中选择历史快照。
-        </span>
+        <span className="text-sm text-muted">该作品暂无可下载的最新快照，可在版本列表中选择历史快照。</span>
       )}
     </section>
   );

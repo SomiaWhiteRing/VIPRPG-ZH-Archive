@@ -1,8 +1,8 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { assertSameOrigin } from "@/lib/server/auth/origin";
 import { hashPassword } from "@/lib/server/auth/password";
 import { hashVerificationCode } from "@/lib/server/auth/tokens";
 import { consumeLatestEmailChallenge } from "@/lib/server/db/auth-challenges";
-import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { normalizeEmail, setUserPasswordByEmail } from "@/lib/server/db/users";
 import { readRequiredFormString, redirectWithParams } from "@/lib/server/http/form";
 
@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(readRequiredFormString(formData, "email"));
 
   try {
+    assertSameOrigin(request);
     await consumeLatestEmailChallenge({
       email,
       purpose: "password_reset",
@@ -28,11 +29,6 @@ export async function POST(request: Request) {
       email,
       passwordHash: await hashPassword(readRequiredFormString(formData, "password")),
     });
-    await writeAuthAuditLog({
-      email,
-      eventType: "password_reset_completed",
-    });
-
     return redirectWithParams(request, "/login", {
       next: nextPath,
       reset: "1",

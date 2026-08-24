@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -38,7 +39,10 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
         actions={
           <>
             <BackLink href="/characters" label="返回角色列表" />
-            <Link className="button" href={`/games?character=${encodeURIComponent(character.slug)}`}>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href={`/games?character=${encodeURIComponent(character.slug)}`}
+            >
               筛选作品
             </Link>
             {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
@@ -56,33 +60,29 @@ export default async function CharacterDetailPage({ params }: CharacterDetailPag
 
       <Pane heading="登场作品">
         {character.works.length > 0 ? (
-          <TableWrap compact label="登场作品" minWidth={760} mobileCards>
+          <TableWrap compact label="登场作品" minWidth={760}>
             <thead>
               <tr>
                 <th>作品</th>
                 <th>引擎</th>
-                <th>归档</th>
+                <th>文件版本</th>
               </tr>
             </thead>
             <tbody>
               {character.works.map((work) => (
                 <tr key={work.id}>
                   <td data-label="作品">
-                    <Link href={`/games/${work.slug}`}>
-                      {work.chineseTitle || work.originalTitle}
-                    </Link>
-                    {work.chineseTitle ? (
-                      <span className="muted-line">{work.originalTitle}</span>
-                    ) : null}
+                    <Link href={`/games/${work.slug}`}>{work.chineseTitle || work.originalTitle}</Link>
+                    {work.chineseTitle ? <span className="text-sm text-muted">{work.originalTitle}</span> : null}
                   </td>
                   <td data-label="引擎">{engineLabel(work.engineFamily)}</td>
-                  <td data-label="归档">{formatNumber(work.archiveVersionCount)} 个归档</td>
+                  <td data-label="文件版本">{formatNumber(work.archiveVersionCount)} 个版本</td>
                 </tr>
               ))}
             </tbody>
           </TableWrap>
         ) : (
-          <p className="muted-line">暂无公开登场作品。</p>
+          <p className="text-sm text-muted">暂无公开登场作品。</p>
         )}
       </Pane>
     </main>

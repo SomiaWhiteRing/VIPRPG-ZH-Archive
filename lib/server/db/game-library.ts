@@ -472,156 +472,149 @@ export async function listGameWorks(input: {
   tag?: string;
   tagQuery?: string;
   character?: string;
+  sort?: "updated" | "title" | "engine";
   limit?: number;
+  offset?: number;
   includeNonPublic?: boolean;
 } = {}): Promise<GameWorkSummary[]> {
-  const where: string[] = [];
-  const binds: Array<string | number> = [];
+  const { where, binds } = buildGameWorkWhere(input);
 
-  if (!input.includeNonPublic) {
-    where.push("w.status = 'published'");
-  } else {
-    where.push("w.status <> 'deleted'");
-  }
-
-  if (input.engine && input.engine !== "all") {
-    where.push("w.engine_family = ?");
-    binds.push(input.engine);
-  }
-
-  if (input.tag) {
-    where.push(
-      `(EXISTS (
-        SELECT 1
-        FROM work_tags wt
-        JOIN tags t ON t.id = wt.tag_id
-        WHERE wt.work_id = w.id
-          AND t.slug = ?
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM releases r
-        JOIN release_tags rt ON rt.release_id = r.id
-        JOIN tags t ON t.id = rt.tag_id
-        WHERE r.work_id = w.id
-          AND r.status = 'published'
-          AND t.slug = ?
-      ))`,
-    );
-    binds.push(input.tag, input.tag);
-  }
-
-  const normalizedTagQuery = input.tagQuery?.trim();
-
-  if (normalizedTagQuery) {
-    const pattern = `%${normalizedTagQuery}%`;
-    where.push(
-      `(EXISTS (
-        SELECT 1
-        FROM work_tags wt
-        JOIN tags t ON t.id = wt.tag_id
-        WHERE wt.work_id = w.id
-          AND (t.name LIKE ? OR t.slug LIKE ?)
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM releases r
-        JOIN release_tags rt ON rt.release_id = r.id
-        JOIN tags t ON t.id = rt.tag_id
-        WHERE r.work_id = w.id
-          AND r.status = 'published'
-          AND (t.name LIKE ? OR t.slug LIKE ?)
-      ))`,
-    );
-    binds.push(pattern, pattern, pattern, pattern);
-  }
-
-  if (input.character) {
-    where.push(
-      `EXISTS (
-        SELECT 1
-        FROM work_characters wc
-        JOIN characters ch ON ch.id = wc.character_id
-        WHERE wc.work_id = w.id
-          AND ch.slug = ?
-      )`,
-    );
-    binds.push(input.character);
-  }
-
-  const normalizedQuery = input.query?.trim();
-
-  if (normalizedQuery) {
-    const pattern = `%${normalizedQuery}%`;
-    where.push(
-      `(w.original_title LIKE ?
-        OR w.chinese_title LIKE ?
-        OR EXISTS (
-          SELECT 1 FROM work_titles title
-          WHERE title.work_id = w.id
-            AND title.is_searchable = 1
-            AND title.title LIKE ?
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM work_staff ws
-          JOIN creators c ON c.id = ws.creator_id
-          WHERE ws.work_id = w.id
-            AND (c.name LIKE ? OR c.original_name LIKE ?)
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM work_tags wt
-          JOIN tags t ON t.id = wt.tag_id
-          WHERE wt.work_id = w.id
-            AND (t.name LIKE ? OR t.slug LIKE ?)
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM releases r
-          JOIN release_tags rt ON rt.release_id = r.id
-          JOIN tags t ON t.id = rt.tag_id
-          WHERE r.work_id = w.id
-            AND r.status = 'published'
-            AND (t.name LIKE ? OR t.slug LIKE ?)
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM work_characters wc
-          JOIN characters ch ON ch.id = wc.character_id
-          WHERE wc.work_id = w.id
-            AND (ch.primary_name LIKE ? OR ch.original_name LIKE ?)
-        ))`,
-    );
-    binds.push(
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-      pattern,
-    );
-  }
-
+  const limit = clampLimit(input.limit ?? 80, 1, 200);
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
   const rows = await getD1()
     .prepare(
       `${workSummarySelectSql()}
       FROM works w
       ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY
-        COALESCE(latest_published_at, w.published_at, w.created_at) DESC,
-        COALESCE(w.sort_title, w.chinese_title, w.original_title) ASC
-      LIMIT ?`,
+      ORDER BY ${gameWorkOrderSql(input.sort)}
+      LIMIT ? OFFSET ?`,
     )
-    .bind(...binds, clampLimit(input.limit ?? 80, 1, 200))
+    .bind(...binds, limit, offset)
     .all<WorkSummaryRow>();
 
   return hydrateWorkSummaries(rows.results ?? []);
+}
+
+export type PaginatedGameSearch = {
+  items: GameWorkSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export async function searchGameWorks(input: {
+  query: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedGameSearch> {
+  const pageSize = clampLimit(input.pageSize ?? 20, 1, 50);
+  const page = clampLimit(input.page ?? 1, 1, 9999);
+  const { where, binds } = buildGameWorkWhere({ query: input.query });
+  const database = getD1();
+  const [countResult, rows] = await Promise.all([
+    database
+      .prepare(`SELECT COUNT(*) AS total FROM works w WHERE ${where.join(" AND ")}`)
+      .bind(...binds)
+      .first<{ total: number }>(),
+    database
+      .prepare(
+        `${workSummarySelectSql()}
+        FROM works w
+        WHERE ${where.join(" AND ")}
+        ORDER BY ${gameWorkOrderSql("updated")}
+        LIMIT ? OFFSET ?`,
+      )
+      .bind(...binds, pageSize, (page - 1) * pageSize)
+      .all<WorkSummaryRow>(),
+  ]);
+  const total = Number(countResult?.total ?? 0);
+
+  return {
+    items: await hydrateWorkSummaries(rows.results ?? []),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+function buildGameWorkWhere(input: {
+  query?: string;
+  engine?: string;
+  tag?: string;
+  tagQuery?: string;
+  character?: string;
+  includeNonPublic?: boolean;
+}): { where: string[]; binds: Array<string | number> } {
+  const where: string[] = [input.includeNonPublic ? "w.status <> 'deleted'" : "w.status = 'published'"];
+  const binds: Array<string | number> = [];
+
+  if (input.engine && input.engine !== "all") {
+    where.push("w.engine_family = ?");
+    binds.push(input.engine);
+  }
+  if (input.tag) {
+    where.push(`(EXISTS (
+      SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id
+      WHERE wt.work_id = w.id AND t.slug = ?
+    ) OR EXISTS (
+      SELECT 1 FROM releases r JOIN release_tags rt ON rt.release_id = r.id JOIN tags t ON t.id = rt.tag_id
+      WHERE r.work_id = w.id AND r.status = 'published' AND t.slug = ?
+    ))`);
+    binds.push(input.tag, input.tag);
+  }
+  const tagQuery = input.tagQuery?.trim();
+  if (tagQuery) {
+    const pattern = `%${tagQuery}%`;
+    where.push(`(EXISTS (
+      SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id
+      WHERE wt.work_id = w.id AND (t.name LIKE ? OR t.slug LIKE ?)
+    ) OR EXISTS (
+      SELECT 1 FROM releases r JOIN release_tags rt ON rt.release_id = r.id JOIN tags t ON t.id = rt.tag_id
+      WHERE r.work_id = w.id AND r.status = 'published' AND (t.name LIKE ? OR t.slug LIKE ?)
+    ))`);
+    binds.push(pattern, pattern, pattern, pattern);
+  }
+  if (input.character) {
+    where.push(`EXISTS (
+      SELECT 1 FROM work_characters wc JOIN characters ch ON ch.id = wc.character_id
+      WHERE wc.work_id = w.id AND ch.slug = ?
+    )`);
+    binds.push(input.character);
+  }
+  const query = input.query?.trim();
+  if (query) {
+    const pattern = `%${query}%`;
+    where.push(`(w.original_title LIKE ? OR w.chinese_title LIKE ? OR EXISTS (
+      SELECT 1 FROM work_titles title
+      WHERE title.work_id = w.id AND title.is_searchable = 1 AND title.title LIKE ?
+    ) OR EXISTS (
+      SELECT 1 FROM work_staff ws JOIN creators c ON c.id = ws.creator_id
+      WHERE ws.work_id = w.id AND (c.name LIKE ? OR c.original_name LIKE ?)
+    ) OR EXISTS (
+      SELECT 1 FROM work_tags wt JOIN tags t ON t.id = wt.tag_id
+      WHERE wt.work_id = w.id AND (t.name LIKE ? OR t.slug LIKE ?)
+    ) OR EXISTS (
+      SELECT 1 FROM releases r JOIN release_tags rt ON rt.release_id = r.id JOIN tags t ON t.id = rt.tag_id
+      WHERE r.work_id = w.id AND r.status = 'published' AND (t.name LIKE ? OR t.slug LIKE ?)
+    ) OR EXISTS (
+      SELECT 1 FROM work_characters wc JOIN characters ch ON ch.id = wc.character_id
+      WHERE wc.work_id = w.id AND (ch.primary_name LIKE ? OR ch.original_name LIKE ?)
+    ))`);
+    binds.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
+  }
+  return { where, binds };
+}
+
+function gameWorkOrderSql(sort: "updated" | "title" | "engine" = "updated"): string {
+  if (sort === "title") {
+    return "COALESCE(w.sort_title, w.chinese_title, w.original_title) ASC, w.id ASC";
+  }
+  if (sort === "engine") {
+    return "w.engine_family ASC, COALESCE(w.sort_title, w.chinese_title, w.original_title) ASC, w.id ASC";
+  }
+  return "COALESCE(latest_published_at, w.published_at, w.created_at) DESC, COALESCE(w.sort_title, w.chinese_title, w.original_title) ASC, w.id ASC";
 }
 
 export async function getGameWorkDetail(slug: string): Promise<GameWorkDetail | null> {

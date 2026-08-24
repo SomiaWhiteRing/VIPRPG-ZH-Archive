@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import {
   parseArchiveVersionEditForm,
@@ -16,7 +16,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "archive_version.update");
 
   if ("response" in auth) {
     return auth.response;

@@ -1,11 +1,11 @@
+import { Input } from "@/app/components/ui/input";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatList } from "@/app/components/ui/stat-list";
-import {
-  listPublicSeries,
-  type PublicSeriesSummary,
-} from "@/lib/server/db/taxonomy-library";
+import { listPublicSeries, type PublicSeriesSummary } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
 
@@ -24,28 +24,30 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
     <main>
       <PageHeader eyebrow="Series" title="系列作品" />
 
-      <form className="library-toolbar" action="/series" method="get">
-        <label>
+      <form
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
+        action="/series"
+        method="get"
+      >
+        <Label>
           <span>搜索</span>
-          <input defaultValue={query} name="q" placeholder="系列名、原名、slug" type="search" />
-        </label>
-        <button className="button primary" type="submit">
-          筛选
-        </button>
+          <Input defaultValue={query} name="q" placeholder="系列名、原名、slug" type="search" />
+        </Label>
+        <Button type="submit">筛选</Button>
         {query ? (
-          <Link className="button" href="/series">
+          <Link className={buttonVariants({ variant: "outline" })} href="/series">
             清除
           </Link>
         ) : null}
       </form>
 
-      <section className="library-summary" aria-label="系列摘要">
+      <section className="text-sm text-muted" aria-label="系列摘要">
         <strong>共 {formatNumber(series.length)} </strong>
         <span>个系列</span>
       </section>
 
       {series.length > 0 ? (
-        <section className="directory-card-grid" aria-label="系列列表">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="系列列表">
           {series.map((item) => (
             <SeriesCard item={item} key={item.id} />
           ))}
@@ -59,19 +61,15 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
 
 function SeriesCard({ item }: { item: PublicSeriesSummary }) {
   return (
-    <article className="directory-card">
+    <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="directory-card-title" href={`/series/${item.slug}`}>
+        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/series/${item.slug}`}>
           {item.title}
         </Link>
-        {item.titleOriginal ? <span className="muted-line">{item.titleOriginal}</span> : null}
+        {item.titleOriginal ? <span className="text-sm text-muted">{item.titleOriginal}</span> : null}
       </div>
       {item.description ? <p>{item.description}</p> : null}
-      <StatList
-        columns={3}
-        items={[{ label: "作品", value: formatNumber(item.workCount) }]}
-        variant="tiles"
-      />
+      <StatList columns={3} items={[{ label: "作品", value: formatNumber(item.workCount) }]} variant="tiles" />
     </article>
   );
 }

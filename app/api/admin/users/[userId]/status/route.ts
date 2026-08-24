@@ -1,6 +1,5 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { setUserStatusForAdmin, type UserStatus } from "@/lib/server/db/users";
-import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -13,7 +12,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "user.status.update");
 
   if ("response" in auth) {
     return auth.response;
@@ -30,23 +29,13 @@ export async function POST(request: Request, context: RouteContext) {
       status,
     });
 
-    await writeAuthAuditLog({
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_user_status_update",
-      detail: {
-        targetUserId: user.id,
-        status: user.status,
-      },
-    });
-
     if (request.headers.get("accept")?.includes("application/json")) {
       return json({
         ok: true,
         user: {
           id: user.id,
           email: user.email,
-          role: user.role,
+          roleKeys: user.roleKeys,
           status: user.status,
         },
       });
