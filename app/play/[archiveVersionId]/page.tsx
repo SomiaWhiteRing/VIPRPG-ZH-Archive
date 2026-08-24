@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import { notFound } from "next/navigation";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
@@ -16,6 +17,7 @@ import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { publicCopy } from "@/lib/public-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +84,7 @@ export default async function WebPlayPage({ params }: PageProps) {
           <>
             <BackLink href="/" label="返回首页" />
             <a
-              className="button"
+              className={buttonVariants({ variant: "outline" })}
               href={`/api/archive-versions/${record.id}/download?zip_builder=${downloadZipBuilderVersion}`}
             >
               下载 ZIP
@@ -92,7 +94,7 @@ export default async function WebPlayPage({ params }: PageProps) {
         eyebrow="Online Play"
         subtitle={
           <>
-            {metadata.releaseLabel} / {metadata.archiveLabel}
+            {metadata.releaseLabel} / {publicCopy(metadata.archiveLabel)}
             {metadata.chineseTitle ? ` / ${metadata.originalTitle}` : ""}
           </>
         }

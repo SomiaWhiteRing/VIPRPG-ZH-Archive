@@ -6,6 +6,13 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+export class HttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
 export function json(body: JsonValue, init?: ResponseInit): Response {
   return Response.json(body, {
     headers: {
@@ -17,6 +24,7 @@ export function json(body: JsonValue, init?: ResponseInit): Response {
 }
 
 export function jsonError(message: string, error: unknown): Response {
+  const status = error instanceof HttpError ? error.status : 500;
   return json(
     {
       ok: false,
@@ -24,6 +32,6 @@ export function jsonError(message: string, error: unknown): Response {
       detail: error instanceof Error ? error.message : "Unknown error",
       timestamp: new Date().toISOString(),
     },
-    { status: 500 },
+    { status },
   );
 }

@@ -1,4 +1,5 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { assertSameOrigin } from "@/lib/server/auth/origin";
 import { buildAuthCallbackUrl } from "@/lib/server/auth/callback-url";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(readRequiredFormString(formData, "email"));
 
   try {
+    assertSameOrigin(request);
     await verifyTurnstile({
       token: readRequiredFormString(formData, "cf-turnstile-response"),
       request,

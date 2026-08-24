@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
 
 type BackLinkProps = {
   href: string;
@@ -7,9 +9,11 @@ type BackLinkProps = {
 
 export function BackLink({ href, label }: BackLinkProps) {
   return (
-    <Link className="button back-link" href={href}>
-      <span aria-hidden>←</span>
-      {label}
-    </Link>
+    <Button asChild variant="outline">
+      <Link href={href}>
+        <ArrowLeft aria-hidden className="size-4" />
+        {label}
+      </Link>
+    </Button>
   );
 }

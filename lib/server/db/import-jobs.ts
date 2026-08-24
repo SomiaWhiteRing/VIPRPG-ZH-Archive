@@ -1,6 +1,6 @@
-import { canManageUsersRole } from "@/lib/server/auth/roles";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { getD1 } from "@/lib/server/db/d1";
+import { HttpError } from "@/lib/server/http/json";
 
 export type ImportJobRow = {
   id: number;
@@ -132,12 +132,10 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
     .first<ImportJobRow>();
 }
 
-export function assertImportJobAccess(job: ImportJobRow, user: ArchiveUser): void {
-  if (job.uploader_id === user.id || canManageUsersRole(user.role)) {
-    return;
-  }
-
-  throw new Error("Import job access denied");
+export async function requiredOwnedImportJob(id: number, user: ArchiveUser): Promise<ImportJobRow> {
+  const job = await findImportJob(id);
+  if (!job || job.uploader_id !== user.id) throw new HttpError(404, "Import job not found");
+  return job;
 }
 
 export async function listImportJobsForUser(

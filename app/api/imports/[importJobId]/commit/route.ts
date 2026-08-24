@@ -1,12 +1,11 @@
 import type { ArchiveCommitMetadata, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { commitArchiveImport } from "@/lib/server/db/archive-commit";
 import {
-  assertImportJobAccess,
   markImportJobFailed,
   parseImportJobId,
   recordImportCommitSucceeded,
-  requiredImportJob,
+  requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -28,7 +27,7 @@ type CommitRequest = {
 
 export async function POST(request: Request, context: RouteContext) {
   const startedAt = Date.now();
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "import_job.commit_own");
 
   if ("response" in auth) {
     return auth.response;
@@ -39,8 +38,7 @@ export async function POST(request: Request, context: RouteContext) {
   let authorizedForJob = false;
 
   try {
-    const job = await requiredImportJob(id);
-    assertImportJobAccess(job, auth.user);
+    await requiredOwnedImportJob(id, auth.user);
     authorizedForJob = true;
 
     const payload = (await request.json()) as CommitRequest;

@@ -1,4 +1,15 @@
 "use client";
+import { Button } from "@/app/components/ui/button";
+import { Progress } from "@/app/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,6 +26,7 @@ import type {
   WebPlayStorageSnapshot,
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { formatBytes } from "@/lib/format";
+import { publicCopy } from "@/lib/public-copy";
 import { installStatusLabel } from "@/lib/labels";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
@@ -47,6 +59,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
   const [running, setRunning] = useState(false);
   const [playerStarting, setPlayerStarting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
   const workerRef = useRef<Worker | null>(null);
   const moduleRef = useRef<EasyRpgModule | null>(null);
@@ -81,19 +94,13 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
           setInstallation(value);
 
           if (value?.status === "installing") {
-            addLog(
-              "warning",
-              "检测到上次安装未完成。浏览器刷新或崩溃后，当前版本会清理并重新安装。",
-            );
+            addLog("warning", "检测到上次安装未完成。浏览器刷新或崩溃后，当前版本会清理并重新安装。");
           }
         }
       })
       .catch((error: unknown) => {
         if (mounted) {
-          addLog(
-            "warning",
-            error instanceof Error ? error.message : "读取本地安装状态失败。",
-          );
+          addLog("warning", error instanceof Error ? error.message : "读取本地安装状态失败。");
         }
       })
       .finally(() => {
@@ -120,10 +127,7 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
         return;
       }
 
-      addLog(
-        "error",
-        "游戏文件读取失败，请清理并重新安装。",
-      );
+      addLog("error", "游戏文件读取失败，请清理并重新安装。");
     };
 
     navigator.serviceWorker?.addEventListener("message", onMessage);
@@ -330,21 +334,22 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
       { label: "本地状态", value: installStatusLabel(installation.status) },
       {
         label: "长期保存",
-        value:
-          installation.persistedStorage === null
-            ? "未请求"
-            : installation.persistedStorage
-              ? "已允许"
-              : "未允许",
+        value: installation.persistedStorage === null ? "未请求" : installation.persistedStorage ? "已允许" : "未允许",
       },
-      { label: "浏览器用量", value: formatBytes(installation.storageUsageBytes ?? 0) },
-      { label: "浏览器额度", value: formatBytes(installation.storageQuotaBytes ?? 0) },
+      {
+        label: "浏览器用量",
+        value: formatBytes(installation.storageUsageBytes ?? 0),
+      },
+      {
+        label: "浏览器额度",
+        value: formatBytes(installation.storageQuotaBytes ?? 0),
+      },
     ];
   }, [installation]);
 
   if (!metadata.canPlay) {
     return (
-      <div className="web-play-card">
+      <div className="grid gap-3">
         <Pane heading="在线游玩不可用">
           <p>该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。</p>
         </Pane>
@@ -353,116 +358,131 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
   }
 
   return (
-    <div className="web-play-layout">
-      <aside className="web-play-sidebar">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
+      <aside className="grid gap-3">
         <Pane>
-        <SectionHeading
-          action={
-            <StatusBadge
-              kind="browser-install"
-              value={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
-            />
-          }
-          eyebrow="EasyRPG Web Player"
-          title="浏览器本地安装"
-        />
+          <SectionHeading
+            action={
+              <StatusBadge
+                kind="browser-install"
+                value={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
+              />
+            }
+            eyebrow="EasyRPG Web Player"
+            title="浏览器本地安装"
+          />
 
-        <StatList
-          columns={2}
-          items={[
-            { label: "归档大小", value: formatBytes(metadata.totalSizeBytes) },
-            { label: "文件数", value: metadata.totalFiles.toLocaleString("zh-CN") },
-            {
-              label: "安装内容",
-              value: `${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`,
-            },
-            { label: "发布版本", value: metadata.releaseLabel },
-            { label: "归档快照", value: metadata.archiveLabel },
-          ]}
-          variant="tiles"
-        />
+          <StatList
+            columns={2}
+            items={[
+              {
+                label: "文件大小",
+                value: formatBytes(metadata.totalSizeBytes),
+              },
+              {
+                label: "文件数",
+                value: metadata.totalFiles.toLocaleString("zh-CN"),
+              },
+              {
+                label: "安装内容",
+                value: `${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`,
+              },
+              { label: "发布版本", value: metadata.releaseLabel },
+              {
+                label: "下载版本",
+                value: publicCopy(metadata.archiveLabel) ?? metadata.archiveLabel,
+              },
+            ]}
+            variant="tiles"
+          />
 
-        {storageSummary ? (
-          <StatList columns={2} items={storageSummary} variant="tiles" />
-        ) : null}
+          {storageSummary ? <StatList columns={2} items={storageSummary} variant="tiles" /> : null}
 
-        {installation ? <InstallProgress installation={installation} /> : null}
-        {interruptedInstalling ? (
-          <p className="error-message compact">
-            上次安装没有正常结束。请清理并重装本地缓存。
-          </p>
-        ) : null}
-        {operationError ? <p className="error-message compact">{operationError}</p> : null}
+          {installation ? <InstallProgress installation={installation} /> : null}
+          {interruptedInstalling ? (
+            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">
+              上次安装没有正常结束。请清理并重装本地缓存。
+            </p>
+          ) : null}
+          {operationError ? (
+            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{operationError}</p>
+          ) : null}
 
-        <div className="actions">
-          {!installed && !installing ? (
-            <button className="button primary" onClick={startInstall} type="button">
-              安装到浏览器
-            </button>
-          ) : null}
-          {activeInstalling ? (
-            <button className="button" onClick={cancelInstall} type="button">
-              取消安装
-            </button>
-          ) : null}
-          {failed || interruptedInstalling ? (
-            <button className="button primary" onClick={startInstall} type="button">
-              清理并重装
-            </button>
-          ) : null}
-          {installed ? (
-            <>
-              <button
-                className="button primary"
-                disabled={playerBusy}
-                onClick={startPlayer}
-                type="button"
-              >
-                {running ? "运行中" : playerStarting ? "启动中" : "启动游戏"}
-              </button>
-              <button
-                className="button"
-                disabled={!running}
-                onClick={requestFullscreen}
-                type="button"
-              >
-                全屏
-              </button>
-              <button
-                className="button"
-                disabled={playerBusy}
-                onClick={deleteLocalInstall}
-                type="button"
-              >
-                删除本地缓存
-              </button>
-              <button
-                className="button"
-                disabled={playerBusy}
-                onClick={startInstall}
-                type="button"
-              >
-                重新安装
-              </button>
-            </>
-          ) : null}
-        </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {!installed && !installing ? (
+              <Button onClick={startInstall} type="button">
+                安装到浏览器
+              </Button>
+            ) : null}
+            {activeInstalling ? (
+              <Button variant="outline" onClick={cancelInstall} type="button">
+                取消安装
+              </Button>
+            ) : null}
+            {failed || interruptedInstalling ? (
+              <Button onClick={startInstall} type="button">
+                清理并重装
+              </Button>
+            ) : null}
+            {installed ? (
+              <>
+                <Button disabled={playerBusy} onClick={startPlayer} type="button">
+                  {running ? "运行中" : playerStarting ? "启动中" : "启动游戏"}
+                </Button>
+                <Button variant="outline" disabled={!running} onClick={requestFullscreen} type="button">
+                  全屏
+                </Button>
+                <Button variant="outline" disabled={playerBusy} onClick={() => setDeleteDialogOpen(true)} type="button">
+                  删除本地缓存
+                </Button>
+                <Button variant="outline" disabled={playerBusy} onClick={startInstall} type="button">
+                  重新安装
+                </Button>
+              </>
+            ) : null}
+          </div>
+          <AlertDialog onOpenChange={setDeleteDialogOpen} open={deleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogTitle>删除本地游戏缓存？</AlertDialogTitle>
+              <AlertDialogDescription>
+                已下载的本地游戏文件将被删除，浏览器存档不会受到影响。之后需要重新安装才能在线游玩。
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel asChild>
+                  <Button variant="outline">取消</Button>
+                </AlertDialogCancel>
+                <AlertDialogAction asChild>
+                  <Button
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      void deleteLocalInstall();
+                    }}
+                    variant="destructive"
+                  >
+                    删除缓存
+                  </Button>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </Pane>
 
-        <details className="web-play-log-card">
+        <details className="rounded-lg border border-border bg-card p-4">
           <summary>
             <span>运行日志</span>
-            <span className="task-count-badge">{logs.length}</span>
+            <span className="inline-flex min-h-5 items-center rounded-full bg-primary/10 px-1.5 text-[11px] font-bold text-primary">
+              {logs.length}
+            </span>
           </summary>
-          <div className="web-play-log-body">
+          <div className="font-mono text-xs">
             {logs.length > 0 ? (
               <>
-                <div className="web-play-log-actions">
-                  <button className="button" onClick={() => setLogs([])} type="button">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => setLogs([])} type="button">
                     清空
-                  </button>
+                  </Button>
                 </div>
-                <ol className="web-play-log-list">
+                <ol className="max-h-64 overflow-y-auto">
                   {logs.map((log) => (
                     <li className={log.level} key={log.id}>
                       <span>{new Date(log.createdAt).toLocaleTimeString("zh-CN")}</span>
@@ -478,22 +498,20 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
         </details>
       </aside>
 
-      <div className="web-player-pane">
+      <div className="min-w-0">
         <Pane>
           <SectionHeading
-            action={
-              <StatusBadge
-                kind="player"
-                value={running ? "running" : playerStarting ? "starting" : "idle"}
-              />
-            }
+            action={<StatusBadge kind="player" value={running ? "running" : playerStarting ? "starting" : "idle"} />}
             title="游戏画面"
           />
-          <div className="web-player-card">
-            <div className="web-player-frame" id="web-player-frame">
+          <div className="grid gap-3">
+            <div
+              className="relative min-h-[min(62vh,520px)] overflow-hidden rounded-md border border-border bg-black focus-within:ring-2 focus-within:ring-accent"
+              id="web-player-frame"
+            >
               <canvas id="canvas" tabIndex={0} />
             </div>
-            <div id="status" className="web-player-status">
+            <div id="status" className="text-sm text-muted">
               {running ? "EasyRPG 正在运行" : "未启动"}
             </div>
           </div>
@@ -504,38 +522,31 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
 }
 
 function InstallProgress({ installation }: { installation: WebPlayInstallation }) {
-  const downloadPercent = percent(
-    installation.downloadedBytes,
-    installation.downloadBytesTotal,
-  );
+  const downloadPercent = percent(installation.downloadedBytes, installation.downloadBytesTotal);
   const extractPercent =
     installation.totalSizeBytes > 0
       ? percent(installation.installedBytes, installation.totalSizeBytes)
       : percent(installation.installedFiles, installation.totalFiles);
 
   return (
-    <div className="web-play-progress-block">
+    <div className="grid gap-2">
       <div>
         <span>下载进度</span>
         <strong>
-          {formatBytes(installation.downloadedBytes)} /{" "}
-          {formatBytes(installation.downloadBytesTotal)}
+          {formatBytes(installation.downloadedBytes)} / {formatBytes(installation.downloadBytesTotal)}
         </strong>
       </div>
-      <div className="upload-progress">
-        <span style={{ width: `${downloadPercent}%` }} />
-      </div>
+      <Progress aria-label="下载进度" value={downloadPercent} />
       <div>
         <span>安装进度</span>
         <strong>
-          {installation.installedFiles.toLocaleString("zh-CN")} /{" "}
-          {installation.totalFiles.toLocaleString("zh-CN")} 文件
+          {installation.installedFiles.toLocaleString("zh-CN")} / {installation.totalFiles.toLocaleString("zh-CN")} 文件
         </strong>
       </div>
-      <div className="upload-progress">
-        <span style={{ width: `${extractPercent}%` }} />
-      </div>
-      {installation.error ? <p className="error-message compact">{installation.error}</p> : null}
+      <Progress aria-label="安装进度" value={extractPercent} />
+      {installation.error ? (
+        <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{installation.error}</p>
+      ) : null}
     </div>
   );
 }
@@ -612,9 +623,9 @@ async function loadEasyRpgRuntime(runtimeBasePath: string): Promise<void> {
   }
 
   const src = `${runtimeBasePath}/index.js`;
-  const existing = Array.from(
-    document.querySelectorAll<HTMLScriptElement>("script[data-easyrpg-runtime]"),
-  ).find((script) => script.dataset.easyrpgRuntime === src);
+  const existing = Array.from(document.querySelectorAll<HTMLScriptElement>("script[data-easyrpg-runtime]")).find(
+    (script) => script.dataset.easyrpgRuntime === src,
+  );
 
   if (existing?.dataset.loaded === "true") {
     return;
@@ -630,8 +641,7 @@ async function loadEasyRpgRuntime(runtimeBasePath: string): Promise<void> {
       script.dataset.loaded = "true";
       resolve();
     };
-    script.onerror = () =>
-      reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
+    script.onerror = () => reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
 
     if (!existing) {
       document.head.appendChild(script);

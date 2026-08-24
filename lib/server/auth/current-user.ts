@@ -1,42 +1,44 @@
 import { cookies } from "next/headers";
-import {
-  SESSION_COOKIE_NAME,
-  readSessionUserIdFromCookieHeader,
-  readSessionUserIdFromToken,
-} from "@/lib/server/auth/session";
+import { SESSION_COOKIE_NAME, readSessionFromCookieHeader, type SessionIdentity } from "@/lib/server/auth/session";
 import { type ArchiveUser, findUserById } from "@/lib/server/db/users";
 
-export async function getCurrentUserFromRequest(
-  request: Request,
-): Promise<ArchiveUser | null> {
-  try {
-    const userId = await readSessionUserIdFromCookieHeader(
-      request.headers.get("cookie"),
-    );
+export type AuthContext = {
+  session: SessionIdentity;
+  user: ArchiveUser;
+  roleKeys: readonly string[];
+  permissionKeys: ArchiveUser["permissionKeys"];
+  maxRolePriority: number;
+  isBootstrapAdmin: boolean;
+};
 
-    const user = userId ? await findUserById(userId) : null;
+export async function getAuthContextFromRequest(request: Request): Promise<AuthContext | null> {
+  return loadAuthContext(await readSessionFromCookieHeader(request.headers.get("cookie")));
+}
 
-    return user?.status === "active" ? user : null;
-  } catch {
-    return null;
-  }
+export async function getAuthContextFromCookies(): Promise<AuthContext | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  return loadAuthContext(await readSessionFromCookieHeader(token ? `${SESSION_COOKIE_NAME}=${token}` : null));
+}
+
+export async function getCurrentUserFromRequest(request: Request): Promise<ArchiveUser | null> {
+  return (await getAuthContextFromRequest(request))?.user ?? null;
 }
 
 export async function getCurrentUserFromCookies(): Promise<ArchiveUser | null> {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  return (await getAuthContextFromCookies())?.user ?? null;
+}
 
-    if (!token) {
-      return null;
-    }
-
-    const userId = await readSessionUserIdFromToken(token);
-
-    const user = userId ? await findUserById(userId) : null;
-
-    return user?.status === "active" ? user : null;
-  } catch {
-    return null;
-  }
+async function loadAuthContext(session: SessionIdentity | null): Promise<AuthContext | null> {
+  if (!session) return null;
+  const user = await findUserById(session.userId);
+  if (!user || user.status !== "active") return null;
+  return {
+    session,
+    user,
+    roleKeys: user.roleKeys,
+    permissionKeys: user.permissionKeys,
+    maxRolePriority: user.maxRolePriority,
+    isBootstrapAdmin: user.isBootstrapAdmin,
+  };
 }

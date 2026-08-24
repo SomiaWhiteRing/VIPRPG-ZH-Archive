@@ -40,6 +40,7 @@ Thumbs.db
 /screenshot-*.png
 /audit-*.png
 /baseline-*.png
+/output/
 
 # Local importer samples
 tools/rpgm-archive-importer/samples/*.local.json

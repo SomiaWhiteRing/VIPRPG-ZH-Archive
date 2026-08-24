@@ -1,15 +1,7 @@
-import {
-  archiveStatusLabel,
-  importTaskStatusLabel,
-  inboxStatusLabel,
-  installStatusLabel,
-  roleLabel,
-  uploadTaskStatusLabel,
-  userStatusLabel,
-  workStatusLabel,
-} from "@/lib/labels";
+import { archiveStatusLabel, importTaskStatusLabel, inboxStatusLabel, installStatusLabel, uploadTaskStatusLabel, userStatusLabel, workStatusLabel } from "@/lib/labels";
 import type { WebPlayInstallStatus } from "@/app/play/[archiveVersionId]/web-play-types";
 import type { UploadTaskStatus } from "@/app/upload/upload-types";
+import { Badge } from "@/app/components/ui/badge";
 
 type StatusBadgeProps =
   | {
@@ -18,18 +10,18 @@ type StatusBadgeProps =
       purgedAt?: string | null;
     }
   | { kind: "upload-task"; value: UploadTaskStatus; purgedAt?: never }
-  | { kind: "browser-install"; value: WebPlayInstallStatus | "loading"; purgedAt?: never }
-  | { kind: "player"; value: "running" | "starting" | "idle"; purgedAt?: never }
-  | { kind: "role"; value: Parameters<typeof roleLabel>[0]; purgedAt?: never };
+  | {
+      kind: "browser-install";
+      value: WebPlayInstallStatus | "loading";
+      purgedAt?: never;
+    }
+  | {
+      kind: "player";
+      value: "running" | "starting" | "idle";
+      purgedAt?: never;
+    };
 
-type BadgeTone =
-  | "pending"
-  | "positive"
-  | "uploader"
-  | "negative"
-  | "user"
-  | "admin"
-  | "super-admin";
+type BadgeTone = "pending" | "positive" | "uploader" | "negative" | "user" | "admin" | "super-admin";
 
 type BadgeMeta = {
   label: string;
@@ -39,11 +31,7 @@ type BadgeMeta = {
 export function StatusBadge(props: StatusBadgeProps) {
   const meta = badgeMeta(props);
 
-  return (
-    <span className={`badge status-badge status-badge--${meta.tone}`}>
-      {meta.label}
-    </span>
-  );
+  return <Badge variant={meta.tone}>{meta.label}</Badge>;
 }
 
 function badgeMeta(props: StatusBadgeProps): BadgeMeta {
@@ -75,12 +63,7 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
       };
     case "player":
       return {
-        label:
-          props.value === "running"
-            ? "运行中"
-            : props.value === "starting"
-              ? "启动中"
-              : "待机",
+        label: props.value === "running" ? "运行中" : props.value === "starting" ? "启动中" : "待机",
         tone: props.value === "running" ? "positive" : "pending",
       };
     case "approval":
@@ -93,25 +76,6 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
         label: userStatusLabel(props.value),
         tone: props.value === "active" ? "positive" : "negative",
       };
-    case "role": {
-      return {
-        label: roleLabel(props.value),
-        tone: roleTone(props.value),
-      };
-    }
-  }
-}
-
-function roleTone(value: Parameters<typeof roleLabel>[0]): BadgeTone {
-  switch (value) {
-    case "uploader":
-      return "uploader";
-    case "admin":
-      return "admin";
-    case "super_admin":
-      return "super-admin";
-    default:
-      return "user";
   }
 }
 

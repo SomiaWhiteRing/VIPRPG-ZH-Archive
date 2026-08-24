@@ -1,5 +1,5 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
-import { resolveRoleChangeRequest } from "@/lib/server/db/inbox";
+import { requirePermission } from "@/lib/server/auth/authorize";
+import { resolveRoleRequest } from "@/lib/server/db/permissions";
 import { readRequiredFormString, redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -12,7 +12,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "inbox.role_request.resolve");
 
   if ("response" in auth) {
     return auth.response;
@@ -26,7 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
       throw new Error("Invalid decision");
     }
 
-    await resolveRoleChangeRequest({
+    await resolveRoleRequest({
       actor: auth.user,
       itemId: parseItemId(rawItemId),
       decision,

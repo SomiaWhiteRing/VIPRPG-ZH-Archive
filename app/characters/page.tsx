@@ -1,11 +1,11 @@
+import { Input } from "@/app/components/ui/input";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatList } from "@/app/components/ui/stat-list";
-import {
-  listPublicCharacters,
-  type PublicCharacterSummary,
-} from "@/lib/server/db/taxonomy-library";
+import { listPublicCharacters, type PublicCharacterSummary } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
 
@@ -24,28 +24,30 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
     <main>
       <PageHeader eyebrow="Characters" title="登场角色" />
 
-      <form className="library-toolbar" action="/characters" method="get">
-        <label>
+      <form
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
+        action="/characters"
+        method="get"
+      >
+        <Label>
           <span>搜索</span>
-          <input defaultValue={query} name="q" placeholder="角色名、原名" type="search" />
-        </label>
-        <button className="button primary" type="submit">
-          筛选
-        </button>
+          <Input defaultValue={query} name="q" placeholder="角色名、原名" type="search" />
+        </Label>
+        <Button type="submit">筛选</Button>
         {query ? (
-          <Link className="button" href="/characters">
+          <Link className={buttonVariants({ variant: "outline" })} href="/characters">
             清除
           </Link>
         ) : null}
       </form>
 
-      <section className="library-summary" aria-label="角色摘要">
+      <section className="text-sm text-muted" aria-label="角色摘要">
         <strong>共 {formatNumber(characters.length)} </strong>
         <span>位角色</span>
       </section>
 
       {characters.length > 0 ? (
-        <section className="directory-card-grid" aria-label="角色列表">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="角色列表">
           {characters.map((character) => (
             <CharacterCard character={character} key={character.id} />
           ))}
@@ -59,21 +61,15 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
 
 function CharacterCard({ character }: { character: PublicCharacterSummary }) {
   return (
-    <article className="directory-card">
+    <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="directory-card-title" href={`/characters/${character.slug}`}>
+        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/characters/${character.slug}`}>
           {character.primaryName}
         </Link>
-        {character.originalName ? (
-          <span className="muted-line">{character.originalName}</span>
-        ) : null}
+        {character.originalName ? <span className="text-sm text-muted">{character.originalName}</span> : null}
       </div>
       {character.description ? <p>{character.description}</p> : null}
-      <StatList
-        columns={3}
-        items={[{ label: "登场作品", value: formatNumber(character.workCount) }]}
-        variant="tiles"
-      />
+      <StatList columns={3} items={[{ label: "登场作品", value: formatNumber(character.workCount) }]} variant="tiles" />
     </article>
   );
 }

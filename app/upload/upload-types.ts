@@ -30,6 +30,12 @@ export type UploadTaskPhase =
 
 export type UploadSourceKind = "folder" | "zip";
 
+export type MetadataBlobUpload = {
+  sha256: string;
+  file: File;
+  contentType: string;
+};
+
 export type BrowserUploadTaskSnapshot = {
   localTaskId: string;
   serverImportJobId: number | null;
@@ -101,6 +107,7 @@ export type UploadWorkerInput =
       sourceKind: UploadSourceKind;
       files: File[];
       metadata: ArchiveCommitMetadata;
+      metadataBlobs: MetadataBlobUpload[];
     }
   | {
       type: "pause";

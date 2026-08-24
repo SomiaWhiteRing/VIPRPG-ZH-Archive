@@ -1,4 +1,10 @@
 "use client";
+import { Input } from "@/app/components/ui/input";
+import { Button } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
+import { SelectField } from "@/app/components/ui/select";
+import { Checkbox } from "@/app/components/ui/checkbox";
 
 import {
   type ChangeEvent,
@@ -16,6 +22,8 @@ import { FormField } from "@/app/components/ui/form-field";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
+import { isPermissionKey } from "@/lib/authz/permissions";
+import type { MetadataBlobUpload } from "@/app/upload/upload-types";
 
 type FileInputMode = "folder" | "zip";
 type EngineFamily = "rpg_maker_2000" | "rpg_maker_2003";
@@ -84,7 +92,8 @@ type WorkReleaseLookupResult = {
 type CurrentUser = {
   email: string;
   displayName: string;
-  role: string;
+  roleKeys: string[];
+  permissionKeys: string[];
 };
 
 type ImageSelections = {
@@ -98,6 +107,8 @@ type ImageHashes = {
   thumbnailBlobSha256: string | null;
   browsingImageBlobSha256s: string[];
 };
+
+type PreparedImages = { hashes: ImageHashes; blobs: MetadataBlobUpload[] };
 
 const defaultForm: FlatMetadata = {
   workSlug: "",
@@ -177,17 +188,13 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   const [preparing, setPreparing] = useState(false);
 
   const recoverableTasks = useMemo(
-    () =>
-      tasks.filter((task) =>
-        ["needs_source_reselect", "failed_recoverable", "paused"].includes(task.status),
-      ),
+    () => tasks.filter((task) => ["needs_source_reselect", "failed_recoverable", "paused"].includes(task.status)),
     [tasks],
   );
   const selectedSourceSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
-  const selectedWork =
-    lookupState.results.find((work) => work.id === lookupState.selectedWorkId) ?? null;
+  const selectedWork = lookupState.results.find((work) => work.id === lookupState.selectedWorkId) ?? null;
   const releaseOptions = selectedWork?.releases ?? [];
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_admin";
+  const isAdmin = currentUser?.permissionKeys.some((key) => isPermissionKey(key) && key === "work.update") ?? false;
 
   useEffect(() => {
     const title = form.originalTitle.trim();
@@ -201,7 +208,10 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
       fetch(`/api/works/lookup?title=${encodeURIComponent(title)}`)
         .then(async (response) =>
           response.ok
-            ? ((await response.json()) as { ok: true; works: WorkLookupResult[] })
+            ? ((await response.json()) as {
+                ok: true;
+                works: WorkLookupResult[];
+              })
             : null,
         )
         .then((body) => {
@@ -212,7 +222,11 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
           }));
         })
         .catch(() => {
-          setLookupState((current) => ({ ...current, loading: false, results: [] }));
+          setLookupState((current) => ({
+            ...current,
+            loading: false,
+            results: [],
+          }));
         });
     }, 450);
 
@@ -238,8 +252,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   function applyExistingWork(work: WorkLookupResult) {
-    const engineFamily =
-      work.engineFamily === "rpg_maker_2003" ? "rpg_maker_2003" : "rpg_maker_2000";
+    const engineFamily = work.engineFamily === "rpg_maker_2003" ? "rpg_maker_2003" : "rpg_maker_2000";
     const originalTitle = work.originalTitle;
 
     setLookupState((current) => ({
@@ -305,25 +318,26 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     }
 
     if (!form.language.trim()) {
-      setSubmitError("请填写归档语言。");
+      setSubmitError("请填写版本语言。");
       return;
     }
 
     if (!form.archiveVariantLabel.trim()) {
-      setSubmitError("请填写归档名称。");
+      setSubmitError("请填写发布包名称。");
       return;
     }
 
     setPreparing(true);
 
     try {
-      const imageHashes = await uploadSelectedImages(imageSelections);
-      const metadata = buildMetadata(form, imageHashes);
+      const preparedImages = await prepareSelectedImages(imageSelections);
+      const metadata = buildMetadata(form, preparedImages.hashes);
 
       startUpload({
         sourceKind: mode,
         files: selectedFiles,
         metadata,
+        metadataBlobs: preparedImages.blobs,
         resumeLocalTaskId: resumeLocalTaskId || null,
       });
     } catch (error) {
@@ -334,81 +348,70 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   return (
-    <div className="upload-layout">
-      <aside className="upload-source-card">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <aside className="rounded-lg border border-border bg-card p-4">
         <Pane>
-        <SectionHeading eyebrow="上传来源" title="游戏文件" />
-        <div className="segmented-control" role="tablist" aria-label="源类型">
-          <button
-            className={mode === "folder" ? "active" : ""}
-            onClick={() => setMode("folder")}
-            type="button"
-          >
-            文件夹
-          </button>
-          <button
-            className={mode === "zip" ? "active" : ""}
-            onClick={() => setMode("zip")}
-            type="button"
-          >
-            本地 ZIP
-          </button>
-        </div>
-
-        {mode === "folder" ? (
-          <label className="file-drop">
-            <span>选择游戏目录</span>
-            <input
-              multiple
-              onChange={onSourceFileChange}
-              type="file"
-              {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
-            />
-          </label>
-        ) : (
-          <label className="file-drop">
-            <span>选择本地 ZIP</span>
-            <input accept=".zip,application/zip" onChange={onSourceFileChange} type="file" />
-          </label>
-        )}
-
-        <StatList
-          columns={2}
-          items={[
-            {
-              label: "已选择",
-              value: `${selectedFiles.length.toLocaleString("zh-CN")} 个文件`,
-            },
-            { label: "总大小", value: formatBytes(selectedSourceSize) },
-          ]}
-          variant="tiles"
-        />
-
-        {recoverableTasks.length > 0 ? (
-          <FormField label="恢复任务">
-            <select
-              onChange={(event) => setResumeLocalTaskId(event.target.value)}
-              value={resumeLocalTaskId}
+          <SectionHeading eyebrow="上传来源" title="游戏文件" />
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="源类型">
+            <Button
+              className={mode === "folder" ? "text-primary underline decoration-2 underline-offset-4" : ""}
+              onClick={() => setMode("folder")}
+              type="button"
             >
-              <option value="">作为新任务导入</option>
-              {recoverableTasks.map((task) => (
-                <option key={task.localTaskId} value={task.localTaskId}>
-                  恢复 {task.sourceName} / {Math.round(task.progress.percent)}%
-                </option>
-              ))}
-            </select>
-          </FormField>
-        ) : null}
+              文件夹
+            </Button>
+            <Button
+              className={mode === "zip" ? "text-primary underline decoration-2 underline-offset-4" : ""}
+              onClick={() => setMode("zip")}
+              type="button"
+            >
+              本地 ZIP
+            </Button>
+          </div>
+
+          {mode === "folder" ? (
+            <FilePicker accept="" directory label="选择游戏目录" multiple onChange={onSourceFileChange} />
+          ) : (
+            <FilePicker accept=".zip,application/zip" label="选择本地 ZIP" onChange={onSourceFileChange} />
+          )}
+
+          <StatList
+            columns={2}
+            items={[
+              {
+                label: "已选择",
+                value: `${selectedFiles.length.toLocaleString("zh-CN")} 个文件`,
+              },
+              { label: "总大小", value: formatBytes(selectedSourceSize) },
+            ]}
+            variant="tiles"
+          />
+
+          {recoverableTasks.length > 0 ? (
+            <FormField label="恢复任务">
+              <SelectField
+                onValueChange={setResumeLocalTaskId}
+                options={[
+                  { value: "", label: "作为新任务导入" },
+                  ...recoverableTasks.map((task) => ({
+                    value: task.localTaskId,
+                    label: `恢复 ${task.sourceName} / ${Math.round(task.progress.percent)}%`,
+                  })),
+                ]}
+                value={resumeLocalTaskId}
+              />
+            </FormField>
+          ) : null}
         </Pane>
       </aside>
 
-      <form className="upload-form-stack" onSubmit={onSubmit}>
+      <form className="grid gap-4" onSubmit={onSubmit}>
         <Pane>
           <SectionHeading eyebrow="第一步" title="作品" />
 
-          <div className="upload-form-grid">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField label="原名 *">
-              <input
+              <Input
                 onChange={(event) => onOriginalTitleChange(event.target.value)}
                 required
                 type="text"
@@ -416,88 +419,88 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
               />
             </FormField>
             <FormField label="游戏引擎 *">
-              <select
-                onChange={(event) =>
+              <SelectField
+                onValueChange={(value) =>
                   setForm((current) => ({
                     ...current,
-                    engineFamily: event.target.value as EngineFamily,
+                    engineFamily: value as EngineFamily,
                   }))
                 }
+                options={[
+                  { value: "rpg_maker_2000", label: "RPG Maker 2000" },
+                  { value: "rpg_maker_2003", label: "RPG Maker 2003" },
+                ]}
                 required
                 value={form.engineFamily}
-              >
-                <option value="rpg_maker_2000">RPG Maker 2000</option>
-                <option value="rpg_maker_2003">RPG Maker 2003</option>
-              </select>
+              />
             </FormField>
-            <TextField
-              form={form}
-              label="中文名"
-              name="chineseTitle"
-              setForm={setForm}
-            />
-            <div className="readonly-field">
+            <TextField form={form} label="中文名" name="chineseTitle" setForm={setForm} />
+            <div className="bg-muted/10">
               <FormField label="网址标识">
-                <input readOnly type="text" value={form.workSlug} />
+                <Input readOnly type="text" value={form.workSlug} />
               </FormField>
             </div>
           </div>
 
-          {lookupState.loading ? <p className="muted-line">正在查找同名作品…</p> : null}
+          {lookupState.loading ? <p className="text-sm text-muted">正在查找同名作品…</p> : null}
           {lookupState.results.length > 0 && !selectedWork ? (
-            <div className="lookup-panel">
+            <div className="grid gap-3 rounded-lg border border-border bg-card p-4">
               <strong>资料库中可能已有同名作品</strong>
               {lookupState.results.map((work) => (
-                <div className="lookup-row" key={work.id}>
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0"
+                  key={work.id}
+                >
                   <div>
                     <span>{work.originalTitle}</span>
                     <small>{work.slug}</small>
                   </div>
-                  <button onClick={() => applyExistingWork(work)} type="button">
+                  <Button onClick={() => applyExistingWork(work)} type="button">
                     关联此作品
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           ) : null}
           {selectedWork ? (
-            <p className="success-message compact">
+            <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-800 text-sm">
               已关联已有作品：{selectedWork.originalTitle}
             </p>
           ) : null}
 
-          <div className="checkbox-grid">
-            <label>
-              <input
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Label className="flex min-h-10 items-center gap-2">
+              <Checkbox
                 checked={form.usesManiacsPatch}
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   setForm((current) => ({
                     ...current,
-                    usesManiacsPatch: event.target.checked,
+                    usesManiacsPatch: checked === true,
                   }))
                 }
-                type="checkbox"
               />
               Maniacs Patch
-            </label>
+            </Label>
           </div>
 
-          <div className="upload-form-grid media-grid">
+          <div className="grid gap-4 md:grid-cols-2 grid gap-3 sm:grid-cols-3">
             <ImageField
               label="图标"
-              onChange={(file) =>
-                setImageSelections((current) => ({ ...current, icon: file }))
-              }
+              onChange={(file) => setImageSelections((current) => ({ ...current, icon: file }))}
             />
             <ImageField
               label="预览图"
               onChange={(file) =>
-                setImageSelections((current) => ({ ...current, thumbnail: file }))
+                setImageSelections((current) => ({
+                  ...current,
+                  thumbnail: file,
+                }))
               }
             />
             <FormField label="浏览图" wide>
-              <input
+              <FilePicker
                 accept="image/*"
+                label="选择浏览图"
                 multiple
                 onChange={(event) =>
                   setImageSelections((current) => ({
@@ -505,30 +508,27 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                     browsingImages: Array.from(event.target.files ?? []),
                   }))
                 }
-                type="file"
               />
             </FormField>
           </div>
 
-          <details className="upload-details">
+          <details className="grid gap-2">
             <summary>更多作品信息</summary>
-            <div className="upload-form-grid">
+            <div className="grid gap-4 md:grid-cols-2">
               <TextField form={form} label="排序标题" name="sortTitle" setForm={setForm} />
               <TextAreaField form={form} label="别名" name="aliasTitles" setForm={setForm} />
               <TextField form={form} label="标签" name="tags" setForm={setForm} />
-              <TextAreaField
-                form={form}
-                label="登场角色"
-                name="characters"
-                setForm={setForm}
-              />
+              <TextAreaField form={form} label="登场角色" name="characters" setForm={setForm} />
               <TextField form={form} label="作者名" name="creatorName" setForm={setForm} />
               <TextField form={form} label="作者链接" name="creatorUrl" setForm={setForm} />
             </div>
             <FormField label="简介">
-              <textarea
+              <Textarea
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, description: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
                 }
                 rows={4}
                 value={form.description}
@@ -542,59 +542,49 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
 
           {releaseOptions.length > 0 ? (
             <FormField label="使用已有发布版本">
-              <select
-                onChange={(event) => applyExistingRelease(event.target.value)}
+              <SelectField
+                onValueChange={applyExistingRelease}
+                options={[
+                  { value: "", label: "创建新发布版本" },
+                  ...releaseOptions.map((release) => ({
+                    value: String(release.id),
+                    label: `${release.label}${isAdmin ? ` / ${release.key}` : ""}`,
+                  })),
+                ]}
                 value={lookupState.selectedReleaseId ? String(lookupState.selectedReleaseId) : ""}
-              >
-                <option value="">创建新发布版本</option>
-                {releaseOptions.map((release) => (
-                  <option key={release.id} value={release.id}>
-                    {release.label}{isAdmin ? ` / ${release.key}` : ""}
-                  </option>
-                ))}
-              </select>
+              />
             </FormField>
           ) : null}
 
-          <div className="upload-form-grid">
+          <div className="grid gap-4 md:grid-cols-2">
             <FormField label="基底版本 *">
-              <select
-                onChange={(event) =>
+              <SelectField
+                onValueChange={(value) =>
                   setForm((current) => ({
                     ...current,
-                    baseVariant: event.target.value as ReleaseBaseVariant,
+                    baseVariant: value as ReleaseBaseVariant,
                   }))
                 }
+                options={baseVariantOptions}
                 required
                 value={form.baseVariant}
-              >
-                {baseVariantOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             </FormField>
             <FormField label="发布类型 *">
-              <select
-                onChange={(event) =>
+              <SelectField
+                onValueChange={(value) =>
                   setForm((current) => ({
                     ...current,
-                    releaseType: event.target.value as ReleaseType,
+                    releaseType: value as ReleaseType,
                   }))
                 }
+                options={releaseTypeOptions}
                 required
                 value={form.releaseType}
-              >
-                {releaseTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             </FormField>
             <FormField label="版本名称 *">
-              <input
+              <Input
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -608,7 +598,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
               />
             </FormField>
             <FormField label="发布日期">
-              <input
+              <Input
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -619,40 +609,39 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 value={form.releaseDate}
               />
             </FormField>
-            <div className="readonly-field">
+            <div className="bg-muted/10">
               <FormField label="上传者">
-                <input
-                  readOnly
-                  type="text"
-                  value={currentUser?.displayName || currentUser?.email || "当前登录账户"}
-                />
+                <Input readOnly type="text" value={currentUser?.displayName || currentUser?.email || "当前登录账户"} />
               </FormField>
             </div>
-            <div className="readonly-field">
+            <div className="bg-muted/10">
               <FormField label="自动版本名称">
-                <input readOnly type="text" value={buildReleaseLabel(form)} />
+                <Input readOnly type="text" value={buildReleaseLabel(form)} />
               </FormField>
             </div>
             {isAdmin ? (
-              <div className="readonly-field wide-field">
+              <div className="bg-muted/10 md:col-span-2">
                 <FormField label="版本代码">
-                  <input readOnly type="text" value={buildReleaseKey(form)} />
+                  <Input readOnly type="text" value={buildReleaseKey(form)} />
                 </FormField>
               </div>
             ) : null}
           </div>
 
-          <details className="upload-details">
+          <details className="grid gap-2">
             <summary>更多发布信息</summary>
-            <div className="upload-form-grid">
+            <div className="grid gap-4 md:grid-cols-2">
               <TextField form={form} label="来源名" name="sourceName" setForm={setForm} />
               <TextField form={form} label="来源链接" name="sourceUrl" setForm={setForm} />
               <TextField form={form} label="可执行入口" name="executablePath" setForm={setForm} />
             </div>
             <FormField label="版权/授权备注">
-              <textarea
+              <Textarea
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, rightsNotes: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    rightsNotes: event.target.value,
+                  }))
                 }
                 rows={3}
                 value={form.rightsNotes}
@@ -662,10 +651,10 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
         </Pane>
 
         <Pane>
-          <SectionHeading eyebrow="第三步" title="归档快照" />
-          <div className="upload-form-grid">
-            <FormField label="归档语言 *">
-              <input
+          <SectionHeading eyebrow="第三步" title="文件版本" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="版本语言 *">
+              <Input
                 list="upload-language-options"
                 onChange={(event) =>
                   setForm((current) => ({
@@ -685,8 +674,8 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 ))}
               </datalist>
             </FormField>
-            <FormField label="归档名称 *">
-              <input
+            <FormField label="发布包名称 *">
+              <Input
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -699,49 +688,52 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 value={form.archiveVariantLabel}
               />
             </FormField>
-            <div className="readonly-field">
-              <FormField label="自动归档名称">
-                <input readOnly type="text" value={buildArchiveVersionLabel(form)} />
+            <div className="bg-muted/10">
+              <FormField label="自动生成名称">
+                <Input readOnly type="text" value={buildArchiveVersionLabel(form)} />
               </FormField>
             </div>
             {isAdmin ? (
-              <div className="readonly-field wide-field">
-                <FormField label="归档代码">
-                  <input readOnly type="text" value={buildArchiveVersionKey(form)} />
+              <div className="bg-muted/10 md:col-span-2">
+                <FormField label="版本代码">
+                  <Input readOnly type="text" value={buildArchiveVersionKey(form)} />
                 </FormField>
               </div>
             ) : null}
           </div>
-          <div className="checkbox-grid">
-            <label>
-              <input
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Label className="flex min-h-10 items-center gap-2">
+              <Checkbox
                 checked={form.isProofread}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, isProofread: event.target.checked }))
-                }
-                type="checkbox"
-              />
-              已校对
-            </label>
-            <label>
-              <input
-                checked={form.isImageEdited}
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   setForm((current) => ({
                     ...current,
-                    isImageEdited: event.target.checked,
+                    isProofread: checked === true,
                   }))
                 }
-                type="checkbox"
+              />
+              已校对
+            </Label>
+            <Label className="flex min-h-10 items-center gap-2">
+              <Checkbox
+                checked={form.isImageEdited}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({
+                    ...current,
+                    isImageEdited: checked === true,
+                  }))
+                }
               />
               已修图
-            </label>
+            </Label>
           </div>
-          <div className="upload-submit-bar">
-            {submitError ? <p className="error-message compact">{submitError}</p> : null}
-            <button className="button primary" disabled={preparing} type="submit">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            {submitError ? (
+              <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{submitError}</p>
+            ) : null}
+            <Button disabled={preparing} type="submit">
               {preparing ? "正在准备…" : "开始导入"}
-            </button>
+            </Button>
           </div>
         </Pane>
       </form>
@@ -762,11 +754,9 @@ function TextField({
 }) {
   return (
     <FormField label={label}>
-      <input
+      <Input
         name={name}
-        onChange={(event) =>
-          setForm((current) => ({ ...current, [name]: event.target.value }))
-        }
+        onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}
         type="text"
         value={String(form[name])}
       />
@@ -787,11 +777,9 @@ function TextAreaField({
 }) {
   return (
     <FormField label={label}>
-      <textarea
+      <Textarea
         name={name}
-        onChange={(event) =>
-          setForm((current) => ({ ...current, [name]: event.target.value }))
-        }
+        onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}
         rows={3}
         value={String(form[name])}
       />
@@ -799,29 +787,56 @@ function TextAreaField({
   );
 }
 
-function ImageField({
-  label,
-  onChange,
-}: {
-  label: string;
-  onChange: (file: File | null) => void;
-}) {
+function ImageField({ label, onChange }: { label: string; onChange: (file: File | null) => void }) {
   return (
     <FormField label={label}>
-      <input
+      <FilePicker
         accept="image/*"
+        label={`选择${label}`}
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-        type="file"
       />
     </FormField>
+  );
+}
+
+function FilePicker({
+  accept,
+  directory = false,
+  label,
+  multiple = false,
+  onChange,
+}: {
+  accept: string;
+  directory?: boolean;
+  label: string;
+  multiple?: boolean;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const inputId = `file-picker-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+  return (
+    <div className="grid gap-3 rounded-lg border-2 border-dashed border-border bg-card p-6 text-center">
+      <Button asChild variant="outline">
+        <Label className="cursor-pointer" htmlFor={inputId}>
+          {label}
+        </Label>
+      </Button>
+      <input
+        accept={accept || undefined}
+        className="sr-only"
+        id={inputId}
+        multiple={multiple}
+        onChange={onChange}
+        type="file"
+        {...(directory ? { webkitdirectory: "", directory: "" } : {})}
+      />
+    </div>
   );
 }
 
 function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCommitMetadata {
   const originalTitle = form.originalTitle.trim();
   const chineseTitle = form.chineseTitle.trim();
-  const creatorSlug =
-    form.creatorSlug.trim() || (form.creatorName.trim() ? slugFromTitle(form.creatorName) : "");
+  const creatorSlug = form.creatorSlug.trim() || (form.creatorName.trim() ? slugFromTitle(form.creatorName) : "");
   const creator =
     creatorSlug && form.creatorName.trim()
       ? [
@@ -850,8 +865,7 @@ function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCom
       originalReleaseDate: null,
       originalReleasePrecision: "unknown",
       engineFamily: form.engineFamily,
-      engineDetail:
-        form.engineFamily === "rpg_maker_2003" ? "RPG Maker 2003" : "RPG Maker 2000",
+      engineDetail: form.engineFamily === "rpg_maker_2003" ? "RPG Maker 2003" : "RPG Maker 2000",
       usesManiacsPatch: form.usesManiacsPatch,
       iconBlobSha256: imageHashes.iconBlobSha256,
       thumbnailBlobSha256: imageHashes.thumbnailBlobSha256,
@@ -929,53 +943,37 @@ function buildMetadata(form: FlatMetadata, imageHashes: ImageHashes): ArchiveCom
   };
 }
 
-async function uploadSelectedImages(input: ImageSelections): Promise<ImageHashes> {
-  const iconBlobSha256 = input.icon ? await uploadMetadataImage(input.icon) : null;
-  const thumbnailBlobSha256 = input.thumbnail
-    ? await uploadMetadataImage(input.thumbnail)
-    : null;
+async function prepareSelectedImages(input: ImageSelections): Promise<PreparedImages> {
+  const blobs: MetadataBlobUpload[] = [];
+  const iconBlobSha256 = input.icon ? await prepareMetadataImage(input.icon, blobs) : null;
+  const thumbnailBlobSha256 = input.thumbnail ? await prepareMetadataImage(input.thumbnail, blobs) : null;
   const browsingImageBlobSha256s: string[] = [];
 
   for (const file of input.browsingImages) {
-    browsingImageBlobSha256s.push(await uploadMetadataImage(file));
+    browsingImageBlobSha256s.push(await prepareMetadataImage(file, blobs));
   }
 
   return {
-    iconBlobSha256,
-    thumbnailBlobSha256,
-    browsingImageBlobSha256s,
+    hashes: { iconBlobSha256, thumbnailBlobSha256, browsingImageBlobSha256s },
+    blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()],
   };
 }
 
-async function uploadMetadataImage(file: File): Promise<string> {
+async function prepareMetadataImage(file: File, blobs: MetadataBlobUpload[]): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error(`${file.name} 不是图片文件。`);
   }
 
   const bytes = await file.arrayBuffer();
   const sha256 = await sha256Hex(bytes);
-  const response = await fetch(`/api/blobs/${sha256}`, {
-    method: "PUT",
-    credentials: "same-origin",
-    headers: {
-      "content-type": file.type || "application/octet-stream",
-    },
-    body: bytes,
-  });
-
-  if (!response.ok) {
-    throw new Error(`图片上传失败：${file.name}`);
-  }
-
+  blobs.push({ sha256, file, contentType: file.type });
   return sha256;
 }
 
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buffer);
 
-  return [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function cleanNullable(value: string): string | null {
@@ -1009,39 +1007,23 @@ function parseCharacterLines(value: string): NonNullable<ArchiveCommitMetadata["
 }
 
 function buildReleaseLabel(form: FlatMetadata): string {
-  return [
-    baseVariantDisplay(form.baseVariant),
-    releaseTypeShortDisplay(form.releaseType),
-    form.variantLabel.trim(),
-  ]
+  return [baseVariantDisplay(form.baseVariant), releaseTypeShortDisplay(form.releaseType), form.variantLabel.trim()]
     .filter(Boolean)
     .join("・");
 }
 
 function buildReleaseKey(form: FlatMetadata): string {
-  return [
-    form.baseVariant,
-    form.releaseType,
-    keyPart(form.variantLabel),
-  ].join(".");
+  return [form.baseVariant, form.releaseType, keyPart(form.variantLabel)].join(".");
 }
 
 function buildArchiveVersionLabel(form: FlatMetadata): string {
-  return [
-    languageDisplay(form.language),
-    archiveQualityDisplay(form),
-    form.archiveVariantLabel.trim(),
-  ]
+  return [languageDisplay(form.language), archiveQualityDisplay(form), form.archiveVariantLabel.trim()]
     .filter(Boolean)
     .join("・");
 }
 
 function buildArchiveVersionKey(form: FlatMetadata): string {
-  return [
-    keyPart(form.language),
-    archiveQualityKey(form),
-    keyPart(form.archiveVariantLabel),
-  ].join(".");
+  return [keyPart(form.language), archiveQualityKey(form), keyPart(form.archiveVariantLabel)].join(".");
 }
 
 function baseVariantDisplay(value: ReleaseBaseVariant): string {

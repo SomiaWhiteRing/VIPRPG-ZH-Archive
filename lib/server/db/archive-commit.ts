@@ -9,7 +9,7 @@ import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
 import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
-import { assertImportJobAccess, requiredImportJob } from "@/lib/server/db/import-jobs";
+import { requiredOwnedImportJob } from "@/lib/server/db/import-jobs";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { putManifest } from "@/lib/server/storage/archive-bucket";
 
@@ -58,8 +58,7 @@ type ArchiveVersionLabelRow = {
 export async function commitArchiveImport(
   input: CommitArchiveImportInput,
 ): Promise<CommitArchiveImportResult> {
-  const job = await requiredImportJob(input.importJobId);
-  assertImportJobAccess(job, input.user);
+  const job = await requiredOwnedImportJob(input.importJobId, input.user);
 
   if (job.status === "canceled") {
     throw new Error("Import job is canceled");

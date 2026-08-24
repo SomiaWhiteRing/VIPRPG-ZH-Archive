@@ -1,187 +1,107 @@
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
-import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { canManageUsersRole, canUploadRole } from "@/lib/server/auth/roles";
-import {
-  getPublicArchiveCounts,
-  listRecentlyUpdatedWorks,
-} from "@/lib/server/db/public-overview";
-import { formatNumber, formatDateOnly } from "@/lib/format";
+import { listGameWorks } from "@/lib/server/db/game-library";
+import { HomeTabs } from "@/app/components/home/home-tabs";
+import { HomeGameCard } from "@/app/components/home/game-card";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
 export const dynamic = "force-dynamic";
 
-const ENTRIES = [
-  {
-    href: "/games",
-    icon: "🎮",
-    title: "作品",
-    description: "查找归档作品",
-    countKey: "works",
-  },
-  {
-    href: "/creators",
-    icon: "🖌️",
-    title: "作者与制作人员",
-    description: "查看参与人员",
-    countKey: "creators",
-  },
-  {
-    href: "/characters",
-    icon: "👥",
-    title: "登场角色",
-    description: "按角色找作品",
-    countKey: "characters",
-  },
-  {
-    href: "/tags",
-    icon: "🏷️",
-    title: "标签",
-    description: "按标签找作品",
-    countKey: "tags",
-  },
-  {
-    href: "/series",
-    icon: "📚",
-    title: "系列",
-    description: "查看系列归属",
-    countKey: "series",
-  },
-] as const;
-
 export default async function HomePage() {
-  const [currentUser, counts, recent] = await Promise.all([
-    getCurrentUserFromCookies(),
-    getPublicArchiveCounts(),
-    listRecentlyUpdatedWorks(8),
-  ]);
-
-  const canUpload = currentUser ? canUploadRole(currentUser.role) : false;
-  const canAdmin = currentUser ? canManageUsersRole(currentUser.role) : false;
+  const [currentUser, works] = await Promise.all([getCurrentUserFromCookies(), listGameWorks({ limit: 9 })]);
 
   return (
-    <main>
-      <section className="festival-hero" aria-label="站点入口">
-        <p className="eyebrow">VIPRPG Chinese Archive</p>
-        <h1>VIPRPG 中文归档</h1>
-        <p>
-          保存 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，可在线游玩与下载。
-        </p>
-        <form className="festival-hero-search" action="/games" method="get">
-          <input
-            aria-label="搜索作品、作者、角色、标签"
+    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
+      <section
+        className="grid gap-8 border-b border-border py-6 pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end"
+        aria-label="作品发现"
+      >
+        <div>
+          <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-accent">VIPRPG / PLAY SPACE</p>
+          <h1 className="text-4xl font-extrabold leading-[0.98] tracking-tight md:text-6xl">
+            发现下一款
+            <br />
+            想玩的 RPG。
+          </h1>
+          <p className="mt-4 max-w-xl text-lg leading-8 text-muted">
+            浏览 VIPRPG 社区里的 RPG Maker 作品，进入详情、在线游玩或下载。
+          </p>
+        </div>
+        <form className="flex gap-2" action="/search" method="get">
+          <Label className="sr-only" htmlFor="home-search">
+            搜索作品
+          </Label>
+          <Input
+            className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground shadow-sm outline-none placeholder:text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+            id="home-search"
             name="q"
-            placeholder="搜索作品 / 作者 / 角色 / 标签"
+            placeholder="搜索作品、作者、标签或角色"
             type="search"
           />
-          <button type="submit">搜索</button>
+          <Rm2kButton type="submit">搜索</Rm2kButton>
         </form>
       </section>
 
-      <section className="festival-zone" aria-label="项目简介">
-        <Pane heading="收录范围">
-          <p>
-            收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，包括原版、汉化版、修正版与活动投稿。
-          </p>
-          <p>
-            技术细节与保存边界见 <Link href="/about">关于本归档</Link>。
-          </p>
-        </Pane>
-      </section>
+      <HomeTabs />
 
-      <section className="festival-zone" aria-label="主要入口">
-        <SectionHeading
-          action={<Link href="/games">查看全部作品 →</Link>}
-          title="浏览板"
-        />
-        <div className="entry-grid">
-          {ENTRIES.map((entry) => {
-            const count = counts[entry.countKey];
-            return (
-              <Link key={entry.href} className="entry-card" href={entry.href}>
-                <span className="entry-card-icon" aria-hidden>
-                  {entry.icon}
-                </span>
-                <h3>{entry.title}</h3>
-                <p>{entry.description}</p>
-                <span className="entry-card-count">
-                  {formatNumber(count)} 条
-                </span>
-              </Link>
-            );
-          })}
+      <section className="scroll-mt-36" id="recent-updates" aria-labelledby="recent-updates-title">
+        <div className="mb-5 flex items-end justify-between gap-5">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight" id="recent-updates-title">
+              最近更新
+            </h2>
+            <p className="mt-1 text-muted">最近有新版本或新内容的作品。</p>
+          </div>
+          <Link className="text-sm font-bold text-primary hover:text-accent" href="/games">
+            查看全部游戏 →
+          </Link>
         </div>
+        {works.length > 0 ? (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {works.map((work) => (
+              <HomeGameCard key={work.id} work={work} />
+            ))}
+          </div>
+        ) : (
+          <p className="max-w-[700px] text-muted leading-7">目前还没有公开作品。</p>
+        )}
       </section>
 
-      <section className="festival-zone" aria-label="参与贡献">
-        <SectionHeading title="参与贡献" />
-        <div className="contribute-grid">
-          {!currentUser ? (
-            <>
-              <Link className="entry-card" href="/login">
-                <span className="entry-card-icon" aria-hidden>🔑</span>
-                <h3>登录</h3>
-                <p>查看站内信与账户状态。</p>
-              </Link>
-              <Link className="entry-card" href="/register">
-                <span className="entry-card-icon" aria-hidden>📝</span>
-                <h3>注册账号</h3>
-                <p>注册后可申请上传权限。</p>
-              </Link>
-            </>
-          ) : null}
-          {currentUser && !canUpload ? (
-            <Link className="entry-card" href="/me">
-              <span className="entry-card-icon" aria-hidden>📨</span>
-              <h3>申请上传权限</h3>
-              <p>上传需要上传者权限，可在「我的账户」申请。</p>
-            </Link>
-          ) : null}
-          {currentUser && canUpload ? (
-            <>
-              <Link className="entry-card" href="/upload">
-                <span className="entry-card-icon" aria-hidden>📤</span>
-                <h3>上传归档</h3>
-                <p>在浏览器内直接导入本地游戏目录，只上传缺少的文件。</p>
-              </Link>
-              <Link className="entry-card" href="/upload/tasks">
-                <span className="entry-card-icon" aria-hidden>🧾</span>
-                <h3>我的导入任务</h3>
-                <p>查看导入进度与结果。</p>
-              </Link>
-            </>
-          ) : null}
-          {canAdmin ? (
-            <Link className="entry-card" href="/admin">
-              <span className="entry-card-icon" aria-hidden>🛠️</span>
-              <h3>管理控制台</h3>
-              <p>处理内容、用户与维护事项。</p>
-            </Link>
-          ) : null}
+      <section className="scroll-mt-36" id="about-site" aria-labelledby="about-site-title">
+        <div className="mb-5 flex items-end justify-between gap-5">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight" id="about-site-title">
+              关于本站
+            </h2>
+            <p className="mt-1 text-muted">一个面向玩家的 VIPRPG 作品空间。</p>
+          </div>
+          <Link className="text-sm font-bold text-primary hover:text-accent" href="/about">
+            了解更多 →
+          </Link>
         </div>
-      </section>
-
-      <section className="festival-zone" aria-label="最近更新">
-        <SectionHeading
-          action={<Link href="/games">查看全部作品 →</Link>}
-          title="最近更新"
-        />
-        <Pane>
-          {recent.length > 0 ? (
-            <ul className="recent-update-list">
-              {recent.map((item) => (
-                <li key={item.slug}>
-                  <Link href={`/games/${item.slug}`}>{item.title}</Link>
-                  <time dateTime={item.updatedAt}>
-                    {formatDateOnly(item.updatedAt)}
-                  </time>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted-line">还没有公开作品。</p>
-          )}
-        </Pane>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
+          <p className="max-w-[700px] text-muted leading-7">
+            VIPRPG.org 收录 VIPRPG 活动与社区相关的 RPG Maker 2000/2003 作品，
+            提供清晰的作品资料、版本选择、在线游玩和下载入口。这里优先展示真实作品内容，
+            让你从浏览到开始游戏只需要几步。
+          </p>
+          <div className="grid gap-3 border-l-4 border-accent pl-5">
+            <div>
+              <strong>作品优先</strong>
+              <span>封面、简介和游玩入口先于技术细节。</span>
+            </div>
+            <div>
+              <strong>可追溯</strong>
+              <span>不同发布版本独立展示，来源和变更保持清晰。</span>
+            </div>
+            <div>
+              <strong>一起补充</strong>
+              <span>{currentUser ? "可以从账户入口查看你的贡献状态。" : "登录后可以申请上传权限。"}</span>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   );

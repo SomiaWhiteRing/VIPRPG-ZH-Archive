@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -36,7 +37,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
         actions={
           <>
             <BackLink href="/series" label="返回系列列表" />
-            <Link className="button" href="/games">
+            <Link className={buttonVariants({ variant: "outline" })} href="/games">
               游戏资料库
             </Link>
             {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
@@ -54,7 +55,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
 
       <Pane heading="系列作品">
         {series.works.length > 0 ? (
-          <TableWrap compact label="系列作品" minWidth={760} mobileCards>
+          <TableWrap compact label="系列作品" minWidth={760}>
             <thead>
               <tr>
                 <th>顺序</th>
@@ -70,7 +71,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
                   <td data-label="作品">
                     <Link href={`/games/${work.slug}`}>{work.title}</Link>
                     {work.title !== work.originalTitle ? (
-                      <span className="muted-line">{work.originalTitle}</span>
+                      <span className="text-sm text-muted">{work.originalTitle}</span>
                     ) : null}
                   </td>
                   <td data-label="关系">{seriesRelationLabel(work.relationKind)}</td>
@@ -80,7 +81,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
             </tbody>
           </TableWrap>
         ) : (
-          <p className="muted-line">暂无公开系列作品。</p>
+          <p className="text-sm text-muted">暂无公开系列作品。</p>
         )}
       </Pane>
     </main>

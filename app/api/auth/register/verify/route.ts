@@ -1,5 +1,6 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 import { createSessionCookie } from "@/lib/server/auth/session";
+import { assertSameOrigin } from "@/lib/server/auth/origin";
 import { hashVerificationCode } from "@/lib/server/auth/tokens";
 import { consumeLatestEmailChallenge } from "@/lib/server/db/auth-challenges";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(readRequiredFormString(formData, "email"));
 
   try {
+    assertSameOrigin(request);
     const challenge = await consumeLatestEmailChallenge({
       email,
       purpose: "register",
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     const response = redirectResponse(new URL(nextPath, request.url));
     response.headers.append(
       "Set-Cookie",
-      await createSessionCookie(user.id, request.url),
+      await createSessionCookie(user.id, request),
     );
 
     return response;

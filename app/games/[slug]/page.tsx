@@ -1,3 +1,4 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,17 +11,10 @@ import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import {
-  getGameWorkDetail,
-  type GameArchiveVersionDetail,
-} from "@/lib/server/db/game-library";
+import { getGameWorkDetail, type GameArchiveVersionDetail } from "@/lib/server/db/game-library";
 import { formatNumber, formatBytes } from "@/lib/format";
-import {
-  baseVariantLabel,
-  creatorRoleLabel,
-  engineLabel,
-  releaseTypeLabel,
-} from "@/lib/labels";
+import { baseVariantLabel, creatorRoleLabel, engineLabel, releaseTypeLabel } from "@/lib/labels";
+import { publicCopy } from "@/lib/public-copy";
 import { WorkActionBar } from "./work-action-bar";
 
 export const dynamic = "force-dynamic";
@@ -50,30 +44,24 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
         eyebrow="Game Work"
         subtitle={work.chineseTitle ? work.originalTitle : undefined}
         title={
-          <span className="work-title-line">
+          <span className="flex flex-wrap items-baseline gap-2">
             {title}
             <StatusBadge kind="publication" value={work.status} />
           </span>
         }
       />
 
-      <section className="work-hero">
-        <div className="work-hero-visual">
-          <div className="work-hero-media">
+      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,380px)]">
+        <div className="aspect-video w-full object-cover">
+          <div className="overflow-hidden rounded-lg border border-border bg-muted/15">
             {primaryMedia ? (
-              <Image
-                alt={title}
-                height={360}
-                src={`/api/media/blobs/${primaryMedia}`}
-                unoptimized
-                width={640}
-              />
+              <Image alt={title} height={360} src={`/api/media/blobs/${primaryMedia}`} unoptimized width={640} />
             ) : (
               <span>{engineLabel(work.engineFamily)}</span>
             )}
           </div>
           {work.media.length > 1 ? (
-            <section className="work-preview-strip" aria-label="浏览图">
+            <section className="grid gap-3 sm:grid-cols-3" aria-label="浏览图">
               {work.media.slice(1).map((media) => (
                 <Image
                   alt={media.altText ?? title}
@@ -99,7 +87,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
               currentArchive
                 ? {
                     id: currentArchive.id,
-                    label: currentArchive.archiveLabel,
+                    label: publicCopy(currentArchive.archiveLabel) ?? currentArchive.archiveLabel,
                     downloadHref: `/api/archive-versions/${currentArchive.id}/download?zip_builder=${downloadZipBuilderVersion}`,
                     totalFiles: currentArchive.totalFiles,
                     totalSizeBytes: currentArchive.totalSizeBytes,
@@ -108,7 +96,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
             }
             canPlayInBrowser={!work.usesManiacsPatch}
           />
-          {work.description ? <p>{work.description}</p> : null}
+          {work.description ? <p>{publicCopy(work.description)}</p> : null}
           <StatList
             items={[
               {
@@ -116,22 +104,33 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 value: formatDateish(work.originalReleaseDate, work.originalReleasePrecision),
               },
               { label: "发布分支", value: formatNumber(work.releaseCount) },
-              { label: "归档快照", value: formatNumber(work.archiveVersionCount) },
-              { label: "当前归档容量", value: formatBytes(work.totalSizeBytes) },
+              {
+                label: "文件版本",
+                value: formatNumber(work.archiveVersionCount),
+              },
+              {
+                label: "当前文件大小",
+                value: formatBytes(work.totalSizeBytes),
+              },
             ]}
           />
         </Pane>
       </section>
 
-      <section className="release-list" aria-label="发布版本">
-        <SectionHeading title="发布版本与归档" />
+      <section className="grid gap-3" aria-label="发布版本">
+        <SectionHeading title="发布版本与下载" />
         {work.releases.map((release) => (
           <Pane
             compact
             heading={release.label}
             headingAction={
               release.sourceUrl ? (
-                <a className="button" href={release.sourceUrl} rel="noreferrer" target="_blank">
+                <a
+                  className={buttonVariants({ variant: "outline" })}
+                  href={release.sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   来源
                 </a>
               ) : null
@@ -139,7 +138,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
             headingLevel={3}
             key={release.id}
           >
-            <p className="muted-line">
+            <p className="text-sm text-muted">
               {releaseTypeLabel(release.type)} / {baseVariantLabel(release.baseVariant)}
               {" / "}
               {formatDateish(release.releaseDate, release.releaseDatePrecision)}
@@ -168,11 +167,11 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 ]}
               />
             ) : null}
-            <div className="release-archive-table">
-              <TableWrap compact label={`${release.label}归档列表`} minWidth={760}>
+            <div className="w-full overflow-x-auto">
+              <TableWrap compact label={`${release.label}下载版本列表`} minWidth={760}>
                 <thead>
                   <tr>
-                    <th>归档</th>
+                    <th>下载版本</th>
                     <th>状态</th>
                     <th>规模</th>
                     <th>操作</th>
@@ -182,36 +181,33 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                   {release.archiveVersions.map((archive) => (
                     <tr key={archive.id}>
                       <td>
-                        <strong>{archive.archiveLabel}</strong>
-                        <span className="mono muted-line">{archive.archiveKey}</span>
+                        <strong>{publicCopy(archive.archiveLabel)}</strong>
+                        <span className="font-mono text-sm text-primary text-sm text-muted">{archive.archiveKey}</span>
                         {archive.uploaderName ? (
-                          <span className="muted-line">上传者：{archive.uploaderName}</span>
+                          <span className="text-sm text-muted">上传者：{archive.uploaderName}</span>
                         ) : null}
                       </td>
-                      <td><ArchiveBadges archive={archive} /></td>
                       <td>
-                        {formatNumber(archive.totalFiles)} 文件
-                        <span className="muted-line">
-                          {formatBytes(archive.totalSizeBytes)}
-                        </span>
+                        <ArchiveBadges archive={archive} />
                       </td>
                       <td>
-                        <ArchiveActions
-                          archiveId={archive.id}
-                          canPlayInBrowser={!work.usesManiacsPatch}
-                        />
+                        {formatNumber(archive.totalFiles)} 文件
+                        <span className="text-sm text-muted">{formatBytes(archive.totalSizeBytes)}</span>
+                      </td>
+                      <td>
+                        <ArchiveActions archiveId={archive.id} canPlayInBrowser={!work.usesManiacsPatch} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </TableWrap>
             </div>
-            <ul className="archive-card-list" aria-label={`${release.label}归档列表`}>
+            <ul className="grid gap-3" aria-label={`${release.label}下载版本列表`}>
               {release.archiveVersions.map((archive) => (
-                <li className="archive-card" key={archive.id}>
+                <li className="rounded-lg border border-border bg-card p-4 shadow-sm" key={archive.id}>
                   <header>
-                    <strong>{archive.archiveLabel}</strong>
-                    <span className="mono muted-line">{archive.archiveKey}</span>
+                    <strong>{publicCopy(archive.archiveLabel)}</strong>
+                    <span className="font-mono text-sm text-primary text-sm text-muted">{archive.archiveKey}</span>
                   </header>
                   <ArchiveBadges archive={archive} />
                   <StatList
@@ -224,15 +220,10 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                         label: "发布日期",
                         value: formatDateish(archive.publishedAt, archive.publishedAt ? "day" : "unknown"),
                       },
-                      ...(archive.uploaderName
-                        ? [{ label: "上传者", value: archive.uploaderName }]
-                        : []),
+                      ...(archive.uploaderName ? [{ label: "上传者", value: archive.uploaderName }] : []),
                     ]}
                   />
-                  <ArchiveActions
-                    archiveId={archive.id}
-                    canPlayInBrowser={!work.usesManiacsPatch}
-                  />
+                  <ArchiveActions archiveId={archive.id} canPlayInBrowser={!work.usesManiacsPatch} />
                 </li>
               ))}
             </ul>
@@ -241,7 +232,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
       </section>
 
       <Pane heading="资料">
-        <div className="work-data-groups">
+        <div className="grid gap-4">
           <section>
             <h3>名称</h3>
             <StatList
@@ -258,13 +249,13 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           <section>
             <h3>制作人员</h3>
             {work.creators.length > 0 ? (
-              <ul className="plain-list">
+              <ul className="mt-3 grid gap-3">
                 {work.creators.map((creator) => (
                   <li key={`${creator.slug}-${creator.roleKey}`}>
                     <Link href={`/creators/${creator.slug}`}>
                       <strong>{creator.name}</strong>
                     </Link>
-                    <span className="muted-line">
+                    <span className="text-sm text-muted">
                       {creator.roleLabel || creatorRoleLabel(creator.roleKey)}
                       {creator.originalName ? ` / ${creator.originalName}` : ""}
                     </span>
@@ -272,7 +263,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 ))}
               </ul>
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
           <section>
@@ -285,7 +276,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 }))}
               />
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
           <section>
@@ -298,60 +289,58 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 }))}
               />
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
           <section>
             <h3>系列</h3>
             {work.series.length > 0 ? (
-              <ul className="plain-list">
+              <ul className="mt-3 grid gap-3">
                 {work.series.map((item) => (
                   <li key={item.seriesId}>
                     <Link href={`/series/${item.slug}`}>
                       <strong>{item.title}</strong>
                     </Link>
-                    <span className="muted-line">
-                      {item.positionLabel || item.relationKind}
-                    </span>
+                    <span className="text-sm text-muted">{item.positionLabel || item.relationKind}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
           <section>
             <h3>外部链接</h3>
             {work.externalLinks.length > 0 ? (
-              <ul className="plain-list">
+              <ul className="mt-3 grid gap-3">
                 {work.externalLinks.map((link) => (
                   <li key={link.id}>
                     <a href={link.url} rel="noreferrer" target="_blank">
                       {link.label}
                     </a>
-                    <span className="muted-line">{linkTypeLabel(link.linkType)}</span>
+                    <span className="text-sm text-muted">{linkTypeLabel(link.linkType)}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
           <section>
             <h3>相关作品</h3>
             {work.relations.length > 0 ? (
-              <ul className="plain-list">
+              <ul className="mt-3 grid gap-3">
                 {work.relations.map((relation) => (
                   <li key={`${relation.direction}-${relation.workId}-${relation.relationType}`}>
                     <Link href={`/games/${relation.slug}`}>{relation.title}</Link>
-                    <span className="muted-line">
+                    <span className="text-sm text-muted">
                       {relationLabel(relation.relationType, relation.direction)}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted-line">未填写。</p>
+              <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
         </div>
@@ -374,27 +363,21 @@ function ArchiveBadges({ archive }: { archive: GameArchiveVersionDetail }) {
   );
 }
 
-function ArchiveActions({
-  archiveId,
-  canPlayInBrowser,
-}: {
-  archiveId: number;
-  canPlayInBrowser: boolean;
-}) {
+function ArchiveActions({ archiveId, canPlayInBrowser }: { archiveId: number; canPlayInBrowser: boolean }) {
   return (
-    <div className="actions compact-actions">
+    <div className="flex flex-wrap items-center gap-3">
       <a
-        className="button primary"
+        className={buttonVariants()}
         href={`/api/archive-versions/${archiveId}/download?zip_builder=${downloadZipBuilderVersion}`}
       >
         下载 ZIP
       </a>
       {canPlayInBrowser ? (
-        <Link className="button" href={`/play/${archiveId}`}>
+        <Link className={buttonVariants({ variant: "outline" })} href={`/play/${archiveId}`}>
           在线游玩
         </Link>
       ) : (
-        <span className="muted-line">暂不支持在线游玩</span>
+        <span className="text-sm text-muted">暂不支持在线游玩</span>
       )}
     </div>
   );

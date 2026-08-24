@@ -1,4 +1,5 @@
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
+import { assertSameOrigin } from "@/lib/server/auth/origin";
 import { buildAuthCallbackUrl } from "@/lib/server/auth/callback-url";
 import { hashPassword } from "@/lib/server/auth/password";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   const nextPath = sanitizeRedirectPath(formData.get("next"));
 
   try {
+    assertSameOrigin(request);
     const email = normalizeEmail(readRequiredFormString(formData, "email"));
     const existingUser = await findUserByEmail(email);
 

@@ -2,16 +2,11 @@ import type { Metadata } from "next";
 import { UploadTaskProvider } from "@/app/upload/upload-task-provider";
 import { SiteHeader } from "@/app/components/site-header";
 import { SiteFooter } from "@/app/components/site-footer";
-import { ThemeBodyClass } from "@/app/components/theme-body-class";
-import "./styles/tokens.css";
-import "./styles/base.css";
-import "./styles/layout.css";
-import "./styles/components.css";
-import "./styles/pages.css";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VIPRPG 中文归档",
-  description: "RPG Maker 2000/2003 游戏去重归档与下载系统",
+  title: "VIPRPG.org",
+  description: "RPG Maker 2000/2003 作品发现、游玩与下载空间",
   icons: {
     icon: "/favicon.svg",
   },
@@ -24,14 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-Hans">
-      <body className="theme-festival" suppressHydrationWarning>
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "document.body.className=location.pathname.startsWith('/admin')?'theme-admin':'theme-festival'",
-          }}
-        />
-        <ThemeBodyClass />
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
         <UploadTaskProvider>
           <SiteHeader />
           {children}

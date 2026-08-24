@@ -1,7 +1,8 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { canUploadRole } from "@/lib/server/auth/roles";
+import { hasPermission } from "@/lib/authz/permissions";
 import { listImportJobsForUser } from "@/lib/server/db/import-jobs";
 import { formatNumber, formatBytes, formatDate } from "@/lib/format";
 import { importTaskStageLabel } from "@/lib/labels";
@@ -19,7 +20,7 @@ export default async function UploadTasksPage() {
     redirect(`/login?next=${encodeURIComponent("/upload/tasks")}`);
   }
 
-  if (!canUploadRole(currentUser.role)) {
+  if (!hasPermission(currentUser, "import_job.create")) {
     redirect("/me");
   }
 
@@ -29,7 +30,7 @@ export default async function UploadTasksPage() {
     <main>
       <PageHeader
         actions={
-          <Link className="button primary" href="/upload">
+          <Link className={buttonVariants()} href="/upload">
             新建上传
           </Link>
         }
@@ -46,65 +47,56 @@ export default async function UploadTasksPage() {
       ) : (
         <TableWrap label="导入任务" minWidth={760}>
           <thead>
-              <tr>
-                <th>任务</th>
-                <th>状态</th>
-                <th>规模</th>
-                <th>新增文件</th>
-                <th>时间</th>
-              </tr>
+            <tr>
+              <th>任务</th>
+              <th>状态</th>
+              <th>规模</th>
+              <th>新增文件</th>
+              <th>时间</th>
+            </tr>
           </thead>
           <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id}>
-                  <td>
-                    <strong>#{job.id}</strong>
-                    <span className="muted-line">{job.source_name ?? "未命名"}</span>
-                    {job.archive_version_id ? (
-                      <span className="muted-line mono">
-                        归档快照 #{job.archive_version_id}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <StatusBadge kind="import-task" value={job.status} />
-                    {job.failed_stage ? (
-                      <span className="muted-line">
-                        {/* ponytail: only two API stages exist; extend this mapping with the API. */}
-                        失败阶段：
-                        {importTaskStageLabel(job.failed_stage)}
-                      </span>
-                    ) : null}
-                    {job.error_message ? (
-                      <span className="muted-line">{job.error_message}</span>
-                    ) : null}
-                  </td>
-                  <td>
-                    {formatNumber(job.file_count)} 文件
-                    <span className="muted-line">
-                      {formatBytes(job.source_size_bytes ?? 0)}
+            {jobs.map((job) => (
+              <tr key={job.id}>
+                <td>
+                  <strong>#{job.id}</strong>
+                  <span className="text-sm text-muted">{job.source_name ?? "未命名"}</span>
+                  {job.archive_version_id ? (
+                    <span className="text-sm text-muted font-mono text-sm text-primary">
+                      文件版本 #{job.archive_version_id}
                     </span>
-                  </td>
-                  <td>
-                    {formatNumber(job.uploaded_blob_count)} 个文件 /{" "}
-                    {formatNumber(job.uploaded_core_pack_count)} 组引擎公共文件
-                    <span className="muted-line">
-                      {formatBytes(
-                        job.uploaded_blob_size_bytes +
-                          job.uploaded_core_pack_size_bytes,
-                      )}
+                  ) : null}
+                </td>
+                <td>
+                  <StatusBadge kind="import-task" value={job.status} />
+                  {job.failed_stage ? (
+                    <span className="text-sm text-muted">
+                      {/* ponytail: only two API stages exist; extend this mapping with the API. */}
+                      失败阶段：
+                      {importTaskStageLabel(job.failed_stage)}
                     </span>
-                  </td>
-                  <td>
-                    {formatDate(job.created_at)}
-                    {job.completed_at ? (
-                      <span className="muted-line">
-                        完成 {formatDate(job.completed_at)}
-                      </span>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
+                  ) : null}
+                  {job.error_message ? <span className="text-sm text-muted">{job.error_message}</span> : null}
+                </td>
+                <td>
+                  {formatNumber(job.file_count)} 文件
+                  <span className="text-sm text-muted">{formatBytes(job.source_size_bytes ?? 0)}</span>
+                </td>
+                <td>
+                  {formatNumber(job.uploaded_blob_count)} 个文件 / {formatNumber(job.uploaded_core_pack_count)}{" "}
+                  组引擎公共文件
+                  <span className="text-sm text-muted">
+                    {formatBytes(job.uploaded_blob_size_bytes + job.uploaded_core_pack_size_bytes)}
+                  </span>
+                </td>
+                <td>
+                  {formatDate(job.created_at)}
+                  {job.completed_at ? (
+                    <span className="text-sm text-muted">完成 {formatDate(job.completed_at)}</span>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </TableWrap>
       )}

@@ -1,11 +1,19 @@
 "use client";
+import { Input } from "@/app/components/ui/input";
+import { Button } from "@/app/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
+import { Label } from "@/app/components/ui/label";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
-import {
-  gcDefaultGraceDays,
-  gcDefaultSweepLimitPerType,
-  gcManualSweepGraceDays,
-} from "@/lib/archive/gc-policy";
+import { gcDefaultGraceDays, gcDefaultSweepLimitPerType, gcManualSweepGraceDays } from "@/lib/archive/gc-policy";
 import { useState } from "react";
 
 type OperationKind = "consistency" | "gc" | "sweep";
@@ -24,11 +32,7 @@ type ApiPayload = {
   report?: unknown;
 };
 
-export function AdminOperationPanel({
-  canRunFinalCleanup,
-}: {
-  canRunFinalCleanup: boolean;
-}) {
+export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup: boolean }) {
   const [state, setState] = useState<OperationState>({
     kind: null,
     loading: false,
@@ -36,9 +40,8 @@ export function AdminOperationPanel({
     result: null,
   });
   const [sweepConfirm, setSweepConfirm] = useState("");
-  const [sweepGraceDays, setSweepGraceDays] = useState(
-    String(gcManualSweepGraceDays),
-  );
+  const [sweepDialogOpen, setSweepDialogOpen] = useState(false);
+  const [sweepGraceDays, setSweepGraceDays] = useState(String(gcManualSweepGraceDays));
 
   async function run(kind: OperationKind): Promise<void> {
     const url = operationUrl(kind);
@@ -91,37 +94,26 @@ export function AdminOperationPanel({
   }
 
   return (
-    <div className="admin-operation-panel">
+    <div className="mt-5">
       <SectionHeading level={3} title="运维检查" />
-      <div className="actions">
-        <button
-          className="button primary"
-          disabled={state.loading}
-          onClick={() => run("consistency")}
-          type="button"
-        >
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabled={state.loading} onClick={() => run("consistency")} type="button">
           运行一致性检查
-        </button>
-        <button
-          className="button"
-          disabled={state.loading}
-          onClick={() => run("gc")}
-          type="button"
-        >
+        </Button>
+        <Button variant="outline" disabled={state.loading} onClick={() => run("gc")} type="button">
           运行清理预演
-        </button>
+        </Button>
       </div>
       {canRunFinalCleanup ? (
-        <div className="danger-inline-controls">
-          <label htmlFor="gc-sweep-confirm">
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
+          <Label htmlFor="gc-sweep-confirm">
             最终清理
-            <span className="muted-line">
-              此操作会永久删除且不可恢复。
-              自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
+            <span className="text-sm text-muted">
+              此操作会永久删除且不可恢复。 自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
               手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
             </span>
-          </label>
-          <input
+          </Label>
+          <Input
             aria-label="最终清理手动保留天数"
             min="0"
             step="1"
@@ -129,30 +121,58 @@ export function AdminOperationPanel({
             value={sweepGraceDays}
             onChange={(event) => setSweepGraceDays(event.target.value)}
           />
-          <input
+          <Input
             id="gc-sweep-confirm"
             value={sweepConfirm}
             onChange={(event) => setSweepConfirm(event.target.value)}
             placeholder="SWEEP"
           />
-          <button
-            className="button"
+          <Button
+            variant="outline"
             disabled={state.loading || sweepConfirm !== "SWEEP"}
-            onClick={() => run("sweep")}
+            onClick={() => setSweepDialogOpen(true)}
             type="button"
           >
             执行最终清理
-          </button>
+          </Button>
+          <AlertDialog onOpenChange={setSweepDialogOpen} open={sweepDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogTitle>确认执行最终清理</AlertDialogTitle>
+              <AlertDialogDescription>
+                此操作会永久删除回收站版本的文件引用和零引用 R2 对象，不能恢复。只有在确认清理范围正确后继续。
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel asChild>
+                  <Button variant="outline">取消</Button>
+                </AlertDialogCancel>
+                <AlertDialogAction asChild>
+                  <Button
+                    onClick={() => {
+                      setSweepDialogOpen(false);
+                      void run("sweep");
+                    }}
+                    variant="destructive"
+                  >
+                    确认清理
+                  </Button>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       ) : (
-        <p className="muted-line">
+        <p className="text-sm text-muted">
           最终清理会永久删除回收站版本的文件引用和零引用 R2 对象，只有超级管理员可手动执行。
         </p>
       )}
-      {state.loading ? <p className="muted-line">检查运行中</p> : null}
-      {state.error ? <p className="error-message compact">{state.error}</p> : null}
+      {state.loading ? <p className="text-sm text-muted">检查运行中</p> : null}
+      {state.error ? (
+        <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{state.error}</p>
+      ) : null}
       {state.result ? (
-        <pre className="code-block compact-code">{JSON.stringify(state.result, null, 2)}</pre>
+        <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs">
+          {JSON.stringify(state.result, null, 2)}
+        </pre>
       ) : null}
     </div>
   );

@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { parseTagEditForm, updateTagForAdmin } from "@/lib/server/db/taxonomy-library";
 import { redirectResponse } from "@/lib/server/http/form";
@@ -13,7 +13,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireAdmin(request);
+  const auth = await requirePermission(request, "tag.update");
 
   if ("response" in auth) {
     return auth.response;

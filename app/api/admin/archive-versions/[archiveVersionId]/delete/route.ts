@@ -1,4 +1,4 @@
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requireAnyPermission } from "@/lib/server/auth/authorize";
 import { moveArchiveVersionToTrash } from "@/lib/server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { redirectResponse } from "@/lib/server/http/form";
@@ -13,7 +13,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requireUploader(request);
+  const auth = await requireAnyPermission(request, ["archive_version.delete_own", "archive_version.delete_any"]);
 
   if ("response" in auth) {
     return auth.response;
@@ -32,7 +32,6 @@ export async function POST(request: Request, context: RouteContext) {
         archiveVersionId,
         workId: archiveVersion.workId,
         releaseId: archiveVersion.releaseId,
-        actorRole: auth.user.role,
         uploaderId: archiveVersion.uploaderId,
       },
     });

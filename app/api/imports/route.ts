@@ -1,5 +1,5 @@
 import { FILE_POLICY_VERSION } from "@/lib/archive/file-policy";
-import { requireUploader } from "@/lib/server/auth/guards";
+import { requirePermission } from "@/lib/server/auth/authorize";
 import { createImportJob } from "@/lib/server/db/import-jobs";
 import { json, jsonError } from "@/lib/server/http/json";
 
@@ -15,7 +15,7 @@ type CreateImportRequest = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireUploader(request);
+  const auth = await requirePermission(request, "import_job.create");
 
   if ("response" in auth) {
     return auth.response;

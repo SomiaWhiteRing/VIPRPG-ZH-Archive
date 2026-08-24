@@ -5,9 +5,6 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT,
   password_updated_at TEXT,
   display_name TEXT NOT NULL,
-  role_key TEXT NOT NULL CHECK (
-    role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ) DEFAULT 'user',
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
@@ -16,8 +13,106 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_role_key
-  ON users(role_key, created_at);
+CREATE TABLE IF NOT EXISTS roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  priority INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL CHECK (kind IN ('built_in', 'bootstrap_admin', 'custom')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (kind <> 'custom' OR priority BETWEEN 101 AND 699)
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission_key TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (role_id, permission_key)
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_key, role_id);
+
+INSERT OR IGNORE INTO roles (key, name, description, priority, kind)
+VALUES
+  ('user', '普通用户', '基础账户', 100, 'built_in'),
+  ('uploader', '上传者', '可提交上传任务', 400, 'built_in'),
+  ('admin', '管理员', '管理业务内容和用户角色', 700, 'built_in'),
+  ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
+
+INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.read_own","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own"]')
+WHERE roles.key = 'uploader';
+
+INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.read_own","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","work.read_private","work.update","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","series.read_private","series.create","series.update","release.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+WHERE roles.key IN ('admin', 'super_admin');
+
+INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+SELECT roles.id, value FROM roles, json_each('["storage.gc.sweep","audit.read"]')
+WHERE roles.key = 'super_admin';
+
+CREATE TRIGGER IF NOT EXISTS users_assign_base_role
+AFTER INSERT ON users
+BEGIN
+  INSERT OR IGNORE INTO user_roles (user_id, role_id)
+  SELECT NEW.id, id FROM roles WHERE key = 'user';
+END;
+
+CREATE TRIGGER IF NOT EXISTS user_roles_unique_bootstrap_admin
+BEFORE INSERT ON user_roles
+WHEN (SELECT kind FROM roles WHERE id = NEW.role_id) = 'bootstrap_admin'
+  AND EXISTS (
+    SELECT 1 FROM user_roles existing
+    JOIN roles r ON r.id = existing.role_id
+    WHERE r.kind = 'bootstrap_admin' AND existing.user_id <> NEW.user_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'bootstrap admin already assigned');
+END;
+
+CREATE TRIGGER IF NOT EXISTS user_roles_require_active_role
+BEFORE INSERT ON user_roles
+WHEN (SELECT status FROM roles WHERE id = NEW.role_id) <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'inactive role cannot be assigned');
+END;
+
+CREATE TRIGGER IF NOT EXISTS user_roles_protect_base_role
+BEFORE DELETE ON user_roles
+WHEN (SELECT key FROM roles WHERE id = OLD.role_id) = 'user'
+BEGIN
+  SELECT RAISE(ABORT, 'base user role cannot be removed');
+END;
+
+CREATE TRIGGER IF NOT EXISTS roles_protect_identity
+BEFORE UPDATE OF key, kind ON roles
+BEGIN
+  SELECT RAISE(ABORT, 'role identity cannot be changed');
+END;
+
+CREATE TRIGGER IF NOT EXISTS roles_protect_system_definition
+BEFORE UPDATE ON roles
+WHEN OLD.kind <> 'custom'
+BEGIN
+  SELECT RAISE(ABORT, 'system role cannot be changed');
+END;
+
+CREATE TRIGGER IF NOT EXISTS roles_protect_delete
+BEFORE DELETE ON roles
+BEGIN
+  SELECT RAISE(ABORT, 'roles cannot be deleted; disable custom roles');
+END;
 
 CREATE TABLE IF NOT EXISTS email_verification_challenges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,36 +172,36 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   ) DEFAULT 'open',
   sender_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   recipient_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  audience_min_role_key TEXT CHECK (
-    audience_min_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
+  required_permission_key TEXT,
   target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  requested_role_key TEXT CHECK (
-    requested_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
-  old_role_key TEXT CHECK (
-    old_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
-  new_role_key TEXT CHECK (
-    new_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
+  requested_role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+  requested_role_key_snapshot TEXT,
+  requested_role_name_snapshot TEXT,
+  role_event_id INTEGER REFERENCES user_role_events(id) ON DELETE SET NULL,
   resolved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   resolved_at TEXT,
   title TEXT NOT NULL,
   body TEXT NOT NULL,
   metadata_json TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CHECK (recipient_user_id IS NOT NULL OR audience_min_role_key IS NOT NULL)
+  CHECK (recipient_user_id IS NOT NULL OR required_permission_key IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS idx_inbox_items_recipient
   ON inbox_items(recipient_user_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inbox_items_audience
-  ON inbox_items(audience_min_role_key, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_inbox_items_permission
+  ON inbox_items(required_permission_key, status, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_inbox_items_target
   ON inbox_items(target_user_id, type, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_pending_role_request
+  ON inbox_items(target_user_id, requested_role_id)
+  WHERE type = 'role_change_request'
+    AND status = 'pending'
+    AND target_user_id IS NOT NULL
+    AND requested_role_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS inbox_item_reads (
   item_id INTEGER NOT NULL REFERENCES inbox_items(id) ON DELETE CASCADE,
@@ -118,14 +213,13 @@ CREATE TABLE IF NOT EXISTS inbox_item_reads (
 
 CREATE TABLE IF NOT EXISTS user_role_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_key TEXT NOT NULL UNIQUE,
   actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   target_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  old_role_key TEXT NOT NULL CHECK (
-    old_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
-  new_role_key TEXT NOT NULL CHECK (
-    new_role_key IN ('super_admin', 'admin', 'uploader', 'user')
-  ),
+  action TEXT NOT NULL CHECK (action IN ('assigned', 'removed')),
+  role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL,
+  role_key_snapshot TEXT NOT NULL,
+  role_name_snapshot TEXT NOT NULL,
   reason TEXT,
   source_inbox_item_id INTEGER REFERENCES inbox_items(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

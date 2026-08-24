@@ -1,5 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
-import { json, jsonError } from "@/lib/server/http/json";
+import { json } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +11,10 @@ export async function GET() {
 
     return json({
       ok: result?.ok === 1,
-      binding: "DB",
+      dependency: "database",
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
-    return jsonError("D1 health check failed", error);
+  } catch {
+    return json({ ok: false, error: "Database unavailable" }, { status: 503 });
   }
 }

@@ -1,9 +1,10 @@
+import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { BackLink } from "@/app/components/ui/back-link";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { requireAdminPageUser } from "@/lib/server/auth/guards";
+import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
@@ -11,7 +12,7 @@ import { formatNumber } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCharactersPage() {
-  const adminUser = await requireAdminPageUser("/admin/characters");
+  const adminUser = await requirePagePermission("/admin/characters", "character.read_private");
   const [characters, unreadInboxCount] = await Promise.all([
     listCharactersForAdmin(),
     countUnreadInboxItemsForUser(adminUser),
@@ -25,7 +26,7 @@ export default async function AdminCharactersPage() {
         actions={
           <>
             <BackLink href="/admin" label="返回管理端" />
-            <Link className="button" href="/characters">
+            <Link className={buttonVariants({ variant: "outline" })} href="/characters">
               公开列表
             </Link>
             <InboxLink unread={unreadInboxCount} />
@@ -34,41 +35,39 @@ export default async function AdminCharactersPage() {
       />
 
       <TableWrap label="角色列表" minWidth={900}>
-          <thead>
-            <tr>
-              <th>角色</th>
-              <th>登场作品</th>
-              <th>更新时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {characters.map((character) => (
-              <tr key={character.id}>
-                <td>
-                  <strong>{character.primaryName}</strong>
-                  {character.originalName ? (
-                    <span className="muted-line">{character.originalName}</span>
-                  ) : null}
-                  <span className="mono muted-line">{character.slug}</span>
-                </td>
-                <td>{formatNumber(character.workCount)}</td>
-                <td>{character.updatedAt}</td>
-                <td>
-                  <div className="actions compact-actions">
-                    <Link className="button primary" href={`/admin/characters/${character.id}`}>
-                      编辑
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>登场作品</th>
+            <th>更新时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {characters.map((character) => (
+            <tr key={character.id}>
+              <td>
+                <strong>{character.primaryName}</strong>
+                {character.originalName ? <span className="text-sm text-muted">{character.originalName}</span> : null}
+                <span className="font-mono text-sm text-primary text-sm text-muted">{character.slug}</span>
+              </td>
+              <td>{formatNumber(character.workCount)}</td>
+              <td>{character.updatedAt}</td>
+              <td>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link className={buttonVariants()} href={`/admin/characters/${character.id}`}>
+                    编辑
+                  </Link>
+                  {character.workCount > 0 ? (
+                    <Link className={buttonVariants({ variant: "outline" })} href={`/characters/${character.slug}`}>
+                      公开页
                     </Link>
-                    {character.workCount > 0 ? (
-                      <Link className="button" href={`/characters/${character.slug}`}>
-                        公开页
-                      </Link>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+                  ) : null}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
       </TableWrap>
     </main>
   );

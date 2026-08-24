@@ -1,3 +1,6 @@
+import { Input } from "@/app/components/ui/input";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -22,29 +25,31 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
     <main>
       <PageHeader eyebrow="Tags" title="标签" />
 
-      <form className="library-toolbar" action="/tags" method="get">
-        <label>
+      <form
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
+        action="/tags"
+        method="get"
+      >
+        <Label>
           <span>搜索</span>
-          <input defaultValue={query} name="q" placeholder="标签名、slug" type="search" />
-        </label>
-        <button className="button primary" type="submit">
-          筛选
-        </button>
+          <Input defaultValue={query} name="q" placeholder="标签名、slug" type="search" />
+        </Label>
+        <Button type="submit">筛选</Button>
         {query ? (
-          <Link className="button" href="/tags">
+          <Link className={buttonVariants({ variant: "outline" })} href="/tags">
             清除
           </Link>
         ) : null}
       </form>
 
-      <section className="library-summary" aria-label="标签摘要">
+      <section className="text-sm text-muted" aria-label="标签摘要">
         <span>共</span>
         <strong>{formatNumber(tags.length)}</strong>
         <span>个标签</span>
       </section>
 
       {tags.length > 0 ? (
-        <section className="directory-card-grid" aria-label="标签列表">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="标签列表">
           {tags.map((tag) => (
             <TagCard key={tag.id} tag={tag} />
           ))}
@@ -58,12 +63,12 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
 
 function TagCard({ tag }: { tag: PublicTagSummary }) {
   return (
-    <article className="directory-card">
+    <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="directory-card-title" href={`/tags/${tag.slug}`}>
+        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/tags/${tag.slug}`}>
           {tag.name}
         </Link>
-        <span className="mono muted-line">{tag.slug}</span>
+        <span className="font-mono text-sm text-primary text-sm text-muted">{tag.slug}</span>
       </div>
       <p>{tag.description || namespaceLabel(tag.namespace)}</p>
       <StatList

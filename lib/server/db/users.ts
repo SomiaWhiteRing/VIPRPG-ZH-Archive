@@ -1,11 +1,9 @@
 import { getBootstrapAdminEmail } from "@/lib/server/auth/config";
-import { verifyPassword } from "@/lib/server/auth/password";
-import {
-  canManageRole,
-  canUploadRole,
-  type UserRole,
-} from "@/lib/server/auth/roles";
+import { hashPassword, passwordHashNeedsUpgrade, verifyPassword } from "@/lib/server/auth/password";
+import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
 import { getD1 } from "@/lib/server/db/d1";
+import { canManageUser, listPermissionKeysForUser, listRolesForUser } from "@/lib/server/db/permissions";
+import { HttpError } from "@/lib/server/http/json";
 
 export type UserStatus = "active" | "disabled";
 
@@ -14,7 +12,12 @@ export type ArchiveUser = {
   email: string;
   externalAuthId: string;
   displayName: string;
-  role: UserRole;
+  roleIds: number[];
+  roleKeys: string[];
+  roleNames: string[];
+  permissionKeys: PermissionKey[];
+  maxRolePriority: number;
+  isBootstrapAdmin: boolean;
   status: UserStatus;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
@@ -26,7 +29,6 @@ type UserRow = {
   external_auth_id: string;
   email: string | null;
   display_name: string;
-  role_key: UserRole;
   status: UserStatus;
   email_verified_at: string | null;
   last_login_at: string | null;
@@ -44,7 +46,6 @@ const USER_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role_key,
   status,
   email_verified_at,
   last_login_at,
@@ -56,7 +57,6 @@ const USER_AUTH_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
-  role_key,
   status,
   email_verified_at,
   last_login_at,
@@ -77,15 +77,7 @@ export function normalizeEmail(value: string): string {
 }
 
 export function canUpload(user: ArchiveUser): boolean {
-  return user.status === "active" && canUploadRole(user.role);
-}
-
-export function canManageUser(actor: ArchiveUser, target: ArchiveUser): boolean {
-  return (
-    actor.status === "active" &&
-    actor.id !== target.id &&
-    canManageRole(actor.role, target.role)
-  );
+  return hasPermission(user, "import_job.create");
 }
 
 export async function findUserById(id: number): Promise<ArchiveUser | null> {
@@ -94,13 +86,13 @@ export async function findUserById(id: number): Promise<ArchiveUser | null> {
     .bind(id)
     .first<UserRow>();
 
-  return row ? mapUserRow(await ensureBootstrapSuperAdmin(row)) : null;
+  return row ? hydrateUser(row) : null;
 }
 
 export async function findUserByEmail(rawEmail: string): Promise<ArchiveUser | null> {
   const row = await findUserRowByEmail(normalizeEmail(rawEmail));
 
-  return row ? mapUserRow(await ensureBootstrapSuperAdmin(row)) : null;
+  return row ? hydrateUser(row) : null;
 }
 
 export async function createOrActivateVerifiedUser(input: {
@@ -110,7 +102,6 @@ export async function createOrActivateVerifiedUser(input: {
   const email = normalizeEmail(input.email);
   const externalAuthId = emailToExternalAuthId(email);
   const existing = await findUserRowByEmail(email);
-  const isBootstrapAdmin = getBootstrapAdminEmail() === email;
 
   if (existing?.status === "disabled") {
     throw new Error("账户已被禁用");
@@ -122,7 +113,6 @@ export async function createOrActivateVerifiedUser(input: {
         `UPDATE users
         SET email = ?,
           display_name = COALESCE(NULLIF(display_name, ''), ?),
-          role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END,
           password_hash = ?,
           password_updated_at = CURRENT_TIMESTAMP,
           email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
@@ -135,12 +125,12 @@ export async function createOrActivateVerifiedUser(input: {
       .bind(
         email,
         email,
-        isBootstrapAdmin ? 1 : 0,
         input.passwordHash,
         existing.id,
       )
       .run();
 
+    await ensureInitialBootstrapRole(existing.id, email);
     return requiredUserById(existing.id);
   }
 
@@ -150,22 +140,25 @@ export async function createOrActivateVerifiedUser(input: {
         external_auth_id,
         email,
         display_name,
-        role_key,
         status,
         password_hash,
         password_updated_at,
         email_verified_at,
         last_login_at
-      ) VALUES (?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       externalAuthId,
       email,
       email,
-      isBootstrapAdmin ? "super_admin" : "user",
       input.passwordHash,
     )
     .run();
+
+  const created = await findUserRowByEmail(email);
+  if (created) {
+    await ensureInitialBootstrapRole(created.id, email);
+  }
 
   return requiredUserByEmail(email);
 }
@@ -186,24 +179,34 @@ export async function authenticateUser(input: {
     throw new Error("登录失败次数过多，请稍后再试");
   }
 
-  const verified = await verifyPassword(input.password, row.password_hash);
+  const passwordLengthValid = input.password.length >= 12 && input.password.length <= 256;
+  const verified = await verifyPassword(
+    passwordLengthValid ? input.password : "invalid-password-placeholder",
+    row.password_hash,
+  );
 
-  if (!verified) {
-    await recordFailedLogin(row.id, row.failed_login_count);
+  if (!passwordLengthValid || !verified) {
+    await recordFailedLogin(row.id);
     throw new Error("邮箱或密码不正确");
   }
+
+  const upgradedHash = passwordHashNeedsUpgrade(row.password_hash)
+    ? await hashPassword(input.password)
+    : row.password_hash;
 
   await getD1()
     .prepare(
       `UPDATE users
-      SET last_login_at = CURRENT_TIMESTAMP,
+      SET password_hash = ?,
+        password_updated_at = CASE WHEN password_hash <> ? THEN CURRENT_TIMESTAMP ELSE password_updated_at END,
+        last_login_at = CURRENT_TIMESTAMP,
         failed_login_count = 0,
-        locked_until = NULL,
-        role_key = CASE WHEN ? THEN 'super_admin' ELSE role_key END
+        locked_until = NULL
       WHERE id = ?`,
     )
     .bind(
-      getBootstrapAdminEmail() === email ? 1 : 0,
+      upgradedHash,
+      upgradedHash,
       row.id,
     )
     .run();
@@ -222,8 +225,9 @@ export async function setUserPasswordByEmail(input: {
     throw new Error("账户不存在或不可用");
   }
 
-  await getD1()
-    .prepare(
+  const database = getD1();
+  await database.batch([
+    database.prepare(
       `UPDATE users
       SET password_hash = ?,
         password_updated_at = CURRENT_TIMESTAMP,
@@ -232,8 +236,17 @@ export async function setUserPasswordByEmail(input: {
         locked_until = NULL
       WHERE id = ?`,
     )
-    .bind(input.passwordHash, existing.id)
-    .run();
+    .bind(input.passwordHash, existing.id),
+    database.prepare(`
+      UPDATE user_sessions
+      SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).bind(existing.id),
+    database.prepare(`
+      INSERT INTO auth_audit_logs (user_id, email, event_type)
+      VALUES (?, ?, 'password_reset_completed')
+    `).bind(existing.id, email),
+  ]);
 }
 
 export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUser[]> {
@@ -241,19 +254,12 @@ export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUse
     .prepare(
       `${USER_SELECT}
       ORDER BY
-        CASE role_key
-          WHEN 'super_admin' THEN 0
-          WHEN 'admin' THEN 1
-          WHEN 'uploader' THEN 2
-          WHEN 'user' THEN 3
-          ELSE 4
-        END,
         created_at DESC
       LIMIT 500`,
     )
     .all<UserRow>();
 
-  const users = (rows.results ?? []).map(mapUserRow);
+  const users = await Promise.all((rows.results ?? []).map((row) => hydrateUser(row)));
 
   if (!actor) {
     return users;
@@ -270,25 +276,38 @@ export async function setUserStatusForAdmin(input: {
   const target = await findUserById(input.targetUserId);
 
   if (!target) {
-    throw new Error("目标用户不存在");
+    throw new HttpError(404, "目标用户不存在");
   }
 
-  if (!canManageUser(input.actor, target)) {
-    throw new Error("只能管理低于自己层级的用户");
+  if (!hasPermission(input.actor, "user.status.update") || !canManageUser(input.actor, target)) {
+    throw new HttpError(403, "只能管理自己权限范围内的用户");
   }
 
   if (target.status === input.status) {
     return target;
   }
 
-  await getD1()
-    .prepare(
+  const database = getD1();
+  const statements = [
+    database.prepare(
       `UPDATE users
       SET status = ?
       WHERE id = ?`,
     )
-    .bind(input.status, target.id)
-    .run();
+    .bind(input.status, target.id),
+  ];
+  if (input.status === "disabled") {
+    statements.push(database.prepare(`
+      UPDATE user_sessions
+      SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).bind(target.id));
+  }
+  statements.push(database.prepare(`
+    INSERT INTO auth_audit_logs (user_id, email, event_type, detail_json)
+    VALUES (?, ?, 'admin_user_status_update', ?)
+  `).bind(input.actor.id, input.actor.email, JSON.stringify({ targetUserId: target.id, status: input.status })));
+  await database.batch(statements);
 
   const updated = await findUserById(target.id);
 
@@ -299,23 +318,18 @@ export async function setUserStatusForAdmin(input: {
   return updated;
 }
 
-async function recordFailedLogin(
-  userId: number,
-  currentFailedLoginCount: number,
-): Promise<void> {
-  const nextCount = currentFailedLoginCount + 1;
-
+async function recordFailedLogin(userId: number): Promise<void> {
   await getD1()
     .prepare(
       `UPDATE users
-      SET failed_login_count = ?,
+      SET failed_login_count = failed_login_count + 1,
         locked_until = CASE
-          WHEN ? >= 5 THEN datetime('now', '+15 minutes')
+          WHEN failed_login_count + 1 >= 5 THEN datetime('now', '+15 minutes')
           ELSE locked_until
         END
       WHERE id = ?`,
     )
-    .bind(nextCount, nextCount, userId)
+    .bind(userId)
     .run();
 }
 
@@ -343,27 +357,31 @@ async function findUserAuthRowByEmail(email: string): Promise<UserAuthRow | null
     .first<UserAuthRow>();
 }
 
-async function ensureBootstrapSuperAdmin<Row extends UserRow>(row: Row): Promise<Row> {
-  const bootstrapEmail = getBootstrapAdminEmail();
-  const rowEmail = row.email ?? externalAuthIdToEmail(row.external_auth_id);
-
-  if (bootstrapEmail !== rowEmail || row.role_key === "super_admin") {
-    return row;
+async function ensureInitialBootstrapRole(userId: number, email: string): Promise<void> {
+  const database = getD1();
+  if (getBootstrapAdminEmail() !== email) return;
+  const existingRoot = await database.prepare(`
+    SELECT 1 AS present FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+    WHERE r.kind = 'bootstrap_admin' LIMIT 1
+  `).first<{ present: number }>();
+  if (!existingRoot) {
+    const eventKey = crypto.randomUUID();
+    await database.batch([
+      database.prepare(`INSERT INTO user_roles (user_id, role_id) SELECT ?, id FROM roles WHERE key = 'super_admin'`)
+        .bind(userId),
+      database.prepare(`
+        INSERT INTO user_role_events (
+          event_key, actor_user_id, target_user_id, action, role_id,
+          role_key_snapshot, role_name_snapshot, reason
+        ) SELECT ?, ?, ?, 'assigned', id, key, name, 'initial_bootstrap'
+        FROM roles WHERE key = 'super_admin'
+      `).bind(eventKey, userId, userId),
+      database.prepare(`
+        INSERT INTO auth_audit_logs (user_id, email, event_type, detail_json)
+        VALUES (?, ?, 'bootstrap_admin_initialized', ?)
+      `).bind(userId, email, JSON.stringify({ eventKey })),
+    ]);
   }
-
-  await getD1()
-    .prepare(
-      `UPDATE users
-      SET role_key = 'super_admin'
-      WHERE id = ?`,
-    )
-    .bind(row.id)
-    .run();
-
-  return {
-    ...row,
-    role_key: "super_admin",
-  };
 }
 
 async function requiredUserByEmail(email: string): Promise<ArchiveUser> {
@@ -390,13 +408,22 @@ function emailToExternalAuthId(email: string): string {
   return `email:${email}`;
 }
 
-function mapUserRow(row: UserRow): ArchiveUser {
+async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
+  const [roles, permissionKeys] = await Promise.all([
+    listRolesForUser(row.id),
+    listPermissionKeysForUser(row.id),
+  ]);
   return {
     id: row.id,
     email: row.email ?? externalAuthIdToEmail(row.external_auth_id),
     externalAuthId: row.external_auth_id,
     displayName: row.display_name,
-    role: row.role_key,
+    roleIds: roles.map((role) => role.id),
+    roleKeys: roles.map((role) => role.key),
+    roleNames: roles.map((role) => role.name),
+    permissionKeys,
+    maxRolePriority: Math.max(0, ...roles.map((role) => role.priority)),
+    isBootstrapAdmin: roles.some((role) => role.kind === "bootstrap_admin"),
     status: row.status,
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,

@@ -1,5 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
-import type { UserRole } from "@/lib/server/auth/roles";
+import type { RoleSnapshot } from "@/lib/server/db/inbox";
 
 export type AdminAuditLog = {
   id: number;
@@ -19,8 +19,8 @@ export type AdminRoleEvent = {
   actorName: string | null;
   targetUserId: number;
   targetName: string | null;
-  oldRole: UserRole;
-  newRole: UserRole;
+  action: "assigned" | "removed";
+  role: RoleSnapshot;
   reason: string | null;
   sourceInboxItemId: number | null;
   createdAt: string;
@@ -44,8 +44,10 @@ type RoleEventRow = {
   actor_name: string | null;
   target_user_id: number;
   target_name: string | null;
-  old_role_key: UserRole;
-  new_role_key: UserRole;
+  action: "assigned" | "removed";
+  role_id: number | null;
+  role_key_snapshot: string;
+  role_name_snapshot: string;
   reason: string | null;
   source_inbox_item_id: number | null;
   created_at: string;
@@ -94,8 +96,10 @@ export async function listAdminRoleEvents(limit = 100): Promise<AdminRoleEvent[]
         actor.display_name AS actor_name,
         e.target_user_id,
         target.display_name AS target_name,
-        e.old_role_key,
-        e.new_role_key,
+        e.action,
+        e.role_id,
+        e.role_key_snapshot,
+        e.role_name_snapshot,
         e.reason,
         e.source_inbox_item_id,
         e.created_at
@@ -114,8 +118,8 @@ export async function listAdminRoleEvents(limit = 100): Promise<AdminRoleEvent[]
     actorName: row.actor_name,
     targetUserId: row.target_user_id,
     targetName: row.target_name,
-    oldRole: row.old_role_key,
-    newRole: row.new_role_key,
+    action: row.action,
+    role: { id: row.role_id, key: row.role_key_snapshot, name: row.role_name_snapshot },
     reason: row.reason,
     sourceInboxItemId: row.source_inbox_item_id,
     createdAt: row.created_at,
