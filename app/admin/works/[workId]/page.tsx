@@ -43,7 +43,6 @@ export default async function AdminWorkEditPage({ params }: AdminWorkEditPagePro
   return (
     <main>
       <PageHeader
-        eyebrow="Edit Work"
         title={work.chineseTitle || work.originalTitle}
         actions={
           <>

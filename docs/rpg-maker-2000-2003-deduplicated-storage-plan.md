@@ -716,7 +716,7 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
 
 ## 8. 上传流程
 
-Phase D 的浏览器端长期任务、浮标 UI、崩溃恢复和 IndexedDB 状态管理，详见 [浏览器上传任务架构设计](./browser-upload-task-architecture.md)。本节只保留存储链路层面的摘要。
+Phase D 的浏览器上传只在当前标签页会话内维护 Worker 和进度；服务端 import job 负责内部状态记录。本节保留存储链路摘要。
 
 ### 8.1 推荐流程：浏览器预索引
 
@@ -949,8 +949,6 @@ PUT /api/core-packs/{sha256}
 POST /api/imports/{id}/commit
   写入 Work、Release、ArchiveVersion、core pack、文件索引、manifest
 
-GET /api/imports/{id}
-  查看导入进度和错误
 ```
 
 ### 11.2 作品、发布和归档快照

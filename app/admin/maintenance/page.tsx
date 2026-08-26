@@ -63,7 +63,7 @@ export default async function AdminMaintenancePage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Maintenance" title="维护与一致性" actions={<BackLink href="/admin" label="返回控制台" />} />
+      <PageHeader title="维护与一致性" actions={<BackLink href="/admin" label="返回控制台" />} />
 
       <Pane heading="健康检查">
         <div className="flex flex-wrap items-center gap-3">

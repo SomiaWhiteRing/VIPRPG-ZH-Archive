@@ -22,7 +22,6 @@ export default async function AdminArchiveVersionsPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Archive Maintenance"
         title="文件版本维护"
         subtitle={
           canAccessTrash

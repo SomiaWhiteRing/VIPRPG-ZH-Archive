@@ -40,7 +40,6 @@ export default async function InboxPage() {
             ) : null}
           </>
         }
-        eyebrow="Inbox"
         subtitle={`当前角色：${currentUser.roleNames.join("、") || "未分配角色"}`}
         title={
           <>

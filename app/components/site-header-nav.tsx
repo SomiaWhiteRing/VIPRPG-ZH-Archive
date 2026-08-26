@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { ChevronDown, Search, UserRound } from "lucide-react";
+import Image from "next/image";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { hasPermissionKey, type PermissionKey } from "@/lib/authz/permissions";
@@ -75,12 +76,14 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
           className="inline-flex shrink-0 items-center gap-2 font-extrabold tracking-wide"
           href={inAdmin ? "/admin" : "/"}
         >
-          <span
-            className="grid size-8 place-items-center border-2 border-primary bg-primary font-serif text-lg text-white"
+          <Image
+            alt=""
             aria-hidden
-          >
-            V
-          </span>
+            className="size-8 object-contain [image-rendering:pixelated]"
+            height={32}
+            src="/icon/windI.png"
+            width={32}
+          />
           <span>{inAdmin ? "VIPRPG 控制台" : "VIPRPG.org"}</span>
         </Link>
         <nav
@@ -148,7 +151,7 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
               type="search"
             />
             <Button
-              className="grid w-10 shrink-0 place-items-center border-l border-border bg-primary text-white hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="grid w-10 shrink-0 place-items-center border-l border-border bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="搜索"
               title="搜索"
               type="submit"

@@ -35,7 +35,7 @@ export function HomeTabs() {
 
   return (
     <div
-      className="sticky top-16 z-20 my-6 flex gap-1 overflow-x-auto rounded-md border border-border bg-background/95 p-1 backdrop-blur"
+      className="sticky top-16 z-20 my-6 flex gap-1 overflow-x-auto backdrop-blur"
       role="tablist"
       aria-label="首页内容"
     >

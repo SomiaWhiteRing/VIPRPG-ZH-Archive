@@ -16,7 +16,6 @@ import { putManifest } from "@/lib/server/storage/archive-bucket";
 export type CommitArchiveImportInput = {
   importJobId: number;
   user: ArchiveUser;
-  localTaskId: string;
   manifestSha256: string;
   manifestJson: string;
   metadata: ArchiveCommitMetadata;

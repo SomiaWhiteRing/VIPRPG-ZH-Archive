@@ -27,7 +27,6 @@ export default async function AdminUsersPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Users"
         title="用户与上传权限"
         actions={
           <>

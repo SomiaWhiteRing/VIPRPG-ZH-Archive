@@ -11,7 +11,7 @@ export const metadata = {
 export default function AboutPage() {
   return (
     <main>
-      <PageHeader eyebrow="About" title="关于本站" />
+      <PageHeader title="关于本站" />
 
       <Pane heading="项目目标">
         <p>

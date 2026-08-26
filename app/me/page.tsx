@@ -8,9 +8,7 @@ import { StatList } from "@/app/components/ui/stat-list";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { hasPermission } from "@/lib/authz/permissions";
 import { countUnreadInboxItemsForUser, listInboxItemsForUser } from "@/lib/server/db/inbox";
-import { listImportJobsForUser } from "@/lib/server/db/import-jobs";
 import { formatNumber, formatDate } from "@/lib/format";
-import { importTaskStageLabel, importTaskStatusLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +21,9 @@ export default async function MePage() {
 
   const canUpload = hasPermission(currentUser, "import_job.create");
 
-  const [unread, inbox, jobs] = await Promise.all([
+  const [unread, inbox] = await Promise.all([
     countUnreadInboxItemsForUser(currentUser),
     listInboxItemsForUser(currentUser),
-    canUpload ? listImportJobsForUser(currentUser, 5) : Promise.resolve([]),
   ]);
 
   const pendingUploadRequest = inbox.find(
@@ -39,7 +36,7 @@ export default async function MePage() {
 
   return (
     <main>
-      <PageHeader eyebrow="My Account" title="我的账户" />
+      <PageHeader title="我的账户" />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
         <Pane heading="账号状态">
@@ -65,7 +62,7 @@ export default async function MePage() {
           <div className="rounded-md border border-border bg-muted/10 p-4">
             <h3>上传权限</h3>
             {canUpload ? (
-              <p>当前账户已有上传权限，可以提交游戏并跟踪处理任务。</p>
+              <p>当前账户已有上传权限，可以提交游戏；上传进度会在当前标签页显示。</p>
             ) : pendingUploadRequest ? (
               <p>
                 申请已提交，等待管理员处理。结果会通过
@@ -125,41 +122,6 @@ export default async function MePage() {
           </div>
         </Pane>
 
-        <Pane heading="最近任务">
-          {canUpload ? (
-            <>
-              {jobs.length === 0 ? (
-                <p className="text-sm text-muted">还没有导入任务。</p>
-              ) : (
-                <ul className="mt-3 grid gap-3">
-                  {jobs.map((job) => (
-                    <li key={job.id}>
-                      <strong>
-                        #{job.id} {job.source_name ?? "未命名"}
-                      </strong>
-                      <span className="text-sm text-muted">
-                        状态：{importTaskStatusLabel(job.status)}
-                        {job.failed_stage ? ` · ${importTaskStageLabel(job.failed_stage)}` : ""}
-                        {job.archive_version_id ? ` · 文件版本 #${job.archive_version_id}` : ""}
-                      </span>
-                      <span className="text-sm text-muted">{formatDate(job.created_at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <Link className={buttonVariants({ variant: "outline" })} href="/upload/tasks">
-                  查看全部任务
-                </Link>
-                <Link className={buttonVariants()} href="/upload">
-                  开始新上传
-                </Link>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted">取得上传权限后，可在这里跟踪导入任务。</p>
-          )}
-        </Pane>
       </div>
     </main>
   );

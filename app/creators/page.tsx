@@ -22,7 +22,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
 
   return (
     <main>
-      <PageHeader eyebrow="Creators" title="作者与制作人员" />
+      <PageHeader title="作者与制作人员" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"

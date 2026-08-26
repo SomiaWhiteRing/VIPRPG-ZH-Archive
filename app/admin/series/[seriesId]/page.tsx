@@ -39,7 +39,6 @@ export default async function AdminSeriesEditPage({ params }: AdminSeriesEditPag
   return (
     <main>
       <PageHeader
-        eyebrow="Edit Series"
         title={series.title}
         actions={
           <>

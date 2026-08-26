@@ -19,7 +19,6 @@ export default async function HomePage() {
         aria-label="作品发现"
       >
         <div>
-          <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-accent">VIPRPG / PLAY SPACE</p>
           <h1 className="text-4xl font-extrabold leading-[0.98] tracking-tight md:text-6xl">
             发现下一款
             <br />

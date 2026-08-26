@@ -23,7 +23,6 @@ export default async function AdminWorksPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Works"
         title="作品资料维护"
         actions={
           <>

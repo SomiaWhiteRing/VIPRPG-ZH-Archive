@@ -18,7 +18,6 @@ export default async function AdminArchiveVersionTrashPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Archive Trash"
         title="已删除版本"
         subtitle="还原后会重新发布；同组没有最新快照时，会自动成为最新快照。"
         actions={

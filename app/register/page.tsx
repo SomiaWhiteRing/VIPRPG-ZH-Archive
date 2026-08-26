@@ -35,7 +35,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 mx-auto w-full max-w-md">
       {turnstileKey ? <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer /> : null}
-      <PageHeader eyebrow="Account" title="注册" subtitle="注册后需要管理员批准才可以上传游戏。" />
+      <PageHeader title="注册" subtitle="注册后需要管理员批准才可以上传游戏。" />
 
       <Pane>
         {params.error ? (

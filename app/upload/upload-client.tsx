@@ -12,7 +12,6 @@ import {
   type FormEvent,
   type SetStateAction,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
@@ -163,10 +162,9 @@ const releaseTypeOptions: Array<{ value: ReleaseType; label: string }> = [
 ];
 
 export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
-  const { tasks, startUpload } = useUploadTasks();
+  const { startUpload } = useUploadTasks();
   const [mode, setMode] = useState<FileInputMode>("folder");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [resumeLocalTaskId, setResumeLocalTaskId] = useState<string>("");
   const [form, setForm] = useState<FlatMetadata>(defaultForm);
   const [imageSelections, setImageSelections] = useState<ImageSelections>({
     icon: null,
@@ -187,10 +185,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
 
-  const recoverableTasks = useMemo(
-    () => tasks.filter((task) => ["needs_source_reselect", "failed_recoverable", "paused"].includes(task.status)),
-    [tasks],
-  );
   const selectedSourceSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
   const selectedWork = lookupState.results.find((work) => work.id === lookupState.selectedWorkId) ?? null;
   const releaseOptions = selectedWork?.releases ?? [];
@@ -338,7 +332,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
         files: selectedFiles,
         metadata,
         metadataBlobs: preparedImages.blobs,
-        resumeLocalTaskId: resumeLocalTaskId || null,
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "准备上传失败。");
@@ -387,21 +380,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
             variant="tiles"
           />
 
-          {recoverableTasks.length > 0 ? (
-            <FormField label="恢复任务">
-              <SelectField
-                onValueChange={setResumeLocalTaskId}
-                options={[
-                  { value: "", label: "作为新任务导入" },
-                  ...recoverableTasks.map((task) => ({
-                    value: task.localTaskId,
-                    label: `恢复 ${task.sourceName} / ${Math.round(task.progress.percent)}%`,
-                  })),
-                ]}
-                value={resumeLocalTaskId}
-              />
-            </FormField>
-          ) : null}
         </Pane>
       </aside>
 

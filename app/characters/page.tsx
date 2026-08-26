@@ -22,7 +22,7 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
 
   return (
     <main>
-      <PageHeader eyebrow="Characters" title="登场角色" />
+      <PageHeader title="登场角色" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
@@ -63,7 +63,10 @@ function CharacterCard({ character }: { character: PublicCharacterSummary }) {
   return (
     <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/characters/${character.slug}`}>
+        <Link
+          className="text-lg font-bold text-primary hover:text-accent"
+          href={`/games?character=${encodeURIComponent(character.slug)}`}
+        >
           {character.primaryName}
         </Link>
         {character.originalName ? <span className="text-sm text-muted">{character.originalName}</span> : null}

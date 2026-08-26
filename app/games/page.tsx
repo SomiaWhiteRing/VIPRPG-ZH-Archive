@@ -3,8 +3,12 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { HomeGameCard } from "@/app/components/home/game-card";
 import { LibraryFacetIndex } from "@/app/components/library/library-facets";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { listGameWorks, listPublicCharacters, listPublicTags } from "@/lib/server/db/game-library";
-import { listPublicSeries } from "@/lib/server/db/taxonomy-library";
+import { countGameWorks, listGameWorks } from "@/lib/server/db/game-library";
+import {
+  getPublicCharacterSummary,
+  getPublicTagSummary,
+  listPublicSeries,
+} from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
 
@@ -30,17 +34,21 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const requestedSort = stringParam(params.sort);
   const sort = requestedSort === "title" || requestedSort === "engine" ? requestedSort : "updated";
   const page = Math.max(1, Number.parseInt(stringParam(params.page) || "1", 10) || 1);
-  const [works, tags, characters, series] = await Promise.all([
+  const filters = {
+    engine,
+    tag,
+    character,
+  };
+  const [works, total, selectedTag, selectedCharacter, series] = await Promise.all([
     listGameWorks({
-      engine,
-      tag,
-      character,
+      ...filters,
       sort,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     }),
-    listPublicTags(30),
-    listPublicCharacters(30),
+    countGameWorks(filters),
+    tag ? getPublicTagSummary(tag) : Promise.resolve(null),
+    character ? getPublicCharacterSummary(character) : Promise.resolve(null),
     listPublicSeries({ limit: 24 }),
   ]);
   const activeParams = {
@@ -52,14 +60,13 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
-      <header className="mb-5 flex items-end justify-between gap-5 mb-6 flex items-end justify-between gap-4 border-b border-border pb-6">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
         <div>
-          <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-accent">GAME LIBRARY</p>
           <h1>全部游戏</h1>
-          <p>按作品、引擎和分类浏览可游玩与下载的游戏。</p>
+          <p>浏览可游玩与下载的游戏。</p>
         </div>
         <span className="text-sm font-bold text-muted">
-          第 {page} 页 · {formatNumber(works.length)} 个作品
+          第 {page} 页 · 共 {formatNumber(total)} 个作品
         </span>
       </header>
       <section
@@ -81,7 +88,6 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
         ))}
       </section>
       <LibraryFacetIndex
-        characters={characters}
         engines={ENGINES.map(([value, label]) => ({
           href: gamesHref({
             ...activeParams,
@@ -91,7 +97,6 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           active: engine === value,
         }))}
         series={series}
-        tags={tags}
       />
       {engine !== "all" || tag || character || sort !== "updated" ? (
         <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted" aria-label="当前筛选">
@@ -104,13 +109,13 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           ) : null}
           {tag ? (
             <Link href={gamesHref({ ...activeParams, tag: undefined })}>
-              标签：{tags.find((item) => item.slug === tag)?.name ?? tag} ×
+              标签：{selectedTag?.name ?? tag} ×
             </Link>
           ) : null}
           {character ? (
             <Link href={gamesHref({ ...activeParams, character: undefined })}>
               角色：
-              {characters.find((item) => item.slug === character)?.primaryName ?? character} ×
+              {selectedCharacter?.primaryName ?? character} ×
             </Link>
           ) : null}
         </div>
@@ -124,7 +129,12 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
       ) : (
         <EmptyState title="没有找到匹配的作品。" />
       )}
-      <PaginationLinks basePath="/games" page={page} hasNext={works.length === PAGE_SIZE} params={activeParams} />
+      <PaginationLinks
+        basePath="/games"
+        page={page}
+        hasNext={page * PAGE_SIZE < total}
+        params={activeParams}
+      />
     </main>
   );
 }

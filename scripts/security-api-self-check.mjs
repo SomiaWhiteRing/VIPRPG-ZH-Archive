@@ -104,8 +104,12 @@ const createPayload = await createResponse.json();
 const importJobId = createPayload.importJob.id;
 assert.ok(Number.isSafeInteger(importJobId) && importJobId > 0);
 
-await expectStatus("owner reads job", `/api/imports/${importJobId}`, { headers: { cookie: uploaderCookie } }, 200);
-await expectStatus("non-owner cannot discover job", `/api/imports/${importJobId}`, { headers: { cookie: adminCookie } }, 404);
+await expectStatus(
+  "deleted import job lookup route",
+  `/api/imports/${importJobId}`,
+  { headers: { cookie: uploaderCookie } },
+  404,
+);
 await expectStatus(
   "object upload requires job",
   `/api/blobs/${"0".repeat(64)}`,
@@ -164,7 +168,12 @@ await expectStatus(
   formRequest({ next: "/" }, { cookie: uploaderCookie }),
   303,
 );
-await expectStatus("revoked session rejected", `/api/imports/${importJobId}`, { headers: { cookie: uploaderCookie } }, 401);
+await expectStatus(
+  "revoked session rejected",
+  `/api/imports/${importJobId}/cancel`,
+  { method: "POST", headers: { cookie: uploaderCookie, origin } },
+  401,
+);
 
 console.log("API security self-check passed");
 

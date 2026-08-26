@@ -19,7 +19,7 @@ export default async function UploadPage() {
   if (!hasPermission(currentUser, "import_job.create")) {
     return (
       <main>
-        <PageHeader eyebrow="Upload" title="需要上传者权限" />
+        <PageHeader title="需要上传者权限" />
 
         <Pane>
           <p>上传需要上传者权限，可在「我的账户」申请。</p>
@@ -35,16 +35,7 @@ export default async function UploadPage() {
 
   return (
     <main>
-      <PageHeader
-        actions={
-          <Link className={buttonVariants({ variant: "outline" })} href="/upload/tasks">
-            查看导入任务
-          </Link>
-        }
-        eyebrow="Upload Workspace"
-        subtitle="选择本地 RPG Maker 2000/2003 游戏目录，浏览器会完成检查并上传缺少的文件。"
-        title="上传游戏"
-      />
+      <PageHeader subtitle="选择本地 RPG Maker 2000/2003 游戏目录，浏览器会完成检查并上传缺少的文件。" title="上传游戏" />
       <UploadClient
         currentUser={{
           displayName: currentUser.displayName,

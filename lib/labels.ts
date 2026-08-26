@@ -156,14 +156,10 @@ export function uploadTaskStatusLabel(value: string): string {
       return "处理中";
     case "paused":
       return "已暂停";
-    case "needs_source_reselect":
-      return "需要重新选择游戏目录或 ZIP";
     case "completed":
       return "完成";
-    case "failed_recoverable":
-      return "可重试失败";
-    case "failed_terminal":
-      return "终止失败";
+    case "failed":
+      return "失败";
     case "canceled":
       return "已取消";
     default:

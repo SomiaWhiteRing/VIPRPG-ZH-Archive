@@ -755,9 +755,9 @@ GET /api/archive-versions/{archive_version_id}/download
 /games/{work_slug}/releases/{release_id}
 /series
 /series/{series_slug}
-/characters/{character_slug}
+/characters
 /events/{event_slug}
-/tags/{tag_slug}
+/tags
 ```
 
 说明：
@@ -917,8 +917,8 @@ LIMIT 1;
 
 当前实现约定：
 
-- `/characters` 和 `/characters/{slug}` 展示角色本体与登场作品。
-- `/tags` 和 `/tags/{slug}` 展示普通标签与关联作品；角色不再作为普通标签录入。
+- `/characters` 展示公开角色索引，条目进入 `/games?character={slug}` 查看登场作品。
+- `/tags` 展示公开标签索引，条目进入 `/games?tag={slug}` 查看关联作品；角色不再作为普通标签录入。
 - `/series` 和 `/series/{slug}` 展示系列本体与成员排序。
 - `/admin/characters`、`/admin/tags`、`/admin/series` 维护本体资料；重复角色和重复标签通过合并到目标 slug 处理。
 - `/admin/works/{workId}` 维护 Work 和这些关系表的连接：`work_characters`、`work_series`、`work_relations`、`work_media_assets`。

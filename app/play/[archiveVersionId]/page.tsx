@@ -91,7 +91,6 @@ export default async function WebPlayPage({ params }: PageProps) {
             </a>
           </>
         }
-        eyebrow="Online Play"
         subtitle={
           <>
             {metadata.releaseLabel} / {publicCopy(metadata.archiveLabel)}

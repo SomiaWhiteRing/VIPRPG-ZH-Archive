@@ -23,7 +23,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
 
   return (
     <main>
-      <PageHeader eyebrow="Tags" title="标签" />
+      <PageHeader title="标签" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
@@ -65,7 +65,10 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
   return (
     <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/tags/${tag.slug}`}>
+        <Link
+          className="text-lg font-bold text-primary hover:text-accent"
+          href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+        >
           {tag.name}
         </Link>
         <span className="font-mono text-sm text-primary text-sm text-muted">{tag.slug}</span>

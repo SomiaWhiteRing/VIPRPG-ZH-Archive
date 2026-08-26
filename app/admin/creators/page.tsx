@@ -21,7 +21,6 @@ export default async function AdminCreatorsPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Creators"
         title="作者与制作人员维护"
         actions={
           <>

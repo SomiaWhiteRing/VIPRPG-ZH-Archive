@@ -19,7 +19,6 @@ export const PERMISSIONS = {
   "archive_version.restore": { category: "archive", label: "还原归档" },
   "archive_version.set_current": { category: "archive", label: "切换当前归档" },
   "import_job.create": { category: "import", label: "创建导入任务" },
-  "import_job.read_own": { category: "import", label: "查看自己的导入任务" },
   "import_job.cancel_own": { category: "import", label: "取消自己的导入任务" },
   "import_job.preflight_own": { category: "import", label: "预检自己的导入任务" },
   "import_job.commit_own": { category: "import", label: "提交自己的导入任务" },
@@ -73,12 +72,12 @@ export function hasPermissionKey(
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [] as const,
   uploader: [
-    "work.lookup_non_deleted", "import_job.create", "import_job.read_own",
+    "work.lookup_non_deleted", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own",
   ] as const,
   admin: [
-    "work.lookup_non_deleted", "import_job.create", "import_job.read_own",
+    "work.lookup_non_deleted", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
@@ -90,7 +89,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "system.dashboard.read", "system.maintenance.run",
   ] as const,
   super_admin: [
-    "work.lookup_non_deleted", "import_job.create", "import_job.read_own",
+    "work.lookup_non_deleted", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
