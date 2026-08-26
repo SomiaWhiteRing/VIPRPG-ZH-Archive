@@ -51,11 +51,11 @@ VALUES
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.read_own","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.read_own","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","work.read_private","work.update","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","series.read_private","series.create","series.update","release.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","work.read_private","work.update","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","series.read_private","series.create","series.update","release.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)

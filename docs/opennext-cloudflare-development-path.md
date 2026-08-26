@@ -551,7 +551,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 目标：前端选择文件夹或本地 ZIP，浏览器生成 manifest 草案和 core pack。
 
-详细浏览器任务系统见 [浏览器上传任务架构设计](./browser-upload-task-architecture.md)。
+上传只保留当前标签页会话内的 Worker 和进度状态，不持久化浏览器任务快照。
 
 任务：
 
@@ -573,12 +573,12 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 实施记录：
 
-- 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、浮标进度、IndexedDB 任务快照和同浏览器恢复。
+- 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、当前会话浮标进度。
 - 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
 - 已用本地浏览器端样本在 staging 完成导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
 - staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，对象引用表写入完成；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
 - staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
-- commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试；浏览器本地任务恢复后必须重新 preflight。
+- commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试。
 - 2026-05-03 追加上传性能优化：上传 worker 不再在 ZIP 模式下 `unzipSync` 全量解包，而是读取中央目录并按需切片解压 entry；hash / CRC 阶段改为有字节预算的自适应并发；core pack 生成复用扫描阶段已读 core 字节并改为 `fflate` 异步 ZIP；缺失 blob 上传并发改为按浏览器能力自适应。
 - 2026-05-03 ZIP 路径编码修复：本地 ZIP 上传读取中央目录时遵守 UTF-8 flag；对未标记 UTF-8 的 legacy ZIP 在样本上选择统一编码，覆盖日文 Shift-JIS/CP932 路径，避免 manifest 固化乱码路径和 Web Play 安装时出现 EasyRPG 路径冲突。
 
@@ -739,7 +739,7 @@ Phase 5 MVP 回补：
 - 实现 `/admin/archive-versions/{archiveVersionId}`，用于维护 ArchiveVersion 层资料：名称、语言、校对、修图和发布状态；归档 key、manifest 和对象引用保持只读。
 - 实现 `/creators` 和 `/creators/{slug}`，公开展示作者、汉化、校对、修图和整理人员的资料、作品层职务和 Release 职务。
 - 实现 `/admin/creators` 和 `/admin/creators/{creatorId}`，用于维护 creator 本体资料；职务关联第一版只读展示。
-- 实现 `/characters`、`/tags`、`/series` 及其详情页，分别展示角色登场作品、标签关联作品和系列作品顺序。
+- 实现 `/characters`、`/tags` 公开索引并连接到作品筛选；`/series` 及其详情页展示系列作品顺序。
 - 实现 `/admin/characters`、`/admin/tags`、`/admin/series`，用于维护角色、标签和系列本体资料，并支持角色/标签合并。
 - 作品编辑页补齐角色职务、浏览图 SHA-256、系列成员和相关作品关系维护。
 - 作品编辑写入 `auth_audit_logs`，供审计页追踪资料变更；读取授权见统一基线。
@@ -757,7 +757,7 @@ Phase 5 MVP 回补：
 - `/creators` 能列出已有公开作品或公开 Release 关联的制作人员。
 - `/creators/{slug}` 能展示作者简介、个人链接、作品年表和发布参与记录。
 - Creator 管理页可编辑名称、原名、个人链接和简介；访问边界只见统一基线。
-- `/characters/{slug}` 能展示角色简介和登场作品；`/tags/{slug}` 能展示标签关联作品；`/series/{slug}` 能展示系列成员排序。
+- `/characters` 和 `/tags` 的条目能进入对应作品筛选；`/series/{slug}` 能展示系列成员排序。
 - 管理端可维护角色资料、标签、系列，并可在 Work 编辑页维护角色、系列和相关作品关系；访问边界只见统一基线。
 
 当前落地：
@@ -770,7 +770,7 @@ Phase 5 MVP 回补：
 - 新增 `lib/server/db/creator-library.ts`，集中处理 creator 公开查询、详情聚合和管理端编辑。
 - 新增 `/creators`、`/creators/{slug}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
 - 新增 `lib/server/db/taxonomy-library.ts`，集中处理角色、标签和系列的公开查询、管理端编辑、合并和系列创建。
-- 新增 `/characters`、`/characters/{slug}`、`/tags`、`/tags/{slug}`、`/series`、`/series/{slug}`。
+- 新增 `/characters`、`/tags`、`/series`、`/series/{slug}`；角色和标签条目进入 `/games` 的对应筛选结果。
 - 新增 `/admin/characters`、`/admin/characters/{characterId}`、`/admin/tags`、`/admin/tags/{tagId}`、`/admin/series`、`/admin/series/{seriesId}` 及对应管理 API。
 - `/admin/works/{workId}` 现在可维护 Work 图标/缩略图 SHA-256、浏览图列表、角色职务、系列成员和相关作品关系。
 - 作品详情页的 Work staff 和 Release staff 现在链接到 creator 公开页。

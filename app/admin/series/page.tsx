@@ -22,7 +22,6 @@ export default async function AdminSeriesPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Series"
         title="系列作品维护"
         actions={
           <>

@@ -22,7 +22,7 @@ export default async function SeriesPage({ searchParams }: SeriesPageProps) {
 
   return (
     <main>
-      <PageHeader eyebrow="Series" title="系列作品" />
+      <PageHeader title="系列作品" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"

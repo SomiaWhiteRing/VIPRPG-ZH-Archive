@@ -1,37 +1,18 @@
 import Link from "next/link";
-import type { GameCharacter, GameTag } from "@/lib/server/db/game-library";
 import type { PublicSeriesSummary } from "@/lib/server/db/taxonomy-library";
 
 type FacetLink = { href: string; label: string; active?: boolean };
 
 export function LibraryFacetIndex({
   engines,
-  tags,
-  characters,
   series,
 }: {
   engines: FacetLink[];
-  tags: GameTag[];
-  characters: GameCharacter[];
   series: PublicSeriesSummary[];
 }) {
   return (
     <section className="mb-7 grid gap-4 rounded-lg border border-border bg-card p-5" aria-label="游戏库分类索引">
       <FacetGroup links={engines} title="引擎" />
-      <FacetGroup
-        links={tags.map((tag) => ({
-          href: `/games?tag=${encodeURIComponent(tag.slug)}`,
-          label: tag.name,
-        }))}
-        title="标签"
-      />
-      <FacetGroup
-        links={characters.map((character) => ({
-          href: `/games?character=${encodeURIComponent(character.slug)}`,
-          label: character.primaryName,
-        }))}
-        title="角色"
-      />
       <FacetGroup
         links={series.map((item) => ({
           href: `/series/${item.slug}`,

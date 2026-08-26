@@ -38,7 +38,6 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
   return (
     <main>
       <PageHeader
-        eyebrow="Edit Creator"
         title={creator.name}
         actions={
           <>

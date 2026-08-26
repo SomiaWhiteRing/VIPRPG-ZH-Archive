@@ -83,7 +83,7 @@ function uploadTaskTone(value: UploadTaskStatus): BadgeTone {
   if (value === "completed") {
     return "positive";
   }
-  if (value === "failed_recoverable" || value === "failed_terminal" || value === "canceled") {
+  if (value === "failed" || value === "canceled") {
     return "negative";
   }
   return "pending";

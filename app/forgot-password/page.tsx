@@ -26,7 +26,7 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 mx-auto w-full max-w-md">
       {turnstileKey ? <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer /> : null}
-      <PageHeader eyebrow="Account" title="找回密码" subtitle="通过邮箱验证码设置新密码。" />
+      <PageHeader title="找回密码" subtitle="通过邮箱验证码设置新密码。" />
 
       <Pane>
         {params.error ? (

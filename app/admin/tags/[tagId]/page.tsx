@@ -38,14 +38,18 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
   return (
     <main>
       <PageHeader
-        eyebrow="Edit Tag"
         title={tag.name}
         actions={
           <>
             <BackLink href="/admin/tags" label="返回标签维护" />
-            <Link className={buttonVariants({ variant: "outline" })} href={`/tags/${tag.slug}`}>
-              公开页
-            </Link>
+            {tag.workCount > 0 || tag.releaseCount > 0 ? (
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+              >
+                查看作品
+              </Link>
+            ) : null}
             <InboxLink unread={unreadInboxCount} />
           </>
         }

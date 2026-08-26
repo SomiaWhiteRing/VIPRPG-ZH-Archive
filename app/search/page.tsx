@@ -36,7 +36,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
       <header className="mb-6 border-b border-border pb-6">
-        <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-accent">SEARCH</p>
         <h1 className="text-3xl font-extrabold tracking-tight">搜索作品与分类</h1>
         <p className="mt-2 text-muted">按标题、作者、标签、角色或系列查找内容。</p>
       </header>
@@ -140,14 +139,14 @@ async function listDirectory(scope: string, query: string, page: number) {
     }));
   else if (scope === "characters")
     items = (await listPublicCharacters({ query, limit: 300 })).map((item) => ({
-      href: `/characters/${item.slug}`,
+      href: `/games?character=${encodeURIComponent(item.slug)}`,
       title: item.primaryName,
       subtitle: item.originalName,
       meta: `${item.workCount} 个作品`,
     }));
   else if (scope === "tags")
     items = (await listPublicTags({ query, limit: 300 })).map((item) => ({
-      href: `/tags/${item.slug}`,
+      href: `/games?tag=${encodeURIComponent(item.slug)}`,
       title: item.name,
       subtitle: item.slug,
       meta: `${item.workCount} 个作品`,

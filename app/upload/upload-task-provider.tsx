@@ -1,10 +1,9 @@
 "use client";
-import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Button } from "@/app/components/ui/button";
 import { Progress } from "@/app/components/ui/progress";
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import { clearTaskSnapshot, loadTaskSnapshots } from "@/app/upload/upload-task-db";
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceKind,
@@ -21,7 +20,6 @@ type StartUploadInput = {
   files: File[];
   metadata: ArchiveCommitMetadata;
   metadataBlobs: MetadataBlobUpload[];
-  resumeLocalTaskId?: string | null;
 };
 
 type UploadTaskContextValue = {
@@ -41,35 +39,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
-    loadTaskSnapshots()
-      .then((items) => {
-        if (!mounted) {
-          return;
-        }
-
-        setTasks(
-          items.map((task) =>
-            isUnfinished(task)
-              ? {
-                  ...task,
-                  status: "needs_source_reselect",
-                  updatedAt: new Date().toISOString(),
-                }
-              : task,
-          ),
-        );
-      })
-      .catch(() => undefined);
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const hasActiveTask = tasks.some((task) => ["running", "paused", "needs_source_reselect"].includes(task.status));
+    const hasActiveTask = tasks.some((task) => ["running", "paused"].includes(task.status));
 
     if (!hasActiveTask) {
       return;
@@ -79,20 +49,10 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
       event.preventDefault();
       event.returnValue = "";
     };
-    const checkpoint = () => {
-      workerRef.current?.postMessage({
-        type: "checkpoint",
-      } satisfies UploadWorkerInput);
-    };
-
     window.addEventListener("beforeunload", onBeforeUnload);
-    window.addEventListener("pagehide", checkpoint);
-    document.addEventListener("visibilitychange", checkpoint);
 
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
-      window.removeEventListener("pagehide", checkpoint);
-      document.removeEventListener("visibilitychange", checkpoint);
     };
   }, [tasks]);
 
@@ -120,12 +80,11 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   const startUpload = useCallback(
     (input: StartUploadInput) => {
       const worker = ensureWorker();
-      const localTaskId = input.resumeLocalTaskId ?? crypto.randomUUID();
+      const localTaskId = crypto.randomUUID();
 
       worker.postMessage({
         type: "start",
         localTaskId,
-        resumeLocalTaskId: input.resumeLocalTaskId ?? null,
         sourceKind: input.sourceKind,
         files: input.files,
         metadata: input.metadata,
@@ -173,7 +132,6 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearTask = useCallback((localTaskId: string) => {
-    clearTaskSnapshot(localTaskId).catch(() => undefined);
     setTasks((current) => current.filter((task) => task.localTaskId !== localTaskId));
   }, []);
 
@@ -223,9 +181,7 @@ function UploadFloatingDock({
   onClose: () => void;
   value: UploadTaskContextValue;
 }) {
-  const activeTasks = value.tasks.filter((task) =>
-    ["running", "paused", "needs_source_reselect"].includes(task.status),
-  );
+  const activeTasks = value.tasks.filter((task) => ["running", "paused"].includes(task.status));
   const visibleTasks = value.tasks.slice(0, 6);
 
   if (value.tasks.length === 0) {
@@ -304,11 +260,6 @@ function UploadFloatingDock({
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center gap-3">
-                {task.status === "needs_source_reselect" ? (
-                  <a className={buttonVariants()} href="/upload">
-                    重新选择来源
-                  </a>
-                ) : null}
                 {task.status === "running" ? (
                   <Button variant="outline" onClick={() => value.pauseTask(task.localTaskId)} type="button">
                     暂停
@@ -319,7 +270,7 @@ function UploadFloatingDock({
                     继续
                   </Button>
                 ) : null}
-                {["running", "paused", "needs_source_reselect"].includes(task.status) ? (
+                {["running", "paused"].includes(task.status) ? (
                   <Button variant="outline" onClick={() => value.cancelTask(task.localTaskId)} type="button">
                     取消
                   </Button>
@@ -351,10 +302,6 @@ function upsertTask(
   next[index] = nextTask;
 
   return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-function isUnfinished(task: BrowserUploadTaskSnapshot): boolean {
-  return !["completed", "failed_terminal", "canceled"].includes(task.status);
 }
 
 function phaseLabel(phase: BrowserUploadTaskSnapshot["phase"]): string {

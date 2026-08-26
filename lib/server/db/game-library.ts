@@ -466,17 +466,22 @@ type SeriesRow = {
   relation_kind: string;
 };
 
-export async function listGameWorks(input: {
+type GameWorkFilters = {
   query?: string;
   engine?: string;
   tag?: string;
   tagQuery?: string;
   character?: string;
+  includeNonPublic?: boolean;
+};
+
+type ListGameWorksInput = GameWorkFilters & {
   sort?: "updated" | "title" | "engine";
   limit?: number;
   offset?: number;
-  includeNonPublic?: boolean;
-} = {}): Promise<GameWorkSummary[]> {
+};
+
+export async function listGameWorks(input: ListGameWorksInput = {}): Promise<GameWorkSummary[]> {
   const { where, binds } = buildGameWorkWhere(input);
 
   const limit = clampLimit(input.limit ?? 80, 1, 200);
@@ -493,6 +498,20 @@ export async function listGameWorks(input: {
     .all<WorkSummaryRow>();
 
   return hydrateWorkSummaries(rows.results ?? []);
+}
+
+export async function countGameWorks(input: GameWorkFilters = {}): Promise<number> {
+  const { where, binds } = buildGameWorkWhere(input);
+  const row = await getD1()
+    .prepare(
+      `SELECT COUNT(*) AS total
+      FROM works w
+      ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}`,
+    )
+    .bind(...binds)
+    .first<{ total: number }>();
+
+  return Number(row?.total ?? 0);
 }
 
 export type PaginatedGameSearch = {
@@ -512,11 +531,8 @@ export async function searchGameWorks(input: {
   const page = clampLimit(input.page ?? 1, 1, 9999);
   const { where, binds } = buildGameWorkWhere({ query: input.query });
   const database = getD1();
-  const [countResult, rows] = await Promise.all([
-    database
-      .prepare(`SELECT COUNT(*) AS total FROM works w WHERE ${where.join(" AND ")}`)
-      .bind(...binds)
-      .first<{ total: number }>(),
+  const [total, rows] = await Promise.all([
+    countGameWorks({ query: input.query }),
     database
       .prepare(
         `${workSummarySelectSql()}
@@ -528,7 +544,6 @@ export async function searchGameWorks(input: {
       .bind(...binds, pageSize, (page - 1) * pageSize)
       .all<WorkSummaryRow>(),
   ]);
-  const total = Number(countResult?.total ?? 0);
 
   return {
     items: await hydrateWorkSummaries(rows.results ?? []),
@@ -539,14 +554,7 @@ export async function searchGameWorks(input: {
   };
 }
 
-function buildGameWorkWhere(input: {
-  query?: string;
-  engine?: string;
-  tag?: string;
-  tagQuery?: string;
-  character?: string;
-  includeNonPublic?: boolean;
-}): { where: string[]; binds: Array<string | number> } {
+function buildGameWorkWhere(input: GameWorkFilters): { where: string[]; binds: Array<string | number> } {
   const where: string[] = [input.includeNonPublic ? "w.status <> 'deleted'" : "w.status = 'published'"];
   const binds: Array<string | number> = [];
 
@@ -1206,58 +1214,6 @@ export async function updateArchiveVersionForAdmin(input: {
   }
 
   return updated;
-}
-
-export async function listPublicTags(limit = 100): Promise<GameTag[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT DISTINCT slug, name, namespace
-      FROM (
-        SELECT t.slug, t.name, t.namespace
-        FROM tags t
-        JOIN work_tags wt ON wt.tag_id = t.id
-        JOIN works w ON w.id = wt.work_id
-        WHERE w.status = 'published'
-        UNION
-        SELECT t.slug, t.name, t.namespace
-        FROM tags t
-        JOIN release_tags rt ON rt.tag_id = t.id
-        JOIN releases r ON r.id = rt.release_id
-        JOIN works w ON w.id = r.work_id
-        WHERE w.status = 'published'
-          AND r.status = 'published'
-      )
-      ORDER BY name ASC
-      LIMIT ?`,
-    )
-    .bind(clampLimit(limit, 1, 300))
-    .all<TagRow>();
-
-  return (rows.results ?? []).map(mapTagRow);
-}
-
-export async function listPublicCharacters(limit = 100): Promise<GameCharacter[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT DISTINCT
-        ch.slug,
-        ch.primary_name,
-        ch.original_name,
-        'supporting' AS role_key,
-        0 AS spoiler_level,
-        NULL AS sort_order,
-        NULL AS notes
-      FROM characters ch
-      JOIN work_characters wc ON wc.character_id = ch.id
-      JOIN works w ON w.id = wc.work_id
-      WHERE w.status = 'published'
-      ORDER BY ch.primary_name ASC
-      LIMIT ?`,
-    )
-    .bind(clampLimit(limit, 1, 300))
-    .all<CharacterRow>();
-
-  return (rows.results ?? []).map(mapCharacterRow);
 }
 
 function workSummarySelectSql(): string {

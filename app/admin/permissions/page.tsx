@@ -10,7 +10,7 @@ export default async function AdminPermissionsPage() {
   const [roles, permissions] = await Promise.all([listRoles(), listPermissions()]);
   return (
     <main>
-      <PageHeader eyebrow="Admin Permissions" title="角色与权限" />
+      <PageHeader title="角色与权限" />
       <PermissionMatrix permissions={permissions} roles={roles} />
     </main>
   );

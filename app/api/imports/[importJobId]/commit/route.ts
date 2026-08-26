@@ -18,7 +18,6 @@ type RouteContext = {
 };
 
 type CommitRequest = {
-  localTaskId?: string;
   manifestSha256?: string;
   manifestJson?: string;
   metadata?: ArchiveCommitMetadata;
@@ -44,7 +43,6 @@ export async function POST(request: Request, context: RouteContext) {
     const payload = (await request.json()) as CommitRequest;
 
     if (
-      typeof payload.localTaskId !== "string" ||
       typeof payload.manifestSha256 !== "string" ||
       typeof payload.manifestJson !== "string" ||
       !payload.metadata
@@ -61,7 +59,6 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await commitArchiveImport({
       importJobId: id,
       user: auth.user,
-      localTaskId: payload.localTaskId,
       manifestSha256: payload.manifestSha256,
       manifestJson: payload.manifestJson,
       metadata: payload.metadata,

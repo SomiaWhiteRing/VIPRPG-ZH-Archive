@@ -37,14 +37,16 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
   return (
     <main>
       <PageHeader
-        eyebrow="Edit Character"
         title={character.primaryName}
         actions={
           <>
             <BackLink href="/admin/characters" label="返回角色维护" />
             {character.workCount > 0 ? (
-              <Link className={buttonVariants({ variant: "outline" })} href={`/characters/${character.slug}`}>
-                公开页
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                href={`/games?character=${encodeURIComponent(character.slug)}`}
+              >
+                查看作品
               </Link>
             ) : null}
             <InboxLink unread={unreadInboxCount} />

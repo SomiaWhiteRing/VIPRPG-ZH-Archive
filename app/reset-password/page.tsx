@@ -24,7 +24,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 mx-auto w-full max-w-md">
-      <PageHeader eyebrow="Account" title="重置密码" subtitle="输入邮箱验证码和新密码。" />
+      <PageHeader title="重置密码" subtitle="输入邮箱验证码和新密码。" />
 
       <Pane>
         {params.sent ? (

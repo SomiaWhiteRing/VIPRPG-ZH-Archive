@@ -43,7 +43,6 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
             {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
           </>
         }
-        eyebrow="Series"
         subtitle={series.titleOriginal}
         title={series.title}
       />

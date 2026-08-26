@@ -40,7 +40,7 @@ export default async function AdminPage() {
 
   return (
     <main>
-      <PageHeader eyebrow="Admin Console" title="管理控制台" />
+      <PageHeader title="管理控制台" />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="存储摘要">
         {metrics.map(([label, value]) => (

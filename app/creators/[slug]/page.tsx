@@ -45,7 +45,6 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
             {currentUser ? <InboxLink unread={unreadInboxCount} /> : null}
           </>
         }
-        eyebrow="Creator"
         subtitle={creator.originalName}
         title={creator.name}
       />

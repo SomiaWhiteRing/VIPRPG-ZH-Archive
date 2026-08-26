@@ -21,7 +21,6 @@ export default async function AdminCharactersPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Characters"
         title="登场角色维护"
         actions={
           <>
@@ -59,8 +58,11 @@ export default async function AdminCharactersPage() {
                     编辑
                   </Link>
                   {character.workCount > 0 ? (
-                    <Link className={buttonVariants({ variant: "outline" })} href={`/characters/${character.slug}`}>
-                      公开页
+                    <Link
+                      className={buttonVariants({ variant: "outline" })}
+                      href={`/games?character=${encodeURIComponent(character.slug)}`}
+                    >
+                      查看作品
                     </Link>
                   ) : null}
                 </div>

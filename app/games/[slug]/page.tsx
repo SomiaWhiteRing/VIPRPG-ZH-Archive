@@ -41,7 +41,6 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
     <main>
       <PageHeader
         actions={<BackLink href="/games" label="返回作品资料库" />}
-        eyebrow="Game Work"
         subtitle={work.chineseTitle ? work.originalTitle : undefined}
         title={
           <span className="flex flex-wrap items-baseline gap-2">

@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 mx-auto w-full max-w-md">
-      <PageHeader eyebrow="Account" title="登录" subtitle="使用邮箱和密码进入账户。" />
+      <PageHeader title="登录" subtitle="使用邮箱和密码进入账户。" />
 
       <Pane>
         {params.reset ? (

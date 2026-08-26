@@ -1,5 +1,4 @@
 import { getD1 } from "@/lib/server/db/d1";
-import { listGameWorks, type GameWorkSummary } from "@/lib/server/db/game-library";
 
 export type PublicCharacterSummary = {
   id: number;
@@ -9,10 +8,6 @@ export type PublicCharacterSummary = {
   description: string | null;
   workCount: number;
   updatedAt: string;
-};
-
-export type PublicCharacterDetail = PublicCharacterSummary & {
-  works: GameWorkSummary[];
 };
 
 export type AdminCharacterEdit = PublicCharacterSummary & {
@@ -28,10 +23,6 @@ export type PublicTagSummary = {
   workCount: number;
   releaseCount: number;
   updatedAt: string;
-};
-
-export type PublicTagDetail = PublicTagSummary & {
-  works: GameWorkSummary[];
 };
 
 export type AdminTagEdit = PublicTagSummary;
@@ -149,21 +140,10 @@ export async function listPublicCharacters(input: {
   return (rows.results ?? []).map(mapCharacterSummary);
 }
 
-export async function getPublicCharacterDetail(
+export async function getPublicCharacterSummary(
   slug: string,
-): Promise<PublicCharacterDetail | null> {
-  const character = await getCharacterBySlug(slug, false);
-
-  if (!character) {
-    return null;
-  }
-
-  const works = await listGameWorks({ character: character.slug, limit: 200 });
-
-  return {
-    ...character,
-    works,
-  };
+): Promise<PublicCharacterSummary | null> {
+  return getCharacterBySlug(slug, false);
 }
 
 export async function listCharactersForAdmin(limit = 300): Promise<PublicCharacterSummary[]> {
@@ -296,19 +276,14 @@ export async function listPublicTags(input: {
   return (rows.results ?? []).map(mapTagSummary);
 }
 
-export async function getPublicTagDetail(slug: string): Promise<PublicTagDetail | null> {
+export async function getPublicTagSummary(slug: string): Promise<PublicTagSummary | null> {
   const tag = await getTagBySlug(slug);
 
-  if (!tag) {
+  if (!tag || (tag.workCount === 0 && tag.releaseCount === 0)) {
     return null;
   }
 
-  const works = await listGameWorks({ tag: tag.slug, limit: 200 });
-
-  return {
-    ...tag,
-    works,
-  };
+  return tag;
 }
 
 export async function listTagsForAdmin(limit = 300): Promise<PublicTagSummary[]> {

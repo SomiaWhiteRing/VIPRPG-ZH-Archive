@@ -15,7 +15,6 @@ import type {
   ArchiveManifestFile,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
-import { saveTaskSnapshot } from "@/app/upload/upload-task-db";
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
@@ -132,7 +131,7 @@ self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
   if (message.type === "start") {
     runUpload(message).catch((error: unknown) => {
       postLog(
-        message.resumeLocalTaskId ?? message.localTaskId,
+        message.localTaskId,
         error instanceof Error ? error.message : "上传任务失败",
       );
     });
@@ -155,7 +154,7 @@ self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
 };
 
 async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>) {
-  const localTaskId = message.resumeLocalTaskId ?? message.localTaskId;
+  const localTaskId = message.localTaskId;
   const now = new Date().toISOString();
   let task = createInitialTask({
     localTaskId,
@@ -173,13 +172,11 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
     task = setPhase(task, "enumerating", 1, null);
     task = await persistAndPost(task, true);
     const sourceFiles = await enumerateSourceFiles(message.files, message.sourceKind);
-    const sourceFingerprint = await fingerprintSource(sourceFiles, message.sourceKind);
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
     task = {
       ...task,
       sourceName: inferCleanSourceName(message.files, message.sourceKind),
-      sourceFingerprint,
       stats: {
         ...task.stats,
         sourceFileCount: sourceFiles.length,
@@ -271,7 +268,7 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
     const messageText = error instanceof Error ? error.message : "上传任务失败";
     const failedTask: BrowserUploadTaskSnapshot = {
       ...task,
-      status: canceledTasks.has(localTaskId) ? "canceled" : "failed_recoverable",
+      status: canceledTasks.has(localTaskId) ? "canceled" : "failed",
       updatedAt: new Date().toISOString(),
       error: messageText,
     };
@@ -798,7 +795,6 @@ async function commitTask(
   }>(`/api/imports/${task.serverImportJobId}/commit`, {
     method: "POST",
     body: JSON.stringify({
-      localTaskId: task.localTaskId,
       manifestSha256: task.manifestSha256,
       manifestJson: task.manifestJson,
       metadata,
@@ -882,9 +878,6 @@ function createInitialTask(input: {
     phase: "created",
     sourceKind: input.sourceKind,
     sourceName: input.sourceName,
-    sourceFingerprint: null,
-    filePolicyVersion: FILE_POLICY_VERSION,
-    packerVersion: PACKER_VERSION,
     metadata: input.metadata,
     manifestSha256: null,
     manifestJson: null,
@@ -1023,7 +1016,6 @@ async function persistAndPost(
     updatedAt: new Date().toISOString(),
   };
 
-  await saveTaskSnapshot(nextTask);
   postMessage({
     type: "task",
     task: nextTask,
@@ -1267,27 +1259,6 @@ function asArrayBufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 
 async function sha256Text(value: string): Promise<string> {
   return sha256Bytes(new TextEncoder().encode(value));
-}
-
-async function fingerprintSource(
-  files: SourceFile[],
-  sourceKind: UploadSourceKind,
-): Promise<string> {
-  const parts = [
-    sourceKind,
-    String(files.length),
-    String(files.reduce((sum, file) => sum + file.size, 0)),
-  ];
-  const sampleFiles = [
-    ...files.slice(0, 20),
-    ...files.slice(Math.max(20, files.length - 20)),
-  ];
-
-  for (const file of sampleFiles) {
-    parts.push(`${file.path}:${file.size}:${file.mtimeMs ?? ""}`);
-  }
-
-  return sha256Text(parts.join("\n"));
 }
 
 function addExcluded(

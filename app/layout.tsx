@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "VIPRPG.org",
   description: "RPG Maker 2000/2003 作品发现、游玩与下载空间",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/icon/windI.png",
   },
 };
 

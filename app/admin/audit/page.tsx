@@ -22,7 +22,6 @@ export default async function AdminAuditPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Super Admin Audit"
         title="审计日志"
         subtitle="登录、版本维护与权限调整的审计日志。"
         actions={

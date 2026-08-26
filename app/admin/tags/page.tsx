@@ -19,7 +19,6 @@ export default async function AdminTagsPage() {
   return (
     <main>
       <PageHeader
-        eyebrow="Admin Tags"
         title="标签维护"
         actions={
           <>
@@ -57,9 +56,14 @@ export default async function AdminTagsPage() {
                   <Link className={buttonVariants()} href={`/admin/tags/${tag.id}`}>
                     编辑
                   </Link>
-                  <Link className={buttonVariants({ variant: "outline" })} href={`/tags/${tag.slug}`}>
-                    公开页
-                  </Link>
+                  {tag.workCount > 0 || tag.releaseCount > 0 ? (
+                    <Link
+                      className={buttonVariants({ variant: "outline" })}
+                      href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+                    >
+                      查看作品
+                    </Link>
+                  ) : null}
                 </div>
               </td>
             </tr>

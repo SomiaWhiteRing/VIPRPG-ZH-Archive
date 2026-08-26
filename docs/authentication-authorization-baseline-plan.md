@@ -48,7 +48,7 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | 角色 | 显式 permission key |
 | --- | --- |
 | `user` | 无；只具备登录后本人范围能力 |
-| `uploader` | `work.lookup_non_deleted`、`import_job.create`、`import_job.read_own`、`import_job.cancel_own`、`import_job.preflight_own`、`import_job.commit_own`、`storage_object.upload`、`archive_version.delete_own` |
+| `uploader` | `work.lookup_non_deleted`、`import_job.create`、`import_job.cancel_own`、`import_job.preflight_own`、`import_job.commit_own`、`storage_object.upload`、`archive_version.delete_own` |
 | `admin` | `uploader` 的完整显式清单，加 `work.read_private`、`work.update`、`creator.read_private`、`creator.update`、`character.read_private`、`character.update`、`tag.read_private`、`tag.update`、`series.read_private`、`series.create`、`series.update`、`release.update`、`archive_version.read_private`、`archive_version.update`、`archive_version.delete_any`、`archive_version.restore`、`archive_version.set_current`、`user.read`、`user.status.update`、`user.role.assign`、`inbox.role_request.resolve`、`system.dashboard.read`、`system.maintenance.run` |
 | `super_admin` | `admin` 的完整显式清单，加 `storage.gc.sweep`、`audit.read`；角色策略写入仍依赖不可委派的 bootstrap 身份，不由 key 推导 |
 
@@ -96,7 +96,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | Method + route | permission key | 领域约束 |
 | --- | --- | --- |
 | `POST /api/imports` | `import_job.create` | `uploader_id` 只取 AuthContext |
-| `GET /api/imports/{id}` | `import_job.read_own` | SQL/服务再次要求 job uploader 为本人；否则 404 |
 | `POST /api/imports/{id}/cancel` | `import_job.cancel_own` | 同上，并校验任务状态 |
 | `POST /api/imports/{id}/preflight` | `import_job.preflight_own` | 同上；失败只更新已授权任务 |
 | `POST /api/imports/{id}/commit` | `import_job.commit_own` | 同上；服务端不信任客户端 uploader |
@@ -134,9 +133,9 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 
 | 页面 | 身份/权限 |
 | --- | --- |
-| `/`、`/games*`、`/creators*`、`/characters*`、`/tags*`、`/series*`、`/play/{id}`、认证表单页 | 公开；公共资料 SQL 只返回 published |
+| `/`、`/games*`、`/creators*`、`/characters`、`/tags`、`/series*`、`/play/{id}`、认证表单页 | 公开；公共资料 SQL 只返回 published |
 | `/me`、`/inbox` | 仅活跃用户；内容按本人或可处理 permission 过滤 |
-| `/upload`、`/upload/tasks` | `import_job.create` |
+| `/upload` | `import_job.create` |
 | `/admin` | `system.dashboard.read` |
 | `/admin/works`、`/admin/creators`、`/admin/characters`、`/admin/tags`、`/admin/series` | 对应 `*.read_private` |
 | `/admin/works/{id}`、`/admin/releases/{id}`、`/admin/creators/{id}`、`/admin/characters/{id}`、`/admin/tags/{id}`、`/admin/series/{id}` | 对应精确 `*.update` |
@@ -178,7 +177,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `POST` | `/api/inbox/{itemId}/read` | 仅活跃用户 + 同源 | 领域服务再次证明站内信可见性 |
 | `POST` | `/api/inbox/{itemId}/resolve` | `inbox.role_request.resolve` + 同源 | 统一角色服务再次检查 `user.role.assign`、priority、状态和重复操作 |
 | `POST` | `/api/imports` | `import_job.create` + 同源 | `uploader_id` 只取 AuthContext |
-| `GET` | `/api/imports/{importJobId}` | `import_job.read_own` | owned job；非本人为 `404` |
 | `POST` | `/api/imports/{importJobId}/cancel` | `import_job.cancel_own` + 同源 | owned job 和任务状态机 |
 | `POST` | `/api/imports/{importJobId}/preflight` | `import_job.preflight_own` + 同源 | owned job；只更新已授权任务 |
 | `POST` | `/api/imports/{importJobId}/commit` | `import_job.commit_own` + 同源 | owned job；服务端重取 uploader 和内容引用 |
@@ -219,10 +217,8 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/search` | 公开 | 搜索结果遵守公开资料 SQL |
 | `/creators` | 公开 | 只展示公开关联的 creator |
 | `/creators/{slug}` | 公开 | 只展示公开 Work/Release 关联 |
-| `/characters` | 公开 | 只展示公开关联的角色 |
-| `/characters/{slug}` | 公开 | 只展示公开 Work 关联 |
-| `/tags` | 公开 | 只展示公开关联的标签 |
-| `/tags/{slug}` | 公开 | 只展示公开 Work 关联 |
+| `/characters` | 公开 | 只展示公开关联的角色，条目进入公开 Work 筛选 |
+| `/tags` | 公开 | 只展示公开关联的标签，条目进入公开 Work 筛选 |
 | `/series` | 公开 | 只展示公开系列和成员 |
 | `/series/{slug}` | 公开 | 只展示公开 Work 成员 |
 | `/play/{archiveVersionId}` | 公开 | 页面数据只能来自完整 published 版本链 |
@@ -230,10 +226,9 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/register` | 公开 | 注册提交走同源验证码 API |
 | `/forgot-password` | 公开 | 仅发起密码重置流程 |
 | `/reset-password` | 公开 | 重置提交走同源验证码 API |
-| `/me` | 仅活跃用户 | 只读取本人账户、通知和任务 |
+| `/me` | 仅活跃用户 | 只读取本人账户和通知 |
 | `/inbox` | 仅活跃用户 | 只显示本人或当前 permission 可见通知 |
 | `/upload` | `import_job.create` | 无 key 时显示申请入口，不创建任务 |
-| `/upload/tasks` | `import_job.create` | 只列出本人 import job |
 | `/admin` | `system.dashboard.read` | 管理摘要按当前权限显示 |
 | `/admin/works` | `work.read_private` | 管理列表仍由 Work 服务过滤 |
 | `/admin/works/{workId}` | `work.update` | 编辑目标由 Work 服务校验 |

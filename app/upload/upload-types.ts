@@ -8,10 +8,8 @@ export type UploadTaskStatus =
   | "created"
   | "running"
   | "paused"
-  | "needs_source_reselect"
   | "completed"
-  | "failed_recoverable"
-  | "failed_terminal"
+  | "failed"
   | "canceled";
 
 export type UploadTaskPhase =
@@ -43,9 +41,6 @@ export type BrowserUploadTaskSnapshot = {
   phase: UploadTaskPhase;
   sourceKind: UploadSourceKind;
   sourceName: string;
-  sourceFingerprint: string | null;
-  filePolicyVersion: string;
-  packerVersion: string;
   metadata: ArchiveCommitMetadata;
   manifestSha256: string | null;
   manifestJson: string | null;
@@ -103,7 +98,6 @@ export type UploadWorkerInput =
   | {
       type: "start";
       localTaskId: string;
-      resumeLocalTaskId: string | null;
       sourceKind: UploadSourceKind;
       files: File[];
       metadata: ArchiveCommitMetadata;
@@ -120,9 +114,6 @@ export type UploadWorkerInput =
   | {
       type: "cancel";
       localTaskId: string;
-    }
-  | {
-      type: "checkpoint";
     };
 
 export type UploadWorkerOutput =
