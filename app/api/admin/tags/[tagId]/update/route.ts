@@ -38,8 +38,7 @@ export async function POST(request: Request, context: RouteContext) {
       detail: {
         tagId,
         resultingTagId: tag.id,
-        slug: tag.slug,
-        merged: Boolean(input.mergeTargetSlug),
+        merged: Boolean(input.mergeTargetId),
       },
     });
 

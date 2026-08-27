@@ -48,7 +48,6 @@ export default async function AdminCharactersPage() {
               <td>
                 <strong>{character.primaryName}</strong>
                 {character.originalName ? <span className="text-sm text-muted">{character.originalName}</span> : null}
-                <span className="font-mono text-sm text-primary text-sm text-muted">{character.slug}</span>
               </td>
               <td>{formatNumber(character.workCount)}</td>
               <td>{character.updatedAt}</td>
@@ -60,7 +59,7 @@ export default async function AdminCharactersPage() {
                   {character.workCount > 0 ? (
                     <Link
                       className={buttonVariants({ variant: "outline" })}
-                      href={`/games?character=${encodeURIComponent(character.slug)}`}
+                      href={`/games?character=${character.id}`}
                     >
                       查看作品
                     </Link>

@@ -32,7 +32,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       >
         <Label>
           <span>搜索</span>
-          <Input defaultValue={query} name="q" placeholder="标签名、slug" type="search" />
+          <Input defaultValue={query} name="q" placeholder="标签名" type="search" />
         </Label>
         <Button type="submit">筛选</Button>
         {query ? (
@@ -67,11 +67,10 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
       <div>
         <Link
           className="text-lg font-bold text-primary hover:text-accent"
-          href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+          href={`/games?tag=${tag.id}`}
         >
           {tag.name}
         </Link>
-        <span className="font-mono text-sm text-primary text-sm text-muted">{tag.slug}</span>
       </div>
       <p>{tag.description || namespaceLabel(tag.namespace)}</p>
       <StatList

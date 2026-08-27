@@ -22,17 +22,17 @@ import { WorkActionBar } from "./work-action-bar";
 import { RelationEditor } from "./relation-editor";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
+import { parsePositiveId } from "@/lib/server/http/request";
 
 export const dynamic = "force-dynamic";
 
 export default async function GameDetailPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const rawSlug = (await params).slug;
-  const slug = decodeRouteSegment(rawSlug);
-  const work = await getGameWorkDetail(slug);
+  const id = parsePositiveId((await params).id, "work id");
+  const work = await getGameWorkDetail(id);
   if (!work) notFound();
   const currentUser = await getCurrentUserFromCookies();
   const relationCapabilities = getRelationEditorCapabilities(currentUser);
@@ -182,7 +182,7 @@ export default async function GameDetailPage({
                   className="flex flex-wrap items-baseline justify-between gap-2"
                   key={`${item.role}-${item.workId}`}
                 >
-                  <Link href={`/games/${item.slug}`}>{item.title}</Link>
+                  <Link href={`/games/${item.workId}`}>{item.title}</Link>
                   <span className="text-sm text-muted">
                     {item.role === "original" ? "原版" : "译版"} ·{" "}
                     {languageLabel(item.language)}
@@ -200,7 +200,7 @@ export default async function GameDetailPage({
               {work.relations.map((relation) => (
                 <li className="grid gap-1" key={relation.id}>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Link href={`/games/${relation.slug}`}>
+                    <Link href={`/games/${relation.workId}`}>
                       {relation.title}
                     </Link>
                     <span className="text-sm text-muted">
@@ -251,8 +251,8 @@ export default async function GameDetailPage({
             {work.creators.length ? (
               <ul className="mt-3 grid gap-2">
                 {work.creators.map((creator) => (
-                  <li key={`${creator.slug}-${creator.roleKey}`}>
-                    <Link href={`/creators/${creator.slug}`}>
+                  <li key={`${creator.id}-${creator.roleKey}`}>
+                    <Link href={`/creators/${creator.id}`}>
                       {creator.name}
                     </Link>
                     <span className="text-sm text-muted">
@@ -270,7 +270,7 @@ export default async function GameDetailPage({
             {work.characters.length ? (
               <ChipList
                 items={work.characters.map((character) => ({
-                  href: `/games?character=${encodeURIComponent(character.slug)}`,
+                  href: `/games?character=${character.id}`,
                   label: character.primaryName,
                 }))}
               />
@@ -283,7 +283,7 @@ export default async function GameDetailPage({
             {work.tags.length ? (
               <ChipList
                 items={work.tags.map((tag) => ({
-                  href: `/games?tag=${encodeURIComponent(tag.slug)}`,
+                  href: `/games?tag=${tag.id}`,
                   label: tag.name,
                 }))}
               />
@@ -314,13 +314,6 @@ export default async function GameDetailPage({
   );
 }
 
-function decodeRouteSegment(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 function ArchiveActions({
   archiveId,

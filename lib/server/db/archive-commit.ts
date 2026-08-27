@@ -5,6 +5,7 @@ import type {
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
+import { normalizeEntityName } from "@/lib/entity-name";
 import { isLanguageCode } from "@/lib/labels";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
@@ -17,7 +18,6 @@ import { putManifest } from "@/lib/server/storage/archive-bucket";
 import { validateCorePackReferences } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
-import { slugify } from "@/lib/slug";
 
 export type CommitArchiveImportInput = {
   importJobId: number;
@@ -30,7 +30,6 @@ export type CommitArchiveImportInput = {
 
 export type CommitArchiveImportResult = {
   workId: number;
-  workSlug: string;
   archiveVersionId: number;
   manifestSha256: string;
   fileCount: number;
@@ -147,9 +146,9 @@ export async function commitArchiveImport(
     input.importJobId,
   );
   const work = await getD1()
-    .prepare(`SELECT slug FROM works WHERE id = ? LIMIT 1`)
+    .prepare(`SELECT id FROM works WHERE id = ? LIMIT 1`)
     .bind(workId)
-    .first<{ slug: string }>();
+    .first<{ id: number }>();
   if (!work) throw new Error("Game was not created");
   if (metadata.target.mode === "update") {
     const existingWork = await getD1()
@@ -216,20 +215,14 @@ export async function commitArchiveImport(
       };
     }
   }
-  if (metadata.target.mode === "create" && work.slug !== metadata.game.slug) {
-    metadata = { ...metadata, game: { ...metadata.game, slug: work.slug } };
-  }
-  // The server may fill omitted update fields from the existing work, and a
-  // create may receive a collision-safe slug. Keep the signed manifest in
-  // lockstep with those effective game identity fields before persisting it.
+  // The server may fill omitted update fields from the existing work. Keep the
+  // signed manifest in lockstep with those effective game fields.
   if (
-    manifest.game.slug !== metadata.game.slug ||
     manifest.game.originalTitle !== metadata.game.originalTitle ||
     manifest.game.chineseTitle !== metadata.game.chineseTitle ||
     manifest.game.language !== metadata.game.language ||
     manifest.game.isOriginal !== metadata.game.isOriginal
   ) {
-    manifest.game.slug = work.slug;
     manifest.game.originalTitle = metadata.game.originalTitle;
     manifest.game.chineseTitle = metadata.game.chineseTitle;
     manifest.game.language = metadata.game.language;
@@ -293,7 +286,6 @@ export async function commitArchiveImport(
 
   return {
     workId,
-    workSlug: work.slug,
     archiveVersionId,
     manifestSha256,
     fileCount: manifest.files.length,
@@ -347,7 +339,7 @@ function validateManifest(
   manifest: ArchiveManifest,
   metadata: ArchiveCommitMetadata,
 ): void {
-  if (manifest.schema !== "viprpg-archive.manifest.v2") {
+  if (manifest.schema !== "viprpg-archive.manifest.v1") {
     throw new Error("Unsupported manifest schema");
   }
 
@@ -357,10 +349,6 @@ function validateManifest(
 
   if (manifest.archiveVersion.packerVersion !== PACKER_VERSION) {
     throw new Error("Unsupported packer version");
-  }
-
-  if (manifest.game.slug !== metadata.game.slug) {
-    throw new Error("Manifest game slug does not match metadata");
   }
 
   if (manifest.game.originalTitle !== metadata.game.originalTitle) {
@@ -540,13 +528,12 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
     throw new HttpError(400, "Manifest object lists are invalid");
   }
 
-  if (parsed.schema !== "viprpg-archive.manifest.v2") {
+  if (parsed.schema !== "viprpg-archive.manifest.v1") {
     throw new HttpError(400, "Manifest schema is invalid");
   }
 
   const game = parsed.game;
   if (
-    typeof game.slug !== "string" ||
     typeof game.originalTitle !== "string" ||
     (game.chineseTitle !== null && typeof game.chineseTitle !== "string") ||
     typeof game.language !== "string" ||
@@ -663,7 +650,6 @@ function normalizeMetadata(
   const target = metadata.target;
   const externalLinks = metadata.externalLinks;
   if (
-    typeof game.slug !== "string" ||
     typeof game.originalTitle !== "string" ||
     !isNullableString(game.chineseTitle) ||
     !isNullableString(game.sortTitle) ||
@@ -742,7 +728,7 @@ function normalizeMetadata(
   const thumbnailBlobSha256 = normalizeOptionalHash(game.thumbnailBlobSha256);
   const tags = unique(
     metadata.tags
-      .map((tag) => requireString(tag, "tag").trim())
+      .map((tag) => normalizeEntityName(requireString(tag, "tag")))
       .filter(Boolean),
   );
 
@@ -791,7 +777,7 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata character is invalid");
       }
       return {
-        name: character.name.trim(),
+        name: normalizeEntityName(character.name),
         originalName: character.originalName?.trim() || null,
         roleKey: character.roleKey,
         spoilerLevel: character.spoilerLevel,
@@ -805,7 +791,6 @@ function normalizeMetadata(
     .map((creator) => {
       if (
         !isRecord(creator) ||
-        typeof creator.slug !== "string" ||
         typeof creator.name !== "string" ||
         !isNullableString(creator.originalName) ||
         !isNullableString(creator.websiteUrl) ||
@@ -814,20 +799,19 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata creator is invalid");
       }
       return {
-        slug: creator.slug.trim(),
-        name: creator.name.trim(),
+        name: normalizeEntityName(creator.name),
         originalName: creator.originalName?.trim() || null,
         websiteUrl: normalizeHttpUrl(creator.websiteUrl, "作者网站"),
         extra: creator.extra,
       };
     })
-    .filter((creator) => creator.slug && creator.name);
+    .filter((creator) => creator.name);
 
   const workStaff = metadata.workStaff
     .map((staff) => {
       if (
         !isRecord(staff) ||
-        typeof staff.creatorSlug !== "string" ||
+        typeof staff.creatorName !== "string" ||
         !isEnum(staff.roleKey, [
           "author",
           "scenario",
@@ -846,13 +830,13 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata staff entry is invalid");
       }
       return {
-        creatorSlug: staff.creatorSlug.trim(),
+        creatorName: normalizeEntityName(staff.creatorName),
         roleKey: staff.roleKey,
         roleLabel: staff.roleLabel?.trim() || null,
         notes: staff.notes?.trim() || null,
       };
     })
-    .filter((staff) => staff.creatorSlug);
+    .filter((staff) => staff.creatorName);
 
   const workLinks = externalLinks.work
     .map((link) => {
@@ -879,19 +863,14 @@ function normalizeMetadata(
     })
     .filter((link) => link.label && link.url);
 
-  const slug = game.slug.trim();
-  if (!slug || !game.originalTitle.trim() || !archiveVersion.label.trim()) {
-    throw new HttpError(400, "游戏原名、slug 和快照名称不能为空");
-  }
-  if (slug !== slugify(slug, "untitled-game") || slug.length > 160) {
-    throw new HttpError(400, "游戏 slug 格式不合法");
+  if (!game.originalTitle.trim() || !archiveVersion.label.trim()) {
+    throw new HttpError(400, "游戏原名和快照名称不能为空");
   }
 
   return {
     ...metadata,
     game: {
       ...metadata.game,
-      slug,
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       sortTitle: normalizeNullableWorkText(game.sortTitle),
@@ -961,16 +940,15 @@ async function resolveTargetWork(
     }
     const identity = await getD1()
       .prepare(
-        `SELECT slug,original_title FROM works WHERE id=? AND status <> 'deleted' LIMIT 1`,
+        `SELECT original_title FROM works WHERE id=? AND status <> 'deleted' LIMIT 1`,
       )
       .bind(metadata.target.workId)
-      .first<{ slug: string; original_title: string }>();
+      .first<{ original_title: string }>();
     if (
       !identity ||
-      identity.slug !== game.slug ||
       identity.original_title !== game.originalTitle
     ) {
-      throw new HttpError(409, "更新目标的 slug 或原名不匹配");
+      throw new HttpError(409, "更新目标的原名不匹配");
     }
     await assertTranslationLanguageChangeAllowed(
       metadata.target.workId,
@@ -985,11 +963,10 @@ async function resolveTargetWork(
     }
     const identity = await getD1()
       .prepare(
-        `SELECT slug,original_title,language,is_original,status FROM works WHERE id=? LIMIT 1`,
+        `SELECT original_title,language,is_original,status FROM works WHERE id=? LIMIT 1`,
       )
       .bind(existingJobWorkId)
       .first<{
-        slug: string;
         original_title: string;
         language: string;
         is_original: number;
@@ -998,7 +975,6 @@ async function resolveTargetWork(
     if (
       !identity ||
       identity.status === "deleted" ||
-      !matchesRequestedSlug(identity.slug, game.slug) ||
       identity.original_title !== game.originalTitle ||
       identity.language !== game.language ||
       identity.is_original !== (game.isOriginal ? 1 : 0)
@@ -1007,53 +983,54 @@ async function resolveTargetWork(
     return existingJobWorkId;
   }
 
-  const slug = await uniqueWorkSlug(game.slug);
   const database = getD1();
-  const results = await database.batch([
-    database
-      .prepare(
-        `INSERT INTO works (
-        slug, original_title, chinese_title, sort_title, description, is_original, language,
+  const result = await database
+    .prepare(
+      `INSERT INTO works (
+        original_title, chinese_title, sort_title, description, is_original, language,
         original_release_date, original_release_precision, engine_family, engine_detail,
         uses_maniacs_patch, icon_blob_sha256, thumbnail_blob_sha256, status, extra_json,
         created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL)`,
-      )
-      .bind(
-        slug,
-        game.originalTitle,
-        game.chineseTitle,
-        game.sortTitle,
-        game.description,
-        game.isOriginal ? 1 : 0,
-        game.language,
-        game.originalReleaseDate,
-        game.originalReleasePrecision,
-        game.engineFamily,
-        game.engineDetail,
-        game.usesManiacsPatch ? 1 : 0,
-        game.iconBlobSha256,
-        game.thumbnailBlobSha256,
-        jsonText(game.extra),
-        user.id,
-      ),
-    database
-      .prepare(
-        `INSERT INTO work_uploaders (work_id, user_id)
-       VALUES ((SELECT id FROM works WHERE slug = ?), ?)`,
-      )
-      .bind(slug, user.id),
-    database
-      .prepare(
-        `UPDATE import_jobs
-       SET work_id = (SELECT id FROM works WHERE slug = ?),
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      )
-      .bind(slug, importJobId),
-  ]);
-  const workId = results[0]?.meta.last_row_id;
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL)`,
+    )
+    .bind(
+      game.originalTitle,
+      game.chineseTitle,
+      game.sortTitle,
+      game.description,
+      game.isOriginal ? 1 : 0,
+      game.language,
+      game.originalReleaseDate,
+      game.originalReleasePrecision,
+      game.engineFamily,
+      game.engineDetail,
+      game.usesManiacsPatch ? 1 : 0,
+      game.iconBlobSha256,
+      game.thumbnailBlobSha256,
+      jsonText(game.extra),
+      user.id,
+    )
+    .run();
+  const workId = result.meta.last_row_id;
   if (!Number.isSafeInteger(workId)) throw new Error("Game was not created");
+  try {
+    await database.batch([
+      database
+        .prepare(`INSERT INTO work_uploaders (work_id, user_id) VALUES (?, ?)`)
+        .bind(workId, user.id),
+      database
+        .prepare(
+          `UPDATE import_jobs SET work_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        )
+        .bind(workId, importJobId),
+    ]);
+  } catch (error) {
+    await database
+      .prepare(`DELETE FROM works WHERE id = ? AND status = 'draft'`)
+      .bind(workId)
+      .run();
+    throw error;
+  }
   return workId as number;
 }
 
@@ -1087,32 +1064,8 @@ function hasWorkUpdatePermission(user: ArchiveUser): boolean {
   );
 }
 
-function matchesRequestedSlug(actual: string, requested: string): boolean {
-  if (actual === requested) return true;
-  const suffix = actual.startsWith(`${requested}-`)
-    ? actual.slice(requested.length + 1)
-    : "";
-  return suffix.length > 0 && /^\d+$/.test(suffix);
-}
-
 function isSupportedLanguage(value: string): boolean {
   return isLanguageCode(value);
-}
-
-async function uniqueWorkSlug(base: string): Promise<string> {
-  const normalized = slugify(base, "untitled-game");
-  let candidate = normalized;
-  let suffix = 2;
-  while (
-    await getD1()
-      .prepare(`SELECT 1 FROM works WHERE slug = ? LIMIT 1`)
-      .bind(candidate)
-      .first()
-  ) {
-    candidate = `${normalized}-${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
 }
 
 
@@ -1245,11 +1198,10 @@ async function finalizeArchiveCommit(input: {
         database
           .prepare(
             `INSERT OR IGNORE INTO creators (
-             slug, name, original_name, website_url, extra_json
-           ) VALUES (?, ?, ?, ?, ?)`,
+             name, original_name, website_url, extra_json
+           ) VALUES (?, ?, ?, ?)`,
           )
           .bind(
-            creator.slug,
             creator.name,
             creator.originalName,
             creator.websiteUrl,
@@ -1270,14 +1222,14 @@ async function finalizeArchiveCommit(input: {
           .prepare(
             `INSERT OR IGNORE INTO work_staff (
              work_id, creator_id, role_key, role_label, notes
-           ) SELECT ?, id, ?, ?, ? FROM creators WHERE slug = ?`,
+           ) SELECT ?, id, ?, ?, ? FROM creators WHERE name = ? COLLATE NOCASE`,
           )
           .bind(
             input.workId,
             staff.roleKey,
             staff.roleLabel,
             staff.notes,
-            staff.creatorSlug,
+            staff.creatorName,
           ),
       );
     }
@@ -1289,14 +1241,10 @@ async function finalizeArchiveCommit(input: {
         database
           .prepare(
             `INSERT OR IGNORE INTO characters (
-             slug, primary_name, original_name, extra_json
-           ) VALUES (?, ?, ?, '{}')`,
+             primary_name, original_name, extra_json
+           ) VALUES (?, ?, '{}')`,
           )
-          .bind(
-            characterSlug(character.name),
-            character.name,
-            character.originalName,
-          ),
+          .bind(character.name, character.originalName),
       );
     }
     if (creating) {
@@ -1312,7 +1260,7 @@ async function finalizeArchiveCommit(input: {
           .prepare(
             `INSERT OR REPLACE INTO work_characters (
              work_id, character_id, role_key, spoiler_level, sort_order, notes
-           ) SELECT ?, id, ?, ?, ?, ? FROM characters WHERE slug = ?`,
+           ) SELECT ?, id, ?, ?, ?, ? FROM characters WHERE primary_name = ? COLLATE NOCASE`,
           )
           .bind(
             input.workId,
@@ -1320,7 +1268,7 @@ async function finalizeArchiveCommit(input: {
             character.spoilerLevel,
             character.sortOrder,
             character.notes,
-            characterSlug(character.name),
+            character.name,
           ),
       );
     }
@@ -1331,9 +1279,9 @@ async function finalizeArchiveCommit(input: {
       statements.push(
         database
           .prepare(
-            `INSERT OR IGNORE INTO tags (slug, name, namespace) VALUES (?, ?, 'other')`,
+            `INSERT OR IGNORE INTO tags (name, namespace) VALUES (?, 'other')`,
           )
-          .bind(tagSlug(tag), tag),
+          .bind(tag),
       );
     }
     if (creating) {
@@ -1350,9 +1298,9 @@ async function finalizeArchiveCommit(input: {
         database
           .prepare(
             `INSERT OR IGNORE INTO work_tags (work_id, tag_id, source)
-           SELECT ?, id, 'uploader' FROM tags WHERE slug = ?`,
+           SELECT ?, id, 'uploader' FROM tags WHERE name = ? COLLATE NOCASE`,
           )
-          .bind(input.workId, tagSlug(tag)),
+          .bind(input.workId, tag),
       );
     }
   }
@@ -1768,36 +1716,6 @@ function calculateWebPlayTotals(manifest: ArchiveManifest): {
     fileCount,
     sizeBytes,
   };
-}
-
-function tagSlug(tag: string): string {
-  const normalized = tag
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return normalized || `tag-${hashCode(tag)}`;
-}
-
-function characterSlug(name: string): string {
-  const normalized = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return normalized || `character-${hashCode(name)}`;
-}
-
-function hashCode(value: string): string {
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-  }
-
-  return hash.toString(16);
 }
 
 function jsonText(value: Record<string, unknown>): string {

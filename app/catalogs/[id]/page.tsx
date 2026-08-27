@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { getCatalogBySlug } from "@/lib/server/db/catalogs";
+import { getCatalogById } from "@/lib/server/db/catalogs";
+import { parsePositiveId } from "@/lib/server/http/request";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { hasPermission } from "@/lib/authz/permissions";
 import { CatalogItemsEditor, CatalogSummaryEditor } from "../catalog-manager";
@@ -12,12 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function CatalogPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const rawSlug = (await params).slug;
-  const slug = decodeRouteSegment(rawSlug);
+  const id = parsePositiveId((await params).id, "catalog id");
   const [catalog, currentUser] = await Promise.all([
-    getCatalogBySlug(slug),
+    getCatalogById(id),
     getCurrentUserFromCookies(),
   ]);
   if (!catalog) notFound();
@@ -57,7 +57,6 @@ export default async function CatalogPage({
               catalogId={catalog.id}
               items={catalog.items.map((item) => ({
                 workId: item.workId,
-                slug: item.slug,
                 title: item.title,
                 note: item.note,
               }))}
@@ -72,7 +71,7 @@ export default async function CatalogPage({
               <span className="w-8 text-right text-sm text-muted">
                 {index + 1}
               </span>
-              <Link href={`/games/${item.slug}`}>{item.title}</Link>
+              <Link href={`/games/${item.workId}`}>{item.title}</Link>
               {item.note ? (
                 <span className="text-sm text-muted">{item.note}</span>
               ) : null}
@@ -82,12 +81,4 @@ export default async function CatalogPage({
       </Pane>
     </main>
   );
-}
-
-function decodeRouteSegment(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }

@@ -12,20 +12,21 @@ import { getPublicCreatorDetail } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
+import { parsePositiveId } from "@/lib/server/http/request";
 
 export const dynamic = "force-dynamic";
 
 type CreatorDetailPageProps = {
   params: Promise<{
-    slug: string;
+    id: string;
   }>;
 };
 
 export default async function CreatorDetailPage({ params }: CreatorDetailPageProps) {
-  const { slug } = await params;
+  const id = parsePositiveId((await params).id, "creator id");
   const currentUser = await getCurrentUserFromCookies();
   const [creator, unreadInboxCount] = await Promise.all([
-    getPublicCreatorDetail(slug),
+    getPublicCreatorDetail(id),
     currentUser ? countUnreadInboxItemsForUser(currentUser) : Promise.resolve(0),
   ]);
 
@@ -88,7 +89,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
               {creator.workCredits.map((credit) => (
                 <tr key={`${credit.workId}-${credit.roleKey}`}>
                   <td data-label="作品">
-                    <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
+                    <Link href={`/games/${credit.workId}`}>{credit.workTitle}</Link>
                     {credit.workTitle !== credit.workOriginalTitle ? (
                       <span className="text-sm text-muted">{credit.workOriginalTitle}</span>
                     ) : null}

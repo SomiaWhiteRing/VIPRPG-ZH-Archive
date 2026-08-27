@@ -41,8 +41,7 @@ export async function POST(request: Request, context: RouteContext) {
       detail: {
         characterId,
         resultingCharacterId: character.id,
-        slug: character.slug,
-        merged: Boolean(input.mergeTargetSlug),
+        merged: Boolean(input.mergeTargetId),
       },
     });
 
@@ -51,7 +50,6 @@ export async function POST(request: Request, context: RouteContext) {
         ok: true,
         character: {
           id: character.id,
-          slug: character.slug,
           primaryName: character.primaryName,
           originalName: character.originalName,
           description: character.description,

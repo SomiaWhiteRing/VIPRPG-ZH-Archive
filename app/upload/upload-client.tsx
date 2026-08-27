@@ -16,7 +16,6 @@ import {
   useState,
 } from "react";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import { slugify } from "@/lib/slug";
 import { useUploadTasks } from "@/app/upload/upload-task-provider";
 import { formatBytes } from "@/lib/format";
 import { FormField } from "@/app/components/ui/form-field";
@@ -29,7 +28,6 @@ type FileInputMode = "folder" | "zip";
 type EngineFamily =
   "rpg_maker_2000" | "rpg_maker_2003" | "mixed" | "unknown" | "other";
 type FlatMetadata = {
-  workSlug: string;
   originalTitle: string;
   chineseTitle: string;
   aliasTitles: string;
@@ -40,7 +38,6 @@ type FlatMetadata = {
   tags: string;
   characters: string;
   creatorName: string;
-  creatorSlug: string;
   creatorUrl: string;
   usesManiacsPatch: boolean;
   isOriginal: boolean;
@@ -58,7 +55,6 @@ type FlatMetadata = {
 
 type WorkLookupResult = {
   id: number;
-  slug: string;
   originalTitle: string;
   chineseTitle: string | null;
   aliases: string[];
@@ -96,7 +92,6 @@ type ImageHashes = {
 type PreparedImages = { hashes: ImageHashes; blobs: MetadataBlobUpload[] };
 
 const defaultForm: FlatMetadata = {
-  workSlug: "",
   originalTitle: "",
   chineseTitle: "",
   aliasTitles: "",
@@ -107,7 +102,6 @@ const defaultForm: FlatMetadata = {
   tags: "",
   characters: "",
   creatorName: "",
-  creatorSlug: "",
   creatorUrl: "",
   usesManiacsPatch: false,
   isOriginal: false,
@@ -203,7 +197,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     setForm((current) => ({
       ...current,
       originalTitle: value,
-      workSlug: slugify(value),
       sortTitle: current.sortTitle || value,
       targetMode: "create",
       targetWorkId: null,
@@ -220,7 +213,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     }));
     setForm((current) => ({
       ...current,
-      workSlug: work.slug,
       originalTitle,
       chineseTitle: work.chineseTitle ?? "",
       aliasTitles: work.aliases.join("\n"),
@@ -388,11 +380,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
               name="chineseTitle"
               setForm={setForm}
             />
-            <div className="bg-muted/10">
-              <FormField label="网址标识">
-                <Input readOnly type="text" value={form.workSlug} />
-              </FormField>
-            </div>
           </div>
 
           {lookupState.loading ? (
@@ -406,10 +393,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                   className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0"
                   key={work.id}
                 >
-                  <div>
-                    <span>{work.originalTitle}</span>
-                    <small>{work.slug}</small>
-                  </div>
+                  <span>{work.originalTitle}</span>
                   {work.canEdit ? (
                     <Button
                       onClick={() => applyExistingWork(work)}
@@ -800,14 +784,10 @@ function buildMetadata(
   const chineseTitle = form.chineseTitle.trim();
   const optionalWorkText = (value: string): string | null =>
     form.targetMode === "update" ? value.trim() : cleanNullable(value);
-  const creatorSlug =
-    form.creatorSlug.trim() ||
-    (form.creatorName.trim() ? slugify(form.creatorName) : "");
   const creator =
-    creatorSlug && form.creatorName.trim()
+    form.creatorName.trim()
       ? [
           {
-            slug: creatorSlug,
             name: form.creatorName.trim(),
             originalName: null,
             websiteUrl: cleanNullable(form.creatorUrl),
@@ -823,7 +803,6 @@ function buildMetadata(
 
   return {
     game: {
-      slug: form.workSlug.trim() || slugify(originalTitle),
       originalTitle,
       chineseTitle: optionalWorkText(form.chineseTitle),
       sortTitle,
@@ -866,7 +845,7 @@ function buildMetadata(
     workStaff: creator.length
       ? [
           {
-            creatorSlug: creator[0].slug,
+            creatorName: creator[0].name,
             roleKey: "author",
             roleLabel: "作者",
             notes: null,

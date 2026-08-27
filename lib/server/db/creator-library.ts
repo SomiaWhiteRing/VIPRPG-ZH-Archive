@@ -1,9 +1,9 @@
 import { getD1 } from "@/lib/server/db/d1";
+import { normalizeEntityName } from "@/lib/entity-name";
 import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
 
 export type CreatorWorkCredit = {
   workId: number;
-  workSlug: string;
   workTitle: string;
   workOriginalTitle: string;
   roleKey: string;
@@ -14,7 +14,6 @@ export type CreatorWorkCredit = {
 };
 export type PublicCreatorSummary = {
   id: number;
-  slug: string;
   name: string;
   originalName: string | null;
   websiteUrl: string | null;
@@ -33,7 +32,6 @@ export type AdminCreatorEdit = PublicCreatorSummary & {
 };
 type CreatorRow = {
   id: number;
-  slug: string;
   name: string;
   original_name: string | null;
   website_url: string | null;
@@ -45,7 +43,6 @@ type CreatorRow = {
 };
 type CreditRow = {
   work_id: number;
-  work_slug: string;
   work_title: string;
   work_original_title: string;
   role_key: string;
@@ -76,12 +73,11 @@ export async function listPublicCreators(
   return (rows.results ?? []).map(mapSummary);
 }
 export async function getPublicCreatorDetail(
-  slug: string,
+  id: number,
 ): Promise<PublicCreatorDetail | null> {
-  const values = [slug, decodeSlug(slug)];
   const row = await getD1()
-    .prepare(`${summarySql()} FROM creators c WHERE c.slug IN (?,?) LIMIT 1`)
-    .bind(...values)
+    .prepare(`${summarySql()} FROM creators c WHERE c.id=? LIMIT 1`)
+    .bind(id)
     .first<CreatorRow>();
   if (!row) return null;
   return { ...mapSummary(row), workCredits: await listCredits(row.id, false) };
@@ -122,7 +118,8 @@ export async function updateCreatorForAdmin(input: {
   websiteUrl: string | null;
   bio: string | null;
 }): Promise<AdminCreatorEdit> {
-  if (!input.name.trim()) throw new Error("作者名不能为空");
+  const name = normalizeEntityName(input.name);
+  if (!name) throw new Error("作者名不能为空");
   const existing = await getCreatorForAdminEdit(input.creatorId);
   if (!existing) throw new Error("作者不存在");
   const extra = { ...existing.extra };
@@ -134,7 +131,7 @@ export async function updateCreatorForAdmin(input: {
       `UPDATE creators SET name=?,original_name=?,website_url=?,extra_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
     .bind(
-      input.name.trim(),
+      name,
       input.originalName,
       websiteUrl,
       JSON.stringify(extra),
@@ -169,7 +166,6 @@ async function listCredits(
   const rows = await getD1()
     .prepare(
       `SELECT w.id AS work_id,
-          w.slug AS work_slug,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.original_title AS work_original_title,
           ws.role_key,
@@ -188,7 +184,6 @@ async function listCredits(
     .all<CreditRow>();
   return (rows.results ?? []).map((row) => ({
     workId: row.work_id,
-    workSlug: row.work_slug,
     workTitle: row.work_title,
     workOriginalTitle: row.work_original_title,
     roleKey: row.role_key,
@@ -202,7 +197,6 @@ function summarySql(): string {
   return `
     SELECT
       c.id,
-      c.slug,
       c.name,
       c.original_name,
       c.website_url,
@@ -225,7 +219,6 @@ function summarySql(): string {
 function mapSummary(row: CreatorRow): PublicCreatorSummary {
   return {
     id: row.id,
-    slug: row.slug,
     name: row.name,
     originalName: row.original_name,
     websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
@@ -249,13 +242,6 @@ function parseExtra(value: string): Record<string, unknown> {
 function clean(value: FormDataEntryValue | null): string | null {
   const result = String(value ?? "").trim();
   return result || null;
-}
-function decodeSlug(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 function limitValue(value: number, max: number): number {
   return Number.isFinite(value)

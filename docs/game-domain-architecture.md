@@ -37,7 +37,7 @@ ArchiveVersion
 
 `Work` 表示作品本身，是公开游戏资料页面的核心。它包含原名、中文名、别名、简介、原作日期、引擎族、引擎备注、语言、是否本站原创、图像引用和发布状态。
 
-Work 还拥有作者/制作人员、角色、标签、普通关联、翻译关联、目录成员和外部链接。作品身份使用全局唯一 `slug` 和原名约束，关联表使用 `work_id` 外键。
+Work 还拥有作者/制作人员、角色、标签、普通关联、翻译关联、目录成员和外部链接。作品身份只使用分类内自增且永久不变的 `id`，关联表使用 `work_id` 外键；作品原名和中文名都允许重复。
 
 Work 不直接保存文件清单。文件清单和每次归档的来源、校对/修图状态属于 ArchiveVersion。
 
@@ -101,8 +101,7 @@ catalogs
 ```sql
 CREATE TABLE works (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  original_title TEXT NOT NULL UNIQUE,
+  original_title TEXT NOT NULL,
   chinese_title TEXT,
   sort_title TEXT,
   description TEXT,
@@ -161,7 +160,7 @@ CREATE INDEX idx_work_uploaders_user
 
 说明：
 
-- `works.original_title` 是作品身份的自然唯一键；数据库外键仍使用 `id` 作为技术主键。
+- `works.id` 是作品的唯一身份；原名和中文名仅用于展示与搜索，可以重复。
 - `works.chinese_title` 是可选中文名；为空时展示层使用原名。
 - `works.uses_maniacs_patch` 跟随作品本体，因为 Maniacs Patch 会影响作品运行时假设，而不是某个文件归档快照。
 - `works.icon_blob_sha256` 和 `works.thumbnail_blob_sha256` 是 Work 层的单图引用；为空时展示层按引擎使用缺省图。
@@ -311,8 +310,7 @@ CREATE INDEX idx_archive_version_core_pack_refs_core_pack
 ```sql
 CREATE TABLE characters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  primary_name TEXT NOT NULL,
+  primary_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   original_name TEXT,
   description TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
@@ -334,8 +332,7 @@ CREATE TABLE work_characters (
 
 CREATE TABLE creators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   original_name TEXT,
   website_url TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
@@ -356,8 +353,7 @@ CREATE TABLE work_staff (
 
 CREATE TABLE tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   namespace TEXT NOT NULL CHECK (
     namespace IN ('genre', 'theme', 'character', 'technical', 'content', 'other')
   ) DEFAULT 'other',
@@ -377,7 +373,6 @@ CREATE TABLE work_tags (
 CREATE TABLE catalogs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL CHECK (status IN ('published', 'deleted')) DEFAULT 'published',
@@ -573,12 +568,12 @@ GET /api/archive-versions/{archive_version_id}/download
 
 ```text
 /games
-/games/{work_slug}
+/games/{work_id}
 /characters
 /creators
-/creators/{creator_slug}
+/creators/{creator_id}
 /catalogs
-/catalogs/{catalog_slug}
+/catalogs/{catalog_id}
 /tags
 ```
 
@@ -676,7 +671,6 @@ catalogs + catalog_items
 ```sql
 SELECT
   w.id,
-  w.slug,
   w.original_title,
   w.chinese_title,
   wc.role_key,
@@ -714,10 +708,10 @@ LIMIT 1;
 
 当前实现约定：
 
-- `/characters` 展示公开角色索引，条目进入 `/games?character={slug}` 查看登场作品。
-- `/tags` 展示公开标签索引，条目进入 `/games?tag={slug}` 查看关联作品；角色不再作为普通标签录入。
-- `/catalogs` 和 `/catalogs/{slug}` 展示人工编排目录及作品排序。
-- `/admin/characters`、`/admin/creators`、`/admin/tags` 维护本体资料；重复角色、作者和标签通过合并到目标 slug 处理。
+- `/characters` 展示公开角色索引，条目进入 `/games?character={id}` 查看登场作品。
+- `/tags` 展示公开标签索引，条目进入 `/games?tag={id}` 查看关联作品；角色不再作为普通标签录入。
+- `/catalogs` 和 `/catalogs/{id}` 展示人工编排目录及作品排序。
+- `/admin/characters`、`/admin/creators`、`/admin/tags` 维护本体资料；作者名、角色主名称和标签名写入前统一执行 NFKC、首尾去空白和连续空白合并，并按 `COLLATE NOCASE UNIQUE` 复用已有实体。角色和标签可由管理员按目标名称合并到现有 ID。
 - `/admin/works/{workId}` 维护 Work 和这些关系表的连接：`work_characters`、`work_staff`、`work_relations`、`translation_relations`、`work_media_assets`。
 
 当数据量增大后，建议追加一个物化搜索表：
@@ -740,9 +734,9 @@ work_search_documents
 
 必须由数据库约束或服务层保证：
 
-- Work 的 slug 全局唯一。
-- Work 的原名全局唯一，是人工判断“同一作品”的自然键。
-- Work 的 `slug` 和原名是唯一身份约束；共同上传者由 `work_uploaders` 记录，不区分成员角色。
+- 每张实体表的 `id` 在各自编号空间内唯一、自增、永久不变且不复用；不同实体表之间的数字可以相同。
+- Work 的原名和中文名可以重复；创建模式始终产生新的 Work，编辑模式必须明确指定现有 `work_id`。
+- Work 只以 `id` 作为身份约束；共同上传者由 `work_uploaders` 记录，不区分成员角色。
 - 同一 Work 下 `manifest_sha256` 唯一。
 - 同一 Work 同时只能有一个 published current ArchiveVersion。
 - ArchiveVersion 发布后 manifest 不可变。

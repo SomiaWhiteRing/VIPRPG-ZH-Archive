@@ -1,9 +1,8 @@
 import type { ArchiveFileRole, ArchiveStorageKind } from "@/lib/archive/file-policy";
 
 export type ArchiveManifest = {
-  schema: "viprpg-archive.manifest.v2";
+  schema: "viprpg-archive.manifest.v1";
   game: {
-    slug: string;
     originalTitle: string;
     chineseTitle: string | null;
     language: string;
@@ -65,7 +64,6 @@ export type ArchiveManifestFile = {
 
 export type ArchiveCommitMetadata = {
   game: {
-    slug: string;
     originalTitle: string;
     chineseTitle: string | null;
     sortTitle: string | null;
@@ -110,14 +108,13 @@ export type ArchiveCommitMetadata = {
     notes: string | null;
   }>;
   creators: Array<{
-    slug: string;
     name: string;
     originalName: string | null;
     websiteUrl: string | null;
     extra: Record<string, unknown>;
   }>;
   workStaff: Array<{
-    creatorSlug: string;
+    creatorName: string;
     roleKey: "author" | "scenario" | "graphics" | "music" | "translator" | "editor" | "publisher" | "proofreader" | "image_editor" | "other";
     roleLabel: string | null;
     notes: string | null;

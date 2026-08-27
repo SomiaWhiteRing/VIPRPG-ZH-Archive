@@ -96,35 +96,35 @@ insert(
 );
 
 insert("works", [
-  game(1, "maou-no-natsuyasumi", "魔王の夏休み", "魔王的暑假", {
+  game(1, "魔王の夏休み", "魔王的暑假", {
     language: "ja",
     thumbnail: images[0].sha256,
     description: "魔王决定给自己放一个暑假，结果勇者一行人也跟来了。",
     date: "2019-08-14",
   }),
-  game(2, "maou-no-natsuyasumi-zh", "魔王の夏休み", "魔王的暑假（中文译本）", {
+  game(2, "魔王の夏休み", "魔王的暑假（中文译本）", {
     language: "zh-CN",
     thumbnail: images[0].sha256,
     description: "魔王的暑假中文翻译。",
     date: "2019-08-14",
   }),
-  game(3, "monar-castle-hazama", "時空の狭間のモナー城", "时空夹缝中的莫娜城", {
+  game(3, "時空の狭間のモナー城", "时空夹缝中的莫娜城", {
     language: "ja",
     thumbnail: images[1].sha256,
     maniacs: 1,
     date: "2023-02-11",
   }),
-  game(4, "viprpg-summer-original", "夏之阵原创短篇", "夏之阵原创短篇", {
+  game(4, "夏之阵原创短篇", "夏之阵原创短篇", {
     language: "zh-CN",
     isOriginal: 1,
     thumbnail: images[2].sha256,
     date: "2026-06-20",
   }),
-  game(5, "giko-no-bouken", "ギコの大冒険", null, {
+  game(5, "ギコの大冒険", null, {
     language: "ja",
     date: "2011-05-05",
   }),
-  game(6, "draft-only", "未公開テスト作品", "未公开测试作品", {
+  game(6, "未公開テスト作品", "未公开测试作品", {
     language: "ja",
     status: "draft",
   }),
@@ -197,7 +197,6 @@ insert("catalogs", [
   {
     id: 1,
     owner_user_id: 3,
-    slug: "summer-picks",
     title: "夏日精选",
     description: "适合夏天游玩的游戏。",
     status: "published",
@@ -214,7 +213,6 @@ insert("catalog_items", [
 insert("characters", [
   {
     id: 1,
-    slug: "monar",
     primary_name: "モナー",
     description: "猫耳角色。",
     created_at: NOW,
@@ -222,7 +220,6 @@ insert("characters", [
   },
   {
     id: 2,
-    slug: "giko",
     primary_name: "ギコ猫",
     description: "嘴硬的猫。",
     created_at: NOW,
@@ -237,14 +234,12 @@ insert("work_characters", [
 insert("creators", [
   {
     id: 1,
-    slug: "nanashi-a",
     name: "名無し的制作人",
     created_at: NOW,
     updated_at: NOW,
   },
   {
     id: 2,
-    slug: "vip-original",
     name: "本站原创作者",
     created_at: NOW,
     updated_at: NOW,
@@ -258,7 +253,6 @@ insert("work_staff", [
 insert("tags", [
   {
     id: 1,
-    slug: "short",
     name: "短篇",
     namespace: "genre",
     created_at: NOW,
@@ -266,7 +260,6 @@ insert("tags", [
   },
   {
     id: 2,
-    slug: "original",
     name: "本站原创",
     namespace: "technical",
     created_at: NOW,
@@ -409,11 +402,10 @@ console.log(
   "本地测试数据已写入。账号密码均为 dev123456789：super@dev.local / admin@dev.local / uploader@dev.local / user@dev.local",
 );
 
-function game(id, slug, originalTitle, chineseTitle, options = {}) {
+function game(id, originalTitle, chineseTitle, options = {}) {
   const status = options.status ?? "published";
   return {
     id,
-    slug,
     original_title: originalTitle,
     chinese_title: chineseTitle,
     sort_title: chineseTitle ?? originalTitle,
@@ -436,31 +428,26 @@ function game(id, slug, originalTitle, chineseTitle, options = {}) {
 function archive(id, work_id, label, language, files, size, current) {
   const info = {
     1: {
-      slug: "maou-no-natsuyasumi",
       title: "魔王の夏休み",
       isOriginal: false,
     },
     2: {
-      slug: "maou-no-natsuyasumi-zh",
       title: "魔王の夏休み",
       isOriginal: false,
     },
     3: {
-      slug: "monar-castle-hazama",
       title: "時空の狭間のモナー城",
       isOriginal: false,
     },
     4: {
-      slug: "viprpg-summer-original",
       title: "夏之阵原创短篇",
       isOriginal: true,
     },
-    5: { slug: "giko-no-bouken", title: "ギコの大冒険", isOriginal: false },
+    5: { title: "ギコの大冒険", isOriginal: false },
   }[work_id];
   const manifestJson = JSON.stringify({
-    schema: "viprpg-archive.manifest.v2",
+    schema: "viprpg-archive.manifest.v1",
     game: {
-      slug: info.slug,
       originalTitle: info.title,
       chineseTitle: null,
       language,

@@ -51,7 +51,7 @@ export default async function AdminArchiveVersionEditPage({
             </Link>
             <Link
               className={buttonVariants({ variant: "outline" })}
-              href={`/games/${archiveVersion.workSlug}`}
+              href={`/games/${archiveVersion.workId}`}
             >
               查看公开页
             </Link>

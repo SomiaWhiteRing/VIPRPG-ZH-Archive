@@ -10,6 +10,7 @@ import {
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
 import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
+import { parsePositiveId } from "@/lib/server/http/request";
 
 export const dynamic = "force-dynamic";
 type GamesPageProps = {
@@ -28,8 +29,8 @@ const ENGINES = [
 export default async function GamesPage({ searchParams }: GamesPageProps) {
   const params = await searchParams;
   const engine = stringParam(params.engine) || "all";
-  const tag = stringParam(params.tag);
-  const character = stringParam(params.character);
+  const tag = parseOptionalId(stringParam(params.tag));
+  const character = parseOptionalId(stringParam(params.character));
   const language = stringParam(params.language);
   const original = stringParam(params.original);
   const requestedSort = stringParam(params.sort);
@@ -43,8 +44,8 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   );
   const filters = {
     engine,
-    tag,
-    character,
+    tag: tag ?? undefined,
+    character: character ?? undefined,
     language: language || undefined,
     isOriginal: original === "1" ? true : original === "0" ? false : undefined,
   };
@@ -61,8 +62,8 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   ]);
   const activeParams = {
     engine: engine !== "all" ? engine : undefined,
-    tag: tag || undefined,
-    character: character || undefined,
+    tag: tag ? String(tag) : undefined,
+    character: character ? String(character) : undefined,
     language: language || undefined,
     original: original || undefined,
     sort: sort !== "updated" ? sort : undefined,
@@ -255,4 +256,13 @@ function gamesHref(params: Record<string, string | undefined>) {
   });
   const text = query.toString();
   return text ? `/games?${text}` : "/games";
+}
+
+function parseOptionalId(value: string | null): number | null {
+  if (!value) return null;
+  try {
+    return parsePositiveId(value);
+  } catch {
+    return null;
+  }
 }

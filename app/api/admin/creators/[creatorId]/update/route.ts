@@ -40,7 +40,6 @@ export async function POST(request: Request, context: RouteContext) {
       eventType: "admin_creator_update",
       detail: {
         creatorId: creator.id,
-        slug: creator.slug,
         name: creator.name,
       },
     });
@@ -50,7 +49,6 @@ export async function POST(request: Request, context: RouteContext) {
         ok: true,
         creator: {
           id: creator.id,
-          slug: creator.slug,
           name: creator.name,
           originalName: creator.originalName,
           websiteUrl: creator.websiteUrl,

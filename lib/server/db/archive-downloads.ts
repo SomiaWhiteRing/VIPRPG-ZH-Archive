@@ -9,7 +9,6 @@ type DownloadRow = {
   total_files: number;
   total_size_bytes: number;
   estimated_r2_get_count: number;
-  work_slug: string;
   work_original_title: string;
   work_chinese_title: string | null;
   engine_family: string;
@@ -22,14 +21,13 @@ type TotalsRow = {
 
 export type ArchiveDownloadRecord = {
   id: number;
-  workId: number;
   archiveLabel: string;
   manifestSha256: string;
   packerVersion: string;
   totalFiles: number;
   totalSizeBytes: number;
   estimatedR2GetCount: number;
-  workSlug: string;
+  workId: number;
   workOriginalTitle: string;
   workChineseTitle: string | null;
   engineFamily: string;
@@ -73,7 +71,6 @@ export async function getPublishedArchiveDownloadRecord(
           av.total_files,
           av.total_size_bytes,
           av.estimated_r2_get_count,
-          w.slug AS work_slug,
           w.original_title AS work_original_title,
           w.chinese_title AS work_chinese_title,
           w.engine_family,
@@ -91,14 +88,13 @@ export async function getPublishedArchiveDownloadRecord(
   if (!row || !row.work_original_title) return null;
   return {
     id: row.id,
-    workId: row.work_id,
     archiveLabel: row.archive_label,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,
-    workSlug: row.work_slug,
+    workId: row.work_id,
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
     engineFamily: row.engine_family,

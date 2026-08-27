@@ -563,9 +563,8 @@ async function buildManifest(input: {
             },
     }));
   const manifest: ArchiveManifest = {
-    schema: "viprpg-archive.manifest.v2",
+    schema: "viprpg-archive.manifest.v1",
     game: {
-      slug: input.task.metadata.game.slug,
       originalTitle: input.task.metadata.game.originalTitle,
       chineseTitle: input.task.metadata.game.chineseTitle,
       language: input.task.metadata.game.language,

@@ -133,28 +133,28 @@ async function listDirectory(scope: string, query: string, page: number) {
   let items: Array<{ href: string; title: string; subtitle: string | null; meta: string }>;
   if (scope === "creators")
     items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
-      href: `/creators/${item.slug}`,
+      href: `/creators/${item.id}`,
       title: item.name,
       subtitle: item.originalName,
       meta: `${item.workCreditCount} 个作品`,
     }));
   else if (scope === "characters")
     items = (await listPublicCharacters({ query, limit: 300 })).map((item) => ({
-      href: `/games?character=${encodeURIComponent(item.slug)}`,
+      href: `/games?character=${item.id}`,
       title: item.primaryName,
       subtitle: item.originalName,
       meta: `${item.workCount} 个作品`,
     }));
   else if (scope === "tags")
     items = (await listPublicTags({ query, limit: 300 })).map((item) => ({
-      href: `/games?tag=${encodeURIComponent(item.slug)}`,
+      href: `/games?tag=${item.id}`,
       title: item.name,
-      subtitle: item.slug,
+      subtitle: null,
       meta: `${item.workCount} 个作品`,
     }));
   else if (scope === "catalogs")
     items = (await searchCatalogs(query, 300)).map((item) => ({
-      href: `/catalogs/${item.slug}`,
+      href: `/catalogs/${item.id}`,
       title: item.title,
       subtitle: item.description,
       meta: `${item.itemCount} 个游戏 · ${item.ownerName}`,

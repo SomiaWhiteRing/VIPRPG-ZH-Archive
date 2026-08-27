@@ -9,7 +9,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
   return (
     <Link
       className="grid gap-4 rounded-lg border border-border bg-card p-3 text-foreground no-underline hover:border-primary hover:shadow-surface md:grid-cols-[148px_minmax(0,1fr)]"
-      href={`/games/${work.slug}`}
+      href={`/games/${work.id}`}
     >
       <div className="grid aspect-video place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
@@ -38,7 +38,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
           {work.creators.slice(0, 1).map((creator) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
-              key={creator.slug}
+              key={creator.id}
             >
               {creator.name}
             </span>
@@ -46,7 +46,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
           {work.characters.slice(0, 1).map((character) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
-              key={character.slug}
+              key={character.id}
             >
               {character.primaryName}
             </span>
@@ -54,7 +54,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
           {work.tags.slice(0, 2).map((tag) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
-              key={tag.slug}
+              key={tag.id}
             >
               {tag.name}
             </span>

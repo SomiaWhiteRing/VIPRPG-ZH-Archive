@@ -12,7 +12,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { getTagForAdminEdit } from "@/lib/server/db/taxonomy-library";
+import { getTagForAdminEdit, listTagsForAdmin } from "@/lib/server/db/taxonomy-library";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,10 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
   const { tagId: rawTagId } = await params;
   const tagId = parseId(rawTagId);
   const adminUser = await requirePagePermission(`/admin/tags/${tagId}`, "tag.update");
-  const [tag, unreadInboxCount] = await Promise.all([
+  const [tag, unreadInboxCount, candidates] = await Promise.all([
     getTagForAdminEdit(tagId),
     countUnreadInboxItemsForUser(adminUser),
+    listTagsForAdmin(),
   ]);
 
   if (!tag) {
@@ -45,7 +46,7 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
             {tag.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
-                href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+                href={`/games?tag=${tag.id}`}
               >
                 查看作品
               </Link>
@@ -58,17 +59,14 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
       <ConfirmingForm
         action={`/api/admin/tags/${tag.id}/update`}
         className="grid gap-4 grid gap-4"
-        confirmField="merge_target_slug"
+        confirmField="merge_target_id"
         method="post"
         title="确认合并并删除标签"
-        description="目标标签会接收现有关联，当前标签将被删除。此操作不可逆，请确认目标 slug 正确。"
+        description="目标标签会接收现有关联，当前标签将被删除。此操作不可逆，请确认目标名称正确。"
       >
         <input name="tag_id" type="hidden" value={tag.id} />
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="不可修改" label="Slug">
-              <Input readOnly value={tag.slug} />
-            </FormField>
             <FormField label="名称">
               <Input defaultValue={tag.name} name="name" required />
             </FormField>
@@ -93,8 +91,16 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" label="目标标签 slug">
-            <Input name="merge_target_slug" placeholder="留空则不合并" />
+          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" label="目标标签">
+            <SelectField
+              name="merge_target_id"
+              options={[
+                { value: "", label: "不合并" },
+                ...candidates
+                  .filter((candidate) => candidate.id !== tag.id)
+                  .map((candidate) => ({ value: String(candidate.id), label: candidate.name })),
+              ]}
+            />
           </FormField>
         </Pane>
 

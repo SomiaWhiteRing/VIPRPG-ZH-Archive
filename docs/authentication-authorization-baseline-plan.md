@@ -207,14 +207,14 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/` | 公开 | 公开列表只查询 published 资料 |
 | `/about` | 公开 | 不显示内部凭据或权限规则 |
 | `/games` | 公开 | 只展示 published Work |
-| `/games/{slug}` | 公开 | 只展示 published Work 及其公开版本链 |
+| `/games/{id}` | 公开 | 只展示 published Work 及其公开版本链 |
 | `/search` | 公开 | 搜索结果遵守公开资料 SQL |
 | `/creators` | 公开 | 只展示公开关联的 creator |
-| `/creators/{slug}` | 公开 | 只展示公开 Work 关联 |
+| `/creators/{id}` | 公开 | 只展示公开 Work 关联 |
 | `/characters` | 公开 | 只展示公开关联的角色，条目进入公开 Work 筛选 |
 | `/tags` | 公开 | 只展示公开关联的标签，条目进入公开 Work 筛选 |
 | `/catalogs` | 公开 | 只展示 published 目录和 Work 成员 |
-| `/catalogs/{slug}` | 公开 | 只展示 published 目录中的公开 Work |
+| `/catalogs/{id}` | 公开 | 只展示 published 目录中的公开 Work |
 | `/play/{archiveVersionId}` | 公开 | 页面数据只能来自完整 published 版本链 |
 | `/login` | 公开 | 登录提交走同源认证 API |
 | `/register` | 公开 | 注册提交走同源验证码 API |

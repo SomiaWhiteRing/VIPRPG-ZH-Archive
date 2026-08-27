@@ -42,7 +42,7 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
         actions={
           <>
             <BackLink href="/admin/creators" label="返回作者维护" />
-            <Link className={buttonVariants({ variant: "outline" })} href={`/creators/${creator.slug}`}>
+            <Link className={buttonVariants({ variant: "outline" })} href={`/creators/${creator.id}`}>
               查看公开页
             </Link>
             <InboxLink unread={unreadInboxCount} />
@@ -55,9 +55,6 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
 
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="不可修改" label="Slug">
-              <Input readOnly value={creator.slug} />
-            </FormField>
             <FormField label="名称">
               <Input defaultValue={creator.name} name="name" required type="text" />
             </FormField>
