@@ -1,1574 +1,229 @@
-# RPG Maker 2000/2003 去重存储库架构计划
+# RPG Maker 2000/2003 去重存储架构
 
-> 认证、session、角色和授权规则以 [认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md) 为唯一现行依据。本文只说明存储业务为何需要上传、归档维护和 GC 能力。
+本文定义归档文件进入 R2、D1、下载流和垃圾回收时必须保持的稳定边界。作品资料和 ArchiveVersion 关系见[游戏领域架构](./game-domain-architecture.md)，在线游玩本地安装见[EasyRPG 架构](./easyrpg-web-play-architecture.md)，Cloudflare 环境操作见[OpenNext 与 Cloudflare 运行手册](./opennext-cloudflare-development-path.md)。
 
-本文把“游戏在浏览器端预索引后，把可复用静态资源去重存入 R2，游戏只保存独有数据和索引，下载时再按索引重组压缩包”的想法，整理成一套可实现的软件工程方案。
+认证、角色和授权只以[认证与权限基线](./authentication-authorization-baseline-plan.md)为准；本文不复制 permission key 或端点清单。
 
-游戏资料、作品关系、翻译关系、目录和归档快照的领域模型单独维护在：[游戏领域架构设计](./game-domain-architecture.md)。EasyRPG 在线游玩的浏览器本地安装、OPFS、Service Worker 和 Web Player 细节单独维护在：[EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)。
+## 1. 目标与非目标
 
-当前建议的核心模型是：
+目标：
 
-- R2 作为内容寻址对象库，按文件内容哈希保存可复用静态资源和需要单独管理的运行时文件，每个唯一内容只存一次。
-- 每个 ArchiveVersion 的核心独有文件打成一个 core pack，减少下载重组时的 R2 读取次数。
-- D1 作为元数据和关系数据库，记录作品、作品关系、翻译关系、目录、归档快照、文件路径与物理存储对象之间的关系。
-- 每个 ArchiveVersion 不是一份完整压缩包，而是一份 manifest：它说明“这个归档快照由哪些路径、哪些文件内容组成”。
-- 下载时根据 manifest 从 R2 读取 core pack 和独立 blob，流式重组为 ZIP；完整游戏 ZIP 不进入 R2，只允许作为响应流或可丢弃的 Workers Cache/CDN 边缘缓存存在。
-- 在线游玩复用同一份下载 ZIP 的 Workers Cache/CDN 缓存，由浏览器下载、解包到 OPFS，本地安装完成后通过内嵌 EasyRPG Web Player 读取 OPFS 文件运行。
-- 导入边界采用单一强制白名单：系统归档“可运行游戏内容”，不在白名单内的文件不进入 canonical manifest。
+- 相同内容只保存一次，并用 SHA-256 证明对象身份。
+- 保留每个 ArchiveVersion 的完整路径、文件顺序、大小、CRC32 和来源映射。
+- 上传、下载、在线游玩和 GC 共用同一套 canonical 对象。
+- D1 可判断对象引用、状态和成本，但不复制完整文件目录。
+- 任何缺失、损坏或不一致都显式失败，不静默降级为不完整归档。
 
-## 1. 背景和目标
+非目标：
 
-### 1.1 背景
+- 不把完整游戏 ZIP、源 ZIP 或上传暂存包保存到 R2。
+- 不以文件名、R2 key、ETag 或数据库自增 ID 作为内容身份。
+- 不让 D1 成为第二份 manifest。
+- 不为网页在线游玩生成另一套 ZIP 或 canonical 文件。
+- 不保留已废弃的文件行模型、旧对象路径或兼容写入。
 
-RPG Maker 2000/2003 游戏通常包含以下内容：
-
-- 项目核心数据：`RPG_RT.ldb`、`RPG_RT.lmt`、`Map0001.lmu` 等地图和数据库文件。
-- 游戏配置和说明：`RPG_RT.ini`、`Readme.txt`、补丁说明、作者说明等。
-- 静态素材目录：`CharSet`、`ChipSet`、`FaceSet`、`Picture`、`Music`、`Sound`、`System`、`Title` 等。
-- 运行时和依赖：`RPG_RT.exe`、`Harmony.dll`、字体、补丁 DLL 等。
-
-其中大量 RTP 素材、公共素材、VIPRPG 常用素材会在不同游戏中重复出现。如果每个游戏都把整包原样存入 R2，R2 storage 很快超过免费额度。另一方面，地图和数据库文件虽然通常是独有内容，但数量可能很多，下载时逐个读取会放大 R2 Class B 操作。更合理的方式是：静态素材按文件内容去重，核心独有文件按 ArchiveVersion 打包。
-
-### 1.2 目标
-
-- 降低 R2 存储占用：重复文件只保存一份。
-- 降低下载重组的 R2 Class B 读操作：核心小文件以 core pack 形式读取。
-- 保留游戏原始目录结构：下载时可重建可运行的游戏目录。
-- 支持 Work 和 ArchiveVersion 两层：一个 Work 可有原版、译本、修正版等多个 ArchiveVersion，并以语言、原创标记和快照元数据区分。
-- 支持审计和回收：知道每个 blob/core pack 被哪些 ArchiveVersion 引用，能安全清理无人引用对象。
-- 支持未使用 Maniacs Patch 的游戏通过 EasyRPG Web Player 在线游玩，并把已安装游戏缓存在浏览器本地。
-- 适配 Cloudflare Workers + OpenNext + R2 + D1。
-
-### 1.3 非目标
-
-- 不在 D1 中保存文件二进制内容。
-- 不把大型 manifest 只作为 D1 JSON 字段存储。
-- 不维护 SHA-256 以外的内容身份；CRC32 只作为 ZIP 构建和 Web Play pack 切片校验所需的传输元数据，不作为内容寻址依据。
-- 不把所有文件都打进 core pack；可复用静态素材仍以 blob 方式去重存储。
-- 不在 R2 中保存任何完整游戏 ZIP；最终 ZIP 只能作为响应流或可丢弃的 Workers Cache/CDN 边缘缓存存在。
-- 不为在线游玩生成另一套 Web 专用 ZIP；在线游玩必须复用下载 ZIP，浏览器解包后丢弃 ZIP。
-- 不支持把完整 ZIP 上传到 Worker/R2 后再由服务端解包导入；导入固定采用浏览器预索引。
-- 不把游戏目录中的所有杂项文件都视为归档对象；崩溃转储、原始压缩包、工具缓存、工程源文件等必须由白名单策略挡在 canonical 数据之外。
-
-## 2. 关键结论
-
-### 2.1 只用 SHA-256 做内容身份
-
-长期归档系统需要一个稳定、抗碰撞、可跨环境复现的内容身份。为了降低复杂度，系统只维护一套持久化内容摘要：SHA-256。
-
-建议：
-
-- `sha256`：文件内容的主身份，作为 R2 对象 key 和 D1 主键。
-- `size_bytes`：和 `sha256` 一起校验，便于快速排查异常。
-
-CRC32 不是内容身份，但下载 ZIP 的 local file header 需要在写出文件数据前知道 CRC 和大小。因此浏览器预索引阶段会为每个文件计算 CRC32，并把它写入 manifest。下载端用它构建标准 STORE ZIP；Web Play 用它生成 pack 切片索引和后续校验。
-
-### 2.2 静态素材存 blob，核心文件存 core pack
-
-不要按游戏保存：
+## 2. Canonical 对象
 
 ```text
-games/game-a/full.zip
-games/game-b/full.zip
-```
-
-建议把可复用静态素材和需要单独管理的运行时文件按内容保存：
-
-```text
-blobs/sha256/ab/cd/abcdef...7890
-```
-
-把核心独有文件按 ArchiveVersion 打成 core pack：
-
-```text
-core-packs/sha256/ab/cd/abcdef...7890.zip
-```
-
-然后 D1 记录每个逻辑文件的实际来源：
-
-```text
-archive_version_file:
-  archive_version_id = 123
-  path = "CharSet/Actor01.png"
-  file_sha256 = "abcdef...7890"
-  storage_kind = "blob"
-  blob_sha256 = "abcdef...7890"
-
-archive_version_file:
-  archive_version_id = 123
-  path = "Map0001.lmu"
-  file_sha256 = "123456...7890"
-  storage_kind = "core_pack"
-  core_pack_id = 456
-  pack_entry_path = "Map0001.lmu"
-```
-
-也就是说，游戏文件路径和实际存储对象分离。静态素材可以被许多游戏、许多路径引用；核心文件则通过 core pack 减少下载时的对象读取次数。
-
-### 2.3 Core pack 是下载成本优化层
-
-Core pack 的定位是：把某个 ArchiveVersion 独有、但数量较多的小文件合并成一个 R2 对象。它主要优化 R2 Class B 读操作和 Worker subrequest 数量。
-
-适合放入 core pack：
-
-```text
-RPG_RT.ldb
-RPG_RT.lmt
-Map*.lmu
-RPG_RT.ini
-StringScripts/*.txt
-StringScripts_Origin/*.txt
-```
-
-不适合放入 core pack：
-
-```text
-CharSet/
-ChipSet/
-Picture/
-Music/
-Sound/
-System/
-RPG_RT.exe
-*.dll
-```
-
-静态素材跨游戏复用价值高，应继续按 SHA-256 blob 去重；`RPG_RT.exe` 和 DLL 完整保留为普通独立 blob，不做额外运行时策略。`RPG_RT.ini` 进入 core pack。
-
-`StringScripts/` 和 `StringScripts_Origin/` 是特殊路径：如果存在，只保留其中的 `.txt` 文件，并强制打入本 ArchiveVersion 的 core pack；这些文本不作为跨游戏复用 blob 存储。两个目录下的非 `.txt` 文件即使扩展名进入白名单，也强制排除。
-
-### 2.4 上传端固定使用浏览器预索引
-
-系统不接受完整 ZIP 上传到 Worker/R2 后再由服务端解包。用户可以选择本地文件夹，也可以选择本地 ZIP，但 ZIP 必须在浏览器端读取和索引，不能作为完整游戏包上传到后端。
-
-固定流程是：
-
-1. 浏览器读取本地文件夹或本地 ZIP。
-2. 浏览器计算每个文件的 `sha256`、大小、路径。
-3. 前端按规则分类 core 文件、asset 文件、runtime 文件和 excluded 文件。
-4. 前端生成 core pack。
-5. 前端把 manifest 发给后端做 preflight。
-6. 后端查询 D1，返回“哪些 asset/runtime blob 已存在，哪些缺失”。
-7. 前端只上传缺失 asset/runtime blob 和本次 ArchiveVersion 的 core pack。
-8. 后端写入 Work、ArchiveVersion、core pack 和文件索引。
-
-这样可以同时节省 R2 存储、重复上传成本，并降低下载重组时的 R2 读取次数。
-
-### 2.5 导入边界使用强制白名单
-
-本地扫描证明，真实游戏目录中会混入大量非运行内容，例如崩溃转储、原始压缩包、分卷包、翻译工具缓存、工程源文件和临时脚本。继续扩展黑名单会遗漏边界情况，因此导入策略固定为单一强制白名单。
-
-当前 `file_policy_version = 'rpgm2000-2003-whitelist-v3'` 的允许类型：
-
-```text
-.avi
-.bmp
-.dll
-.exe
-.flac
-.fon
-.gif
-.ico
-.ini
-.jpg
-.ldb
-.lmt
-.lmu
-.mid
-.midi
-.mpeg
-.mp3
-.mpg
-.oga
-.ogg
-.opus
-.otf
-.png
-.ttc
-.ttf
-.txt
-.wav
-.wma
-.xyz
-```
-
-不在白名单内的文件不进入 canonical manifest，也不参与 blob/core pack 存储。导入任务仍应记录排除统计，便于解释“原目录大小”和“归档大小”之间的差异。
-
-白名单之后还有固定路径覆盖规则：
-
-- `StringScripts/` 和 `StringScripts_Origin/`：只保留 `.txt`，并强制进入 core pack。
-- `screenshots/` 目录：无论文件类型如何，强制排除。
-- 游戏根目录下文件名包含 `screenshot` 的文件：无论文件类型如何，强制排除；该规则覆盖 `screenshot` 和 `screenshots` 两种拼写。
-- 游戏根目录下文件名精确等于 `null.txt` 的文件：无论 `.txt` 是否在白名单内，强制排除。
-
-这些路径规则属于 `file_policy_version` 的一部分。调整路径规则必须提升版本号，不能继续复用旧版本语义。
-
-### 2.6 本地扫描得到的容量基线
-
-基于 D 盘 177 个候选 RPG Maker 2000/2003 游戏的白名单重扫结果：
-
-> 注意：这一全量基线来自文件类型白名单扫描，尚未对全部样本重跑 `rpgm2000-2003-whitelist-v3` 的路径覆盖规则。`whitelist-v3` 的效果先以 2.7 的单游戏样本作为实测依据；后续批量导入前应重新生成全量 v3 基线。
-
-| 口径 | 游戏数 | 白名单内归档大小 | 文件数 | 白名单外排除 | 去重后计划存储 | 压缩比 | 节省率 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 原计划限制内样本 | 140 | 10.43 GB | 153,657 | 3.41 GB | 3.83 GB | 0.3670 | 63.30% |
-| 不限制文件数和大小 | 177 | 18.52 GB | 419,521 | 5.29 GB | 6.31 GB | 0.3409 | 65.91% |
-
-经验结论：
-
-- R2 storage 不是初期最紧张的资源；即使纳入全部 177 个候选游戏，计划存储也低于 10 GB。
-- 单游戏 core pack 低压缩本身只能带来很小空间收益，真正的空间节省来自跨游戏 blob 去重。
-- Core pack 的主要价值是减少地图、数据库等核心小文件造成的 R2 Class B 读取次数和 Worker subrequest 数量。
-- 下载重组的 Class B 操作和热门游戏下载缓存，比单纯存储容量更值得优先设计。
-
-### 2.7 Phase C 样本试导入结果
-
-2026-05-01 对一个本地 RPG Maker 2000/2003 游戏目录做了一次 staging 受控导入。当前导入策略为 `file_policy_version = 'rpgm2000-2003-whitelist-v3'`；v3 相比当时样本规则额外排除根目录 `null.txt`。该样本根目录未发现 `null.txt`，所以下列统计不变。
-
-样本结论：
-
-| 指标 | 结果 |
-|---|---:|
-| 源目录文件 | 3041 个 |
-| 源目录大小 | 222.22 MB |
-| 进入归档文件 | 3018 个 |
-| 进入归档大小 | 126.20 MB |
-| 排除文件 | 23 个 |
-| 排除大小 | 96.02 MB |
-| Core pack 文件 | 1272 个 |
-| Core pack 原始大小 | 5.19 MB |
-| Core pack ZIP 大小 | 1.41 MB |
-| 唯一 blob | 1705 个 |
-| 唯一 blob 大小 | 119.97 MB |
-| 预计 canonical R2 新增 | 121.37 MB，不含 manifest |
-| 预计单次下载 R2 Get | 1706 次 |
-
-路径规则验证：
-
-- `StringScripts/` 与 `StringScripts_Origin/` 下共 862 个 `.txt`，全部进入 core pack。
-- `screenshots/` 目录、根目录 `screenshot*` 文件和根目录 `null.txt` 均不会进入 manifest。
-- 分卷 7z、存档 `.lsd`、`.r3proj`、`.bat` 均被排除并记录在排除统计中。
-- R2 中抽验 manifest、core pack、blob，SHA-256 均与 D1/manifest 记录一致。
-
-唯一 blob 来源目录：
-
-| 来源目录 | 唯一 blob 数 | 代表体积 |
-|---|---:|---:|
-| `Sound/` | 873 | 47.89 MB |
-| `Picture/` | 242 | 10.13 MB |
-| `CharSet/` | 191 | 1.34 MB |
-| `FaceSet/` | 101 | 1.28 MB |
-| `Music/` | 88 | 37.43 MB |
-| `Panorama/` | 78 | 2.36 MB |
-| `Battle/` | 65 | 552.21 KB |
-| `ChipSet/` | 49 | 1.24 MB |
-| 根目录 | 9 | 17.40 MB |
-| `Backdrop/` | 6 | 295.91 KB |
-| `Title/` | 1 | 51.12 KB |
-| `GameOver/` | 1 | 26.73 KB |
-| `System/` | 1 | 2.00 KB |
-
-这个样本证明：把 `StringScripts*` 文本并入 core pack 能显著减少 blob 数量和预计下载 R2 Get；根目录截图强制排除能避免把本地游玩截图误当作发布资产。
-
-### 2.8 不设置固定规模上限
-
-本地扫描显示，固定规模上限会把一批可归档且空间收益良好的游戏挡在系统之外。计划改为不设置固定的单游戏文件数或大小硬上限。
-
-新的控制方式是：
-
-- 导入阶段展示原目录大小、白名单内归档大小、白名单外排除大小、文件数、预计新增 R2 存储、预计下载 R2 Get 次数。
-- 大型导入使用后台任务、分块提交和对象级重试，不要求单个 Worker 请求完成所有工作；commit 本身仍是单次请求。
-- 大型下载优先命中 Workers Cache/CDN 边缘缓存，或进入异步下载/排队流程；任何完整游戏 ZIP 都不能写入 R2。
-- 管理端保留按用户、按时间窗口的上传配额和滥用限流，但这些是运营限额，不是游戏内容规模上限。
-
-### 2.9 EasyRPG 在线游玩复用下载 ZIP
-
-在线游玩不引入新的服务端存储形态。系统继续只保存 manifest、blob、core pack 和元数据；Web Play 使用现有下载端点生成的同一份 ZIP：
-
-```text
-下载 ZIP Workers Cache/CDN 命中
-  -> 浏览器 Web Worker 拉取 ZIP
-  -> 浏览器端顺序读取 ZIP 响应流
-  -> 按 local file header 边下载边追加写入 OPFS pack
-  -> OPFS 保存 index.json、pack-index.json 和少量 packs/*.pack（跳过 .txt / .exe / .dll）
-  -> IndexedDB 保存安装状态和文件清单
-  -> Service Worker 把 EasyRPG 文件请求映射到 OPFS
-  -> 自托管 EasyRPG Web Player 运行游戏
-```
-
-固定决策：
-
-- Web Play 必须 fetch 与下载按钮相同的 ZIP URL，复用同一个下载 cache key。
-- `RPG_RT.exe`、DLL 和 `.txt` 不从普通下载 ZIP 中剔除；OPFS 中的 Web Play 本地运行目录跳过所有 `.txt`、`.exe`、`.dll` 文件，其余运行文件与下载 ZIP 保持一致。
-- ZIP 解包完成后不长期保存，浏览器本地只保留 OPFS pack、安装状态和 EasyRPG 存档。下载 ZIP 固定为 STORE 且 local header 写入明确 size/CRC，不使用 data descriptor；Web Play 安装器不等待中央目录，直接顺序解析 entry 并追加写入 pack。`.txt`、`.exe`、`.dll` entry 不写入 OPFS、不进入 EasyRPG 索引，ZIP 不写入 OPFS、IndexedDB 或 Cache API。
-- 游戏文件主存储使用 OPFS，Cache API 只用于播放器壳资源缓存或后续 fallback。
-- EasyRPG Web Player 必须同源自托管；跨域 iframe 无法访问本站 OPFS，不作为实现方案。
-- `works.uses_maniacs_patch = true` 的作品 MVP 阶段隐藏在线游玩入口，只保留下载。
-
-## 3. Cloudflare 约束
-
-以下约束按 2026-04-29 查阅 Cloudflare 官方文档整理，后续实现前应再次确认。
-
-### 3.1 R2
-
-R2 Standard storage 免费层：
-
-- Storage：`10 GB-month / month`
-- Class A Operations：`1,000,000 requests / month`
-- Class B Operations：`10,000,000 requests / month`
-- Egress：免费
-
-超出后 Standard storage 当前价格：
-
-- Storage：`$0.015 / GB-month`
-- Class A：`$4.50 / million requests`
-- Class B：`$0.36 / million requests`
-
-影响：
-
-- 去重主要节省 storage。
-- 下载重组 ZIP 时，如果一个 ArchiveVersion 需要读取 2000 个 R2 blob，就是约 2000 次 Class B 读操作。
-- Core pack 可以把地图、数据库等核心文件的多次读取压缩为 1 次 R2 Get。
-- 热门游戏下载次数高时，Class B 操作可能比 storage 更值得优化。
-
-### 3.2 Workers
-
-Workers Paid 当前关键限制：
-
-- CPU time 默认 30 秒，可配置到 5 分钟。
-- Memory：128 MB。
-- Subrequests：`10,000/request`。
-- Response body 没有 Worker 自身强制上限，但 CDN cache 另有限制。
-
-影响：
-
-- 一个下载请求如果需要读取超过 10,000 个 R2 对象，不能在单个 Worker 请求中直接完成。
-- Core pack 解包和 ZIP 重组都应采用 streaming，避免把所有文件读入内存。
-- ZIP 压缩会消耗 CPU；初版建议用 `STORE` 或低压缩等级，优先保证稳定。
-
-### 3.3 Workers Cache / CDN 边缘缓存
-
-Workers Cache 可以缓存 Worker 生成的 `Response`，适合存放“可重新生成、丢失也不影响数据完整性”的下载 ZIP。
-
-约束：
-
-- 边缘缓存不是 R2，不是 canonical storage，也没有可承诺的长期保留时间。
-- 缓存通常是 data center-local，不保证一次生成后全球所有地区都命中。
-- 缓存对象可能被 Cloudflare 驱逐；缓存未命中时必须能从 manifest、core pack 和 blob 重新生成 ZIP。
-- 实现前应重新确认当前计划下 CDN/Cache API 的单对象大小限制；超过限制的 ZIP 只能流式返回，不写入边缘缓存。
-
-影响：
-
-- 热门下载优先使用 Workers Cache/CDN 边缘缓存降低重复 R2 Get 和 Worker CPU。
-- 边缘缓存只能作为性能优化层，不能作为存储层。
-- 因为完整游戏 ZIP 不进入 R2，缓存命中率不足时只能通过 core pack、下载排队、限流和后续打包策略优化 Class B 成本。
-
-### 3.4 D1
-
-D1 Workers Paid 当前关键限制：
-
-- 单数据库最大 10 GB。
-- 单 account D1 总存储最大 1 TB。
-- 单次 Worker invocation D1 query 受 subrequest 限制影响，Paid 为 1000。
-- 单行、字符串或 BLOB 最大 2 MB。
-- 单 SQL 绑定参数最大 100。
-
-影响：
-
-- 不要把几千个文件条目塞进一个 D1 JSON 字段；完整文件级 manifest 存 R2。
-- D1 不再镜像完整文件行，只保存 ArchiveVersion 到 blob / core pack 的精简引用和常用派生统计。
-- 批量查询 blob/core pack hash 时应分块，每块不超过 100 个参数。
-- 大型上传应分 chunk 写入，避免单次请求写几千条导致超限。
-
-## 4. 数据模型
-
-### 4.1 概念模型
-
-```text
-Work
-  作品本身，是公开游戏资料页和搜索页的主要对象。
-
 ArchiveVersion
-  Work 下的一份可下载文件快照，同时记录语言、校对、修图、来源和文件清单。
+  -> Manifest (一个不可变 JSON)
+       -> Blob refs
+       -> CorePack refs
 
-Blob
-  一个独立文件内容，通常是可复用静态资源或需要单独管理的运行时文件，由 sha256 标识，存放在 R2。
+R2
+  blobs/sha256/...
+  core-packs/sha256/...
+  manifests/sha256/...
 
-CorePack
-  一个核心文件包，由 sha256 标识，存放在 R2，包含某个 ArchiveVersion 的地图、数据库等独有小文件。
-
-ArchiveVersionObjectRef
-  某个归档快照对 Blob 或 CorePack 的保活引用。
-  文件路径、CRC32、core pack entry 只属于 manifest，不再展开进 D1。
-
-ImportJob
-  一次导入任务，用于追踪上传、校验、索引、发布状态。
-
-DownloadBuild
-  一次下载重组、异步下载或边缘缓存预热任务；不对应 R2 中的完整游戏 ZIP。
+D1
+  archive_versions
+  blobs / core_packs
+  archive_version_blob_refs
+  archive_version_core_pack_refs
+  import_jobs
+  download_builds
 ```
 
-### 4.2 正式 D1 表族
+### Blob
 
-正式游戏领域模型固定为 `works` 和 `archive_versions` 两层。完整领域说明见 [游戏领域架构设计](./game-domain-architecture.md)，当前初始 schema 见 `migrations/0001_init_archive_schema.sql`。
+Blob 是按 SHA-256 寻址的单文件对象，主要承载图像、音频、视频、字体、运行时和其他可独立复用的内容。同一个 blob 可以在不同 ArchiveVersion 中以不同路径出现。
 
-核心表族：
+### CorePack
 
-- 作品资料：`works`、`work_titles`、`work_relations`、`translation_relations`、`catalogs`、`catalog_items`。
-- 归档快照：`archive_versions`、`archive_version_blob_refs`、`archive_version_core_pack_refs`。
-- 可扩展资料：`characters`、`work_characters`、`creators`、`work_staff`、`tags`、`work_tags`。
-- 媒体和来源：`media_assets`、`work_media_assets`、`work_external_links`。
-- 存储对象：`blobs`、`core_packs`、`import_jobs`、`download_builds`。
+CorePack 是一个内容寻址的低压缩 ZIP，用于合并 RPG Maker 数据库、地图和 string script 等大量小核心文件，减少下载重组时的 R2 Get。它是成本优化层，不是新的作品或版本边界。
 
-长期边界：
+CorePack 内 entry 仍保留 manifest 路径。修改任一 entry 会产生新的 pack hash；旧 pack 只有在所有 ArchiveVersion 都不再引用后才能清理。
 
-- `Work` 管“这是什么作品”。
-- `ArchiveVersion` 管“本站实际保存了哪份具体归档”，包括语言、校对/修图状态、来源和文件快照；不同译本、平行整理本和修正版直接挂在同一 Work 下。
-- `work_relations` 表达普通作品关系；`translation_relations` 表达原版与译本之间的有向关系；`catalogs` 表达用户维护的有序作品目录。
-- manifest 管路径和文件级元数据；`archive_version_blob_refs` / `archive_version_core_pack_refs` 只管对象引用；`blobs` 只管内容，不管文件名。
-- `download_builds` 指向 `archive_versions`。
+### Manifest
 
-### 4.3 字段说明
+Manifest 是 ArchiveVersion 文件清单的唯一事实来源。当前结构由 `lib/archive/manifest.ts` 的 `ArchiveManifest` 定义，至少包含：
 
-- `works.id`：作品的唯一定位标识，用于公开 URL，例如 `/games/123`；页面正文不直接展示该编号。
-- `works.original_title`：作品原名，仅用于展示和搜索，可以与其他作品重复；更新目标必须由 `work_id` 明确指定。
-- `works.chinese_title`：可选中文名；为空时展示层使用原名。
-- `works.language`：Work 的主要语言，使用当前支持的语言枚举。
-- `works.is_original`：是否为本站原创作品。
-- `works.engine_family`、`works.engine_detail`：引擎枚举和补充备注；更新表单未编辑备注时必须保留。
-- `works.uses_maniacs_patch`：是否使用 Maniacs Patch，属于 Work 层。
-- `works.icon_blob_sha256`、`works.thumbnail_blob_sha256`：Work 层单图引用；为空时展示层按游戏引擎使用缺省图。
-- `work_titles`：保存可多值别名；原名和中文名是 Work 的明确列。
-- `work_uploaders`：仅保存 `work_id`、`user_id`、`created_at`，用于保留共同上传者成员关系；不在本表实现 owner/editor 权限分层。
-- `work_relations`：前作、后作、改编、同世界观、不同版本、合集和 Collaboration 等普通作品关系；`vice_versa` 和 `relation_order` 保留方向与排序语义。
-- `translation_relations`：原版与译本之间的方向、角色和排序；数据库约束确保语言不同且同一来源至多一个原版关系。
-- `catalogs`、`catalog_items`：用户拥有的有序作品目录及其备注。
-- `archive_versions.archive_label`：具体归档快照的显示名称；快照身份由 `work_id` 与 `manifest_sha256` 确定。
-- `archive_versions.is_proofread`、`archive_versions.is_image_edited`：属于具体可下载归档的元数据。
-- `archive_versions.source_name`、`source_url`、`executable_path`、`rights_notes`：快照来源、入口和授权备注。
-- `archive_versions.manifest_sha256`：对规范化 manifest JSON 计算哈希，用来判断文件快照是否变化。
-- manifest 的 R2 key 由 `manifest_sha256` 通过统一 key helper 派生。
-- `archive_versions.file_policy_version`：生成 manifest 时使用的强制白名单版本。
-- `archive_versions.total_files`、`archive_versions.total_size_bytes`：进入 canonical manifest 的白名单内文件数和归档大小。
-- `archive_versions.unique_blob_size_bytes`：本归档快照需要新增的 blob 大小统计，不包含已存在 blob。
-- `archive_versions.core_pack_size_bytes`：本归档快照 core pack 在 R2 中的压缩后大小统计。
-- `archive_versions.estimated_r2_get_count`：下载重组预计 R2 Get 次数。
-- `archive_versions.web_play_file_count`、`archive_versions.web_play_size_bytes`：按 Web Play 本地写入规则排除 `.txt`、`.exe`、`.dll` 后的安装目标统计，用于在线游玩元数据接口和进度条。
-- `archive_version_blob_refs.blob_sha256`：本归档快照引用的独立 blob，用于对象保活和 GC。
-- `archive_version_core_pack_refs.core_pack_id`：本归档快照引用的 core pack，用于对象保活和 GC。
-- manifest 文件条目记录下载重建时的相对路径、文件角色、文件 SHA-256、CRC32、大小、物理来源和 core pack entry。若后续决定记录 ZIP 内原始文件名字节，也进入 manifest 的 `pathBytesB64`，不进入 D1。
-- 账户、站内信、角色事件、session 和安全审计表为上传归属与运维追踪提供业务支撑；字段、安全语义和写入原子性只按[认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)解释。
-- `blobs.sha256`：独立文件内容的主键。
-- blob 的 R2 key 由 SHA-256 通过统一 key helper 派生。
-- `core_packs.sha256`：核心文件包自身的内容主键。
-- core pack 的 R2 key 由 SHA-256 通过统一 key helper 派生。
-- `import_job_excluded_file_types`：按文件类型记录白名单外排除统计和示例路径，供上传者和管理员审计。
-- `download_builds.cache_key`：Workers Cache/CDN 边缘缓存 key，只用于命中可丢弃缓存，不是 R2 对象路径。
+- schema、作品摘要和归档元数据；
+- 文件策略与打包器版本；
+- 源文件、纳入文件和排除文件统计；
+- core pack 的 hash、大小和 entry 数；
+- 每个文件的规范化路径、排序键、可选原始路径字节、角色、SHA-256、CRC32、大小、mtime 和 storage mapping。
 
-## 5. R2 对象布局
+Manifest 自身按规范 JSON 字节计算 SHA-256。`archive_versions.manifest_sha256` 指向该内容，R2 key 由 hash 派生，不在 D1 另存可变路径。
 
-推荐一个 bucket 起步：
+## 3. 对象键与身份
+
+R2 key 只由 `lib/server/storage/archive-keys.ts` 生成：
+
+- `blobKey(sha256)`
+- `corePackKey(sha256)`
+- `manifestKey(manifestSha256)`
+
+规则：
+
+1. 接收上传时重新计算 SHA-256，不能信任 URL、header 或客户端声明。
+2. R2 ETag 不参与内容身份或完整性判断。
+3. 相同 hash 的重复上传是幂等操作；内容或长度不符必须拒绝。
+4. D1 记录存在但 R2 对象缺失时标记不一致，不把它当作 existing 返回。
+5. 下载和 commit 都从 hash 派生 key，业务代码不拼接 R2 路径。
+
+## 4. 文件策略
+
+文件纳入、角色分类、内容类型和 core pack 选择的唯一实现位于 `lib/archive/file-policy.ts`：
+
+- `FILE_POLICY_VERSION`
+- `classifyArchivePath`
+- `normalizeArchivePath`
+- `contentTypeForArchivePath`
+
+策略只允许 RPG Maker 2000/2003 归档所需的数据库、地图、图像、音频、视频、字体、配置、文本和运行时类型。截图目录、根目录临时截图、`null.txt`、分卷压缩包和不在白名单中的类型不能进入 canonical 归档。
+
+白名单是信任边界。修改规则时必须提升 `FILE_POLICY_VERSION`，扩展浏览器扫描和服务端 commit 校验，并用真实样本验证排除统计；不要在文档中复制扩展名清单。
+
+### 路径与编码
+
+- 路径统一为相对路径和 `/` 分隔，不允许盘符、绝对路径、空段或 `..` 越界。
+- 逻辑冲突比较使用规范化排序键；原始路径显示或重建需要时保存 `pathBytesB64`。
+- Windows 保留名、大小写冲突和 Unicode 规范化冲突必须在 commit 前拒绝或明确报告。
+- 文件名只存在于 manifest 和本地安装索引，不写入 blob key 或 D1 对象表。
+
+## 5. 上传流程
 
 ```text
-rpg-archive/
-  blobs/
-    sha256/
-      ab/
-        cd/
-          abcdef...7890
-
-  core-packs/
-    sha256/
-      12/
-        34/
-          123456...7890.zip
-
-  manifests/
-    sha256/
-      ab/
-        cd/
-          abcdef...7890.json
+选择文件夹或 ZIP
+  -> 浏览器 Worker 枚举和规范化路径
+  -> 应用文件策略并记录排除统计
+  -> 计算每个文件的 SHA-256 与 CRC32
+  -> 生成 core pack 和 manifest
+  -> 创建 owned import job
+  -> job-scoped preflight 查询 existing / missing
+  -> 只上传 missing blob 和 core pack
+  -> commit 校验对象、manifest 和元数据
+  -> 原子创建或更新 Work，创建 ArchiveVersion 和引用
 ```
 
-说明：
+上传任务只在当前标签页会话中执行。服务端 `import_jobs` 记录授权、状态、阶段统计和失败位置，但不承诺浏览器重启后恢复本地文件或继续 Worker。
 
-- `blobs/` 是可复用静态资源和独立运行时文件的长期主存储。
-- `core-packs/` 是核心文件包的长期主存储，用于减少下载重组时的 R2 读取次数。
-- `manifests/` 存完整规范化 manifest，便于导出、审计、备份。
-- R2 bucket 中不设置任何完整游戏 ZIP 的缓存路径或原包暂存路径。
-- 校验失败的上传对象直接拒绝或标记导入任务失败，不进入长期 R2 存储。
+### Preflight
 
-Blob key 生成规则：
+- 必须绑定当前用户拥有的 active import job。
+- 只把 D1 状态有效且 R2 对象存在的 hash 视为 existing。
+- 返回缺失对象及必要的上传统计，不接受客户端用 preflight 绕过实际 PUT 校验。
 
-```ts
-function blobKey(sha256: string) {
-  return `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
-}
-```
+### 对象上传
 
-Core pack key 生成规则：
+- blob PUT 校验 hash、长度、owned job 和 preflight 预期。
+- core pack PUT 校验外层 hash、ZIP 结构、entry 清单、解压大小和文件数。
+- 上传成功后更新 D1 对象状态与 import job 统计；并发相同 hash 必须得到一致结果。
+- 对象上传失败可以在同一任务仍有效时重试，已成功对象不重复写入。
 
-```ts
-function corePackKey(sha256: string) {
-  return `core-packs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.zip`;
-}
-```
+### Commit
 
-Manifest key 生成规则：
+Commit 是发布引用的唯一边界：
 
-```ts
-function manifestKey(sha256: string) {
-  return `manifests/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.json`;
-}
-```
+1. 重新解析并验证 manifest schema、文件策略、路径、hash、CRC32 和 storage mapping。
+2. 确认所有引用对象在 D1 与 R2 中可用。
+3. 校验 Work 目标、上传者权限和 ArchiveVersion 元数据。
+4. 在同一 D1 batch 中写入 Work 变更、ArchiveVersion、对象引用和 import job 结果。
+5. 只有 commit 成功后，新归档才进入可管理的领域模型；失败不得留下半成品引用。
 
-## 6. 文件分类规则
+核心校验集中在 `lib/server/db/archive-commit.ts`，客户端生成结果不构成信任依据。
 
-文件分类的第一步不是黑名单排除，而是强制白名单过滤。只有 `file_policy_version` 对应白名单内的类型才会进入 manifest、blob 或 core pack。
+## 6. 下载重组
 
-白名单外文件不进入发布版本，但导入任务必须记录数量、大小、类型和示例路径。这样管理员可以解释原目录大小和归档大小的差异，并在未来有证据地更新白名单。
-
-当前白名单见 2.5。新增类型必须通过一次样本扫描和人工确认后提升 `file_policy_version`，不能临时绕过。
-
-### 6.1 RPG Maker 2000/2003 核心文件
-
-建议把以下文件标为 `role = 'database'` 或 `role = 'map'`，并默认放入 core pack：
+公开下载由 `worker/archive-download.mjs` 处理：
 
 ```text
-RPG_RT.ldb
-RPG_RT.lmt
-RPG_RT.ini
-Map0001.lmu
-Map0002.lmu
-...
-StringScripts/*.txt
-StringScripts_Origin/*.txt
+published Work + published current ArchiveVersion
+  -> 读取 manifest
+  -> 并发打开 blob/core pack 对象
+  -> 按 manifest 顺序输出 ZIP local header 和文件字节
+  -> 写入中央目录
+  -> 返回流式 ZIP
 ```
 
-注意：`RPG_RT.lmt` 是地图树，通常也属于游戏独有核心数据，不应漏掉。
+要求：
 
-Core pack 固定采用“每个 ArchiveVersion 一个核心包”的粒度。也就是说，一个归档快照内的 `RPG_RT.ldb`、`RPG_RT.lmt`、`RPG_RT.ini`、`Map*.lmu`，以及 `StringScripts/`、`StringScripts_Origin/` 下保留下来的 `.txt` 一起打包。初版不做按类型或地图编号范围分组。
+- 只允许完整 published 引用链；回收站、purged、draft 或 hidden 对象不能下载。
+- 输出顺序由 manifest 固定，相同输入和 builder 版本产生稳定 cache key。
+- ZIP 使用 STORE；local header 写入明确 CRC32、compressed size 和 uncompressed size，不依赖 data descriptor。
+- 可以预取少量后续对象和缓存单次请求内重复的小 blob，但不能改变输出顺序或把完整 ZIP写回 R2。
+- Workers Cache/CDN 是可丢弃派生缓存；`download_builds` 只记录 cache key 和观测数据，不拥有文件内容。
+- 构建失败必须记录错误并中止响应，不能跳过缺失 entry 生成“可下载”的残缺 ZIP。
 
-Core pack 使用 ZIP 低压缩等级，兼顾 R2 存储占用和 Worker 解包 CPU。
+## 7. 在线游玩
 
-### 6.2 静态素材
+在线游玩 fetch 与下载按钮相同的 ZIP URL。浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；R2 和 D1 不新增 Web Play 文件副本。
 
-以下目录一般标为 `role = 'asset'`：
+本地安装的版本键、IndexedDB 状态、OPFS pack、Service Worker 桥、重试和存档策略由[EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)定义。存储层只保证下载 ZIP 与 manifest 可验证且字节稳定。
 
-```text
-Backdrop/
-Battle/
-Battle2/
-BattleCharSet/
-BattleWeapon/
-CharSet/
-ChipSet/
-FaceSet/
-GameOver/
-Monster/
-Movie/
-Music/
-Panorama/
-Picture/
-Sound/
-System/
-System2/
-Title/
-```
+## 8. 删除与垃圾回收
 
-这些文件最适合内容去重，应继续以独立 blob 存储，不放入 core pack。
+删除分为领域删除和对象清理：
 
-### 6.3 运行时和依赖
+1. ArchiveVersion 先进入 `deleted`，停止公开下载和游玩。
+2. 宽限期内可以 restore；current 删除后由领域服务选择合法替代项。
+3. purge 移除 ArchiveVersion 的 manifest 与引用，并记录 `purged_at`。
+4. 只有引用计数为零且超过宽限期的 blob/core pack 才能进入 GC 候选。
+5. sweep 使用 `active -> purging -> purged` 状态转换；R2 删除失败恢复为 active 并报告。
 
-以下文件建议标为 `role = 'runtime'`：
+GC 实现位于 `lib/server/storage/admin-storage-checks.ts` 和 `worker/archive-gc.mjs`。最终 sweep 必须有权限、显式确认、固定批次上限和审计；dry-run 不得产生删除副作用。
 
-```text
-RPG_RT.exe
-Harmony.dll
-*.dll
-```
+禁止根据“某个目录看起来不用了”直接删除 R2 prefix，也禁止只查单个 ArchiveVersion 就判断共享对象无引用。
 
-策略建议：
+## 9. 安全与版权
 
-- `RPG_RT.exe` 和 DLL 完整保留，按普通独立 blob 存储，不进入 core pack。
-- 不对 `exe` / DLL 做额外运行时策略。
+- 上传、preflight、commit 和对象 PUT 都绑定当前用户及 owned import job。
+- 文件类型白名单不等于内容安全；ZIP、路径、hash、大小和计数仍需独立验证。
+- `.exe`、`.dll` 等运行时可以为离线归档保留，但在线游玩本地安装会跳过不需要的运行时文件。
+- 来源、授权和 rights notes 属于 ArchiveVersion 元数据；系统不因技术上可去重就推断内容可分发。
+- 媒体、下载和在线游玩入口只读取完整 published 引用链。
+- 高成本操作必须有数量、大小或批次上限，并留下可查询的失败状态。
 
-### 6.4 白名单外文件
+## 10. 必须保持的不变量
 
-白名单外文件和路径规则强制排除文件默认不进入 ArchiveVersion，也不作为 blob 上传。典型例子包括：
+- 内容身份只有 SHA-256。
+- 文件路径只由 manifest 持有。
+- D1 只保存对象引用，不保存完整文件行副本。
+- R2 不保存完整游戏 ZIP。
+- Work 表示作品，ArchiveVersion 表示不可变文件快照。
+- 发布后的 manifest 不原地修改；修正通过新 ArchiveVersion 完成。
+- 对象只有在全局零引用且满足宽限期时才能清理。
+- 未知文件策略、未知 manifest schema 或缺失对象一律失败。
 
-```text
-*.dmp
-*.zip
-*.7z
-*.7z.001
-*.z01
-*.bak
-*.tmp
-*.log
-翻译工具缓存
-工程源文件
-screenshots/
-根目录 screenshot*.*
-根目录 null.txt
-```
+## 11. 验证
 
-导入界面必须提供“白名单外文件”审计列表，至少包括：
+变更归档链路时至少执行：
 
-- 文件类型。
-- 文件数。
-- 总大小。
-- 示例路径。
-- 当前 `file_policy_version`。
+- `npm run check`
+- `npm run build`
+- `npm run check:domain`
+- 本地 D1 reset/seed 后的上传、preflight 和 commit
+- manifest SHA-256 与 R2 对象抽验
+- 下载 ZIP entry、顺序、CRC32 和总大小验证
+- GC consistency/dry-run；只有明确授权时运行 sweep
+- 在线游玩安装后确认 OPFS 中没有完整 ZIP
 
-如果发现确实影响游戏运行的类型，应通过更新白名单版本解决，而不是为单个导入任务开例外。
+有状态 D1、API、Worker 和 GC 检查串行执行，避免共享状态污染被误判为产品缺陷。
 
-## 7. Manifest 设计
+## 12. 参考
 
-Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导出，并足以重建目录树。
-
-示例：
-
-```json
-{
-  "schema": "viprpg-archive.manifest.v1",
-  "game": {
-    "originalTitle": "Sample Game",
-    "chineseTitle": "示例游戏",
-    "language": "zh-CN",
-    "isOriginal": false
-  },
-  "archiveVersion": {
-    "label": "initial-import",
-    "isProofread": true,
-    "isImageEdited": false,
-    "sourceName": "作者发布页",
-    "sourceUrl": "https://example.com/source",
-    "executablePath": "RPG_RT.exe",
-    "rightsNotes": "仅供归档和研究",
-    "createdAt": "2026-04-29T00:00:00.000Z",
-    "filePolicyVersion": "rpgm2000-2003-whitelist-v3",
-    "packerVersion": "core-pack-v1",
-    "sourceType": "browser_folder",
-    "sourceFileCount": 1200,
-    "sourceSize": 58000000,
-    "includedFileCount": 980,
-    "includedSize": 42000000,
-    "excludedFileCount": 220,
-    "excludedSize": 16000000
-  },
-  "corePacks": [
-    {
-      "id": "core-main",
-      "sha256": "1234567890abcdef...",
-      "size": 45678,
-      "uncompressedSize": 92000,
-      "fileCount": 3,
-      "format": "zip",
-      "compression": "deflate-low"
-    }
-  ],
-  "files": [
-    {
-      "path": "RPG_RT.ldb",
-      "pathSortKey": "rpg_rt.ldb",
-      "role": "database",
-      "sha256": "0123456789abcdef...",
-      "crc32": 305419896,
-      "size": 123456,
-      "mtimeMs": 1714348800000,
-      "storage": {
-        "kind": "core_pack",
-        "packId": "core-main",
-        "entry": "RPG_RT.ldb"
-      }
-    },
-    {
-      "path": "Map0001.lmu",
-      "pathSortKey": "map0001.lmu",
-      "role": "map",
-      "sha256": "2345678901abcdef...",
-      "crc32": 2596069104,
-      "size": 4096,
-      "mtimeMs": null,
-      "storage": {
-        "kind": "core_pack",
-        "packId": "core-main",
-        "entry": "Map0001.lmu"
-      }
-    },
-    {
-      "path": "CharSet/Hero.png",
-      "pathSortKey": "charset/hero.png",
-      "role": "asset",
-      "sha256": "abcdef0123456789...",
-      "crc32": 2271560481,
-      "size": 8192,
-      "mtimeMs": 1714348800000,
-      "storage": {
-        "kind": "blob",
-        "blobSha256": "abcdef0123456789..."
-      }
-    }
-  ]
-}
-```
-
-规范化规则：
-
-- JSON 字段顺序固定。
-- `files` 按 `pathSortKey` 排序。
-- `corePacks` 按 `sha256` 排序。
-- 路径统一使用 `/`。
-- 禁止绝对路径、空路径、`..` 路径穿越。
-- 如果后续决定记录原始路径编码，将原始字节放入 `pathBytesB64`。
-- `files[].sha256` 永远表示逻辑文件内容哈希；物理存储来源由 `files[].storage` 表示。
-
-## 8. 上传流程
-
-Phase D 的浏览器上传只在当前标签页会话内维护 Worker 和进度；服务端 import job 负责内部状态记录。本节保留存储链路摘要。
-
-### 8.1 推荐流程：浏览器预索引
-
-```text
-用户选择游戏文件夹或本地 ZIP
-  -> Worker 按统一认证授权基线校验身份、permission key 和任务 ownership
-  -> 浏览器枚举文件
-  -> 浏览器按强制白名单区分 included/excluded
-  -> 浏览器计算 sha256/size/path
-  -> 浏览器按规则分类 core/asset/runtime/excluded
-  -> 浏览器生成 core pack
-  -> POST /api/imports/{id}/preflight
-  -> Worker 查询 D1 blobs 和 core_packs
-  -> 返回 missing asset/runtime blobs 和 missing core packs
-  -> 浏览器只上传缺失 asset/runtime blobs 和 core pack
-  -> Worker 校验并写入 R2 blobs/core-packs
-  -> POST /api/imports/{id}/commit
-  -> Worker 写入 works、archive_versions、core_packs 和对象引用表
-  -> 按提交元数据写入 draft 或 published 状态
-```
-
-优点：
-
-- 重复素材不重复上传。
-- 核心文件包只上传一次，并在下载重组时只产生一次 R2 读取。
-- Worker 不需要解完整 ZIP。
-- 更容易做分块、断点续传、进度显示。
-
-注意：
-
-- 上传接口按统一基线授权，`uploader_id` 始终由服务端 AuthContext 记录。
-- 不设置固定的单游戏文件数或大小硬上限；大型导入通过后台任务、分块提交和管理端配额控制风险。
-- 导入前必须显示原目录大小、白名单内归档大小、白名单外排除大小、预计新增 R2 存储和预计下载 R2 Get 次数。
-- 浏览器端 hash 只能作为预检依据，后端仍要验证上传内容。
-- 对单个小文件，可由 Worker 接收上传流并计算 SHA-256 后写入 R2。
-- Core pack 上传后，后端至少要校验 pack 自身 SHA-256、文件数量、未压缩大小、entry 路径和 manifest 是否一致。
-- 对大文件，可使用分片上传或客户端直传，但目标仍然只能是缺失 blob 或 core pack，不能是完整游戏包。
-
-### 8.2 不支持的导入方式
-
-明确不支持：
-
-- 把完整游戏 ZIP 上传到 Worker 后解包。
-- 把完整游戏 ZIP 暂存到 R2。
-- 后台任务读取完整 ZIP 再拆分为 blob/core pack。
-- 管理员通过上传原包绕过浏览器预索引。
-
-管理员批量导入旧资源时，也应使用同一套浏览器预索引流程；不能把原始完整 ZIP 写入 R2。
-
-## 9. Blob 和 Core Pack 上传校验
-
-### 9.1 Blob 上传
-
-适合大多数 RPG Maker 素材，以及需要单独管理的运行时文件。
-
-```text
-PUT /api/blobs/{sha256}
-Headers:
-  Content-Length: ...
-  X-Content-SHA256: ...
-```
-
-Worker 行为：
-
-1. 检查 D1 是否已存在 `sha256`。
-2. 已存在则直接返回 `200 exists`。
-3. 不存在则读取请求 body，流式计算 SHA-256。
-4. hash 和路径参数一致时写入 R2。
-5. 写入 D1 `blobs`。
-
-### 9.2 并发重复上传
-
-多个用户同时上传同一个缺失 blob 或 core pack 时可能发生竞争。
-
-处理原则：
-
-- `blobs.sha256` 和 `core_packs.sha256` 是唯一键。
-- R2 key 由 sha256 决定，重复 put 相同内容是幂等的。
-- D1 insert 使用 `INSERT OR IGNORE`。
-- 如果 D1 已存在但 R2 缺失，标记为 `status = 'missing'` 并触发修复。
-
-### 9.3 Core pack 上传和校验
-
-Core pack 是一个版本核心文件集合，由浏览器先生成，再上传给 Worker。
-
-```text
-PUT /api/core-packs/{sha256}
-Headers:
-  Content-Length: ...
-  X-Content-SHA256: ...
-```
-
-Worker 行为：
-
-1. 检查 D1 是否已存在 `core_packs.sha256`。
-2. 已存在则直接返回 `200 exists`。
-3. 不存在则读取请求 body，流式计算 SHA-256。
-4. 校验 pack SHA-256、大小、文件数量、entry 路径和 manifest 声明一致。
-5. 写入 R2 `core-packs/`。
-6. 写入 D1 `core_packs`。
-
-初版只支持 ZIP 格式的 core pack，并固定使用低压缩等级。这样可以压缩 `lmu`、`ldb` 等核心文件，同时控制 Worker 解包 CPU。
-
-### 9.4 不信任 R2 ETag
-
-R2/S3 的 ETag 不应作为内容身份依据，尤其在 multipart 场景下。系统应保存并校验自己计算的 `sha256` 和 `size_bytes`。
-
-## 10. 下载与重组流程
-
-### 10.1 直接流式重组
-
-```text
-GET /api/archive-versions/{archiveVersionId}/download
-  -> 读取 R2 manifest
-  -> 按 manifest pathSortKey 排序
-  -> R2.get(corePackKey(core_pack.sha256))
-  -> 流式读取 core pack entries
-  -> 对每个 asset/runtime blob 执行 R2.get(blobKey(blob.sha256))
-  -> 根据 manifest 文件大小、UTF-8 路径长度和 ZIP STORE header 公式计算 Content-Length
-  -> 写入 local header（包含 CRC32 和 size）
-  -> 写入 ZIP stream（无 data descriptor）
-  -> 返回 application/zip
-```
-
-优点：
-
-- 不额外占用最终 ZIP 的 R2 storage。
-- 核心文件只需要一次 R2 Class B 读取。
-- 任意版本随时可下载。
-
-缺点：
-
-- 每个 asset/runtime blob 仍至少一次 R2 Class B 操作。
-- Worker 需要解析 core pack 并把 entry 写入最终 ZIP。
-- 文件数量太多时会接近 Worker subrequest 限制。
-- ZIP 压缩会消耗 CPU。
-
-初版建议：
-
-- ZIP entry 默认使用 `STORE` 或低压缩等级。
-- 对已压缩或不值得二次压缩的白名单格式直接 `STORE`：`png`、`jpg`、`gif`、`mp3`、`ogg`、`avi`、`mpg`。
-- 当最终 ZIP 使用 `STORE` 时，应在响应前精确计算最终 ZIP 字节数，并在 Cloudflare Workers 中使用 `FixedLengthStream` 返回固定长度 body，让运行时发出真实 `Content-Length`；仅手动设置 header 而 body 仍是普通 `ReadableStream` 时，GET 仍可能被降为 chunked，浏览器不会显示百分比进度。
-- 最终 ZIP local file header 必须包含明确 CRC32、compressed size 和 uncompressed size；不能使用 data descriptor。这样普通下载仍是标准 ZIP，Web Play 也能边下载边定位 entry 并写入 pack。
-- 如果 OpenNext / Next.js 路由层会重新包装响应流，则下载端点应放在 Worker 原生入口层拦截，避免 `FixedLengthStream` 在框架层丢失。
-- 冷下载重组必须避免逐 entry 串行等待 R2。ZIP 输出顺序仍按 manifest 固定，但下载端应提前并发打开后续少量 entry 的 R2 对象，并在单次请求内缓存重复出现的小 blob 字节；这不改变最终 ZIP 字节顺序，也不把完整 ZIP 写入 R2。
-- 单次请求内的小 blob 缓存必须有内存上限，例如单个 blob 只缓存到约 2 MB、总缓存约 64 MB。超过阈值的大 blob 仍以 R2 body stream 方式输出，避免 Worker 内存风险。
-- 正式扩大前，读取 core pack 时应优先流式处理，不把大 pack 整体解到内存；Phase E MVP 可在 core pack 已由实测证明较小时整包解压，并把该限制写入风险记录。
-- 实时下载前必须估算 R2 Get 次数、Worker subrequest、预计输出大小和是否适合边缘缓存；接近限制时进入异步下载/排队流程，不写入 R2 完整 ZIP。
-
-### 10.2 Workers Cache / CDN 边缘缓存
-
-```text
-GET /downloads/{archive_version_id}/{manifest_sha256}/{packer_version}/{download_zip_builder_version}.zip
-  -> caches.default.match(cache_key)
-  -> 命中则直接返回缓存响应
-  -> 未命中则流式重组 ZIP
-  -> 适合缓存时 caches.default.put(cache_key, response.clone())
-```
-
-策略：
-
-- URL 必须包含 `manifest_sha256`、`packer_version` 和下载 ZIP builder 版本，保证 manifest、导入打包器或下载重组格式任一变化都会避开旧缓存。
-- 页面上的公开下载链接也应携带下载 ZIP builder 版本参数；否则浏览器可能继续复用旧版 immutable 响应头，导致新能力例如 `Content-Length` 不生效。
-- 第一次下载直接重组；如果响应大小和请求条件适合缓存，则写入 Workers Cache/CDN 边缘缓存。
-- 如果响应头中暴露自定义缓存状态，写入缓存的响应副本必须标记为命中态；否则后续命中边缘缓存时仍可能携带第一次生成响应的 `MISS` 头。正式观测应同时记录自定义缓存头和 Cloudflare 的 `CF-Cache-Status`。
-- 后续同一边缘节点命中缓存时，不再读取 R2 core pack 和 blob。
-- 缓存未命中或被驱逐时，重新按 manifest 重组。
-- 大于当前 CDN/Cache API 单对象限制的 ZIP 直接流式返回，不尝试边缘缓存。
-
-权衡：
-
-- 不增加 R2 storage，也不破坏 canonical 数据模型。
-- 缓存不保证持久、不保证全球同步，不能作为唯一可用的下载来源。
-- 热门游戏下载可以减少大量 R2 Class B 操作和 CPU，但命中率需要通过日志观察。
-
-建议默认：
-
-- 所有可缓存下载响应都使用不可变 URL 和长 `Cache-Control`。
-- 小众版本只依赖自然缓存命中，不做额外预热。
-- 热门版本可以做边缘缓存预热或下载排队优化，但不写入 R2 完整 ZIP。
-
-### 10.3 EasyRPG 在线游玩
-
-在线游玩是下载重组流程的浏览器端延伸，不是新的 canonical 存储层。详细设计见 [EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)。
-
-```text
-GET /play/{archiveVersionId}
-  -> 查询 Work / ArchiveVersion
-  -> works.uses_maniacs_patch=true 时不展示在线游玩入口
-  -> 检查 IndexedDB 本地安装状态
-  -> 未安装时 Web Worker fetch 现有下载 ZIP URL
-  -> ZIP 命中 Workers Cache/CDN 时不读取 R2
-  -> Web Worker 顺序读取 ZIP 响应流
-  -> 按 ZIP local header 写入 OPFS pack
-  -> 生成 EasyRPG index.json 和 pack-index.json
-  -> IndexedDB 标记安装 ready
-  -> 加载同源 EasyRPG runtime
-  -> Service Worker 从 OPFS pack 切片响应 /play/games/{playKey}/{path...}
-```
-
-固定边界：
-
-- 在线游玩必须复用现有下载 ZIP 的 URL、字节内容和缓存 key；不得为了 Web Player 排除 `exe` / DLL 或生成另一份 ZIP。
-- ZIP 只在浏览器下载和解包过程中临时存在，解包后丢弃；OPFS 中保留 `index.json`、`pack-index.json` 和少量 `packs/*.pack`，跳过所有 `.txt`、`.exe`、`.dll` 文件。ZIP builder 使用 STORE + local header 明确 size/CRC，浏览器安装器不需要把完整 ZIP 留在内存中等待中央目录。
-- OPFS、IndexedDB、Cache API 和 EasyRPG IDBFS 共享同一个 origin 的浏览器存储额度；进入安装流程前应由页面主线程调用 `navigator.storage.estimate()` 和 `navigator.storage.persist()`，把结果展示给用户并传给 Web Worker。
-- IndexedDB 负责安装状态、版本键、进度、文件清单和错误；OPFS 负责游戏文件本体；EasyRPG IDBFS 负责存档。
-- 本地安装版本键至少包含 `archive_version_id`、`manifest_sha256`、`download_zip_builder_version`、`web_play_installer_version` 和 `easyrpg_runtime_version`。
-- 安装完成前不能启动 EasyRPG；MVP 对刷新或崩溃遗留的 `installing` 状态执行清理重装，跨标签页强锁后续再补。
-- `index.json` 由 archive manifest 或 ZIP entry 列表生成，不能依赖上传者提供；图像和音频资源必须同时写入真实文件名键和去扩展名别名，匹配 EasyRPG 的资源查询方式。
-- Service Worker 只读 OPFS pack 并返回切片 Response；MVP 不做单文件云端 fallback，避免本地安装后仍持续消耗 R2。
-
-## 11. API 草案
-
-### 11.1 导入
-
-```text
-POST /api/imports
-  创建导入任务；授权和 uploader ownership 见统一基线
-
-POST /api/imports/{id}/preflight
-  输入文件 hash manifest 和上传元数据
-  输出已存在/缺失 blob 和 core pack 列表
-
-PUT /api/blobs/{sha256}
-  上传单个缺失 blob
-
-PUT /api/core-packs/{sha256}
-  上传单个缺失 core pack
-
-POST /api/imports/{id}/commit
-  一次写入 Work、ArchiveVersion、core pack、文件索引和 manifest；失败后仍按 draft 规则重新提交
-
-```
-
-### 11.2 作品、关系、目录和归档快照
-
-```text
-GET /api/works
-GET /api/works/{id}
-GET /api/works/lookup
-
-POST /api/works/{id}/relations
-PATCH /api/work-relations/{relationId}
-DELETE /api/work-relations/{relationId}
-
-POST /api/works/{id}/translation-relations
-PATCH /api/translation-relations/{relationId}
-DELETE /api/translation-relations/{relationId}
-
-GET /api/catalogs
-POST /api/catalogs
-PATCH /api/catalogs/{id}
-DELETE /api/catalogs/{id}
-POST /api/catalogs/{id}/items
-PATCH /api/catalogs/{id}/items
-DELETE /api/catalogs/{id}/items
-
-PATCH /api/archive-versions/{id}
-GET /api/archive-versions/{id}/web-play
-```
-
-### 11.3 下载
-
-```text
-GET /api/archive-versions/{archiveVersionId}/download
-GET /api/downloads/{downloadBuildId}
-POST /api/archive-versions/{archiveVersionId}/download-jobs
-POST /api/archive-versions/{archiveVersionId}/warm-edge-cache
-```
-
-### 11.4 在线游玩
-
-```text
-GET /play/{archiveVersionId}
-GET /api/archive-versions/{archiveVersionId}/web-play
-GET /play/games/{playKey}/index.json
-GET /play/games/{playKey}/{path...}
-```
-
-说明：
-
-- `/play/{archiveVersionId}` 是用户进入在线游玩的页面。
-- `GET /api/archive-versions/{archiveVersionId}/web-play` 返回 Web Play 所需元数据：下载 URL、manifest SHA-256、ZIP builder 版本、EasyRPG runtime 版本、安装版本键、是否使用 Maniacs Patch、预计安装大小。
-- `/play/games/{playKey}/...` 由 Service Worker 优先处理，从 OPFS 返回文件；服务器端不展开游戏目录。
-
-### 11.5 管理
-
-```text
-GET /api/admin/blobs/{sha256}/references
-GET /api/admin/core-packs/{sha256}/references
-GET /api/admin/users
-POST /api/admin/users/{userId}/roles
-GET /api/inbox
-POST /api/inbox/{itemId}/resolve
-POST /api/inbox/{itemId}/read
-POST /api/inbox/read-all
-POST /api/admin/gc/mark
-POST /api/admin/gc/sweep
-```
-
-## 12. 前端导入界面
-
-导入界面需要支持：
-
-- 上传入口受统一基线保护；本文只定义浏览器预索引和对象提交业务流程。
-- 选择文件夹。
-- 选择本地 ZIP，并在浏览器端解包预索引；完整 ZIP 不上传到 Worker/R2。
-- 显示原目录文件数和大小、白名单内归档文件数和大小、白名单外排除文件数和大小、已存在大小、需上传大小、预计节省空间。
-- 显示核心文件检测结果：`RPG_RT.ldb`、`RPG_RT.lmt`、`Map*.lmu`。
-- 显示 core pack 文件数、压缩前大小、压缩后大小、预计减少的 R2 读取次数。
-- 显示运行时文件统计：`exe`、`dll`、补丁程序作为普通独立 blob 保留。
-- 显示白名单外文件类型汇总和示例路径。
-- 对预计下载 R2 Get 次数很高的版本提示下载成本风险，并建议启用边缘缓存观察、排队下载或后续打包策略优化。
-- 对象上传失败可在当前导入任务仍处于活动状态时按 preflight 结果重试；commit 是一次请求，失败后按现有 draft 规则重新提交，不承诺跨标签页或跨进程恢复提交结果。
-- commit 前必须选择或创建 Work，并填写 Work 元数据：原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、是否使用 Maniacs Patch；同时填写 ArchiveVersion 的归档标识、来源、可执行入口、版权备注、校对和修图状态。
-- 系统自动记录上传者和上传时间。
-- 可选补充字段：引擎版本、来源链接/出处、发布状态、可执行入口、版权/授权备注。
-
-建议的状态流：
-
-```text
-created
-  -> preflighted
-  -> uploading
-  -> completed
-
-失败或取消时进入 `failed` / `canceled`；失败的任务可按现有 draft 规则重新提交，不提供跨会话的 commit 结果恢复。
-```
-
-## 13. 路径和编码处理
-
-RPG Maker 2000/2003 旧游戏经常涉及日文、中文和非 UTF-8 ZIP 文件名。这里容易出问题。
-
-必须处理：
-
-- ZIP entry 可能是 Shift-JIS、GBK、Big5 或乱码。
-- Windows 路径大小写不敏感，但 ZIP/R2 key 大小写敏感。
-- 路径分隔符可能是 `\` 或 `/`。
-- 不能允许 `../`、绝对路径、盘符路径。
-
-建议：
-
-- 内部规范路径统一为 UTF-8 字符串和 `/` 分隔。
-- 初版先通过真实样本分析非 UTF-8 ZIP 文件名，再决定是否实现 `path_bytes_b64` 原始文件名字节保存。
-- `path_bytes_b64` 字段作为预留字段保留，但最小实现不强制写入。
-- 建立 `path_sort_key = lower(normalized_path)` 用于排序和冲突检测。
-- 同一版本中如果出现仅大小写不同的路径，应进入人工确认或导入失败并提示上传者修正。
-
-## 14. 删除和垃圾回收
-
-不要在删除 ArchiveVersion 时立即删除 blob 或 core pack。因为 blob 可能被其他归档快照引用，core pack 也可能被多个归档快照复用。
-
-推荐流程：
-
-1. 管理端“删除”ArchiveVersion 的产品语义是放入回收站；技术上写入 `archive_versions.status = 'deleted'`、`deleted_at`，并清空 `is_current`。
-2. 回收站内的 ArchiveVersion 可以还原；还原时恢复为 `published`，但不抢占已有 current，仅在同一 Work 没有 current 时自动补为 current。
-3. 最终清理：对已放入回收站且超过目标宽限期的 ArchiveVersion 写入 `purged_at`，删除对象引用表记录和 manifest R2 对象；最终清理后不能还原。
-4. GC mark：扫描仍被未最终清理归档文件清单引用的 blob 和 core pack。
-5. GC sweep：找出未被引用的 blob/core pack，且超过目标宽限期。
-6. 删除 R2 blob 和 R2 core pack。
-7. 将 D1 `blobs.status`、`core_packs.status` 改为 `purged` 或删除记录。
-
-宽限期固定为：
-
-```text
-自动 GC：7 天
-手动 GC：管理端可指定 0 天或更高天数，调用授权见统一认证授权基线
-```
-
-原因：
-
-- 防止误删。
-- 给数据库备份、恢复和人工复核留时间。
-
-MVP 固定边界：
-
-- 管理端提供 ArchiveVersion 删除、回收站列表、还原和“设为当前版本”操作。
-- 删除会把 ArchiveVersion 放入回收站，清空该 ArchiveVersion 的 `is_current`，并在同一 Work 下自动选择最新 published 版本作为新的 current；如果没有可用版本，则不设置 current。
-- 还原回收站中的 ArchiveVersion 时先恢复为 `published`，但不会抢占已有 current；仅在同一 Work 没有 current 时自动补为 current。
-- 回收站最终清理会写入 `archive_versions.purged_at`，删除其对象引用表记录，并删除对应 manifest R2 对象。最终清理后只能保留基础审计和显示记录，不能再还原。
-- 最终清理中的 GC sweep 处理 `blobs.status IN ('active', 'purging')` / `core_packs.status IN ('active', 'purging')`、超过目标宽限期、且没有任何归档引用的对象。blob 还必须确认未被 Work 图标、缩略图或媒体资产引用；`purging` 只表示本轮删除的临时 reservation。
-- 自动 GC 每天执行一次，默认最终清理超过 7 天的回收站版本和零引用对象；手动 GC 可随时执行，并允许把宽限期设为 0 天以立即清理当前候选。
-- 仅被回收站 ArchiveVersion 引用的 blob/core pack 会在该 ArchiveVersion 被最终清理、文件引用被删除后进入零引用 sweep。
-- sweep 前先把候选对象临时标记为 `purging`，R2 删除成功后再标记为 `purged`；R2 或数据库写入失败则恢复为 `active`，下一轮可以重新处理。
-- Preflight 只把 `status = 'active'` 的 blob/core pack 视为已存在；如果同 hash 对象已被 purged，后续上传会重新写入 R2 并把 D1 状态恢复为 active。
-- 完整游戏 ZIP 仍然不进入 R2，删除和 GC 流程不需要处理完整 ZIP。
-
-## 15. 成本模型
-
-### 15.1 存储成本
-
-文档和界面中不要笼统使用“游戏大小”，应明确区分：
-
-- 原目录大小：上传源中枚举到的全部文件大小。
-- 白名单内归档大小：进入 manifest 的文件大小，也是 canonical 数据的逻辑大小。
-- 白名单外排除大小：因强制白名单策略不进入归档的文件大小。
-- 去重后计划存储：唯一 blob、唯一 core pack 和 manifest 的合计大小。
-
-如果整包存储全部源文件：
-
-```text
-storage_full = sum(each_game_zip_size)
-```
-
-本系统的去重存储：
-
-```text
-storage_dedup = sum(unique_blob_size) + sum(core_pack_size) + sum(manifest_size)
-```
-
-完整游戏 ZIP 不进入 R2，因此不作为 R2 storage 成本项。Workers Cache/CDN 边缘缓存是可丢弃缓存，不纳入 canonical 存储容量模型。
-
-节省比例：
-
-```text
-saving = 1 - storage_dedup / storage_full
-```
-
-导入界面可以直接显示：
-
-```text
-原目录大小：58 MB
-白名单内归档大小：42 MB
-白名单外排除：16 MB
-已存在内容：31 MB
-新增 core pack：3 MB
-实际新增 R2 存储：11 MB
-预计节省：73.8%
-```
-
-本地扫描基线说明，白名单和跨游戏去重共同决定最终容量；固定规模限制不是必要的 R2 storage 保护手段。
-
-### 15.2 操作成本
-
-导入一个包含 1000 个文件的游戏：
-
-- Preflight 查询 D1：按 100 hash 分块，约 10 组查询。
-- 新 asset/runtime blob 上传：每个缺失文件 1 次 R2 Put，属于 Class A。
-- Core pack 上传：每个 ArchiveVersion 通常 1 次 R2 Put，属于 Class A。
-- 已存在 blob/core pack 不需要 R2 Put。
-- 完整游戏 ZIP 不上传到 Worker/R2，不产生原包暂存的 R2 存储和删除流程。
-
-下载一个包含 1000 个文件的游戏：
-
-- 未使用 core pack 的逐文件重组：约 1000 次 R2 Get，属于 Class B。
-- 使用 core pack 后：约 `1 + asset_blob_count + runtime_blob_count` 次 R2 Get。
-- Workers Cache/CDN 边缘缓存命中：不读取 R2；未命中则按上一条重新读取 core pack 和 blob。
-
-结论：
-
-- 去重可以显著降低 storage。
-- Core pack 可以降低核心小文件带来的 Class B 操作。
-- 但“按素材 blob 重组下载”仍会增加 Class B 操作。
-- 热门游戏需要尽量命中 Workers Cache/CDN 边缘缓存，否则下载量上来后 Class B 操作会成为主要成本。
-- 大型或高热度游戏不能通过完整 ZIP R2 缓存兜底，应优先观察边缘缓存命中率、优化 core pack/打包策略，并配合下载排队和运营限流。
-
-## 16. 安全和版权策略
-
-### 16.1 运行时文件
-
-原包中的 `RPG_RT.exe`、DLL 和补丁程序完整保留。它们作为普通独立 blob 存储，不进入 core pack，也不做额外运行时策略。
-
-建议：
-
-- `RPG_RT.ini` 进入 core pack。
-- `exe`、`dll` 文件按原路径进入最终下载包，并作为普通独立 blob 存储。
-- 安全风险主要通过上传权限控制，而不是对运行时文件做额外内容分级。
-
-### 16.2 RTP 和素材版权
-
-RTP 和第三方素材可能有授权限制。去重存储不改变版权责任。
-
-建议：
-
-- 为资源来源建立 metadata。
-- 对官方 RTP 资源考虑“需要用户自备 RTP”的下载模式。
-- 对无法确认授权的资源保留后台可见，不进入公开下载。
-
-### 16.3 滥用防护
-
-- 上传接口的身份、permission key、任务所有权和角色申请规则见统一认证授权基线。
-- 单用户每日上传大小限制。
-- 单用户、单时间窗口、单队列的运营配额和并发限制。
-- 强制白名单文件类型和路径校验。
-- 大型导入进入后台队列，对象上传失败可重试，不要求单次 Worker 请求完成；commit 失败按 draft 规则重新提交。
-- 记录 `uploader_id` 和 `uploaded_at`，便于追踪和回收。
-
-### 16.4 账户、验证码和发信
-
-业务摘要：公开账户流程为上传归属、通知和运维审计提供可信用户身份，Cloudflare Email/Turnstile/Rate Limiting 是其基础设施依赖。密码、验证码、session、同源保护和失败语义全部由[认证与权限管理系统统一基线](./authentication-authorization-baseline-plan.md)定义，本文不再维护副本。
-
-### 16.5 用户角色和站内信
-
-业务摘要：站内信用于上传资格申请和操作结果通知，角色事件与安全审计用于长期追踪。角色模型、权限清单、层级、自定义角色、根账户和审计边界只见统一基线。
-
-## 17. 实施阶段
-
-### Phase 0：验证样本
-
-目标：证明去重率值得做。
-
-任务：
-
-- 收集 20 到 50 个典型 RPG Maker 2000/2003 游戏。
-- 本地脚本扫描文件 hash。
-- 输出总大小、唯一 blob 大小、core pack 大小、重复率、文件数量分布。
-- 输出白名单内归档大小、白名单外排除大小、文件类型分布。
-- 统计素材目录重复率、核心文件数量、core pack 压缩率和预计节省的 Class B 读取次数。
-
-交付：
-
-- `dedup-report.json`
-- `dedup-report.md`
-
-### Phase 1：最小可用存储模型
-
-目标：能导入一个本地文件夹，写入 R2/D1，并在后台看到 manifest。
-
-任务：
-
-- 建立 D1 migration。
-- 建立 R2 bucket binding。
-- 实现 `blobs`、`core_packs`、`works`、`archive_versions` 和归档对象引用表。
-- 认证授权与站内信业务按统一基线落地，不在存储阶段维护第二套模型。
-- 实现管理端浏览器预索引导入路径。
-- 固定强制白名单和 `file_policy_version`。
-- 实现 core pack 生成、manifest 生成和 R2 保存。
-- 记录白名单外文件类型汇总、排除大小和示例路径。
-
-当前实现状态：
-
-- 已建立 staging D1/R2 和 `works` / `archive_versions` / 归档对象引用数据模型。
-- 已实现单个 blob、core pack 上传校验和 `/api/imports/{id}/preflight`。
-- 已用本地样本完成 staging 试导入，证明 manifest、core pack、blob、D1 索引和排除统计链路可运行。
-
-暂不做：
-
-- 在线 ZIP 重组。
-- 边缘缓存优化。
-
-### Phase 2：浏览器预索引上传
-
-目标：获得统一基线上传能力的用户可以通过网页导入游戏。
-
-任务：
-
-- 将 Phase B 临时邮箱登录替换为密码登录；验证码只用于注册和找回密码。
-- 接入统一基线定义的上传资格申请与处理流程。
-- 前端选择文件夹或本地 ZIP；ZIP 只在浏览器端解包预索引。
-- 浏览器计算 SHA-256。
-- 浏览器生成 core pack。
-- Preflight 查询已有 blob 和 core pack。
-- 只上传缺失 blob 和 core pack。
-- Commit Work 元数据和 ArchiveVersion 归档快照。
-- 上传表单包含原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、Maniacs Patch、ArchiveVersion 归档标识、校对、修图、来源链接/出处、发布状态、可执行入口、版权/授权备注。
-- 服务端自动写入 `uploader_id` 和 `uploaded_at`。
-- 展示节省空间。
-- 展示白名单外排除统计和预计下载 R2 Get 次数。
-
-### Phase 3：下载重组
-
-目标：用户可以下载重建后的 ZIP。
-
-任务：
-
-- 实现 manifest 查询。
-- 实现 R2 core pack stream 和 blob stream 到 ZIP stream。
-- 下载前估算 R2 Get 次数、Worker subrequest、预计输出大小和是否适合 Workers Cache/CDN 边缘缓存。
-- 大型版本或预计读取对象过多时转入异步下载/排队流程，不在单个 Worker 请求中强行实时重组，也不写入 R2 完整 ZIP。
-
-### Phase 4：缓存和成本优化
-
-目标：控制热门下载的 Class B 操作和 Worker CPU。
-
-任务：
-
-- 记录下载次数。
-- 使用不可变下载 URL 和 `Cache-Control` 支持 Workers Cache/CDN 边缘缓存。
-- 记录边缘缓存命中率、重组耗时、R2 Get 次数和失败原因。
-- 对热门版本提供边缘缓存预热和下载排队优化。
-- 明确禁止把完整游戏下载 ZIP 写入 R2。
-
-当前落地：
-
-- `download_builds` 固定作为不可变下载 cache key 的聚合观测表。
-- 下载端记录下载次数、缓存命中/未命中、累计实际 R2 Get、最近缓存状态和最近响应构建耗时。
-- 下载端记录失败次数、最近失败原因和最近失败耗时，便于发现 manifest 缺失、R2 缺失或 ZIP 构建异常。
-- 管理端展示总下载次数、缓存节省的预计 R2 Get、累计实际 R2 Get、近期下载和预计高成本归档。
-- 缓存命中时记录 `actual_r2_get_count = 0`；缓存未命中时按该 ArchiveVersion 的 `estimated_r2_get_count` 计入累计 R2 Get。这个数值是成本估算，不代替 Cloudflare 账单。
-- 导入端在 `import_jobs` 聚合记录实际新增 blob/core pack 数量与容量、manifest 写入量、R2 Put 数、预检/上传/提交耗时、缺失对象容量和失败阶段。
-- 管理端提供手动按钮触发一致性检查、清理预演和最终清理；自动 GC 通过 Cloudflare Cron Triggers 每天执行一次。
-
-### Phase 5：账户通知、删除和 GC
-
-目标：系统长期可维护。
-
-任务：
-
-- 完善 `email_verification_challenges`、`user_sessions` 和 `auth_audit_logs`。
-- 接入统一基线的 session 撤销、用户状态、通知和审计能力。
-- ArchiveVersion 删除进入回收站。
-- Blob mark-and-sweep GC。
-- Core pack mark-and-sweep GC。
-- 定期一致性检查：D1 blob/core pack 存在但 R2 缺失、R2 对象无 D1 记录。
-
-当前落地：
-
-- 新增受保护的一致性检查 API：抽样检查 D1 指向的 R2 对象是否存在、大小是否匹配，并扫描 R2 样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`；调用授权见统一基线。
-- 新增受保护的 GC dry-run API：作为清理预演只报告候选对象，不执行删除；调用授权见统一基线。
-- MVP 的可清理候选定义为：`status IN ('active', 'purging')`、超过宽限期、且没有任何归档对象引用的 blob/core pack；blob 还需确认未被资料库媒体字段引用。`purging` 只表示临时 GC reservation。
-- 新增高危 GC sweep API：必须显式提交 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用对象；默认每类最多清理 1000 个超过 7 天的对象，手动执行时可指定 `graceDays = 0` 立即清理。sweep 会删除 R2 blob/core pack，并把 D1 对象状态改为 `purged`；失败对象恢复 `active`。调用授权只见统一基线。
-- 新增 Cloudflare Scheduled handler：staging/prod 统一每天 UTC 19:17（香港时间 03:17）自动执行一次 7 天 GC sweep，每类最多清理 1000 个对象，并写入 `auth_audit_logs`。
-- 新增 `/admin/archive-versions` 归档维护页，支持 ArchiveVersion 删除、设为 current，并提供 `/admin/archive-versions/trash` 回收站列表用于还原。
-- ArchiveVersion 删除会自动维护同一 Work 的 current，不会立即删除 blob、core pack 或 manifest。
-- ArchiveVersion 最终清理后会删除 manifest R2 对象和文件引用；对应 blob/core pack 如无其他引用，会在同一轮或后续 GC sweep 中清理。
-- 用户管理页提供账户状态维护；授权、层级检查和 session 撤销语义只见统一基线。
-- 新增 `/admin/audit` 审计页；访问边界见统一基线。
-
-### Phase 6：EasyRPG 在线游玩
-
-目标：用户可以把已归档游戏安装到浏览器本地，并通过 EasyRPG Web Player 在线游玩。
-
-任务：
-
-- 自托管 EasyRPG Web Player runtime，固定 `easyrpg_runtime_version`。
-- 实现 `/play/{archiveVersionId}` 在线游玩页。
-- 实现 `GET /api/archive-versions/{archiveVersionId}/web-play`，返回下载 URL、版本键、预计安装大小和 Maniacs Patch 可用性。
-- Web Worker 使用现有下载 ZIP URL 拉取 ZIP，并显示下载进度。
-- Web Worker 下载 ZIP，顺序解析 local file header，跳过 `.txt`、`.exe`、`.dll` 文件，追加写入 OPFS pack，生成 EasyRPG `index.json` 和 `pack-index.json`。
-- IndexedDB 记录安装状态、版本键、文件清单、进度、错误和最后游玩时间。MVP 将刷新或崩溃遗留的 `installing` 状态视为中断安装，并要求用户清理重装；跨标签页强锁后续再补。
-- Service Worker 拦截 `/play/games/{playKey}/...`，从 OPFS pack 切片返回文件。
-- UI 提供安装中拦截关闭、安装失败清理、删除本地缓存、重新安装和日志面板；游戏启动中或运行中禁用删除本地缓存和重新安装。
-- `works.uses_maniacs_patch = true` 的作品 MVP 不展示在线游玩入口。
-- 存档继续由 EasyRPG/Emscripten IDBFS 维护；资源缓存删除不默认删除存档。
-
-验收：
-
-- Web Play 下载 ZIP 与普通下载使用同一 cache key；边缘缓存命中时不增加 R2 Get。
-- 安装完成后刷新页面，不请求云端即可启动已安装游戏。
-- OPFS 中存在 Web Play 运行目录、生成的 `index.json`、`pack-index.json` 和少量 `packs/*.pack`；pack 索引不包含 `.txt`、`.exe`、`.dll` 文件，也不保存完整 ZIP。
-- 浏览器崩溃或关闭后，未完成安装可清理或继续。
-- 已知未使用 Maniacs Patch 的样本游戏可以启动并游玩。
-- 使用 Maniacs Patch 的作品只显示下载，不显示在线游玩。
-- EasyRPG 资源索引包含图像和音频资源的去扩展名别名；Service Worker 对非法路径和缺失文件返回明确错误，并把问题写入页面日志。
-
-## 18. 技术选择建议
-
-### 18.1 Hash
-
-- 浏览器：Web Crypto `crypto.subtle.digest('SHA-256', data)`。
-- Worker：优先使用 Web Crypto 或流式 digest。
-- Node 本地导入脚本：`crypto.createHash('sha256')`。
-
-### 18.2 ZIP
-
-候选库：
-
-- `fflate`：轻量，浏览器和 Worker 都可用。
-- `zip.js`：功能较完整，适合处理编码和流。
-
-建议：
-
-- 导入 ZIP 时只在浏览器端读取、解包和预索引，不上传完整 ZIP。
-- Core pack 优先在浏览器生成，使用 ZIP 低压缩等级，Worker 负责校验和入库。
-- Worker 在线重组 ZIP 时选择支持 streaming 的库。
-- 初版不要追求高压缩率。
-
-### 18.3 OpenNext 路由
-
-建议结构：
-
-```text
-app/
-  api/
-    imports/
-    blobs/
-    core-packs/
-    works/
-    archive-versions/
-    downloads/
-```
-
-R2/D1 bindings 通过 Cloudflare 环境注入。服务层封装：
-
-```text
-lib/server/storage/blob-store.ts
-lib/server/storage/core-pack-store.ts
-lib/server/storage/manifest-store.ts
-lib/server/db/works.ts
-lib/server/db/archive-versions.ts
-lib/server/db/blobs.ts
-lib/server/db/core-packs.ts
-lib/server/import/manifest.ts
-lib/server/import/core-pack.ts
-lib/server/download/zip-builder.ts
-```
-
-### 18.4 浏览器本地存储和 EasyRPG
-
-- 游戏文件安装目录使用 OPFS，表达“本站私有的 Web Play 运行目录”；该目录以 `pack-index.json + packs/*.pack` 保存资源切片，跳过 `.txt`、`.exe`、`.dll` 文件，普通下载 ZIP 仍保留这些文件。
-- 安装状态、进度和文件清单使用 IndexedDB。
-- EasyRPG 存档沿用 Emscripten IDBFS。
-- Cache API 不作为游戏文件主存储，只用于 EasyRPG runtime 壳资源缓存或 fallback。
-- EasyRPG Web Player runtime 放在同源静态目录，版本化发布，不引用跨域官方播放器。
-
-## 19. 风险和应对
-
-### 19.1 D1 写入大量文件索引较慢
-
-应对：
-
-- 分 chunk commit。
-- 每个请求写 200 到 500 个文件。
-- 使用 import job 状态追踪。
-
-### 19.2 单次下载文件数超过 Worker subrequest 限制
-
-应对：
-
-- 导入阶段不设置固定文件数或大小上限，但必须保存每个版本的预计 R2 Get 次数和白名单内文件数量。
-- 核心文件通过 core pack 合并读取。
-- 实时下载前做成本预估；接近 Worker subrequest 或 CPU 风险时，改为异步下载/排队流程。
-- 热门或大型版本优先提高 Workers Cache/CDN 边缘缓存命中率，并根据日志评估是否需要调整 core pack 或后续引入额外打包层；不使用完整 ZIP R2 缓存。
-
-### 19.3 路径编码导致游戏无法运行
-
-应对：
-
-- 初版先用真实样本分析非 UTF-8 ZIP 文件名，再决定是否启用 `path_bytes_b64`。
-- 内部始终保存规范化 UTF-8 路径。
-- 对乱码路径或仅大小写不同的路径进入人工确认。
-
-### 19.4 ZIP 重组 CPU 过高
-
-应对：
-
-- 默认 STORE。
-- 最终 ZIP 写入采用 streaming；core pack 在 MVP 可基于实测小体积整包解压，规模扩大前应改为 entry streaming 或调整 core pack 粒度。
-- 热门版本优先命中 Workers Cache/CDN 边缘缓存。
-- 大型版本进入异步下载/排队流程，必要时提示管理员优化打包策略。
-
-### 19.5 Core pack 粒度导致跨版本重复存储
-
-应对：
-
-- 固定接受“每个 ArchiveVersion 一个 core pack”的重复，换取实现简单和下载读操作更少。
-- Phase 0 统计多版本核心文件重复率。
-- 初版不支持按类型或地图编号范围分组。
-
-### 19.6 Core pack 损坏影响整个版本核心文件
-
-应对：
-
-- 上传时校验 core pack SHA-256、文件数量、未压缩大小和 entry 列表。
-- 发布前做一次重建 ZIP dry-run。
-- 后台定期抽样校验 core pack 与 manifest 是否一致。
-
-### 19.7 误删共享 blob 或 core pack
-
-应对：
-
-- 删除先进入回收站。
-- GC 使用 mark-and-sweep。
-- 自动 GC 使用 7 天宽限期；手动 GC 可设为 0 天即时清理零引用对象。
-- GC 前生成 dry-run 报告。
-
-### 19.8 浏览器本地存储被清理或空间不足
-
-应对：
-
-- 安装前展示 `navigator.storage.estimate()` 的已用空间和估算额度。
-- 安装前由页面主线程调用 `navigator.storage.persist()` 请求持久化存储，并把结果展示给用户和安装 Worker。
-- 安装状态保存在 IndexedDB，OPFS 只保存文件本体；空间不足时能明确进入 `failed` 状态。
-- 本地缓存管理页提供删除和重装。
-- 本地安装不是 canonical 数据，浏览器清理后可重新从下载 ZIP 安装。
-
-### 19.9 EasyRPG 兼容性不足
-
-应对：
-
-- MVP 通过 `works.uses_maniacs_patch` 控制入口；使用 Maniacs Patch 的作品不展示在线游玩。
-- 不单独维护 Web Play 可玩性表，避免和引擎兼容性字段重复。
-- 在线游玩页提供前端日志面板，缺失文件和 EasyRPG console 输出可复制。
-- 下载仍是主交付形态；在线游玩是附加体验。
-
-## 20. 已固定决策
-
-### 20.1 已确认
-
-- 运行时文件完整保留：`RPG_RT.exe` 和 DLL 作为普通独立 blob，不做额外运行时策略；`RPG_RT.ini` 进入 core pack。
-- 用户、角色、上传资格申请和 permission key 以统一认证授权基线为唯一决策源。
-- 规模限制：不设置固定的单游戏文件数或大小硬上限；通过强制白名单、导入队列、分块提交、下载成本预估、边缘缓存、下载排队和运营限流控制风险。
-- 文件类型策略：使用单一强制白名单，白名单外文件不进入 canonical manifest；每次导入记录 `file_policy_version` 和排除统计。
-- 导入方式：只支持浏览器预索引；本地 ZIP 可以被浏览器读取和索引，但完整 ZIP 不能上传到 Worker/R2，也不能作为临时对象进入 R2。
-- 完整游戏下载 ZIP：R2 不保存任何完整游戏 ZIP；最终 ZIP 只能作为响应流或可丢弃的 Workers Cache/CDN 边缘缓存存在。
-- 在线游玩 ZIP：Web Play 复用完整游戏下载 ZIP，不生成排除 `exe` / DLL 的专用包；浏览器解包完成后丢弃 ZIP。
-- 在线游玩本地存储：游戏文件本体使用 OPFS，安装状态和文件清单使用 IndexedDB，EasyRPG 存档沿用 IDBFS。
-- 在线游玩入口：`works.uses_maniacs_patch = true` 的作品 MVP 不展示在线游玩，只保留下载。
-- Canonical 数据：长期数据只保留 manifest、blob、core pack 和元数据。
-- 版本策略：完全不做差量发布或版本继承；多个 ArchiveVersion 直接归属于同一 Work，详见游戏领域架构设计。
-- Core pack 粒度：每个 ArchiveVersion 固定一个 core pack，不做按类型或地图编号范围分组。
-- Core pack 压缩：使用 ZIP 低压缩等级。
-- 检索元数据：上传时填写原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、是否使用 Maniacs Patch、ArchiveVersion 归档标识、来源、可执行入口、是否校对、是否修图。
-- 补充元数据：引擎版本、来源链接/出处、发布状态、可执行入口、版权/授权备注。
-- 自动元数据：上传者和上传时间由系统生成。
-
-### 20.2 暂缓决策
-
-- 非 UTF-8 ZIP 文件名的原字节级重建暂缓；最小实现阶段先用真实样本分析，再决定是否启用 `path_bytes_b64`。
-
-## 21. 最小实现建议
-
-如果要尽快开始，建议按以下顺序做：
-
-1. 写一个本地扫描脚本，对现有样本游戏计算 SHA-256，先确认真实去重率。
-2. 用真实样本检查路径编码，决定最小实现是否需要写入 `path_bytes_b64`。
-3. 建 D1 schema、R2 blob key 和 core pack key 规则。
-4. 接入统一认证授权基线，不在存储模块实现角色推导或重复写服务。
-5. 做导入页面，支持“文件夹/本地 ZIP + 浏览器预索引”，并执行强制白名单；完整 ZIP 不上传到 Worker/R2。
-6. 上传表单写入完整检索元数据，服务端自动记录上传者和上传时间。
-7. 导入时记录白名单外文件类型汇总、排除大小、示例路径和 `file_policy_version`。
-8. 导入时生成一个 ArchiveVersion 级 core pack，并写入 manifest。
-9. 做 manifest 写入和游戏详情页。
-10. 做下载重组，并在下载前估算 R2 Get 次数。
-11. 对大型或热门版本实现 Workers Cache/CDN 边缘缓存命中统计、预热和下载排队。
-12. 统计 core pack 后的实际 Class B 读取次数，并根据下载日志调整缓存策略。
-13. 自托管 EasyRPG Web Player runtime，并实现 `/play/{archiveVersionId}` 在线游玩页。
-14. 实现 Web Worker ZIP Bootstrap、OPFS 安装、IndexedDB 安装状态和 Service Worker OPFS 文件桥。
-15. 用未使用 Maniacs Patch 的真实样本验证刷新后本地启动、缓存删除重装和缺失文件日志。
-
-这条路线的优点是：先验证是否真的省空间，再逐步把复杂度加上去，不会一开始就陷入 ZIP 编码、后台任务和缓存策略的细节。
-
-## 22. 参考链接
-
-- Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
+- Cloudflare R2: https://developers.cloudflare.com/r2/
 - Cloudflare Workers limits: https://developers.cloudflare.com/workers/platform/limits/
-- Cloudflare Workers Cache API: https://developers.cloudflare.com/workers/runtime-apis/cache/
-- Cloudflare D1 limits: https://developers.cloudflare.com/d1/platform/limits/
-- Cloudflare Turnstile server-side validation: https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
-- Cloudflare Email Service Workers API: https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
-- Cloudflare Workers Rate Limiting binding: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
-- EasyRPG Web Player: https://easyrpg.org/player/guide/webplayer/
-- MDN OPFS / StorageManager.getDirectory: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/getDirectory
-- MDN Storage quotas and eviction criteria: https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
-- MDN StorageManager.persist: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
+- ZIP APPNOTE: https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+- Web Crypto `SubtleCrypto.digest`: https://developer.mozilla.org/docs/Web/API/SubtleCrypto/digest

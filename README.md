@@ -90,4 +90,4 @@ npm run deploy
 - `migrations/`：D1 schema migration
 - `public/play/`：EasyRPG Web Player 运行时
 - `scripts/`：本地数据库、种子数据、构建和 smoke test 脚本
-- `docs/`：架构、部署和问题修正文档
+- `docs/`：产品、领域、存储、部署和运行手册
