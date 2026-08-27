@@ -45,7 +45,6 @@ export default async function AdminTagsPage() {
             <tr key={tag.id}>
               <td>
                 <strong>{tag.name}</strong>
-                <span className="font-mono text-sm text-primary text-sm text-muted">{tag.slug}</span>
               </td>
               <td>{namespaceLabel(tag.namespace)}</td>
               <td>
@@ -59,7 +58,7 @@ export default async function AdminTagsPage() {
                   {tag.workCount > 0 ? (
                     <Link
                       className={buttonVariants({ variant: "outline" })}
-                      href={`/games?tag=${encodeURIComponent(tag.slug)}`}
+                      href={`/games?tag=${tag.id}`}
                     >
                       查看作品
                     </Link>

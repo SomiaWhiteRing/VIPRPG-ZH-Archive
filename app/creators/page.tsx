@@ -63,7 +63,7 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
   return (
     <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
-        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/creators/${creator.slug}`}>
+        <Link className="text-lg font-bold text-primary hover:text-accent" href={`/creators/${creator.id}`}>
           {creator.name}
         </Link>
         {creator.originalName ? <span className="text-sm text-muted">{creator.originalName}</span> : null}

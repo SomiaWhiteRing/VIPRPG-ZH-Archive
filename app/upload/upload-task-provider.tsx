@@ -257,7 +257,7 @@ function UploadFloatingDock({
               {task.result ? (
                 <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-800 text-sm">
                   游戏已入库，归档快照 #{task.result.archiveVersionId} 已处理。{" "}
-                  <a className="font-bold underline" href={`/games/${task.result.workSlug}#relations`}>补充关联</a>
+                  <a className="font-bold underline" href={`/games/${task.result.workId}#relations`}>补充关联</a>
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center gap-3">

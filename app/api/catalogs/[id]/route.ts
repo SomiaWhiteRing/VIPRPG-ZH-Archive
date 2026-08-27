@@ -17,7 +17,6 @@ export async function PATCH(
     const body = (await readJsonObject(request, "Invalid catalog body")) as {
       title?: string;
       description?: string | null;
-      slug?: string | null;
     };
     return json({
       ok: true,

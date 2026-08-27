@@ -48,7 +48,6 @@ export default async function AdminCreatorsPage() {
               <td>
                 <strong>{creator.name}</strong>
                 {creator.originalName ? <span className="text-sm text-muted">{creator.originalName}</span> : null}
-                <span className="font-mono text-sm text-primary text-sm text-muted">{creator.slug}</span>
               </td>
               <td>
                 {formatNumber(creator.workCreditCount)} 个游戏
@@ -70,7 +69,7 @@ export default async function AdminCreatorsPage() {
                   <Link className={buttonVariants()} href={`/admin/creators/${creator.id}`}>
                     编辑
                   </Link>
-                  <Link className={buttonVariants({ variant: "outline" })} href={`/creators/${creator.slug}`}>
+                  <Link className={buttonVariants({ variant: "outline" })} href={`/creators/${creator.id}`}>
                     公开页
                   </Link>
                 </div>

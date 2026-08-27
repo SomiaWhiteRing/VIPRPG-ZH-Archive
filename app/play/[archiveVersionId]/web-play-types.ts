@@ -5,7 +5,6 @@ export type WebPlayMetadata = {
   title: string;
   originalTitle: string;
   chineseTitle: string | null;
-  workSlug: string;
   archiveLabel: string;
   manifestSha256: string;
   downloadZipBuilderVersion: string;

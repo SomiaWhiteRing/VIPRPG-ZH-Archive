@@ -9,7 +9,7 @@ export function HomeGameCard({ work }: { work: GameWorkSummary }) {
   return (
     <Link
       className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-foreground shadow-sm transition hover:-translate-y-1 hover:shadow-surface"
-      href={`/games/${work.slug}`}
+      href={`/games/${work.id}`}
     >
       <div className="grid aspect-video place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
@@ -49,7 +49,7 @@ export function HomeGameCard({ work }: { work: GameWorkSummary }) {
           {work.tags.slice(0, 2).map((tag) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
-              key={tag.slug}
+              key={tag.id}
             >
               {tag.name}
             </span>

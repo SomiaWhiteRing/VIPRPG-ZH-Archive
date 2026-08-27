@@ -1,8 +1,8 @@
 import { getD1 } from "@/lib/server/db/d1";
+import { normalizeEntityName } from "@/lib/entity-name";
 
 export type PublicCharacterSummary = {
   id: number;
-  slug: string;
   primaryName: string;
   originalName: string | null;
   description: string | null;
@@ -14,7 +14,6 @@ export type AdminCharacterEdit = PublicCharacterSummary & {
 };
 export type PublicTagSummary = {
   id: number;
-  slug: string;
   name: string;
   namespace: string;
   description: string | null;
@@ -24,7 +23,6 @@ export type PublicTagSummary = {
 export type AdminTagEdit = PublicTagSummary;
 type CharacterRow = {
   id: number;
-  slug: string;
   primary_name: string;
   original_name: string | null;
   description: string | null;
@@ -34,7 +32,6 @@ type CharacterRow = {
 };
 type TagRow = {
   id: number;
-  slug: string;
   name: string;
   namespace: string;
   description: string | null;
@@ -63,9 +60,9 @@ export async function listPublicCharacters(
   return (rows.results ?? []).map(mapCharacter);
 }
 export async function getPublicCharacterSummary(
-  slug: string,
+  id: number,
 ): Promise<PublicCharacterSummary | null> {
-  return getCharacter(slug, false);
+  return getCharacter(id, false);
 }
 export async function listCharactersForAdmin(
   limit = 300,
@@ -96,12 +93,13 @@ export async function updateCharacterForAdmin(input: {
   primaryName: string;
   originalName: string | null;
   description: string | null;
-  mergeTargetSlug: string | null;
+  mergeTargetId: number | null;
 }): Promise<AdminCharacterEdit> {
-  if (!input.primaryName.trim()) throw new Error("角色名不能为空");
-  if (input.mergeTargetSlug) {
-    await mergeCharacter(input.characterId, input.mergeTargetSlug);
-    const target = await getCharacterBySlug(input.mergeTargetSlug, true);
+  const primaryName = normalizeEntityName(input.primaryName);
+  if (!primaryName) throw new Error("角色名不能为空");
+  if (input.mergeTargetId) {
+    await mergeCharacter(input.characterId, input.mergeTargetId);
+    const target = await getCharacterById(input.mergeTargetId, true);
     if (!target) throw new Error("合并目标不存在");
     return target;
   }
@@ -110,7 +108,7 @@ export async function updateCharacterForAdmin(input: {
       `UPDATE characters SET primary_name=?,original_name=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
     .bind(
-      input.primaryName.trim(),
+      primaryName,
       input.originalName,
       input.description,
       input.characterId,
@@ -129,7 +127,7 @@ export function parseCharacterEditForm(
     primaryName: String(form.get("primary_name") ?? ""),
     originalName: clean(form.get("original_name")),
     description: clean(form.get("description")),
-    mergeTargetSlug: clean(form.get("merge_target_slug")),
+    mergeTargetId: positive(form.get("merge_target_id")),
   };
 }
 
@@ -142,8 +140,8 @@ export async function listPublicTags(
   ];
   if (input.query?.trim()) {
     const q = `%${input.query.trim()}%`;
-    where.push("(t.name LIKE ? OR t.slug LIKE ?)");
-    binds.push(q, q);
+    where.push("t.name LIKE ?");
+    binds.push(q);
   }
   const rows = await getD1()
     .prepare(
@@ -154,9 +152,9 @@ export async function listPublicTags(
   return (rows.results ?? []).map(mapTag);
 }
 export async function getPublicTagSummary(
-  slug: string,
+  id: number,
 ): Promise<PublicTagSummary | null> {
-  const tag = await getTagBySlug(slug, false);
+  const tag = await getTagById(id, false);
   return tag && tag.workCount > 0 ? tag : null;
 }
 export async function listTagsForAdmin(
@@ -184,18 +182,19 @@ export async function updateTagForAdmin(input: {
   name: string;
   namespace: string;
   description: string | null;
-  mergeTargetSlug: string | null;
+  mergeTargetId: number | null;
 }): Promise<AdminTagEdit> {
-  if (!input.name.trim()) throw new Error("标签名不能为空");
+  const name = normalizeEntityName(input.name);
+  if (!name) throw new Error("标签名不能为空");
   if (
     !["genre", "theme", "character", "technical", "content", "other"].includes(
       input.namespace,
     )
   )
     throw new Error("标签命名空间不合法");
-  if (input.mergeTargetSlug) {
-    await mergeTag(input.tagId, input.mergeTargetSlug);
-    const target = await getTagBySlug(input.mergeTargetSlug, true);
+  if (input.mergeTargetId) {
+    await mergeTag(input.tagId, input.mergeTargetId);
+    const target = await getTagById(input.mergeTargetId, true);
     if (!target) throw new Error("合并目标不存在");
     return target;
   }
@@ -203,7 +202,7 @@ export async function updateTagForAdmin(input: {
     .prepare(
       `UPDATE tags SET name=?,namespace=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
-    .bind(input.name.trim(), input.namespace, input.description, input.tagId)
+    .bind(name, input.namespace, input.description, input.tagId)
     .run();
   const updated = await getTagForAdminEdit(input.tagId);
   if (!updated) throw new Error("标签更新后不可读取");
@@ -217,51 +216,51 @@ export function parseTagEditForm(
     name: String(form.get("name") ?? ""),
     namespace: String(form.get("namespace") ?? "other"),
     description: clean(form.get("description")),
-    mergeTargetSlug: clean(form.get("merge_target_slug")),
+    mergeTargetId: positive(form.get("merge_target_id")),
   };
 }
 
 async function getCharacter(
-  slug: string,
+  id: number,
   includeNonPublic: boolean,
 ): Promise<PublicCharacterSummary | null> {
   const row = await getD1()
-    .prepare(`${characterSql()} FROM characters ch WHERE ch.slug=? LIMIT 1`)
-    .bind(slug)
+    .prepare(`${characterSql()} FROM characters ch WHERE ch.id=? LIMIT 1`)
+    .bind(id)
     .first<CharacterRow>();
   if (!row) return null;
   if (!includeNonPublic && row.work_count === 0) return null;
   return mapCharacter(row);
 }
-async function getCharacterBySlug(
-  slug: string,
+async function getCharacterById(
+  id: number,
   includeNonPublic: boolean,
 ): Promise<AdminCharacterEdit | null> {
   const row = await getD1()
     .prepare(
-      `${characterSql()},ch.extra_json FROM characters ch WHERE ch.slug=? LIMIT 1`,
+      `${characterSql()},ch.extra_json FROM characters ch WHERE ch.id=? LIMIT 1`,
     )
-    .bind(slug)
+    .bind(id)
     .first<CharacterRow>();
   if (!row) return null;
   if (!includeNonPublic && row.work_count === 0) return null;
   return { ...mapCharacter(row), extra: parseExtra(row.extra_json) };
 }
-async function getTagBySlug(
-  slug: string,
+async function getTagById(
+  id: number,
   includeNonPublic: boolean,
 ): Promise<PublicTagSummary | null> {
   const row = await getD1()
-    .prepare(`${tagSql()} FROM tags t WHERE t.slug=? LIMIT 1`)
-    .bind(slug)
+    .prepare(`${tagSql()} FROM tags t WHERE t.id=? LIMIT 1`)
+    .bind(id)
     .first<TagRow>();
   if (!row || (!includeNonPublic && row.work_count === 0)) return null;
   return mapTag(row);
 }
-async function mergeCharacter(id: number, targetSlug: string): Promise<void> {
+async function mergeCharacter(id: number, targetId: number): Promise<void> {
   const target = await getD1()
-    .prepare(`SELECT id FROM characters WHERE slug=? LIMIT 1`)
-    .bind(targetSlug)
+    .prepare(`SELECT id FROM characters WHERE id=? LIMIT 1`)
+    .bind(targetId)
     .first<{ id: number }>();
   if (!target || target.id === id) throw new Error("角色合并目标不合法");
   const database = getD1();
@@ -277,10 +276,10 @@ async function mergeCharacter(id: number, targetSlug: string): Promise<void> {
     database.prepare(`DELETE FROM characters WHERE id=?`).bind(id),
   ]);
 }
-async function mergeTag(id: number, targetSlug: string): Promise<void> {
+async function mergeTag(id: number, targetId: number): Promise<void> {
   const target = await getD1()
-    .prepare(`SELECT id FROM tags WHERE slug=? LIMIT 1`)
-    .bind(targetSlug)
+    .prepare(`SELECT id FROM tags WHERE id=? LIMIT 1`)
+    .bind(targetId)
     .first<{ id: number }>();
   if (!target || target.id === id) throw new Error("标签合并目标不合法");
   const database = getD1();
@@ -295,15 +294,14 @@ async function mergeTag(id: number, targetSlug: string): Promise<void> {
   ]);
 }
 function characterSql(): string {
-  return `SELECT ch.id,ch.slug,ch.primary_name,ch.original_name,ch.description,ch.extra_json,(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at`;
+  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at`;
 }
 function tagSql(): string {
-  return `SELECT t.id,t.slug,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published') AS work_count,t.updated_at`;
+  return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published') AS work_count,t.updated_at`;
 }
 function mapCharacter(row: CharacterRow): PublicCharacterSummary {
   return {
     id: row.id,
-    slug: row.slug,
     primaryName: row.primary_name,
     originalName: row.original_name,
     description: row.description,
@@ -314,7 +312,6 @@ function mapCharacter(row: CharacterRow): PublicCharacterSummary {
 function mapTag(row: TagRow): PublicTagSummary {
   return {
     id: row.id,
-    slug: row.slug,
     name: row.name,
     namespace: row.namespace,
     description: row.description,

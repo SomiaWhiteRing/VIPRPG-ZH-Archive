@@ -1,13 +1,11 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { getD1 } from "@/lib/server/db/d1";
 import { json, jsonError } from "@/lib/server/http/json";
-import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
 type WorkLookupRow = {
   id: number;
-  slug: string;
   original_title: string;
   chinese_title: string | null;
   alias_titles: string | null;
@@ -43,7 +41,6 @@ export async function GET(request: Request) {
       .prepare(
         `SELECT DISTINCT
           w.id,
-          w.slug,
           w.original_title,
           w.chinese_title,
           (
@@ -86,7 +83,6 @@ export async function GET(request: Request) {
             w.original_title LIKE ? ESCAPE '\\'
             OR w.chinese_title LIKE ? ESCAPE '\\'
             OR wt.title LIKE ? ESCAPE '\\'
-            OR w.slug = ?
           )
         ORDER BY
           CASE
@@ -108,7 +104,6 @@ export async function GET(request: Request) {
         like,
         like,
         like,
-        slugify(title),
         title,
         title,
         title,
@@ -120,7 +115,6 @@ export async function GET(request: Request) {
       ok: true,
       works: workRows.map((work) => ({
         id: work.id,
-        slug: work.slug,
         originalTitle: work.original_title,
         chineseTitle: work.chinese_title,
         aliases: splitAliases(work.alias_titles),

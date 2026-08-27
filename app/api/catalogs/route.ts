@@ -22,7 +22,6 @@ export async function POST(request: Request) {
     const body = (await readJsonObject(request, "Invalid catalog body")) as {
       title?: string;
       description?: string | null;
-      slug?: string | null;
     };
     return json(
       { ok: true, catalog: await createCatalog(body, auth.user) },

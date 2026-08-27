@@ -732,11 +732,11 @@ Phase 5 MVP 回补：
 任务：
 
 - 实现 `/games` 公开资料库列表，支持标题、别名、作者、标签、登场角色搜索，以及引擎、标签和登场角色筛选。
-- 实现 `/games/{slug}` 作品详情页，展示原名、中文名、别名、作者、标签、登场角色、外部链接、普通/翻译关联和归档下载/在线游玩入口。
+- 实现 `/games/{id}` 作品详情页，展示原名、中文名、别名、作者、标签、登场角色、外部链接、普通/翻译关联和归档下载/在线游玩入口。
 - 实现公开图片读取端点，用于作品缩略图和浏览图展示；公开引用链规则只见统一认证授权基线。
 - 实现 `/admin/works` 和 `/admin/works/{workId}`，用于维护 Work 层基础资料、别名、标签、登场角色和外部链接。
 - 实现 `/admin/archive-versions/{archiveVersionId}`，用于维护 ArchiveVersion 层资料：名称、来源、校对、修图和发布状态；manifest 和对象引用保持只读。
-- 实现 `/creators` 和 `/creators/{slug}`，公开展示作者和制作人员的资料及 Work 职务。
+- 实现 `/creators` 和 `/creators/{id}`，公开展示作者和制作人员的资料及 Work 职务。
 - 实现 `/admin/creators` 和 `/admin/creators/{creatorId}`，用于维护 creator 本体资料；职务关联第一版只读展示。
 - 实现 `/characters`、`/tags` 公开索引并连接到作品筛选；`/catalogs` 及其详情页展示人工编排顺序。
 - 实现 `/admin/characters`、`/admin/tags`，用于维护角色和标签本体资料，并支持合并。
@@ -749,25 +749,25 @@ Phase 5 MVP 回补：
 
 - 首页提供游戏资料库入口。
 - `/games` 能列出已发布作品，按标签文本或登场角色筛选后仍能进入详情页。
-- `/games/{slug}` 的下载按钮复用现有下载端点；未使用 Maniacs Patch 的归档显示在线游玩入口。
+- `/games/{id}` 的下载按钮复用现有下载端点；未使用 Maniacs Patch 的归档显示在线游玩入口。
 - 管理端可编辑作品中文名、简介、发布日期、引擎、Maniacs Patch 标记、状态、别名、标签、登场角色和外链。
 - 管理端可从作品编辑页进入 ArchiveVersion 编辑。
 - ArchiveVersion 编辑页按统一基线守卫，不在本文按角色名重复定义访问边界。
 - `/creators` 能列出已有公开 Work 关联的制作人员。
-- `/creators/{slug}` 能展示作者简介、个人链接、作品年表和参与记录。
+- `/creators/{id}` 能展示作者简介、个人链接、作品年表和参与记录。
 - Creator 管理页可编辑名称、原名、个人链接和简介；访问边界只见统一基线。
-- `/characters` 和 `/tags` 的条目能进入对应作品筛选；`/catalogs/{slug}` 能展示目录成员排序。
+- `/characters` 和 `/tags` 的条目能进入对应作品筛选；`/catalogs/{id}` 能展示目录成员排序。
 - 管理端可维护角色、标签和目录，并可在 Work 编辑页维护角色和相关作品关系；访问边界只见统一基线。
 
 当前落地：
 
 - 新增 `lib/server/db/game-library.ts`，集中处理资料库查询、详情聚合和 Work 编辑。
 - 新增 `/api/media/blobs/{sha256}`，按统一基线证明完整公开引用链后返回 `image/*` 内容，并设置长期 immutable 缓存。
-- 新增 `/games`、`/games/{slug}`、`/admin/works`、`/admin/works/{workId}` 和 `POST /api/admin/works/{workId}/update`。
+- 新增 `/games`、`/games/{id}`、`/admin/works`、`/admin/works/{workId}` 和 `POST /api/admin/works/{workId}/update`。
 - `/games` 现在支持独立标签文本搜索和登场角色筛选；登场角色使用 `characters` + `work_characters`，不会混入普通 `tags`。
 - 新增 `/admin/archive-versions/{archiveVersionId}` 和 `POST /api/admin/archive-versions/{archiveVersionId}/update`。
 - 新增 `lib/server/db/creator-library.ts`，集中处理 creator 公开查询、详情聚合和管理端编辑。
-- 新增 `/creators`、`/creators/{slug}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
+- 新增 `/creators`、`/creators/{id}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
 - 新增 `lib/server/db/taxonomy-library.ts`，集中处理角色和标签的公开查询、管理端编辑与合并。
 - 新增 `/characters`、`/tags`；角色和标签条目进入 `/games` 的对应筛选结果。
 - 新增 `/admin/characters`、`/admin/characters/{characterId}`、`/admin/tags`、`/admin/tags/{tagId}` 及对应管理 API。

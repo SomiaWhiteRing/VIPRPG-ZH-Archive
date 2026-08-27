@@ -9,9 +9,10 @@ import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
+import { SelectField } from "@/app/components/ui/select";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { getCharacterForAdminEdit } from "@/lib/server/db/taxonomy-library";
+import { getCharacterForAdminEdit, listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,10 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
   const { characterId: rawCharacterId } = await params;
   const characterId = parseId(rawCharacterId);
   const adminUser = await requirePagePermission(`/admin/characters/${characterId}`, "character.update");
-  const [character, unreadInboxCount] = await Promise.all([
+  const [character, unreadInboxCount, candidates] = await Promise.all([
     getCharacterForAdminEdit(characterId),
     countUnreadInboxItemsForUser(adminUser),
+    listCharactersForAdmin(),
   ]);
 
   if (!character) {
@@ -44,7 +46,7 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
             {character.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
-                href={`/games?character=${encodeURIComponent(character.slug)}`}
+                href={`/games?character=${character.id}`}
               >
                 查看作品
               </Link>
@@ -57,17 +59,14 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
       <ConfirmingForm
         action={`/api/admin/characters/${character.id}/update`}
         className="grid gap-4 grid gap-4"
-        confirmField="merge_target_slug"
+        confirmField="merge_target_id"
         method="post"
         title="确认合并并删除角色"
-        description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标 slug 正确。"
+        description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
       >
         <input name="character_id" type="hidden" value={character.id} />
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="不可修改" label="Slug">
-              <Input readOnly value={character.slug} />
-            </FormField>
             <FormField label="名称">
               <Input defaultValue={character.primaryName} name="primary_name" required />
             </FormField>
@@ -81,8 +80,16 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
         </Pane>
 
         <Pane heading="合并重复角色" tone="danger">
-          <FormField hint="提交后，登场关系会移至目标角色，当前角色会被删除。" label="目标角色 slug">
-            <Input name="merge_target_slug" placeholder="留空则不合并" />
+          <FormField hint="提交后，登场关系会移至目标角色，当前角色会被删除。" label="目标角色">
+            <SelectField
+              name="merge_target_id"
+              options={[
+                { value: "", label: "不合并" },
+                ...candidates
+                  .filter((candidate) => candidate.id !== character.id)
+                  .map((candidate) => ({ value: String(candidate.id), label: candidate.primaryName })),
+              ]}
+            />
           </FormField>
         </Pane>
 

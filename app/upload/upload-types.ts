@@ -85,7 +85,6 @@ export type UploadTaskStats = {
 
 export type UploadTaskCommitResult = {
   workId: number;
-  workSlug: string;
   archiveVersionId: number;
   manifestSha256: string;
   fileCount: number;

@@ -10,7 +10,7 @@ const database = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
 const password = process.env.DOMAIN_CHECK_PASSWORD || "dev123456789";
 const relationMarker = "domain-contract-self-check";
 const testOrder = 987_000_000 + (Date.now() % 100_000);
-const catalogSlug = `domain-contract-check-${process.pid}-${Date.now().toString(36)}`;
+const catalogTitle = `领域契约自检目录 ${process.pid}-${Date.now().toString(36)}`;
 const fixtureOriginalId = 900_000_000 + ((Date.now() + process.pid) % 100_000);
 const fixtureTranslationAId = fixtureOriginalId + 1;
 const fixtureTranslationBId = fixtureOriginalId + 2;
@@ -244,7 +244,7 @@ try {
     condition: `(SELECT GROUP_CONCAT(target_work_id, ',') FROM (SELECT target_work_id FROM translation_relations WHERE source_work_id=${fixtureOriginalId} AND vice_versa=0 ORDER BY relation_order,id)) = '${fixtureTranslationBId},${fixtureTranslationAId},${fixtureTranslationCId}'`,
   }]);
 
-  const detailResponse = await expectStatus("translation detail page", `/games/domain-check-original-${fixtureOriginalId}`, {}, 200);
+  const detailResponse = await expectStatus("translation detail page", `/games/${fixtureOriginalId}`, {}, 200);
   const detailHtml = await detailResponse.text();
   assert.match(detailHtml, /领域契约译本 A/, "first translation is shown");
   assert.match(detailHtml, /领域契约译本 B/, "parallel translation is shown");
@@ -306,7 +306,7 @@ try {
   const catalogResponse = await expectStatus(
     "catalog creation",
     "/api/catalogs",
-    jsonRequest({ slug: catalogSlug, title: "领域契约自检目录", description: "temporary domain contract check" }, uploaderCookie),
+    jsonRequest({ title: catalogTitle, description: "temporary domain contract check" }, uploaderCookie),
     201,
   );
   const catalogPayload = await catalogResponse.json();
@@ -325,7 +325,7 @@ try {
   await assertD1("catalog owner and ordering", [
     {
       name: "catalog owner",
-      condition: `(SELECT owner_user_id FROM catalogs WHERE id=${catalogId} AND slug='${catalogSlug}') = 3`,
+      condition: `(SELECT owner_user_id FROM catalogs WHERE id=${catalogId} AND title='${catalogTitle}') = 3`,
     },
     {
       name: "catalog sort order",
@@ -432,21 +432,21 @@ DROP TABLE IF EXISTS _domain_contract_assertions;
 DELETE FROM work_relations WHERE notes='${relationMarker}';
 DELETE FROM work_relations WHERE notes='${relationMarker}-reverse';
 DELETE FROM translation_relations WHERE created_by_user_id=3 AND ((source_work_id IN (${fixtureIds.join(",")}) AND target_work_id IN (${fixtureIds.join(",")})) OR relation_order IN (${testOrder},${testOrder + 1}));
-DELETE FROM catalogs WHERE owner_user_id=3 AND slug LIKE 'domain-contract-check-%';
-DELETE FROM works WHERE created_by_user_id=3 AND slug LIKE 'domain-check-%';
+DELETE FROM catalogs WHERE owner_user_id=3 AND title LIKE '领域契约自检目录 %';
+DELETE FROM works WHERE created_by_user_id=3 AND original_title LIKE 'Domain Contract %';
 DELETE FROM works WHERE id IN (${fixtureIds.join(",")});
 `, "cleanup domain contract state");
 }
 
 async function createTranslationFixture() {
   await executeLocalSql(`
-INSERT INTO works (id,slug,original_title,chinese_title,sort_title,is_original,language,status,created_by_user_id,published_at)
+INSERT INTO works (id,original_title,chinese_title,sort_title,is_original,language,status,created_by_user_id,published_at)
 VALUES
-  (${fixtureOriginalId},'domain-check-original-${fixtureOriginalId}','Domain Contract Original','领域契约原版','领域契约原版',0,'ja','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationAId},'domain-check-translation-a-${fixtureOriginalId}','Domain Contract Translation A','领域契约译本 A','领域契约译本 A',0,'zh-CN','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationBId},'domain-check-translation-b-${fixtureOriginalId}','Domain Contract Translation B','领域契约译本 B','领域契约译本 B',0,'en','published',3,CURRENT_TIMESTAMP),
-  (${fixtureOriginalBId},'domain-check-original-b-${fixtureOriginalId}','Domain Contract Original B','领域契约原版 B','领域契约原版 B',0,'ja','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationCId},'domain-check-translation-c-${fixtureOriginalId}','Domain Contract Translation C','领域契约译本 C','领域契约译本 C',0,'ko','published',3,CURRENT_TIMESTAMP);
+  (${fixtureOriginalId},'Domain Contract Original','领域契约原版','领域契约原版',0,'ja','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationAId},'Domain Contract Translation A','领域契约译本 A','领域契约译本 A',0,'zh-CN','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationBId},'Domain Contract Translation B','领域契约译本 B','领域契约译本 B',0,'en','published',3,CURRENT_TIMESTAMP),
+  (${fixtureOriginalBId},'Domain Contract Original B','领域契约原版 B','领域契约原版 B',0,'ja','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationCId},'Domain Contract Translation C','领域契约译本 C','领域契约译本 C',0,'ko','published',3,CURRENT_TIMESTAMP);
 INSERT INTO work_uploaders (work_id,user_id) VALUES
   (${fixtureOriginalId},3),(${fixtureTranslationAId},3),(${fixtureTranslationBId},3),(${fixtureOriginalBId},3),(${fixtureTranslationCId},3);
 `, "create translation fixture");

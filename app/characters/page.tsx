@@ -65,7 +65,7 @@ function CharacterCard({ character }: { character: PublicCharacterSummary }) {
       <div>
         <Link
           className="text-lg font-bold text-primary hover:text-accent"
-          href={`/games?character=${encodeURIComponent(character.slug)}`}
+          href={`/games?character=${character.id}`}
         >
           {character.primaryName}
         </Link>

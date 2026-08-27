@@ -237,7 +237,6 @@ CREATE INDEX IF NOT EXISTS idx_user_role_events_actor
 
 CREATE TABLE IF NOT EXISTS works (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
   original_title TEXT NOT NULL,
   chinese_title TEXT,
   sort_title TEXT,
@@ -461,7 +460,6 @@ END;
 CREATE TABLE IF NOT EXISTS catalogs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL CHECK (status IN ('published', 'deleted')) DEFAULT 'published',
@@ -639,8 +637,7 @@ CREATE INDEX IF NOT EXISTS idx_archive_version_core_pack_refs_core_pack
 
 CREATE TABLE IF NOT EXISTS characters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  primary_name TEXT NOT NULL,
+  primary_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   original_name TEXT,
   description TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
@@ -662,8 +659,7 @@ CREATE TABLE IF NOT EXISTS work_characters (
 
 CREATE TABLE IF NOT EXISTS creators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   original_name TEXT,
   website_url TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
@@ -684,8 +680,7 @@ CREATE TABLE IF NOT EXISTS work_staff (
 
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
   namespace TEXT NOT NULL CHECK (
     namespace IN ('genre', 'theme', 'character', 'technical', 'content', 'other')
   ) DEFAULT 'other',

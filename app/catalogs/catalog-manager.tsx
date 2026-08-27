@@ -34,7 +34,7 @@ export function CatalogCreateForm() {
         setMessage(body.detail ?? "目录创建失败。");
         return;
       }
-      router.push(`/catalogs/${body.catalog.slug}`);
+      router.push(`/catalogs/${body.catalog.id}`);
     } catch {
       setMessage("网络请求失败。");
     } finally {
@@ -179,7 +179,6 @@ export function CatalogSummaryEditor({
 
 export type CatalogItemDraft = {
   workId: number;
-  slug: string;
   title: string;
   note: string | null;
 };
@@ -197,7 +196,6 @@ export function CatalogItemsEditor({
   const [candidates, setCandidates] = useState<
     Array<{
       id: number;
-      slug: string;
       originalTitle: string;
       chineseTitle: string | null;
     }>
@@ -226,7 +224,6 @@ export function CatalogItemsEditor({
       ...current,
       {
         workId: candidate.id,
-        slug: candidate.slug,
         title: candidate.chineseTitle || candidate.originalTitle,
         note: null,
       },
@@ -314,7 +311,7 @@ export function CatalogItemsEditor({
               {index + 1}
             </span>
             <span className="min-w-0 flex-1">
-              <a href={`/games/${item.slug}`}>{item.title}</a>
+              <a href={`/games/${item.workId}`}>{item.title}</a>
             </span>
             <Input
               aria-label={`${item.title}备注`}

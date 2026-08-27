@@ -14,7 +14,7 @@ import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getWorkForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
-import { RelationEditor } from "@/app/games/[slug]/relation-editor";
+import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import { AdminLanguageField } from "../language-field";
 
 export const dynamic = "force-dynamic";
@@ -56,9 +56,6 @@ export default async function AdminWorkEditPage({
           <div className="grid gap-4 md:grid-cols-2">
             <FormField hint="不可修改" label="原名">
               <Input readOnly value={work.originalTitle} />
-            </FormField>
-            <FormField hint="不可修改" label="Slug">
-              <Input readOnly value={work.slug} />
             </FormField>
             <FormField label="中文名">
               <Input
@@ -210,7 +207,7 @@ export default async function AdminWorkEditPage({
           {work.status === "published" ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
-              href={`/games/${work.slug}`}
+              href={`/games/${work.id}`}
             >
               查看公开页
             </Link>

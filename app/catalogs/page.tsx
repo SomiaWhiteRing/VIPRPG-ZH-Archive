@@ -31,7 +31,7 @@ export default async function CatalogsPage() {
             >
               <Link
                 className="text-lg font-bold"
-                href={`/catalogs/${catalog.slug}`}
+                href={`/catalogs/${catalog.id}`}
               >
                 {catalog.title}
               </Link>

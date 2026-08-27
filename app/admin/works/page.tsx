@@ -48,7 +48,6 @@ export default async function AdminWorksPage() {
               <td>
                 <strong>{work.chineseTitle || work.originalTitle}</strong>
                 {work.chineseTitle ? <span className="text-sm text-muted">{work.originalTitle}</span> : null}
-                <span className="font-mono text-sm text-primary text-sm text-muted">{work.slug}</span>
               </td>
               <td>
                 <StatusBadge kind="publication" value={work.status} />
@@ -71,7 +70,7 @@ export default async function AdminWorksPage() {
                     编辑
                   </Link>
                   {work.status === "published" ? (
-                    <Link className={buttonVariants({ variant: "outline" })} href={`/games/${work.slug}`}>
+                    <Link className={buttonVariants({ variant: "outline" })} href={`/games/${work.id}`}>
                       查看公开页
                     </Link>
                   ) : null}

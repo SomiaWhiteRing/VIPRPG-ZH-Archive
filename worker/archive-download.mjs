@@ -1,7 +1,7 @@
 import { unzipSync } from "fflate";
 
 const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
-const manifestSchema = "viprpg-archive.manifest.v2";
+const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
 const localFileHeaderSignature = 0x04034b50;
 const centralDirectorySignature = 0x02014b50;
@@ -148,7 +148,7 @@ async function getDownloadRecord(db, archiveVersionId) {
         av.total_files,
         av.total_size_bytes,
         av.estimated_r2_get_count,
-        w.slug AS work_slug,
+        w.id AS work_id,
         w.original_title AS work_original_title,
         w.chinese_title AS work_chinese_title
       FROM archive_versions av

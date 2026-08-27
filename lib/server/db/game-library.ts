@@ -1,14 +1,14 @@
 import { isLanguageCode } from "@/lib/labels";
+import { normalizeEntityName } from "@/lib/entity-name";
 import { getD1 } from "@/lib/server/db/d1";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
 import { HttpError } from "@/lib/server/http/json";
-import { slugify } from "@/lib/slug";
 
-export type GameTag = { slug: string; name: string; namespace: string };
+export type GameTag = { id: number; name: string; namespace: string };
 export type GameCharacter = {
-  slug: string;
+  id: number;
   primaryName: string;
   originalName: string | null;
   roleKey: string;
@@ -17,7 +17,7 @@ export type GameCharacter = {
   notes: string | null;
 };
 export type GameCreatorCredit = {
-  slug: string;
+  id: number;
   name: string;
   originalName: string | null;
   websiteUrl: string | null;
@@ -57,7 +57,6 @@ export type GameWorkRelation = {
   relationType: string;
   notes: string | null;
   workId: number;
-  slug: string;
   title: string;
   relationOrder: number;
   viceVersa: boolean;
@@ -67,7 +66,6 @@ export type GameTranslationRelation = {
   id: number;
   role: "original" | "translation";
   workId: number;
-  slug: string;
   title: string;
   language: string;
   relationOrder: number;
@@ -75,7 +73,6 @@ export type GameTranslationRelation = {
 };
 export type GameWorkSummary = {
   id: number;
-  slug: string;
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
@@ -108,7 +105,6 @@ export type GameWorkDetail = GameWorkSummary & {
 };
 export type AdminWorkEdit = {
   id: number;
-  slug: string;
   originalTitle: string;
   chineseTitle: string | null;
   sortTitle: string | null;
@@ -136,7 +132,6 @@ export type AdminWorkEdit = {
 export type AdminArchiveVersionEdit = {
   id: number;
   workId: number;
-  workSlug: string;
   workTitle: string;
   archiveLabel: string;
   language: string;
@@ -167,8 +162,8 @@ export type AdminArchiveVersionEdit = {
 type Filters = {
   query?: string;
   engine?: string;
-  tag?: string;
-  character?: string;
+  tag?: number;
+  character?: number;
   isOriginal?: boolean;
   language?: string;
   includeNonPublic?: boolean;
@@ -180,7 +175,6 @@ type ListInput = Filters & {
 };
 type SummaryRow = {
   id: number;
-  slug: string;
   original_title: string;
   chinese_title: string | null;
   description: string | null;
@@ -205,7 +199,6 @@ type WorkRow = SummaryRow & {
 type ArchiveEditRow = {
   id: number;
   work_id: number;
-  work_slug: string;
   work_title: string;
   work_language: string;
   archive_label: string;
@@ -330,13 +323,13 @@ export async function searchGameWorks(input: {
   };
 }
 export async function getGameWorkDetail(
-  slug: string,
+  id: number,
 ): Promise<GameWorkDetail | null> {
   const row = await getD1()
     .prepare(
-      `SELECT ${summarySql()},w.sort_title,w.engine_detail FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.slug=? AND w.status='published' GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()},w.sort_title,w.engine_detail FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' GROUP BY w.id LIMIT 1`,
     )
-    .bind(slug)
+    .bind(id)
     .first<
       SummaryRow & { sort_title: string | null; engine_detail: string | null }
     >();
@@ -397,7 +390,6 @@ export async function getWorkForAdminEdit(
     (translations.some((item) => item.role === "translation") ? row.id : null);
   return {
     id: row.id,
-    slug: row.slug,
     originalTitle: row.original_title,
     chineseTitle: row.chinese_title,
     sortTitle: row.sort_title,
@@ -498,7 +490,6 @@ export async function getArchiveVersionForAdminEdit(
   const row = await getD1()
     .prepare(
       `SELECT av.*,
-          w.slug AS work_slug,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.language AS work_language,
           u.display_name AS uploader_name
@@ -514,7 +505,6 @@ export async function getArchiveVersionForAdminEdit(
   return {
     id: row.id,
     workId: row.work_id,
-    workSlug: row.work_slug,
     workTitle: row.work_title,
     archiveLabel: row.archive_label,
     language: row.work_language,
@@ -643,7 +633,6 @@ export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
 function summarySql(): string {
   return `
     w.id,
-    w.slug,
     w.original_title,
     w.chinese_title,
     w.description,
@@ -694,9 +683,9 @@ function buildWhere(input: Filters): {
   if (input.query) {
     const q = `%${input.query}%`;
     clauses.push(
-      `(w.original_title LIKE ? OR w.chinese_title LIKE ? OR w.slug LIKE ? OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ?))`,
+      `(w.original_title LIKE ? OR w.chinese_title LIKE ? OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ?))`,
     );
-    binds.push(q, q, q, q);
+    binds.push(q, q, q);
   }
   if (input.engine && input.engine !== "all") {
     clauses.push("w.engine_family=?");
@@ -712,13 +701,13 @@ function buildWhere(input: Filters): {
   }
   if (input.tag) {
     clauses.push(
-      "EXISTS(SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=w.id AND t.slug=?)",
+      "EXISTS(SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=w.id AND t.id=?)",
     );
     binds.push(input.tag);
   }
   if (input.character) {
     clauses.push(
-      "EXISTS(SELECT 1 FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=w.id AND c.slug=?)",
+      "EXISTS(SELECT 1 FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=w.id AND c.id=?)",
     );
     binds.push(input.character);
   }
@@ -734,7 +723,6 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
     ]);
     output.push({
       id: row.id,
-      slug: row.slug,
       originalTitle: row.original_title,
       chineseTitle: row.chinese_title,
       description: row.description,
@@ -767,7 +755,7 @@ async function listAliases(id: number): Promise<string[]> {
 async function listTags(id: number): Promise<GameTag[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT t.slug,t.name,t.namespace FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=? ORDER BY t.name`,
+      `SELECT t.id,t.name,t.namespace FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=? ORDER BY t.name`,
     )
     .bind(id)
     .all<GameTag>();
@@ -776,11 +764,11 @@ async function listTags(id: number): Promise<GameTag[]> {
 async function listCharacters(id: number): Promise<GameCharacter[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT c.slug,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
+      `SELECT c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
     )
     .bind(id)
     .all<{
-      slug: string;
+      id: number;
       primary_name: string;
       original_name: string | null;
       role_key: string;
@@ -789,7 +777,7 @@ async function listCharacters(id: number): Promise<GameCharacter[]> {
       notes: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
-    slug: x.slug,
+    id: x.id,
     primaryName: x.primary_name,
     originalName: x.original_name,
     roleKey: x.role_key,
@@ -801,11 +789,11 @@ async function listCharacters(id: number): Promise<GameCharacter[]> {
 async function listCreators(id: number): Promise<GameCreatorCredit[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT c.slug,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label FROM work_staff ws JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? ORDER BY c.name`,
+      `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label FROM work_staff ws JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? ORDER BY c.name`,
     )
     .bind(id)
     .all<{
-      slug: string;
+      id: number;
       name: string;
       original_name: string | null;
       website_url: string | null;
@@ -813,7 +801,7 @@ async function listCreators(id: number): Promise<GameCreatorCredit[]> {
       role_label: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
-    slug: x.slug,
+    id: x.id,
     name: x.name,
     originalName: x.original_name,
     websiteUrl: isHttpUrl(x.website_url) ? x.website_url : null,
@@ -926,7 +914,6 @@ async function listRelations(
           wr.vice_versa,
           wr.created_by_user_id,
           w.id AS work_id,
-          w.slug,
           COALESCE(w.chinese_title, w.original_title) AS title
        FROM work_relations wr
        JOIN works w ON w.id = wr.to_work_id
@@ -943,7 +930,6 @@ async function listRelations(
       vice_versa: number;
       created_by_user_id: number | null;
       work_id: number;
-      slug: string;
       title: string;
     }>();
   return (rows.results ?? []).map((x) => ({
@@ -955,7 +941,6 @@ async function listRelations(
     viceVersa: x.vice_versa === 1,
     createdByUserId: x.created_by_user_id,
     workId: x.work_id,
-    slug: x.slug,
     title: x.title,
   }));
 }
@@ -973,7 +958,6 @@ async function listTranslations(
           tr.relation_order,
           tr.created_by_user_id,
           w.id AS work_id,
-          w.slug,
           COALESCE(w.chinese_title, w.original_title) AS title,
           w.language
        FROM translation_relations tr
@@ -989,7 +973,6 @@ async function listTranslations(
       relation_order: number;
       created_by_user_id: number | null;
       work_id: number;
-      slug: string;
       title: string;
       language: string;
     }>();
@@ -997,7 +980,6 @@ async function listTranslations(
     id: x.id,
     role: x.role,
     workId: x.work_id,
-    slug: x.slug,
     title: x.title,
     language: x.language,
     relationOrder: x.relation_order,
@@ -1019,19 +1001,18 @@ async function replaceAliases(id: number, values: string[]): Promise<void> {
 }
 async function replaceTags(id: number, values: string[]): Promise<void> {
   await getD1().prepare(`DELETE FROM work_tags WHERE work_id=?`).bind(id).run();
-  for (const value of values.map((x) => x.trim()).filter(Boolean)) {
-    const slug = slugify(value, "item");
+  for (const value of values.map(normalizeEntityName).filter(Boolean)) {
     await getD1()
       .prepare(
-        `INSERT OR IGNORE INTO tags(slug,name,namespace) VALUES(?,?,'other')`,
+        `INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`,
       )
-      .bind(slug, value)
+      .bind(value)
       .run();
     await getD1()
       .prepare(
-        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'admin' FROM tags WHERE slug=?`,
+        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'admin' FROM tags WHERE name=? COLLATE NOCASE`,
       )
-      .bind(id, slug)
+      .bind(id, value)
       .run();
   }
 }
@@ -1040,20 +1021,19 @@ async function replaceCharacters(id: number, values: string[]): Promise<void> {
     .prepare(`DELETE FROM work_characters WHERE work_id=?`)
     .bind(id)
     .run();
-  for (const value of values.map((x) => x.trim()).filter(Boolean)) {
-    const name = value.split("|")[0].trim();
-    const slug = slugify(name, "item");
+  for (const value of values.map((x) => x.split("|")[0]).map(normalizeEntityName).filter(Boolean)) {
+    const name = value;
     await getD1()
       .prepare(
-        `INSERT OR IGNORE INTO characters(slug,primary_name) VALUES(?,?)`,
+        `INSERT OR IGNORE INTO characters(primary_name) VALUES(?)`,
       )
-      .bind(slug, name)
+      .bind(name)
       .run();
     await getD1()
       .prepare(
-        `INSERT OR IGNORE INTO work_characters(work_id,character_id) SELECT ?,id FROM characters WHERE slug=?`,
+        `INSERT OR IGNORE INTO work_characters(work_id,character_id) SELECT ?,id FROM characters WHERE primary_name=? COLLATE NOCASE`,
       )
-      .bind(id, slug)
+      .bind(id, name)
       .run();
   }
 }

@@ -430,8 +430,8 @@ DownloadBuild
 
 ### 4.3 字段说明
 
-- `works.slug`：公开 URL 用，例如 `/games/yume-nikki-viprpg-demo`。
-- `works.original_title`：作品原名；与 `slug` 一起作为识别和更新目标的稳定身份字段。
+- `works.id`：作品的唯一定位标识，用于公开 URL，例如 `/games/123`；页面正文不直接展示该编号。
+- `works.original_title`：作品原名，仅用于展示和搜索，可以与其他作品重复；更新目标必须由 `work_id` 明确指定。
 - `works.chinese_title`：可选中文名；为空时展示层使用原名。
 - `works.language`：Work 的主要语言，使用当前支持的语言枚举。
 - `works.is_original`：是否为本站原创作品。
@@ -631,9 +631,8 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
 
 ```json
 {
-  "schema": "viprpg-archive.manifest.v2",
+  "schema": "viprpg-archive.manifest.v1",
   "game": {
-    "slug": "sample-game",
     "originalTitle": "Sample Game",
     "chineseTitle": "示例游戏",
     "language": "zh-CN",

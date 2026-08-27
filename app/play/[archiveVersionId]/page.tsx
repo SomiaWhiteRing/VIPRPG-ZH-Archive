@@ -52,7 +52,6 @@ export default async function WebPlayPage({ params }: PageProps) {
     title: record.workChineseTitle || record.workOriginalTitle,
     originalTitle: record.workOriginalTitle,
     chineseTitle: record.workChineseTitle,
-    workSlug: record.workSlug,
     archiveLabel: record.archiveLabel,
     manifestSha256: record.manifestSha256,
     downloadZipBuilderVersion,
