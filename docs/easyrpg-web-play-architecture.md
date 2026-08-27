@@ -4,8 +4,8 @@
 
 相关主文档：
 
-- [RPG Maker 2000/2003 去重存储库架构计划](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
-- [OpenNext 应用与 Cloudflare 基础设施开发路径](./opennext-cloudflare-development-path.md)
+- [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
+- [OpenNext 与 Cloudflare 运行手册](./opennext-cloudflare-development-path.md)
 
 ## 1. 固定结论
 
