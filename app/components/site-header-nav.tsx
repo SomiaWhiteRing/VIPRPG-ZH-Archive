@@ -30,7 +30,7 @@ const LIBRARY_LINKS = [
   { href: "/creators", label: "作者" },
   { href: "/characters", label: "角色" },
   { href: "/tags", label: "标签" },
-  { href: "/series", label: "系列" },
+  { href: "/catalogs", label: "目录" },
 ];
 
 const ADMIN_LINKS: Array<{
@@ -56,7 +56,6 @@ const ADMIN_LINKS: Array<{
     permission: "character.read_private",
   },
   { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
-  { href: "/admin/series", label: "系列", permission: "series.read_private" },
   { href: "/admin/users", label: "用户", permission: "user.read" },
   {
     href: "/admin/maintenance",

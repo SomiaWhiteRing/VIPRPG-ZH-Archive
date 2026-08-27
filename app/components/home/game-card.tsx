@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { GameWorkSummary } from "@/lib/server/db/game-library";
-import { engineLabel } from "@/lib/labels";
+import { engineLabel, languageLabel } from "@/lib/labels";
 import { publicCopy } from "@/lib/public-copy";
 
 export function HomeGameCard({ work }: { work: GameWorkSummary }) {
@@ -13,7 +13,14 @@ export function HomeGameCard({ work }: { work: GameWorkSummary }) {
     >
       <div className="grid aspect-video place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
-          <Image alt={title} height={240} src={`/api/media/blobs/${work.previewBlobSha256}`} unoptimized width={420} />
+          <Image
+            alt={title}
+            className="h-auto w-full object-cover"
+            height={240}
+            src={`/api/media/blobs/${work.previewBlobSha256}`}
+            unoptimized
+            width={420}
+          />
         ) : (
           <span>{engineLabel(work.engineFamily)}</span>
         )}
@@ -30,6 +37,10 @@ export function HomeGameCard({ work }: { work: GameWorkSummary }) {
           <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
             {engineLabel(work.engineFamily)}
           </span>
+          <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+            {languageLabel(work.language)}
+          </span>
+          {work.isOriginal ? <span className="inline-flex min-h-6 items-center rounded-full bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent">本站原创</span> : null}
           {work.usesManiacsPatch ? (
             <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
               Maniacs Patch

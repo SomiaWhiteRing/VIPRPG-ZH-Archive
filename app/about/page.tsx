@@ -16,16 +16,16 @@ export default function AboutPage() {
       <Pane heading="项目目标">
         <p>
           VIPRPG.org收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，
-          包括原版、汉化版、修正版与活动投稿。本站保留作品资料、作者与角色信息， 并提供下载与在线游玩入口。
+          包括不同语言和本站原创作品。本站保留游戏资料、作者与角色信息，并提供下载与在线游玩入口。
         </p>
       </Pane>
 
       <Pane heading="资料结构">
-        <p>同一作品可以有原版、汉化版与修正版等多个发布版本。下载与在线游玩入口对应具体版本， 方便区分来源和变化。</p>
+        <p>每次上传对应一个游戏和一个不可变归档快照；同一游戏的历史快照只在管理端保留，翻译关系和其他关联在上传后追加。</p>
         <p>
-          作者与制作人员、登场角色、标签、系列分别独立索引，可以在
+          作者与制作人员、登场角色、标签、目录分别独立索引，可以在
           <Link href="/creators">作者目录</Link>、<Link href="/characters">角色目录</Link>、
-          <Link href="/tags">标签目录</Link>、<Link href="/series">系列目录</Link> 中按任一维度反查作品。
+          <Link href="/tags">标签目录</Link>、<Link href="/catalogs">目录</Link> 中按任一维度反查游戏。
         </p>
       </Pane>
 
@@ -60,7 +60,7 @@ export default function AboutPage() {
           <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 2000/2003 作品。</li>
           <li>对原作权利人提出删除/限制要求的内容，会从公开列表移除。</li>
           <li>使用 Maniacs Patch 的作品暂不支持在线游玩，请下载 ZIP。</li>
-          <li>本站不会修改原始文件；汉化版以独立发布版本提供。</li>
+          <li>本站不会修改原始文件；不同语言的作品以独立游戏条目保存，并通过翻译关联连接。</li>
         </ul>
       </Pane>
 

@@ -5,7 +5,6 @@ import { HttpError } from "@/lib/server/http/json";
 export type ImportJobRow = {
   id: number;
   work_id: number | null;
-  release_id: number | null;
   archive_version_id: number | null;
   uploader_id: number | null;
   status: string;
@@ -96,7 +95,6 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
       `SELECT
         id,
         work_id,
-        release_id,
         archive_version_id,
         uploader_id,
         status,
@@ -132,9 +130,27 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
     .first<ImportJobRow>();
 }
 
-export async function requiredOwnedImportJob(id: number, user: ArchiveUser): Promise<ImportJobRow> {
+export async function requiredOwnedImportJob(
+  id: number,
+  user: ArchiveUser,
+): Promise<ImportJobRow> {
   const job = await findImportJob(id);
-  if (!job || job.uploader_id !== user.id) throw new HttpError(404, "Import job not found");
+  if (!job || job.uploader_id !== user.id)
+    throw new HttpError(404, "Import job not found");
+  return job;
+}
+
+export async function requiredActiveOwnedImportJob(
+  id: number,
+  user: ArchiveUser,
+): Promise<ImportJobRow> {
+  const job = await requiredOwnedImportJob(id, user);
+  if (job.status === "completed") {
+    throw new HttpError(409, "Import job is already completed");
+  }
+  if (job.status === "canceled") {
+    throw new HttpError(409, "Import job is canceled");
+  }
   return job;
 }
 
@@ -146,7 +162,7 @@ export async function markImportJobPreflighted(input: {
   missingCorePackSizeBytes: number;
   durationMs: number;
 }): Promise<void> {
-  await getD1()
+  const result = await getD1()
     .prepare(
       `UPDATE import_jobs
       SET status = 'preflighted',
@@ -157,7 +173,8 @@ export async function markImportJobPreflighted(input: {
         preflight_duration_ms = ?,
         error_message = NULL,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      WHERE id = ?
+        AND status IN ('created', 'preflighted', 'uploading', 'failed')`,
     )
     .bind(
       input.missingBlobCount,
@@ -168,6 +185,9 @@ export async function markImportJobPreflighted(input: {
       input.id,
     )
     .run();
+  if ((result.meta.changes ?? 0) === 0) {
+    throw new HttpError(409, "Import job is no longer active");
+  }
 }
 
 export async function recordImportObjectUpload(input: {
@@ -178,7 +198,7 @@ export async function recordImportObjectUpload(input: {
 }): Promise<void> {
   const isBlob = input.objectKind === "blob";
 
-  await getD1()
+  const result = await getD1()
     .prepare(
       `UPDATE import_jobs
       SET uploaded_blob_count = uploaded_blob_count + ?,
@@ -188,7 +208,8 @@ export async function recordImportObjectUpload(input: {
         r2_put_count = r2_put_count + 1,
         upload_duration_ms = upload_duration_ms + ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      WHERE id = ?
+        AND status IN ('created', 'preflighted', 'uploading', 'failed')`,
     )
     .bind(
       isBlob ? 1 : 0,
@@ -199,6 +220,8 @@ export async function recordImportObjectUpload(input: {
       input.id,
     )
     .run();
+  if ((result.meta.changes ?? 0) === 0)
+    throw new HttpError(409, "Import job is no longer active");
 }
 
 export async function recordImportCommitSucceeded(input: {
@@ -216,7 +239,8 @@ export async function recordImportCommitSucceeded(input: {
         failed_stage = NULL,
         error_message = NULL,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      WHERE id = ?
+        AND status = 'completed'`,
     )
     .bind(input.manifestSizeBytes, Math.max(0, input.durationMs), input.id)
     .run();
@@ -234,32 +258,37 @@ export async function markImportJobFailed(
         error_message = ?,
         failed_stage = ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      WHERE id = ?
+        AND status IN ('created', 'preflighted', 'uploading', 'failed')`,
     )
     .bind(message.slice(0, 1000), failedStage, id)
     .run();
 }
 
 export async function markImportJobCanceled(id: number): Promise<void> {
-  await getD1()
+  const result = await getD1()
     .prepare(
       `UPDATE import_jobs
       SET status = 'canceled',
         updated_at = CURRENT_TIMESTAMP,
         completed_at = CURRENT_TIMESTAMP
       WHERE id = ?
-        AND status NOT IN ('completed', 'canceled')`,
+        AND status IN ('created', 'preflighted', 'uploading', 'failed')`,
     )
     .bind(id)
     .run();
+  if ((result.meta.changes ?? 0) === 0) {
+    throw new HttpError(409, "Import job is no longer active");
+  }
 }
 
 export function parseImportJobId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error("Invalid import job id");
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new HttpError(400, "Invalid import job id");
   }
-
+  const id = Number(value);
+  if (!Number.isSafeInteger(id)) {
+    throw new HttpError(400, "Invalid import job id");
+  }
   return id;
 }

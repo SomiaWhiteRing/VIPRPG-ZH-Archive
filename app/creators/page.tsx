@@ -73,7 +73,7 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
         columns={3}
         items={[
           { label: "作品", value: formatNumber(creator.workCreditCount) },
-          { label: "发布", value: formatNumber(creator.releaseCreditCount) },
+          { label: "参与游戏", value: formatNumber(creator.workCreditCount) },
         ]}
         variant="tiles"
       />

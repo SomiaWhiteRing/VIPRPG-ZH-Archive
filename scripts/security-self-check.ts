@@ -11,28 +11,68 @@ import { isCustomRolePriority } from "../lib/authz/roles";
 import { buildInboxVisibilityClause } from "../lib/server/db/inbox";
 import { canManageUser } from "../lib/server/db/permissions";
 import { canDeleteArchiveVersion } from "../lib/server/db/archive-maintenance";
+import { sanitizeRedirectPath } from "../lib/server/auth/redirect";
+import {
+  blobKey,
+  corePackKey,
+  manifestKey,
+} from "../lib/server/storage/archive-keys";
 import type { PermissionKey } from "../lib/authz/permissions";
 import type { ArchiveUser } from "../lib/server/db/users";
 
-assert.equal(new Set(PERMISSION_LIST.map((permission) => permission.key)).size, PERMISSION_LIST.length);
-assert.deepEqual(Object.keys(SYSTEM_ROLE_PERMISSIONS), ["user", "uploader", "admin", "super_admin"]);
+assert.equal(
+  new Set(PERMISSION_LIST.map((permission) => permission.key)).size,
+  PERMISSION_LIST.length,
+);
+assert.deepEqual(Object.keys(SYSTEM_ROLE_PERMISSIONS), [
+  "user",
+  "uploader",
+  "admin",
+  "super_admin",
+]);
 for (const grants of Object.values(SYSTEM_ROLE_PERMISSIONS)) {
   for (const grant of grants) assert.equal(isPermissionKey(grant), true);
 }
-assert.equal(hasPermission({ status: "active", permissionKeys: ["import_job.create"] }, "import_job.create"), true);
-assert.equal(hasPermission({ status: "disabled", permissionKeys: ["import_job.create"] }, "import_job.create"), false);
-assert.deepEqual(parsePermissionKeys(["audit.read", "audit.read"]), ["audit.read"]);
+assert.equal(
+  hasPermission(
+    { status: "active", permissionKeys: ["import_job.create"] },
+    "import_job.create",
+  ),
+  true,
+);
+assert.equal(
+  hasPermission(
+    { status: "disabled", permissionKeys: ["import_job.create"] },
+    "import_job.create",
+  ),
+  false,
+);
+assert.deepEqual(parsePermissionKeys(["audit.read", "audit.read"]), [
+  "audit.read",
+]);
 assert.deepEqual(
-  new Set(parsePermissionKeys(["import_job.create", "archive_version.delete_own", "audit.read"])),
+  new Set(
+    parsePermissionKeys([
+      "import_job.create",
+      "archive_version.delete_own",
+      "audit.read",
+    ]),
+  ),
   new Set(["import_job.create", "archive_version.delete_own", "audit.read"]),
 );
-assert.throws(() => parsePermissionKeys(["future.permission"]), /Unknown permission key/);
+assert.throws(
+  () => parsePermissionKeys(["future.permission"]),
+  /Unknown permission key/,
+);
 assert.equal(isCustomRolePriority(101), true);
 assert.equal(isCustomRolePriority(699), true);
 assert.equal(isCustomRolePriority(100), false);
 assert.equal(isCustomRolePriority(700), false);
 
-const actor = fakeUser(1, "active", 700, ["user.read", "archive_version.delete_any"]);
+const actor = fakeUser(1, "active", 700, [
+  "user.read",
+  "archive_version.delete_any",
+]);
 const lowerUser = fakeUser(2, "active", 400, ["archive_version.delete_own"]);
 const peerUser = fakeUser(3, "active", 700, []);
 const disabledUser = fakeUser(4, "disabled", 100, []);
@@ -42,19 +82,53 @@ assert.equal(canManageUser(actor, disabledUser), true);
 assert.equal(canDeleteArchiveVersion(lowerUser, lowerUser.id), true);
 assert.equal(canDeleteArchiveVersion(lowerUser, actor.id), false);
 assert.equal(canDeleteArchiveVersion(actor, lowerUser.id), true);
+assert.equal(sanitizeRedirectPath("/safe/path?next=1"), "/safe/path?next=1");
+assert.equal(sanitizeRedirectPath("/\\evil.com"), "/");
+assert.equal(sanitizeRedirectPath("/\u0000bad"), "/");
+const upperSha256 = "AB".repeat(32);
+const lowerSha256 = upperSha256.toLowerCase();
+assert.equal(blobKey(upperSha256), `blobs/sha256/ab/ab/${lowerSha256}`);
+assert.equal(
+  corePackKey(upperSha256),
+  `core-packs/sha256/ab/ab/${lowerSha256}.zip`,
+);
+assert.equal(
+  manifestKey(upperSha256),
+  `manifests/sha256/ab/ab/${lowerSha256}.json`,
+);
 
 const inboxVisibility = buildInboxVisibilityClause(["user.role.assign"]);
 assert.match(inboxVisibility.sql, /required_permission_key IN/);
 
-const migration = readFileSync(new URL("../migrations/0001_init_archive_schema.sql", import.meta.url), "utf8");
+const migration = readFileSync(
+  new URL("../migrations/0001_init_archive_schema.sql", import.meta.url),
+  "utf8",
+);
 assert.doesNotMatch(migration, /CREATE TABLE IF NOT EXISTS permissions/);
-assert.doesNotMatch(migration, /permission_id|system_role_kind|old_role_|new_role_/);
+assert.doesNotMatch(
+  migration,
+  /permission_id|system_role_kind|old_role_|new_role_/,
+);
 assert.match(migration, /user_roles_unique_bootstrap_admin/);
 assert.match(migration, /user_roles_protect_base_role/);
 assert.match(migration, /roles_protect_delete/);
 assert.match(migration, /event_key TEXT NOT NULL UNIQUE/);
+assert.match(migration, /archive_version_blob_refs_require_active_blob/);
+assert.match(migration, /blobs_purge_requires_unreferenced/);
+assert.match(migration, /core_packs_purge_requires_unreferenced/);
+assert.match(
+  migration,
+  /status IN \('created', 'preflighted', 'uploading', 'completed', 'failed', 'canceled'\)/,
+);
+assert.match(
+  migration,
+  /CREATE TABLE IF NOT EXISTS work_uploaders \(\s*work_id[\s\S]*?\s*user_id[\s\S]*?\s*created_at[\s\S]*?\)/,
+);
 for (const permission of Object.values(SYSTEM_ROLE_PERMISSIONS).flat()) {
-  assert.match(migration, new RegExp(`"${permission.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  assert.match(
+    migration,
+    new RegExp(`"${permission.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+  );
 }
 
 console.log("security self-check passed");

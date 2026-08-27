@@ -5,17 +5,39 @@ const origin = baseUrl.origin;
 const password = "dev123456789";
 
 await expectStatus("anonymous protected GET", "/api/admin/summary", {}, 401);
-await expectStatus("anonymous same-origin mutation", "/api/imports", jsonRequest({}), 401);
-await expectStatus("missing Origin", "/api/imports", jsonRequest({}, { origin: null }), 403);
+await expectStatus(
+  "anonymous same-origin mutation",
+  "/api/imports",
+  jsonRequest({}),
+  401,
+);
+await expectStatus(
+  "missing Origin",
+  "/api/imports",
+  jsonRequest({}, { origin: null }),
+  403,
+);
 
-const [userCookie, uploaderCookie, adminCookie, rootCookie] = await Promise.all([
-  login("user@dev.local"),
-  login("uploader@dev.local"),
-  login("admin@dev.local"),
-  login("super@dev.local"),
-]);
-await expectStatus("missing permission", "/api/imports", jsonRequest({}, { cookie: userCookie }), 403);
-await expectStatus("bootstrap boundary", "/api/admin/permissions", { headers: { cookie: userCookie } }, 403);
+const [userCookie, uploaderCookie, adminCookie, rootCookie] = await Promise.all(
+  [
+    login("user@dev.local"),
+    login("uploader@dev.local"),
+    login("admin@dev.local"),
+    login("super@dev.local"),
+  ],
+);
+await expectStatus(
+  "missing permission",
+  "/api/imports",
+  jsonRequest({}, { cookie: userCookie }),
+  403,
+);
+await expectStatus(
+  "bootstrap boundary",
+  "/api/admin/permissions",
+  { headers: { cookie: userCookie } },
+  403,
+);
 
 const permissionModelResponse = await expectStatus(
   "root permission model",
@@ -24,13 +46,18 @@ const permissionModelResponse = await expectStatus(
   200,
 );
 const permissionModel = await permissionModelResponse.json();
-const uploaderRole = permissionModel.roles.find((role) => role.key === "uploader");
+const uploaderRole = permissionModel.roles.find(
+  (role) => role.key === "uploader",
+);
 assert.ok(uploaderRole, "seed uploader role");
 
 const requestAccessResponse = await expectStatus(
   "user requests uploader role",
   "/api/account/request-upload-access",
-  { method: "POST", headers: { cookie: userCookie, origin, accept: "application/json" } },
+  {
+    method: "POST",
+    headers: { cookie: userCookie, origin, accept: "application/json" },
+  },
   200,
 );
 const requestAccessPayload = await requestAccessResponse.json();
@@ -39,27 +66,49 @@ assert.ok(Number.isSafeInteger(roleRequestId) && roleRequestId > 0);
 const duplicateRequestResponse = await expectStatus(
   "duplicate role request reuses pending item",
   "/api/account/request-upload-access",
-  { method: "POST", headers: { cookie: userCookie, origin, accept: "application/json" } },
+  {
+    method: "POST",
+    headers: { cookie: userCookie, origin, accept: "application/json" },
+  },
   200,
 );
-assert.equal((await duplicateRequestResponse.json()).inboxItem.id, roleRequestId);
+assert.equal(
+  (await duplicateRequestResponse.json()).inboxItem.id,
+  roleRequestId,
+);
 await expectStatus(
   "approve role request",
   `/api/inbox/${roleRequestId}/resolve`,
-  formRequest({ decision: "approve" }, { cookie: adminCookie, acceptJson: true }),
+  formRequest(
+    { decision: "approve" },
+    { cookie: adminCookie, acceptJson: true },
+  ),
   200,
 );
 const approvedJobResponse = await expectStatus(
   "fresh permission context after approval",
   "/api/imports",
-  jsonRequest({ sourceName: "role-request-job", sourceSizeBytes: 0, fileCount: 0, excludedFileCount: 0, excludedSizeBytes: 0, filePolicyVersion: "rpgm2000-2003-whitelist-v3" }, { cookie: userCookie }),
+  jsonRequest(
+    {
+      sourceName: "role-request-job",
+      sourceSizeBytes: 0,
+      fileCount: 0,
+      excludedFileCount: 0,
+      excludedSizeBytes: 0,
+      filePolicyVersion: "rpgm2000-2003-whitelist-v3",
+    },
+    { cookie: userCookie },
+  ),
   201,
 );
 const approvedJob = await approvedJobResponse.json();
 await expectStatus(
   "duplicate role approval",
   `/api/inbox/${roleRequestId}/resolve`,
-  formRequest({ decision: "approve" }, { cookie: adminCookie, acceptJson: true }),
+  formRequest(
+    { decision: "approve" },
+    { cookie: adminCookie, acceptJson: true },
+  ),
   409,
 );
 await expectStatus(
@@ -90,14 +139,17 @@ await expectStatus(
 const createResponse = await expectStatus(
   "uploader creates owned job",
   "/api/imports",
-  jsonRequest({
-    sourceName: "security-api-self-check",
-    sourceSizeBytes: 0,
-    fileCount: 0,
-    excludedFileCount: 0,
-    excludedSizeBytes: 0,
-    filePolicyVersion: "rpgm2000-2003-whitelist-v3",
-  }, { cookie: uploaderCookie }),
+  jsonRequest(
+    {
+      sourceName: "security-api-self-check",
+      sourceSizeBytes: 0,
+      fileCount: 0,
+      excludedFileCount: 0,
+      excludedSizeBytes: 0,
+      filePolicyVersion: "rpgm2000-2003-whitelist-v3",
+    },
+    { cookie: uploaderCookie },
+  ),
   201,
 );
 const createPayload = await createResponse.json();
@@ -105,34 +157,50 @@ const importJobId = createPayload.importJob.id;
 assert.ok(Number.isSafeInteger(importJobId) && importJobId > 0);
 
 await expectStatus(
-  "deleted import job lookup route",
+  "removed import result route",
   `/api/imports/${importJobId}`,
   { headers: { cookie: uploaderCookie } },
   404,
 );
+
 await expectStatus(
   "object upload requires job",
   `/api/blobs/${"0".repeat(64)}`,
-  { method: "PUT", headers: { cookie: uploaderCookie, origin }, body: new Uint8Array() },
+  {
+    method: "PUT",
+    headers: { cookie: uploaderCookie, origin },
+    body: new Uint8Array(),
+  },
   400,
 );
 await expectStatus(
   "cross-origin mutation",
   `/api/imports/${importJobId}/cancel`,
-  { method: "POST", headers: { cookie: uploaderCookie, origin: "https://example.invalid" } },
+  {
+    method: "POST",
+    headers: { cookie: uploaderCookie, origin: "https://example.invalid" },
+  },
   403,
 );
 await expectStatus(
   "admin cannot manage root",
   "/api/admin/users/1/status",
-  formRequest({ status: "disabled" }, { cookie: adminCookie, acceptJson: true }),
+  formRequest(
+    { status: "disabled" },
+    { cookie: adminCookie, acceptJson: true },
+  ),
   403,
 );
 
-await expectStatus("published web play", "/api/archive-versions/3/web-play", {}, 200);
+await expectStatus(
+  "published web play",
+  "/api/archive-versions/3/web-play",
+  {},
+  200,
+);
 await expectStatus(
   "published media",
-  "/api/media/blobs/80f64924679ec7a3c58e13a717c1bf929300a15dcb4c9ce581a287aa842bbe45",
+  "/api/media/blobs/8e20208635d8c539249d0299f9de321b85b43e89c90ba70b5ebbf5f4808d1038",
   {},
   200,
 );
@@ -183,15 +251,22 @@ async function login(email) {
     redirect: "manual",
   });
   assert.equal(response.status, 303, `login status for ${email}`);
-  const match = response.headers.get("set-cookie")?.match(/viprpg_session=([A-Za-z0-9_-]{43})/);
+  const match = response.headers
+    .get("set-cookie")
+    ?.match(/viprpg_session=([A-Za-z0-9_-]{43})/);
   assert.ok(match, `opaque session cookie for ${email}`);
   return `viprpg_session=${match[1]}`;
 }
 
 async function expectStatus(label, path, init, expected) {
-  const response = await fetch(new URL(path, baseUrl), { redirect: "manual", ...init });
+  const response = await fetch(new URL(path, baseUrl), {
+    redirect: "manual",
+    ...init,
+  });
   if (response.status !== expected) {
-    throw new Error(`${label}: expected ${expected}, received ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `${label}: expected ${expected}, received ${response.status}: ${await response.text()}`,
+    );
   }
   return response;
 }
@@ -204,7 +279,10 @@ function jsonRequest(body, options = {}) {
 }
 
 function formRequest(values, options = {}) {
-  const headers = { "content-type": "application/x-www-form-urlencoded", origin };
+  const headers = {
+    "content-type": "application/x-www-form-urlencoded",
+    origin,
+  };
   if (options.cookie) headers.cookie = options.cookie;
   if (options.acceptJson) headers.accept = "application/json";
   return { method: "POST", headers, body: new URLSearchParams(values) };

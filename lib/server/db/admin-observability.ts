@@ -34,7 +34,6 @@ export type RecentDownloadBuild = {
   id: number;
   archiveVersionId: number;
   workTitle: string;
-  releaseLabel: string;
   archiveLabel: string;
   downloadCount: number;
   cacheHitCount: number;
@@ -51,7 +50,6 @@ export type RecentDownloadBuild = {
 export type ExpensiveArchiveVersion = {
   archiveVersionId: number;
   workTitle: string;
-  releaseLabel: string;
   archiveLabel: string;
   totalFiles: number;
   totalSizeBytes: number;
@@ -156,7 +154,6 @@ type RecentDownloadRow = {
   id: number;
   archive_version_id: number;
   work_title: string;
-  release_label: string;
   archive_label: string;
   download_count: number;
   cache_hit_count: number;
@@ -173,7 +170,6 @@ type RecentDownloadRow = {
 type ExpensiveArchiveRow = {
   archive_version_id: number;
   work_title: string;
-  release_label: string;
   archive_label: string;
   total_files: number;
   total_size_bytes: number;
@@ -394,7 +390,6 @@ async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
         db.id,
         db.archive_version_id,
         COALESCE(w.chinese_title, w.original_title) AS work_title,
-        r.release_label,
         av.archive_label,
         db.download_count,
         db.cache_hit_count,
@@ -408,8 +403,7 @@ async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
         db.last_accessed_at
       FROM download_builds db
       JOIN archive_versions av ON av.id = db.archive_version_id
-      JOIN releases r ON r.id = av.release_id
-      JOIN works w ON w.id = r.work_id
+      JOIN works w ON w.id = av.work_id
       ORDER BY db.last_accessed_at DESC
       LIMIT 10`,
     )
@@ -419,7 +413,6 @@ async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
     id: row.id,
     archiveVersionId: row.archive_version_id,
     workTitle: row.work_title,
-    releaseLabel: row.release_label,
     archiveLabel: row.archive_label,
     downloadCount: row.download_count,
     cacheHitCount: row.cache_hit_count,
@@ -440,14 +433,12 @@ async function listExpensiveArchiveVersions(): Promise<ExpensiveArchiveVersion[]
       `SELECT
         av.id AS archive_version_id,
         COALESCE(w.chinese_title, w.original_title) AS work_title,
-        r.release_label,
         av.archive_label,
         av.total_files,
         av.total_size_bytes,
         av.estimated_r2_get_count
       FROM archive_versions av
-      JOIN releases r ON r.id = av.release_id
-      JOIN works w ON w.id = r.work_id
+      JOIN works w ON w.id = av.work_id
       WHERE av.status = 'published'
       ORDER BY av.estimated_r2_get_count DESC, av.total_size_bytes DESC
       LIMIT 10`,
@@ -457,7 +448,6 @@ async function listExpensiveArchiveVersions(): Promise<ExpensiveArchiveVersion[]
   return (rows.results ?? []).map((row) => ({
     archiveVersionId: row.archive_version_id,
     workTitle: row.work_title,
-    releaseLabel: row.release_label,
     archiveLabel: row.archive_label,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,

@@ -1,17 +1,39 @@
 import { getD1 } from "@/lib/server/db/d1";
 import { chunkArray } from "@/lib/server/db/chunks";
+import { HttpError } from "@/lib/server/http/json";
 
 export type ExistingObjectSet = {
   blobs: Set<string>;
   corePacks: Set<string>;
 };
 
+export async function assertObjectUploadAllowed(input: {
+  kind: "blob" | "core_pack";
+  sha256: string;
+}): Promise<void> {
+  const table = input.kind === "blob" ? "blobs" : "core_packs";
+  const row = await getD1()
+    .prepare(`SELECT status FROM ${table} WHERE sha256 = ? LIMIT 1`)
+    .bind(input.sha256)
+    .first<{ status: string }>();
+
+  if (row?.status === "purging") {
+    throw new HttpError(
+      409,
+      `${input.kind === "blob" ? "Blob" : "Core pack"} is being garbage-collected; retry the upload`,
+    );
+  }
+}
+
 export async function findExistingObjects(input: {
   blobSha256: string[];
   corePackSha256: string[];
 }): Promise<ExistingObjectSet> {
   const blobs = await findExistingSha256("blobs", input.blobSha256);
-  const corePacks = await findExistingSha256("core_packs", input.corePackSha256);
+  const corePacks = await findExistingSha256(
+    "core_packs",
+    input.corePackSha256,
+  );
 
   return {
     blobs,
@@ -25,7 +47,7 @@ export async function insertBlobRecord(input: {
   contentTypeHint: string | null;
   observedExt: string | null;
 }): Promise<void> {
-  await getD1()
+  const result = await getD1()
     .prepare(
       `INSERT INTO blobs (
         sha256,
@@ -40,7 +62,9 @@ export async function insertBlobRecord(input: {
         content_type_hint = excluded.content_type_hint,
         observed_ext = excluded.observed_ext,
         verified_at = CURRENT_TIMESTAMP,
-        status = 'active'`,
+        created_at = CASE WHEN blobs.status = 'purged' THEN CURRENT_TIMESTAMP ELSE blobs.created_at END,
+        status = 'active'
+      WHERE blobs.status IN ('active', 'purged')`,
     )
     .bind(
       input.sha256,
@@ -49,6 +73,13 @@ export async function insertBlobRecord(input: {
       input.observedExt,
     )
     .run();
+
+  if ((result.meta.changes ?? 0) === 0) {
+    throw new HttpError(
+      409,
+      "Blob is being garbage-collected; retry the upload",
+    );
+  }
 }
 
 export async function insertCorePackRecord(input: {
@@ -57,7 +88,7 @@ export async function insertCorePackRecord(input: {
   uncompressedSizeBytes: number;
   fileCount: number;
 }): Promise<void> {
-  await getD1()
+  const result = await getD1()
     .prepare(
       `INSERT INTO core_packs (
         sha256,
@@ -72,7 +103,9 @@ export async function insertCorePackRecord(input: {
         uncompressed_size_bytes = excluded.uncompressed_size_bytes,
         file_count = excluded.file_count,
         verified_at = CURRENT_TIMESTAMP,
-        status = 'active'`,
+        created_at = CASE WHEN core_packs.status = 'purged' THEN CURRENT_TIMESTAMP ELSE core_packs.created_at END,
+        status = 'active'
+      WHERE core_packs.status IN ('active', 'purged')`,
     )
     .bind(
       input.sha256,
@@ -81,6 +114,13 @@ export async function insertCorePackRecord(input: {
       input.fileCount,
     )
     .run();
+
+  if ((result.meta.changes ?? 0) === 0) {
+    throw new HttpError(
+      409,
+      "Core pack is being garbage-collected; retry the upload",
+    );
+  }
 }
 
 async function findExistingSha256(

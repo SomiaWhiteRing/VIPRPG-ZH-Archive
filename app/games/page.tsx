@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { HomeGameCard } from "@/app/components/home/game-card";
-import { LibraryFacetIndex } from "@/app/components/library/library-facets";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { countGameWorks, listGameWorks } from "@/lib/server/db/game-library";
 import {
   getPublicCharacterSummary,
   getPublicTagSummary,
-  listPublicSeries,
 } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
+import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 type GamesPageProps = {
@@ -31,15 +30,25 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const engine = stringParam(params.engine) || "all";
   const tag = stringParam(params.tag);
   const character = stringParam(params.character);
+  const language = stringParam(params.language);
+  const original = stringParam(params.original);
   const requestedSort = stringParam(params.sort);
-  const sort = requestedSort === "title" || requestedSort === "engine" ? requestedSort : "updated";
-  const page = Math.max(1, Number.parseInt(stringParam(params.page) || "1", 10) || 1);
+  const sort =
+    requestedSort === "title" || requestedSort === "engine"
+      ? requestedSort
+      : "updated";
+  const page = Math.max(
+    1,
+    Number.parseInt(stringParam(params.page) || "1", 10) || 1,
+  );
   const filters = {
     engine,
     tag,
     character,
+    language: language || undefined,
+    isOriginal: original === "1" ? true : original === "0" ? false : undefined,
   };
-  const [works, total, selectedTag, selectedCharacter, series] = await Promise.all([
+  const [works, total, selectedTag, selectedCharacter] = await Promise.all([
     listGameWorks({
       ...filters,
       sort,
@@ -49,12 +58,13 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
     countGameWorks(filters),
     tag ? getPublicTagSummary(tag) : Promise.resolve(null),
     character ? getPublicCharacterSummary(character) : Promise.resolve(null),
-    listPublicSeries({ limit: 24 }),
   ]);
   const activeParams = {
     engine: engine !== "all" ? engine : undefined,
     tag: tag || undefined,
     character: character || undefined,
+    language: language || undefined,
+    original: original || undefined,
     sort: sort !== "updated" ? sort : undefined,
   };
 
@@ -76,35 +86,121 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
         <span>排序</span>
         {(["updated", "title", "engine"] as const).map((value) => (
           <Link
-            className={sort === value ? "text-primary underline decoration-2 underline-offset-4" : undefined}
+            className={
+              sort === value
+                ? "text-primary underline decoration-2 underline-offset-4"
+                : undefined
+            }
             href={gamesHref({
               ...activeParams,
               sort: value === "updated" ? undefined : value,
             })}
             key={value}
           >
-            {value === "updated" ? "最近更新" : value === "title" ? "标题" : "引擎"}
+            {value === "updated"
+              ? "最近更新"
+              : value === "title"
+                ? "标题"
+                : "引擎"}
           </Link>
         ))}
       </section>
-      <LibraryFacetIndex
-        engines={ENGINES.map(([value, label]) => ({
-          href: gamesHref({
-            ...activeParams,
-            engine: value === "all" ? undefined : value,
-          }),
-          label,
-          active: engine === value,
-        }))}
-        series={series}
-      />
-      {engine !== "all" || tag || character || sort !== "updated" ? (
-        <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted" aria-label="当前筛选">
+      <div className="mb-5 grid gap-3" aria-label="游戏筛选">
+        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
+          <span className="text-muted">引擎</span>
+          {ENGINES.map(([value, label]) => (
+            <Link
+              className={
+                engine === value
+                  ? "text-primary underline underline-offset-4"
+                  : undefined
+              }
+              href={gamesHref({
+                ...activeParams,
+                engine: value === "all" ? undefined : value,
+              })}
+              key={value}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
+          <span className="text-muted">原创</span>
+          <Link
+            className={
+              !original
+                ? "text-primary underline underline-offset-4"
+                : undefined
+            }
+            href={gamesHref({ ...activeParams, original: undefined })}
+          >
+            全部
+          </Link>
+          <Link
+            className={
+              original === "1"
+                ? "text-primary underline underline-offset-4"
+                : undefined
+            }
+            href={gamesHref({ ...activeParams, original: "1" })}
+          >
+            本站原创
+          </Link>
+          <Link
+            className={
+              original === "0"
+                ? "text-primary underline underline-offset-4"
+                : undefined
+            }
+            href={gamesHref({ ...activeParams, original: "0" })}
+          >
+            社区收录
+          </Link>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
+          <span className="text-muted">语言</span>
+          <Link
+            className={
+              !language
+                ? "text-primary underline underline-offset-4"
+                : undefined
+            }
+            href={gamesHref({ ...activeParams, language: undefined })}
+          >
+            全部
+          </Link>
+          {LANGUAGE_OPTIONS.map((item) => (
+            <Link
+              className={
+                language === item.value
+                  ? "text-primary underline underline-offset-4"
+                  : undefined
+              }
+              href={gamesHref({ ...activeParams, language: item.value })}
+              key={item.value}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+      {engine !== "all" ||
+      tag ||
+      character ||
+      language ||
+      original ||
+      sort !== "updated" ? (
+        <div
+          className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted"
+          aria-label="当前筛选"
+        >
           <span>当前筛选</span>
           <Link href="/games">清除全部</Link>
           {engine !== "all" ? (
             <Link href={gamesHref({ ...activeParams, engine: undefined })}>
-              引擎：{ENGINES.find(([value]) => value === engine)?.[1] ?? engine} ×
+              引擎：{ENGINES.find(([value]) => value === engine)?.[1] ?? engine}{" "}
+              ×
             </Link>
           ) : null}
           {tag ? (
@@ -118,10 +214,23 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
               {selectedCharacter?.primaryName ?? character} ×
             </Link>
           ) : null}
+          {language ? (
+            <Link href={gamesHref({ ...activeParams, language: undefined })}>
+              语言：{languageLabel(language)} ×
+            </Link>
+          ) : null}
+          {original ? (
+            <Link href={gamesHref({ ...activeParams, original: undefined })}>
+              {original === "1" ? "本站原创" : "社区收录"} ×
+            </Link>
+          ) : null}
         </div>
       ) : null}
       {works.length > 0 ? (
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" aria-label="作品列表">
+        <section
+          className="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+          aria-label="作品列表"
+        >
           {works.map((work) => (
             <HomeGameCard key={work.id} work={work} />
           ))}

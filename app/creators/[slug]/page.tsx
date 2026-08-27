@@ -57,14 +57,7 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
               label: "作品层职务",
               value: formatNumber(creator.workCreditCount),
             },
-            {
-              label: "发布版本职务",
-              value: formatNumber(creator.releaseCreditCount),
-            },
-            {
-              label: "最近发布关联",
-              value: creator.latestReleaseCreditAt ?? "暂无",
-            },
+            { label: "最近参与游戏", value: creator.latestWorkCreditAt ?? "暂无" },
           ]}
         />
         {creator.websiteUrl ? (
@@ -114,36 +107,6 @@ export default async function CreatorDetailPage({ params }: CreatorDetailPagePro
         )}
       </Pane>
 
-      <Pane heading="发布参与">
-        {creator.releaseCredits.length > 0 ? (
-          <TableWrap compact label="发布参与" minWidth={760}>
-            <thead>
-              <tr>
-                <th>作品 / 发布版本</th>
-                <th>职务</th>
-                <th>日期</th>
-              </tr>
-            </thead>
-            <tbody>
-              {creator.releaseCredits.map((credit) => (
-                <tr key={`${credit.releaseId}-${credit.roleKey}`}>
-                  <td data-label="作品 / 发布版本">
-                    <Link href={`/games/${credit.workSlug}`}>{credit.workTitle}</Link>
-                    <span className="text-sm text-muted">{credit.releaseLabel}</span>
-                  </td>
-                  <td data-label="职务">
-                    {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                    {credit.notes ? <span className="text-sm text-muted">{credit.notes}</span> : null}
-                  </td>
-                  <td data-label="日期">{credit.releaseDate ?? "未知"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
-        ) : (
-          <p className="text-sm text-muted">暂无发布版本职务记录。</p>
-        )}
-      </Pane>
     </main>
   );
 }

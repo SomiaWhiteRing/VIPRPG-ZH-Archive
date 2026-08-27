@@ -6,41 +6,54 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { ChipList } from "@/app/components/ui/chip-list";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
-import { TableWrap } from "@/app/components/ui/table-wrap";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import { getGameWorkDetail, type GameArchiveVersionDetail } from "@/lib/server/db/game-library";
-import { formatNumber, formatBytes } from "@/lib/format";
-import { baseVariantLabel, creatorRoleLabel, engineLabel, releaseTypeLabel } from "@/lib/labels";
+import { getGameWorkDetail } from "@/lib/server/db/game-library";
+import { formatBytes, formatNumber } from "@/lib/format";
+import {
+  creatorRoleLabel,
+  engineLabel,
+  languageLabel,
+  relationLabel,
+} from "@/lib/labels";
 import { publicCopy } from "@/lib/public-copy";
 import { WorkActionBar } from "./work-action-bar";
+import { RelationEditor } from "./relation-editor";
+import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
+import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 
 export const dynamic = "force-dynamic";
 
-type GameDetailPageProps = {
-  params: Promise<{
-    slug: string;
-  }>;
-};
-
-export default async function GameDetailPage({ params }: GameDetailPageProps) {
-  const { slug } = await params;
+export default async function GameDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const rawSlug = (await params).slug;
+  const slug = decodeRouteSegment(rawSlug);
   const work = await getGameWorkDetail(slug);
-
-  if (!work) {
-    notFound();
-  }
-
+  if (!work) notFound();
+  const currentUser = await getCurrentUserFromCookies();
+  const relationCapabilities = getRelationEditorCapabilities(currentUser);
   const title = work.chineseTitle || work.originalTitle;
-  const primaryMedia = work.media[0]?.blobSha256 ?? work.previewBlobSha256;
-  const currentArchive = pickCurrentArchive(work);
+  const current = work.archiveVersions[0] ?? null;
+  const primaryMedia =
+    work.media.find((media) => media.isPrimary)?.blobSha256 ??
+    work.previewBlobSha256;
+  const translations = [
+    ...work.translations,
+    ...work.parallelTranslations.filter(
+      (item) =>
+        item.workId !== work.id &&
+        !work.translations.some((direct) => direct.workId === item.workId),
+    ),
+  ];
 
   return (
     <main>
       <PageHeader
-        actions={<BackLink href="/games" label="返回作品资料库" />}
+        actions={<BackLink href="/games" label="返回游戏库" />}
         subtitle={work.chineseTitle ? work.originalTitle : undefined}
         title={
           <span className="flex flex-wrap items-baseline gap-2">
@@ -49,47 +62,61 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           </span>
         }
       />
-
       <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(260px,380px)]">
-        <div className="aspect-video w-full object-cover">
-          <div className="overflow-hidden rounded-lg border border-border bg-muted/15">
+        <div className="grid gap-3">
+          <div className="grid aspect-video place-items-center overflow-hidden rounded-lg border border-border bg-muted/15 text-sm text-muted">
             {primaryMedia ? (
-              <Image alt={title} height={360} src={`/api/media/blobs/${primaryMedia}`} unoptimized width={640} />
+              <Image
+                alt={title}
+                className="h-auto w-full object-contain"
+                height={480}
+                src={`/api/media/blobs/${primaryMedia}`}
+                unoptimized
+                width={860}
+              />
             ) : (
-              <span>{engineLabel(work.engineFamily)}</span>
+              engineLabel(work.engineFamily)
             )}
           </div>
-          {work.media.length > 1 ? (
-            <section className="grid gap-3 sm:grid-cols-3" aria-label="浏览图">
-              {work.media.slice(1).map((media) => (
-                <Image
-                  alt={media.altText ?? title}
-                  height={160}
-                  key={media.blobSha256}
-                  src={`/api/media/blobs/${media.blobSha256}`}
-                  unoptimized
-                  width={240}
-                />
-              ))}
-            </section>
+          {work.media.filter((media) => media.blobSha256 !== primaryMedia)
+            .length > 0 ? (
+            <div className="grid grid-cols-3 gap-3" aria-label="浏览图">
+              {work.media
+                .filter((media) => media.blobSha256 !== primaryMedia)
+                .slice(0, 3)
+                .map((media) => (
+                  <Image
+                    alt={media.altText ?? title}
+                    className="h-auto w-full rounded-md border border-border object-cover"
+                    height={160}
+                    key={media.blobSha256}
+                    src={`/api/media/blobs/${media.blobSha256}`}
+                    unoptimized
+                    width={240}
+                  />
+                ))}
+            </div>
           ) : null}
         </div>
-        <Pane heading="作品概览">
+        <Pane heading="游戏概览">
           <ChipList
             items={[
               { label: engineLabel(work.engineFamily) },
+              { label: languageLabel(work.language) },
+              { label: work.isOriginal ? "本站原创" : "社区收录" },
               ...(work.usesManiacsPatch ? [{ label: "Maniacs Patch" }] : []),
             ]}
           />
           <WorkActionBar
             archive={
-              currentArchive
+              current
                 ? {
-                    id: currentArchive.id,
-                    label: publicCopy(currentArchive.archiveLabel) ?? currentArchive.archiveLabel,
-                    downloadHref: `/api/archive-versions/${currentArchive.id}/download?zip_builder=${downloadZipBuilderVersion}`,
-                    totalFiles: currentArchive.totalFiles,
-                    totalSizeBytes: currentArchive.totalSizeBytes,
+                    id: current.id,
+                    label:
+                      publicCopy(current.archiveLabel) ?? current.archiveLabel,
+                    downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
+                    totalFiles: current.totalFiles,
+                    totalSizeBytes: current.totalSizeBytes,
                   }
                 : null
             }
@@ -100,12 +127,10 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
             items={[
               {
                 label: "原作发布日期",
-                value: formatDateish(work.originalReleaseDate, work.originalReleasePrecision),
-              },
-              { label: "发布分支", value: formatNumber(work.releaseCount) },
-              {
-                label: "文件版本",
-                value: formatNumber(work.archiveVersionCount),
+                value: formatDateish(
+                  work.originalReleaseDate,
+                  work.originalReleasePrecision,
+                ),
               },
               {
                 label: "当前文件大小",
@@ -115,123 +140,97 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           />
         </Pane>
       </section>
-
-      <section className="grid gap-3" aria-label="发布版本">
-        <SectionHeading title="发布版本与下载" />
-        {work.releases.map((release) => (
-          <Pane
-            compact
-            heading={release.label}
-            headingAction={
-              release.sourceUrl ? (
-                <a
-                  className={buttonVariants({ variant: "outline" })}
-                  href={release.sourceUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  来源
-                </a>
-              ) : null
-            }
-            headingLevel={3}
-            key={release.id}
-          >
-            <p className="text-sm text-muted">
-              {releaseTypeLabel(release.type)} / {baseVariantLabel(release.baseVariant)}
-              {" / "}
-              {formatDateish(release.releaseDate, release.releaseDatePrecision)}
-            </p>
-            {release.rightsNotes ? <p>{release.rightsNotes}</p> : null}
-            {release.externalLinks.length > 0 ? (
+      <Pane heading="当前快照">
+        {current ? (
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div>
+              <strong>{publicCopy(current.archiveLabel)}</strong>
               <ChipList
-                items={release.externalLinks.map((link) => ({
-                  external: true,
-                  href: link.url,
-                  label: link.label,
-                }))}
-              />
-            ) : null}
-            {release.staff.length > 0 || release.tags.length > 0 ? (
-              <ChipList
+                compact
                 items={[
-                  ...release.staff.map((staff) => ({
-                    href: `/creators/${staff.slug}`,
-                    label: `${staff.roleLabel || creatorRoleLabel(staff.roleKey)}：${staff.name}`,
-                  })),
-                  ...release.tags.map((tag) => ({
-                    href: `/games?tag=${encodeURIComponent(tag.slug)}`,
-                    label: tag.name,
-                  })),
+                  { label: languageLabel(current.language) },
+                  { label: current.isProofread ? "已校对" : "未校对" },
+                  { label: current.isImageEdited ? "已修图" : "未修图" },
                 ]}
               />
-            ) : null}
-            <div className="w-full overflow-x-auto">
-              <TableWrap compact label={`${release.label}下载版本列表`} minWidth={760}>
-                <thead>
-                  <tr>
-                    <th>下载版本</th>
-                    <th>状态</th>
-                    <th>规模</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {release.archiveVersions.map((archive) => (
-                    <tr key={archive.id}>
-                      <td>
-                        <strong>{publicCopy(archive.archiveLabel)}</strong>
-                        <span className="font-mono text-sm text-primary text-sm text-muted">{archive.archiveKey}</span>
-                        {archive.uploaderName ? (
-                          <span className="text-sm text-muted">上传者：{archive.uploaderName}</span>
-                        ) : null}
-                      </td>
-                      <td>
-                        <ArchiveBadges archive={archive} />
-                      </td>
-                      <td>
-                        {formatNumber(archive.totalFiles)} 文件
-                        <span className="text-sm text-muted">{formatBytes(archive.totalSizeBytes)}</span>
-                      </td>
-                      <td>
-                        <ArchiveActions archiveId={archive.id} canPlayInBrowser={!work.usesManiacsPatch} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </TableWrap>
+              <p className="text-sm text-muted">
+                {formatNumber(current.totalFiles)} 文件 ·{" "}
+                {formatBytes(current.totalSizeBytes)}
+                {current.uploaderName
+                  ? ` · 上传者：${current.uploaderName}`
+                  : ""}
+              </p>
             </div>
-            <ul className="grid gap-3" aria-label={`${release.label}下载版本列表`}>
-              {release.archiveVersions.map((archive) => (
-                <li className="rounded-lg border border-border bg-card p-4 shadow-sm" key={archive.id}>
-                  <header>
-                    <strong>{publicCopy(archive.archiveLabel)}</strong>
-                    <span className="font-mono text-sm text-primary text-sm text-muted">{archive.archiveKey}</span>
-                  </header>
-                  <ArchiveBadges archive={archive} />
-                  <StatList
-                    items={[
-                      {
-                        label: "规模",
-                        value: `${formatNumber(archive.totalFiles)} 文件 / ${formatBytes(archive.totalSizeBytes)}`,
-                      },
-                      {
-                        label: "发布日期",
-                        value: formatDateish(archive.publishedAt, archive.publishedAt ? "day" : "unknown"),
-                      },
-                      ...(archive.uploaderName ? [{ label: "上传者", value: archive.uploaderName }] : []),
-                    ]}
-                  />
-                  <ArchiveActions archiveId={archive.id} canPlayInBrowser={!work.usesManiacsPatch} />
+            <ArchiveActions
+              archiveId={current.id}
+              canPlayInBrowser={!work.usesManiacsPatch}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted">当前还没有可下载快照。</p>
+        )}
+      </Pane>
+      <section
+        className="grid gap-5 scroll-mt-24 lg:grid-cols-2"
+        id="relations"
+      >
+        <Pane heading="原版与译版">
+          {translations.length ? (
+            <ul className="grid gap-3">
+              {translations.map((item) => (
+                <li
+                  className="flex flex-wrap items-baseline justify-between gap-2"
+                  key={`${item.role}-${item.workId}`}
+                >
+                  <Link href={`/games/${item.slug}`}>{item.title}</Link>
+                  <span className="text-sm text-muted">
+                    {item.role === "original" ? "原版" : "译版"} ·{" "}
+                    {languageLabel(item.language)}
+                  </span>
                 </li>
               ))}
             </ul>
-          </Pane>
-        ))}
+          ) : (
+            <p className="text-sm text-muted">尚未建立翻译关联。</p>
+          )}
+        </Pane>
+        <Pane heading="普通关联">
+          {work.relations.length ? (
+            <ul className="grid gap-3">
+              {work.relations.map((relation) => (
+                <li className="grid gap-1" key={relation.id}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <Link href={`/games/${relation.slug}`}>
+                      {relation.title}
+                    </Link>
+                    <span className="text-sm text-muted">
+                      {relationLabel(relation.relationType)}
+                    </span>
+                  </div>
+                  {relation.notes ? (
+                    <p className="text-sm text-muted">{relation.notes}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted">尚未建立普通关联。</p>
+          )}
+        </Pane>
+        <Pane>
+          <RelationEditor
+            {...relationCapabilities}
+            currentUserId={currentUser?.id ?? null}
+            language={work.language}
+            parallelTranslations={work.parallelTranslations}
+            relations={work.relations}
+            translations={work.translations}
+            workId={work.id}
+          />
+        </Pane>
       </section>
-
       <Pane heading="资料">
-        <div className="grid gap-4">
+        <div className="grid gap-5 md:grid-cols-2">
           <section>
             <h3>名称</h3>
             <StatList
@@ -240,23 +239,24 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 { label: "中文名", value: work.chineseTitle ?? "未填写" },
                 {
                   label: "别名",
-                  value: work.aliases.length > 0 ? work.aliases.join(" / ") : "未填写",
+                  value: work.aliases.length
+                    ? work.aliases.join(" / ")
+                    : "未填写",
                 },
               ]}
             />
           </section>
           <section>
             <h3>制作人员</h3>
-            {work.creators.length > 0 ? (
-              <ul className="mt-3 grid gap-3">
+            {work.creators.length ? (
+              <ul className="mt-3 grid gap-2">
                 {work.creators.map((creator) => (
                   <li key={`${creator.slug}-${creator.roleKey}`}>
                     <Link href={`/creators/${creator.slug}`}>
-                      <strong>{creator.name}</strong>
+                      {creator.name}
                     </Link>
                     <span className="text-sm text-muted">
                       {creator.roleLabel || creatorRoleLabel(creator.roleKey)}
-                      {creator.originalName ? ` / ${creator.originalName}` : ""}
                     </span>
                   </li>
                 ))}
@@ -267,7 +267,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           </section>
           <section>
             <h3>登场角色</h3>
-            {work.characters.length > 0 ? (
+            {work.characters.length ? (
               <ChipList
                 items={work.characters.map((character) => ({
                   href: `/games?character=${encodeURIComponent(character.slug)}`,
@@ -280,7 +280,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           </section>
           <section>
             <h3>标签</h3>
-            {work.tags.length > 0 ? (
+            {work.tags.length ? (
               <ChipList
                 items={work.tags.map((tag) => ({
                   href: `/games?tag=${encodeURIComponent(tag.slug)}`,
@@ -291,50 +291,16 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
               <p className="text-sm text-muted">未填写。</p>
             )}
           </section>
-          <section>
-            <h3>系列</h3>
-            {work.series.length > 0 ? (
-              <ul className="mt-3 grid gap-3">
-                {work.series.map((item) => (
-                  <li key={item.seriesId}>
-                    <Link href={`/series/${item.slug}`}>
-                      <strong>{item.title}</strong>
-                    </Link>
-                    <span className="text-sm text-muted">{item.positionLabel || item.relationKind}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted">未填写。</p>
-            )}
-          </section>
-          <section>
+          <section className="md:col-span-2">
             <h3>外部链接</h3>
-            {work.externalLinks.length > 0 ? (
-              <ul className="mt-3 grid gap-3">
+            {work.externalLinks.length ? (
+              <ul className="mt-3 grid gap-2">
                 {work.externalLinks.map((link) => (
                   <li key={link.id}>
                     <a href={link.url} rel="noreferrer" target="_blank">
                       {link.label}
                     </a>
-                    <span className="text-sm text-muted">{linkTypeLabel(link.linkType)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted">未填写。</p>
-            )}
-          </section>
-          <section>
-            <h3>相关作品</h3>
-            {work.relations.length > 0 ? (
-              <ul className="mt-3 grid gap-3">
-                {work.relations.map((relation) => (
-                  <li key={`${relation.direction}-${relation.workId}-${relation.relationType}`}>
-                    <Link href={`/games/${relation.slug}`}>{relation.title}</Link>
-                    <span className="text-sm text-muted">
-                      {relationLabel(relation.relationType, relation.direction)}
-                    </span>
+                    <span className="text-sm text-muted">{link.linkType}</span>
                   </li>
                 ))}
               </ul>
@@ -348,21 +314,21 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
   );
 }
 
-function ArchiveBadges({ archive }: { archive: GameArchiveVersionDetail }) {
-  return (
-    <ChipList
-      compact
-      items={[
-        ...(archive.isCurrent ? [{ label: "当前" }] : []),
-        { label: archive.language },
-        { label: archive.isProofread ? "已校对" : "未校对" },
-        { label: archive.isImageEdited ? "已修图" : "未修图" },
-      ]}
-    />
-  );
+function decodeRouteSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
-function ArchiveActions({ archiveId, canPlayInBrowser }: { archiveId: number; canPlayInBrowser: boolean }) {
+function ArchiveActions({
+  archiveId,
+  canPlayInBrowser,
+}: {
+  archiveId: number;
+  canPlayInBrowser: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <a
@@ -372,7 +338,10 @@ function ArchiveActions({ archiveId, canPlayInBrowser }: { archiveId: number; ca
         下载 ZIP
       </a>
       {canPlayInBrowser ? (
-        <Link className={buttonVariants({ variant: "outline" })} href={`/play/${archiveId}`}>
+        <Link
+          className={buttonVariants({ variant: "outline" })}
+          href={`/play/${archiveId}`}
+        >
           在线游玩
         </Link>
       ) : (
@@ -381,66 +350,6 @@ function ArchiveActions({ archiveId, canPlayInBrowser }: { archiveId: number; ca
     </div>
   );
 }
-
-function linkTypeLabel(value: string): string {
-  const labels: Record<string, string> = {
-    official: "官方网站",
-    wiki: "资料页面",
-    source: "来源",
-    video: "视频",
-    download_page: "下载页",
-  };
-
-  return labels[value] ?? "其他";
-}
-
-function relationLabel(value: string, direction: "from" | "to"): string {
-  const labels: Record<string, string> = {
-    prequel: direction === "from" ? "前作" : "后作",
-    sequel: direction === "from" ? "后作" : "前作",
-    side_story: "外传",
-    same_setting: "同世界观",
-    remake: "重制",
-    remaster: "高清/重制",
-    fan_disc: "Fan disc",
-    alternate_version: "异版本",
-    translation_source: "翻译来源",
-    inspired_by: "受其影响",
-  };
-
-  return labels[value] ?? "相关";
-}
-
 function formatDateish(value: string | null, precision: string): string {
-  if (!value || precision === "unknown") {
-    return "日期未知";
-  }
-
-  return value;
-}
-
-function pickCurrentArchive(work: {
-  releases: Array<{
-    archiveVersions: Array<{
-      id: number;
-      archiveLabel: string;
-      isCurrent: boolean;
-      totalFiles: number;
-      totalSizeBytes: number;
-    }>;
-  }>;
-}): {
-  id: number;
-  archiveLabel: string;
-  totalFiles: number;
-  totalSizeBytes: number;
-} | null {
-  for (const release of work.releases) {
-    for (const archive of release.archiveVersions) {
-      if (archive.isCurrent) {
-        return archive;
-      }
-    }
-  }
-  return null;
+  return !value || precision === "unknown" ? "日期未知" : value;
 }

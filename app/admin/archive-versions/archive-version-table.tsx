@@ -7,6 +7,7 @@ import { canDeleteArchiveVersion, type AdminArchiveVersion } from "@/lib/server/
 import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { formatNumber, formatDate, formatBytes } from "@/lib/format";
+import { languageLabel } from "@/lib/labels";
 
 export function ArchiveVersionTable({
   actor,
@@ -38,10 +39,10 @@ export function ArchiveVersionTable({
             <td>
               <strong>{archiveVersion.workTitle}</strong>
               <span className="text-sm text-muted">
-                {archiveVersion.releaseLabel} / {archiveVersion.archiveLabel}
+                {archiveVersion.archiveLabel}
               </span>
               <span className="font-mono text-sm text-primary text-sm text-muted">
-                #{archiveVersion.id} {archiveVersion.archiveKey} / {archiveVersion.language}
+                #{archiveVersion.id} / {languageLabel(archiveVersion.language)}
               </span>
             </td>
             <td>
@@ -88,7 +89,6 @@ function ArchiveActions({
 }) {
   const canRestore = hasPermission(actor, "archive_version.restore");
   const canUpdateArchive = hasPermission(actor, "archive_version.update");
-  const canUpdateRelease = hasPermission(actor, "release.update");
   const canSetCurrent = hasPermission(actor, "archive_version.set_current");
 
   if (archiveVersion.status === "deleted") {
@@ -114,11 +114,6 @@ function ArchiveActions({
       {canUpdateArchive ? (
         <Link className={buttonVariants()} href={`/admin/archive-versions/${archiveVersion.id}`}>
           编辑版本
-        </Link>
-      ) : null}
-      {canUpdateRelease ? (
-        <Link className={buttonVariants({ variant: "outline" })} href={`/admin/releases/${archiveVersion.releaseId}`}>
-          编辑发布版本
         </Link>
       ) : null}
       {canSetCurrent && archiveVersion.status === "published" && !archiveVersion.isCurrent ? (

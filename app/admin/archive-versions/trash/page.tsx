@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminArchiveVersionTrashPage() {
   const adminUser = await requirePagePermission("/admin/archive-versions/trash", "archive_version.restore");
   const [archiveVersions, unreadInboxCount] = await Promise.all([
-    listArchiveVersionsForAdmin(150, "trash"),
+    listArchiveVersionsForAdmin(150, "trash", adminUser),
     countUnreadInboxItemsForUser(adminUser),
   ]);
 

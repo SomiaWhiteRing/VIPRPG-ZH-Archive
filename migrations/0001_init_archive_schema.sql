@@ -51,11 +51,15 @@ VALUES
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+WHERE roles.key = 'user';
+
+INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","work.read_private","work.update","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","series.read_private","series.create","series.update","release.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -234,10 +238,14 @@ CREATE INDEX IF NOT EXISTS idx_user_role_events_actor
 CREATE TABLE IF NOT EXISTS works (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE,
-  original_title TEXT NOT NULL UNIQUE,
+  original_title TEXT NOT NULL,
   chinese_title TEXT,
   sort_title TEXT,
   description TEXT,
+  is_original INTEGER NOT NULL DEFAULT 0 CHECK (is_original IN (0, 1)),
+  language TEXT NOT NULL DEFAULT 'zh-CN' CHECK (
+    language IN ('zh-CN', 'ja', 'en', 'zh-TW', 'ko', 'fr', 'de', 'es', 'ru', 'pt-BR', 'it', 'th', 'vi')
+  ),
   original_release_date TEXT,
   original_release_precision TEXT NOT NULL CHECK (
     original_release_precision IN ('year', 'month', 'day', 'unknown')
@@ -262,6 +270,19 @@ CREATE TABLE IF NOT EXISTS works (
 CREATE INDEX IF NOT EXISTS idx_works_status_title
   ON works(status, sort_title, original_title);
 
+CREATE INDEX IF NOT EXISTS idx_works_original_title
+  ON works(original_title);
+
+CREATE TABLE IF NOT EXISTS work_uploaders (
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (work_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_uploaders_user
+  ON work_uploaders(user_id, work_id);
+
 CREATE TABLE IF NOT EXISTS work_titles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
@@ -278,57 +299,32 @@ CREATE TABLE IF NOT EXISTS work_titles (
 CREATE INDEX IF NOT EXISTS idx_work_titles_title
   ON work_titles(title);
 
-CREATE TABLE IF NOT EXISTS series (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  title_original TEXT,
-  description TEXT,
-  status TEXT NOT NULL CHECK (
-    status IN ('draft', 'published', 'hidden', 'deleted')
-  ) DEFAULT 'draft',
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS work_series (
-  series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
-  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  position_number REAL,
-  position_label TEXT,
-  relation_kind TEXT NOT NULL CHECK (
-    relation_kind IN ('main', 'side', 'collection_member', 'same_setting', 'other')
-  ) DEFAULT 'main',
-  notes TEXT,
-  PRIMARY KEY (series_id, work_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_work_series_order
-  ON work_series(series_id, position_number, position_label);
-
 CREATE TABLE IF NOT EXISTS work_relations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   from_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   to_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   relation_type TEXT NOT NULL CHECK (
     relation_type IN (
+      'adaptation',
       'prequel',
       'sequel',
-      'side_story',
       'same_setting',
-      'remake',
-      'remaster',
-      'fan_disc',
-      'alternate_version',
-      'translation_source',
-      'inspired_by',
-      'other'
+      'alternative_setting',
+      'alternative_version',
+      'character',
+      'collaboration',
+      'version',
+      'main_version',
+      'collection',
+      'in_collection'
     )
   ),
+  vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
+  relation_order REAL NOT NULL DEFAULT 0,
   notes TEXT,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (from_work_id, to_work_id, relation_type),
+  UNIQUE (from_work_id, to_work_id, relation_type, vice_versa),
   CHECK (from_work_id <> to_work_id)
 );
 
@@ -338,66 +334,172 @@ CREATE INDEX IF NOT EXISTS idx_work_relations_from
 CREATE INDEX IF NOT EXISTS idx_work_relations_to
   ON work_relations(to_work_id, relation_type);
 
-CREATE TABLE IF NOT EXISTS releases (
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_relations_logical_source
+  ON work_relations(
+    CASE WHEN from_work_id < to_work_id THEN from_work_id ELSE to_work_id END,
+    CASE WHEN from_work_id < to_work_id THEN to_work_id ELSE from_work_id END,
+    CASE
+      WHEN relation_type IN ('prequel', 'sequel') THEN 'prequel_sequel'
+      WHEN relation_type IN ('version', 'main_version') THEN 'version'
+      WHEN relation_type IN ('collection', 'in_collection') THEN 'collection'
+      ELSE relation_type
+    END
+  )
+  WHERE vice_versa = 0 AND relation_type <> 'collaboration';
+
+CREATE TABLE IF NOT EXISTS translation_relations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  target_role TEXT NOT NULL CHECK (target_role IN ('original', 'translation')),
+  target_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
+  relation_order REAL NOT NULL DEFAULT 0,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (source_work_id, target_work_id, vice_versa),
+  CHECK (source_work_id <> target_work_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_translation_relations_source
+  ON translation_relations(source_work_id, target_role, relation_order);
+
+CREATE INDEX IF NOT EXISTS idx_translation_relations_target
+  ON translation_relations(target_work_id, target_role);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_relations_one_original
+  ON translation_relations(source_work_id)
+  WHERE target_role = 'original';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_relations_logical_source
+  ON translation_relations(
+    CASE WHEN source_work_id < target_work_id THEN source_work_id ELSE target_work_id END,
+    CASE WHEN source_work_id < target_work_id THEN target_work_id ELSE source_work_id END
+  )
+  WHERE vice_versa = 0;
+
+CREATE TRIGGER IF NOT EXISTS translation_relations_require_distinct_languages
+BEFORE INSERT ON translation_relations
+WHEN (SELECT language FROM works WHERE id = NEW.source_work_id) =
+  (SELECT language FROM works WHERE id = NEW.target_work_id)
+BEGIN
+  SELECT RAISE(ABORT, 'translation languages must differ');
+END;
+
+CREATE TRIGGER IF NOT EXISTS translation_relations_update_require_distinct_languages
+BEFORE UPDATE OF source_work_id, target_work_id ON translation_relations
+WHEN (SELECT language FROM works WHERE id = NEW.source_work_id) =
+  (SELECT language FROM works WHERE id = NEW.target_work_id)
+BEGIN
+  SELECT RAISE(ABORT, 'translation languages must differ');
+END;
+
+CREATE TRIGGER IF NOT EXISTS translation_relations_require_consistent_roles
+BEFORE INSERT ON translation_relations
+WHEN EXISTS (
+  SELECT 1 FROM translation_relations existing
+  WHERE (
+    existing.source_work_id = NEW.source_work_id
+    AND (CASE WHEN existing.target_role = 'original' THEN 'translation' ELSE 'original' END)
+      <> (CASE WHEN NEW.target_role = 'original' THEN 'translation' ELSE 'original' END)
+  ) OR (
+    existing.target_work_id = NEW.source_work_id
+    AND existing.target_role <> (CASE WHEN NEW.target_role = 'original' THEN 'translation' ELSE 'original' END)
+  ) OR (
+    existing.source_work_id = NEW.target_work_id
+    AND (CASE WHEN existing.target_role = 'original' THEN 'translation' ELSE 'original' END) <> NEW.target_role
+  ) OR (
+    existing.target_work_id = NEW.target_work_id
+    AND existing.target_role <> NEW.target_role
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'translation role conflict');
+END;
+
+CREATE TRIGGER IF NOT EXISTS translation_relations_update_require_consistent_roles
+BEFORE UPDATE OF source_work_id, target_work_id, target_role ON translation_relations
+WHEN EXISTS (
+  SELECT 1 FROM translation_relations existing
+  WHERE existing.id <> NEW.id
+  AND (
+    (
+      existing.source_work_id = NEW.source_work_id
+      AND (CASE WHEN existing.target_role = 'original' THEN 'translation' ELSE 'original' END)
+        <> (CASE WHEN NEW.target_role = 'original' THEN 'translation' ELSE 'original' END)
+    ) OR (
+      existing.target_work_id = NEW.source_work_id
+      AND existing.target_role <> (CASE WHEN NEW.target_role = 'original' THEN 'translation' ELSE 'original' END)
+    ) OR (
+      existing.source_work_id = NEW.target_work_id
+      AND (CASE WHEN existing.target_role = 'original' THEN 'translation' ELSE 'original' END) <> NEW.target_role
+    ) OR (
+      existing.target_work_id = NEW.target_work_id
+      AND existing.target_role <> NEW.target_role
+    )
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'translation role conflict');
+END;
+
+CREATE TRIGGER IF NOT EXISTS works_translation_language_update_guard
+BEFORE UPDATE OF language ON works
+WHEN EXISTS (
+  SELECT 1
+  FROM translation_relations relation
+  JOIN works other ON other.id = CASE
+    WHEN relation.source_work_id = NEW.id THEN relation.target_work_id
+    ELSE relation.source_work_id
+  END
+  WHERE (relation.source_work_id = NEW.id OR relation.target_work_id = NEW.id)
+    AND other.language = NEW.language
+)
+BEGIN
+  SELECT RAISE(ABORT, 'translation languages must differ');
+END;
+
+CREATE TABLE IF NOT EXISTS catalogs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL CHECK (status IN ('published', 'deleted')) DEFAULT 'published',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalogs_owner_status
+  ON catalogs(owner_user_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS catalog_items (
+  catalog_id INTEGER NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE,
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  sort_order REAL NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (catalog_id, work_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_items_order
+  ON catalog_items(catalog_id, sort_order, work_id);
+
+CREATE TABLE IF NOT EXISTS archive_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  release_key TEXT NOT NULL,
-  release_label TEXT NOT NULL,
-  base_variant TEXT NOT NULL CHECK (
-    base_variant IN ('original', 'remake', 'other')
-  ) DEFAULT 'original',
-  variant_label TEXT NOT NULL DEFAULT 'default',
-  release_type TEXT NOT NULL CHECK (
-    release_type IN (
-      'original',
-      'translation',
-      'revision',
-      'localized_revision',
-      'demo',
-      'event_submission',
-      'patch_applied_full_release',
-      'repack',
-      'other'
-    )
-  ) DEFAULT 'original',
-  release_date TEXT,
-  release_date_precision TEXT NOT NULL CHECK (
-    release_date_precision IN ('year', 'month', 'day', 'unknown')
-  ) DEFAULT 'unknown',
+  archive_label TEXT NOT NULL,
+  is_proofread INTEGER NOT NULL DEFAULT 0,
+  is_image_edited INTEGER NOT NULL DEFAULT 0,
   source_name TEXT,
   source_url TEXT,
   executable_path TEXT,
   rights_notes TEXT,
-  status TEXT NOT NULL CHECK (
-    status IN ('draft', 'published', 'hidden', 'deleted')
-  ) DEFAULT 'draft',
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_by_user_id INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  published_at TEXT,
-  UNIQUE (work_id, release_key)
-);
-
-CREATE INDEX IF NOT EXISTS idx_releases_work_status
-  ON releases(work_id, status, release_date);
-
-CREATE TABLE IF NOT EXISTS archive_versions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  archive_key TEXT NOT NULL,
-  archive_label TEXT NOT NULL,
-  archive_variant_label TEXT NOT NULL DEFAULT 'default',
-  language TEXT NOT NULL,
-  is_proofread INTEGER NOT NULL DEFAULT 0,
-  is_image_edited INTEGER NOT NULL DEFAULT 0,
   manifest_sha256 TEXT NOT NULL,
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
   source_type TEXT NOT NULL CHECK (
     source_type IN ('browser_folder', 'browser_zip', 'preindexed_manifest')
   ),
-  source_name TEXT,
   source_file_count INTEGER NOT NULL DEFAULT 0,
   source_size_bytes INTEGER NOT NULL DEFAULT 0,
   excluded_file_count INTEGER NOT NULL DEFAULT 0,
@@ -419,19 +521,32 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   published_at TEXT,
   deleted_at TEXT,
   purged_at TEXT,
-  UNIQUE (release_id, archive_key, archive_label),
-  UNIQUE (release_id, archive_key, manifest_sha256)
+  UNIQUE (work_id, manifest_sha256)
 );
 
-CREATE INDEX IF NOT EXISTS idx_archive_versions_release
-  ON archive_versions(release_id, archive_key, status, is_current);
+CREATE INDEX IF NOT EXISTS idx_archive_versions_work
+  ON archive_versions(work_id, status, is_current, created_at);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_archive_versions_one_current
-  ON archive_versions(release_id, archive_key)
+  ON archive_versions(work_id)
   WHERE is_current = 1 AND status = 'published';
 
 CREATE INDEX IF NOT EXISTS idx_archive_versions_deleted_purge
   ON archive_versions(status, deleted_at, purged_at);
+
+CREATE TRIGGER IF NOT EXISTS archive_versions_current_insert_guard
+BEFORE INSERT ON archive_versions
+WHEN NEW.is_current = 1 AND (NEW.status <> 'published' OR NEW.purged_at IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'only published archive versions can be current');
+END;
+
+CREATE TRIGGER IF NOT EXISTS archive_versions_current_update_guard
+BEFORE UPDATE OF is_current, status, purged_at ON archive_versions
+WHEN NEW.is_current = 1 AND (NEW.status <> 'published' OR NEW.purged_at IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'only published archive versions can be current');
+END;
 
 CREATE TABLE IF NOT EXISTS blobs (
   sha256 TEXT PRIMARY KEY,
@@ -460,11 +575,41 @@ CREATE TABLE IF NOT EXISTS core_packs (
   status TEXT NOT NULL DEFAULT 'active'
 );
 
+CREATE TRIGGER IF NOT EXISTS works_require_active_media_blobs
+BEFORE INSERT ON works
+WHEN (NEW.icon_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.icon_blob_sha256), '') <> 'active')
+  OR (NEW.thumbnail_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.thumbnail_blob_sha256), '') <> 'active')
+BEGIN
+  SELECT RAISE(ABORT, 'work media blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS works_update_require_active_media_blobs
+BEFORE UPDATE OF icon_blob_sha256, thumbnail_blob_sha256 ON works
+WHEN (NEW.icon_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.icon_blob_sha256), '') <> 'active')
+  OR (NEW.thumbnail_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.thumbnail_blob_sha256), '') <> 'active')
+BEGIN
+  SELECT RAISE(ABORT, 'work media blob must be active');
+END;
+
 CREATE TABLE IF NOT EXISTS archive_version_blob_refs (
   archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
   blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
   PRIMARY KEY (archive_version_id, blob_sha256)
 ) WITHOUT ROWID;
+
+CREATE TRIGGER IF NOT EXISTS archive_version_blob_refs_require_active_blob
+BEFORE INSERT ON archive_version_blob_refs
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'archive version blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS archive_version_blob_refs_update_require_active_blob
+BEFORE UPDATE OF blob_sha256 ON archive_version_blob_refs
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'archive version blob must be active');
+END;
 
 CREATE INDEX IF NOT EXISTS idx_archive_version_blob_refs_blob
   ON archive_version_blob_refs(blob_sha256);
@@ -474,6 +619,20 @@ CREATE TABLE IF NOT EXISTS archive_version_core_pack_refs (
   core_pack_id INTEGER NOT NULL REFERENCES core_packs(id),
   PRIMARY KEY (archive_version_id, core_pack_id)
 ) WITHOUT ROWID;
+
+CREATE TRIGGER IF NOT EXISTS archive_version_core_pack_refs_require_active_pack
+BEFORE INSERT ON archive_version_core_pack_refs
+WHEN COALESCE((SELECT status FROM core_packs WHERE id = NEW.core_pack_id), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'archive version core pack must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS archive_version_core_pack_refs_update_require_active_pack
+BEFORE UPDATE OF core_pack_id ON archive_version_core_pack_refs
+WHEN COALESCE((SELECT status FROM core_packs WHERE id = NEW.core_pack_id), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'archive version core pack must be active');
+END;
 
 CREATE INDEX IF NOT EXISTS idx_archive_version_core_pack_refs_core_pack
   ON archive_version_core_pack_refs(core_pack_id);
@@ -516,22 +675,11 @@ CREATE TABLE IF NOT EXISTS work_staff (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
   role_key TEXT NOT NULL CHECK (
-    role_key IN ('author', 'scenario', 'graphics', 'music', 'translator', 'editor', 'publisher', 'other')
+    role_key IN ('author', 'scenario', 'graphics', 'music', 'translator', 'editor', 'publisher', 'proofreader', 'image_editor', 'other')
   ),
   role_label TEXT,
   notes TEXT,
   PRIMARY KEY (work_id, creator_id, role_key)
-);
-
-CREATE TABLE IF NOT EXISTS release_staff (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
-  role_key TEXT NOT NULL CHECK (
-    role_key IN ('author', 'translator', 'proofreader', 'image_editor', 'publisher', 'repacker', 'other')
-  ),
-  role_label TEXT,
-  notes TEXT,
-  PRIMARY KEY (release_id, creator_id, role_key)
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -554,14 +702,6 @@ CREATE TABLE IF NOT EXISTS work_tags (
   PRIMARY KEY (work_id, tag_id)
 );
 
-CREATE TABLE IF NOT EXISTS release_tags (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  source TEXT NOT NULL CHECK (source IN ('admin', 'uploader', 'imported')) DEFAULT 'admin',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (release_id, tag_id)
-);
-
 CREATE TABLE IF NOT EXISTS media_assets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
@@ -576,6 +716,20 @@ CREATE TABLE IF NOT EXISTS media_assets (
   UNIQUE (blob_sha256, kind)
 );
 
+CREATE TRIGGER IF NOT EXISTS media_assets_require_active_blob
+BEFORE INSERT ON media_assets
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'media asset blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS media_assets_update_require_active_blob
+BEFORE UPDATE OF blob_sha256 ON media_assets
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'media asset blob must be active');
+END;
+
 CREATE TABLE IF NOT EXISTS work_media_assets (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   media_asset_id INTEGER NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
@@ -583,6 +737,39 @@ CREATE TABLE IF NOT EXISTS work_media_assets (
   is_primary INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (work_id, media_asset_id)
 );
+
+CREATE TRIGGER IF NOT EXISTS blobs_purge_requires_unreferenced
+BEFORE UPDATE OF status ON blobs
+WHEN NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM archive_version_blob_refs
+    WHERE blob_sha256 = OLD.sha256
+  )
+  OR NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM works
+    WHERE icon_blob_sha256 = OLD.sha256
+      OR thumbnail_blob_sha256 = OLD.sha256
+  )
+  OR NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM media_assets
+    WHERE blob_sha256 = OLD.sha256
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'referenced blob cannot be purged');
+END;
+
+CREATE TRIGGER IF NOT EXISTS core_packs_purge_requires_unreferenced
+BEFORE UPDATE OF status ON core_packs
+WHEN NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM archive_version_core_pack_refs
+    WHERE core_pack_id = OLD.id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'referenced core pack cannot be purged');
+END;
 
 CREATE TABLE IF NOT EXISTS work_external_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -595,24 +782,14 @@ CREATE TABLE IF NOT EXISTS work_external_links (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS release_external_links (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  label TEXT NOT NULL,
-  url TEXT NOT NULL,
-  link_type TEXT NOT NULL CHECK (
-    link_type IN ('official', 'source', 'download_page', 'patch_note', 'other')
-  ) DEFAULT 'source',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS import_jobs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER REFERENCES works(id) ON DELETE SET NULL,
-  release_id INTEGER REFERENCES releases(id) ON DELETE SET NULL,
   archive_version_id INTEGER REFERENCES archive_versions(id) ON DELETE SET NULL,
   uploader_id INTEGER REFERENCES users(id),
-  status TEXT NOT NULL DEFAULT 'created',
+  status TEXT NOT NULL DEFAULT 'created' CHECK (
+    status IN ('created', 'preflighted', 'uploading', 'completed', 'failed', 'canceled')
+  ),
   source_name TEXT,
   source_size_bytes INTEGER,
   file_count INTEGER NOT NULL DEFAULT 0,
@@ -642,9 +819,6 @@ CREATE TABLE IF NOT EXISTS import_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_import_jobs_work
   ON import_jobs(work_id, created_at);
-
-CREATE INDEX IF NOT EXISTS idx_import_jobs_release
-  ON import_jobs(release_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_import_jobs_archive_version
   ON import_jobs(archive_version_id, created_at);

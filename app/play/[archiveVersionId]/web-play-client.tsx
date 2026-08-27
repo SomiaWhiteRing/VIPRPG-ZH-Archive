@@ -387,9 +387,8 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
                 label: "安装内容",
                 value: `${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`,
               },
-              { label: "发布版本", value: metadata.releaseLabel },
               {
-                label: "下载版本",
+                label: "当前快照",
                 value: publicCopy(metadata.archiveLabel) ?? metadata.archiveLabel,
               },
             ]}

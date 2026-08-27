@@ -22,8 +22,7 @@ export default async function AdminPage() {
 
   const metrics = [
     ["用户", formatNumber(summary.users)],
-    ["作品", formatNumber(summary.works)],
-    ["发布版本", formatNumber(summary.releases)],
+    ["游戏", formatNumber(summary.works)],
     ["文件版本", formatNumber(summary.archiveVersions)],
     ["文件对象数", formatNumber(summary.blobs.count)],
     ["文件对象容量", formatBytes(summary.blobs.sizeBytes)],

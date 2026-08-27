@@ -85,13 +85,12 @@ export type UploadTaskStats = {
 
 export type UploadTaskCommitResult = {
   workId: number;
-  releaseId: number;
+  workSlug: string;
   archiveVersionId: number;
   manifestSha256: string;
   fileCount: number;
   uniqueBlobCount: number;
   corePackCount: number;
-  alreadyExisted: boolean;
 };
 
 export type UploadWorkerInput =

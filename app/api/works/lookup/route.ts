@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { getD1 } from "@/lib/server/db/d1";
 import { json, jsonError } from "@/lib/server/http/json";
+import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
@@ -17,37 +18,9 @@ type WorkLookupRow = {
   uses_maniacs_patch: number;
   icon_blob_sha256: string | null;
   thumbnail_blob_sha256: string | null;
-};
-
-type ReleaseLookupRow = {
-  id: number;
-  work_id: number;
-  release_key: string;
-  release_label: string;
-  base_variant: "original" | "remake" | "other";
-  variant_label: string;
-  release_type: string;
-  release_date: string | null;
-  release_date_precision: string;
-  source_name: string | null;
-  source_url: string | null;
-  executable_path: string | null;
-  rights_notes: string | null;
-};
-
-type ReleaseLookupOutput = {
-  id: number;
-  key: string;
-  label: string;
-  baseVariant: "original" | "remake" | "other";
-  variantLabel: string;
-  type: string;
-  releaseDate: string | null;
-  releaseDatePrecision: string;
-  sourceName: string | null;
-  sourceUrl: string | null;
-  executablePath: string | null;
-  rightsNotes: string | null;
+  language: string;
+  is_original: number;
+  can_edit: number;
 };
 
 export async function GET(request: Request) {
@@ -85,10 +58,30 @@ export async function GET(request: Request) {
           w.engine_detail,
           w.uses_maniacs_patch,
           w.icon_blob_sha256,
-          w.thumbnail_blob_sha256
+          w.thumbnail_blob_sha256,
+          w.language,
+          w.is_original,
+          CASE
+            WHEN (
+              ? = 1 AND EXISTS (
+                SELECT 1
+                FROM work_uploaders wu
+                WHERE wu.work_id = w.id AND wu.user_id = ?
+              )
+            ) OR ? = 1 THEN 1
+            ELSE 0
+          END AS can_edit
         FROM works w
         LEFT JOIN work_titles wt ON wt.work_id = w.id
         WHERE w.status <> 'deleted'
+          AND (
+            w.status = 'published'
+            OR ? = 1
+            OR (? = 1 AND EXISTS (
+              SELECT 1 FROM work_uploaders private_wu
+              WHERE private_wu.work_id = w.id AND private_wu.user_id = ?
+            ))
+          )
           AND (
             w.original_title LIKE ? ESCAPE '\\'
             OR w.chinese_title LIKE ? ESCAPE '\\'
@@ -105,13 +98,24 @@ export async function GET(request: Request) {
           w.updated_at DESC
         LIMIT 5`,
       )
-      .bind(like, like, like, slugFromTitle(title), title, title, title)
+      .bind(
+        auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
+        auth.user.id,
+        auth.user.permissionKeys.includes("work.update") ? 1 : 0,
+        auth.user.permissionKeys.includes("work.read_private") ? 1 : 0,
+        auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
+        auth.user.id,
+        like,
+        like,
+        like,
+        slugify(title),
+        title,
+        title,
+        title,
+      )
       .all<WorkLookupRow>();
 
     const workRows = works.results ?? [];
-    const workIds = workRows.map((work) => work.id);
-    const releasesByWork = await loadReleasesByWork(workIds);
-
     return json({
       ok: true,
       works: workRows.map((work) => ({
@@ -127,66 +131,14 @@ export async function GET(request: Request) {
         usesManiacsPatch: work.uses_maniacs_patch === 1,
         iconBlobSha256: work.icon_blob_sha256,
         thumbnailBlobSha256: work.thumbnail_blob_sha256,
-        releases: releasesByWork.get(work.id) ?? [],
+        language: work.language,
+        isOriginal: work.is_original === 1,
+        canEdit: work.can_edit === 1,
       })),
     });
   } catch (error) {
     return jsonError("Work lookup failed", error);
   }
-}
-
-async function loadReleasesByWork(workIds: number[]) {
-  const result = new Map<number, ReleaseLookupOutput[]>();
-
-  if (workIds.length === 0) {
-    return result;
-  }
-
-  const placeholders = workIds.map(() => "?").join(", ");
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        id,
-        work_id,
-        release_key,
-        release_label,
-        base_variant,
-        variant_label,
-        release_type,
-        release_date,
-        release_date_precision,
-        source_name,
-        source_url,
-        executable_path,
-        rights_notes
-      FROM releases
-      WHERE status <> 'deleted'
-        AND work_id IN (${placeholders})
-      ORDER BY published_at DESC, created_at DESC`,
-    )
-    .bind(...workIds)
-    .all<ReleaseLookupRow>();
-
-  for (const row of rows.results ?? []) {
-    const releases = result.get(row.work_id) ?? [];
-    releases.push({
-      id: row.id,
-      key: row.release_key,
-      label: row.release_label,
-      baseVariant: row.base_variant,
-      variantLabel: row.variant_label,
-      type: row.release_type,
-      releaseDate: row.release_date,
-      releaseDatePrecision: row.release_date_precision,
-      sourceName: row.source_name,
-      sourceUrl: row.source_url,
-      executablePath: row.executable_path,
-      rightsNotes: row.rights_notes,
-    });
-    result.set(row.work_id, releases);
-  }
-
-  return result;
 }
 
 function escapeLike(value: string): string {
@@ -195,15 +147,4 @@ function escapeLike(value: string): string {
 
 function splitAliases(value: string | null): string[] {
   return value ? value.split("\n").filter(Boolean) : [];
-}
-
-function slugFromTitle(title: string): string {
-  return (
-    title
-      .normalize("NFKC")
-      .trim()
-      .toLowerCase()
-      .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
-      .replace(/^-+|-+$/g, "") || "untitled-work"
-  );
 }

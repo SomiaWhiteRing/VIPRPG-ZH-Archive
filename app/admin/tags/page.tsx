@@ -49,14 +49,14 @@ export default async function AdminTagsPage() {
               </td>
               <td>{namespaceLabel(tag.namespace)}</td>
               <td>
-                {formatNumber(tag.workCount)} 作品 / {formatNumber(tag.releaseCount)} 发布版本
+                {formatNumber(tag.workCount)} 个游戏
               </td>
               <td>
                 <div className="flex flex-wrap items-center gap-3">
                   <Link className={buttonVariants()} href={`/admin/tags/${tag.id}`}>
                     编辑
                   </Link>
-                  {tag.workCount > 0 || tag.releaseCount > 0 ? (
+                  {tag.workCount > 0 ? (
                     <Link
                       className={buttonVariants({ variant: "outline" })}
                       href={`/games?tag=${encodeURIComponent(tag.slug)}`}

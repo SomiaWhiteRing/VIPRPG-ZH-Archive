@@ -78,7 +78,7 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
         columns={3}
         items={[
           { label: "作品", value: formatNumber(tag.workCount) },
-          { label: "发布版本", value: formatNumber(tag.releaseCount) },
+          { label: "游戏", value: formatNumber(tag.workCount) },
         ]}
         variant="tiles"
       />

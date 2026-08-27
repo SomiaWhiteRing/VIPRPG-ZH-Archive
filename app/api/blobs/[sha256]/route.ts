@@ -1,10 +1,18 @@
-import { normalizeSha256, sha256Hex, timingSafeEqualString } from "@/lib/server/crypto/sha256";
+import {
+  normalizeSha256,
+  sha256Hex,
+  timingSafeEqualString,
+} from "@/lib/server/crypto/sha256";
 import { requirePermission } from "@/lib/server/auth/authorize";
-import { findExistingObjects, insertBlobRecord } from "@/lib/server/db/archive-objects";
+import {
+  assertObjectUploadAllowed,
+  findExistingObjects,
+  insertBlobRecord,
+} from "@/lib/server/db/archive-objects";
 import {
   parseImportJobId,
   recordImportObjectUpload,
-  requiredOwnedImportJob,
+  requiredActiveOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import { readContentType } from "@/lib/server/http/request";
@@ -42,6 +50,7 @@ export async function PUT(request: Request, context: RouteContext) {
         sha256,
       });
     }
+    await assertObjectUploadAllowed({ kind: "blob", sha256 });
 
     const body = await request.arrayBuffer();
     const actualSha256 = await sha256Hex(body);
@@ -91,12 +100,12 @@ export async function PUT(request: Request, context: RouteContext) {
 
 async function requiredAuthorizedImportJobId(
   request: Request,
-  user: Parameters<typeof requiredOwnedImportJob>[1],
+  user: Parameters<typeof requiredActiveOwnedImportJob>[1],
 ): Promise<number> {
   const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
   if (!rawImportJobId) throw new HttpError(400, "import_job_id is required");
 
   const importJobId = parseImportJobId(rawImportJobId);
-  await requiredOwnedImportJob(importJobId, user);
+  await requiredActiveOwnedImportJob(importJobId, user);
   return importJobId;
 }

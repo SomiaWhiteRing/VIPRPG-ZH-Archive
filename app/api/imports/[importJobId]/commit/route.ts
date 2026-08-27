@@ -1,4 +1,7 @@
-import type { ArchiveCommitMetadata, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
+import type {
+  ArchiveCommitMetadata,
+  ExcludedFileTypeSummary,
+} from "@/lib/archive/manifest";
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { commitArchiveImport } from "@/lib/server/db/archive-commit";
 import {
@@ -7,7 +10,7 @@ import {
   recordImportCommitSucceeded,
   requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
-import { json, jsonError } from "@/lib/server/http/json";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +21,9 @@ type RouteContext = {
 };
 
 type CommitRequest = {
-  manifestSha256?: string;
-  manifestJson?: string;
-  metadata?: ArchiveCommitMetadata;
+  manifestSha256: string;
+  manifestJson: string;
+  metadata: ArchiveCommitMetadata;
   excludedFileTypes?: ExcludedFileTypeSummary[];
 };
 
@@ -33,28 +36,18 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const { importJobId } = await context.params;
-  const id = parseImportJobId(importJobId);
+  let id: number | null = null;
   let authorizedForJob = false;
 
   try {
-    await requiredOwnedImportJob(id, auth.user);
+    id = parseImportJobId(importJobId);
+    const job = await requiredOwnedImportJob(id, auth.user);
     authorizedForJob = true;
-
-    const payload = (await request.json()) as CommitRequest;
-
-    if (
-      typeof payload.manifestSha256 !== "string" ||
-      typeof payload.manifestJson !== "string" ||
-      !payload.metadata
-    ) {
-      return json(
-        {
-          ok: false,
-          error: "Invalid commit payload",
-        },
-        { status: 400 },
-      );
+    if (job.status === "completed") throw new HttpError(409, "导入任务已完成");
+    if (job.status === "canceled") {
+      throw new HttpError(409, "导入任务已取消");
     }
+    const payload = await parseCommitRequest(request);
 
     const result = await commitArchiveImport({
       importJobId: id,
@@ -64,24 +57,75 @@ export async function POST(request: Request, context: RouteContext) {
       metadata: payload.metadata,
       excludedFileTypes: payload.excludedFileTypes ?? [],
     });
+    // The archive commit is already durable; observability must not turn a
+    // successful upload into a misleading 500 if its counter update fails.
     await recordImportCommitSucceeded({
       id,
       durationMs: Date.now() - startedAt,
-      manifestSizeBytes: new TextEncoder().encode(payload.manifestJson).byteLength,
-    });
+      manifestSizeBytes: new TextEncoder().encode(payload.manifestJson)
+        .byteLength,
+    }).catch(() => undefined);
 
     return json({
       ok: true,
       result,
     });
   } catch (error) {
-    if (authorizedForJob) {
+    if (id !== null && authorizedForJob) {
       await markImportJobFailed(
         id,
         error instanceof Error ? error.message : "Unknown error",
         "commit",
-      );
+      ).catch(() => undefined);
     }
     return jsonError("Import commit failed", error);
   }
+}
+
+async function parseCommitRequest(request: Request): Promise<CommitRequest> {
+  let value: unknown;
+  try {
+    value = await request.json();
+  } catch {
+    throw new HttpError(400, "Invalid commit payload");
+  }
+
+  if (
+    !isRecord(value) ||
+    typeof value.manifestSha256 !== "string" ||
+    typeof value.manifestJson !== "string" ||
+    !isRecord(value.metadata)
+  ) {
+    throw new HttpError(400, "Invalid commit payload");
+  }
+
+  const excludedFileTypes = value.excludedFileTypes ?? [];
+  if (
+    !Array.isArray(excludedFileTypes) ||
+    excludedFileTypes.some(
+      (item) =>
+        !isRecord(item) ||
+        typeof item.fileType !== "string" ||
+        !isNonNegativeInteger(item.fileCount) ||
+        !isNonNegativeInteger(item.totalSizeBytes) ||
+        typeof item.examplePath !== "string",
+    )
+  ) {
+    throw new HttpError(400, "Invalid excluded file summary");
+  }
+
+  return {
+    manifestSha256: value.manifestSha256,
+    manifestJson: value.manifestJson,
+    metadata: value.metadata as ArchiveCommitMetadata,
+    excludedFileTypes: excludedFileTypes as ExcludedFileTypeSummary[],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }

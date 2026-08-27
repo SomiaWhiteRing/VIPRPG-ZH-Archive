@@ -97,25 +97,6 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
           )}
         </Pane>
 
-        <Pane heading="发布版本职务">
-          {creator.adminReleaseCredits.length > 0 ? (
-            <ul className="mt-3 grid gap-3">
-              {creator.adminReleaseCredits.map((credit) => (
-                <li key={`${credit.releaseId}-${credit.roleKey}`}>
-                  <Link href={`/admin/releases/${credit.releaseId}`}>
-                    {credit.workTitle} / {credit.releaseLabel}
-                  </Link>
-                  <span className="text-sm text-muted">
-                    {creatorRoleLabel(credit.roleKey)} / {workStatusLabel(credit.status)}
-                    {credit.notes ? ` / ${credit.notes}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState title="暂无发布版本职务。" />
-          )}
-        </Pane>
       </section>
     </main>
   );

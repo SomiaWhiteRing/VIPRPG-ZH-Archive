@@ -1,15 +1,37 @@
 const defaultGcGraceDays = 7;
 const scheduledGcLimitPerType = 1000;
 const maxReturnedIssues = 25;
-const blobKey = (sha256) => `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
-const corePackKey = (sha256) => `core-packs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.zip`;
-const manifestKey = (sha256) => `manifests/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.json`;
+const canonicalHash = (sha256) => String(sha256).trim().toLowerCase();
+const blobKey = (sha256) => {
+  const hash = canonicalHash(sha256);
+  return `blobs/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}`;
+};
+const corePackKey = (sha256) => {
+  const hash = canonicalHash(sha256);
+  return `core-packs/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.zip`;
+};
+const manifestKey = (sha256) => {
+  const hash = canonicalHash(sha256);
+  return `manifests/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.json`;
+};
 
 export async function runScheduledArchiveGc(env, input = {}) {
   const startedAt = Date.now();
-  const graceDays = clampInteger(input.graceDays ?? defaultGcGraceDays, 0, 3650);
-  const limitPerType = clampInteger(input.limitPerType ?? scheduledGcLimitPerType, 1, 1000);
-  const archiveVersions = await purgeDeletedArchiveVersions(env, graceDays, limitPerType);
+  const graceDays = clampInteger(
+    input.graceDays ?? defaultGcGraceDays,
+    0,
+    3650,
+  );
+  const limitPerType = clampInteger(
+    input.limitPerType ?? scheduledGcLimitPerType,
+    1,
+    1000,
+  );
+  const archiveVersions = await purgeDeletedArchiveVersions(
+    env,
+    graceDays,
+    limitPerType,
+  );
   const [blobRows, corePackRows] = await Promise.all([
     listEligibleGcRows(env.DB, "blob", graceDays, limitPerType),
     listEligibleGcRows(env.DB, "core_pack", graceDays, limitPerType),
@@ -43,7 +65,7 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
           b.sha256,
           b.size_bytes
         FROM blobs b
-        WHERE b.status = 'active'
+        WHERE b.status IN ('active', 'purging')
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -68,7 +90,7 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
           cp.sha256,
           cp.size_bytes
         FROM core_packs cp
-        WHERE cp.status = 'active'
+        WHERE cp.status IN ('active', 'purging')
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -88,7 +110,6 @@ async function listArchiveVersionPurgeCandidates(db, graceDays, limit) {
       `SELECT
         id,
         archive_label,
-        archive_key,
         deleted_at,
         total_files,
         total_size_bytes,
@@ -108,7 +129,11 @@ async function listArchiveVersionPurgeCandidates(db, graceDays, limit) {
 }
 
 async function purgeDeletedArchiveVersions(env, graceDays, limit) {
-  const rows = await listArchiveVersionPurgeCandidates(env.DB, graceDays, limit);
+  const rows = await listArchiveVersionPurgeCandidates(
+    env.DB,
+    graceDays,
+    limit,
+  );
   const purged = [];
   const skipped = [];
   const failed = [];
@@ -123,21 +148,15 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
     }
 
     try {
-      await env.DB.prepare(
-        `DELETE FROM archive_version_blob_refs
-        WHERE archive_version_id = ?`,
-      )
-        .bind(row.id)
-        .run();
-      await env.DB.prepare(
-        `DELETE FROM archive_version_core_pack_refs
-        WHERE archive_version_id = ?`,
-      )
-        .bind(row.id)
-        .run();
-      await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
+      if (
+        !(await hasOtherManifestReferences(env.DB, row.manifest_sha256, row.id))
+      ) {
+        await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
+      }
+      await deleteArchiveVersionRefs(env.DB, row.id);
       purged.push(candidate);
     } catch (error) {
+      await releaseArchiveVersionPurgeReservation(env.DB, row.id);
       failed.push({
         ...candidate,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -148,8 +167,14 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
   return {
     scannedCount: rows.length,
     purgedCount: purged.length,
-    purgedFileCount: purged.reduce((sum, candidate) => sum + candidate.totalFiles, 0),
-    purgedSizeBytes: purged.reduce((sum, candidate) => sum + candidate.totalSizeBytes, 0),
+    purgedFileCount: purged.reduce(
+      (sum, candidate) => sum + candidate.totalFiles,
+      0,
+    ),
+    purgedSizeBytes: purged.reduce(
+      (sum, candidate) => sum + candidate.totalSizeBytes,
+      0,
+    ),
     skippedCount: skipped.length,
     failedCount: failed.length,
     purged: purged.slice(0, maxReturnedIssues),
@@ -176,11 +201,57 @@ async function markArchiveVersionPurged(db, archiveVersionId, graceDays) {
   return (result.meta?.changes ?? 0) > 0;
 }
 
+async function hasOtherManifestReferences(
+  db,
+  manifestSha256,
+  archiveVersionId,
+) {
+  const row = await db
+    .prepare(
+      `SELECT 1
+       FROM archive_versions
+       WHERE manifest_sha256 = ?
+         AND id <> ?
+         AND purged_at IS NULL
+       LIMIT 1`,
+    )
+    .bind(manifestSha256, archiveVersionId)
+    .first();
+  return Boolean(row);
+}
+
+async function releaseArchiveVersionPurgeReservation(db, archiveVersionId) {
+  await db
+    .prepare(
+      `UPDATE archive_versions
+       SET purged_at = NULL
+       WHERE id = ? AND status = 'deleted'`,
+    )
+    .bind(archiveVersionId)
+    .run();
+}
+
+async function deleteArchiveVersionRefs(db, archiveVersionId) {
+  await db
+    .prepare(
+      `DELETE FROM archive_version_blob_refs
+       WHERE archive_version_id = ?`,
+    )
+    .bind(archiveVersionId)
+    .run();
+  await db
+    .prepare(
+      `DELETE FROM archive_version_core_pack_refs
+       WHERE archive_version_id = ?`,
+    )
+    .bind(archiveVersionId)
+    .run();
+}
+
 function mapArchiveVersionPurgeCandidate(row) {
   return {
     id: row.id,
     archiveLabel: row.archive_label,
-    archiveKey: row.archive_key,
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
@@ -196,10 +267,15 @@ async function sweepRows(env, type, rows, graceDays) {
     const object = {
       type,
       id: String(row.id),
-      r2Key: row.sha256,
+      r2Key: type === "blob" ? blobKey(row.id) : corePackKey(row.id),
       sizeBytes: row.size_bytes,
     };
-    const reserved = await markCandidatePurging(env.DB, type, object.id, graceDays);
+    const reserved = await markCandidatePurging(
+      env.DB,
+      type,
+      object.id,
+      graceDays,
+    );
 
     if (!reserved) {
       skipped.push(object);
@@ -207,7 +283,9 @@ async function sweepRows(env, type, rows, graceDays) {
     }
 
     try {
-      await env.ARCHIVE_BUCKET.delete(type === "blob" ? blobKey(object.id) : corePackKey(object.id));
+      await env.ARCHIVE_BUCKET.delete(
+        type === "blob" ? blobKey(object.id) : corePackKey(object.id),
+      );
       await markCandidatePurged(env.DB, type, object.id);
       purged.push(object);
     } catch (error) {
@@ -237,7 +315,7 @@ async function markCandidatePurging(db, type, id, graceDays) {
       ? `UPDATE blobs
         SET status = 'purging'
         WHERE sha256 = ?
-          AND status = 'active'
+          AND status IN ('active', 'purging')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -257,18 +335,15 @@ async function markCandidatePurging(db, type, id, graceDays) {
           )`
       : `UPDATE core_packs
         SET status = 'purging'
-        WHERE id = ?
-          AND status = 'active'
+        WHERE sha256 = ?
+          AND status IN ('active', 'purging')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
             FROM archive_version_core_pack_refs avcpr
             WHERE avcpr.core_pack_id = core_packs.id
           )`;
-  const result = await db
-    .prepare(sql)
-    .bind(type === "blob" ? id : Number(id), `-${graceDays} days`)
-    .run();
+  const result = await db.prepare(sql).bind(id, `-${graceDays} days`).run();
 
   return (result.meta?.changes ?? 0) > 0;
 }
@@ -282,10 +357,13 @@ async function markCandidatePurged(db, type, id) {
           AND status = 'purging'`
       : `UPDATE core_packs
         SET status = 'purged'
-        WHERE id = ?
+        WHERE sha256 = ?
           AND status = 'purging'`;
 
-  await db.prepare(sql).bind(type === "blob" ? id : Number(id)).run();
+  const result = await db.prepare(sql).bind(id).run();
+  if ((result.meta?.changes ?? 0) === 0) {
+    throw new Error("GC reservation was lost before purge completion");
+  }
 }
 
 async function restoreCandidateActive(db, type, id) {
@@ -297,10 +375,10 @@ async function restoreCandidateActive(db, type, id) {
           AND status = 'purging'`
       : `UPDATE core_packs
         SET status = 'active'
-        WHERE id = ?
+        WHERE sha256 = ?
           AND status = 'purging'`;
 
-  await db.prepare(sql).bind(type === "blob" ? id : Number(id)).run();
+  await db.prepare(sql).bind(id).run();
 }
 
 async function writeGcAuditLog(db, report) {

@@ -1,16 +1,19 @@
 export function blobKey(sha256: string): string {
   assertSha256(sha256);
-  return `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
+  const normalized = sha256.toLowerCase();
+  return `blobs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}`;
 }
 
 export function corePackKey(sha256: string): string {
   assertSha256(sha256);
-  return `core-packs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.zip`;
+  const normalized = sha256.toLowerCase();
+  return `core-packs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.zip`;
 }
 
 export function manifestKey(manifestSha256: string): string {
   assertSha256(manifestSha256);
-  return `manifests/sha256/${manifestSha256.slice(0, 2)}/${manifestSha256.slice(2, 4)}/${manifestSha256}.json`;
+  const normalized = manifestSha256.toLowerCase();
+  return `manifests/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.json`;
 }
 
 function assertSha256(value: string): void {

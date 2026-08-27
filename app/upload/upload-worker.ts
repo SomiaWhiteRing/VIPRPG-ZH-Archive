@@ -275,7 +275,7 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
 
     await persistAndPost(failedTask, true);
 
-    if (failedTask.serverImportJobId) {
+    if (failedTask.serverImportJobId && failedTask.status === "canceled") {
       await fetch(`/api/imports/${failedTask.serverImportJobId}/cancel`, {
         method: "POST",
         credentials: "same-origin",
@@ -563,31 +563,26 @@ async function buildManifest(input: {
             },
     }));
   const manifest: ArchiveManifest = {
-    schema: "viprpg-archive.manifest.v1",
-    work: {
-      slug: input.task.metadata.work.slug,
-      originalTitle: input.task.metadata.work.originalTitle,
-      chineseTitle: input.task.metadata.work.chineseTitle,
-    },
-    release: {
-      key: input.task.metadata.release.key,
-      label: input.task.metadata.release.label,
-      baseVariant: input.task.metadata.release.baseVariant,
-      variantLabel: input.task.metadata.release.variantLabel,
-      type: input.task.metadata.release.type,
+    schema: "viprpg-archive.manifest.v2",
+    game: {
+      slug: input.task.metadata.game.slug,
+      originalTitle: input.task.metadata.game.originalTitle,
+      chineseTitle: input.task.metadata.game.chineseTitle,
+      language: input.task.metadata.game.language,
+      isOriginal: input.task.metadata.game.isOriginal,
     },
     archiveVersion: {
-      key: input.task.metadata.archiveVersion.key,
       label: input.task.metadata.archiveVersion.label,
-      variantLabel: input.task.metadata.archiveVersion.variantLabel,
-      language: input.task.metadata.archiveVersion.language,
       isProofread: input.task.metadata.archiveVersion.isProofread,
       isImageEdited: input.task.metadata.archiveVersion.isImageEdited,
+      sourceName: input.task.metadata.archiveVersion.sourceName,
+      sourceUrl: input.task.metadata.archiveVersion.sourceUrl,
+      executablePath: input.task.metadata.archiveVersion.executablePath,
+      rightsNotes: input.task.metadata.archiveVersion.rightsNotes,
       createdAt: new Date().toISOString(),
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
       sourceType: input.sourceKind === "zip" ? "browser_zip" : "browser_folder",
-      sourceName: input.task.sourceName,
       sourceFileCount: input.task.stats.sourceFileCount,
       sourceSize: input.task.stats.sourceSizeBytes,
       includedFileCount: input.task.stats.includedFileCount,
@@ -789,17 +784,19 @@ async function commitTask(
     throw new Error("上传任务尚未准备好，无法提交入库。");
   }
 
+  const body = JSON.stringify({
+    manifestSha256: task.manifestSha256,
+    manifestJson: task.manifestJson,
+    metadata,
+    excludedFileTypes,
+  });
+
   const response = await jsonFetch<{
     ok: true;
     result: UploadTaskCommitResult;
   }>(`/api/imports/${task.serverImportJobId}/commit`, {
     method: "POST",
-    body: JSON.stringify({
-      manifestSha256: task.manifestSha256,
-      manifestJson: task.manifestJson,
-      metadata,
-      excludedFileTypes,
-    }),
+    body,
   });
 
   return response.result;
