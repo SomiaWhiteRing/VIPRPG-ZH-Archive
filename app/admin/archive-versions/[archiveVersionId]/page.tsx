@@ -5,8 +5,8 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
-import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
+import { FormField } from "@/app/components/ui/form-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
@@ -15,19 +15,16 @@ import { StatusBadge } from "@/app/components/ui/status-badge";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatDate, formatNumber, formatBytes } from "@/lib/format";
+import { formatBytes, formatDate, formatNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type AdminArchiveVersionEditPageProps = {
-  params: Promise<{
-    archiveVersionId: string;
-  }>;
-};
-
-export default async function AdminArchiveVersionEditPage({ params }: AdminArchiveVersionEditPageProps) {
-  const { archiveVersionId: rawArchiveVersionId } = await params;
-  const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
+export default async function AdminArchiveVersionEditPage({
+  params,
+}: {
+  params: Promise<{ archiveVersionId: string }>;
+}) {
+  const archiveVersionId = parseId((await params).archiveVersionId);
   const adminUser = await requirePagePermission(
     `/admin/archive-versions/${archiveVersionId}`,
     "archive_version.update",
@@ -36,57 +33,51 @@ export default async function AdminArchiveVersionEditPage({ params }: AdminArchi
     getArchiveVersionForAdminEdit(archiveVersionId),
     countUnreadInboxItemsForUser(adminUser),
   ]);
-
-  if (!archiveVersion) {
-    notFound();
-  }
-
+  if (!archiveVersion) notFound();
   return (
     <main>
       <PageHeader
-        eyebrow="编辑文件版本"
+        eyebrow="编辑归档快照"
         title={archiveVersion.archiveLabel}
-        subtitle={`所属作品：${archiveVersion.workTitle} / ${archiveVersion.releaseLabel}`}
+        subtitle={`所属游戏：${archiveVersion.workTitle}`}
         actions={
           <>
-            <BackLink href={`/admin/releases/${archiveVersion.releaseId}`} label="返回发布版本" />
-            <Link className={buttonVariants({ variant: "outline" })} href="/admin/archive-versions">
-              版本管理
+            <BackLink href="/admin/archive-versions" label="返回归档管理" />
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href={`/admin/works/${archiveVersion.workId}`}
+            >
+              编辑游戏
             </Link>
-            <Link className={buttonVariants({ variant: "outline" })} href={`/games/${archiveVersion.workSlug}`}>
+            <Link
+              className={buttonVariants({ variant: "outline" })}
+              href={`/games/${archiveVersion.workSlug}`}
+            >
               查看公开页
             </Link>
             <InboxLink unread={unreadInboxCount} />
           </>
         }
       />
-
       <form
         action={`/api/admin/archive-versions/${archiveVersion.id}/update`}
-        className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm min-h-0 grid gap-4"
+        className="grid gap-4"
         method="post"
       >
-        <input name="archive_version_id" type="hidden" value={archiveVersion.id} />
-
-        <section className="grid gap-3">
-          <SectionHeading title="文件版本资料" />
+        <input
+          name="archive_version_id"
+          type="hidden"
+          value={archiveVersion.id}
+        />
+        <Pane heading="快照资料">
+          <SectionHeading title="只修改归档事实，不改变游戏关系" />
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="不可修改" label="文件版本 key">
-              <Input readOnly value={archiveVersion.archiveKey} />
-            </FormField>
-            <FormField label="文件版本名称">
-              <Input defaultValue={archiveVersion.archiveLabel} name="archive_label" required type="text" />
-            </FormField>
-            <FormField label="快照分支">
+            <FormField label="快照名称">
               <Input
-                defaultValue={archiveVersion.archiveVariantLabel}
-                name="archive_variant_label"
+                defaultValue={archiveVersion.archiveLabel}
+                name="archive_label"
                 required
-                type="text"
               />
-            </FormField>
-            <FormField label="语言">
-              <Input defaultValue={archiveVersion.language} name="language" required type="text" />
             </FormField>
             <FormField label="状态">
               <SelectField
@@ -99,51 +90,88 @@ export default async function AdminArchiveVersionEditPage({ params }: AdminArchi
                 ]}
               />
             </FormField>
-            <CheckboxField defaultChecked={archiveVersion.isProofread} label="已校对" name="is_proofread" />
-            <CheckboxField defaultChecked={archiveVersion.isImageEdited} label="已修图" name="is_image_edited" />
+            <CheckboxField
+              defaultChecked={archiveVersion.isProofread}
+              label="已校对"
+              name="is_proofread"
+            />
+            <CheckboxField
+              defaultChecked={archiveVersion.isImageEdited}
+              label="已修图"
+              name="is_image_edited"
+            />
+            <FormField label="来源名称">
+              <Input
+                defaultValue={archiveVersion.sourceName ?? ""}
+                name="source_name"
+              />
+            </FormField>
+            <FormField label="来源网址">
+              <Input
+                defaultValue={archiveVersion.sourceUrl ?? ""}
+                name="source_url"
+                type="url"
+              />
+            </FormField>
+            <FormField label="可执行文件路径">
+              <Input
+                defaultValue={archiveVersion.executablePath ?? ""}
+                name="executable_path"
+              />
+            </FormField>
+            <FormField label="授权备注" wide>
+              <Input
+                defaultValue={archiveVersion.rightsNotes ?? ""}
+                name="rights_notes"
+              />
+            </FormField>
           </div>
-        </section>
-
+        </Pane>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit">保存文件版本</Button>
-          {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
-            <Button variant="outline" form="set-current-archive-version" type="submit">
+          <Button type="submit">保存归档</Button>
+          {archiveVersion.status === "published" &&
+          !archiveVersion.isCurrent ? (
+            <Button
+              form="set-current-archive-version"
+              type="submit"
+              variant="outline"
+            >
               设为当前
             </Button>
           ) : null}
         </div>
       </form>
-
       {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
         <form
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
-          className="inline-flex"
           id="set-current-archive-version"
           method="post"
         />
       ) : null}
-
-      <section className="grid gap-3 md:grid-cols-3 grid gap-4 lg:grid-cols-3" aria-label="文件版本只读信息">
-        <Pane heading="当前状态">
+      <section className="grid gap-4 md:grid-cols-3">
+        <Pane heading="状态">
           <StatList
             items={[
               {
                 label: "状态",
-                value: <StatusBadge kind="archive" value={archiveVersion.status} />,
+                value: (
+                  <StatusBadge kind="archive" value={archiveVersion.status} />
+                ),
               },
               {
-                label: "当前版本",
+                label: "当前快照",
                 value: archiveVersion.isCurrent ? "是" : "否",
               },
               { label: "上传者", value: archiveVersion.uploaderName ?? "未知" },
               {
                 label: "发布时间",
-                value: archiveVersion.publishedAt ? formatDate(archiveVersion.publishedAt) : "未发布",
+                value: archiveVersion.publishedAt
+                  ? formatDate(archiveVersion.publishedAt)
+                  : "未发布",
               },
             ]}
           />
         </Pane>
-
         <Pane heading="规模">
           <StatList
             items={[
@@ -156,7 +184,7 @@ export default async function AdminArchiveVersionEditPage({ params }: AdminArchi
                 value: formatBytes(archiveVersion.totalSizeBytes),
               },
               {
-                label: "预计对象存储读取",
+                label: "对象存储读取",
                 value: formatNumber(archiveVersion.estimatedR2GetCount),
               },
               {
@@ -166,40 +194,19 @@ export default async function AdminArchiveVersionEditPage({ params }: AdminArchi
             ]}
           />
         </Pane>
-
-        <Pane heading="文件清单">
+        <Pane heading="清单">
           <StatList
             items={[
               {
                 label: "SHA-256",
-                value: <span className="font-mono text-sm text-primary">{archiveVersion.manifestSha256}</span>,
+                value: (
+                  <span className="font-mono text-sm">
+                    {archiveVersion.manifestSha256}
+                  </span>
+                ),
               },
               { label: "文件策略", value: archiveVersion.filePolicyVersion },
               { label: "打包器", value: archiveVersion.packerVersion },
-            ]}
-          />
-        </Pane>
-
-        <Pane heading="来源">
-          <StatList
-            items={[
-              {
-                label: "来源类型",
-                value: sourceTypeLabel(archiveVersion.sourceType),
-              },
-              { label: "来源名称", value: archiveVersion.sourceName ?? "未知" },
-              {
-                label: "源文件",
-                value: formatNumber(archiveVersion.sourceFileCount),
-              },
-              {
-                label: "源容量",
-                value: formatBytes(archiveVersion.sourceSizeBytes),
-              },
-              {
-                label: "排除文件",
-                value: `${formatNumber(archiveVersion.excludedFileCount)} / ${formatBytes(archiveVersion.excludedSizeBytes)}`,
-              },
             ]}
           />
         </Pane>
@@ -208,25 +215,8 @@ export default async function AdminArchiveVersionEditPage({ params }: AdminArchi
   );
 }
 
-function parseArchiveVersionId(value: string): number {
-  const archiveVersionId = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(archiveVersionId) || archiveVersionId <= 0) {
-    notFound();
-  }
-
-  return archiveVersionId;
-}
-
-function sourceTypeLabel(value: string): string {
-  switch (value) {
-    case "browser_folder":
-      return "浏览器文件夹上传";
-    case "browser_zip":
-      return "浏览器 ZIP 上传";
-    case "preindexed_manifest":
-      return "预生成文件清单";
-    default:
-      return "未知";
-  }
+function parseId(value: string): number {
+  const id = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(id) || id <= 0) notFound();
+  return id;
 }

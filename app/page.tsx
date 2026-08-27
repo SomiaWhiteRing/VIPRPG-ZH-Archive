@@ -9,8 +9,10 @@ import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const [currentUser, works] = await Promise.all([getCurrentUserFromCookies(), listGameWorks({ limit: 9 })]);
+export default async function HomePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const activeTab = params.tab === "original" ? "original" : "all";
+  const [currentUser, works] = await Promise.all([getCurrentUserFromCookies(), listGameWorks({ limit: 9, isOriginal: activeTab === "original" ? true : undefined })]);
 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
@@ -43,17 +45,17 @@ export default async function HomePage() {
         </form>
       </section>
 
-      <HomeTabs />
+      <HomeTabs active={activeTab} />
 
       <section className="scroll-mt-36" id="recent-updates" aria-labelledby="recent-updates-title">
         <div className="mb-5 flex items-end justify-between gap-5">
           <div>
             <h2 className="text-2xl font-bold tracking-tight" id="recent-updates-title">
-              最近更新
+              {activeTab === "original" ? "本站原创" : "全部游戏"}
             </h2>
-            <p className="mt-1 text-muted">最近有新版本或新内容的作品。</p>
+            <p className="mt-1 text-muted">{activeTab === "original" ? "由作者亲自在本站发表的游戏。" : "最近更新的公开游戏。"}</p>
           </div>
-          <Link className="text-sm font-bold text-primary hover:text-accent" href="/games">
+          <Link className="text-sm font-bold text-primary hover:text-accent" href={activeTab === "original" ? "/games?original=1" : "/games"}>
             查看全部游戏 →
           </Link>
         </div>
@@ -68,7 +70,7 @@ export default async function HomePage() {
         )}
       </section>
 
-      <section className="scroll-mt-36" id="about-site" aria-labelledby="about-site-title">
+      <section className="mt-14 scroll-mt-36" id="about-site" aria-labelledby="about-site-title">
         <div className="mb-5 flex items-end justify-between gap-5">
           <div>
             <h2 className="text-2xl font-bold tracking-tight" id="about-site-title">
@@ -83,7 +85,7 @@ export default async function HomePage() {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
           <p className="max-w-[700px] text-muted leading-7">
             VIPRPG.org 收录 VIPRPG 活动与社区相关的 RPG Maker 2000/2003 作品，
-            提供清晰的作品资料、版本选择、在线游玩和下载入口。这里优先展示真实作品内容，
+            提供清晰的游戏资料、当前快照、在线游玩和下载入口。这里优先展示真实作品内容，
             让你从浏览到开始游戏只需要几步。
           </p>
           <div className="grid gap-3 border-l-4 border-accent pl-5">
@@ -93,7 +95,7 @@ export default async function HomePage() {
             </div>
             <div>
               <strong>可追溯</strong>
-              <span>不同发布版本独立展示，来源和变更保持清晰。</span>
+              <span>历史快照保留在站内，公开页始终指向当前内容。</span>
             </div>
             <div>
               <strong>一起补充</strong>

@@ -1,7 +1,7 @@
 import { FILE_POLICY_VERSION } from "@/lib/archive/file-policy";
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { createImportJob } from "@/lib/server/db/import-jobs";
-import { json, jsonError } from "@/lib/server/http/json";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ type CreateImportRequest = {
   fileCount?: number;
   excludedFileCount?: number;
   excludedSizeBytes?: number;
-  filePolicyVersion?: string;
+  filePolicyVersion: string;
 };
 
 export async function POST(request: Request) {
@@ -22,8 +22,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = (await request.json()) as CreateImportRequest;
-    const filePolicyVersion = String(payload.filePolicyVersion ?? "");
+    const payload = await parseCreateImportRequest(request);
+    const filePolicyVersion = payload.filePolicyVersion;
 
     if (filePolicyVersion !== FILE_POLICY_VERSION) {
       return json(
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
 function readString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`Invalid ${name}`);
+    throw new HttpError(400, `Invalid ${name}`);
   }
 
   return value.trim();
@@ -78,10 +78,32 @@ function readString(value: unknown, name: string): string {
 
 function readNonNegativeInteger(value: unknown, name: string): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
-    throw new Error(`Invalid ${name}`);
+    throw new HttpError(400, `Invalid ${name}`);
   }
 
   return Number(value);
+}
+
+async function parseCreateImportRequest(
+  request: Request,
+): Promise<CreateImportRequest> {
+  let value: unknown;
+  try {
+    value = await request.json();
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
+  if (!isRecord(value)) {
+    throw new HttpError(400, "Invalid import job body");
+  }
+  if (typeof value.filePolicyVersion !== "string") {
+    throw new HttpError(400, "Invalid filePolicyVersion");
+  }
+  return value as CreateImportRequest;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function mapImportJob(job: Awaited<ReturnType<typeof createImportJob>>) {

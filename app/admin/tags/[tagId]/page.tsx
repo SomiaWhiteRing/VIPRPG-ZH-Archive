@@ -42,7 +42,7 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
         actions={
           <>
             <BackLink href="/admin/tags" label="返回标签维护" />
-            {tag.workCount > 0 || tag.releaseCount > 0 ? (
+            {tag.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
                 href={`/games?tag=${encodeURIComponent(tag.slug)}`}
@@ -93,7 +93,7 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField hint="提交后，作品与发布版本关联会移至目标标签，当前标签会被删除。" label="目标标签 slug">
+          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" label="目标标签 slug">
             <Input name="merge_target_slug" placeholder="留空则不合并" />
           </FormField>
         </Pane>

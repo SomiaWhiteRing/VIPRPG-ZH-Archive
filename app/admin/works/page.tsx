@@ -55,7 +55,7 @@ export default async function AdminWorksPage() {
                 {work.usesManiacsPatch ? <span className="text-sm text-muted">Maniacs Patch</span> : null}
               </td>
               <td>
-                {formatNumber(work.releaseCount)} 发布 / {formatNumber(work.archiveVersionCount)} 个文件版本
+                {formatNumber(work.archiveVersionCount)} 个归档快照
                 <span className="text-sm text-muted">{formatBytes(work.totalSizeBytes)}</span>
               </td>
               <td>

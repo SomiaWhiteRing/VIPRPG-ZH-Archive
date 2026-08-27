@@ -12,114 +12,48 @@
 
 ## 1. 设计目标
 
-当前游戏资料模型需要解决四个问题：
+当前游戏资料模型需要同时保持玩家可理解的资料边界和可验证的归档边界：
 
-1. 系列作品需要统一管理页面。
-2. 前作、后作、外传、同世界观、重制版等作品关系需要显式记录。
-3. “游戏本身”和“某次发布版本”不能混为一谈，否则同一作品的汉化版、修正版、活动投下版、再打包版会越来越难管理。
-4. 元数据会持续增长，例如主要登场角色、投下场合、标签、作者、来源链接、版权备注等，不能把所有东西都硬塞进一个越来越大的作品表。
+1. `Work` 是作品身份、公开资料和权限归属的唯一业务对象。
+2. `ArchiveVersion` 是直接挂在 Work 下的不可变文件快照；同一 Work 可以保留原版、多个译本和并行修订版本。
+3. 语言、原创标记、引擎信息、作者、角色、标签、普通关联和翻译关联都必须有明确的数据归属。
+4. 文件路径只属于 manifest；D1 只保存可查询的资料、统计和对象引用，避免把文件索引复制成另一套事实。
 
-因此当前模型拆成：
+当前模型只有两层领域对象：
 
 ```text
-Series
-  系列或集合，例如同一企划、同一世界观、同一作者系列。
-
 Work
-  作品本身。它是玩家、搜索和资料页面看到的主要对象。
-
-Release
-  作品的一条玩家可识别的版本分支，例如原版、重制版、修正版、活动投下版。
+  作品本身。它是玩家、搜索、资料页和上传权限看到的主要对象。
 
 ArchiveVersion
-  本站实际归档的一份可下载文件快照，同时记录语言、校对、修图等归档状态。
+  直接归属于 Work 的一份可下载文件快照，记录语言、校对、修图、来源和清单统计。
 ```
 
-用一句话概括：
-
-```text
-Series 管一组 Work；Work 管资料；Release 管版本分支和发布日期；ArchiveVersion 管本站保存的具体归档。
-```
+`Work` 回答“这是什么游戏”，`ArchiveVersion` 回答“本站保存并发布了哪一份文件”。
 
 ## 2. 核心对象解释
 
-### 2.1 Series
+### 2.1 Work
 
-`Series` 表示系列、合集、企划或世界观集合。
+`Work` 表示作品本身，是公开游戏资料页面的核心。它包含原名、中文名、别名、简介、原作日期、引擎族、引擎备注、语言、是否本站原创、图像引用和发布状态。
 
-例子：
+Work 还拥有作者/制作人员、角色、标签、普通关联、翻译关联、目录成员和外部链接。作品身份使用全局唯一 `slug` 和原名约束，关联表使用 `work_id` 外键。
 
-- 某作者连续制作的一组作品。
-- 同一世界观下的多个 RPG Maker 作品。
-- 某个活动或企划下官方整理的系列。
+Work 不直接保存文件清单。文件清单和每次归档的来源、校对/修图状态属于 ArchiveVersion。
 
-Series 本身不直接下载。它的用途是管理和展示：
+### 2.2 ArchiveVersion
 
-- 系列介绍。
-- 系列内作品排序。
-- 正传、外传、同世界观、合集收录等关系。
+`ArchiveVersion` 表示本站实际保存的一份文件快照，直接引用一个 Work。一个 Work 可以有多个已发布快照，例如原版、中文译本、英语译本或不同的平行整理方案；每个 Work 最多有一个 published current 快照。
 
-### 2.2 Work
+ArchiveVersion 记录：
 
-`Work` 表示作品本身，是公开游戏资料页面的核心。
+- 归档名称、来源名称、来源网址、可执行入口和授权备注；
+- 是否校对、是否修图；
+- manifest SHA-256、文件策略版本、打包器版本和来源类型；
+- 总文件数、总大小、排除统计、core pack 统计和预计 R2 Get；
+- `is_current`、发布/回收站状态以及上传者。
 
-Work 应回答：
-
-- 这是什么作品？
-- 它的中文名、原名、别名是什么？
-- 作者是谁？
-- 它大概是什么引擎、题材、标签？
-- 它与其他作品有什么关系？
-- 它有哪些公开发布版本可以下载？
-
-Work 不应该直接保存文件清单。文件清单属于 ArchiveVersion。
-
-### 2.3 Release
-
-`Release` 表示作品的一条可被玩家识别的版本分支。
-
-常见 Release：
-
-- 原版发布。
-- 修正版。
-- Maniacs Patch 适配版。
-- 活动投下版。
-- 再发布版。
-
-Release 应回答：
-
-- 这是哪个作品的哪个发布版本？
-- 它基于原版、重制版还是其他基底？
-- 它的版本标识是什么？
-- 发布时间是什么？
-- 来源链接是什么？
-
-Release 不等同于独立补丁包。架构仍然不以“补丁包增量继承”作为归档目标。这里的 Release 指的是一个版本分支的资料层；语言、校对、修图和具体文件状态下放到 ArchiveVersion。
-
-### 2.4 ArchiveVersion
-
-`ArchiveVersion` 表示本站实际保存的一份文件快照。
-
-同一个 Release 可以有多个 ArchiveVersion，例如：
-
-- 第一次导入时漏了某个白名单类型，之后用新白名单重新导入。
-- 重新计算 manifest 或修正路径编码策略。
-- 管理员发现原导入损坏，重新从同一来源归档。
-
-ArchiveVersion 应回答：
-
-- 本站现在保存了哪些文件？
-- 这份归档是什么语言？
-- 是否校对、修图？
-- 它是该 Release 下哪个归档方案？
-- manifest SHA-256 是什么？
-- 使用了哪个文件白名单版本？
-- 有多少文件进入归档？
-- 排除了多少白名单外文件？
-- 需要多少 R2 Get 才能重组下载？
-- 其 core pack 和 blob 引用是什么？
-
-ArchiveVersion 发布后应当不可变。若需要修正，应创建新的 ArchiveVersion，并把同一 `archive_key` 的当前下载指向新快照。
+发布后不原地修改 manifest 或文件引用。需要修正时创建新的 ArchiveVersion，再由管理端切换 current；删除 current 后由服务层选择同一 Work 的最新 published 快照接任。
 
 ### 2.5 Blob / CorePack / Manifest
 
@@ -139,33 +73,30 @@ ArchiveVersion 发布后应当不可变。若需要修正，应创建新的 Arch
 ## 3. 关系图
 
 ```text
-series
-  1 ── n work_series n ── 1 works
-
 works
+  1 ── n archive_versions
   1 ── n work_titles
-  1 ── n releases
   1 ── n work_characters n ── 1 characters
+  1 ── n work_staff n ── 1 creators
   1 ── n work_tags n ── 1 tags
   1 ── n work_relations n ── 1 works
-
-releases
-  1 ── n archive_versions
-  1 ── n release_events n ── 1 events
-  1 ── n release_staff n ── 1 creators
-  1 ── n release_tags n ── 1 tags
+  1 ── n translation_relations n ── 1 works
+  1 ── n work_media_assets n ── 1 media_assets
+  1 ── n work_external_links
 
 archive_versions
   1 ── n archive_version_blob_refs n ── 1 blobs
   1 ── n archive_version_core_pack_refs n ── 1 core_packs
-  n ── 1 releases
+
+catalogs
+  1 ── n catalog_items n ── 1 works
 ```
 
 ## 4. D1 表结构
 
 下面是当前游戏领域表，后续实现只围绕这些表开发。
 
-### 4.1 作品和系列
+### 4.1 作品和归属
 
 ```sql
 CREATE TABLE works (
@@ -175,6 +106,8 @@ CREATE TABLE works (
   chinese_title TEXT,
   sort_title TEXT,
   description TEXT,
+  is_original INTEGER NOT NULL DEFAULT 0 CHECK (is_original IN (0, 1)),
+  language TEXT NOT NULL DEFAULT 'zh-CN',
   original_release_date TEXT,
   original_release_precision TEXT NOT NULL CHECK (
     original_release_precision IN ('year', 'month', 'day', 'unknown')
@@ -215,34 +148,15 @@ CREATE TABLE work_titles (
 CREATE INDEX idx_work_titles_title
   ON work_titles(title);
 
-CREATE TABLE series (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  title_original TEXT,
-  description TEXT,
-  status TEXT NOT NULL CHECK (
-    status IN ('draft', 'published', 'hidden', 'deleted')
-  ) DEFAULT 'draft',
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE work_series (
-  series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+CREATE TABLE work_uploaders (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  position_number REAL,
-  position_label TEXT,
-  relation_kind TEXT NOT NULL CHECK (
-    relation_kind IN ('main', 'side', 'collection_member', 'same_setting', 'other')
-  ) DEFAULT 'main',
-  notes TEXT,
-  PRIMARY KEY (series_id, work_id)
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (work_id, user_id)
 );
 
-CREATE INDEX idx_work_series_order
-  ON work_series(series_id, position_number, position_label);
+CREATE INDEX idx_work_uploaders_user
+  ON work_uploaders(user_id, work_id);
 ```
 
 说明：
@@ -252,8 +166,7 @@ CREATE INDEX idx_work_series_order
 - `works.uses_maniacs_patch` 跟随作品本体，因为 Maniacs Patch 会影响作品运行时假设，而不是某个文件归档快照。
 - `works.icon_blob_sha256` 和 `works.thumbnail_blob_sha256` 是 Work 层的单图引用；为空时展示层按引擎使用缺省图。
 - `work_titles` 只保存可多值的别名；原名和中文名是 Work 的明确列。
-- `series` 与 `works` 是多对多关系，因为一个作品可能既属于作者系列，也属于活动合集。
-- `position_number` 用于排序，允许 `1.5` 这类外传插入位置；`position_label` 用于显示“外传”“前日谈”等人工标签。
+- `work_uploaders` 只记录共同上传者和创建时间，不区分 owner/editor；具体权限仍由统一授权边界和 Work 所有权规则决定。
 
 ### 4.2 作品关系
 
@@ -264,22 +177,26 @@ CREATE TABLE work_relations (
   to_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   relation_type TEXT NOT NULL CHECK (
     relation_type IN (
+      'adaptation',
       'prequel',
       'sequel',
-      'side_story',
       'same_setting',
-      'remake',
-      'remaster',
-      'fan_disc',
-      'alternate_version',
-      'translation_source',
-      'inspired_by',
-      'other'
+      'alternative_setting',
+      'alternative_version',
+      'character',
+      'collaboration',
+      'version',
+      'main_version',
+      'collection',
+      'in_collection'
     )
   ),
+  vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
+  relation_order REAL NOT NULL DEFAULT 0,
   notes TEXT,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (from_work_id, to_work_id, relation_type),
+  UNIQUE (from_work_id, to_work_id, relation_type, vice_versa),
   CHECK (from_work_id <> to_work_id)
 );
 
@@ -293,65 +210,23 @@ CREATE INDEX idx_work_relations_to
 说明：
 
 - 前作、后作这类关系是有方向的。
-- 若需要在页面上双向显示，可以由应用层根据 `relation_type` 生成反向文案。
-- `translation_source` 用于表达“此作品或此发布基于另一个作品”，但若关系只属于某个汉化 Release，应该优先记录在 Release 层。
+- 具有自然反向关系的类型由服务层在同一 D1 batch 中写入正向和反向行；`vice_versa = 1` 的行只允许独立排序或随正向行删除。
+- `collaboration` 是单向关系，不自动生成反向行。
+- 翻译语义使用 `translation_relations`，因为它还需要校验两端语言和原版/译版角色。
 
-### 4.3 发布版本和归档快照
+### 4.3 归档快照
 
 ```sql
-CREATE TABLE releases (
+CREATE TABLE archive_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  release_key TEXT NOT NULL,
-  release_label TEXT NOT NULL,
-  base_variant TEXT NOT NULL CHECK (
-    base_variant IN ('original', 'remake', 'other')
-  ) DEFAULT 'original',
-  variant_label TEXT NOT NULL DEFAULT 'default',
-  release_type TEXT NOT NULL CHECK (
-    release_type IN (
-      'original',
-      'translation',
-      'revision',
-      'localized_revision',
-      'demo',
-      'event_submission',
-      'patch_applied_full_release',
-      'repack',
-      'other'
-    )
-  ) DEFAULT 'original',
-  release_date TEXT,
-  release_date_precision TEXT NOT NULL CHECK (
-    release_date_precision IN ('year', 'month', 'day', 'unknown')
-  ) DEFAULT 'unknown',
+  archive_label TEXT NOT NULL,
+  is_proofread INTEGER NOT NULL DEFAULT 0,
+  is_image_edited INTEGER NOT NULL DEFAULT 0,
   source_name TEXT,
   source_url TEXT,
   executable_path TEXT,
   rights_notes TEXT,
-  status TEXT NOT NULL CHECK (
-    status IN ('draft', 'published', 'hidden', 'deleted')
-  ) DEFAULT 'draft',
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_by_user_id INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  published_at TEXT,
-  UNIQUE (work_id, release_key)
-);
-
-CREATE INDEX idx_releases_work_status
-  ON releases(work_id, status, release_date);
-
-CREATE TABLE archive_versions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  archive_key TEXT NOT NULL,
-  archive_label TEXT NOT NULL,
-  archive_variant_label TEXT NOT NULL DEFAULT 'default',
-  language TEXT NOT NULL,
-  is_proofread INTEGER NOT NULL DEFAULT 0,
-  is_image_edited INTEGER NOT NULL DEFAULT 0,
   manifest_sha256 TEXT NOT NULL,
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
@@ -379,30 +254,25 @@ CREATE TABLE archive_versions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   published_at TEXT,
   deleted_at TEXT,
-  UNIQUE (release_id, archive_key, archive_label),
-  UNIQUE (release_id, archive_key, manifest_sha256)
+  purged_at TEXT,
+  UNIQUE (work_id, manifest_sha256)
 );
 
-CREATE INDEX idx_archive_versions_release
-  ON archive_versions(release_id, archive_key, status, is_current);
+CREATE INDEX idx_archive_versions_work
+  ON archive_versions(work_id, status, is_current, created_at);
 
 CREATE UNIQUE INDEX idx_archive_versions_one_current
-  ON archive_versions(release_id, archive_key)
+  ON archive_versions(work_id)
   WHERE is_current = 1 AND status = 'published';
 ```
 
 说明：
 
-- `releases` 负责玩家能理解的版本分支和发布日期。
-- `archive_versions` 负责本站导入、下载重组、语言、校对/修图状态和具体文件快照。
-- `patch_applied_full_release` 表示“已经打好补丁的完整发布物”，不是独立补丁包支持。
-- `release_key` 是同一 Work 下的稳定唯一键，由 `base_variant + release_type + variant_label` 生成；`release_label` 只负责显示。
-- `base_variant` 表示该发布分支基于原版、重制版或其他基底。
-- `variant_label` 是区分同类版本分支的短文本，例如 `原版`、`重制版`、`官方修正版`、`默认版`。
-- `archive_key` 是同一 Release 下的稳定唯一归档分支键，由 `language + 校对/修图状态 + archive_variant_label` 生成。
-- `archive_variant_label` 用来区分同语言、同校对/修图状态下的 A 方案、B 方案或不同上传者整理方案。
-- `language`、`is_proofread`、`is_image_edited` 属于 ArchiveVersion，因为它们描述的是这份可下载归档，而不是作品版本分支本身。
-- `is_current` 表示某个 Release 下某个 `archive_key` 当前默认下载的归档快照。
+- `archive_versions` 直接归属于 Work；不存在单独的发布分支或归档分支键。
+- `language` 和 `is_original` 是 Work 的资料字段；校对、修图和来源字段描述具体文件快照。
+- `manifest_sha256` 在同一 Work 下唯一，避免重复发布相同清单。
+- `is_current` 表示该 Work 的默认下载快照；同一 Work 同时只能有一个 published current。
+- 发布后的 ArchiveVersion 不原地修改 manifest。修正导入应创建新行，再切换 `is_current`。
 - 发布后的 ArchiveVersion 不应原地改 manifest。修正导入应创建新行，再切换 `is_current`。
 
 ### 4.4 归档对象引用
@@ -484,43 +354,6 @@ CREATE TABLE work_staff (
   PRIMARY KEY (work_id, creator_id, role_key)
 );
 
-CREATE TABLE release_staff (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
-  role_key TEXT NOT NULL CHECK (
-    role_key IN ('author', 'translator', 'proofreader', 'image_editor', 'publisher', 'repacker', 'other')
-  ),
-  role_label TEXT,
-  notes TEXT,
-  PRIMARY KEY (release_id, creator_id, role_key)
-);
-
-CREATE TABLE events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  title_original TEXT,
-  event_type TEXT NOT NULL CHECK (
-    event_type IN ('viprpg', 'contest', 'collection', 'personal_release', 'other')
-  ) DEFAULT 'viprpg',
-  start_date TEXT,
-  end_date TEXT,
-  description TEXT,
-  source_url TEXT,
-  extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE release_events (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-  entry_label TEXT,
-  entry_number TEXT,
-  notes TEXT,
-  PRIMARY KEY (release_id, event_id)
-);
-
 CREATE TABLE tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE,
@@ -541,20 +374,32 @@ CREATE TABLE work_tags (
   PRIMARY KEY (work_id, tag_id)
 );
 
-CREATE TABLE release_tags (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  source TEXT NOT NULL CHECK (source IN ('admin', 'uploader', 'imported')) DEFAULT 'admin',
+CREATE TABLE catalogs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL CHECK (status IN ('published', 'deleted')) DEFAULT 'published',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (release_id, tag_id)
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE catalog_items (
+  catalog_id INTEGER NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE,
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  sort_order REAL NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (catalog_id, work_id)
 );
 ```
 
 说明：
 
 - “主要登场角色”应进入 `characters` + `work_characters`，而不是写成逗号分隔文本。
-- “投下场合”通常属于 Release，因此用 `release_events`。
-- 作者可同时挂在 Work 和 Release 上。原作者属于 Work；发布方、活动整理方、再发布方通常属于 Release；汉化、校对、修图人员若只对应某份归档，应记录在 ArchiveVersion 的扩展元数据或后续专门关系表中。
+- 作者和制作人员统一挂在 `Work` 的 `work_staff`；不实现按发布分支拆分的人员层。
+- 目录使用 `catalogs` + `catalog_items`，用于人工编排和排序，不改变 Work 或 ArchiveVersion 身份。
 - 标签长期应规范化。上传阶段可以先收文本草稿，但发布前应尽量映射到 `tags`。
 
 ### 4.6 媒体资产和外部链接
@@ -581,14 +426,6 @@ CREATE TABLE work_media_assets (
   PRIMARY KEY (work_id, media_asset_id)
 );
 
-CREATE TABLE release_media_assets (
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  media_asset_id INTEGER NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
-  sort_order INTEGER,
-  is_primary INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (release_id, media_asset_id)
-);
-
 CREATE TABLE work_external_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
@@ -600,16 +437,6 @@ CREATE TABLE work_external_links (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE release_external_links (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
-  label TEXT NOT NULL,
-  url TEXT NOT NULL,
-  link_type TEXT NOT NULL CHECK (
-    link_type IN ('official', 'source', 'download_page', 'patch_note', 'other')
-  ) DEFAULT 'source',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 ```
 
 说明：
@@ -618,7 +445,7 @@ CREATE TABLE release_external_links (
 - Work 的图标和缩略图是单值字段：`works.icon_blob_sha256`、`works.thumbnail_blob_sha256`。
 - Work 的浏览图可以有多张，因此通过 `media_assets.kind = 'preview'` + `work_media_assets` 建立排序关系。
 - 游戏目录内的 `screenshots/` 文件夹、根目录下文件名包含 `screenshot` / `screenshots` 的文件，以及根目录 `null.txt`，按导入策略强制排除，不自动作为媒体资产入库。
-- Work 的封面图和 Release 的截图可能不同，因此分开关联。
+- 媒体资产统一通过 Work 关联；ArchiveVersion 的文件内容仍只由 manifest 和对象引用表达。
 - 外部链接不放进 JSON，便于统一显示、检查失效链接和做来源审计。
 
 ## 5. SQLite / D1 下的可扩展元数据策略
@@ -635,9 +462,11 @@ SQLite 不是 MongoDB，但这不是坏事。游戏资料库更需要稳定关�
 
 - `works.original_title`
 - `works.chinese_title`
+- `works.language`
+- `works.is_original`
 - `works.original_release_date`
-- `archive_versions.language`
 - `works.uses_maniacs_patch`
+- `archive_versions.archive_label`
 - `archive_versions.manifest_sha256`
 - `archive_versions.estimated_r2_get_count`
 
@@ -650,15 +479,16 @@ SQLite 不是 MongoDB，但这不是坏事。游戏资料库更需要稳定关�
 例子：
 
 - 主要登场角色：`characters` + `work_characters`
-- 投下场合：`events` + `release_events`
-- 标签：`tags` + `work_tags` / `release_tags`
-- 作者和汉化人员：`creators` + staff 表
-- 系列成员：`series` + `work_series`
+- 作者和制作人员：`creators` + `work_staff`
+- 标签：`tags` + `work_tags`
+- 普通关联：`work_relations`
+- 原版与译版：`translation_relations`
+- 人工编排目录：`catalogs` + `catalog_items`
 
 这样做的好处：
 
 - 可以反查“某角色出现在哪些作品”。
-- 可以生成“某活动收录作品列表”。
+- 可以生成按顺序编排的目录作品列表。
 - 可以统一标签命名。
 - 可以避免同一个作者被写成多个不同字符串。
 
@@ -698,20 +528,19 @@ custom_field_values
 
 ## 6. 上传和导入流程
 
-新的导入流程应从“创建一个游戏版本”改成“选择资料归属，再提交归档快照”。
+新的导入流程是“选择或创建 Work，再提交 ArchiveVersion 快照”。
 
 推荐流程：
 
 1. 上传者在浏览器选择文件夹或本地 ZIP。
 2. 浏览器执行白名单过滤、SHA-256 计算、core pack 生成和 manifest 草案生成。
-3. 上传者选择已有 Work，或创建新的 Work 草稿。
-4. 上传者选择已有 Release，或创建新的 Release 草稿。
-5. 上传者填写 ArchiveVersion 的语言、校对/修图状态和归档标识。
+3. 上传者选择已有 Work，或创建新的 Work 草稿；新建流程默认引擎为 `rpg_maker_2000`。
+4. 上传者填写 ArchiveVersion 的名称、来源、校对/修图状态和授权备注。
 6. 前端调用 preflight，询问哪些 blob / core pack 已存在。
 7. 前端只上传缺失 blob 和本次 core pack。
 8. 前端提交 ArchiveVersion commit。
 9. 服务端写入 `archive_versions`、对象引用表、manifest R2 对象和统计信息。
-10. 服务端在通过统一授权边界后发布 Work / Release / ArchiveVersion。
+10. 服务端在通过统一授权边界后发布 Work 和 ArchiveVersion。
 
 关键规则：
 
@@ -723,27 +552,20 @@ custom_field_values
 
 ## 7. 下载流程
 
-公开下载不应该直接使用 Work 或 Release 的文件字段，而是从用户选择的 ArchiveVersion 或 Release 下某个 `archive_key` 的 current ArchiveVersion 开始。
+公开下载不应该直接使用 Work 的文件字段，而是从 Work 的 published current ArchiveVersion 开始。
 
 流程：
 
 ```text
-GET /games/{work_slug}/releases/{release_id}/download
-  -> 查询 release
-  -> 按 archive_key 找到 is_current = 1 的 published archive_version
+GET /api/archive-versions/{archive_version_id}/download
+  -> 校验 Work、ArchiveVersion 全链 published 且快照为 current
   -> 读取 manifest
   -> 从 core pack 和 blob 流式重组 ZIP
   -> 尝试写入 Workers Cache/CDN 边缘缓存
   -> 不写入 R2 完整 ZIP
 ```
 
-也可以提供更稳定的内部下载端点：
-
-```text
-GET /api/archive-versions/{archive_version_id}/download
-```
-
-当用户从作品页点下载时，页面先让用户选择语言/处理状态对应的归档分支，再使用该 `archive_key` 的 current ArchiveVersion。管理员需要复现旧快照时，可以从归档管理页指定 ArchiveVersion 下载。
+作品页可先选择语言或平行译本，再跳转到目标 ArchiveVersion；管理员需要复现旧快照时，可从归档管理页指定 ArchiveVersion 下载。
 
 ## 8. 页面和 API
 
@@ -752,11 +574,11 @@ GET /api/archive-versions/{archive_version_id}/download
 ```text
 /games
 /games/{work_slug}
-/games/{work_slug}/releases/{release_id}
-/series
-/series/{series_slug}
 /characters
-/events/{event_slug}
+/creators
+/creators/{creator_slug}
+/catalogs
+/catalogs/{catalog_slug}
 /tags
 ```
 
@@ -770,49 +592,42 @@ GET /api/archive-versions/{archive_version_id}/download
 ```text
 /admin/works
 /admin/works/{work_id}
-/admin/series
-/admin/series/{series_id}
-/admin/releases/{release_id}
 /admin/archive-versions/{archive_version_id}
 /admin/characters
-/admin/events
+/admin/creators
 /admin/tags
+/admin/maintenance
 ```
 
 管理端需要支持：
 
 - 合并重复 Work。
-- 调整 Work 所属 Series。
 - 编辑 Work 关系。
-- 管理 Release。
-- 切换 Release 当前 ArchiveVersion。
+- 编辑翻译关联和目录。
+- 切换 Work 当前 ArchiveVersion。
 - 查看 ArchiveVersion 文件统计、排除统计和预计下载成本。
 
 ### 8.3 API
 
 ```text
-GET    /api/works
-POST   /api/works
-GET    /api/works/{id}
-PATCH  /api/works/{id}
-
-GET    /api/series
-POST   /api/series
-PATCH  /api/series/{id}
-POST   /api/series/{id}/works
-
+GET    /api/works/lookup
 POST   /api/works/{id}/relations
+PATCH  /api/work-relations/{relation_id}
 DELETE /api/work-relations/{relation_id}
+POST   /api/works/{id}/translation-relations
+PATCH  /api/translation-relations/{relation_id}
+DELETE /api/translation-relations/{relation_id}
 
-GET    /api/works/{id}/releases
-POST   /api/works/{id}/releases
-PATCH  /api/releases/{id}
+GET    /api/catalogs
+POST   /api/catalogs
+PATCH  /api/catalogs/{id}
+POST   /api/catalogs/{id}/items
+PATCH  /api/catalogs/{id}/items
+DELETE /api/catalogs/{id}/items
 
-POST   /api/releases/{id}/archive-versions
-PATCH  /api/archive-versions/{id}
-POST   /api/archive-versions/{id}/publish
-POST   /api/archive-versions/{id}/make-current
-GET    /api/archive-versions/{id}/download
+GET    /api/archive-versions/{id}/web-play
+GET    /api/admin/gc/dry-run
+POST   /api/admin/gc/sweep
 ```
 
 上传相关 API 可以继续复用现有存储端点：
@@ -824,14 +639,14 @@ POST /api/imports/{importJobId}/preflight
 POST /api/imports/{id}/commit
 ```
 
-commit 的目标是 `work_id`、`release_id` 和新建的 `archive_version`。
+commit 的目标是一个 `work_id` 和新建或复用的 `archive_version`；Work 创建、共同上传者绑定和任务绑定在同一 D1 batch 中完成。
 
 ## 9. 当前落地路径
 
 已经固定的落地方式：
 
 1. `0001_init_archive_schema.sql` 直接创建当前账户、站内信、存储和游戏领域完整 schema。
-2. 上传 commit 写入 `works + releases + archive_versions + archive_version_blob_refs + archive_version_core_pack_refs`。
+2. 上传 commit 写入 `works + archive_versions + archive_version_blob_refs + archive_version_core_pack_refs`。
 3. 下载重组从 `archive_versions` 定位 R2 manifest，再由 manifest 读取文件级清单。
 4. 公开 URL 可以继续叫 `/games`，但内部领域命名使用 `works`。
 
@@ -844,36 +659,19 @@ commit 的目标是 `work_id`、`release_id` 和新建的 `archive_version`。
 ```text
 works
 work_titles
-work_series + series
 work_relations
+translation_relations
 work_characters + characters
+work_staff + creators
 work_tags + tags
-releases
 archive_versions where is_current = 1
 work_media_assets + media_assets
+catalogs + catalog_items
 ```
 
 页面重点是资料聚合，不直接扫描文件清单。
 
-### 10.2 系列页
-
-```sql
-SELECT
-  w.id,
-  w.slug,
-  w.original_title,
-  w.chinese_title,
-  ws.position_number,
-  ws.position_label,
-  ws.relation_kind
-FROM work_series ws
-JOIN works w ON w.id = ws.work_id
-WHERE ws.series_id = ?
-  AND w.status = 'published'
-ORDER BY ws.position_number, ws.position_label, w.sort_title, w.original_title;
-```
-
-### 10.3 角色登场作品
+### 10.2 角色登场作品
 
 ```sql
 SELECT
@@ -890,13 +688,12 @@ WHERE wc.character_id = ?
 ORDER BY wc.role_key, w.original_title;
 ```
 
-### 10.4 归档分支当前下载快照
+### 10.3 Work 的当前下载快照
 
 ```sql
 SELECT *
 FROM archive_versions
-WHERE release_id = ?
-  AND archive_key = ?
+WHERE work_id = ?
   AND status = 'published'
   AND is_current = 1
 LIMIT 1;
@@ -919,9 +716,9 @@ LIMIT 1;
 
 - `/characters` 展示公开角色索引，条目进入 `/games?character={slug}` 查看登场作品。
 - `/tags` 展示公开标签索引，条目进入 `/games?tag={slug}` 查看关联作品；角色不再作为普通标签录入。
-- `/series` 和 `/series/{slug}` 展示系列本体与成员排序。
-- `/admin/characters`、`/admin/tags`、`/admin/series` 维护本体资料；重复角色和重复标签通过合并到目标 slug 处理。
-- `/admin/works/{workId}` 维护 Work 和这些关系表的连接：`work_characters`、`work_series`、`work_relations`、`work_media_assets`。
+- `/catalogs` 和 `/catalogs/{slug}` 展示人工编排目录及作品排序。
+- `/admin/characters`、`/admin/creators`、`/admin/tags` 维护本体资料；重复角色、作者和标签通过合并到目标 slug 处理。
+- `/admin/works/{workId}` 维护 Work 和这些关系表的连接：`work_characters`、`work_staff`、`work_relations`、`translation_relations`、`work_media_assets`。
 
 当数据量增大后，建议追加一个物化搜索表：
 
@@ -945,15 +742,17 @@ work_search_documents
 
 - Work 的 slug 全局唯一。
 - Work 的原名全局唯一，是人工判断“同一作品”的自然键。
-- 同一 Work 下 Release key 唯一；Release label 可随显示策略调整。
-- 同一 Release 下 `archive_key + archive_label` 唯一。
-- 同一 Release 的同一 `archive_key` 同时只能有一个 published current ArchiveVersion。
+- Work 的 `slug` 和原名是唯一身份约束；共同上传者由 `work_uploaders` 记录，不区分成员角色。
+- 同一 Work 下 `manifest_sha256` 唯一。
+- 同一 Work 同时只能有一个 published current ArchiveVersion。
 - ArchiveVersion 发布后 manifest 不可变。
-- ArchiveVersion 删除应进入回收站，不应立即删除 blob 或 core pack；技术上写入 `status = 'deleted'`。删除 current ArchiveVersion 后，服务层应在同一 `release_id + archive_key` 中自动选择最新 published 版本接任。
-- 还原回收站中的 ArchiveVersion 时恢复为 `published`，但不抢占已有 current；仅在同组没有 current 时自动补为 current。
-- 删除 Work 时应先确认 Release 和 ArchiveVersion 的处理策略。
+- ArchiveVersion 删除应进入回收站，不应立即删除 blob 或 core pack；技术上写入 `status = 'deleted'`。删除 current ArchiveVersion 后，服务层应在同一 Work 下自动选择最新 published 版本接任。
+- 还原回收站中的 ArchiveVersion 时恢复为 `published`，但不抢占已有 current；仅在 Work 没有 current 时自动补为 current。
+- 删除 Work 时应先确认其 ArchiveVersion 和对象引用的处理策略。
 - blob 和 core pack 的 GC 必须通过引用扫描决定，不能因为某个 Work 删除就直接删除 R2 对象。
 - 回收站中的 ArchiveVersion 在最终清理前仍保留对象引用表和 manifest，可以还原；最终清理后写入 `purged_at`、删除对象引用和 manifest，不能再还原。之后对应 blob/core pack 若没有其他归档或媒体引用，会进入 GC sweep。
+- GC sweep 只把候选对象临时标记为 `purging`；R2 删除成功后标记为 `purged`，失败则恢复 `active`，以便下一轮重试。
+- 上传端只把 `active` 对象视为已存在，不能覆盖正在 `purging` 的对象。
 - 文件路径只在 ArchiveVersion manifest 中管理。
 - 完整游戏 ZIP 不进入 R2。
 
@@ -962,26 +761,24 @@ work_search_documents
 为减少后续实现时的分歧，建议固定以下默认值：
 
 - 对外仍使用“游戏”称呼，对内使用 `Work`。
-- 一个作品可以有多个 Release。
-- 一个 Release 可以有多个 ArchiveVersion；每个 `archive_key` 只有一个 current。
-- 上传一个新的版本分支时，默认创建 Release；若只是新增语言、校对/修图方案或重新导入同一方案，创建 ArchiveVersion。
-- 活动投下信息挂在 Release，不挂在 Work。
-- 作者原作者挂在 Work；发布分支相关人员挂在 Release；只对应某份归档的汉化、校对、修图人员后续应挂在 ArchiveVersion 扩展关系上。
+- 一个 Work 可以有多个 ArchiveVersion；每个 Work 只有一个 current。
+- 新增语言、校对/修图方案或重新导入同一作品时创建 ArchiveVersion，不复制 Work。
+- 作者和制作人员挂在 Work；具体文件来源、校对和修图状态挂在 ArchiveVersion。
 - 主要登场角色挂在 Work。
-- 标签先支持 Work 和 Release 两层；文件级标签不做。
+- 标签只支持 Work 层；文件级标签不做。
 - `extra_json` 只保存低频显示字段和暂未定型字段。
 
 ## 14. 最小落地顺序
 
 建议下一阶段按这个顺序推进：
 
-1. 新增 `works` / `releases` / `archive_versions` 的 DB helper。
+1. 建立 `works` / `archive_versions` 的 DB helper。
 2. 管理端增加 Work 草稿创建和列表。
-3. 上传 commit 先要求选择 Work 和 Release。
+3. 上传 commit 选择或创建 Work。
 4. commit 写入 `archive_versions` 和对象引用表。
 5. 下载端从 `archive_versions` 读取 manifest。
-6. 增加 Series 管理。
-7. 增加 Work relations。
-8. 增加 Characters / Events / Tags。
+6. 增加 Work relations 和 translation relations。
+7. 增加 Characters / Creators / Tags。
+8. 增加 catalogs 和管理端维护入口。
 
 这个顺序的重点是先修正核心边界，再逐步丰富 VNDB 风格资料功能。

@@ -55,7 +55,6 @@ export async function putManifest(
   manifestJson: string,
   metadata: {
     workId?: number;
-    releaseId?: number;
     archiveVersionId?: number;
   } = {},
 ): Promise<R2Object> {
@@ -69,7 +68,6 @@ export async function putManifest(
       customMetadata: {
         manifestSha256,
         ...(metadata.workId === undefined ? {} : { workId: String(metadata.workId) }),
-        ...(metadata.releaseId === undefined ? {} : { releaseId: String(metadata.releaseId) }),
         ...(metadata.archiveVersionId === undefined
           ? {}
           : { archiveVersionId: String(metadata.archiveVersionId) }),

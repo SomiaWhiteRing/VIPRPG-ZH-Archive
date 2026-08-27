@@ -13,10 +13,11 @@
     "db:local:reset": "node scripts/local-d1-reset.mjs",
     "db:local:seed": "node scripts/dev-seed.mjs",
     "cf-typegen": "node scripts/cf-typegen.mjs",
-    "check": "tsc --noEmit && eslint .",
+    "check": "next typegen && tsc --noEmit && eslint .",
     "check:security": "tsx scripts/security-self-check.ts",
     "check:security:d1": "node scripts/security-d1-self-check.mjs",
     "check:security:api": "node scripts/security-api-self-check.mjs",
+    "check:domain": "node scripts/domain-contract-self-check.mjs",
     "auth:calibrate-password": "tsx scripts/password-calibration.ts",
     "check:ui": "tsx scripts/ui-self-check.ts",
     "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"

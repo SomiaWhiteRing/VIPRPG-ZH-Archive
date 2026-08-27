@@ -1,31 +1,26 @@
 import type { ArchiveFileRole, ArchiveStorageKind } from "@/lib/archive/file-policy";
 
 export type ArchiveManifest = {
-  schema: "viprpg-archive.manifest.v1";
-  work: {
+  schema: "viprpg-archive.manifest.v2";
+  game: {
     slug: string;
     originalTitle: string;
     chineseTitle: string | null;
-  };
-  release: {
-    key: string;
-    label: string;
-    type: string;
-    baseVariant: "original" | "remake" | "other";
-    variantLabel: string;
+    language: string;
+    isOriginal: boolean;
   };
   archiveVersion: {
-    key: string;
     label: string;
-    variantLabel: string;
-    language: string;
     isProofread: boolean;
     isImageEdited: boolean;
+    sourceName: string | null;
+    sourceUrl: string | null;
+    executablePath: string | null;
+    rightsNotes: string | null;
     createdAt: string;
     filePolicyVersion: string;
     packerVersion: string;
     sourceType: "browser_folder" | "browser_zip" | "preindexed_manifest";
-    sourceName: string;
     sourceFileCount: number;
     sourceSize: number;
     includedFileCount: number;
@@ -69,7 +64,7 @@ export type ArchiveManifestFile = {
 };
 
 export type ArchiveCommitMetadata = {
-  work: {
+  game: {
     slug: string;
     originalTitle: string;
     chineseTitle: string | null;
@@ -79,6 +74,8 @@ export type ArchiveCommitMetadata = {
     originalReleasePrecision: "year" | "month" | "day" | "unknown";
     engineFamily: "rpg_maker_2000" | "rpg_maker_2003" | "mixed" | "unknown" | "other";
     engineDetail: string | null;
+    isOriginal: boolean;
+    language: string;
     usesManiacsPatch: boolean;
     iconBlobSha256: string | null;
     thumbnailBlobSha256: string | null;
@@ -86,37 +83,18 @@ export type ArchiveCommitMetadata = {
     status: "draft" | "published" | "hidden";
     extra: Record<string, unknown>;
   };
-  release: {
-    key: string;
+  target: {
+    mode: "create" | "update";
+    workId: number | null;
+  };
+  archiveVersion: {
     label: string;
-    baseVariant: "original" | "remake" | "other";
-    variantLabel: string;
-    type:
-      | "original"
-      | "translation"
-      | "revision"
-      | "localized_revision"
-      | "demo"
-      | "event_submission"
-      | "patch_applied_full_release"
-      | "repack"
-      | "other";
-    releaseDate: string | null;
-    releaseDatePrecision: "year" | "month" | "day" | "unknown";
+    isProofread: boolean;
+    isImageEdited: boolean;
     sourceName: string | null;
     sourceUrl: string | null;
     executablePath: string | null;
     rightsNotes: string | null;
-    status: "draft" | "published" | "hidden";
-    extra: Record<string, unknown>;
-  };
-  archiveVersion: {
-    key: string;
-    label: string;
-    variantLabel: string;
-    language: string;
-    isProofread: boolean;
-    isImageEdited: boolean;
   };
   workTitles: Array<{
     title: string;
@@ -140,13 +118,7 @@ export type ArchiveCommitMetadata = {
   }>;
   workStaff: Array<{
     creatorSlug: string;
-    roleKey: "author" | "scenario" | "graphics" | "music" | "translator" | "editor" | "publisher" | "other";
-    roleLabel: string | null;
-    notes: string | null;
-  }>;
-  releaseStaff: Array<{
-    creatorSlug: string;
-    roleKey: "author" | "translator" | "proofreader" | "image_editor" | "publisher" | "repacker" | "other";
+    roleKey: "author" | "scenario" | "graphics" | "music" | "translator" | "editor" | "publisher" | "proofreader" | "image_editor" | "other";
     roleLabel: string | null;
     notes: string | null;
   }>;
@@ -156,11 +128,6 @@ export type ArchiveCommitMetadata = {
       label: string;
       url: string;
       linkType: "official" | "wiki" | "source" | "video" | "download_page" | "other";
-    }>;
-    release: Array<{
-      label: string;
-      url: string;
-      linkType: "official" | "source" | "download_page" | "patch_note" | "other";
     }>;
   };
 };

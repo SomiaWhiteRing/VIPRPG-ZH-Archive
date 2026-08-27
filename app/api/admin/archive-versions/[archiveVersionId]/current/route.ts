@@ -31,7 +31,6 @@ export async function POST(request: Request, context: RouteContext) {
       detail: {
         archiveVersionId,
         workId: archiveVersion.workId,
-        releaseId: archiveVersion.releaseId,
       },
     });
 

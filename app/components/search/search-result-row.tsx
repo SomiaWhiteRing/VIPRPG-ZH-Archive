@@ -13,7 +13,14 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
     >
       <div className="grid aspect-video place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
-          <Image alt="" height={84} src={`/api/media/blobs/${work.previewBlobSha256}`} unoptimized width={148} />
+          <Image
+            alt=""
+            className="h-auto w-full object-cover"
+            height={84}
+            src={`/api/media/blobs/${work.previewBlobSha256}`}
+            unoptimized
+            width={148}
+          />
         ) : (
           <span>{engineLabel(work.engineFamily)}</span>
         )}

@@ -1,7 +1,7 @@
 import { unzipSync } from "fflate";
 
 const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
-const manifestSchema = "viprpg-archive.manifest.v1";
+const manifestSchema = "viprpg-archive.manifest.v2";
 const textEncoder = new TextEncoder();
 const localFileHeaderSignature = 0x04034b50;
 const centralDirectorySignature = 0x02014b50;
@@ -142,24 +142,20 @@ async function getDownloadRecord(db, archiveVersionId) {
     .prepare(
       `SELECT
         av.id,
-        av.release_id,
         av.archive_label,
-        av.archive_key,
         av.manifest_sha256,
         av.packer_version,
         av.total_files,
         av.total_size_bytes,
         av.estimated_r2_get_count,
-        r.release_label,
         w.slug AS work_slug,
         w.original_title AS work_original_title,
         w.chinese_title AS work_chinese_title
       FROM archive_versions av
-      JOIN releases r ON r.id = av.release_id
-      JOIN works w ON w.id = r.work_id
+      JOIN works w ON w.id = av.work_id
       WHERE av.id = ?
         AND av.status = 'published'
-        AND r.status = 'published'
+        AND av.is_current = 1
         AND w.status = 'published'
       LIMIT 1`,
     )
@@ -172,7 +168,6 @@ async function getDownloadRecord(db, archiveVersionId) {
 
   return {
     id: row.id,
-    releaseLabel: row.release_label,
     archiveLabel: row.archive_label,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
@@ -614,7 +609,7 @@ function downloadHeaders(record, cacheStatus, contentLength) {
 }
 
 function downloadFileName(record) {
-  return `${record.workChineseTitle || record.workOriginalTitle} ${record.releaseLabel} ${record.archiveLabel}.zip`;
+  return `${record.workChineseTitle || record.workOriginalTitle} ${record.archiveLabel}.zip`;
 }
 
 function contentDisposition(fileName) {
@@ -797,15 +792,18 @@ function withDownloadCacheHeader(response, cacheStatus) {
 }
 
 function blobKey(sha256) {
-  return `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
+  const normalized = sha256.toLowerCase();
+  return `blobs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}`;
 }
 
 function corePackKey(sha256) {
-  return `core-packs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.zip`;
+  const normalized = sha256.toLowerCase();
+  return `core-packs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.zip`;
 }
 
 function manifestKey(sha256) {
-  return `manifests/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}.json`;
+  const normalized = sha256.toLowerCase();
+  return `manifests/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.json`;
 }
 
 async function sha256Hex(data) {

@@ -1,29 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
-
-export type PublicCreatorSummary = {
-  id: number;
-  slug: string;
-  name: string;
-  originalName: string | null;
-  websiteUrl: string | null;
-  bio: string | null;
-  workCreditCount: number;
-  releaseCreditCount: number;
-  latestReleaseCreditAt: string | null;
-};
-
-export type PublicCreatorDetail = PublicCreatorSummary & {
-  workCredits: CreatorWorkCredit[];
-  releaseCredits: CreatorReleaseCredit[];
-};
-
-export type AdminCreatorEdit = PublicCreatorSummary & {
-  createdAt: string;
-  updatedAt: string;
-  extra: Record<string, unknown>;
-  adminWorkCredits: CreatorWorkCredit[];
-  adminReleaseCredits: CreatorReleaseCredit[];
-};
+import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
 
 export type CreatorWorkCredit = {
   workId: number;
@@ -36,20 +12,25 @@ export type CreatorWorkCredit = {
   originalReleaseDate: string | null;
   status: string;
 };
-
-export type CreatorReleaseCredit = {
-  releaseId: number;
-  workId: number;
-  workSlug: string;
-  workTitle: string;
-  releaseLabel: string;
-  releaseDate: string | null;
-  roleKey: string;
-  roleLabel: string | null;
-  notes: string | null;
-  status: string;
+export type PublicCreatorSummary = {
+  id: number;
+  slug: string;
+  name: string;
+  originalName: string | null;
+  websiteUrl: string | null;
+  bio: string | null;
+  workCreditCount: number;
+  latestWorkCreditAt: string | null;
 };
-
+export type PublicCreatorDetail = PublicCreatorSummary & {
+  workCredits: CreatorWorkCredit[];
+};
+export type AdminCreatorEdit = PublicCreatorSummary & {
+  createdAt: string;
+  updatedAt: string;
+  extra: Record<string, unknown>;
+  adminWorkCredits: CreatorWorkCredit[];
+};
 type CreatorRow = {
   id: number;
   slug: string;
@@ -60,11 +41,9 @@ type CreatorRow = {
   created_at?: string;
   updated_at?: string;
   work_credit_count: number;
-  release_credit_count: number;
-  latest_release_credit_at: string | null;
+  latest_work_credit_at: string | null;
 };
-
-type CreatorWorkCreditRow = {
+type CreditRow = {
   work_id: number;
   work_slug: string;
   work_title: string;
@@ -76,147 +55,66 @@ type CreatorWorkCreditRow = {
   status: string;
 };
 
-type CreatorReleaseCreditRow = {
-  release_id: number;
-  work_id: number;
-  work_slug: string;
-  work_title: string;
-  release_label: string;
-  release_date: string | null;
-  role_key: string;
-  role_label: string | null;
-  notes: string | null;
-  status: string;
-};
-
-export async function listPublicCreators(input: {
-  query?: string;
-  limit?: number;
-} = {}): Promise<PublicCreatorSummary[]> {
-  const where = [
-    `(
-      EXISTS (
-        SELECT 1
-        FROM work_staff ws
-        JOIN works w ON w.id = ws.work_id
-        WHERE ws.creator_id = c.id
-          AND w.status = 'published'
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM release_staff rs
-        JOIN releases r ON r.id = rs.release_id
-        JOIN works w ON w.id = r.work_id
-        WHERE rs.creator_id = c.id
-          AND r.status = 'published'
-          AND w.status = 'published'
-      )
-    )`,
-  ];
+export async function listPublicCreators(
+  input: { query?: string; limit?: number } = {},
+): Promise<PublicCreatorSummary[]> {
   const binds: Array<string | number> = [];
-  const normalizedQuery = input.query?.trim();
-
-  if (normalizedQuery) {
-    const pattern = `%${normalizedQuery}%`;
+  const where = [
+    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.status='published')`,
+  ];
+  if (input.query?.trim()) {
+    const q = `%${input.query.trim()}%`;
     where.push("(c.name LIKE ? OR c.original_name LIKE ?)");
-    binds.push(pattern, pattern);
+    binds.push(q, q);
   }
-
   const rows = await getD1()
     .prepare(
-      `${creatorSummarySelectSql()}
-      FROM creators c
-      WHERE ${where.join(" AND ")}
-      ORDER BY
-        latest_release_credit_at DESC,
-        c.name ASC
-      LIMIT ?`,
+      `${summarySql()} FROM creators c WHERE ${where.join(" AND ")} ORDER BY latest_work_credit_at DESC,c.name ASC LIMIT ?`,
     )
-    .bind(...binds, clampLimit(input.limit ?? 120, 1, 300))
+    .bind(...binds, limitValue(input.limit ?? 120, 300))
     .all<CreatorRow>();
-
-  return (rows.results ?? []).map(mapPublicCreatorSummary);
+  return (rows.results ?? []).map(mapSummary);
 }
-
 export async function getPublicCreatorDetail(
   slug: string,
 ): Promise<PublicCreatorDetail | null> {
-  const routeSlugs = uniqueClean([slug, decodeRouteSlug(slug)]);
+  const values = [slug, decodeSlug(slug)];
   const row = await getD1()
-    .prepare(
-      `${creatorSummarySelectSql()}
-      FROM creators c
-      WHERE c.slug IN (${routeSlugs.map(() => "?").join(", ")})
-      LIMIT 1`,
-    )
-    .bind(...routeSlugs)
+    .prepare(`${summarySql()} FROM creators c WHERE c.slug IN (?,?) LIMIT 1`)
+    .bind(...values)
     .first<CreatorRow>();
-
-  if (!row) {
-    return null;
-  }
-
-  const [workCredits, releaseCredits] = await Promise.all([
-    listCreatorWorkCredits(row.id, false),
-    listCreatorReleaseCredits(row.id, false),
-  ]);
-
-  return {
-    ...mapPublicCreatorSummary(row),
-    workCredits,
-    releaseCredits,
-  };
+  if (!row) return null;
+  return { ...mapSummary(row), workCredits: await listCredits(row.id, false) };
 }
-
-export async function listCreatorsForAdmin(limit = 300): Promise<PublicCreatorSummary[]> {
+export async function listCreatorsForAdmin(
+  limit = 300,
+): Promise<PublicCreatorSummary[]> {
   const rows = await getD1()
     .prepare(
-      `${creatorSummarySelectSql()}
-      FROM creators c
-      ORDER BY c.updated_at DESC, c.name ASC
-      LIMIT ?`,
+      `${summarySql()} FROM creators c ORDER BY c.updated_at DESC,c.name ASC LIMIT ?`,
     )
-    .bind(clampLimit(limit, 1, 500))
+    .bind(limitValue(limit, 500))
     .all<CreatorRow>();
-
-  return (rows.results ?? []).map(mapPublicCreatorSummary);
+  return (rows.results ?? []).map(mapSummary);
 }
-
 export async function getCreatorForAdminEdit(
-  creatorId: number,
+  id: number,
 ): Promise<AdminCreatorEdit | null> {
   const row = await getD1()
     .prepare(
-      `${creatorSummarySelectSql()},
-        c.created_at,
-        c.updated_at
-      FROM creators c
-      WHERE c.id = ?
-      LIMIT 1`,
+      `${summarySql()},c.created_at,c.updated_at FROM creators c WHERE c.id=? LIMIT 1`,
     )
-    .bind(creatorId)
+    .bind(id)
     .first<CreatorRow>();
-
-  if (!row || !row.created_at || !row.updated_at) {
-    return null;
-  }
-
-  const [adminWorkCredits, adminReleaseCredits] = await Promise.all([
-    listCreatorWorkCredits(row.id, true),
-    listCreatorReleaseCredits(row.id, true),
-  ]);
-  const extra = parseExtraJson(row.extra_json);
-
+  if (!row || !row.created_at || !row.updated_at) return null;
   return {
-    ...mapPublicCreatorSummary(row),
+    ...mapSummary(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    extra,
-    adminWorkCredits,
-    adminReleaseCredits,
+    extra: parseExtra(row.extra_json),
+    adminWorkCredits: await listCredits(id, true),
   };
 }
-
 export async function updateCreatorForAdmin(input: {
   creatorId: number;
   name: string;
@@ -224,188 +122,71 @@ export async function updateCreatorForAdmin(input: {
   websiteUrl: string | null;
   bio: string | null;
 }): Promise<AdminCreatorEdit> {
-  assertRequired(input.name, "作者名");
-
+  if (!input.name.trim()) throw new Error("作者名不能为空");
   const existing = await getCreatorForAdminEdit(input.creatorId);
-
-  if (!existing) {
-    throw new Error("作者不存在");
-  }
-
-  const extra = {
-    ...existing.extra,
-  };
-
-  if (input.bio) {
-    extra.bio = input.bio;
-  } else {
-    delete extra.bio;
-  }
-
+  if (!existing) throw new Error("作者不存在");
+  const extra = { ...existing.extra };
+  if (input.bio?.trim()) extra.bio = input.bio.trim();
+  else delete extra.bio;
+  const websiteUrl = normalizeHttpUrl(input.websiteUrl, "作者网站");
   await getD1()
     .prepare(
-      `UPDATE creators
-      SET name = ?,
-        original_name = ?,
-        website_url = ?,
-        extra_json = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
+      `UPDATE creators SET name=?,original_name=?,website_url=?,extra_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     )
     .bind(
       input.name.trim(),
       input.originalName,
-      input.websiteUrl,
+      websiteUrl,
       JSON.stringify(extra),
       input.creatorId,
     )
     .run();
-
   const updated = await getCreatorForAdminEdit(input.creatorId);
-
-  if (!updated) {
-    throw new Error("作者更新后不可读取");
-  }
-
+  if (!updated) throw new Error("作者更新后不可读取");
   return updated;
 }
-
 export function parseCreatorEditForm(
-  formData: FormData,
+  form: FormData,
 ): Parameters<typeof updateCreatorForAdmin>[0] {
-  const creatorId = Number.parseInt(String(formData.get("creator_id") ?? ""), 10);
-
-  if (!Number.isSafeInteger(creatorId) || creatorId <= 0) {
+  const id = Number.parseInt(String(form.get("creator_id") ?? ""), 10);
+  if (!Number.isSafeInteger(id) || id <= 0)
     throw new Error("Invalid creator id");
-  }
-
   return {
-    creatorId,
-    name: String(formData.get("name") ?? "").trim(),
-    originalName: cleanNullable(String(formData.get("original_name") ?? "")),
-    websiteUrl: cleanNullable(String(formData.get("website_url") ?? "")),
-    bio: cleanNullable(String(formData.get("bio") ?? "")),
+    creatorId: id,
+    name: String(form.get("name") ?? ""),
+    originalName: clean(form.get("original_name")),
+    websiteUrl: clean(form.get("website_url")),
+    bio: clean(form.get("bio")),
   };
 }
-
-function creatorSummarySelectSql(): string {
-  return `SELECT
-    c.id,
-    c.slug,
-    c.name,
-    c.original_name,
-    c.website_url,
-    c.extra_json,
-    (
-      SELECT COUNT(DISTINCT ws.work_id)
-      FROM work_staff ws
-      JOIN works w ON w.id = ws.work_id
-      WHERE ws.creator_id = c.id
-        AND w.status = 'published'
-    ) AS work_credit_count,
-    (
-      SELECT COUNT(DISTINCT rs.release_id)
-      FROM release_staff rs
-      JOIN releases r ON r.id = rs.release_id
-      JOIN works w ON w.id = r.work_id
-      WHERE rs.creator_id = c.id
-        AND r.status = 'published'
-        AND w.status = 'published'
-    ) AS release_credit_count,
-    (
-      SELECT MAX(COALESCE(r.release_date, r.published_at, r.created_at))
-      FROM release_staff rs
-      JOIN releases r ON r.id = rs.release_id
-      JOIN works w ON w.id = r.work_id
-      WHERE rs.creator_id = c.id
-        AND r.status = 'published'
-        AND w.status = 'published'
-    ) AS latest_release_credit_at`;
-}
-
-async function listCreatorWorkCredits(
-  creatorId: number,
+async function listCredits(
+  id: number,
   includeNonPublic: boolean,
 ): Promise<CreatorWorkCredit[]> {
-  const statusSql = includeNonPublic ? "w.status <> 'deleted'" : "w.status = 'published'";
+  const status = includeNonPublic
+    ? "w.status <> 'deleted'"
+    : "w.status='published'";
   const rows = await getD1()
     .prepare(
-      `SELECT
-        w.id AS work_id,
-        w.slug AS work_slug,
-        COALESCE(w.chinese_title, w.original_title) AS work_title,
-        w.original_title AS work_original_title,
-        ws.role_key,
-        ws.role_label,
-        ws.notes,
-        w.original_release_date,
-        w.status
-      FROM work_staff ws
-      JOIN works w ON w.id = ws.work_id
-      WHERE ws.creator_id = ?
-        AND ${statusSql}
-      ORDER BY
-        COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
-        w.original_title ASC`,
+      `SELECT w.id AS work_id,
+          w.slug AS work_slug,
+          COALESCE(w.chinese_title, w.original_title) AS work_title,
+          w.original_title AS work_original_title,
+          ws.role_key,
+          ws.role_label,
+          ws.notes,
+          w.original_release_date,
+          w.status
+       FROM work_staff ws
+       JOIN works w ON w.id = ws.work_id
+       WHERE ws.creator_id = ?
+         AND ${status}
+       ORDER BY COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
+         w.original_title ASC`,
     )
-    .bind(creatorId)
-    .all<CreatorWorkCreditRow>();
-
-  return (rows.results ?? []).map(mapCreatorWorkCreditRow);
-}
-
-async function listCreatorReleaseCredits(
-  creatorId: number,
-  includeNonPublic: boolean,
-): Promise<CreatorReleaseCredit[]> {
-  const statusSql = includeNonPublic
-    ? "r.status <> 'deleted' AND w.status <> 'deleted'"
-    : "r.status = 'published' AND w.status = 'published'";
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        r.id AS release_id,
-        w.id AS work_id,
-        w.slug AS work_slug,
-        COALESCE(w.chinese_title, w.original_title) AS work_title,
-        r.release_label,
-        r.release_date,
-        rs.role_key,
-        rs.role_label,
-        rs.notes,
-        r.status
-      FROM release_staff rs
-      JOIN releases r ON r.id = rs.release_id
-      JOIN works w ON w.id = r.work_id
-      WHERE rs.creator_id = ?
-        AND ${statusSql}
-      ORDER BY
-        COALESCE(r.release_date, r.published_at, r.created_at) DESC,
-        w.original_title ASC,
-        r.release_label ASC`,
-    )
-    .bind(creatorId)
-    .all<CreatorReleaseCreditRow>();
-
-  return (rows.results ?? []).map(mapCreatorReleaseCreditRow);
-}
-
-function mapPublicCreatorSummary(row: CreatorRow): PublicCreatorSummary {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    originalName: row.original_name,
-    websiteUrl: row.website_url,
-    bio: creatorBio(row.extra_json),
-    workCreditCount: row.work_credit_count,
-    releaseCreditCount: row.release_credit_count,
-    latestReleaseCreditAt: row.latest_release_credit_at,
-  };
-}
-
-function mapCreatorWorkCreditRow(row: CreatorWorkCreditRow): CreatorWorkCredit {
-  return {
+    .bind(id)
+    .all<CreditRow>();
+  return (rows.results ?? []).map((row) => ({
     workId: row.work_id,
     workSlug: row.work_slug,
     workTitle: row.work_title,
@@ -415,72 +196,69 @@ function mapCreatorWorkCreditRow(row: CreatorWorkCreditRow): CreatorWorkCredit {
     notes: row.notes,
     originalReleaseDate: row.original_release_date,
     status: row.status,
-  };
+  }));
 }
-
-function mapCreatorReleaseCreditRow(row: CreatorReleaseCreditRow): CreatorReleaseCredit {
+function summarySql(): string {
+  return `
+    SELECT
+      c.id,
+      c.slug,
+      c.name,
+      c.original_name,
+      c.website_url,
+      c.extra_json,
+      (
+        SELECT COUNT(DISTINCT ws.work_id)
+        FROM work_staff ws
+        JOIN works w ON w.id = ws.work_id
+        WHERE ws.creator_id = c.id
+          AND w.status = 'published'
+      ) AS work_credit_count,
+      (
+        SELECT MAX(COALESCE(w.original_release_date, w.published_at, w.created_at))
+        FROM work_staff ws
+        JOIN works w ON w.id = ws.work_id
+        WHERE ws.creator_id = c.id
+          AND w.status = 'published'
+      ) AS latest_work_credit_at`;
+}
+function mapSummary(row: CreatorRow): PublicCreatorSummary {
   return {
-    releaseId: row.release_id,
-    workId: row.work_id,
-    workSlug: row.work_slug,
-    workTitle: row.work_title,
-    releaseLabel: row.release_label,
-    releaseDate: row.release_date,
-    roleKey: row.role_key,
-    roleLabel: row.role_label,
-    notes: row.notes,
-    status: row.status,
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    originalName: row.original_name,
+    websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
+    bio: bio(row.extra_json),
+    workCreditCount: row.work_credit_count,
+    latestWorkCreditAt: row.latest_work_credit_at,
   };
 }
-
-function creatorBio(extraJson: string): string | null {
-  const bio = parseExtraJson(extraJson).bio;
-
-  return typeof bio === "string" && bio.trim() ? bio.trim() : null;
+function bio(value: string): string | null {
+  const parsed = parseExtra(value).bio;
+  return typeof parsed === "string" && parsed.trim() ? parsed.trim() : null;
 }
-
-function parseExtraJson(extraJson: string): Record<string, unknown> {
+function parseExtra(value: string): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(extraJson) as unknown;
-
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
       return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Keep corrupted legacy data from breaking public pages.
-  }
-
+  } catch {}
   return {};
 }
-
-function clampLimit(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-
-  return Math.max(min, Math.min(max, Math.floor(value)));
+function clean(value: FormDataEntryValue | null): string | null {
+  const result = String(value ?? "").trim();
+  return result || null;
 }
-
-function cleanNullable(value: string | null | undefined): string | null {
-  const cleaned = value?.trim() ?? "";
-
-  return cleaned || null;
-}
-
-function uniqueClean(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
-function decodeRouteSlug(value: string): string {
+function decodeSlug(value: string): string {
   try {
     return decodeURIComponent(value);
   } catch {
     return value;
   }
 }
-
-function assertRequired(value: string, label: string): void {
-  if (!value.trim()) {
-    throw new Error(`${label} 不能为空`);
-  }
+function limitValue(value: number, max: number): number {
+  return Number.isFinite(value)
+    ? Math.max(1, Math.min(max, Math.floor(value)))
+    : 1;
 }

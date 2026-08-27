@@ -51,9 +51,9 @@ export default async function AdminCreatorsPage() {
                 <span className="font-mono text-sm text-primary text-sm text-muted">{creator.slug}</span>
               </td>
               <td>
-                {formatNumber(creator.workCreditCount)} 作品 / {formatNumber(creator.releaseCreditCount)} 发布版本
-                {creator.latestReleaseCreditAt ? (
-                  <span className="text-sm text-muted">最近关联：{creator.latestReleaseCreditAt}</span>
+                {formatNumber(creator.workCreditCount)} 个游戏
+                {creator.latestWorkCreditAt ? (
+                  <span className="text-sm text-muted">最近关联：{creator.latestWorkCreditAt}</span>
                 ) : null}
               </td>
               <td>

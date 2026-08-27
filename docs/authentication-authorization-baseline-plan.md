@@ -49,7 +49,7 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | --- | --- |
 | `user` | 无；只具备登录后本人范围能力 |
 | `uploader` | `work.lookup_non_deleted`、`import_job.create`、`import_job.cancel_own`、`import_job.preflight_own`、`import_job.commit_own`、`storage_object.upload`、`archive_version.delete_own` |
-| `admin` | `uploader` 的完整显式清单，加 `work.read_private`、`work.update`、`creator.read_private`、`creator.update`、`character.read_private`、`character.update`、`tag.read_private`、`tag.update`、`series.read_private`、`series.create`、`series.update`、`release.update`、`archive_version.read_private`、`archive_version.update`、`archive_version.delete_any`、`archive_version.restore`、`archive_version.set_current`、`user.read`、`user.status.update`、`user.role.assign`、`inbox.role_request.resolve`、`system.dashboard.read`、`system.maintenance.run` |
+| `admin` | `uploader` 的完整显式清单，加 `work.read_private`、`work.update`、`creator.read_private`、`creator.update`、`character.read_private`、`character.update`、`tag.read_private`、`tag.update`、`relation.manage_any`、`translation_relation.manage_any`、`catalog.manage_any`、`archive_version.read_private`、`archive_version.update`、`archive_version.delete_any`、`archive_version.restore`、`archive_version.set_current`、`user.read`、`user.status.update`、`user.role.assign`、`inbox.role_request.resolve`、`system.dashboard.read`、`system.maintenance.run` |
 | `super_admin` | `admin` 的完整显式清单，加 `storage.gc.sweep`、`audit.read`；角色策略写入仍依赖不可委派的 bootstrap 身份，不由 key 推导 |
 
 `user_role_events` 每行只表达一次 `assigned|removed`，保存 actor、target、role id、role key/name snapshot、reason 和来源 inbox item。站内信通知引用该事件，不再复制 old/new 角色字段。
@@ -82,7 +82,7 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | --- | --- | --- |
 | `GET /api/health`、`GET /api/health/db`、`GET /api/health/r2` | 公开 | 只返回依赖可用性，不返回 secret、binding 或对象名 |
 | `GET /api/media/blobs/{sha256}` | 公开 | active image 且被 published Work 的直接媒体字段或媒体关联引用 |
-| `GET /api/archive-versions/{id}/web-play` | 公开 | Work、Release、ArchiveVersion 全链 published |
+| `GET /api/archive-versions/{id}/web-play` | 公开 | Work、ArchiveVersion 全链 published |
 | `POST /api/auth/login` | 公开 + 同源 | 密码校验成功后创建服务端 session |
 | `POST /api/auth/register/start`、`POST /api/auth/register/verify` | 公开 + 同源 | 限流、验证码单次消费、验证后创建 session |
 | `POST /api/auth/password-reset/start`、`POST /api/auth/password-reset/confirm` | 公开 + 同源 | 限流、验证码单次消费、重置后撤销全部 session |
@@ -111,12 +111,9 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `GET /api/admin/consistency`、`GET /api/admin/gc/dry-run` | `system.maintenance.run` | 有界检查，不做最终删除 |
 | `POST /api/admin/gc/sweep` | `storage.gc.sweep` | 强制确认、状态机与审计 |
 | `POST /api/admin/works/{id}/update` | `work.update` | Work 状态与关联由作品服务校验 |
-| `POST /api/admin/releases/{id}/update` | `release.update` | Release 状态由发布服务校验 |
 | `POST /api/admin/creators/{id}/update` | `creator.update` | 作者服务校验目标与合并约束 |
 | `POST /api/admin/characters/{id}/update` | `character.update` | 角色资料服务校验目标与合并约束 |
 | `POST /api/admin/tags/{id}/update` | `tag.update` | 标签服务校验目标与合并约束 |
-| `POST /api/admin/series/create` | `series.create` | 创建参数由系列服务校验 |
-| `POST /api/admin/series/{id}/update` | `series.update` | 系列服务校验目标与成员关系 |
 | `POST /api/admin/archive-versions/{id}/update` | `archive_version.update` | 归档状态机校验 |
 | `POST /api/admin/archive-versions/{id}/delete` | `archive_version.delete_own` 或 `archive_version.delete_any` | own 必须匹配 uploader；any 可操作任意低层对象 |
 | `POST /api/admin/archive-versions/{id}/restore` | `archive_version.restore` | 只允许未 purged 的 deleted 版本 |
@@ -133,12 +130,12 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 
 | 页面 | 身份/权限 |
 | --- | --- |
-| `/`、`/games*`、`/creators*`、`/characters`、`/tags`、`/series*`、`/play/{id}`、认证表单页 | 公开；公共资料 SQL 只返回 published |
+| `/`、`/games*`、`/creators*`、`/characters`、`/tags`、`/catalogs*`、`/play/{id}`、认证表单页 | 公开；公共资料 SQL 只返回 published |
 | `/me`、`/inbox` | 仅活跃用户；内容按本人或可处理 permission 过滤 |
 | `/upload` | `import_job.create` |
 | `/admin` | `system.dashboard.read` |
-| `/admin/works`、`/admin/creators`、`/admin/characters`、`/admin/tags`、`/admin/series` | 对应 `*.read_private` |
-| `/admin/works/{id}`、`/admin/releases/{id}`、`/admin/creators/{id}`、`/admin/characters/{id}`、`/admin/tags/{id}`、`/admin/series/{id}` | 对应精确 `*.update` |
+| `/admin/works`、`/admin/creators`、`/admin/characters`、`/admin/tags` | 对应 `*.read_private` |
+| `/admin/works/{id}`、`/admin/creators/{id}`、`/admin/characters/{id}`、`/admin/tags/{id}` | 对应精确 `*.update` |
 | `/admin/archive-versions`、`/admin/archive-versions/{id}` | `archive_version.read_private` / `archive_version.update` |
 | `/admin/archive-versions/trash` | `archive_version.restore` |
 | `/admin/maintenance` | `system.maintenance.run`；sweep 控件另查 `storage.gc.sweep` |
@@ -150,7 +147,7 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 
 | 入口 | 基线 |
 | --- | --- |
-| `GET|HEAD /api/archive-versions/{id}/download` | 公开；原生 D1 SQL 强制 Work、Release、ArchiveVersion 全链 published |
+| `GET|HEAD /api/archive-versions/{id}/download` | 公开；原生 D1 SQL 强制 Work、ArchiveVersion 全链 published |
 | 其他 fetch | 交给 OpenNext App Router，适用以上矩阵 |
 | scheduled archive GC | 无用户 session；只由 Cloudflare Cron 触发，固定上限并写 `scheduled_gc_sweep` 审计 |
 
@@ -164,7 +161,7 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `GET` | `/api/health/db` | 公开 | 只返回 D1 可用性；故障为 `503` |
 | `GET` | `/api/health/r2` | 公开 | 只返回 R2 可用性；故障为 `503` |
 | `GET` | `/api/media/blobs/{sha256}` | 公开 | active image，且存在 published Work 的直接媒体字段或 `work_media_assets` 引用 |
-| `GET` | `/api/archive-versions/{archiveVersionId}/web-play` | 公开 | SQL 必须证明 Work、Release、ArchiveVersion 全部 `published` |
+| `GET` | `/api/archive-versions/{archiveVersionId}/web-play` | 公开 | SQL 必须证明 Work、ArchiveVersion 全部 `published` |
 | `GET` | `/api/works/lookup` | `work.lookup_non_deleted` | 仅返回非 deleted Work，用于上传关联 |
 | `POST` | `/api/auth/login` | 公开 + 同源 | 密码长度/哈希校验、失败原子计数、成功创建 session |
 | `POST` | `/api/auth/logout` | 当前 session + 同源 | 只撤销当前 session 并清 cookie |
@@ -195,7 +192,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `DELETE` | `/api/admin/users/{userId}/roles/{roleId}` | `user.role.assign` + 同源 | 同上；`user` 基础角色不可移除 |
 | `POST` | `/api/admin/users/{userId}/status` | `user.status.update` + 同源 | 禁止自操作、同级/更高目标；禁用撤销全部 session |
 | `POST` | `/api/admin/works/{workId}/update` | `work.update` + 同源 | Work 状态与关联由作品服务校验并审计 |
-| `POST` | `/api/admin/releases/{releaseId}/update` | `release.update` + 同源 | Release 状态由发布服务校验并审计 |
 | `POST` | `/api/admin/archive-versions/{archiveVersionId}/update` | `archive_version.update` + 同源 | ArchiveVersion 状态机由归档服务校验并审计 |
 | `POST` | `/api/admin/archive-versions/{archiveVersionId}/delete` | `archive_version.delete_own` 或 `archive_version.delete_any` + 同源 | own 匹配 uploader；any 由服务校验对象范围 |
 | `POST` | `/api/admin/archive-versions/{archiveVersionId}/restore` | `archive_version.restore` + 同源 | 只能还原未 purged deleted 版本 |
@@ -203,8 +199,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `POST` | `/api/admin/creators/{creatorId}/update` | `creator.update` + 同源 | 作者服务校验目标、合并约束并审计 |
 | `POST` | `/api/admin/characters/{characterId}/update` | `character.update` + 同源 | 角色服务校验目标、合并约束并审计 |
 | `POST` | `/api/admin/tags/{tagId}/update` | `tag.update` + 同源 | 标签服务校验目标、合并约束并审计 |
-| `POST` | `/api/admin/series/create` | `series.create` + 同源 | 系列服务校验创建参数并审计 |
-| `POST` | `/api/admin/series/{seriesId}/update` | `series.update` + 同源 | 系列服务校验成员关系并审计 |
 
 ### 4.7 App Router 页面逐项清单
 
@@ -216,11 +210,11 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/games/{slug}` | 公开 | 只展示 published Work 及其公开版本链 |
 | `/search` | 公开 | 搜索结果遵守公开资料 SQL |
 | `/creators` | 公开 | 只展示公开关联的 creator |
-| `/creators/{slug}` | 公开 | 只展示公开 Work/Release 关联 |
+| `/creators/{slug}` | 公开 | 只展示公开 Work 关联 |
 | `/characters` | 公开 | 只展示公开关联的角色，条目进入公开 Work 筛选 |
 | `/tags` | 公开 | 只展示公开关联的标签，条目进入公开 Work 筛选 |
-| `/series` | 公开 | 只展示公开系列和成员 |
-| `/series/{slug}` | 公开 | 只展示公开 Work 成员 |
+| `/catalogs` | 公开 | 只展示 published 目录和 Work 成员 |
+| `/catalogs/{slug}` | 公开 | 只展示 published 目录中的公开 Work |
 | `/play/{archiveVersionId}` | 公开 | 页面数据只能来自完整 published 版本链 |
 | `/login` | 公开 | 登录提交走同源认证 API |
 | `/register` | 公开 | 注册提交走同源验证码 API |
@@ -232,7 +226,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/admin` | `system.dashboard.read` | 管理摘要按当前权限显示 |
 | `/admin/works` | `work.read_private` | 管理列表仍由 Work 服务过滤 |
 | `/admin/works/{workId}` | `work.update` | 编辑目标由 Work 服务校验 |
-| `/admin/releases/{releaseId}` | `release.update` | 编辑目标由 Release 服务校验 |
 | `/admin/archive-versions` | `archive_version.read_private` | 无 `delete_any` 时只列本人归档 |
 | `/admin/archive-versions/{archiveVersionId}` | `archive_version.update` | 编辑目标由 ArchiveVersion 服务校验 |
 | `/admin/archive-versions/trash` | `archive_version.restore` | 只显示可还原 deleted 版本 |
@@ -242,8 +235,6 @@ D1 不再维护 `permissions` 注册表。`role_permissions(role_id, permission_
 | `/admin/characters/{characterId}` | `character.update` | 编辑目标由角色服务校验 |
 | `/admin/tags` | `tag.read_private` | 管理列表由标签服务过滤 |
 | `/admin/tags/{tagId}` | `tag.update` | 编辑目标由标签服务校验 |
-| `/admin/series` | `series.read_private` | 管理列表由系列服务过滤 |
-| `/admin/series/{seriesId}` | `series.update` | 编辑目标由系列服务校验 |
 | `/admin/users` | `user.read` | 只列出低于操作者最高 priority 的用户 |
 | `/admin/maintenance` | `system.maintenance.run` | final sweep 控件另查 `storage.gc.sweep` |
 | `/admin/audit` | `audit.read` | 只读角色事件和安全审计 |

@@ -5,11 +5,12 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { listPublicCharacters, listPublicSeries, listPublicTags } from "@/lib/server/db/taxonomy-library";
+import { listPublicCharacters, listPublicTags } from "@/lib/server/db/taxonomy-library";
 import { listPublicCreators } from "@/lib/server/db/creator-library";
 import { searchGameWorks } from "@/lib/server/db/game-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
+import { searchCatalogs } from "@/lib/server/db/catalogs";
 
 export const dynamic = "force-dynamic";
 type SearchPageProps = {
@@ -20,7 +21,7 @@ const SCOPES = [
   ["creators", "作者"],
   ["characters", "角色"],
   ["tags", "标签"],
-  ["series", "系列"],
+  ["catalogs", "目录"],
 ] as const;
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
@@ -37,7 +38,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
       <header className="mb-6 border-b border-border pb-6">
         <h1 className="text-3xl font-extrabold tracking-tight">搜索作品与分类</h1>
-        <p className="mt-2 text-muted">按标题、作者、标签、角色或系列查找内容。</p>
+        <p className="mt-2 text-muted">按标题、作者、标签或角色查找内容。</p>
       </header>
       <form className="my-6 flex gap-2" action="/search" method="get">
         <Label className="sr-only" htmlFor="search-query">
@@ -129,7 +130,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
 async function listDirectory(scope: string, query: string, page: number) {
   const pageSize = 20;
-  let items;
+  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string }>;
   if (scope === "creators")
     items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
       href: `/creators/${item.slug}`,
@@ -151,13 +152,14 @@ async function listDirectory(scope: string, query: string, page: number) {
       subtitle: item.slug,
       meta: `${item.workCount} 个作品`,
     }));
-  else
-    items = (await listPublicSeries({ query, limit: 300 })).map((item) => ({
-      href: `/series/${item.slug}`,
+  else if (scope === "catalogs")
+    items = (await searchCatalogs(query, 300)).map((item) => ({
+      href: `/catalogs/${item.slug}`,
       title: item.title,
-      subtitle: item.titleOriginal,
-      meta: `${item.workCount} 个作品`,
+      subtitle: item.description,
+      meta: `${item.itemCount} 个游戏 · ${item.ownerName}`,
     }));
+  else items = [];
   return {
     items: items.slice((page - 1) * pageSize, page * pageSize),
     total: items.length,

@@ -782,7 +782,6 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     webPlayInstallerVersion: metadata.webPlayInstallerVersion,
     easyRpgRuntimeVersion: metadata.easyRpgRuntimeVersion,
     title: metadata.title,
-    releaseLabel: metadata.releaseLabel,
     archiveLabel: metadata.archiveLabel,
     status: "created",
     phase: "metadata",

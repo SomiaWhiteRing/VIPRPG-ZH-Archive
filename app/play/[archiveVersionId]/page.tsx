@@ -48,15 +48,12 @@ export default async function WebPlayPage({ params }: PageProps) {
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,
-    releaseId: record.releaseId,
     workId: record.workId,
     title: record.workChineseTitle || record.workOriginalTitle,
     originalTitle: record.workOriginalTitle,
     chineseTitle: record.workChineseTitle,
     workSlug: record.workSlug,
-    releaseLabel: record.releaseLabel,
     archiveLabel: record.archiveLabel,
-    archiveKey: record.archiveKey,
     manifestSha256: record.manifestSha256,
     downloadZipBuilderVersion,
     webPlayInstallerVersion,
@@ -93,7 +90,7 @@ export default async function WebPlayPage({ params }: PageProps) {
         }
         subtitle={
           <>
-            {metadata.releaseLabel} / {publicCopy(metadata.archiveLabel)}
+            {publicCopy(metadata.archiveLabel)}
             {metadata.chineseTitle ? ` / ${metadata.originalTitle}` : ""}
           </>
         }

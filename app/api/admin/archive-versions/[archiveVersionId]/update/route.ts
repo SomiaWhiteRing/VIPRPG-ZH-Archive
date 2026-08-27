@@ -40,7 +40,6 @@ export async function POST(request: Request, context: RouteContext) {
       eventType: "admin_archive_version_update",
       detail: {
         archiveVersionId: archiveVersion.id,
-        releaseId: archiveVersion.releaseId,
         workId: archiveVersion.workId,
         status: archiveVersion.status,
       },

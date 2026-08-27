@@ -7,7 +7,11 @@ import {
 import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
 import { getArchiveBucket } from "@/lib/server/storage/archive-bucket";
-import { blobKey, corePackKey, manifestKey } from "@/lib/server/storage/archive-keys";
+import {
+  blobKey,
+  corePackKey,
+  manifestKey,
+} from "@/lib/server/storage/archive-keys";
 
 type D1ObjectRow = {
   sha256: string;
@@ -85,7 +89,6 @@ export type GcArchiveVersionPurgeSummary = {
 export type GcArchiveVersionPurgeCandidate = {
   id: number;
   archiveLabel: string;
-  archiveKey: string;
   deletedAt: string;
   totalFiles: number;
   totalSizeBytes: number;
@@ -178,7 +181,6 @@ type GcCandidateRow = {
 type GcArchiveVersionPurgeCandidateRow = {
   id: number;
   archive_label: string;
-  archive_key: string;
   deleted_at: string;
   total_files: number;
   total_size_bytes: number;
@@ -193,10 +195,12 @@ type GcArchiveVersionPurgeSummaryRow = {
 
 const maxReturnedIssues = 50;
 
-export async function runStorageConsistencyCheck(input: {
-  dbSampleLimit?: number;
-  r2ScanLimit?: number;
-} = {}): Promise<StorageConsistencyReport> {
+export async function runStorageConsistencyCheck(
+  input: {
+    dbSampleLimit?: number;
+    r2ScanLimit?: number;
+  } = {},
+): Promise<StorageConsistencyReport> {
   const dbSampleLimit = clampInteger(input.dbSampleLimit ?? 100, 1, 300);
   const r2ScanLimit = clampInteger(input.r2ScanLimit ?? 1000, 1, 3000);
   const [blobRows, corePackRows, manifestRows] = await Promise.all([
@@ -235,18 +239,25 @@ export async function runStorageConsistencyCheck(input: {
   };
 }
 
-export async function runGcDryRun(input: {
-  graceDays?: number;
-  sampleLimit?: number;
-} = {}): Promise<GcDryRunReport> {
-  const graceDays = clampInteger(input.graceDays ?? gcDefaultGraceDays, 0, 3650);
+export async function runGcDryRun(
+  input: {
+    graceDays?: number;
+    sampleLimit?: number;
+  } = {},
+): Promise<GcDryRunReport> {
+  const graceDays = clampInteger(
+    input.graceDays ?? gcDefaultGraceDays,
+    0,
+    3650,
+  );
   const sampleLimit = clampInteger(input.sampleLimit ?? 50, 1, 200);
 
-  const [archiveVersionSummary, blobSummary, corePackSummary] = await Promise.all([
-    getArchiveVersionPurgeSummary(graceDays, sampleLimit),
-    getGcObjectSummary("blob", graceDays, sampleLimit),
-    getGcObjectSummary("core_pack", graceDays, sampleLimit),
-  ]);
+  const [archiveVersionSummary, blobSummary, corePackSummary] =
+    await Promise.all([
+      getArchiveVersionPurgeSummary(graceDays, sampleLimit),
+      getGcObjectSummary("blob", graceDays, sampleLimit),
+      getGcObjectSummary("core_pack", graceDays, sampleLimit),
+    ]);
 
   return {
     checkedAt: new Date().toISOString(),
@@ -258,11 +269,17 @@ export async function runGcDryRun(input: {
   };
 }
 
-export async function runGcSweep(input: {
-  graceDays?: number;
-  limitPerType?: number;
-} = {}): Promise<GcSweepReport> {
-  const graceDays = clampInteger(input.graceDays ?? gcDefaultGraceDays, 0, 3650);
+export async function runGcSweep(
+  input: {
+    graceDays?: number;
+    limitPerType?: number;
+  } = {},
+): Promise<GcSweepReport> {
+  const graceDays = clampInteger(
+    input.graceDays ?? gcDefaultGraceDays,
+    0,
+    3650,
+  );
   const limitPerType = clampInteger(
     input.limitPerType ?? gcDefaultSweepLimitPerType,
     1,
@@ -352,7 +369,12 @@ async function checkD1ObjectsInR2(
   const sizeMismatches: R2SizeMismatch[] = [];
 
   for (const row of rows) {
-    const r2Key = type === "blob" ? blobKey(row.sha256) : type === "core_pack" ? corePackKey(row.sha256) : manifestKey(row.sha256);
+    const r2Key =
+      type === "blob"
+        ? blobKey(row.sha256)
+        : type === "core_pack"
+          ? corePackKey(row.sha256)
+          : manifestKey(row.sha256);
     const object = await bucket.head(r2Key);
 
     if (!object) {
@@ -364,7 +386,11 @@ async function checkD1ObjectsInR2(
       continue;
     }
 
-    if (type !== "manifest" && row.size_bytes !== null && object.size !== row.size_bytes) {
+    if (
+      type !== "manifest" &&
+      row.size_bytes !== null &&
+      object.size !== row.size_bytes
+    ) {
       sizeMismatches.push({
         type,
         sha256: row.sha256,
@@ -381,7 +407,9 @@ async function checkD1ObjectsInR2(
   };
 }
 
-async function scanR2Objects(limit: number): Promise<StorageConsistencyReport["r2ToD1"]> {
+async function scanR2Objects(
+  limit: number,
+): Promise<StorageConsistencyReport["r2ToD1"]> {
   const listedObjects = await listR2Objects(limit);
   const known = await findKnownR2Sha256(listedObjects.objects);
   const orphanObjects: R2OrphanObject[] = [];
@@ -401,7 +429,10 @@ async function scanR2Objects(limit: number): Promise<StorageConsistencyReport["r
       }
     }
 
-    if (object.key.endsWith(".zip") && !object.key.startsWith("core-packs/sha256/")) {
+    if (
+      object.key.endsWith(".zip") &&
+      !object.key.startsWith("core-packs/sha256/")
+    ) {
       if (zipOutsideCorePack.length < maxReturnedIssues) {
         zipOutsideCorePack.push(toR2OrphanObject(object, info));
       }
@@ -479,12 +510,12 @@ async function findKnownR2Sha256(objects: R2ListedObject[]): Promise<{
 
   return {
     blob: await findExistingHashes("blobs", "sha256", [...hashes.blob]),
-    core_pack: await findExistingHashes("core_packs", "sha256", [...hashes.core_pack]),
-    manifest: await findExistingHashes(
-      "archive_versions",
-      "manifest_sha256",
-      [...hashes.manifest],
-    ),
+    core_pack: await findExistingHashes("core_packs", "sha256", [
+      ...hashes.core_pack,
+    ]),
+    manifest: await findExistingHashes("archive_versions", "manifest_sha256", [
+      ...hashes.manifest,
+    ]),
   };
 }
 
@@ -544,7 +575,8 @@ async function getGcObjectSummary(
       liveReferenceCount: row.live_reference_count,
       deletedReferenceCount: row.deleted_reference_count,
       eligibleNow:
-        row.total_reference_count === 0 && isOlderThanGrace(row.created_at, graceDays),
+        row.total_reference_count === 0 &&
+        isOlderThanGrace(row.created_at, graceDays),
     })),
   };
 }
@@ -596,7 +628,6 @@ async function listArchiveVersionPurgeCandidates(
       `SELECT
         id,
         archive_label,
-        archive_key,
         deleted_at,
         total_files,
         total_size_bytes,
@@ -635,10 +666,13 @@ async function purgeDeletedArchiveVersions(
     }
 
     try {
+      if (!(await hasOtherManifestReferences(row.manifest_sha256, row.id))) {
+        await bucket.delete(manifestKey(row.manifest_sha256));
+      }
       await deleteArchiveVersionRefs(row.id);
-      await bucket.delete(manifestKey(row.manifest_sha256));
       purged.push(candidate);
     } catch (error) {
+      await releaseArchiveVersionPurgeReservation(row.id);
       failed.push({
         ...candidate,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -649,8 +683,14 @@ async function purgeDeletedArchiveVersions(
   return {
     scannedCount: rows.length,
     purgedCount: purged.length,
-    purgedFileCount: purged.reduce((sum, candidate) => sum + candidate.totalFiles, 0),
-    purgedSizeBytes: purged.reduce((sum, candidate) => sum + candidate.totalSizeBytes, 0),
+    purgedFileCount: purged.reduce(
+      (sum, candidate) => sum + candidate.totalFiles,
+      0,
+    ),
+    purgedSizeBytes: purged.reduce(
+      (sum, candidate) => sum + candidate.totalSizeBytes,
+      0,
+    ),
     skippedCount: skipped.length,
     failedCount: failed.length,
     purged: purged.slice(0, maxReturnedIssues),
@@ -680,7 +720,40 @@ async function markArchiveVersionPurged(
   return (result.meta.changes ?? 0) > 0;
 }
 
-async function deleteArchiveVersionRefs(archiveVersionId: number): Promise<void> {
+async function hasOtherManifestReferences(
+  manifestSha256: string,
+  archiveVersionId: number,
+): Promise<boolean> {
+  const row = await getD1()
+    .prepare(
+      `SELECT 1
+       FROM archive_versions
+       WHERE manifest_sha256 = ?
+         AND id <> ?
+         AND purged_at IS NULL
+       LIMIT 1`,
+    )
+    .bind(manifestSha256, archiveVersionId)
+    .first();
+  return Boolean(row);
+}
+
+async function releaseArchiveVersionPurgeReservation(
+  archiveVersionId: number,
+): Promise<void> {
+  await getD1()
+    .prepare(
+      `UPDATE archive_versions
+       SET purged_at = NULL
+       WHERE id = ? AND status = 'deleted'`,
+    )
+    .bind(archiveVersionId)
+    .run();
+}
+
+async function deleteArchiveVersionRefs(
+  archiveVersionId: number,
+): Promise<void> {
   await getD1()
     .prepare(
       `DELETE FROM archive_version_blob_refs
@@ -703,7 +776,6 @@ function mapArchiveVersionPurgeCandidate(
   return {
     id: row.id,
     archiveLabel: row.archive_label,
-    archiveKey: row.archive_key,
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
@@ -718,7 +790,7 @@ async function getEligibleGcSummary(
     type === "blob"
       ? `SELECT COUNT(*) AS count, SUM(b.size_bytes) AS size_bytes
         FROM blobs b
-        WHERE b.status = 'active'
+        WHERE b.status IN ('active', 'purging')
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -738,7 +810,7 @@ async function getEligibleGcSummary(
           )`
       : `SELECT COUNT(*) AS count, SUM(cp.size_bytes) AS size_bytes
         FROM core_packs cp
-        WHERE cp.status = 'active'
+        WHERE cp.status IN ('active', 'purging')
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -770,7 +842,7 @@ async function listEligibleGcRows(
           0 AS live_reference_count,
           0 AS deleted_reference_count
         FROM blobs b
-        WHERE b.status = 'active'
+        WHERE b.status IN ('active', 'purging')
           AND datetime(b.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -799,7 +871,7 @@ async function listEligibleGcRows(
           0 AS live_reference_count,
           0 AS deleted_reference_count
         FROM core_packs cp
-        WHERE cp.status = 'active'
+        WHERE cp.status IN ('active', 'purging')
           AND datetime(cp.created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -842,7 +914,9 @@ async function sweepGcRows(
     }
 
     try {
-      await bucket.delete(type === "blob" ? blobKey(row.id) : corePackKey(row.id));
+      await bucket.delete(
+        type === "blob" ? blobKey(row.id) : corePackKey(row.id),
+      );
       await markGcCandidatePurged(type, row.id);
       purged.push(object);
     } catch (error) {
@@ -876,7 +950,7 @@ async function markGcCandidatePurging(
       ? `UPDATE blobs
         SET status = 'purging'
         WHERE sha256 = ?
-          AND status = 'active'
+          AND status IN ('active', 'purging')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -896,8 +970,8 @@ async function markGcCandidatePurging(
           )`
       : `UPDATE core_packs
         SET status = 'purging'
-        WHERE id = ?
-          AND status = 'active'
+        WHERE sha256 = ?
+          AND status IN ('active', 'purging')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -907,7 +981,7 @@ async function markGcCandidatePurging(
 
   const result = await getD1()
     .prepare(sql)
-    .bind(type === "blob" ? id : Number(id), `-${graceDays} days`)
+    .bind(id, `-${graceDays} days`)
     .run();
 
   return (result.meta.changes ?? 0) > 0;
@@ -925,13 +999,13 @@ async function markGcCandidatePurged(
           AND status = 'purging'`
       : `UPDATE core_packs
         SET status = 'purged'
-        WHERE id = ?
+        WHERE sha256 = ?
           AND status = 'purging'`;
 
-  await getD1()
-    .prepare(sql)
-    .bind(type === "blob" ? id : Number(id))
-    .run();
+  const result = await getD1().prepare(sql).bind(id).run();
+  if ((result.meta.changes ?? 0) === 0) {
+    throw new Error("GC reservation was lost before purge completion");
+  }
 }
 
 async function restoreGcCandidateActive(
@@ -946,13 +1020,10 @@ async function restoreGcCandidateActive(
           AND status = 'purging'`
       : `UPDATE core_packs
         SET status = 'active'
-        WHERE id = ?
+        WHERE sha256 = ?
           AND status = 'purging'`;
 
-  await getD1()
-    .prepare(sql)
-    .bind(type === "blob" ? id : Number(id))
-    .run();
+  await getD1().prepare(sql).bind(id).run();
 }
 
 async function getDeletedOnlyGcSummary(
@@ -1017,7 +1088,7 @@ async function listGcCandidateRows(
         LEFT JOIN archive_version_blob_refs avbr
           ON avbr.blob_sha256 = b.sha256
         LEFT JOIN archive_versions av ON av.id = avbr.archive_version_id
-        WHERE b.status = 'active'
+        WHERE b.status IN ('active', 'purging')
           AND NOT EXISTS (
             SELECT 1
             FROM works w
@@ -1045,7 +1116,7 @@ async function listGcCandidateRows(
         LEFT JOIN archive_version_core_pack_refs avcpr
           ON avcpr.core_pack_id = cp.id
         LEFT JOIN archive_versions av ON av.id = avcpr.archive_version_id
-        WHERE cp.status = 'active'
+        WHERE cp.status IN ('active', 'purging')
         GROUP BY cp.id
         HAVING live_reference_count = 0
         ORDER BY total_reference_count ASC, cp.created_at ASC
@@ -1061,7 +1132,8 @@ async function listGcCandidateRows(
 }
 
 function parseR2Key(key: string): R2KeyInfo {
-  const blobMatch = /^blobs\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})$/i.exec(key);
+  const blobMatch =
+    /^blobs\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})$/i.exec(key);
 
   if (blobMatch?.[1]) {
     return {
@@ -1071,7 +1143,9 @@ function parseR2Key(key: string): R2KeyInfo {
   }
 
   const corePackMatch =
-    /^core-packs\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})\.zip$/i.exec(key);
+    /^core-packs\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})\.zip$/i.exec(
+      key,
+    );
 
   if (corePackMatch?.[1]) {
     return {
@@ -1081,7 +1155,9 @@ function parseR2Key(key: string): R2KeyInfo {
   }
 
   const manifestMatch =
-    /^manifests\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})\.json$/i.exec(key);
+    /^manifests\/sha256\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{64})\.json$/i.exec(
+      key,
+    );
 
   if (manifestMatch?.[1]) {
     return {
@@ -1096,7 +1172,10 @@ function parseR2Key(key: string): R2KeyInfo {
   };
 }
 
-function toR2OrphanObject(object: R2ListedObject, info: R2KeyInfo): R2OrphanObject {
+function toR2OrphanObject(
+  object: R2ListedObject,
+  info: R2KeyInfo,
+): R2OrphanObject {
   return {
     type: info.type,
     key: object.key,

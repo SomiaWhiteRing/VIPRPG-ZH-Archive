@@ -7,8 +7,8 @@ const CREATOR_ROLE_LABELS: Record<string, string> = {
   proofreader: "校对",
   image_editor: "修图",
   publisher: "发布",
-  repacker: "整理",
   editor: "编辑",
+  other: "其他",
 };
 
 const NAMESPACE_LABELS: Record<string, string> = {
@@ -20,30 +20,63 @@ const NAMESPACE_LABELS: Record<string, string> = {
   other: "其他",
 };
 
-const RELEASE_TYPE_LABELS: Record<string, string> = {
-  original: "原始发布",
-  translation: "汉化版",
-  revision: "修正版",
-  localized_revision: "本地化修正版",
-  demo: "试玩版",
-  event_submission: "活动投稿",
-  patch_applied_full_release: "补丁整合版",
-  repack: "重打包",
+export const LANGUAGE_OPTIONS = [
+  { value: "zh-CN", label: "简体中文" },
+  { value: "ja", label: "日语" },
+  { value: "en", label: "英语" },
+  { value: "zh-TW", label: "繁体中文" },
+  { value: "ko", label: "韩语" },
+  { value: "fr", label: "法语" },
+  { value: "de", label: "德语" },
+  { value: "es", label: "西班牙语" },
+  { value: "ru", label: "俄语" },
+  { value: "pt-BR", label: "葡萄牙语（巴西）" },
+  { value: "it", label: "意大利语" },
+  { value: "th", label: "泰语" },
+  { value: "vi", label: "越南语" },
+] as const;
+
+const RELATION_LABELS: Record<string, string> = {
+  adaptation: "改编",
+  prequel: "前传",
+  sequel: "续集",
+  same_setting: "相同世界观",
+  alternative_setting: "不同世界观",
+  alternative_version: "不同演绎",
+  character: "角色出演",
+  collaboration: "联动",
+  version: "不同版本",
+  main_version: "主版本",
+  collection: "合集",
+  in_collection: "收录作品",
 };
 
-const BASE_VARIANT_LABELS: Record<string, string> = {
-  original: "原版",
-  remake: "重制版",
-  other: "其他基底",
+const RELATION_INVERSE: Record<string, string | null> = {
+  adaptation: "adaptation",
+  prequel: "sequel",
+  sequel: "prequel",
+  same_setting: "same_setting",
+  alternative_setting: "alternative_setting",
+  alternative_version: "alternative_version",
+  character: "character",
+  collaboration: null,
+  version: "main_version",
+  main_version: "version",
+  collection: "in_collection",
+  in_collection: "collection",
 };
+
+export const WORK_RELATION_TYPES = Object.freeze(Object.keys(RELATION_LABELS));
+export const TRANSLATION_ROLE_LABELS = {
+  original: "原版",
+  translation: "译版",
+} as const;
 
 const IMPORT_TASK_STATUS_LABELS: Record<string, string> = {
   created: "已创建",
   preflighted: "检查完成",
   uploading: "上传中",
-  committed: "已提交入库",
   completed: "已完成",
-  succeeded: "已完成",
   failed: "失败",
   canceled: "已取消",
 };
@@ -75,12 +108,20 @@ export function namespaceLabel(value: string): string {
   return NAMESPACE_LABELS[value] ?? value;
 }
 
-export function releaseTypeLabel(value: string): string {
-  return RELEASE_TYPE_LABELS[value] ?? "其他";
+export function languageLabel(value: string | null | undefined): string {
+  return LANGUAGE_OPTIONS.find((option) => option.value === value)?.label ?? value ?? "未知语言";
 }
 
-export function baseVariantLabel(value: string): string {
-  return BASE_VARIANT_LABELS[value] ?? value;
+export function isLanguageCode(value: unknown): value is (typeof LANGUAGE_OPTIONS)[number]["value"] {
+  return typeof value === "string" && LANGUAGE_OPTIONS.some((option) => option.value === value);
+}
+
+export function relationLabel(value: string): string {
+  return RELATION_LABELS[value] ?? value;
+}
+
+export function relationInverse(value: string): string | null {
+  return RELATION_INVERSE[value] ?? null;
 }
 
 export function workStatusLabel(value: string): string {

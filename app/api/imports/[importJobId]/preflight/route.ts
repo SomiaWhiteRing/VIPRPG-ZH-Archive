@@ -7,7 +7,7 @@ import {
   parseImportJobId,
   requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
-import { json, jsonError } from "@/lib/server/http/json";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ export async function POST(request: Request, context: RouteContext) {
     const job = await requiredOwnedImportJob(parsedImportJobId, auth.user);
     authorizedForJob = true;
 
-    const payload = (await request.json()) as PreflightRequest;
+    const payload = await parsePreflightRequest(request);
     const blobObjects = normalizeHashInputs(payload.blobs ?? []);
     const corePackObjects = normalizeHashInputs(payload.corePacks ?? []);
     const blobSha256 = blobObjects.map((item) => item.sha256);
@@ -93,9 +93,16 @@ function normalizeHashInputs(values: HashInput[]): Array<{
   const result = new Map<string, number>();
 
   for (const value of values) {
-    const sha256 = normalizeSha256(
-      typeof value === "string" ? value : String(value.sha256 ?? ""),
-    );
+    const rawSha256 = typeof value === "string" ? value : value.sha256;
+    if (typeof rawSha256 !== "string") {
+      throw new HttpError(400, "Invalid SHA-256");
+    }
+    let sha256: string;
+    try {
+      sha256 = normalizeSha256(rawSha256);
+    } catch {
+      throw new HttpError(400, "Invalid SHA-256");
+    }
     const sizeBytes =
       typeof value === "string" ? 0 : readNonNegativeInteger(value.sizeBytes);
 
@@ -124,15 +131,60 @@ function summarize(
     missing: missingItems.map((item) => item.sha256),
     existingCount: existingItems.length,
     missingCount: missingItems.length,
-    existingSizeBytes: existingItems.reduce((sum, item) => sum + item.sizeBytes, 0),
-    missingSizeBytes: missingItems.reduce((sum, item) => sum + item.sizeBytes, 0),
+    existingSizeBytes: existingItems.reduce(
+      (sum, item) => sum + item.sizeBytes,
+      0,
+    ),
+    missingSizeBytes: missingItems.reduce(
+      (sum, item) => sum + item.sizeBytes,
+      0,
+    ),
   };
 }
 
 function readNonNegativeInteger(value: unknown): number {
+  if (value === undefined) return 0;
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    return 0;
+    throw new HttpError(400, "Invalid object size");
   }
-
   return value;
+}
+
+async function parsePreflightRequest(
+  request: Request,
+): Promise<PreflightRequest> {
+  let value: unknown;
+  try {
+    value = await request.json();
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
+  if (!isRecord(value)) {
+    throw new HttpError(400, "Invalid preflight body");
+  }
+  for (const key of ["blobs", "corePacks"] as const) {
+    if (value[key] !== undefined && !Array.isArray(value[key])) {
+      throw new HttpError(400, `${key} must be an array`);
+    }
+    const values = (value[key] ?? []) as unknown[];
+    for (const item of values) {
+      if (typeof item === "string") continue;
+      if (!isRecord(item) || typeof item.sha256 !== "string") {
+        throw new HttpError(400, "Invalid object reference");
+      }
+      if (
+        item.sizeBytes !== undefined &&
+        (typeof item.sizeBytes !== "number" ||
+          !Number.isSafeInteger(item.sizeBytes) ||
+          item.sizeBytes < 0)
+      ) {
+        throw new HttpError(400, "Invalid object size");
+      }
+    }
+  }
+  return value as PreflightRequest;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

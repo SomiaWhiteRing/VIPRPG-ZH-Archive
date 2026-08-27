@@ -541,8 +541,8 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 - 已实现 `PUT /api/blobs/{sha256}`，会重新计算请求体 SHA-256，匹配后写入 R2 `blobs/sha256/{aa}/{bb}/{sha256}` 和 D1 `blobs`。
 - 已实现 `PUT /api/core-packs/{sha256}`，会校验请求体 SHA-256、基础 ZIP magic、`x-core-pack-file-count` 和 `x-core-pack-uncompressed-size`。
 - 已实现 `POST /api/imports/{id}/preflight`，输入 blob/core pack hash 列表，返回 existing/missing。
-- 当前 schema 已通过迁移收束为 `works` / `releases` / `archive_versions` / `archive_version_blob_refs` / `archive_version_core_pack_refs` 数据模型；production 在正式发布前应使用同一组迁移创建或重建。
-- 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、releases、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
+- 当前 schema 已通过迁移收束为 `works` / `archive_versions` / `archive_version_blob_refs` / `archive_version_core_pack_refs` 数据模型；production 在正式发布前应使用同一组迁移创建或重建。
+- 已实现 `/admin` 和 `GET /api/admin/summary`，用于查看 users、works、archive versions、blobs、core packs、import jobs 和 download builds 的计数。
 - 上传和 preflight 接口已接入统一 guard；具体 401/403 与对象所有权矩阵见认证授权基线。
 - 已用本地样本在 staging 完成一次真实样本导入：3018 个归档文件，1705 个唯一 blob，1 个 core pack，manifest/core pack/blob 的 R2 SHA-256 抽验通过。
 - 本次样本固定了 `rpgm2000-2003-whitelist-v3` 路径覆盖规则：`StringScripts*` 的 `.txt` 进入 core pack，`screenshots/`、根目录 `screenshot*` 和根目录 `null.txt` 强制排除。
@@ -567,16 +567,16 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 验收：
 
-- 导入成功后 D1 有 `works`、`releases`、`archive_versions` 和对象引用表。
+- 导入成功后 D1 有 `works`、`archive_versions` 和对象引用表。
 - manifest 可从 R2 `manifests/` 读取。
 - 文件路径只在 R2 manifest 中出现。
 
 实施记录：
 
 - 已实现 Phase D 最小可用浏览器上传：文件夹选择、白名单过滤、浏览器 SHA-256、`fflate` core pack、manifest、import job、preflight、缺失对象上传、commit、当前会话浮标进度。
-- 上传表单已改为 Work / Release / ArchiveVersion 三段：Work 只强制原名和引擎；Release 强制基底版本、发布类型、版本标识，并自动生成稳定 `release_key` 和显示 `release_label`；ArchiveVersion 强制归档语言和归档标识，记录校对/修图状态，并生成稳定 `archive_key`。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容并选择已有 Release。
+- 上传表单已收束为 Work / ArchiveVersion 两层：Work 负责身份、语言、原创标记和引擎资料；ArchiveVersion 负责归档名称、来源、校对/修图状态和文件快照。原名填写后会查询库内既有 Work，确认同一作品后可复用 Work 内容。
 - 已用本地浏览器端样本在 staging 完成导入：源目录 9081 文件 / 390.51 MB；白名单归档 9073 文件 / 273.75 MB；排除 8 文件 / 122.42 MB；当前有效归档为 `ArchiveVersion #6`。
-- staging D1 验证结果：`works.id = 3`，`releases.id = 3`，`archive_versions.id = 6`，对象引用表写入完成；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
+- staging D1 验证结果：`works.id = 3`，`archive_versions.id = 6`，对象引用表写入完成；manifest SHA-256 为 `e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1`。
 - staging R2 验证结果：manifest 位于 `manifests/sha256/e8/1b/e81b9f20384802ad13acb2f67243577819d29385b9cf3a0948e92b432e8314f1.json`，下载后 SHA-256 与 D1 记录一致。
 - commit 写入已按 D1 变量上限分块，并支持清理同 manifest 或同 archive label 的失败草稿后重试。
 - 2026-05-03 追加上传性能优化：上传 worker 不再在 ZIP 模式下 `unzipSync` 全量解包，而是读取中央目录并按需切片解压 entry；hash / CRC 阶段改为有字节预算的自适应并发；core pack 生成复用扫描阶段已读 core 字节并改为 `fflate` 异步 ZIP；缺失 blob 上传并发改为按浏览器能力自适应。
@@ -588,7 +588,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 任务：
 
-- 实现 `GET /api/archive-versions/{archiveVersionId}/download`，公开页面可从 `/games/{workSlug}/releases/{releaseId}` 链接到该端点。
+- 实现 `GET /api/archive-versions/{archiveVersionId}/download`，公开页面从 Work 的 published current ArchiveVersion 链接到该端点。
 - 实现 streaming ZIP builder。
 - 实现 core pack entry 流式读取。
 - 实现 R2 Get 次数预估。
@@ -604,7 +604,7 @@ const archiveBucket = env.ARCHIVE_BUCKET;
 
 实施记录：
 
-- 已实现 `GET /api/archive-versions/{archiveVersionId}/download`，仅允许下载 `published` 且所属 Work/Release 未删除的 ArchiveVersion。
+- 已实现 `GET /api/archive-versions/{archiveVersionId}/download`，仅允许下载所属 Work 和 ArchiveVersion 均为 `published` 的 current 快照。
 - 下载端点从 R2 读取 manifest 并校验 SHA-256，再按 manifest 路径顺序重组 ZIP；最终 ZIP 使用 STORE 方法流式输出，不在 R2 写入完整游戏 ZIP。
 - 首页已加入“当前可下载归档”列表，只展示 `published + current` 的归档，并提供 ZIP 下载链接。
 - Workers Cache key 使用 `archive_version_id + manifest_sha256 + packer_version + download_zip_builder_version`，响应包含 `Content-Length`、`X-Download-Cache`、`X-Estimated-R2-Get-Count`、`X-Manifest-SHA256` 和 `X-Download-Zip-Builder`。
@@ -662,8 +662,8 @@ Phase 5 MVP 回补：
 - 新增 `/admin/archive-versions` 与回收站页面，用于查看、删除和还原归档；页面与对象 scope 规则见统一基线。
 - 新增 `POST /api/admin/archive-versions/{archiveVersionId}/delete`：把 ArchiveVersion 标记为 `deleted`、写入 `deleted_at` 并清空 `is_current`，不删除 R2 对象。
 - 新增 `POST /api/admin/archive-versions/{archiveVersionId}/restore`：把回收站 ArchiveVersion 恢复为 `published`；若同组没有 current，则自动设为 current。
-- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/current`：在同一 `release_id + archive_key` 下切换当前 published 版本。
-- 删除 current 版本时，会自动在同一组中选择最新 published 版本接任；没有可用版本则保持无 current。
+- 新增 `POST /api/admin/archive-versions/{archiveVersionId}/current`：在同一 Work 下切换当前 published 快照。
+- 删除 current 版本时，会自动在同一 Work 下选择最新 published 快照接任；没有可用版本则保持无 current。
 - 新增迁移 `0005_archive_version_purge.sql`，为 ArchiveVersion 增加 `purged_at`。回收站 ArchiveVersion 在最终清理前可以还原；最终清理后删除文件引用和 manifest，不能再还原。
 - 新增高危 `POST /api/admin/gc/sweep`：需要 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用 active blob/core pack；其授权 key 见统一基线。
 - GC sweep 对候选对象使用 `active -> purging -> purged` 状态转换；R2 删除失败则恢复为 `active`。
@@ -727,23 +727,22 @@ Phase 5 MVP 回补：
 
 ### Phase H：游戏资料库产品化
 
-目标：用户不再只看到 ArchiveVersion 列表，而是按 Work 浏览作品资料、发布分支和归档快照。
+目标：用户不再只看到 ArchiveVersion 列表，而是按 Work 浏览作品资料、翻译关联和归档快照。
 
 任务：
 
 - 实现 `/games` 公开资料库列表，支持标题、别名、作者、标签、登场角色搜索，以及引擎、标签和登场角色筛选。
-- 实现 `/games/{slug}` 作品详情页，展示原名、中文名、别名、作者、标签、登场角色、外部链接、系列/关联作品、发布版本和归档下载/在线游玩入口。
+- 实现 `/games/{slug}` 作品详情页，展示原名、中文名、别名、作者、标签、登场角色、外部链接、普通/翻译关联和归档下载/在线游玩入口。
 - 实现公开图片读取端点，用于作品缩略图和浏览图展示；公开引用链规则只见统一认证授权基线。
 - 实现 `/admin/works` 和 `/admin/works/{workId}`，用于维护 Work 层基础资料、别名、标签、登场角色和外部链接。
-- 实现 `/admin/releases/{releaseId}`，用于维护 Release 层资料：名称、基底版本、分支、类型、发布日期、来源、入口、标签、外链和版权备注。
-- 实现 `/admin/archive-versions/{archiveVersionId}`，用于维护 ArchiveVersion 层资料：名称、语言、校对、修图和发布状态；归档 key、manifest 和对象引用保持只读。
-- 实现 `/creators` 和 `/creators/{slug}`，公开展示作者、汉化、校对、修图和整理人员的资料、作品层职务和 Release 职务。
+- 实现 `/admin/archive-versions/{archiveVersionId}`，用于维护 ArchiveVersion 层资料：名称、来源、校对、修图和发布状态；manifest 和对象引用保持只读。
+- 实现 `/creators` 和 `/creators/{slug}`，公开展示作者和制作人员的资料及 Work 职务。
 - 实现 `/admin/creators` 和 `/admin/creators/{creatorId}`，用于维护 creator 本体资料；职务关联第一版只读展示。
-- 实现 `/characters`、`/tags` 公开索引并连接到作品筛选；`/series` 及其详情页展示系列作品顺序。
-- 实现 `/admin/characters`、`/admin/tags`、`/admin/series`，用于维护角色、标签和系列本体资料，并支持角色/标签合并。
-- 作品编辑页补齐角色职务、浏览图 SHA-256、系列成员和相关作品关系维护。
+- 实现 `/characters`、`/tags` 公开索引并连接到作品筛选；`/catalogs` 及其详情页展示人工编排顺序。
+- 实现 `/admin/characters`、`/admin/tags`，用于维护角色和标签本体资料，并支持合并。
+- 作品编辑页补齐角色职务、浏览图 SHA-256 和相关作品关系维护。
 - 作品编辑写入 `auth_audit_logs`，供审计页追踪资料变更；读取授权见统一基线。
-- Release 和 ArchiveVersion 编辑同样写入 `auth_audit_logs`。
+- ArchiveVersion 编辑同样写入 `auth_audit_logs`。
 - Creator 编辑同样写入 `auth_audit_logs`。
 
 验收：
@@ -752,13 +751,13 @@ Phase 5 MVP 回补：
 - `/games` 能列出已发布作品，按标签文本或登场角色筛选后仍能进入详情页。
 - `/games/{slug}` 的下载按钮复用现有下载端点；未使用 Maniacs Patch 的归档显示在线游玩入口。
 - 管理端可编辑作品中文名、简介、发布日期、引擎、Maniacs Patch 标记、状态、别名、标签、登场角色和外链。
-- 管理端可从作品编辑页进入 Release 编辑，并从 Release 编辑页进入 ArchiveVersion 编辑。
-- Release 与 ArchiveVersion 编辑页按统一基线守卫，不在本文按角色名重复定义访问边界。
-- `/creators` 能列出已有公开作品或公开 Release 关联的制作人员。
-- `/creators/{slug}` 能展示作者简介、个人链接、作品年表和发布参与记录。
+- 管理端可从作品编辑页进入 ArchiveVersion 编辑。
+- ArchiveVersion 编辑页按统一基线守卫，不在本文按角色名重复定义访问边界。
+- `/creators` 能列出已有公开 Work 关联的制作人员。
+- `/creators/{slug}` 能展示作者简介、个人链接、作品年表和参与记录。
 - Creator 管理页可编辑名称、原名、个人链接和简介；访问边界只见统一基线。
-- `/characters` 和 `/tags` 的条目能进入对应作品筛选；`/series/{slug}` 能展示系列成员排序。
-- 管理端可维护角色资料、标签、系列，并可在 Work 编辑页维护角色、系列和相关作品关系；访问边界只见统一基线。
+- `/characters` 和 `/tags` 的条目能进入对应作品筛选；`/catalogs/{slug}` 能展示目录成员排序。
+- 管理端可维护角色、标签和目录，并可在 Work 编辑页维护角色和相关作品关系；访问边界只见统一基线。
 
 当前落地：
 
@@ -766,17 +765,17 @@ Phase 5 MVP 回补：
 - 新增 `/api/media/blobs/{sha256}`，按统一基线证明完整公开引用链后返回 `image/*` 内容，并设置长期 immutable 缓存。
 - 新增 `/games`、`/games/{slug}`、`/admin/works`、`/admin/works/{workId}` 和 `POST /api/admin/works/{workId}/update`。
 - `/games` 现在支持独立标签文本搜索和登场角色筛选；登场角色使用 `characters` + `work_characters`，不会混入普通 `tags`。
-- 新增 `/admin/releases/{releaseId}`、`POST /api/admin/releases/{releaseId}/update`、`/admin/archive-versions/{archiveVersionId}` 和 `POST /api/admin/archive-versions/{archiveVersionId}/update`。
+- 新增 `/admin/archive-versions/{archiveVersionId}` 和 `POST /api/admin/archive-versions/{archiveVersionId}/update`。
 - 新增 `lib/server/db/creator-library.ts`，集中处理 creator 公开查询、详情聚合和管理端编辑。
 - 新增 `/creators`、`/creators/{slug}`、`/admin/creators`、`/admin/creators/{creatorId}` 和 `POST /api/admin/creators/{creatorId}/update`。
-- 新增 `lib/server/db/taxonomy-library.ts`，集中处理角色、标签和系列的公开查询、管理端编辑、合并和系列创建。
-- 新增 `/characters`、`/tags`、`/series`、`/series/{slug}`；角色和标签条目进入 `/games` 的对应筛选结果。
-- 新增 `/admin/characters`、`/admin/characters/{characterId}`、`/admin/tags`、`/admin/tags/{tagId}`、`/admin/series`、`/admin/series/{seriesId}` 及对应管理 API。
-- `/admin/works/{workId}` 现在可维护 Work 图标/缩略图 SHA-256、浏览图列表、角色职务、系列成员和相关作品关系。
-- 作品详情页的 Work staff 和 Release staff 现在链接到 creator 公开页。
+- 新增 `lib/server/db/taxonomy-library.ts`，集中处理角色和标签的公开查询、管理端编辑与合并。
+- 新增 `/characters`、`/tags`；角色和标签条目进入 `/games` 的对应筛选结果。
+- 新增 `/admin/characters`、`/admin/characters/{characterId}`、`/admin/tags`、`/admin/tags/{tagId}` 及对应管理 API。
+- `/admin/works/{workId}` 现在可维护 Work 图标/缩略图 SHA-256、浏览图列表、角色职务和相关作品关系。
+- 作品详情页的 Work staff 现在链接到 creator 公开页。
 - `/admin/archive-versions` 的编辑入口和自身归档维护操作按统一基线的 permission key 与 ownership 显示。
 - 首页新增“游戏资料库”和“作者与制作人员”入口，管理端新增“作品资料”和“作者资料”入口。
-- 首页新增登场角色、标签和系列作品入口；管理端新增角色资料、标签资料和系列资料入口。
+- 首页新增登场角色、标签和目录入口；管理端新增角色资料、标签资料和目录入口。
 
 ## 11. 部署和环境流程
 

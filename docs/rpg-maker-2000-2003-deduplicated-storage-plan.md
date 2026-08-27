@@ -4,13 +4,13 @@
 
 本文把“游戏在浏览器端预索引后，把可复用静态资源去重存入 R2，游戏只保存独有数据和索引，下载时再按索引重组压缩包”的想法，整理成一套可实现的软件工程方案。
 
-游戏资料、系列、作品关系、发布版本和归档快照的领域模型单独维护在：[游戏领域架构设计](./game-domain-architecture.md)。EasyRPG 在线游玩的浏览器本地安装、OPFS、Service Worker 和 Web Player 细节单独维护在：[EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)。
+游戏资料、作品关系、翻译关系、目录和归档快照的领域模型单独维护在：[游戏领域架构设计](./game-domain-architecture.md)。EasyRPG 在线游玩的浏览器本地安装、OPFS、Service Worker 和 Web Player 细节单独维护在：[EasyRPG 在线游玩架构设计](./easyrpg-web-play-architecture.md)。
 
 当前建议的核心模型是：
 
 - R2 作为内容寻址对象库，按文件内容哈希保存可复用静态资源和需要单独管理的运行时文件，每个唯一内容只存一次。
 - 每个 ArchiveVersion 的核心独有文件打成一个 core pack，减少下载重组时的 R2 读取次数。
-- D1 作为元数据和关系数据库，记录作品、发布版本、归档快照、文件路径与物理存储对象之间的关系。
+- D1 作为元数据和关系数据库，记录作品、作品关系、翻译关系、目录、归档快照、文件路径与物理存储对象之间的关系。
 - 每个 ArchiveVersion 不是一份完整压缩包，而是一份 manifest：它说明“这个归档快照由哪些路径、哪些文件内容组成”。
 - 下载时根据 manifest 从 R2 读取 core pack 和独立 blob，流式重组为 ZIP；完整游戏 ZIP 不进入 R2，只允许作为响应流或可丢弃的 Workers Cache/CDN 边缘缓存存在。
 - 在线游玩复用同一份下载 ZIP 的 Workers Cache/CDN 缓存，由浏览器下载、解包到 OPFS，本地安装完成后通过内嵌 EasyRPG Web Player 读取 OPFS 文件运行。
@@ -34,7 +34,7 @@ RPG Maker 2000/2003 游戏通常包含以下内容：
 - 降低 R2 存储占用：重复文件只保存一份。
 - 降低下载重组的 R2 Class B 读操作：核心小文件以 core pack 形式读取。
 - 保留游戏原始目录结构：下载时可重建可运行的游戏目录。
-- 支持作品、发布版本和归档快照分层：同一作品可有原版、修正版、汉化版、活动投下版等 Release，每个 Release 可有一个或多个 ArchiveVersion。
+- 支持 Work 和 ArchiveVersion 两层：一个 Work 可有原版、译本、修正版等多个 ArchiveVersion，并以语言、原创标记和快照元数据区分。
 - 支持审计和回收：知道每个 blob/core pack 被哪些 ArchiveVersion 引用，能安全清理无人引用对象。
 - 支持未使用 Maniacs Patch 的游戏通过 EasyRPG Web Player 在线游玩，并把已安装游戏缓存在浏览器本地。
 - 适配 Cloudflare Workers + OpenNext + R2 + D1。
@@ -150,7 +150,7 @@ RPG_RT.exe
 5. 前端把 manifest 发给后端做 preflight。
 6. 后端查询 D1，返回“哪些 asset/runtime blob 已存在，哪些缺失”。
 7. 前端只上传缺失 asset/runtime blob 和本次 ArchiveVersion 的 core pack。
-8. 后端写入 Work、Release、ArchiveVersion、core pack 和文件索引。
+8. 后端写入 Work、ArchiveVersion、core pack 和文件索引。
 
 这样可以同时节省 R2 存储、重复上传成本，并降低下载重组时的 R2 读取次数。
 
@@ -277,7 +277,7 @@ RPG_RT.exe
 新的控制方式是：
 
 - 导入阶段展示原目录大小、白名单内归档大小、白名单外排除大小、文件数、预计新增 R2 存储、预计下载 R2 Get 次数。
-- 大型导入使用后台任务、分块提交和可恢复状态，不要求单个 Worker 请求完成所有工作。
+- 大型导入使用后台任务、分块提交和对象级重试，不要求单个 Worker 请求完成所有工作；commit 本身仍是单次请求。
 - 大型下载优先命中 Workers Cache/CDN 边缘缓存，或进入异步下载/排队流程；任何完整游戏 ZIP 都不能写入 R2。
 - 管理端保留按用户、按时间窗口的上传配额和滥用限流，但这些是运营限额，不是游戏内容规模上限。
 
@@ -385,17 +385,11 @@ D1 Workers Paid 当前关键限制：
 ### 4.1 概念模型
 
 ```text
-Series
-  系列、合集、企划或世界观集合。一个作品可以属于多个系列。
-
 Work
   作品本身，是公开游戏资料页和搜索页的主要对象。
 
-Release
-  作品的一条玩家可识别的版本分支，例如原版、重制版、修正版或活动投下版。
-
 ArchiveVersion
-  本站实际归档的一份可下载文件快照，同时记录语言、校对、修图等归档状态。
+  Work 下的一份可下载文件快照，同时记录语言、校对、修图、来源和文件清单。
 
 Blob
   一个独立文件内容，通常是可复用静态资源或需要单独管理的运行时文件，由 sha256 标识，存放在 R2。
@@ -416,43 +410,42 @@ DownloadBuild
 
 ### 4.2 正式 D1 表族
 
-正式游戏领域模型固定为 `works`、`releases`、`archive_versions` 三层。完整领域说明见 [游戏领域架构设计](./game-domain-architecture.md)，当前初始 schema 见 `migrations/0001_init_archive_schema.sql`。
+正式游戏领域模型固定为 `works` 和 `archive_versions` 两层。完整领域说明见 [游戏领域架构设计](./game-domain-architecture.md)，当前初始 schema 见 `migrations/0001_init_archive_schema.sql`。
 
 核心表族：
 
-- 作品资料：`works`、`work_titles`、`series`、`work_series`、`work_relations`。
-- 发布资料：`releases`、`release_staff`、`release_events`、`release_tags`、`release_external_links`。
+- 作品资料：`works`、`work_titles`、`work_relations`、`translation_relations`、`catalogs`、`catalog_items`。
 - 归档快照：`archive_versions`、`archive_version_blob_refs`、`archive_version_core_pack_refs`。
-- 可扩展资料：`characters`、`work_characters`、`creators`、`work_staff`、`events`、`tags`、`work_tags`。
-- 媒体和来源：`media_assets`、`work_media_assets`、`release_media_assets`、`work_external_links`。
+- 可扩展资料：`characters`、`work_characters`、`creators`、`work_staff`、`tags`、`work_tags`。
+- 媒体和来源：`media_assets`、`work_media_assets`、`work_external_links`。
 - 存储对象：`blobs`、`core_packs`、`import_jobs`、`download_builds`。
 
 长期边界：
 
 - `Work` 管“这是什么作品”。
-- `Release` 管“这次公开发布是什么版本分支和发布日期”。
-- `ArchiveVersion` 管“本站实际保存了哪份具体归档”，包括语言、校对/修图状态和文件快照。
+- `ArchiveVersion` 管“本站实际保存了哪份具体归档”，包括语言、校对/修图状态、来源和文件快照；不同译本、平行整理本和修正版直接挂在同一 Work 下。
+- `work_relations` 表达普通作品关系；`translation_relations` 表达原版与译本之间的有向关系；`catalogs` 表达用户维护的有序作品目录。
 - manifest 管路径和文件级元数据；`archive_version_blob_refs` / `archive_version_core_pack_refs` 只管对象引用；`blobs` 只管内容，不管文件名。
 - `download_builds` 指向 `archive_versions`。
 
 ### 4.3 字段说明
 
 - `works.slug`：公开 URL 用，例如 `/games/yume-nikki-viprpg-demo`。
-- `works.original_title`：作品原名，作为人工判断同一作品的自然唯一键。
+- `works.original_title`：作品原名；与 `slug` 一起作为识别和更新目标的稳定身份字段。
 - `works.chinese_title`：可选中文名；为空时展示层使用原名。
+- `works.language`：Work 的主要语言，使用当前支持的语言枚举。
+- `works.is_original`：是否为本站原创作品。
+- `works.engine_family`、`works.engine_detail`：引擎枚举和补充备注；更新表单未编辑备注时必须保留。
 - `works.uses_maniacs_patch`：是否使用 Maniacs Patch，属于 Work 层。
 - `works.icon_blob_sha256`、`works.thumbnail_blob_sha256`：Work 层单图引用；为空时展示层按游戏引擎使用缺省图。
 - `work_titles`：保存可多值别名；原名和中文名是 Work 的明确列。
-- `series`、`work_series`：系列和作品成员关系。
-- `work_relations`：前作、后作、外传、同世界观、重制版等作品关系。
-- `releases.release_key`：同一 Work 下的稳定唯一键，由基底版本、发布类型和版本标识生成。
-- `releases.release_label`：玩家可识别的发布版本名，例如 `原版・汉化版・默认版`；它只负责显示，不作为长期身份。
-- `releases.base_variant`：该发布分支基于原版、重制版或其他基底。
-- `releases.variant_label`：区分同类方案的短文本，例如 A 方案、B 方案、官方、默认版。
-- `releases.release_type`：发布类型，例如 `original`、`translation`、`revision`、`event_submission`。
-- `archive_versions.archive_key`：同一 Release 下的稳定归档分支键，由语言、校对/修图状态和归档标识生成。
-- `archive_versions.archive_variant_label`：区分同语言、同校对/修图状态下的 A 方案、B 方案或不同整理方案。
-- `archive_versions.language`、`archive_versions.is_proofread`、`archive_versions.is_image_edited`：属于具体可下载归档的元数据。
+- `work_uploaders`：仅保存 `work_id`、`user_id`、`created_at`，用于保留共同上传者成员关系；不在本表实现 owner/editor 权限分层。
+- `work_relations`：前作、后作、改编、同世界观、不同版本、合集和 Collaboration 等普通作品关系；`vice_versa` 和 `relation_order` 保留方向与排序语义。
+- `translation_relations`：原版与译本之间的方向、角色和排序；数据库约束确保语言不同且同一来源至多一个原版关系。
+- `catalogs`、`catalog_items`：用户拥有的有序作品目录及其备注。
+- `archive_versions.archive_label`：具体归档快照的显示名称；快照身份由 `work_id` 与 `manifest_sha256` 确定。
+- `archive_versions.is_proofread`、`archive_versions.is_image_edited`：属于具体可下载归档的元数据。
+- `archive_versions.source_name`、`source_url`、`executable_path`、`rights_notes`：快照来源、入口和授权备注。
 - `archive_versions.manifest_sha256`：对规范化 manifest JSON 计算哈希，用来判断文件快照是否变化。
 - manifest 的 R2 key 由 `manifest_sha256` 通过统一 key helper 派生。
 - `archive_versions.file_policy_version`：生成 manifest 时使用的强制白名单版本。
@@ -602,7 +595,7 @@ Harmony.dll
 
 ### 6.4 白名单外文件
 
-白名单外文件和路径规则强制排除文件默认不进入发布版本，也不作为 blob 上传。典型例子包括：
+白名单外文件和路径规则强制排除文件默认不进入 ArchiveVersion，也不作为 blob 上传。典型例子包括：
 
 ```text
 *.dmp
@@ -638,19 +631,26 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
 
 ```json
 {
-  "schema": "viprpg-archive.manifest.v1",
-  "work": {
+  "schema": "viprpg-archive.manifest.v2",
+  "game": {
     "slug": "sample-game",
-    "title": "Sample Game"
-  },
-  "release": {
-    "label": "1.0",
-    "type": "original"
+    "originalTitle": "Sample Game",
+    "chineseTitle": "示例游戏",
+    "language": "zh-CN",
+    "isOriginal": false
   },
   "archiveVersion": {
     "label": "initial-import",
+    "isProofread": true,
+    "isImageEdited": false,
+    "sourceName": "作者发布页",
+    "sourceUrl": "https://example.com/source",
+    "executablePath": "RPG_RT.exe",
+    "rightsNotes": "仅供归档和研究",
     "createdAt": "2026-04-29T00:00:00.000Z",
     "filePolicyVersion": "rpgm2000-2003-whitelist-v3",
+    "packerVersion": "core-pack-v1",
+    "sourceType": "browser_folder",
     "sourceFileCount": 1200,
     "sourceSize": 58000000,
     "includedFileCount": 980,
@@ -663,16 +663,21 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
       "id": "core-main",
       "sha256": "1234567890abcdef...",
       "size": 45678,
+      "uncompressedSize": 92000,
       "fileCount": 3,
-      "format": "zip"
+      "format": "zip",
+      "compression": "deflate-low"
     }
   ],
   "files": [
     {
       "path": "RPG_RT.ldb",
+      "pathSortKey": "rpg_rt.ldb",
       "role": "database",
       "sha256": "0123456789abcdef...",
+      "crc32": 305419896,
       "size": 123456,
+      "mtimeMs": 1714348800000,
       "storage": {
         "kind": "core_pack",
         "packId": "core-main",
@@ -681,9 +686,12 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
     },
     {
       "path": "Map0001.lmu",
+      "pathSortKey": "map0001.lmu",
       "role": "map",
       "sha256": "2345678901abcdef...",
+      "crc32": 2596069104,
       "size": 4096,
+      "mtimeMs": null,
       "storage": {
         "kind": "core_pack",
         "packId": "core-main",
@@ -692,9 +700,12 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
     },
     {
       "path": "CharSet/Hero.png",
+      "pathSortKey": "charset/hero.png",
       "role": "asset",
       "sha256": "abcdef0123456789...",
+      "crc32": 2271560481,
       "size": 8192,
+      "mtimeMs": 1714348800000,
       "storage": {
         "kind": "blob",
         "blobSha256": "abcdef0123456789..."
@@ -707,11 +718,11 @@ Manifest 是一个 ArchiveVersion 的完整文件清单。它应当可单独导�
 规范化规则：
 
 - JSON 字段顺序固定。
-- `files` 按 `path_sort_key` 排序。
+- `files` 按 `pathSortKey` 排序。
 - `corePacks` 按 `sha256` 排序。
 - 路径统一使用 `/`。
 - 禁止绝对路径、空路径、`..` 路径穿越。
-- 如果后续决定记录原始路径编码，将原始字节放入 `path_bytes_b64`。
+- 如果后续决定记录原始路径编码，将原始字节放入 `pathBytesB64`。
 - `files[].sha256` 永远表示逻辑文件内容哈希；物理存储来源由 `files[].storage` 表示。
 
 ## 8. 上传流程
@@ -734,8 +745,8 @@ Phase D 的浏览器上传只在当前标签页会话内维护 Worker 和进度�
   -> 浏览器只上传缺失 asset/runtime blobs 和 core pack
   -> Worker 校验并写入 R2 blobs/core-packs
   -> POST /api/imports/{id}/commit
-  -> Worker 写入 works、releases、archive_versions、core_packs 和对象引用表
-  -> 写入 draft 或发布状态
+  -> Worker 写入 works、archive_versions、core_packs 和对象引用表
+  -> 按提交元数据写入 draft 或 published 状态
 ```
 
 优点：
@@ -748,7 +759,7 @@ Phase D 的浏览器上传只在当前标签页会话内维护 Worker 和进度�
 注意：
 
 - 上传接口按统一基线授权，`uploader_id` 始终由服务端 AuthContext 记录。
-- 不设置固定的单游戏文件数或大小硬上限；大型导入通过后台任务、分块提交、可恢复状态和管理端配额控制风险。
+- 不设置固定的单游戏文件数或大小硬上限；大型导入通过后台任务、分块提交和管理端配额控制风险。
 - 导入前必须显示原目录大小、白名单内归档大小、白名单外排除大小、预计新增 R2 存储和预计下载 R2 Get 次数。
 - 浏览器端 hash 只能作为预检依据，后端仍要验证上传内容。
 - 对单个小文件，可由 Worker 接收上传流并计算 SHA-256 后写入 R2。
@@ -904,7 +915,7 @@ GET /downloads/{archive_version_id}/{manifest_sha256}/{packer_version}/{download
 
 ```text
 GET /play/{archiveVersionId}
-  -> 查询 Work / Release / ArchiveVersion
+  -> 查询 Work / ArchiveVersion
   -> works.uses_maniacs_patch=true 时不展示在线游玩入口
   -> 检查 IndexedDB 本地安装状态
   -> 未安装时 Web Worker fetch 现有下载 ZIP URL
@@ -947,34 +958,35 @@ PUT /api/core-packs/{sha256}
   上传单个缺失 core pack
 
 POST /api/imports/{id}/commit
-  写入 Work、Release、ArchiveVersion、core pack、文件索引、manifest
+  一次写入 Work、ArchiveVersion、core pack、文件索引和 manifest；失败后仍按 draft 规则重新提交
 
 ```
 
-### 11.2 作品、发布和归档快照
+### 11.2 作品、关系、目录和归档快照
 
 ```text
 GET /api/works
 GET /api/works/{id}
-POST /api/works
-PATCH /api/works/{id}
-
-GET /api/series
-POST /api/series
-PATCH /api/series/{id}
-POST /api/series/{id}/works
+GET /api/works/lookup
 
 POST /api/works/{id}/relations
+PATCH /api/work-relations/{relationId}
 DELETE /api/work-relations/{relationId}
 
-GET /api/works/{id}/releases
-POST /api/works/{id}/releases
-PATCH /api/releases/{id}
+POST /api/works/{id}/translation-relations
+PATCH /api/translation-relations/{relationId}
+DELETE /api/translation-relations/{relationId}
 
-POST /api/releases/{id}/archive-versions
+GET /api/catalogs
+POST /api/catalogs
+PATCH /api/catalogs/{id}
+DELETE /api/catalogs/{id}
+POST /api/catalogs/{id}/items
+PATCH /api/catalogs/{id}/items
+DELETE /api/catalogs/{id}/items
+
 PATCH /api/archive-versions/{id}
-POST /api/archive-versions/{id}/publish
-POST /api/archive-versions/{id}/make-current
+GET /api/archive-versions/{id}/web-play
 ```
 
 ### 11.3 下载
@@ -1029,8 +1041,8 @@ POST /api/admin/gc/sweep
 - 显示运行时文件统计：`exe`、`dll`、补丁程序作为普通独立 blob 保留。
 - 显示白名单外文件类型汇总和示例路径。
 - 对预计下载 R2 Get 次数很高的版本提示下载成本风险，并建议启用边缘缓存观察、排队下载或后续打包策略优化。
-- 支持中断后继续上传缺失 blob 和 core pack。
-- commit 前必须选择或创建 Work 和 Release，并填写对应元数据：原名、中文名、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、是否使用 Maniacs Patch、Release 基底版本、发布类型、版本标识，以及 ArchiveVersion 语言、归档标识、校对和修图状态。
+- 对象上传失败可在当前导入任务仍处于活动状态时按 preflight 结果重试；commit 是一次请求，失败后按现有 draft 规则重新提交，不承诺跨标签页或跨进程恢复提交结果。
+- commit 前必须选择或创建 Work，并填写 Work 元数据：原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、是否使用 Maniacs Patch；同时填写 ArchiveVersion 的归档标识、来源、可执行入口、版权备注、校对和修图状态。
 - 系统自动记录上传者和上传时间。
 - 可选补充字段：引擎版本、来源链接/出处、发布状态、可执行入口、版权/授权备注。
 
@@ -1038,12 +1050,11 @@ POST /api/admin/gc/sweep
 
 ```text
 created
-  -> indexing
   -> preflighted
-  -> uploading_missing_objects
-  -> verifying
-  -> committed
-  -> published
+  -> uploading
+  -> completed
+
+失败或取消时进入 `failed` / `canceled`；失败的任务可按现有 draft 规则重新提交，不提供跨会话的 commit 结果恢复。
 ```
 
 ## 13. 路径和编码处理
@@ -1072,7 +1083,7 @@ RPG Maker 2000/2003 旧游戏经常涉及日文、中文和非 UTF-8 ZIP 文件�
 推荐流程：
 
 1. 管理端“删除”ArchiveVersion 的产品语义是放入回收站；技术上写入 `archive_versions.status = 'deleted'`、`deleted_at`，并清空 `is_current`。
-2. 回收站内的 ArchiveVersion 可以还原；还原时恢复为 `published`，但不抢占已有 current，仅在同组没有 current 时自动补为 current。
+2. 回收站内的 ArchiveVersion 可以还原；还原时恢复为 `published`，但不抢占已有 current，仅在同一 Work 没有 current 时自动补为 current。
 3. 最终清理：对已放入回收站且超过目标宽限期的 ArchiveVersion 写入 `purged_at`，删除对象引用表记录和 manifest R2 对象；最终清理后不能还原。
 4. GC mark：扫描仍被未最终清理归档文件清单引用的 blob 和 core pack。
 5. GC sweep：找出未被引用的 blob/core pack，且超过目标宽限期。
@@ -1094,13 +1105,13 @@ RPG Maker 2000/2003 旧游戏经常涉及日文、中文和非 UTF-8 ZIP 文件�
 MVP 固定边界：
 
 - 管理端提供 ArchiveVersion 删除、回收站列表、还原和“设为当前版本”操作。
-- 删除会把 ArchiveVersion 放入回收站，清空该 ArchiveVersion 的 `is_current`，并在同一 `release_id + archive_key` 下自动选择最新 published 版本作为新的 current；如果没有可用版本，则不设置 current。
-- 还原回收站中的 ArchiveVersion 时先恢复为 `published`，但不会抢占已有 current；仅在同组没有 current 时自动补为 current。
+- 删除会把 ArchiveVersion 放入回收站，清空该 ArchiveVersion 的 `is_current`，并在同一 Work 下自动选择最新 published 版本作为新的 current；如果没有可用版本，则不设置 current。
+- 还原回收站中的 ArchiveVersion 时先恢复为 `published`，但不会抢占已有 current；仅在同一 Work 没有 current 时自动补为 current。
 - 回收站最终清理会写入 `archive_versions.purged_at`，删除其对象引用表记录，并删除对应 manifest R2 对象。最终清理后只能保留基础审计和显示记录，不能再还原。
-- 最终清理中的 GC sweep 只处理 `blobs.status = 'active'` / `core_packs.status = 'active'`、超过目标宽限期、且没有任何归档引用的对象。blob 还必须确认未被 Work 图标、缩略图或媒体资产引用。
+- 最终清理中的 GC sweep 处理 `blobs.status IN ('active', 'purging')` / `core_packs.status IN ('active', 'purging')`、超过目标宽限期、且没有任何归档引用的对象。blob 还必须确认未被 Work 图标、缩略图或媒体资产引用；`purging` 只表示本轮删除的临时 reservation。
 - 自动 GC 每天执行一次，默认最终清理超过 7 天的回收站版本和零引用对象；手动 GC 可随时执行，并允许把宽限期设为 0 天以立即清理当前候选。
 - 仅被回收站 ArchiveVersion 引用的 blob/core pack 会在该 ArchiveVersion 被最终清理、文件引用被删除后进入零引用 sweep。
-- sweep 前先把候选对象临时标记为 `purging`，R2 删除成功后再标记为 `purged`；删除失败则恢复为 `active`。
+- sweep 前先把候选对象临时标记为 `purging`，R2 删除成功后再标记为 `purged`；R2 或数据库写入失败则恢复为 `active`，下一轮可以重新处理。
 - Preflight 只把 `status = 'active'` 的 blob/core pack 视为已存在；如果同 hash 对象已被 purged，后续上传会重新写入 R2 并把 D1 状态恢复为 active。
 - 完整游戏 ZIP 仍然不进入 R2，删除和 GC 流程不需要处理完整 ZIP。
 
@@ -1201,7 +1212,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 - 单用户每日上传大小限制。
 - 单用户、单时间窗口、单队列的运营配额和并发限制。
 - 强制白名单文件类型和路径校验。
-- 大型导入进入后台队列，失败可恢复，不要求单次 Worker 请求完成。
+- 大型导入进入后台队列，对象上传失败可重试，不要求单次 Worker 请求完成；commit 失败按 draft 规则重新提交。
 - 记录 `uploader_id` 和 `uploaded_at`，便于追踪和回收。
 
 ### 16.4 账户、验证码和发信
@@ -1239,7 +1250,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 - 建立 D1 migration。
 - 建立 R2 bucket binding。
-- 实现 `blobs`、`core_packs`、`works`、`releases`、`archive_versions` 和归档对象引用表。
+- 实现 `blobs`、`core_packs`、`works`、`archive_versions` 和归档对象引用表。
 - 认证授权与站内信业务按统一基线落地，不在存储阶段维护第二套模型。
 - 实现管理端浏览器预索引导入路径。
 - 固定强制白名单和 `file_policy_version`。
@@ -1248,7 +1259,7 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 当前实现状态：
 
-- 已建立 staging D1/R2 和 `works` / `releases` / `archive_versions` / 归档对象引用数据模型。
+- 已建立 staging D1/R2 和 `works` / `archive_versions` / 归档对象引用数据模型。
 - 已实现单个 blob、core pack 上传校验和 `/api/imports/{id}/preflight`。
 - 已用本地样本完成 staging 试导入，证明 manifest、core pack、blob、D1 索引和排除统计链路可运行。
 
@@ -1270,8 +1281,8 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 - 浏览器生成 core pack。
 - Preflight 查询已有 blob 和 core pack。
 - 只上传缺失 blob 和 core pack。
-- Commit Work 元数据、Release 元数据和 ArchiveVersion 归档快照。
-- 上传表单包含原名、中文名、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、Maniacs Patch、Release 基底版本、发布类型、版本标识、ArchiveVersion 语言、归档标识、校对、修图、引擎版本、来源链接/出处、发布状态、可执行入口、版权/授权备注。
+- Commit Work 元数据和 ArchiveVersion 归档快照。
+- 上传表单包含原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、Maniacs Patch、ArchiveVersion 归档标识、校对、修图、来源链接/出处、发布状态、可执行入口、版权/授权备注。
 - 服务端自动写入 `uploader_id` 和 `uploaded_at`。
 - 展示节省空间。
 - 展示白名单外排除统计和预计下载 R2 Get 次数。
@@ -1326,11 +1337,11 @@ RTP 和第三方素材可能有授权限制。去重存储不改变版权责任�
 
 - 新增受保护的一致性检查 API：抽样检查 D1 指向的 R2 对象是否存在、大小是否匹配，并扫描 R2 样本寻找非 canonical key、D1 无记录对象和 `core-packs/` 之外的 `.zip`；调用授权见统一基线。
 - 新增受保护的 GC dry-run API：作为清理预演只报告候选对象，不执行删除；调用授权见统一基线。
-- MVP 的可清理候选定义为：`status = active`、超过宽限期、且没有任何归档对象引用的 blob/core pack；blob 还需确认未被资料库媒体字段引用。
+- MVP 的可清理候选定义为：`status IN ('active', 'purging')`、超过宽限期、且没有任何归档对象引用的 blob/core pack；blob 还需确认未被资料库媒体字段引用。`purging` 只表示临时 GC reservation。
 - 新增高危 GC sweep API：必须显式提交 `confirm = SWEEP`，先最终清理超过目标宽限期的回收站 ArchiveVersion，再清理零引用对象；默认每类最多清理 1000 个超过 7 天的对象，手动执行时可指定 `graceDays = 0` 立即清理。sweep 会删除 R2 blob/core pack，并把 D1 对象状态改为 `purged`；失败对象恢复 `active`。调用授权只见统一基线。
 - 新增 Cloudflare Scheduled handler：staging/prod 统一每天 UTC 19:17（香港时间 03:17）自动执行一次 7 天 GC sweep，每类最多清理 1000 个对象，并写入 `auth_audit_logs`。
 - 新增 `/admin/archive-versions` 归档维护页，支持 ArchiveVersion 删除、设为 current，并提供 `/admin/archive-versions/trash` 回收站列表用于还原。
-- ArchiveVersion 删除会自动维护同组 current，不会立即删除 blob、core pack 或 manifest。
+- ArchiveVersion 删除会自动维护同一 Work 的 current，不会立即删除 blob、core pack 或 manifest。
 - ArchiveVersion 最终清理后会删除 manifest R2 对象和文件引用；对应 blob/core pack 如无其他引用，会在同一轮或后续 GC sweep 中清理。
 - 用户管理页提供账户状态维护；授权、层级检查和 session 撤销语义只见统一基线。
 - 新增 `/admin/audit` 审计页；访问边界见统一基线。
@@ -1395,7 +1406,6 @@ app/
     blobs/
     core-packs/
     works/
-    releases/
     archive-versions/
     downloads/
 ```
@@ -1407,7 +1417,6 @@ lib/server/storage/blob-store.ts
 lib/server/storage/core-pack-store.ts
 lib/server/storage/manifest-store.ts
 lib/server/db/works.ts
-lib/server/db/releases.ts
 lib/server/db/archive-versions.ts
 lib/server/db/blobs.ts
 lib/server/db/core-packs.ts
@@ -1518,10 +1527,10 @@ lib/server/download/zip-builder.ts
 - 在线游玩本地存储：游戏文件本体使用 OPFS，安装状态和文件清单使用 IndexedDB，EasyRPG 存档沿用 IDBFS。
 - 在线游玩入口：`works.uses_maniacs_patch = true` 的作品 MVP 不展示在线游玩，只保留下载。
 - Canonical 数据：长期数据只保留 manifest、blob、core pack 和元数据。
-- 版本策略：完全不做差量发布或版本继承；下一阶段按 Work / Release / ArchiveVersion 拆分，详见游戏领域架构设计。
+- 版本策略：完全不做差量发布或版本继承；多个 ArchiveVersion 直接归属于同一 Work，详见游戏领域架构设计。
 - Core pack 粒度：每个 ArchiveVersion 固定一个 core pack，不做按类型或地图编号范围分组。
 - Core pack 压缩：使用 ZIP 低压缩等级。
-- 检索元数据：上传时填写原名、中文名、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、是否使用 Maniacs Patch、Release 基底版本、发布类型、版本标识、ArchiveVersion 语言、归档标识、是否校对、是否修图。
+- 检索元数据：上传时填写原名、中文名、语言、是否原创、别名、作者、原作发布日期、标签文本、图标、浏览图、简介、引擎枚举和备注、是否使用 Maniacs Patch、ArchiveVersion 归档标识、来源、可执行入口、是否校对、是否修图。
 - 补充元数据：引擎版本、来源链接/出处、发布状态、可执行入口、版权/授权备注。
 - 自动元数据：上传者和上传时间由系统生成。
 

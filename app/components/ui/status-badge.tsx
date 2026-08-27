@@ -111,7 +111,7 @@ function archiveTone(value: string, purgedAt: string | null): BadgeTone {
 }
 
 function importTaskTone(value: string): BadgeTone {
-  if (value === "completed" || value === "succeeded" || value === "committed") {
+  if (value === "completed") {
     return "positive";
   }
   if (value === "failed" || value === "canceled") return "negative";

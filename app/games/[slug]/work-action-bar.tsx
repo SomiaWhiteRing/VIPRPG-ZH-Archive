@@ -60,7 +60,7 @@ export function WorkActionBar({ archive, canPlayInBrowser }: Props) {
           </Button>
         </>
       ) : (
-        <span className="text-sm text-muted">该作品暂无可下载的最新快照，可在版本列表中选择历史快照。</span>
+        <span className="text-sm text-muted">该作品目前暂无可下载的当前快照。</span>
       )}
     </section>
   );

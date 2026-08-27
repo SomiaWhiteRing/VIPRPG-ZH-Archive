@@ -13,7 +13,7 @@ const paths = [
   "/creators",
   "/characters",
   "/tags",
-  "/series",
+  "/catalogs",
   "/api/health",
   "/api/health/db",
   "/api/health/r2",
