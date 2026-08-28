@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, MouseEventHandler, ReactNode } from "react";
 import { Button } from "@/app/components/ui/button";
+import { cn } from "@/lib/ui/cn";
 
 type Rm2kButtonProps = {
   children: ReactNode;
@@ -13,6 +14,7 @@ type Rm2kButtonProps = {
   role?: string;
   "aria-selected"?: boolean;
   iconPosition?: "start" | "end";
+  size?: "default" | "large";
 };
 
 export function Rm2kButton({
@@ -26,7 +28,12 @@ export function Rm2kButton({
   role,
   "aria-selected": ariaSelected,
   iconPosition = "start",
+  size = "default",
 }: Rm2kButtonProps) {
+  const buttonClassName = cn(
+    size === "large" && "min-h-14 justify-start gap-1.5 px-2 text-sm sm:min-h-20 sm:gap-4 sm:px-4 sm:text-xl",
+    className,
+  );
   const content = (
     <>
       {icon && iconPosition === "start" ? <span aria-hidden="true">{icon}</span> : null}
@@ -36,14 +43,18 @@ export function Rm2kButton({
   );
   if (href) {
     return (
-      <Button asChild aria-disabled={disabled || undefined} className={className} variant="rm2k">
+      <Button asChild aria-disabled={disabled || undefined} className={buttonClassName} variant="rm2k">
         <Link
           aria-selected={ariaSelected}
           href={href}
-          onClick={(event) => {
-            if (disabled) event.preventDefault();
-            onClick?.(event);
-          }}
+          onClick={
+            disabled || onClick
+              ? (event) => {
+                  if (disabled) event.preventDefault();
+                  onClick?.(event);
+                }
+              : undefined
+          }
           role={role}
           tabIndex={disabled ? -1 : undefined}
         >
@@ -54,7 +65,7 @@ export function Rm2kButton({
   }
   return (
     <Button
-      className={className}
+      className={buttonClassName}
       disabled={disabled}
       onClick={onClick as MouseEventHandler<HTMLButtonElement>}
       type={type}

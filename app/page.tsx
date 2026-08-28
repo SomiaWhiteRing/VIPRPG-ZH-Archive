@@ -3,72 +3,53 @@ import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { listGameWorks } from "@/lib/server/db/game-library";
-import { HomeTabs } from "@/app/components/home/home-tabs";
+import { HomeAnchors } from "@/app/components/home/home-tabs";
 import { HomeGameCard } from "@/app/components/home/game-card";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const params = await searchParams;
-  const activeTab = params.tab === "original" ? "original" : "all";
-  const [currentUser, works] = await Promise.all([getCurrentUserFromCookies(), listGameWorks({ limit: 9, isOriginal: activeTab === "original" ? true : undefined })]);
+export default async function HomePage() {
+  const [currentUser, recentWorks, recentOriginalWorks] = await Promise.all([
+    getCurrentUserFromCookies(),
+    listGameWorks({ limit: 9 }),
+    listGameWorks({ limit: 9, isOriginal: true }),
+  ]);
 
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
       <section
-        className="grid gap-8 border-b border-border py-6 pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end"
+        className="gap-8 border-b border-border py-6 pb-10 hidden md:grid"
         aria-label="作品发现"
       >
         <div>
-          <h1 className="text-4xl font-extrabold leading-[0.98] tracking-tight md:text-6xl">
-            发现下一款
-            <br />
-            想玩的 RPG。
+          <h1 className="text-xl font-extrabold leading-[0.98] tracking-tight md:text-6xl">
+            夢溢れるエターナラーを応援しています。
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-8 text-muted">
-            浏览 VIPRPG 社区里的 RPG Maker 作品，进入详情、在线游玩或下载。
+            欢迎来到VIPRPG中文保管库。
           </p>
         </div>
-        <form className="flex gap-2" action="/search" method="get">
-          <Label className="sr-only" htmlFor="home-search">
-            搜索作品
-          </Label>
-          <Input
-            className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground shadow-sm outline-none placeholder:text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-            id="home-search"
-            name="q"
-            placeholder="搜索作品、作者、标签或角色"
-            type="search"
-          />
-          <Rm2kButton type="submit">搜索</Rm2kButton>
-        </form>
       </section>
 
-      <HomeTabs active={activeTab} />
+      <HomeAnchors />
 
-      <section className="scroll-mt-36" id="recent-updates" aria-labelledby="recent-updates-title">
-        <div className="mb-5 flex items-end justify-between gap-5">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight" id="recent-updates-title">
-              {activeTab === "original" ? "本站原创" : "全部游戏"}
-            </h2>
-            <p className="mt-1 text-muted">{activeTab === "original" ? "由作者亲自在本站发表的游戏。" : "最近更新的公开游戏。"}</p>
-          </div>
-          <Link className="text-sm font-bold text-primary hover:text-accent" href={activeTab === "original" ? "/games?original=1" : "/games"}>
-            查看全部游戏 →
-          </Link>
-        </div>
-        {works.length > 0 ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {works.map((work) => (
-              <HomeGameCard key={work.id} work={work} />
-            ))}
-          </div>
-        ) : (
-          <p className="max-w-[700px] text-muted leading-7">目前还没有公开作品。</p>
-        )}
-      </section>
+      <HomeGameSection
+        description="最近更新的公开游戏。"
+        id="recent-updates"
+        moreHref="/games"
+        title="最近更新"
+        works={recentWorks}
+      />
+
+      <HomeGameSection
+        className="mt-14"
+        description="由作者亲自在本站发表的游戏。"
+        id="recent-original"
+        moreHref="/games?original=1"
+        title="最近原创"
+        works={recentOriginalWorks}
+      />
 
       <section className="mt-14 scroll-mt-36" id="about-site" aria-labelledby="about-site-title">
         <div className="mb-5 flex items-end justify-between gap-5">
@@ -83,7 +64,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </Link>
         </div>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
-          <p className="max-w-[700px] text-muted leading-7">
+          <p className="max-w-175 text-muted leading-7">
             VIPRPG.org 收录 VIPRPG 活动与社区相关的 RPG Maker 2000/2003 作品，
             提供清晰的游戏资料、当前快照、在线游玩和下载入口。这里优先展示真实作品内容，
             让你从浏览到开始游戏只需要几步。
@@ -105,5 +86,44 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
       </section>
     </main>
+  );
+}
+
+function HomeGameSection({
+  className,
+  description,
+  id,
+  moreHref,
+  title,
+  works,
+}: {
+  className?: string;
+  description: string;
+  id: string;
+  moreHref: string;
+  title: string;
+  works: Awaited<ReturnType<typeof listGameWorks>>;
+}) {
+  return (
+    <section className={`${className ?? ""} scroll-mt-36`} id={id} aria-labelledby={`${id}-title`}>
+        <div className="mb-5 flex items-end justify-between gap-5">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight" id={`${id}-title`}>
+              {title}
+            </h2>
+            <p className="mt-1 text-muted">{description}</p>
+          </div>
+          <Link className="text-sm font-bold text-primary hover:text-accent" href={moreHref}>
+            查看全部游戏 →
+          </Link>
+        </div>
+        {works.length > 0 ? (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {works.map((work) => <HomeGameCard key={work.id} work={work} />)}
+          </div>
+        ) : (
+          <p className="max-w-[700px] text-muted leading-7">目前还没有公开作品。</p>
+        )}
+      </section>
   );
 }
