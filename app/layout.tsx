@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-Hans">
+    <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans">
       <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
         <UploadTaskProvider>
           <SiteHeader />

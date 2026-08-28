@@ -1,25 +1,26 @@
-import Link from "next/link";
+import Image from "next/image";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
-export function HomeTabs({ active }: { active: "all" | "original" }) {
+export function HomeAnchors() {
   return (
-    <nav className="my-6 flex gap-1 overflow-x-auto" aria-label="首页游戏分类">
-      <Link className={tabClass(active === "all")} href="/">
-        全部游戏
-      </Link>
-      <Link
-        className={tabClass(active === "original")}
-        href="/?tab=original"
-      >
-        本站原创
-      </Link>
+    <nav className="my-6 flex flex-nowrap justify-center gap-2" aria-label="首页内容导航">
+      <Rm2kButton href="#recent-updates" icon={<AnchorIcon />} size="large">
+        最近更新
+      </Rm2kButton>
+      <Rm2kButton href="#recent-original" icon={<AnchorIcon />} size="large">
+        最近原创
+      </Rm2kButton>
+      <Rm2kButton href="#about-site" icon={<AnchorIcon />} size="large">
+        关于本站
+      </Rm2kButton>
     </nav>
   );
 }
 
-function tabClass(active: boolean): string {
-  return `inline-flex min-h-10 items-center border-b-2 px-4 text-sm font-bold ${
-    active
-      ? "border-primary text-primary"
-      : "border-transparent text-muted hover:text-foreground"
-  }`;
+function AnchorIcon() {
+  return (
+    <span className="grid size-7 shrink-0 place-items-center overflow-hidden sm:size-14">
+      <Image alt="" aria-hidden className="size-6 sm:size-13" height={52} src="/icon/windI.png" width={52} />
+    </span>
+  );
 }
