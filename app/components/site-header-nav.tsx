@@ -134,7 +134,7 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
         </nav>
         {!inAdmin ? (
           <form
-            className="order-4 flex h-10 w-full overflow-hidden rounded-md border border-border bg-card sm:order-none sm:w-[clamp(170px,18vw,260px)]"
+            className="order-4 flex h-10 w-full overflow-hidden rounded-full border border-border bg-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 sm:order-none sm:w-[clamp(170px,18vw,260px)]"
             action="/search"
             method="get"
             role="search"
@@ -143,14 +143,14 @@ export function SiteHeaderNav({ session, logout, loginLink }: Props) {
               搜索作品
             </Label>
             <Input
-              className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted"
+              className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-sm shadow-none outline-none placeholder:text-muted focus-visible:ring-0"
               id="header-search"
               name="q"
               placeholder="搜索作品"
               type="search"
             />
             <Button
-              className="grid w-10 shrink-0 place-items-center border-l border-border bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="grid w-10 shrink-0 place-items-center rounded-none border-l border-border bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="搜索"
               title="搜索"
               type="submit"

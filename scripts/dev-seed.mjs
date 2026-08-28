@@ -98,26 +98,22 @@ insert(
 insert("works", [
   game(1, "魔王の夏休み", "魔王的暑假", {
     language: "ja",
-    thumbnail: images[0].sha256,
     description: "魔王决定给自己放一个暑假，结果勇者一行人也跟来了。",
     date: "2019-08-14",
   }),
   game(2, "魔王の夏休み", "魔王的暑假（中文译本）", {
     language: "zh-CN",
-    thumbnail: images[0].sha256,
     description: "魔王的暑假中文翻译。",
     date: "2019-08-14",
   }),
   game(3, "時空の狭間のモナー城", "时空夹缝中的莫娜城", {
     language: "ja",
-    thumbnail: images[1].sha256,
     maniacs: 1,
     date: "2023-02-11",
   }),
   game(4, "夏之阵原创短篇", "夏之阵原创短篇", {
     language: "zh-CN",
     isOriginal: 1,
-    thumbnail: images[2].sha256,
     date: "2026-06-20",
   }),
   game(5, "ギコの大冒険", null, {
@@ -273,11 +269,11 @@ insert("work_tags", [
 ]);
 
 const archives = [
-  archive(1, 1, "原版归档", "ja", 214, 38_000_000, 1),
-  archive(2, 2, "中文译本归档", "zh-CN", 216, 39_000_000, 1),
-  archive(3, 3, "原版归档", "ja", 1024, 310_000_000, 1),
-  archive(4, 4, "原创归档", "zh-CN", 156, 21_000_000, 1),
-  archive(5, 5, "原版归档", "ja", 178, 26_000_000, 1),
+  archive(1, 1, "ja", 214, 38_000_000, 1),
+  archive(2, 2, "zh-CN", 216, 39_000_000, 1),
+  archive(3, 3, "ja", 1024, 310_000_000, 1),
+  archive(4, 4, "zh-CN", 156, 21_000_000, 1),
+  archive(5, 5, "ja", 178, 26_000_000, 1),
 ];
 insert(
   "archive_versions",
@@ -408,16 +404,14 @@ function game(id, originalTitle, chineseTitle, options = {}) {
     id,
     original_title: originalTitle,
     chinese_title: chineseTitle,
-    sort_title: chineseTitle ?? originalTitle,
     description: options.description ?? null,
     is_original: options.isOriginal ?? 0,
     language: options.language ?? "zh-CN",
     original_release_date: options.date ?? null,
     original_release_precision: options.date ? "day" : "unknown",
-    engine_family: options.engine ?? "rpg_maker_2000",
-    engine_detail: null,
-    uses_maniacs_patch: options.maniacs ?? 0,
-    thumbnail_blob_sha256: options.thumbnail ?? null,
+    engine_family: options.maniacs
+      ? "rpg_maker_2003_maniac"
+      : (options.engine ?? "rpg_maker_2000"),
     status,
     created_by_user_id: 3,
     created_at: NOW,
@@ -425,7 +419,7 @@ function game(id, originalTitle, chineseTitle, options = {}) {
     published_at: status === "published" ? NOW : null,
   };
 }
-function archive(id, work_id, label, language, files, size, current) {
+function archive(id, work_id, language, files, size, current) {
   const info = {
     1: {
       title: "魔王の夏休み",
@@ -454,13 +448,8 @@ function archive(id, work_id, label, language, files, size, current) {
       isOriginal: info.isOriginal,
     },
     archiveVersion: {
-      label,
-      isProofread: false,
-      isImageEdited: false,
       sourceName: null,
       sourceUrl: null,
-      executablePath: null,
-      rightsNotes: null,
       createdAt: NOW,
       filePolicyVersion: "v1",
       packerVersion: "dev-seed",
@@ -491,13 +480,8 @@ function archive(id, work_id, label, language, files, size, current) {
   return {
     id,
     work_id,
-    archive_label: label,
-    is_proofread: 0,
-    is_image_edited: 0,
     source_name: null,
     source_url: null,
-    executable_path: null,
-    rights_notes: null,
     manifest_sha256,
     manifestJson,
     file_policy_version: "v1",

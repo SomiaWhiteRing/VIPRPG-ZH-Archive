@@ -82,6 +82,11 @@ export default async function AdminPage() {
               查看审计日志
             </Link>
           ) : null}
+          {hasPermission(adminUser, "custom_emoji.manage") ? (
+            <Link className={buttonVariants({ variant: "outline" })} href="/admin/emojis">
+              站点表情
+            </Link>
+          ) : null}
         </div>
       </Pane>
 

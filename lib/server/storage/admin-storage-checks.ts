@@ -88,7 +88,6 @@ export type GcArchiveVersionPurgeSummary = {
 
 export type GcArchiveVersionPurgeCandidate = {
   id: number;
-  archiveLabel: string;
   deletedAt: string;
   totalFiles: number;
   totalSizeBytes: number;
@@ -180,7 +179,6 @@ type GcCandidateRow = {
 
 type GcArchiveVersionPurgeCandidateRow = {
   id: number;
-  archive_label: string;
   deleted_at: string;
   total_files: number;
   total_size_bytes: number;
@@ -627,7 +625,6 @@ async function listArchiveVersionPurgeCandidates(
     .prepare(
       `SELECT
         id,
-        archive_label,
         deleted_at,
         total_files,
         total_size_bytes,
@@ -775,7 +772,6 @@ function mapArchiveVersionPurgeCandidate(
 ): GcArchiveVersionPurgeCandidate {
   return {
     id: row.id,
-    archiveLabel: row.archive_label,
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
@@ -796,12 +792,6 @@ async function getEligibleGcSummary(
             SELECT 1
             FROM archive_version_blob_refs avbr
             WHERE avbr.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = b.sha256
-              OR w.thumbnail_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -848,12 +838,6 @@ async function listEligibleGcRows(
             SELECT 1
             FROM archive_version_blob_refs avbr
             WHERE avbr.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = b.sha256
-              OR w.thumbnail_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -959,12 +943,6 @@ async function markGcCandidatePurging(
           )
           AND NOT EXISTS (
             SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = blobs.sha256
-              OR w.thumbnail_blob_sha256 = blobs.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = blobs.sha256
           )`
@@ -1041,12 +1019,6 @@ async function getDeletedOnlyGcSummary(
           WHERE b.status = 'active'
             AND NOT EXISTS (
               SELECT 1
-              FROM works w
-              WHERE w.icon_blob_sha256 = b.sha256
-                OR w.thumbnail_blob_sha256 = b.sha256
-            )
-            AND NOT EXISTS (
-              SELECT 1
               FROM media_assets ma
               WHERE ma.blob_sha256 = b.sha256
             )
@@ -1089,12 +1061,6 @@ async function listGcCandidateRows(
           ON avbr.blob_sha256 = b.sha256
         LEFT JOIN archive_versions av ON av.id = avbr.archive_version_id
         WHERE b.status IN ('active', 'purging')
-          AND NOT EXISTS (
-            SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = b.sha256
-              OR w.thumbnail_blob_sha256 = b.sha256
-          )
           AND NOT EXISTS (
             SELECT 1
             FROM media_assets ma

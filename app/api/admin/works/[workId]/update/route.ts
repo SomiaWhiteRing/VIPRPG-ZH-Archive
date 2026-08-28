@@ -41,7 +41,6 @@ export async function POST(request: Request, context: RouteContext) {
       detail: {
         workId: work.id,
         status: work.status,
-        usesManiacsPatch: work.usesManiacsPatch,
       },
     });
 

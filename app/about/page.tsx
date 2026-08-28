@@ -59,7 +59,7 @@ export default function AboutPage() {
         <ul>
           <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 2000/2003 作品。</li>
           <li>对原作权利人提出删除/限制要求的内容，会从公开列表移除。</li>
-          <li>使用 Maniacs Patch 的作品暂不支持在线游玩，请下载 ZIP。</li>
+          <li>使用 RPG Maker 2003 Maniac 的作品可能无法用 EasyRPG 正常游玩。</li>
           <li>本站不会修改原始文件；不同语言的作品以独立游戏条目保存，并通过翻译关联连接。</li>
         </ul>
       </Pane>

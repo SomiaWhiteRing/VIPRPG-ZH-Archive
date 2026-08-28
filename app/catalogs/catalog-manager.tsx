@@ -180,6 +180,7 @@ export function CatalogSummaryEditor({
 export type CatalogItemDraft = {
   workId: number;
   title: string;
+  sortOrder: number;
   note: string | null;
 };
 
@@ -225,20 +226,12 @@ export function CatalogItemsEditor({
       {
         workId: candidate.id,
         title: candidate.chineseTitle || candidate.originalTitle,
+        sortOrder: 0,
         note: null,
       },
     ]);
     setCandidates([]);
     setQuery("");
-  }
-  function move(index: number, offset: number) {
-    const target = index + offset;
-    if (target < 0 || target >= draft.length) return;
-    setDraft((current) => {
-      const next = current.slice();
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
   }
   async function save() {
     setBusy(true);
@@ -251,6 +244,7 @@ export function CatalogItemsEditor({
         body: JSON.stringify({
           items: draft.map((item) => ({
             workId: item.workId,
+            sortOrder: item.sortOrder,
             note: item.note,
           })),
         }),
@@ -302,17 +296,30 @@ export function CatalogItemsEditor({
         </div>
       ) : null}
       <ol className="grid gap-2">
-        {draft.map((item, index) => (
+        {draft.map((item) => (
           <li
             className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3"
             key={item.workId}
           >
-            <span className="w-6 text-right text-sm text-muted">
-              {index + 1}
-            </span>
             <span className="min-w-0 flex-1">
               <a href={`/games/${item.workId}`}>{item.title}</a>
             </span>
+            <Input
+              aria-label={`${item.title}排序值`}
+              className="w-24"
+              inputMode="numeric"
+              onChange={(event) =>
+                setDraft((current) =>
+                  current.map((entry) =>
+                    entry.workId === item.workId
+                      ? { ...entry, sortOrder: Number(event.target.value) }
+                      : entry,
+                  ),
+                )
+              }
+              type="number"
+              value={item.sortOrder}
+            />
             <Input
               aria-label={`${item.title}备注`}
               className="w-40"
@@ -327,22 +334,6 @@ export function CatalogItemsEditor({
                 )
               }
             />
-            <Button
-              onClick={() => move(index, -1)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              上移
-            </Button>
-            <Button
-              onClick={() => move(index, 1)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              下移
-            </Button>
             <Button
               onClick={() =>
                 setDraft((current) =>

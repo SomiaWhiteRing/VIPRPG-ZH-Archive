@@ -30,17 +30,17 @@ export async function GET(_request: Request, context: RouteContext) {
           AND (
             EXISTS (
               SELECT 1
-              FROM works w
-              WHERE w.status = 'published'
-                AND (w.icon_blob_sha256 = b.sha256 OR w.thumbnail_blob_sha256 = b.sha256)
-            )
-            OR EXISTS (
-              SELECT 1
               FROM media_assets ma
               JOIN work_media_assets wma ON wma.media_asset_id = ma.id
               JOIN works w ON w.id = wma.work_id
               WHERE ma.blob_sha256 = b.sha256
                 AND w.status = 'published'
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM custom_emojis ce
+              WHERE ce.image_blob_sha256 = b.sha256
+                AND ce.status IN ('active', 'retired')
             )
           )
         LIMIT 1`,

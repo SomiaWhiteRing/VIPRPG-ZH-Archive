@@ -9,13 +9,8 @@ export type ArchiveManifest = {
     isOriginal: boolean;
   };
   archiveVersion: {
-    label: string;
-    isProofread: boolean;
-    isImageEdited: boolean;
     sourceName: string | null;
     sourceUrl: string | null;
-    executablePath: string | null;
-    rightsNotes: string | null;
     createdAt: string;
     filePolicyVersion: string;
     packerVersion: string;
@@ -66,17 +61,24 @@ export type ArchiveCommitMetadata = {
   game: {
     originalTitle: string;
     chineseTitle: string | null;
-    sortTitle: string | null;
     description: string | null;
     originalReleaseDate: string | null;
     originalReleasePrecision: "year" | "month" | "day" | "unknown";
-    engineFamily: "rpg_maker_2000" | "rpg_maker_2003" | "mixed" | "unknown" | "other";
-    engineDetail: string | null;
+    engineFamily:
+      | "rpg_maker_2000"
+      | "rpg_maker_2003"
+      | "rpg_maker_2003_maniac"
+      | "rpg_maker_xp"
+      | "rpg_maker_vx"
+      | "rpg_maker_vx_ace"
+      | "rpg_maker_mv"
+      | "rpg_maker_mz"
+      | "rpg_maker_unite"
+      | "mixed"
+      | "unknown"
+      | "other";
     isOriginal: boolean;
     language: string;
-    usesManiacsPatch: boolean;
-    iconBlobSha256: string | null;
-    thumbnailBlobSha256: string | null;
     browsingImageBlobSha256s: string[];
     status: "draft" | "published" | "hidden";
     extra: Record<string, unknown>;
@@ -86,13 +88,8 @@ export type ArchiveCommitMetadata = {
     workId: number | null;
   };
   archiveVersion: {
-    label: string;
-    isProofread: boolean;
-    isImageEdited: boolean;
     sourceName: string | null;
     sourceUrl: string | null;
-    executablePath: string | null;
-    rightsNotes: string | null;
   };
   workTitles: Array<{
     title: string;

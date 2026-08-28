@@ -1,6 +1,5 @@
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
-import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -38,7 +37,7 @@ export default async function AdminArchiveVersionEditPage({
     <main>
       <PageHeader
         eyebrow="编辑归档快照"
-        title={archiveVersion.archiveLabel}
+        title={`归档 #${archiveVersion.id}`}
         subtitle={`所属游戏：${archiveVersion.workTitle}`}
         actions={
           <>
@@ -72,13 +71,6 @@ export default async function AdminArchiveVersionEditPage({
         <Pane heading="快照资料">
           <SectionHeading title="只修改归档事实，不改变游戏关系" />
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="快照名称">
-              <Input
-                defaultValue={archiveVersion.archiveLabel}
-                name="archive_label"
-                required
-              />
-            </FormField>
             <FormField label="状态">
               <SelectField
                 defaultValue={archiveVersion.status}
@@ -90,16 +82,6 @@ export default async function AdminArchiveVersionEditPage({
                 ]}
               />
             </FormField>
-            <CheckboxField
-              defaultChecked={archiveVersion.isProofread}
-              label="已校对"
-              name="is_proofread"
-            />
-            <CheckboxField
-              defaultChecked={archiveVersion.isImageEdited}
-              label="已修图"
-              name="is_image_edited"
-            />
             <FormField label="来源名称">
               <Input
                 defaultValue={archiveVersion.sourceName ?? ""}
@@ -111,18 +93,6 @@ export default async function AdminArchiveVersionEditPage({
                 defaultValue={archiveVersion.sourceUrl ?? ""}
                 name="source_url"
                 type="url"
-              />
-            </FormField>
-            <FormField label="可执行文件路径">
-              <Input
-                defaultValue={archiveVersion.executablePath ?? ""}
-                name="executable_path"
-              />
-            </FormField>
-            <FormField label="授权备注" wide>
-              <Input
-                defaultValue={archiveVersion.rightsNotes ?? ""}
-                name="rights_notes"
               />
             </FormField>
           </div>

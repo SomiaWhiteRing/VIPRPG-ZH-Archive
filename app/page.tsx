@@ -1,11 +1,8 @@
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { listGameWorks } from "@/lib/server/db/game-library";
 import { HomeAnchors } from "@/app/components/home/home-tabs";
 import { HomeGameCard } from "@/app/components/home/game-card";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
 export const dynamic = "force-dynamic";
 

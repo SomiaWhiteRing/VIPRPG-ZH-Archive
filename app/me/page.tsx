@@ -9,6 +9,7 @@ import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { hasPermission } from "@/lib/authz/permissions";
 import { countUnreadInboxItemsForUser, listInboxItemsForUser } from "@/lib/server/db/inbox";
 import { formatNumber, formatDate } from "@/lib/format";
+import { listMyComments, listMyPlayed, listMyWishlist } from "@/lib/server/db/work-community";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,12 @@ export default async function MePage() {
 
   const canUpload = hasPermission(currentUser, "import_job.create");
 
-  const [unread, inbox] = await Promise.all([
+  const [unread, inbox, played, comments, wishlist] = await Promise.all([
     countUnreadInboxItemsForUser(currentUser),
     listInboxItemsForUser(currentUser),
+    listMyPlayed(currentUser.id, 3),
+    listMyComments(currentUser.id, null, 3),
+    listMyWishlist(currentUser.id, 3),
   ]);
 
   const pendingUploadRequest = inbox.find(
@@ -119,7 +123,28 @@ export default async function MePage() {
           )}
           <div className="flex flex-wrap items-center gap-3">
             <InboxLink unread={unread} />
+            <Link className={buttonVariants({ variant: "outline" })} href="/me/games">
+              我的游戏记录
+            </Link>
           </div>
+        </Pane>
+
+        <Pane heading="近期游戏记录">
+          <div className="grid gap-3 text-sm">
+            <section>
+              <strong>最近游玩</strong>
+              {played.length ? <ul>{played.map((item) => <li key={item.workId}><Link href={`/games/${item.workId}`}>{item.title}</Link></li>)}</ul> : <p className="text-muted">暂无记录。</p>}
+            </section>
+            <section>
+              <strong>最新评论</strong>
+              {comments.items.length ? <ul>{comments.items.map((item) => <li key={item.id}><Link href={`/games/${item.workId}#comment-${item.id}`}>#{item.id} 评论</Link></li>)}</ul> : <p className="text-muted">暂无评论。</p>}
+            </section>
+            <section>
+              <strong>待玩</strong>
+              {wishlist.length ? <ul>{wishlist.map((item) => <li key={item.workId}><Link href={`/games/${item.workId}`}>{item.title}</Link></li>)}</ul> : <p className="text-muted">暂无待玩游戏。</p>}
+            </section>
+          </div>
+          <Link className={buttonVariants({ variant: "outline" })} href="/me/games">查看全部记录</Link>
         </Pane>
 
       </div>

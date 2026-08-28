@@ -17,7 +17,7 @@ import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { publicCopy } from "@/lib/public-copy";
+import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,7 @@ export default async function WebPlayPage({ params }: PageProps) {
   }
 
   const installTarget = await getWebPlayInstallTargetTotals(record.id);
+  const currentUser = await getCurrentUserFromCookies();
 
   const metadata: WebPlayMetadata = {
     ok: true,
@@ -52,7 +53,6 @@ export default async function WebPlayPage({ params }: PageProps) {
     title: record.workChineseTitle || record.workOriginalTitle,
     originalTitle: record.workOriginalTitle,
     chineseTitle: record.workChineseTitle,
-    archiveLabel: record.archiveLabel,
     manifestSha256: record.manifestSha256,
     downloadZipBuilderVersion,
     webPlayInstallerVersion,
@@ -69,8 +69,6 @@ export default async function WebPlayPage({ params }: PageProps) {
     installTotalSizeBytes: installTarget.totalSizeBytes,
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
-    usesManiacsPatch: record.usesManiacsPatch,
-    canPlay: !record.usesManiacsPatch,
   };
 
   return (
@@ -89,14 +87,19 @@ export default async function WebPlayPage({ params }: PageProps) {
         }
         subtitle={
           <>
-            {publicCopy(metadata.archiveLabel)}
             {metadata.chineseTitle ? ` / ${metadata.originalTitle}` : ""}
           </>
         }
         title={metadata.title}
       />
 
-      <WebPlayClient metadata={metadata} />
+      {metadata.engineFamily === "rpg_maker_2003_maniac" ? (
+        <p className="text-sm text-amber-700">
+          该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。
+        </p>
+      ) : null}
+
+      <WebPlayClient isAuthenticated={Boolean(currentUser)} metadata={metadata} />
     </main>
   );
 }

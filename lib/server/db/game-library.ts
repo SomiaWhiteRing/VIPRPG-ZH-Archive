@@ -40,10 +40,7 @@ export type GameExternalLink = {
 };
 export type GameArchiveVersionDetail = {
   id: number;
-  archiveLabel: string;
   language: string;
-  isProofread: boolean;
-  isImageEdited: boolean;
   isCurrent: boolean;
   totalFiles: number;
   totalSizeBytes: number;
@@ -79,11 +76,9 @@ export type GameWorkSummary = {
   originalReleaseDate: string | null;
   originalReleasePrecision: string;
   engineFamily: string;
-  usesManiacsPatch: boolean;
   isOriginal: boolean;
   language: string;
   status: string;
-  thumbnailBlobSha256: string | null;
   previewBlobSha256: string | null;
   archiveVersionCount: number;
   totalSizeBytes: number;
@@ -93,8 +88,6 @@ export type GameWorkSummary = {
   creators: GameCreatorCredit[];
 };
 export type GameWorkDetail = GameWorkSummary & {
-  sortTitle: string | null;
-  engineDetail: string | null;
   aliases: string[];
   media: GameMediaAsset[];
   externalLinks: GameExternalLink[];
@@ -107,20 +100,15 @@ export type AdminWorkEdit = {
   id: number;
   originalTitle: string;
   chineseTitle: string | null;
-  sortTitle: string | null;
   description: string | null;
   originalReleaseDate: string | null;
   originalReleasePrecision: string;
   engineFamily: string;
-  engineDetail: string | null;
-  usesManiacsPatch: boolean;
   isOriginal: boolean;
   language: string;
   status: "draft" | "published" | "hidden" | "deleted";
   aliases: string[];
   tags: string[];
-  iconBlobSha256: string | null;
-  thumbnailBlobSha256: string | null;
   characters: string[];
   characterCredits: GameCharacter[];
   media: GameMediaAsset[];
@@ -133,10 +121,7 @@ export type AdminArchiveVersionEdit = {
   id: number;
   workId: number;
   workTitle: string;
-  archiveLabel: string;
   language: string;
-  isProofread: boolean;
-  isImageEdited: boolean;
   isCurrent: boolean;
   status: "draft" | "published" | "hidden";
   totalFiles: number;
@@ -155,8 +140,6 @@ export type AdminArchiveVersionEdit = {
   publishedAt: string | null;
   uploaderName: string | null;
   sourceUrl: string | null;
-  executablePath: string | null;
-  rightsNotes: string | null;
 };
 
 type Filters = {
@@ -169,7 +152,7 @@ type Filters = {
   includeNonPublic?: boolean;
 };
 type ListInput = Filters & {
-  sort?: "updated" | "title" | "engine";
+  sort?: "id" | "title" | "engine";
   limit?: number;
   offset?: number;
 };
@@ -181,29 +164,21 @@ type SummaryRow = {
   original_release_date: string | null;
   original_release_precision: string;
   engine_family: string;
-  uses_maniacs_patch: number;
   is_original: number;
   language: string;
   status: string;
-  thumbnail_blob_sha256: string | null;
   preview_blob_sha256: string | null;
   archive_version_count: number;
   total_size_bytes: number | null;
   latest_published_at: string | null;
 };
 type WorkRow = SummaryRow & {
-  sort_title: string | null;
-  engine_detail: string | null;
-  icon_blob_sha256: string | null;
 };
 type ArchiveEditRow = {
   id: number;
   work_id: number;
   work_title: string;
   work_language: string;
-  archive_label: string;
-  is_proofread: number;
-  is_image_edited: number;
   is_current: number;
   status: "draft" | "published" | "hidden";
   total_files: number;
@@ -222,24 +197,17 @@ type ArchiveEditRow = {
   published_at: string | null;
   uploader_name: string | null;
   source_url: string | null;
-  executable_path: string | null;
-  rights_notes: string | null;
 };
 type WorkEditInput = {
   workId: number;
   chineseTitle: string | null;
-  sortTitle: string | null;
   description: string | null;
   originalReleaseDate: string | null;
   originalReleasePrecision: string;
   engineFamily: string;
-  engineDetail: string | null;
-  usesManiacsPatch: boolean;
   isOriginal: boolean;
   language: string;
   status: string;
-  iconBlobSha256: string | null;
-  thumbnailBlobSha256: string | null;
   aliases: string[];
   tags: string[];
   characters: string[];
@@ -249,14 +217,9 @@ type WorkEditInput = {
 };
 type ArchiveEditInput = {
   archiveVersionId: number;
-  archiveLabel: string;
-  isProofread: boolean;
-  isImageEdited: boolean;
   status: string;
   sourceName: string | null;
   sourceUrl: string | null;
-  executablePath: string | null;
-  rightsNotes: string | null;
 };
 const LINK_TYPES = [
   "official",
@@ -275,10 +238,10 @@ export async function listGameWorks(
     offset = Math.max(0, Math.floor(input.offset ?? 0));
   const order =
     input.sort === "title"
-      ? "COALESCE(w.sort_title,w.chinese_title,w.original_title) ASC"
+      ? "COALESCE(w.chinese_title,w.original_title) ASC"
       : input.sort === "engine"
         ? "w.engine_family ASC,w.original_title ASC"
-        : "COALESCE(av.published_at,w.updated_at,w.created_at) DESC";
+        : "w.id DESC";
   const rows = await getD1()
     .prepare(
       `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE ${where} GROUP BY w.id ORDER BY ${order},w.id DESC LIMIT ? OFFSET ?`,
@@ -327,11 +290,11 @@ export async function getGameWorkDetail(
 ): Promise<GameWorkDetail | null> {
   const row = await getD1()
     .prepare(
-      `SELECT ${summarySql()},w.sort_title,w.engine_detail FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' GROUP BY w.id LIMIT 1`,
     )
     .bind(id)
     .first<
-      SummaryRow & { sort_title: string | null; engine_detail: string | null }
+      SummaryRow
     >();
   if (!row) return null;
   const [summary] = await hydrate([row]);
@@ -349,8 +312,6 @@ export async function getGameWorkDetail(
     (translations.some((item) => item.role === "translation") ? row.id : null);
   return {
     ...summary,
-    sortTitle: row.sort_title,
-    engineDetail: row.engine_detail,
     aliases,
     media,
     externalLinks: links,
@@ -392,20 +353,15 @@ export async function getWorkForAdminEdit(
     id: row.id,
     originalTitle: row.original_title,
     chineseTitle: row.chinese_title,
-    sortTitle: row.sort_title,
     description: row.description,
     originalReleaseDate: row.original_release_date,
     originalReleasePrecision: row.original_release_precision,
     engineFamily: row.engine_family,
-    engineDetail: row.engine_detail,
-    usesManiacsPatch: row.uses_maniacs_patch === 1,
     isOriginal: row.is_original === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
     aliases,
     tags: tags.map((item) => item.name),
-    iconBlobSha256: row.icon_blob_sha256,
-    thumbnailBlobSha256: row.thumbnail_blob_sha256,
     characters: characters.map((item) => item.primaryName),
     characterCredits: characters,
     media,
@@ -427,7 +383,20 @@ export async function updateWorkForAdmin(
   );
   assertEnum(
     input.engineFamily,
-    ["rpg_maker_2000", "rpg_maker_2003", "mixed", "unknown", "other"],
+    [
+      "rpg_maker_2000",
+      "rpg_maker_2003",
+      "rpg_maker_2003_maniac",
+      "rpg_maker_xp",
+      "rpg_maker_vx",
+      "rpg_maker_vx_ace",
+      "rpg_maker_mv",
+      "rpg_maker_mz",
+      "rpg_maker_unite",
+      "mixed",
+      "unknown",
+      "other",
+    ],
     "引擎",
   );
   assertEnum(input.status, ["draft", "published", "hidden"], "状态");
@@ -439,17 +408,12 @@ export async function updateWorkForAdmin(
     .prepare(
       `UPDATE works
        SET chinese_title = ?,
-         sort_title = ?,
          description = ?,
          original_release_date = ?,
          original_release_precision = ?,
          engine_family = ?,
-         engine_detail = ?,
-         uses_maniacs_patch = ?,
          is_original = ?,
          language = ?,
-         icon_blob_sha256 = ?,
-         thumbnail_blob_sha256 = ?,
          status = ?,
          updated_at = CURRENT_TIMESTAMP,
          published_at = CASE
@@ -460,17 +424,12 @@ export async function updateWorkForAdmin(
     )
     .bind(
       input.chineseTitle,
-      input.sortTitle,
       input.description,
       input.originalReleaseDate,
       input.originalReleasePrecision,
       input.engineFamily,
-      input.engineDetail,
-      input.usesManiacsPatch ? 1 : 0,
       input.isOriginal ? 1 : 0,
       input.language,
-      input.iconBlobSha256,
-      input.thumbnailBlobSha256,
       input.status,
       input.status,
       input.workId,
@@ -506,10 +465,7 @@ export async function getArchiveVersionForAdminEdit(
     id: row.id,
     workId: row.work_id,
     workTitle: row.work_title,
-    archiveLabel: row.archive_label,
     language: row.work_language,
-    isProofread: row.is_proofread === 1,
-    isImageEdited: row.is_image_edited === 1,
     isCurrent: row.is_current === 1,
     status: row.status,
     totalFiles: row.total_files,
@@ -528,14 +484,11 @@ export async function getArchiveVersionForAdminEdit(
     publishedAt: row.published_at,
     uploaderName: row.uploader_name,
     sourceUrl: row.source_url,
-    executablePath: row.executable_path,
-    rightsNotes: row.rights_notes,
   };
 }
 export async function updateArchiveVersionForAdmin(
   input: ArchiveEditInput,
 ): Promise<AdminArchiveVersionEdit> {
-  if (!input.archiveLabel.trim()) throw new Error("归档资料不合法");
   assertEnum(input.status, ["draft", "published", "hidden"], "状态");
   const before = await getD1()
     .prepare(
@@ -556,14 +509,9 @@ export async function updateArchiveVersionForAdmin(
   const update = getD1()
     .prepare(
       `UPDATE archive_versions
-       SET archive_label = ?,
-         is_proofread = ?,
-         is_image_edited = ?,
-         status = ?,
+       SET status = ?,
          source_name = ?,
          source_url = ?,
-         executable_path = ?,
-         rights_notes = ?,
          is_current = CASE
            WHEN ? <> 'published' THEN 0
            ELSE is_current
@@ -573,14 +521,9 @@ export async function updateArchiveVersionForAdmin(
          AND status <> 'deleted'`,
     )
     .bind(
-      input.archiveLabel.trim(),
-      input.isProofread ? 1 : 0,
-      input.isImageEdited ? 1 : 0,
       input.status,
       input.sourceName,
       sourceUrl,
-      input.executablePath,
-      input.rightsNotes,
       input.status,
       input.archiveVersionId,
     );
@@ -595,20 +538,15 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
   return {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
-    sortTitle: clean(form.get("sort_title")),
     description: clean(form.get("description")),
     originalReleaseDate: clean(form.get("original_release_date")),
     originalReleasePrecision: String(
       form.get("original_release_precision") ?? "unknown",
     ),
     engineFamily: String(form.get("engine_family") ?? "unknown"),
-    engineDetail: clean(form.get("engine_detail")),
-    usesManiacsPatch: checked(form, "uses_maniacs_patch"),
     isOriginal: checked(form, "is_original"),
     language: String(form.get("language") ?? "zh-CN"),
     status: String(form.get("status") ?? "draft"),
-    iconBlobSha256: clean(form.get("icon_blob_sha256")),
-    thumbnailBlobSha256: clean(form.get("thumbnail_blob_sha256")),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
     characters: lines(form.get("characters")),
@@ -620,14 +558,9 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
 export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
   return {
     archiveVersionId: positive(form.get("archive_version_id")),
-    archiveLabel: String(form.get("archive_label") ?? ""),
-    isProofread: checked(form, "is_proofread"),
-    isImageEdited: checked(form, "is_image_edited"),
     status: String(form.get("status") ?? "published"),
     sourceName: clean(form.get("source_name")),
     sourceUrl: clean(form.get("source_url")),
-    executablePath: clean(form.get("executable_path")),
-    rightsNotes: clean(form.get("rights_notes")),
   };
 }
 function summarySql(): string {
@@ -639,11 +572,9 @@ function summarySql(): string {
     w.original_release_date,
     w.original_release_precision,
     w.engine_family,
-    w.uses_maniacs_patch,
     w.is_original,
     w.language,
     w.status,
-    w.thumbnail_blob_sha256,
     (
       SELECT ma.blob_sha256
       FROM work_media_assets wma
@@ -729,11 +660,9 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       originalReleaseDate: row.original_release_date,
       originalReleasePrecision: row.original_release_precision,
       engineFamily: row.engine_family,
-      usesManiacsPatch: row.uses_maniacs_patch === 1,
       isOriginal: row.is_original === 1,
       language: row.language,
       status: row.status,
-      thumbnailBlobSha256: row.thumbnail_blob_sha256,
       previewBlobSha256: row.preview_blob_sha256,
       archiveVersionCount: row.archive_version_count,
       totalSizeBytes: row.total_size_bytes ?? 0,
@@ -852,10 +781,7 @@ async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
   const rows = await getD1()
     .prepare(
       `SELECT av.id,
-          av.archive_label,
           w.language,
-          av.is_proofread,
-          av.is_image_edited,
           av.is_current,
           av.total_files,
           av.total_size_bytes,
@@ -873,10 +799,7 @@ async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
     .bind(id)
     .all<{
       id: number;
-      archive_label: string;
       language: string;
-      is_proofread: number;
-      is_image_edited: number;
       is_current: number;
       total_files: number;
       total_size_bytes: number;
@@ -886,10 +809,7 @@ async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
     }>();
   return (rows.results ?? []).map((x) => ({
     id: x.id,
-    archiveLabel: x.archive_label,
     language: x.language,
-    isProofread: x.is_proofread === 1,
-    isImageEdited: x.is_image_edited === 1,
     isCurrent: x.is_current === 1,
     totalFiles: x.total_files,
     totalSizeBytes: x.total_size_bytes,
