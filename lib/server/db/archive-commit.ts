@@ -18,6 +18,10 @@ import { putManifest } from "@/lib/server/storage/archive-bucket";
 import { validateCorePackReferences } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
+import {
+  assertSingleDownloadLink,
+  isArchiveEngineFamily,
+} from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
   importJobId: number;
@@ -163,7 +167,7 @@ export async function commitArchiveImport(
         description: string | null;
         original_release_date: string | null;
         original_release_precision: "year" | "month" | "day" | "unknown";
-        status: "draft" | "published" | "hidden";
+        status: "processing" | "published" | "hidden";
         extra_json: string;
       }>();
     if (existingWork) {
@@ -629,7 +633,7 @@ function normalizeMetadata(
     ] as const) ||
     typeof game.isOriginal !== "boolean" ||
     typeof game.language !== "string" ||
-    !isEnum(game.status, ["draft", "published", "hidden"] as const) ||
+      !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
     !isRecord(game.extra) ||
     !Array.isArray(game.browsingImageBlobSha256s)
   ) {
@@ -637,6 +641,9 @@ function normalizeMetadata(
   }
   if (!isLanguageCode(game.language)) {
     throw new HttpError(400, "Unsupported game language");
+  }
+  if (!isArchiveEngineFamily(game.engineFamily)) {
+    throw new HttpError(400, "非 RPG Maker 2000/2003 系游戏不能通过归档上传");
   }
 
   if (
@@ -813,6 +820,10 @@ function normalizeMetadata(
       };
     })
     .filter((link) => link.label && link.url);
+  assertSingleDownloadLink(workLinks);
+  if (workLinks.some((link) => link.linkType === "download_page")) {
+    throw new HttpError(400, "本站归档作品不能设置外部下载地址");
+  }
 
   if (!game.originalTitle.trim()) {
     throw new HttpError(400, "游戏原名不能为空");
@@ -930,7 +941,7 @@ async function resolveTargetWork(
         original_title, chinese_title, description, is_original, language,
         original_release_date, original_release_precision, engine_family, status, extra_json,
         created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
     )
     .bind(
       game.originalTitle,
@@ -960,7 +971,7 @@ async function resolveTargetWork(
     ]);
   } catch (error) {
     await database
-      .prepare(`DELETE FROM works WHERE id = ? AND status = 'draft'`)
+      .prepare(`DELETE FROM works WHERE id = ? AND status = 'processing'`)
       .bind(workId)
       .run();
     throw error;
@@ -1031,9 +1042,9 @@ async function findReusableDraftByManifest(
     throw new HttpError(409, "相同清单的历史快照已最终清理，不能重新提交");
   }
 
-  // A failed commit can leave a draft after the immutable row is inserted.
-  // Only its uploader may resume that draft; every published row stays immutable.
-  if (row.status === "draft" && row.uploader_id === uploaderId) {
+  // A failed commit can leave processing state after the immutable row is inserted.
+  // Only its uploader may resume it; every published row stays immutable.
+  if (row.status === "processing" && row.uploader_id === uploaderId) {
     return row;
   }
 
@@ -1420,7 +1431,7 @@ async function insertArchiveVersion(input: {
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'processing')`,
     )
     .bind(
       input.workId,

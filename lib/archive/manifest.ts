@@ -80,7 +80,7 @@ export type ArchiveCommitMetadata = {
     isOriginal: boolean;
     language: string;
     browsingImageBlobSha256s: string[];
-    status: "draft" | "published" | "hidden";
+    status: "processing" | "published" | "hidden";
     extra: Record<string, unknown>;
   };
   target: {

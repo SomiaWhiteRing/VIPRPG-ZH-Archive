@@ -15,8 +15,8 @@ export default function AboutPage() {
 
       <Pane heading="项目目标">
         <p>
-          VIPRPG.org收录 VIPRPG 祭典相关的 RPG Maker 2000/2003 作品，
-          包括不同语言和本站原创作品。本站保留游戏资料、作者与角色信息，并提供下载与在线游玩入口。
+          VIPRPG.org 收录 VIPRPG 祭典相关的 RPG Maker 作品，
+          包括不同语言和本站原创作品；2000/2003 系游戏提供本站归档，其他引擎提供外部下载入口。
         </p>
       </Pane>
 
@@ -57,7 +57,7 @@ export default function AboutPage() {
 
       <Pane heading="保存边界">
         <ul>
-          <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 2000/2003 作品。</li>
+          <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 作品。</li>
           <li>对原作权利人提出删除/限制要求的内容，会从公开列表移除。</li>
           <li>使用 RPG Maker 2003 Maniac 的作品可能无法用 EasyRPG 正常游玩。</li>
           <li>本站不会修改原始文件；不同语言的作品以独立游戏条目保存，并通过翻译关联连接。</li>

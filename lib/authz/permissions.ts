@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   "tag.read_private": { category: "tag", label: "查看非公开标签" },
   "tag.update": { category: "tag", label: "编辑标签" },
   "work.update_own": { category: "work", label: "编辑自己上传的游戏" },
+  "work.external_create": { category: "work", label: "发布外链作品" },
   "relation.create": { category: "relation", label: "创建作品关联" },
   "relation.update_own": { category: "relation", label: "编辑自己创建的作品关联" },
   "relation.delete_own": { category: "relation", label: "删除自己创建的作品关联" },
@@ -123,14 +124,14 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   uploader: [
-    "work.lookup_non_deleted", "work.update_own", "import_job.create",
+    "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
     "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   admin: [
-    "work.lookup_non_deleted", "work.update_own", "import_job.create",
+    "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
     "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
@@ -145,7 +146,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "system.dashboard.read", "system.maintenance.run",
   ] as const,
   super_admin: [
-    "work.lookup_non_deleted", "work.update_own", "import_job.create",
+    "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
     "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",

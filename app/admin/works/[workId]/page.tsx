@@ -115,7 +115,6 @@ export default async function AdminWorkEditPage({
                 options={[
                   { value: "published", label: "已发布" },
                   { value: "hidden", label: "隐藏" },
-                  { value: "draft", label: "草稿" },
                 ]}
               />
             </FormField>

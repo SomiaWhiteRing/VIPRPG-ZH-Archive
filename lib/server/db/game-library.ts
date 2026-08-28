@@ -5,6 +5,15 @@ import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relation
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
 import { HttpError } from "@/lib/server/http/json";
+import {
+  assertStableDistribution,
+  assertSingleDownloadLink,
+  deriveWorkDistribution,
+  isExternalEngineFamily,
+  type WorkDistribution,
+} from "@/lib/server/db/work-distribution";
+import type { ArchiveUser } from "@/lib/server/db/users";
+import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 
 export type GameTag = { id: number; name: string; namespace: string };
 export type GameCharacter = {
@@ -86,6 +95,7 @@ export type GameWorkSummary = {
   tags: GameTag[];
   characters: GameCharacter[];
   creators: GameCreatorCredit[];
+  distribution: WorkDistribution;
 };
 export type GameWorkDetail = GameWorkSummary & {
   aliases: string[];
@@ -106,7 +116,7 @@ export type AdminWorkEdit = {
   engineFamily: string;
   isOriginal: boolean;
   language: string;
-  status: "draft" | "published" | "hidden" | "deleted";
+  status: "processing" | "published" | "hidden" | "deleted";
   aliases: string[];
   tags: string[];
   characters: string[];
@@ -123,7 +133,7 @@ export type AdminArchiveVersionEdit = {
   workTitle: string;
   language: string;
   isCurrent: boolean;
-  status: "draft" | "published" | "hidden";
+  status: "processing" | "published" | "hidden";
   totalFiles: number;
   totalSizeBytes: number;
   estimatedR2GetCount: number;
@@ -171,8 +181,20 @@ type SummaryRow = {
   archive_version_count: number;
   total_size_bytes: number | null;
   latest_published_at: string | null;
+  has_current_archive: number;
+  download_link_count: number;
 };
-type WorkRow = SummaryRow & {
+type WorkRow = {
+  id: number;
+  original_title: string;
+  chinese_title: string | null;
+  description: string | null;
+  original_release_date: string | null;
+  original_release_precision: string;
+  engine_family: string;
+  is_original: number;
+  language: string;
+  status: string;
 };
 type ArchiveEditRow = {
   id: number;
@@ -180,7 +202,7 @@ type ArchiveEditRow = {
   work_title: string;
   work_language: string;
   is_current: number;
-  status: "draft" | "published" | "hidden";
+  status: "processing" | "published" | "hidden";
   total_files: number;
   total_size_bytes: number;
   estimated_r2_get_count: number;
@@ -215,6 +237,23 @@ type WorkEditInput = {
   outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
 };
+
+export type ExternalWorkInput = {
+  user: ArchiveUser;
+  originalTitle: string;
+  chineseTitle: string | null;
+  description: string | null;
+  engineFamily: string;
+  isOriginal: boolean;
+  language: string;
+  aliases: string[];
+  tags: string[];
+  characters: string[];
+  creatorName: string | null;
+  creatorUrl: string | null;
+  previewBlobSha256s: string[];
+  downloadUrl: string;
+};
 type ArchiveEditInput = {
   archiveVersionId: number;
   status: string;
@@ -229,6 +268,15 @@ const LINK_TYPES = [
   "download_page",
   "other",
 ] as const;
+const VALID_PUBLISHED_DISTRIBUTION_SQL = `(
+  (EXISTS (SELECT 1 FROM archive_versions avp WHERE avp.work_id=w.id AND avp.status='published' AND avp.is_current=1)
+    AND w.engine_family IN ('rpg_maker_2000','rpg_maker_2003','rpg_maker_2003_maniac')
+    AND (SELECT COUNT(*) FROM work_external_links wep WHERE wep.work_id=w.id AND wep.link_type='download_page') = 0)
+  OR
+  (NOT EXISTS (SELECT 1 FROM archive_versions avp WHERE avp.work_id=w.id AND avp.status='published' AND avp.is_current=1)
+    AND w.engine_family NOT IN ('rpg_maker_2000','rpg_maker_2003','rpg_maker_2003_maniac')
+    AND (SELECT COUNT(*) FROM work_external_links wep WHERE wep.work_id=w.id AND wep.link_type='download_page') = 1)
+)`;
 
 export async function listGameWorks(
   input: ListInput = {},
@@ -290,7 +338,7 @@ export async function getGameWorkDetail(
 ): Promise<GameWorkDetail | null> {
   const row = await getD1()
     .prepare(
-      `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id LIMIT 1`,
     )
     .bind(id)
     .first<
@@ -399,9 +447,22 @@ export async function updateWorkForAdmin(
     ],
     "引擎",
   );
-  assertEnum(input.status, ["draft", "published", "hidden"], "状态");
+  assertEnum(input.status, ["processing", "published", "hidden"], "状态");
+  if (input.status === "processing") {
+    throw new HttpError(400, "processing 只能由上传提交流程创建");
+  }
   if (!isLanguageCode(input.language)) throw new Error("语言不合法");
   const externalLinks = normalizeExternalLinks(input.externalLinks);
+  const distributionState = await getWorkDistributionState(input.workId);
+  assertStableDistribution({
+    status: input.status,
+    engineFamily: input.engineFamily,
+    hasCurrentArchive: distributionState.hasCurrentArchive,
+    archiveVersionCount: distributionState.archiveVersionCount,
+    downloadLinkCount: externalLinks.filter(
+      (link) => link.linkType === "download_page",
+    ).length,
+  });
   await assertTranslationLanguageChangeAllowed(input.workId, input.language);
   await replaceMedia(input.workId, input.previewBlobSha256s);
   await getD1()
@@ -442,6 +503,146 @@ export async function updateWorkForAdmin(
   const updated = await getWorkForAdminEdit(input.workId);
   if (!updated) throw new Error("游戏更新后不可读取");
   return updated;
+}
+
+export async function createExternalWork(
+  input: ExternalWorkInput,
+): Promise<{ workId: number }> {
+  if (!isExternalEngineFamily(input.engineFamily)) {
+    throw new HttpError(400, "外链下载作品必须使用非 RPG Maker 2000/2003 系引擎");
+  }
+  const originalTitle = input.originalTitle.trim();
+  if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
+  const downloadUrl = normalizeHttpUrl(input.downloadUrl, "外部下载地址");
+  if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空");
+
+  const previewBlobSha256s = [
+    ...new Set(
+      input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
+    ),
+  ];
+  if (previewBlobSha256s.length === 0) {
+    throw new HttpError(400, "外链作品必须提供封面图");
+  }
+  if (previewBlobSha256s.some((value) => !/^[a-f0-9]{64}$/.test(value))) {
+    throw new HttpError(400, "封面图 SHA-256 不合法");
+  }
+  const blobRows = await getD1()
+    .prepare(
+      `SELECT sha256,content_type_hint FROM blobs WHERE status='active' AND sha256 IN (${previewBlobSha256s.map(() => "?").join(",")})`,
+    )
+    .bind(...previewBlobSha256s)
+    .all<{ sha256: string; content_type_hint: string | null }>();
+  const blobMap = new Map(
+    (blobRows.results ?? []).map((row) => [row.sha256, row.content_type_hint]),
+  );
+  if (
+    previewBlobSha256s.some(
+      (sha256) => !blobMap.has(sha256) || !blobMap.get(sha256)?.startsWith("image/"),
+    )
+  ) {
+    throw new HttpError(400, "封面或浏览图对象不存在，或不是图片");
+  }
+
+  const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
+  const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
+  const characters = [...new Set(input.characters.map(normalizeEntityName).filter(Boolean))];
+  const creatorName = input.creatorName?.trim() || null;
+  const creatorUrl = normalizeHttpUrl(input.creatorUrl, "作者网站");
+  const database = getD1();
+  const result = await database
+    .prepare(
+      `INSERT INTO works (
+        original_title, chinese_title, description, is_original, language,
+        original_release_date, original_release_precision, engine_family, status,
+        extra_json, created_by_user_id, published_at
+      ) VALUES (?, ?, ?, ?, ?, NULL, 'unknown', ?, 'published', '{}', ?, CURRENT_TIMESTAMP)`,
+    )
+    .bind(
+      originalTitle,
+      input.chineseTitle?.trim() || null,
+      input.description?.trim() || null,
+      input.isOriginal ? 1 : 0,
+      input.language,
+      input.engineFamily,
+      input.user.id,
+    )
+    .run();
+  const workId = result.meta.last_row_id;
+  if (!Number.isSafeInteger(workId)) throw new Error("外链作品创建失败");
+
+  const statements = [
+    database
+      .prepare(`INSERT INTO work_uploaders(work_id,user_id) VALUES(?,?)`)
+      .bind(workId, input.user.id),
+    ...aliases.map((title) =>
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?, 'alias')`,
+        )
+        .bind(workId, title),
+    ),
+    ...(creatorName
+      ? [
+          database
+            .prepare(
+              `INSERT OR IGNORE INTO creators(name,website_url,extra_json) VALUES(?,?, '{}')`,
+            )
+            .bind(creatorName, creatorUrl),
+          database
+            .prepare(
+              `INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label) SELECT ?,id,'author','作者' FROM creators WHERE name=? COLLATE NOCASE`,
+            )
+            .bind(workId, creatorName),
+        ]
+      : []),
+    ...characters.flatMap((name, index) => [
+      database
+        .prepare(`INSERT OR IGNORE INTO characters(primary_name,extra_json) VALUES(?, '{}')`)
+        .bind(name),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_characters(work_id,character_id,role_key,spoiler_level,sort_order) SELECT ?,id,'supporting',0,? FROM characters WHERE primary_name=? COLLATE NOCASE`,
+        )
+        .bind(workId, index + 1, name),
+    ]),
+    ...tags.flatMap((name) => [
+      database
+        .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`)
+        .bind(name),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`,
+        )
+        .bind(workId, name),
+    ]),
+    database
+      .prepare(
+        `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
+      )
+      .bind(workId, downloadUrl),
+    ...previewBlobSha256s.flatMap((sha256, index) => [
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?, 'preview')`,
+        )
+        .bind(sha256),
+      database
+        .prepare(
+          `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
+        )
+        .bind(workId, index + 1, index === 0 ? 1 : 0, sha256),
+    ]),
+  ];
+  await database.batch(statements);
+  await writeAuthAuditLog({
+    userId: input.user.id,
+    email: input.user.email,
+    eventType: "external_work_created",
+    detail: { workId: workId as number, engineFamily: input.engineFamily },
+  });
+  return { workId: workId as number };
 }
 export async function getArchiveVersionForAdminEdit(
   id: number,
@@ -489,7 +690,10 @@ export async function getArchiveVersionForAdminEdit(
 export async function updateArchiveVersionForAdmin(
   input: ArchiveEditInput,
 ): Promise<AdminArchiveVersionEdit> {
-  assertEnum(input.status, ["draft", "published", "hidden"], "状态");
+  assertEnum(input.status, ["processing", "published", "hidden"], "状态");
+  if (input.status === "processing") {
+    throw new HttpError(400, "processing 只能由上传提交流程创建");
+  }
   const before = await getD1()
     .prepare(
       `SELECT work_id,is_current,status,purged_at FROM archive_versions WHERE id=? LIMIT 1`,
@@ -546,7 +750,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     engineFamily: String(form.get("engine_family") ?? "unknown"),
     isOriginal: checked(form, "is_original"),
     language: String(form.get("language") ?? "zh-CN"),
-    status: String(form.get("status") ?? "draft"),
+    status: String(form.get("status") ?? "published"),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
     characters: lines(form.get("characters")),
@@ -601,14 +805,29 @@ function summarySql(): string {
       FROM archive_versions av2
       WHERE av2.work_id = w.id
         AND av2.status = 'published'
-    ) AS latest_published_at`;
+    ) AS latest_published_at,
+    EXISTS(
+      SELECT 1
+      FROM archive_versions av3
+      WHERE av3.work_id = w.id
+        AND av3.status = 'published'
+        AND av3.is_current = 1
+    ) AS has_current_archive,
+    (
+      SELECT COUNT(*)
+      FROM work_external_links wel
+      WHERE wel.work_id = w.id
+        AND wel.link_type = 'download_page'
+    ) AS download_link_count`;
 }
 function buildWhere(input: Filters): {
   where: string;
   binds: Array<string | number>;
 } {
   const clauses = [
-      input.includeNonPublic ? "w.status <> 'deleted'" : "w.status='published'",
+      input.includeNonPublic
+        ? "w.status <> 'deleted'"
+        : `w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`,
     ],
     binds: Array<string | number> = [];
   if (input.query) {
@@ -667,6 +886,10 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       archiveVersionCount: row.archive_version_count,
       totalSizeBytes: row.total_size_bytes ?? 0,
       latestPublishedAt: row.latest_published_at,
+      distribution: deriveWorkDistribution({
+        hasCurrentArchive: row.has_current_archive === 1,
+        downloadLinkCount: row.download_link_count,
+      }),
       tags,
       characters,
       creators,
@@ -980,7 +1203,7 @@ async function replaceLinks(
 function normalizeExternalLinks(
   values: GameExternalLink[],
 ): GameExternalLink[] {
-  return values
+  const links = values
     .filter(
       (link) =>
         link &&
@@ -1001,6 +1224,29 @@ function normalizeExternalLinks(
         linkType: link.linkType,
       };
     });
+  assertSingleDownloadLink(links);
+  return links;
+}
+
+async function getWorkDistributionState(workId: number): Promise<{
+  hasCurrentArchive: boolean;
+  archiveVersionCount: number;
+}> {
+  const row = await getD1()
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM archive_versions WHERE work_id=?) AS archive_version_count,
+         EXISTS(
+           SELECT 1 FROM archive_versions
+           WHERE work_id=? AND status='published' AND is_current=1
+         ) AS has_current_archive`,
+    )
+    .bind(workId, workId)
+    .first<{ archive_version_count: number; has_current_archive: number }>();
+  return {
+    archiveVersionCount: row?.archive_version_count ?? 0,
+    hasCurrentArchive: row?.has_current_archive === 1,
+  };
 }
 async function replaceMedia(workId: number, values: string[]): Promise<void> {
   const hashes = [

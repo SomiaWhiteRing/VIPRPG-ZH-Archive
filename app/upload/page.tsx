@@ -16,7 +16,10 @@ export default async function UploadPage() {
     redirect("/login?next=/upload");
   }
 
-  if (!hasPermission(currentUser, "import_job.create")) {
+  if (
+    !hasPermission(currentUser, "import_job.create") &&
+    !hasPermission(currentUser, "work.external_create")
+  ) {
     return (
       <main>
         <PageHeader title="需要上传者权限" />
@@ -35,7 +38,7 @@ export default async function UploadPage() {
 
   return (
     <main>
-      <PageHeader subtitle="选择本地 RPG Maker 2000/2003 游戏目录，浏览器会完成检查并上传缺少的文件。" title="上传游戏" />
+      <PageHeader subtitle="2000/2003 系游戏可上传本地文件，其他引擎请填写外部下载地址。" title="上传游戏" />
       <UploadClient
         currentUser={{
           displayName: currentUser.displayName,

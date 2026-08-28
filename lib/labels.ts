@@ -144,8 +144,8 @@ export function workStatusLabel(value: string): string {
       return "已发布";
     case "hidden":
       return "隐藏";
-    case "draft":
-      return "草稿";
+    case "processing":
+      return "归档处理中";
     case "deleted":
       return "已删除";
     default:
@@ -165,8 +165,8 @@ export function archiveStatusLabel(
       return "已发布";
     case "hidden":
       return "隐藏";
-    case "draft":
-      return "草稿";
+    case "processing":
+      return "归档处理中";
     case "deleted":
       return "回收站";
     default:

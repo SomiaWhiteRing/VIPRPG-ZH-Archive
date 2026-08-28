@@ -159,7 +159,7 @@ published Work + published current ArchiveVersion
 
 要求：
 
-- 只允许完整 published 引用链；回收站、purged、draft 或 hidden 对象不能下载。
+- 只允许完整 published 引用链；回收站、purged、processing 或 hidden 对象不能下载。
 - 输出顺序由 manifest 固定，相同输入和 builder 版本产生稳定 cache key。
 - ZIP 使用 STORE；local header 写入明确 CRC32、compressed size 和 uncompressed size，不依赖 data descriptor。
 - 可以预取少量后续对象和缓存单次请求内重复的小 blob，但不能改变输出顺序或把完整 ZIP写回 R2。

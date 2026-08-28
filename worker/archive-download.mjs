@@ -142,7 +142,6 @@ async function getDownloadRecord(db, archiveVersionId) {
     .prepare(
       `SELECT
         av.id,
-        av.archive_label,
         av.manifest_sha256,
         av.packer_version,
         av.total_files,
@@ -168,7 +167,6 @@ async function getDownloadRecord(db, archiveVersionId) {
 
   return {
     id: row.id,
-    archiveLabel: row.archive_label,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalSizeBytes: row.total_size_bytes,
@@ -609,7 +607,7 @@ function downloadHeaders(record, cacheStatus, contentLength) {
 }
 
 function downloadFileName(record) {
-  return `${record.workChineseTitle || record.workOriginalTitle} ${record.archiveLabel}.zip`;
+  return `${record.workChineseTitle || record.workOriginalTitle}.zip`;
 }
 
 function contentDisposition(fileName) {
