@@ -41,6 +41,8 @@ export default async function GameDetailPage({
   const relationCapabilities = getRelationEditorCapabilities(currentUser);
   const title = work.chineseTitle || work.originalTitle;
   const current = work.archiveVersions[0] ?? null;
+  const externalDownload =
+    work.externalLinks.find((link) => link.linkType === "download_page") ?? null;
   const primaryMedia =
     work.media.find((media) => media.isPrimary)?.blobSha256 ??
     work.previewBlobSha256;
@@ -128,6 +130,7 @@ export default async function GameDetailPage({
                   }
                 : null
             }
+            externalDownload={externalDownload ? { url: externalDownload.url } : null}
             canPlayInBrowser
           />
           {work.engineFamily === "rpg_maker_2003_maniac" ? (
@@ -145,10 +148,14 @@ export default async function GameDetailPage({
                   work.originalReleasePrecision,
                 ),
               },
-              {
-                label: "当前文件大小",
-                value: formatBytes(work.totalSizeBytes),
-              },
+              ...(work.distribution === "archive"
+                ? [
+                    {
+                      label: "当前文件大小",
+                      value: formatBytes(work.totalSizeBytes),
+                    },
+                  ]
+                : []),
             ]}
           />
         </Pane>
@@ -175,6 +182,8 @@ export default async function GameDetailPage({
               canPlayInBrowser
             />
           </div>
+        ) : work.distribution === "external" ? (
+          <p className="text-sm text-muted">该作品通过外部网站提供下载。</p>
         ) : (
           <p className="text-sm text-muted">当前还没有可下载快照。</p>
         )}
@@ -314,9 +323,9 @@ export default async function GameDetailPage({
           </section>
           <section className="md:col-span-2">
             <h3>外部链接</h3>
-            {work.externalLinks.length ? (
+            {work.externalLinks.filter((link) => link.linkType !== "download_page").length ? (
               <ul className="mt-3 grid gap-2">
-                {work.externalLinks.map((link) => (
+                {work.externalLinks.filter((link) => link.linkType !== "download_page").map((link) => (
                   <li key={link.id}>
                     <a href={link.url} rel="noreferrer" target="_blank">
                       {link.label}

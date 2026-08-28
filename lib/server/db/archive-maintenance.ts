@@ -8,7 +8,7 @@ export type AdminArchiveVersion = {
   workId: number;
   workTitle: string;
   language: string;
-  status: "draft" | "published" | "hidden" | "deleted";
+  status: "processing" | "published" | "hidden" | "deleted";
   isCurrent: boolean;
   totalFiles: number;
   totalSizeBytes: number;
@@ -25,7 +25,7 @@ type Row = {
   work_id: number;
   work_title: string;
   language: string;
-  status: "draft" | "published" | "hidden" | "deleted";
+  status: "processing" | "published" | "hidden" | "deleted";
   is_current: number;
   total_files: number;
   total_size_bytes: number;

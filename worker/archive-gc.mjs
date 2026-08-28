@@ -1,4 +1,5 @@
 const defaultGcGraceDays = 7;
+const processingExpiryHours = 24;
 const scheduledGcLimitPerType = 1000;
 const maxReturnedIssues = 25;
 const canonicalHash = (sha256) => String(sha256).trim().toLowerCase();
@@ -27,6 +28,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     1,
     1000,
   );
+  const processing = await expireStaleProcessing(env, limitPerType);
   const archiveVersions = await purgeDeletedArchiveVersions(
     env,
     graceDays,
@@ -47,6 +49,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     graceDays,
     limitPerType,
     durationMs: Date.now() - startedAt,
+    processing,
     archiveVersions,
     blobs,
     corePacks,
@@ -55,6 +58,169 @@ export async function runScheduledArchiveGc(env, input = {}) {
   await writeGcAuditLog(env.DB, report);
 
   return report;
+}
+
+async function expireStaleProcessing(env, limit) {
+  const cutoff = `-${processingExpiryHours} hours`;
+  const candidates = await env.DB
+    .prepare(
+      `SELECT
+        av.id AS archive_version_id,
+        av.work_id,
+        av.manifest_sha256,
+        av.created_at AS archive_created_at,
+        w.status AS work_status,
+        ij.id AS import_job_id,
+        ij.updated_at AS import_updated_at
+       FROM archive_versions av
+       JOIN works w ON w.id = av.work_id
+       LEFT JOIN import_jobs ij ON ij.id = (
+         SELECT ij2.id
+         FROM import_jobs ij2
+         WHERE ij2.archive_version_id = av.id
+            OR (ij2.work_id = av.work_id AND ij2.archive_version_id IS NULL)
+         ORDER BY datetime(ij2.updated_at) DESC, ij2.id DESC
+         LIMIT 1
+       )
+       WHERE av.status = 'processing'
+         AND datetime(COALESCE(ij.updated_at, av.created_at)) <= datetime('now', ?)
+       ORDER BY datetime(COALESCE(ij.updated_at, av.created_at)) ASC, av.id ASC
+       LIMIT ?`,
+    )
+    .bind(cutoff, limit)
+    .all();
+
+  const expired = [];
+  const skipped = [];
+  const failed = [];
+
+  for (const row of candidates.results ?? []) {
+    const reservation = row.import_job_id
+      ? await env.DB
+          .prepare(
+            `UPDATE import_jobs
+             SET status = 'canceled',
+                 failed_stage = 'processing_expiry',
+                 error_message = '归档处理中超过 24 小时，已自动清理',
+                 updated_at = CURRENT_TIMESTAMP,
+                 completed_at = CURRENT_TIMESTAMP
+             WHERE id = ?
+               AND status IN ('created', 'preflighted', 'uploading', 'failed', 'canceled')
+               AND datetime(updated_at) <= datetime('now', ?)`,
+          )
+          .bind(row.import_job_id, cutoff)
+          .run()
+      : { meta: { changes: 1 } };
+
+    if ((reservation.meta?.changes ?? 0) === 0) {
+      skipped.push({ archiveVersionId: row.archive_version_id });
+      continue;
+    }
+
+    try {
+      if (!(await hasOtherManifestReferences(env.DB, row.manifest_sha256, row.archive_version_id))) {
+        await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
+      }
+
+      await env.DB.batch([
+        env.DB
+          .prepare(`DELETE FROM archive_version_blob_refs WHERE archive_version_id = ?`)
+          .bind(row.archive_version_id),
+        env.DB
+          .prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id = ?`)
+          .bind(row.archive_version_id),
+        env.DB
+          .prepare(`DELETE FROM archive_versions WHERE id = ? AND status = 'processing'`)
+          .bind(row.archive_version_id),
+      ]);
+
+      const workCleanup = await env.DB
+        .prepare(
+          `DELETE FROM works
+           WHERE id = ?
+             AND status = 'processing'
+             AND NOT EXISTS (SELECT 1 FROM archive_versions WHERE work_id = ?)
+             AND NOT EXISTS (SELECT 1 FROM work_external_links WHERE work_id = ?)`,
+        )
+        .bind(row.work_id, row.work_id, row.work_id)
+        .run();
+
+      expired.push({
+        archiveVersionId: row.archive_version_id,
+        workId: row.work_id,
+        workDeleted: (workCleanup.meta?.changes ?? 0) > 0,
+      });
+    } catch (error) {
+      failed.push({
+        archiveVersionId: row.archive_version_id,
+        workId: row.work_id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  const orphanWorks = await env.DB
+    .prepare(
+      `SELECT w.id, ij.id AS import_job_id
+       FROM works w
+       LEFT JOIN import_jobs ij ON ij.work_id = w.id
+       WHERE w.status = 'processing'
+         AND NOT EXISTS (SELECT 1 FROM archive_versions av WHERE av.work_id = w.id)
+         AND datetime(COALESCE(ij.updated_at, w.updated_at)) <= datetime('now', ?)
+       ORDER BY datetime(COALESCE(ij.updated_at, w.updated_at)) ASC, w.id ASC
+       LIMIT ?`,
+    )
+    .bind(cutoff, limit)
+    .all();
+
+  for (const row of orphanWorks.results ?? []) {
+    const reservation = row.import_job_id
+      ? await env.DB
+          .prepare(
+            `UPDATE import_jobs
+             SET status = 'canceled',
+                 failed_stage = 'processing_expiry',
+                 error_message = '归档处理中超过 24 小时，已自动清理',
+                 updated_at = CURRENT_TIMESTAMP,
+                 completed_at = CURRENT_TIMESTAMP
+             WHERE id = ?
+               AND status IN ('created', 'preflighted', 'uploading', 'failed', 'canceled')
+               AND datetime(updated_at) <= datetime('now', ?)`,
+          )
+          .bind(row.import_job_id, cutoff)
+          .run()
+      : { meta: { changes: 1 } };
+
+    if ((reservation.meta?.changes ?? 0) === 0) {
+      skipped.push({ workId: row.id });
+      continue;
+    }
+
+    const result = await env.DB
+      .prepare(
+        `DELETE FROM works
+         WHERE id = ?
+           AND status = 'processing'
+           AND NOT EXISTS (SELECT 1 FROM archive_versions WHERE work_id = ?)
+           AND NOT EXISTS (SELECT 1 FROM work_external_links WHERE work_id = ?)`,
+      )
+      .bind(row.id, row.id, row.id)
+      .run();
+    if ((result.meta?.changes ?? 0) > 0) {
+      expired.push({ workId: row.id, workDeleted: true });
+    }
+  }
+
+  return {
+    expiryHours: processingExpiryHours,
+    scannedCount: (candidates.results ?? []).length + (orphanWorks.results ?? []).length,
+    expiredCount: expired.length,
+    skippedCount: skipped.length,
+    failedCount: failed.length,
+    expired: expired.slice(0, maxReturnedIssues),
+    skipped: skipped.slice(0, maxReturnedIssues),
+    failed: failed.slice(0, maxReturnedIssues),
+  };
 }
 
 async function listEligibleGcRows(db, type, graceDays, limit) {
@@ -71,12 +237,6 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
             SELECT 1
             FROM archive_version_blob_refs avbr
             WHERE avbr.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = b.sha256
-              OR w.thumbnail_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -109,7 +269,6 @@ async function listArchiveVersionPurgeCandidates(db, graceDays, limit) {
     .prepare(
       `SELECT
         id,
-        archive_label,
         deleted_at,
         total_files,
         total_size_bytes,
@@ -251,7 +410,6 @@ async function deleteArchiveVersionRefs(db, archiveVersionId) {
 function mapArchiveVersionPurgeCandidate(row) {
   return {
     id: row.id,
-    archiveLabel: row.archive_label,
     deletedAt: row.deleted_at,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
@@ -324,12 +482,6 @@ async function markCandidatePurging(db, type, id, graceDays) {
           )
           AND NOT EXISTS (
             SELECT 1
-            FROM works w
-            WHERE w.icon_blob_sha256 = blobs.sha256
-              OR w.thumbnail_blob_sha256 = blobs.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = blobs.sha256
           )`
@@ -396,6 +548,10 @@ async function writeGcAuditLog(db, report) {
         trigger: report.trigger,
         cron: report.cron,
         graceDays: report.graceDays,
+        processingExpiryHours: report.processing.expiryHours,
+        expiredProcessingCount: report.processing.expiredCount,
+        skippedProcessingCount: report.processing.skippedCount,
+        failedProcessingCount: report.processing.failedCount,
         limitPerType: report.limitPerType,
         durationMs: report.durationMs,
         purgedArchiveVersionCount: report.archiveVersions.purgedCount,

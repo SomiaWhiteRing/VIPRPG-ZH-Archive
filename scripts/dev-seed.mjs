@@ -122,8 +122,18 @@ insert("works", [
   }),
   game(6, "未公開テスト作品", "未公开测试作品", {
     language: "ja",
-    status: "draft",
+    engine: "other",
+    status: "hidden",
   }),
+]);
+insert("work_external_links", [
+  {
+    work_id: 6,
+    label: "外部下载",
+    url: "https://example.com/hidden-test-work",
+    link_type: "download_page",
+    created_at: NOW,
+  },
 ]);
 insert(
   "work_uploaders",

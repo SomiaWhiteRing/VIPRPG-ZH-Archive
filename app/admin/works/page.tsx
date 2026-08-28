@@ -53,8 +53,14 @@ export default async function AdminWorksPage() {
                 <StatusBadge kind="publication" value={work.status} />
               </td>
               <td>
-                {formatNumber(work.archiveVersionCount)} 个归档快照
-                <span className="text-sm text-muted">{formatBytes(work.totalSizeBytes)}</span>
+                {work.distribution === "external" ? (
+                  <span>外部下载</span>
+                ) : (
+                  <>
+                    {formatNumber(work.archiveVersionCount)} 个归档快照
+                    <span className="text-sm text-muted">{formatBytes(work.totalSizeBytes)}</span>
+                  </>
+                )}
               </td>
               <td>
                 {work.tags.length > 0 ? (

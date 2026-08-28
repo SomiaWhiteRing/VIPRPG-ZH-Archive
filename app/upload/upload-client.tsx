@@ -6,6 +6,7 @@ import { LanguageField } from "@/app/admin/works/language-field";
 import { Textarea } from "@/app/components/ui/textarea";
 import { SelectField } from "@/app/components/ui/select";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { useRouter } from "next/navigation";
 
 import {
   type ChangeEvent,
@@ -54,6 +55,7 @@ type FlatMetadata = {
   language: string;
   sourceName: string;
   sourceUrl: string;
+  externalDownloadUrl: string;
 };
 
 type WorkLookupResult = {
@@ -102,10 +104,12 @@ const defaultForm: FlatMetadata = {
   language: "zh-CN",
   sourceName: "",
   sourceUrl: "",
+  externalDownloadUrl: "",
 };
 
 export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   const { startUpload } = useUploadTasks();
+  const router = useRouter();
   const [mode, setMode] = useState<FileInputMode>("folder");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [form, setForm] = useState<FlatMetadata>(defaultForm);
@@ -226,7 +230,31 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     setSubmitError(null);
 
     if (!canUploadFiles) {
-      setSubmitError("站点不支持上传非 RPG Maker 2000/2003 系游戏，请提供可供下载的外部链接。");
+      if (selectedWork || form.targetMode !== "create") {
+        setSubmitError("已有本站归档的游戏不能切换为外部下载模式，请创建新的外链作品。");
+        return;
+      }
+      if (!form.originalTitle.trim()) {
+        setSubmitError("请填写作品原名。");
+        return;
+      }
+      if (!imageSelections.cover) {
+        setSubmitError("新建外链作品必须选择封面图。");
+        return;
+      }
+      if (!form.externalDownloadUrl.trim()) {
+        setSubmitError("请填写外部下载地址。");
+        return;
+      }
+      setPreparing(true);
+      try {
+        const result = await submitExternalWork(form, imageSelections);
+        router.push(`/games/${result.workId}`);
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : "发布外链作品失败。");
+      } finally {
+        setPreparing(false);
+      }
       return;
     }
 
@@ -277,7 +305,10 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
       <aside className="rounded-lg border border-border bg-card p-4">
         <Pane>
-          <SectionHeading eyebrow="上传来源" title="游戏文件" />
+          <SectionHeading
+            eyebrow="上传来源"
+            title={canUploadFiles ? "游戏文件" : "外部下载"}
+          />
           {canUploadFiles ? <div
             className="flex flex-wrap gap-2"
             role="tablist"
@@ -327,17 +358,19 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
             />
           )}
 
-          <StatList
-            columns={2}
-            items={[
-              {
-                label: "已选择",
-                value: `${selectedFiles.length.toLocaleString("zh-CN")} 个文件`,
-              },
-              { label: "总大小", value: formatBytes(selectedSourceSize) },
-            ]}
-            variant="tiles"
-          />
+          {canUploadFiles ? (
+            <StatList
+              columns={2}
+              items={[
+                {
+                  label: "已选择",
+                  value: `${selectedFiles.length.toLocaleString("zh-CN")} 个文件`,
+                },
+                { label: "总大小", value: formatBytes(selectedSourceSize) },
+              ]}
+              variant="tiles"
+            />
+          ) : null}
         </Pane>
       </aside>
 
@@ -392,7 +425,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
           {lookupState.loading ? (
             <p className="text-sm text-muted">正在查找同名作品…</p>
           ) : null}
-          {lookupState.results.length > 0 && !selectedWork ? (
+          {lookupState.results.length > 0 && !selectedWork && canUploadFiles ? (
             <div className="grid gap-3 rounded-lg border border-border bg-card p-4">
               <strong>资料库中可能已有同名作品</strong>
               {lookupState.results.map((work) => (
@@ -499,62 +532,86 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
         </Pane>
 
         <Pane>
-          <SectionHeading eyebrow="第二步" title="归档资料" />
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="提交方式">
-              <SelectField
-                onValueChange={(value) => {
-                  const targetMode = value as "create" | "update";
-                  if (targetMode === "create") {
-                    setLookupState((current) => ({
-                      ...current,
-                      selectedWorkId: null,
-                    }));
-                  }
+          <SectionHeading
+            eyebrow="第二步"
+            title={canUploadFiles ? "归档资料" : "外部下载"}
+          />
+          {canUploadFiles ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField label="提交方式">
+                  <SelectField
+                    onValueChange={(value) => {
+                      const targetMode = value as "create" | "update";
+                      if (targetMode === "create") {
+                        setLookupState((current) => ({
+                          ...current,
+                          selectedWorkId: null,
+                        }));
+                      }
+                      setForm((current) => ({
+                        ...current,
+                        targetMode,
+                        targetWorkId:
+                          targetMode === "create" ? null : current.targetWorkId,
+                      }));
+                    }}
+                    options={[
+                      { value: "create", label: "创建新游戏条目" },
+                      { value: "update", label: "更新自己已有的游戏" },
+                    ]}
+                    value={form.targetMode}
+                  />
+                </FormField>
+                <div className="bg-muted/10">
+                  <FormField label="上传者">
+                    <Input
+                      readOnly
+                      value={
+                        currentUser?.displayName ||
+                        currentUser?.email ||
+                        "当前登录账户"
+                      }
+                    />
+                  </FormField>
+                </div>
+              </div>
+              <details className="grid gap-2">
+                <summary>来源与运行信息</summary>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TextField
+                    form={form}
+                    label="来源名"
+                    name="sourceName"
+                    setForm={setForm}
+                  />
+                  <TextField
+                    form={form}
+                    label="来源链接"
+                    name="sourceUrl"
+                    setForm={setForm}
+                  />
+                </div>
+              </details>
+            </>
+          ) : (
+            <FormField
+              hint="该地址将作为唯一下载入口，访问时会跳转到外部网站。"
+              label="外部下载地址 *"
+            >
+              <Input
+                onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    targetMode,
-                    targetWorkId:
-                      targetMode === "create" ? null : current.targetWorkId,
-                  }));
-                }}
-                options={[
-                  { value: "create", label: "创建新游戏条目" },
-                  { value: "update", label: "更新自己已有的游戏" },
-                ]}
-                value={form.targetMode}
+                    externalDownloadUrl: event.target.value,
+                  }))
+                }
+                required
+                type="url"
+                value={form.externalDownloadUrl}
               />
             </FormField>
-            <div className="bg-muted/10">
-              <FormField label="上传者">
-                <Input
-                  readOnly
-                  value={
-                    currentUser?.displayName ||
-                    currentUser?.email ||
-                    "当前登录账户"
-                  }
-                />
-              </FormField>
-            </div>
-          </div>
-          <details className="grid gap-2">
-            <summary>来源与运行信息</summary>
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextField
-                form={form}
-                label="来源名"
-                name="sourceName"
-                setForm={setForm}
-              />
-              <TextField
-                form={form}
-                label="来源链接"
-                name="sourceUrl"
-                setForm={setForm}
-              />
-            </div>
-          </details>
+          )}
         </Pane>
 
         <Pane>
@@ -589,8 +646,17 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 {submitError}
               </p>
             ) : null}
-            <Button disabled={preparing || !canUploadFiles} type="submit">
-              {preparing ? "正在准备…" : "开始导入"}
+            <Button
+              disabled={
+                preparing || (!canUploadFiles && !form.externalDownloadUrl.trim())
+              }
+              type="submit"
+            >
+              {preparing
+                ? "正在准备…"
+                : canUploadFiles
+                  ? "开始导入"
+                  : "发布外链作品"}
             </Button>
           </div>
         </Pane>
@@ -774,6 +840,59 @@ function buildMetadata(
       work: [],
     },
   };
+}
+
+async function submitExternalWork(
+  form: FlatMetadata,
+  images: ImageSelections,
+): Promise<{ workId: number }> {
+  const cover = images.cover;
+  if (!cover) throw new Error("外链作品必须提供封面图。");
+  const body = new FormData();
+  body.set(
+    "metadata",
+    JSON.stringify({
+      originalTitle: form.originalTitle.trim(),
+      chineseTitle: cleanNullable(form.chineseTitle),
+      description: cleanNullable(form.description),
+      engineFamily: form.engineFamily,
+      isOriginal: form.isOriginal,
+      language: form.language,
+      aliases: parseAliases(form.aliasTitles),
+      tags: form.tags
+        .split(/[,，\n]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      characters: form.characters
+        .split(/[,，\n]/)
+        .map((character) => character.trim())
+        .filter(Boolean),
+      creatorName: cleanNullable(form.creatorName),
+      creatorUrl: cleanNullable(form.creatorUrl),
+    }),
+  );
+  body.set("download_url", form.externalDownloadUrl.trim());
+  body.set("cover", cover);
+  for (const image of images.browsingImages) {
+    body.append("browsing_images[]", image);
+  }
+  const response = await fetch("/api/works/external", {
+    method: "POST",
+    body,
+    credentials: "same-origin",
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { ok: true; workId: number }
+    | { ok: false; detail?: string; error?: string }
+    | null;
+  if (!response.ok || !payload || !payload.ok) {
+    throw new Error(
+      payload && "detail" in payload
+        ? payload.detail || payload.error || "发布外链作品失败。"
+        : "发布外链作品失败。",
+    );
+  }
+  return { workId: payload.workId };
 }
 
 async function prepareSelectedImages(

@@ -12,7 +12,7 @@ Work
   -> titles / creators / characters / tags / media / links
   -> work relations / translation relations / catalogs
   -> engagement stats / user play-wishlist entries / comments
-  -> ArchiveVersion 1..n
+  -> ArchiveVersion 0..n
 
 ArchiveVersion
   一份不可变文件快照
@@ -26,12 +26,12 @@ ArchiveVersion
 
 Work 回答“这是什么作品”。它拥有：
 
-- 原名、中文名、排序名、别名和简介；
+- 原名、中文名、别名和简介；
 - 语言、原始发布日期、引擎和原创标记；
 - 封面、浏览图和外部链接；
 - 作者/制作人员、登场角色和标签；
 - 普通作品关系、翻译关系、目录成员和共同上传者；
-- `draft | published | hidden | deleted` 状态。
+- `processing | published | hidden | deleted` 状态；`processing` 只表示服务器正在处理上传，不是用户保存的作品草稿。
 
 `works.id` 是作品唯一身份。原名和中文名只用于展示与搜索，可以重复；公开路由使用永久不变的数值 ID。
 
@@ -102,9 +102,9 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 
 ### 媒体与外链
 
-- Work 的 icon/thumbnail 是直接 blob 引用；浏览图等多媒体通过 `media_assets` 与 `work_media_assets` 关联。
+- Work 的封面和浏览图通过 `media_assets` 与 `work_media_assets` 关联。
 - 媒体 blob 必须处于 active 状态，公开读取还要求存在 published Work 引用。
-- `work_external_links` 只保存作品上下文中的官方、wiki、来源、视频、下载页或其他链接。
+- `work_external_links` 保存作品上下文中的官方、wiki、来源、视频、下载页或其他链接。published Work 必须在当前 ArchiveVersion 与唯一 `download_page` 外链之间二选一。
 - URL 校验集中在服务端安全 URL helper，不信任表单字符串。
 
 ## 3. 数据所有权
@@ -133,6 +133,11 @@ target.mode=create
   -> 绑定当前上传者
   -> 创建 ArchiveVersion
 
+external submission
+  -> 创建并直接发布 Work
+  -> 绑定当前上传者
+  -> 写入封面、浏览图和唯一 `download_page` 外链
+
 target.mode=update
   -> 验证目标 Work 与 ownership
   -> 按提交规则合并允许更新的资料
@@ -147,9 +152,9 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 
 ### Work
 
-- `draft`：管理和有权用户可见，不进入公开发现。
+- `processing`：归档提交中的临时状态，不进入公开发现；超过 24 小时没有更新会由定时维护清理。
 - `published`：可以进入公开列表；下载或游玩仍要求目标 ArchiveVersion 同时 published。
-- `hidden`：保留资料和引用，但不公开。
+- `hidden`：保留完整资料和下载来源，但不公开。
 - `deleted`：从普通管理和公共入口退出，等待明确维护操作。
 
 ### ArchiveVersion
@@ -160,7 +165,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 - 删除 current 后，服务层选择同一 Work 中合法的 published 替代版本；没有替代项时保持无 current。
 - deleted 可以在 purge 前 restore；purged 版本不能恢复文件引用。
 
-公开下载、Web Play 和媒体访问都检查完整 published 引用链，不把“知道 ID”当作公开授权。
+公开下载、Web Play 和媒体访问都检查完整 published 引用链；外链作品只显示外部下载入口，不把“知道 ID”当作公开授权。`published` 和 `hidden` Work 都必须且只能有一个下载来源；只有 `processing` 可以暂时没有来源。
 
 ## 6. 查询边界
 
@@ -182,7 +187,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 
 ## 7. 搜索
 
-当前搜索源包括 Work 原名、中文名、排序名、别名，以及公开关联的作者、角色和标签。结果身份始终是 Work ID。
+当前搜索源包括 Work 原名、中文名、别名，以及公开关联的作者、角色和标签。结果身份始终是 Work ID。
 
 小规模数据直接查询规范化表。只有真实数据量证明查询不可接受时，才引入由这些表生成的物化搜索索引；不得让搜索索引成为可独立编辑的第二份资料。
 

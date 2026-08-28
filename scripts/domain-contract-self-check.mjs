@@ -17,6 +17,8 @@ const fixtureTranslationBId = fixtureOriginalId + 2;
 const fixtureOriginalBId = fixtureOriginalId + 3;
 const fixtureTranslationCId = fixtureOriginalId + 4;
 const fixtureIds = [fixtureOriginalId, fixtureTranslationAId, fixtureTranslationBId, fixtureOriginalBId, fixtureTranslationCId];
+const externalWorkIds = [];
+const externalMarker = `External Contract ${process.pid}-${Date.now().toString(36)}`;
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-domain-contract-"));
 
 const ordinaryCases = [
@@ -46,6 +48,7 @@ try {
   await createTranslationFixture();
   uploaderCookie = await login("uploader@dev.local");
   userCookie = await login("user@dev.local");
+  await runExternalWorkChecks();
 
   for (const [fromWorkId, toWorkId, relationType] of ordinaryCases) {
     const response = await expectStatus(
@@ -395,6 +398,12 @@ try {
     try { await expectStatus("cleanup collaboration reverse", `/api/work-relations/${collaborationReverseId}`, mutationRequest("DELETE", uploaderCookie), 200); } catch {}
   }
   try {
+    if (externalWorkIds.length) {
+      await executeLocalSql(
+        `DELETE FROM works WHERE id IN (${externalWorkIds.join(",")})`,
+        "cleanup external work state",
+      );
+    }
     await cleanupLocalState();
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -410,6 +419,74 @@ async function login(email) {
   const match = response.headers.get("set-cookie")?.match(/viprpg_session=([A-Za-z0-9_-]{43})/);
   assert.ok(match, `opaque session cookie for ${email}`);
   return `viprpg_session=${match[1]}`;
+}
+
+async function runExternalWorkChecks() {
+  const engines = [
+    "rpg_maker_xp",
+    "rpg_maker_vx",
+    "rpg_maker_vx_ace",
+    "rpg_maker_mv",
+    "rpg_maker_mz",
+    "rpg_maker_unite",
+    "mixed",
+    "unknown",
+    "other",
+  ];
+  for (const [index, engineFamily] of engines.entries()) {
+    const response = await expectStatus(
+      `external work ${engineFamily}`,
+      "/api/works/external",
+      externalWorkRequest({
+        originalTitle: `${externalMarker} ${index}`,
+        engineFamily,
+      }, `https://example.com/${engineFamily}.zip`),
+      201,
+    );
+    const payload = await response.json();
+    assert.ok(Number.isSafeInteger(payload.workId) && payload.workId > 0, `${engineFamily} returned a work id`);
+    externalWorkIds.push(payload.workId);
+  }
+
+  const externalPage = await fetch(new URL(`/games/${externalWorkIds[0]}`, baseUrl));
+  const externalHtml = await externalPage.text();
+  assert.equal(externalPage.status, 200, "external work page is public");
+  assert.match(externalHtml, /外部下载/);
+  assert.match(externalHtml, /该作品的文件由外部网站提供/);
+  assert.doesNotMatch(externalHtml, /在线游玩/);
+
+  await expectStatus(
+    "2k external work rejected",
+    "/api/works/external",
+    externalWorkRequest({ originalTitle: `${externalMarker} invalid-2k`, engineFamily: "rpg_maker_2003" }, "https://example.com/2k.zip"),
+    400,
+  );
+  await expectStatus(
+    "external work without cover rejected",
+    "/api/works/external",
+    externalWorkRequest({ originalTitle: `${externalMarker} invalid-cover`, engineFamily: "rpg_maker_xp" }, "https://example.com/no-cover.zip", false),
+    400,
+  );
+  await expectStatus(
+    "external work invalid URL rejected",
+    "/api/works/external",
+    externalWorkRequest({ originalTitle: `${externalMarker} invalid-url`, engineFamily: "rpg_maker_xp" }, "javascript:alert(1)"),
+    400,
+  );
+  await assertD1("external work distribution", [
+    {
+      name: "external work has no archive",
+      condition: `(SELECT COUNT(*) FROM archive_versions WHERE work_id=${externalWorkIds[0]}) = 0`,
+    },
+    {
+      name: "external work has one download link",
+      condition: `(SELECT COUNT(*) FROM work_external_links WHERE work_id=${externalWorkIds[0]} AND link_type='download_page') = 1`,
+    },
+    {
+      name: "external work published",
+      condition: `(SELECT status FROM works WHERE id=${externalWorkIds[0]}) = 'published'`,
+    },
+  ]);
 }
 
 async function expectStatus(label, path, init, expected) {
@@ -457,6 +534,12 @@ VALUES
   (${fixtureTranslationCId},'Domain Contract Translation C','领域契约译本 C',0,'ko','published',3,CURRENT_TIMESTAMP);
 INSERT INTO work_uploaders (work_id,user_id) VALUES
   (${fixtureOriginalId},3),(${fixtureTranslationAId},3),(${fixtureTranslationBId},3),(${fixtureOriginalBId},3),(${fixtureTranslationCId},3);
+INSERT INTO work_external_links (work_id,label,url,link_type) VALUES
+  (${fixtureOriginalId},'外部下载','https://example.com/domain-original','download_page'),
+  (${fixtureTranslationAId},'外部下载','https://example.com/domain-translation-a','download_page'),
+  (${fixtureTranslationBId},'外部下载','https://example.com/domain-translation-b','download_page'),
+  (${fixtureOriginalBId},'外部下载','https://example.com/domain-original-b','download_page'),
+  (${fixtureTranslationCId},'外部下载','https://example.com/domain-translation-c','download_page');
 `, "create translation fixture");
 }
 
@@ -481,6 +564,23 @@ async function executeLocalSql(sql, label) {
 
 function jsonRequest(body, cookie) {
   return jsonMutation("POST", body, cookie);
+}
+
+function externalWorkRequest(metadata, downloadUrl, includeCover = true) {
+  const form = new FormData();
+  form.set("metadata", JSON.stringify({
+    ...metadata,
+    isOriginal: false,
+    language: "zh-CN",
+    aliases: [],
+    tags: [],
+    characters: [],
+  }));
+  form.set("download_url", downloadUrl);
+  if (includeCover) {
+    form.set("cover", new File([new Uint8Array([1, 2, 3])], "cover.png", { type: "image/png" }));
+  }
+  return { method: "POST", headers: { origin, cookie: uploaderCookie }, body: form };
 }
 
 function jsonMutation(method, body, cookie) {

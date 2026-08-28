@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "VIPRPG.org",
-  description: "RPG Maker 2000/2003 作品发现、游玩与下载空间",
+  description: "RPG Maker 作品发现、游玩与下载空间",
   icons: {
     icon: "/icon/windI.png",
   },
