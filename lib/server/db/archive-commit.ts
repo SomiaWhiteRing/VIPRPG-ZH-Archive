@@ -153,21 +153,16 @@ export async function commitArchiveImport(
   if (metadata.target.mode === "update") {
     const existingWork = await getD1()
       .prepare(
-        `SELECT chinese_title,sort_title,description,original_release_date,
-           original_release_precision,engine_detail,icon_blob_sha256,thumbnail_blob_sha256,
-           status,extra_json
+        `SELECT chinese_title,description,original_release_date,
+           original_release_precision,status,extra_json
          FROM works WHERE id = ? LIMIT 1`,
       )
       .bind(workId)
       .first<{
         chinese_title: string | null;
-        sort_title: string | null;
         description: string | null;
         original_release_date: string | null;
         original_release_precision: "year" | "month" | "day" | "unknown";
-        engine_detail: string | null;
-        icon_blob_sha256: string | null;
-        thumbnail_blob_sha256: string | null;
         status: "draft" | "published" | "hidden";
         extra_json: string;
       }>();
@@ -179,10 +174,6 @@ export async function commitArchiveImport(
           chineseTitle: mergeNullableWorkText(
             metadata.game.chineseTitle,
             existingWork.chinese_title,
-          ),
-          sortTitle: mergeNullableWorkText(
-            metadata.game.sortTitle,
-            existingWork.sort_title,
           ),
           description: mergeNullableWorkText(
             metadata.game.description,
@@ -197,15 +188,6 @@ export async function commitArchiveImport(
             metadata.game.originalReleasePrecision !== "unknown"
               ? metadata.game.originalReleasePrecision
               : existingWork.original_release_precision,
-          engineDetail: mergeNullableWorkText(
-            metadata.game.engineDetail,
-            existingWork.engine_detail,
-          ),
-          iconBlobSha256:
-            metadata.game.iconBlobSha256 ?? existingWork.icon_blob_sha256,
-          thumbnailBlobSha256:
-            metadata.game.thumbnailBlobSha256 ??
-            existingWork.thumbnail_blob_sha256,
           status: existingWork.status,
           extra: {
             ...parseJsonObject(existingWork.extra_json),
@@ -367,21 +349,7 @@ function validateManifest(
     throw new Error("Manifest game originality does not match metadata");
   }
 
-  if (manifest.archiveVersion.label !== metadata.archiveVersion.label) {
-    throw new Error("Manifest archive version label does not match metadata");
-  }
-
   const snapshotFields: Array<[unknown, unknown, string]> = [
-    [
-      manifest.archiveVersion.isProofread,
-      metadata.archiveVersion.isProofread,
-      "proofread flag",
-    ],
-    [
-      manifest.archiveVersion.isImageEdited,
-      metadata.archiveVersion.isImageEdited,
-      "image edit flag",
-    ],
     [
       manifest.archiveVersion.sourceName,
       metadata.archiveVersion.sourceName,
@@ -391,16 +359,6 @@ function validateManifest(
       manifest.archiveVersion.sourceUrl,
       metadata.archiveVersion.sourceUrl,
       "source URL",
-    ],
-    [
-      manifest.archiveVersion.executablePath,
-      metadata.archiveVersion.executablePath,
-      "executable path",
-    ],
-    [
-      manifest.archiveVersion.rightsNotes,
-      metadata.archiveVersion.rightsNotes,
-      "rights notes",
     ],
   ];
   for (const [manifestValue, metadataValue, field] of snapshotFields) {
@@ -543,13 +501,8 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
   }
   const archiveVersion = parsed.archiveVersion;
   if (
-    typeof archiveVersion.label !== "string" ||
-    typeof archiveVersion.isProofread !== "boolean" ||
-    typeof archiveVersion.isImageEdited !== "boolean" ||
     !isNullableString(archiveVersion.sourceName) ||
     !isNullableString(archiveVersion.sourceUrl) ||
-    !isNullableString(archiveVersion.executablePath) ||
-    !isNullableString(archiveVersion.rightsNotes) ||
     typeof archiveVersion.createdAt !== "string" ||
     typeof archiveVersion.filePolicyVersion !== "string" ||
     typeof archiveVersion.packerVersion !== "string" ||
@@ -652,7 +605,6 @@ function normalizeMetadata(
   if (
     typeof game.originalTitle !== "string" ||
     !isNullableString(game.chineseTitle) ||
-    !isNullableString(game.sortTitle) ||
     !isNullableString(game.description) ||
     !isNullableString(game.originalReleaseDate) ||
     !isEnum(game.originalReleasePrecision, [
@@ -664,16 +616,19 @@ function normalizeMetadata(
     !isEnum(game.engineFamily, [
       "rpg_maker_2000",
       "rpg_maker_2003",
+      "rpg_maker_2003_maniac",
+      "rpg_maker_xp",
+      "rpg_maker_vx",
+      "rpg_maker_vx_ace",
+      "rpg_maker_mv",
+      "rpg_maker_mz",
+      "rpg_maker_unite",
       "mixed",
       "unknown",
       "other",
     ] as const) ||
-    !isNullableString(game.engineDetail) ||
     typeof game.isOriginal !== "boolean" ||
     typeof game.language !== "string" ||
-    !isNullableString(game.iconBlobSha256) ||
-    !isNullableString(game.thumbnailBlobSha256) ||
-    typeof game.usesManiacsPatch !== "boolean" ||
     !isEnum(game.status, ["draft", "published", "hidden"] as const) ||
     !isRecord(game.extra) ||
     !Array.isArray(game.browsingImageBlobSha256s)
@@ -685,13 +640,8 @@ function normalizeMetadata(
   }
 
   if (
-    typeof archiveVersion.label !== "string" ||
-    typeof archiveVersion.isProofread !== "boolean" ||
-    typeof archiveVersion.isImageEdited !== "boolean" ||
     !isNullableString(archiveVersion.sourceName) ||
-    !isNullableString(archiveVersion.sourceUrl) ||
-    !isNullableString(archiveVersion.executablePath) ||
-    !isNullableString(archiveVersion.rightsNotes)
+    !isNullableString(archiveVersion.sourceUrl)
   ) {
     throw new HttpError(400, "Upload metadata archive fields are invalid");
   }
@@ -724,8 +674,9 @@ function normalizeMetadata(
   const browsingImageBlobSha256s = normalizeOptionalHashList(
     game.browsingImageBlobSha256s,
   );
-  const iconBlobSha256 = normalizeOptionalHash(game.iconBlobSha256);
-  const thumbnailBlobSha256 = normalizeOptionalHash(game.thumbnailBlobSha256);
+  if (target.mode === "create" && browsingImageBlobSha256s.length === 0) {
+    throw new HttpError(400, "新建游戏必须提供封面图");
+  }
   const tags = unique(
     metadata.tags
       .map((tag) => normalizeEntityName(requireString(tag, "tag")))
@@ -863,8 +814,8 @@ function normalizeMetadata(
     })
     .filter((link) => link.label && link.url);
 
-  if (!game.originalTitle.trim() || !archiveVersion.label.trim()) {
-    throw new HttpError(400, "游戏原名和快照名称不能为空");
+  if (!game.originalTitle.trim()) {
+    throw new HttpError(400, "游戏原名不能为空");
   }
 
   return {
@@ -873,23 +824,16 @@ function normalizeMetadata(
       ...metadata.game,
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
-      sortTitle: normalizeNullableWorkText(game.sortTitle),
       description: normalizeNullableWorkText(game.description),
       originalReleaseDate: normalizeNullableWorkText(game.originalReleaseDate),
-      engineDetail: normalizeNullableWorkText(game.engineDetail),
       language: game.language.trim(),
-      iconBlobSha256,
-      thumbnailBlobSha256,
       browsingImageBlobSha256s,
     },
     target: { mode: target.mode, workId: target.workId },
     archiveVersion: {
       ...metadata.archiveVersion,
-      label: archiveVersion.label.trim(),
       sourceName: archiveVersion.sourceName?.trim() || null,
       sourceUrl: normalizeHttpUrl(archiveVersion.sourceUrl, "来源网址"),
-      executablePath: archiveVersion.executablePath?.trim() || null,
-      rightsNotes: archiveVersion.rightsNotes?.trim() || null,
     },
     workTitles,
     characters,
@@ -913,11 +857,7 @@ function mergeNullableWorkText(
 
 function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
   return unique(
-    [
-      metadata.game.iconBlobSha256,
-      metadata.game.thumbnailBlobSha256,
-      ...metadata.game.browsingImageBlobSha256s,
-    ].filter((sha256): sha256 is string => Boolean(sha256)),
+    metadata.game.browsingImageBlobSha256s,
   );
 }
 
@@ -987,26 +927,20 @@ async function resolveTargetWork(
   const result = await database
     .prepare(
       `INSERT INTO works (
-        original_title, chinese_title, sort_title, description, is_original, language,
-        original_release_date, original_release_precision, engine_family, engine_detail,
-        uses_maniacs_patch, icon_blob_sha256, thumbnail_blob_sha256, status, extra_json,
+        original_title, chinese_title, description, is_original, language,
+        original_release_date, original_release_precision, engine_family, status, extra_json,
         created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL)`,
     )
     .bind(
       game.originalTitle,
       game.chineseTitle,
-      game.sortTitle,
       game.description,
       game.isOriginal ? 1 : 0,
       game.language,
       game.originalReleaseDate,
       game.originalReleasePrecision,
       game.engineFamily,
-      game.engineDetail,
-      game.usesManiacsPatch ? 1 : 0,
-      game.iconBlobSha256,
-      game.thumbnailBlobSha256,
       jsonText(game.extra),
       user.id,
     )
@@ -1125,19 +1059,14 @@ async function finalizeArchiveCommit(input: {
   statements.push(
     database
       .prepare(
-        `UPDATE works
+      `UPDATE works
        SET chinese_title = ?,
-         sort_title = ?,
          description = ?,
          is_original = ?,
          language = ?,
          original_release_date = ?,
          original_release_precision = ?,
          engine_family = ?,
-         engine_detail = ?,
-         uses_maniacs_patch = ?,
-         icon_blob_sha256 = COALESCE(?, icon_blob_sha256),
-         thumbnail_blob_sha256 = COALESCE(?, thumbnail_blob_sha256),
          status = ?,
          extra_json = ?,
          updated_at = CURRENT_TIMESTAMP,
@@ -1149,17 +1078,12 @@ async function finalizeArchiveCommit(input: {
       )
       .bind(
         game.chineseTitle,
-        game.sortTitle,
         game.description,
         game.isOriginal ? 1 : 0,
         game.language,
         game.originalReleaseDate,
         game.originalReleasePrecision,
         game.engineFamily,
-        game.engineDetail,
-        game.usesManiacsPatch ? 1 : 0,
-        game.iconBlobSha256,
-        game.thumbnailBlobSha256,
         game.status,
         jsonText(game.extra),
         game.status,
@@ -1350,7 +1274,7 @@ async function finalizeArchiveCommit(input: {
           .bind(sha256),
       );
     }
-    if (creating) {
+    if (creating || browsingImages.length > 0) {
       statements.push(
         database
           .prepare(
@@ -1373,7 +1297,7 @@ async function finalizeArchiveCommit(input: {
           .bind(
             input.workId,
             index + 1,
-            creating && index === 0 ? 1 : 0,
+            index === 0 ? 1 : 0,
             sha256,
           ),
       );
@@ -1475,13 +1399,8 @@ async function insertArchiveVersion(input: {
     .prepare(
       `INSERT INTO archive_versions (
         work_id,
-        archive_label,
-        is_proofread,
-        is_image_edited,
         source_name,
         source_url,
-        executable_path,
-        rights_notes,
         manifest_sha256,
         file_policy_version,
         packer_version,
@@ -1501,17 +1420,12 @@ async function insertArchiveVersion(input: {
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft')`,
     )
     .bind(
       input.workId,
-      input.metadata.archiveVersion.label,
-      input.metadata.archiveVersion.isProofread ? 1 : 0,
-      input.metadata.archiveVersion.isImageEdited ? 1 : 0,
       input.metadata.archiveVersion.sourceName,
       input.metadata.archiveVersion.sourceUrl,
-      input.metadata.archiveVersion.executablePath,
-      input.metadata.archiveVersion.rightsNotes,
       input.manifestSha256,
       manifest.archiveVersion.filePolicyVersion,
       manifest.archiveVersion.packerVersion,
@@ -1763,11 +1677,6 @@ function requireString(value: unknown, field: string): string {
     throw new HttpError(400, `Upload metadata ${field} is invalid`);
   }
   return value;
-}
-
-function normalizeOptionalHash(value: string | null): string | null {
-  if (value === null || value.trim() === "") return null;
-  return normalizeSha256(value);
 }
 
 function normalizeOptionalHashList(values: unknown[]): string[] {

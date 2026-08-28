@@ -41,11 +41,6 @@ export function HomeGameCard({ work }: { work: GameWorkSummary }) {
             {languageLabel(work.language)}
           </span>
           {work.isOriginal ? <span className="inline-flex min-h-6 items-center rounded-full bg-accent/15 px-2 py-0.5 text-xs font-bold text-accent">本站原创</span> : null}
-          {work.usesManiacsPatch ? (
-            <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              Maniacs Patch
-            </span>
-          ) : null}
           {work.tags.slice(0, 2).map((tag) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"

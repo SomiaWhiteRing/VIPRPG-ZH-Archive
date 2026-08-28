@@ -5,7 +5,6 @@ export type WebPlayMetadata = {
   title: string;
   originalTitle: string;
   chineseTitle: string | null;
-  archiveLabel: string;
   manifestSha256: string;
   downloadZipBuilderVersion: string;
   webPlayInstallerVersion: string;
@@ -19,8 +18,6 @@ export type WebPlayMetadata = {
   installTotalSizeBytes: number;
   estimatedR2GetCount: number;
   engineFamily: string;
-  usesManiacsPatch: boolean;
-  canPlay: boolean;
 };
 
 export type WebPlayInstallStatus =
@@ -46,7 +43,6 @@ export type WebPlayInstallation = {
   webPlayInstallerVersion: string;
   easyRpgRuntimeVersion: string;
   title: string;
-  archiveLabel: string;
   status: WebPlayInstallStatus;
   phase: WebPlayInstallPhase;
   createdAt: string;

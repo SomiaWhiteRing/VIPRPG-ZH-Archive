@@ -3,7 +3,6 @@ import { getD1 } from "@/lib/server/db/d1";
 type DownloadRow = {
   id: number;
   work_id: number;
-  archive_label: string;
   manifest_sha256: string;
   packer_version: string;
   total_files: number;
@@ -12,7 +11,6 @@ type DownloadRow = {
   work_original_title: string;
   work_chinese_title: string | null;
   engine_family: string;
-  uses_maniacs_patch: number;
 };
 type TotalsRow = {
   total_files: number | null;
@@ -21,7 +19,6 @@ type TotalsRow = {
 
 export type ArchiveDownloadRecord = {
   id: number;
-  archiveLabel: string;
   manifestSha256: string;
   packerVersion: string;
   totalFiles: number;
@@ -31,7 +28,6 @@ export type ArchiveDownloadRecord = {
   workOriginalTitle: string;
   workChineseTitle: string | null;
   engineFamily: string;
-  usesManiacsPatch: boolean;
 };
 export type WebPlayInstallTargetTotals = {
   totalFiles: number;
@@ -65,7 +61,6 @@ export async function getPublishedArchiveDownloadRecord(
     .prepare(
       `SELECT av.id,
           av.work_id,
-          av.archive_label,
           av.manifest_sha256,
           av.packer_version,
           av.total_files,
@@ -73,8 +68,7 @@ export async function getPublishedArchiveDownloadRecord(
           av.estimated_r2_get_count,
           w.original_title AS work_original_title,
           w.chinese_title AS work_chinese_title,
-          w.engine_family,
-          w.uses_maniacs_patch
+          w.engine_family
        FROM archive_versions av
        JOIN works w ON w.id = av.work_id
        WHERE av.id = ?
@@ -88,7 +82,6 @@ export async function getPublishedArchiveDownloadRecord(
   if (!row || !row.work_original_title) return null;
   return {
     id: row.id,
-    archiveLabel: row.archive_label,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,
@@ -98,6 +91,5 @@ export async function getPublishedArchiveDownloadRecord(
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
     engineFamily: row.engine_family,
-    usesManiacsPatch: row.uses_maniacs_patch === 1,
   };
 }

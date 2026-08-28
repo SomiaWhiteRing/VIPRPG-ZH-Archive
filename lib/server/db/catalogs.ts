@@ -106,23 +106,24 @@ export async function deleteCatalog(
 
 export async function replaceCatalogItems(
   catalogId: number,
-  items: Array<{ workId: number; note?: string | null }>,
+  items: Array<{ workId: number; sortOrder: number; note?: string | null }>,
   actor: ArchiveUser,
 ): Promise<CatalogDetail> {
   await ownedCatalog(catalogId, actor, "catalog.reorder_own");
   if (!Array.isArray(items)) throw new HttpError(400, "目录项目顺序不合法");
   const seen = new Set<number>();
-  const normalized = items.map((item, index) => {
+  const normalized = items.map((item) => {
     if (
       !item ||
       typeof item !== "object" ||
       !Number.isSafeInteger(item.workId) ||
       item.workId <= 0 ||
+      !Number.isSafeInteger(item.sortOrder) ||
       seen.has(item.workId)
     )
       throw new HttpError(400, "目录项目顺序不合法");
     seen.add(item.workId);
-    return { workId: item.workId, sortOrder: index, note: clean(item.note) };
+    return { workId: item.workId, sortOrder: item.sortOrder, note: clean(item.note) };
   });
   if (normalized.length) {
     const rows = await getD1()
@@ -151,6 +152,31 @@ export async function replaceCatalogItems(
       .bind(catalogId),
   ];
   await database.batch(statements);
+  return requiredCatalog(catalogId);
+}
+
+export async function addCatalogItem(
+  catalogId: number,
+  workId: number,
+  note: string | null | undefined,
+  actor: ArchiveUser,
+): Promise<CatalogDetail> {
+  await ownedCatalog(catalogId, actor, "catalog.reorder_own");
+  if (!Number.isSafeInteger(workId) || workId <= 0)
+    throw new HttpError(400, "目录项目不合法");
+  const work = await getD1()
+    .prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`)
+    .bind(workId)
+    .first<{ id: number }>();
+  if (!work) throw new HttpError(400, "目录只能收录已发布游戏");
+  await getD1().batch([
+    getD1()
+      .prepare(`INSERT OR IGNORE INTO catalog_items(catalog_id,work_id,sort_order,note) VALUES(?,?,0,?)`)
+      .bind(catalogId, workId, clean(note)),
+    getD1()
+      .prepare(`UPDATE catalogs SET updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(catalogId),
+  ]);
   return requiredCatalog(catalogId);
 }
 

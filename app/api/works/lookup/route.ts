@@ -9,13 +9,8 @@ type WorkLookupRow = {
   original_title: string;
   chinese_title: string | null;
   alias_titles: string | null;
-  sort_title: string | null;
   description: string | null;
   engine_family: string;
-  engine_detail: string | null;
-  uses_maniacs_patch: number;
-  icon_blob_sha256: string | null;
-  thumbnail_blob_sha256: string | null;
   language: string;
   is_original: number;
   can_edit: number;
@@ -49,13 +44,8 @@ export async function GET(request: Request) {
             WHERE wt2.work_id = w.id
               AND wt2.title_type = 'alias'
           ) AS alias_titles,
-          w.sort_title,
           w.description,
           w.engine_family,
-          w.engine_detail,
-          w.uses_maniacs_patch,
-          w.icon_blob_sha256,
-          w.thumbnail_blob_sha256,
           w.language,
           w.is_original,
           CASE
@@ -118,13 +108,8 @@ export async function GET(request: Request) {
         originalTitle: work.original_title,
         chineseTitle: work.chinese_title,
         aliases: splitAliases(work.alias_titles),
-        sortTitle: work.sort_title,
         description: work.description,
         engineFamily: work.engine_family,
-        engineDetail: work.engine_detail,
-        usesManiacsPatch: work.uses_maniacs_patch === 1,
-        iconBlobSha256: work.icon_blob_sha256,
-        thumbnailBlobSha256: work.thumbnail_blob_sha256,
         language: work.language,
         isOriginal: work.is_original === 1,
         canEdit: work.can_edit === 1,

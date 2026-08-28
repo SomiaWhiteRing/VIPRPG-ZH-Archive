@@ -1,5 +1,6 @@
 import { requireAnyPermission } from "@/lib/server/auth/authorize";
 import {
+  addCatalogItem,
   removeCatalogItem,
   replaceCatalogItems,
 } from "@/lib/server/db/catalogs";
@@ -17,8 +18,38 @@ export async function POST(
   ]);
   if ("response" in auth) return auth.response;
   try {
+    const body = (await readJsonObject(request, "Invalid catalog item body")) as {
+      workId?: number;
+      note?: string | null;
+    };
+    const workId = body.workId;
+    if (typeof workId !== "number" || !Number.isSafeInteger(workId) || workId <= 0)
+      return json({ ok: false, error: "workId is required" }, { status: 400 });
+    return json({
+      ok: true,
+      catalog: await addCatalogItem(
+        parsePositiveId((await context.params).id, "catalog id"),
+        workId,
+        body.note,
+        auth.user,
+      ),
+    });
+  } catch (error) {
+    return jsonError("Catalog item update failed", error);
+  }
+}
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireAnyPermission(request, [
+    "catalog.reorder_own",
+    "catalog.manage_any",
+  ]);
+  if ("response" in auth) return auth.response;
+  try {
     const body = (await readJsonObject(request, "Invalid catalog items body")) as {
-      items?: Array<{ workId: number; note?: string | null }>;
+      items?: Array<{ workId: number; sortOrder: number; note?: string | null }>;
     };
     if (!Array.isArray(body.items))
       return json({ ok: false, error: "items is required" }, { status: 400 });
@@ -33,12 +64,6 @@ export async function POST(
   } catch (error) {
     return jsonError("Catalog item update failed", error);
   }
-}
-export async function PATCH(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
-  return POST(request, context);
 }
 export async function DELETE(
   request: Request,

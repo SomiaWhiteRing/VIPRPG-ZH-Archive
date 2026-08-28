@@ -38,9 +38,6 @@ export function ArchiveVersionTable({
           <tr key={archiveVersion.id}>
             <td>
               <strong>{archiveVersion.workTitle}</strong>
-              <span className="text-sm text-muted">
-                {archiveVersion.archiveLabel}
-              </span>
               <span className="font-mono text-sm text-primary text-sm text-muted">
                 #{archiveVersion.id} / {languageLabel(archiveVersion.language)}
               </span>

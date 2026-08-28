@@ -58,6 +58,7 @@ export default async function CatalogPage({
               items={catalog.items.map((item) => ({
                 workId: item.workId,
                 title: item.title,
+                sortOrder: item.sortOrder,
                 note: item.note,
               }))}
             />

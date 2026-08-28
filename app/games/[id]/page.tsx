@@ -23,6 +23,9 @@ import { RelationEditor } from "./relation-editor";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import { parsePositiveId } from "@/lib/server/http/request";
+import { getWorkCommunitySummary, listPickerEmojis, listRootComments } from "@/lib/server/db/work-community";
+import { listCatalogs } from "@/lib/server/db/catalogs";
+import { WorkCommunityPanel } from "./work-community-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +44,12 @@ export default async function GameDetailPage({
   const primaryMedia =
     work.media.find((media) => media.isPrimary)?.blobSha256 ??
     work.previewBlobSha256;
+  const [community, comments, emojis, catalogs] = await Promise.all([
+    getWorkCommunitySummary(work.id, currentUser?.id ?? null),
+    listRootComments(work.id, currentUser?.id ?? null, null),
+    listPickerEmojis(),
+    currentUser ? listCatalogs() : Promise.resolve([]),
+  ]);
   const translations = [
     ...work.translations,
     ...work.parallelTranslations.filter(
@@ -104,24 +113,28 @@ export default async function GameDetailPage({
               { label: engineLabel(work.engineFamily) },
               { label: languageLabel(work.language) },
               { label: work.isOriginal ? "本站原创" : "社区收录" },
-              ...(work.usesManiacsPatch ? [{ label: "Maniacs Patch" }] : []),
             ]}
           />
           <WorkActionBar
+            isAuthenticated={Boolean(currentUser)}
+            workId={work.id}
             archive={
               current
                 ? {
-                    id: current.id,
-                    label:
-                      publicCopy(current.archiveLabel) ?? current.archiveLabel,
+                id: current.id,
                     downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
                     totalFiles: current.totalFiles,
                     totalSizeBytes: current.totalSizeBytes,
                   }
                 : null
             }
-            canPlayInBrowser={!work.usesManiacsPatch}
+            canPlayInBrowser
           />
+          {work.engineFamily === "rpg_maker_2003_maniac" ? (
+            <p className="text-sm text-amber-700">
+              该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。
+            </p>
+          ) : null}
           {work.description ? <p>{publicCopy(work.description)}</p> : null}
           <StatList
             items={[
@@ -144,14 +157,10 @@ export default async function GameDetailPage({
         {current ? (
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div>
-              <strong>{publicCopy(current.archiveLabel)}</strong>
+              <strong>归档 #{current.id}</strong>
               <ChipList
                 compact
-                items={[
-                  { label: languageLabel(current.language) },
-                  { label: current.isProofread ? "已校对" : "未校对" },
-                  { label: current.isImageEdited ? "已修图" : "未修图" },
-                ]}
+                items={[{ label: languageLabel(current.language) }]}
               />
               <p className="text-sm text-muted">
                 {formatNumber(current.totalFiles)} 文件 ·{" "}
@@ -163,12 +172,24 @@ export default async function GameDetailPage({
             </div>
             <ArchiveActions
               archiveId={current.id}
-              canPlayInBrowser={!work.usesManiacsPatch}
+              canPlayInBrowser
             />
           </div>
         ) : (
           <p className="text-sm text-muted">当前还没有可下载快照。</p>
         )}
+      </Pane>
+      <Pane heading="互动">
+        <WorkCommunityPanel
+          currentUserId={currentUser?.id ?? null}
+          emojis={emojis}
+          initialComments={comments.items}
+          initialNextCursor={comments.nextCursor}
+          initialWishlisted={community.wishlistedByMe}
+          stats={community}
+          catalogs={catalogs.filter((catalog) => catalog.ownerUserId === currentUser?.id)}
+          workId={work.id}
+        />
       </Pane>
       <section
         className="grid gap-5 scroll-mt-24 lg:grid-cols-2"

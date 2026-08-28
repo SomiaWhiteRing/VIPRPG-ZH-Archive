@@ -7,7 +7,6 @@ export type AdminArchiveVersion = {
   id: number;
   workId: number;
   workTitle: string;
-  archiveLabel: string;
   language: string;
   status: "draft" | "published" | "hidden" | "deleted";
   isCurrent: boolean;
@@ -26,7 +25,6 @@ type Row = {
   work_id: number;
   work_title: string;
   language: string;
-  archive_label: string;
   status: "draft" | "published" | "hidden" | "deleted";
   is_current: number;
   total_files: number;
@@ -74,7 +72,6 @@ export async function listArchiveVersionsForAdmin(
           av.work_id,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.language,
-          av.archive_label,
           av.status,
           av.is_current,
           av.total_files,
@@ -193,7 +190,6 @@ async function required(id: number): Promise<AdminArchiveVersion> {
           av.work_id,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.language,
-          av.archive_label,
           av.status,
           av.is_current,
           av.total_files,
@@ -221,7 +217,6 @@ function mapRow(row: Row): AdminArchiveVersion {
     id: row.id,
     workId: row.work_id,
     workTitle: row.work_title,
-    archiveLabel: row.archive_label,
     language: row.language,
     status: row.status,
     isCurrent: row.is_current === 1,

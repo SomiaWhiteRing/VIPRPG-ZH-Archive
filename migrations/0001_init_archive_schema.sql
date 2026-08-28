@@ -59,7 +59,7 @@ SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.u
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","work_comment.manage_any","custom_emoji.manage","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -239,7 +239,6 @@ CREATE TABLE IF NOT EXISTS works (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   original_title TEXT NOT NULL,
   chinese_title TEXT,
-  sort_title TEXT,
   description TEXT,
   is_original INTEGER NOT NULL DEFAULT 0 CHECK (is_original IN (0, 1)),
   language TEXT NOT NULL DEFAULT 'zh-CN' CHECK (
@@ -250,12 +249,13 @@ CREATE TABLE IF NOT EXISTS works (
     original_release_precision IN ('year', 'month', 'day', 'unknown')
   ) DEFAULT 'unknown',
   engine_family TEXT NOT NULL CHECK (
-    engine_family IN ('rpg_maker_2000', 'rpg_maker_2003', 'mixed', 'unknown', 'other')
+    engine_family IN (
+      'rpg_maker_2000', 'rpg_maker_2003', 'rpg_maker_2003_maniac',
+      'rpg_maker_xp', 'rpg_maker_vx', 'rpg_maker_vx_ace',
+      'rpg_maker_mv', 'rpg_maker_mz', 'rpg_maker_unite',
+      'mixed', 'unknown', 'other'
+    )
   ) DEFAULT 'unknown',
-  engine_detail TEXT,
-  uses_maniacs_patch INTEGER NOT NULL DEFAULT 0,
-  icon_blob_sha256 TEXT REFERENCES blobs(sha256),
-  thumbnail_blob_sha256 TEXT REFERENCES blobs(sha256),
   status TEXT NOT NULL CHECK (
     status IN ('draft', 'published', 'hidden', 'deleted')
   ) DEFAULT 'draft',
@@ -266,11 +266,69 @@ CREATE TABLE IF NOT EXISTS works (
   published_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_works_status_title
-  ON works(status, sort_title, original_title);
-
 CREATE INDEX IF NOT EXISTS idx_works_original_title
   ON works(original_title);
+
+CREATE TABLE IF NOT EXISTS work_engagement_stats (
+  work_id INTEGER PRIMARY KEY REFERENCES works(id) ON DELETE CASCADE,
+  view_count INTEGER NOT NULL DEFAULT 0 CHECK (view_count >= 0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_work_entries (
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_played_at TEXT,
+  wishlisted_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (work_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_work_entries_played
+  ON user_work_entries(user_id, last_played_at DESC, work_id)
+  WHERE last_played_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_user_work_entries_wishlist
+  ON user_work_entries(user_id, wishlisted_at DESC, work_id)
+  WHERE wishlisted_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS work_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  root_comment_id INTEGER REFERENCES work_comments(id) ON DELETE CASCADE,
+  reply_to_comment_id INTEGER REFERENCES work_comments(id) ON DELETE SET NULL,
+  body TEXT,
+  status TEXT NOT NULL CHECK (status IN ('published', 'hidden', 'deleted')) DEFAULT 'published',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  edited_at TEXT,
+  deleted_at TEXT,
+  CHECK (
+    (status = 'deleted' AND body IS NULL)
+    OR (status <> 'deleted' AND body IS NOT NULL AND length(trim(body)) > 0)
+  ),
+  CHECK (root_comment_id IS NULL OR root_comment_id <> id),
+  CHECK (reply_to_comment_id IS NULL OR reply_to_comment_id <> id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_comments_public_roots
+  ON work_comments(work_id, created_at, id)
+  WHERE root_comment_id IS NULL AND status = 'published';
+
+CREATE INDEX IF NOT EXISTS idx_work_comments_root_replies
+  ON work_comments(root_comment_id, created_at, id)
+  WHERE root_comment_id IS NOT NULL AND status = 'published';
+
+CREATE INDEX IF NOT EXISTS idx_work_comments_author
+  ON work_comments(user_id, updated_at DESC, id);
+
+CREATE TABLE IF NOT EXISTS work_comment_likes (
+  comment_id INTEGER NOT NULL REFERENCES work_comments(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (comment_id, user_id)
+);
 
 CREATE TABLE IF NOT EXISTS work_uploaders (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
@@ -485,13 +543,8 @@ CREATE INDEX IF NOT EXISTS idx_catalog_items_order
 CREATE TABLE IF NOT EXISTS archive_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  archive_label TEXT NOT NULL,
-  is_proofread INTEGER NOT NULL DEFAULT 0,
-  is_image_edited INTEGER NOT NULL DEFAULT 0,
   source_name TEXT,
   source_url TEXT,
-  executable_path TEXT,
-  rights_notes TEXT,
   manifest_sha256 TEXT NOT NULL,
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
@@ -573,21 +626,26 @@ CREATE TABLE IF NOT EXISTS core_packs (
   status TEXT NOT NULL DEFAULT 'active'
 );
 
-CREATE TRIGGER IF NOT EXISTS works_require_active_media_blobs
-BEFORE INSERT ON works
-WHEN (NEW.icon_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.icon_blob_sha256), '') <> 'active')
-  OR (NEW.thumbnail_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.thumbnail_blob_sha256), '') <> 'active')
-BEGIN
-  SELECT RAISE(ABORT, 'work media blob must be active');
-END;
+CREATE TABLE IF NOT EXISTS custom_emojis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shortcode TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '站点',
+  visible_in_picker INTEGER NOT NULL DEFAULT 1 CHECK (visible_in_picker IN (0, 1)),
+  image_blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
+  status TEXT NOT NULL CHECK (status IN ('active', 'retired')) DEFAULT 'active',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (length(shortcode) BETWEEN 1 AND 64),
+  CHECK (shortcode NOT GLOB '*[^A-Za-z0-9_+-]*')
+);
 
-CREATE TRIGGER IF NOT EXISTS works_update_require_active_media_blobs
-BEFORE UPDATE OF icon_blob_sha256, thumbnail_blob_sha256 ON works
-WHEN (NEW.icon_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.icon_blob_sha256), '') <> 'active')
-  OR (NEW.thumbnail_blob_sha256 IS NOT NULL AND COALESCE((SELECT status FROM blobs WHERE sha256 = NEW.thumbnail_blob_sha256), '') <> 'active')
-BEGIN
-  SELECT RAISE(ABORT, 'work media blob must be active');
-END;
+CREATE INDEX IF NOT EXISTS idx_custom_emojis_picker
+  ON custom_emojis(category, shortcode)
+  WHERE status = 'active' AND visible_in_picker = 1;
+
+CREATE INDEX IF NOT EXISTS idx_custom_emojis_blob
+  ON custom_emojis(image_blob_sha256, status);
 
 CREATE TABLE IF NOT EXISTS archive_version_blob_refs (
   archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
@@ -742,14 +800,13 @@ WHEN NEW.status IN ('purging', 'purged')
   )
   OR NEW.status IN ('purging', 'purged')
   AND EXISTS (
-    SELECT 1 FROM works
-    WHERE icon_blob_sha256 = OLD.sha256
-      OR thumbnail_blob_sha256 = OLD.sha256
+    SELECT 1 FROM media_assets
+    WHERE blob_sha256 = OLD.sha256
   )
   OR NEW.status IN ('purging', 'purged')
   AND EXISTS (
-    SELECT 1 FROM media_assets
-    WHERE blob_sha256 = OLD.sha256
+    SELECT 1 FROM custom_emojis
+    WHERE image_blob_sha256 = OLD.sha256
   )
 BEGIN
   SELECT RAISE(ABORT, 'referenced blob cannot be purged');

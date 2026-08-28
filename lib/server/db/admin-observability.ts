@@ -34,7 +34,6 @@ export type RecentDownloadBuild = {
   id: number;
   archiveVersionId: number;
   workTitle: string;
-  archiveLabel: string;
   downloadCount: number;
   cacheHitCount: number;
   cacheMissCount: number;
@@ -50,7 +49,6 @@ export type RecentDownloadBuild = {
 export type ExpensiveArchiveVersion = {
   archiveVersionId: number;
   workTitle: string;
-  archiveLabel: string;
   totalFiles: number;
   totalSizeBytes: number;
   estimatedR2GetCount: number;
@@ -154,7 +152,6 @@ type RecentDownloadRow = {
   id: number;
   archive_version_id: number;
   work_title: string;
-  archive_label: string;
   download_count: number;
   cache_hit_count: number;
   cache_miss_count: number;
@@ -170,7 +167,6 @@ type RecentDownloadRow = {
 type ExpensiveArchiveRow = {
   archive_version_id: number;
   work_title: string;
-  archive_label: string;
   total_files: number;
   total_size_bytes: number;
   estimated_r2_get_count: number;
@@ -390,7 +386,6 @@ async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
         db.id,
         db.archive_version_id,
         COALESCE(w.chinese_title, w.original_title) AS work_title,
-        av.archive_label,
         db.download_count,
         db.cache_hit_count,
         db.cache_miss_count,
@@ -413,7 +408,6 @@ async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
     id: row.id,
     archiveVersionId: row.archive_version_id,
     workTitle: row.work_title,
-    archiveLabel: row.archive_label,
     downloadCount: row.download_count,
     cacheHitCount: row.cache_hit_count,
     cacheMissCount: row.cache_miss_count,
@@ -433,7 +427,6 @@ async function listExpensiveArchiveVersions(): Promise<ExpensiveArchiveVersion[]
       `SELECT
         av.id AS archive_version_id,
         COALESCE(w.chinese_title, w.original_title) AS work_title,
-        av.archive_label,
         av.total_files,
         av.total_size_bytes,
         av.estimated_r2_get_count
@@ -448,7 +441,6 @@ async function listExpensiveArchiveVersions(): Promise<ExpensiveArchiveVersion[]
   return (rows.results ?? []).map((row) => ({
     archiveVersionId: row.archive_version_id,
     workTitle: row.work_title,
-    archiveLabel: row.archive_label,
     totalFiles: row.total_files,
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,

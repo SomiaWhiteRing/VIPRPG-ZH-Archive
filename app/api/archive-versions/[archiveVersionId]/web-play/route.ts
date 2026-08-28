@@ -50,7 +50,6 @@ export async function GET(_request: Request, context: RouteContext) {
       title: record.workChineseTitle || record.workOriginalTitle,
       originalTitle: record.workOriginalTitle,
       chineseTitle: record.workChineseTitle,
-      archiveLabel: record.archiveLabel,
       manifestSha256: record.manifestSha256,
       downloadZipBuilderVersion,
       webPlayInstallerVersion,
@@ -64,8 +63,6 @@ export async function GET(_request: Request, context: RouteContext) {
       installTotalSizeBytes: installTarget.totalSizeBytes,
       estimatedR2GetCount: record.estimatedR2GetCount,
       engineFamily: record.engineFamily,
-      usesManiacsPatch: record.usesManiacsPatch,
-      canPlay: !record.usesManiacsPatch,
     });
   } catch (error) {
     return jsonError("Web Play metadata failed", error);

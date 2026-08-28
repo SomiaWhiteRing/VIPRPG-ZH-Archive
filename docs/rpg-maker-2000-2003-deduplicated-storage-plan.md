@@ -191,7 +191,7 @@ GC 实现位于 `lib/server/storage/admin-storage-checks.ts` 和 `worker/archive
 - 上传、preflight、commit 和对象 PUT 都绑定当前用户及 owned import job。
 - 文件类型白名单不等于内容安全；ZIP、路径、hash、大小和计数仍需独立验证。
 - `.exe`、`.dll` 等运行时可以为离线归档保留，但在线游玩本地安装会跳过不需要的运行时文件。
-- 来源、授权和 rights notes 属于 ArchiveVersion 元数据；系统不因技术上可去重就推断内容可分发。
+- 来源属于 ArchiveVersion 元数据；系统不因技术上可去重就推断内容可分发。
 - 媒体、下载和在线游玩入口只读取完整 published 引用链。
 - 高成本操作必须有数量、大小或批次上限，并留下可查询的失败状态。
 

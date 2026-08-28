@@ -51,7 +51,6 @@ export default async function AdminWorksPage() {
               </td>
               <td>
                 <StatusBadge kind="publication" value={work.status} />
-                {work.usesManiacsPatch ? <span className="text-sm text-muted">Maniacs Patch</span> : null}
               </td>
               <td>
                 {formatNumber(work.archiveVersionCount)} 个归档快照

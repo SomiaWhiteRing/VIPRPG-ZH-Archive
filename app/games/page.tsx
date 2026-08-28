@@ -21,6 +21,13 @@ const ENGINES = [
   ["all", "全部"],
   ["rpg_maker_2000", "RPG Maker 2000"],
   ["rpg_maker_2003", "RPG Maker 2003"],
+  ["rpg_maker_2003_maniac", "RPG Maker 2003 Maniac"],
+  ["rpg_maker_xp", "RPG Maker XP"],
+  ["rpg_maker_vx", "RPG Maker VX"],
+  ["rpg_maker_vx_ace", "RPG Maker VX Ace"],
+  ["rpg_maker_mv", "RPG Maker MV"],
+  ["rpg_maker_mz", "RPG Maker MZ"],
+  ["rpg_maker_unite", "RPG Maker Unite"],
   ["mixed", "混合"],
   ["unknown", "未知"],
   ["other", "其他"],
@@ -37,7 +44,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const sort =
     requestedSort === "title" || requestedSort === "engine"
       ? requestedSort
-      : "updated";
+      : "id";
   const page = Math.max(
     1,
     Number.parseInt(stringParam(params.page) || "1", 10) || 1,
@@ -66,7 +73,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
     character: character ? String(character) : undefined,
     language: language || undefined,
     original: original || undefined,
-    sort: sort !== "updated" ? sort : undefined,
+    sort: sort !== "id" ? sort : undefined,
   };
 
   return (
@@ -85,7 +92,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
         aria-label="游戏排序"
       >
         <span>排序</span>
-        {(["updated", "title", "engine"] as const).map((value) => (
+        {(["id", "title", "engine"] as const).map((value) => (
           <Link
             className={
               sort === value
@@ -94,12 +101,12 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
             }
             href={gamesHref({
               ...activeParams,
-              sort: value === "updated" ? undefined : value,
+              sort: value === "id" ? undefined : value,
             })}
             key={value}
           >
-            {value === "updated"
-              ? "最近更新"
+            {value === "id"
+              ? "编号"
               : value === "title"
                 ? "标题"
                 : "引擎"}
@@ -191,7 +198,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
       character ||
       language ||
       original ||
-      sort !== "updated" ? (
+      sort !== "id" ? (
         <div
           className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted"
           aria-label="当前筛选"

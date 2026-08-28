@@ -313,14 +313,22 @@ try {
   catalogId = catalogPayload.catalog?.id;
   assert.ok(Number.isSafeInteger(catalogId) && catalogId > 0, "catalog returned an id");
 
+  for (const [workId, note] of [[5, "first"], [4, "second"], [2, "third"]]) {
+    await expectStatus(
+      "catalog single item add",
+      `/api/catalogs/${catalogId}/items`,
+      jsonRequest({ workId, note }, uploaderCookie),
+      200,
+    );
+  }
   const orderResponse = await expectStatus(
-    "catalog full ordering",
+    "catalog explicit ordering",
     `/api/catalogs/${catalogId}/items`,
-    jsonRequest({ items: [{ workId: 5, note: "first" }, { workId: 4, note: "second" }, { workId: 2, note: "third" }] }, uploaderCookie),
+    jsonMutation("PATCH", { items: [{ workId: 5, sortOrder: 10, note: "first" }, { workId: 4, sortOrder: -1, note: "second" }, { workId: 2, sortOrder: 0, note: "third" }] }, uploaderCookie),
     200,
   );
   const orderPayload = await orderResponse.json();
-  assert.deepEqual(orderPayload.catalog.items.map((item) => item.workId), [5, 4, 2], "catalog keeps submitted order");
+  assert.deepEqual(orderPayload.catalog.items.map((item) => item.workId), [4, 2, 5], "catalog keeps explicit sort order");
 
   await assertD1("catalog owner and ordering", [
     {
@@ -329,7 +337,7 @@ try {
     },
     {
       name: "catalog sort order",
-      condition: `(SELECT GROUP_CONCAT(work_id, ',') FROM (SELECT work_id FROM catalog_items WHERE catalog_id=${catalogId} ORDER BY sort_order,work_id)) = '5,4,2'`,
+      condition: `(SELECT GROUP_CONCAT(work_id, ',') FROM (SELECT work_id FROM catalog_items WHERE catalog_id=${catalogId} ORDER BY sort_order,work_id)) = '4,2,5'`,
     },
   ]);
 
@@ -342,7 +350,7 @@ try {
   await expectStatus(
     "non-owner catalog reorder rejected",
     `/api/catalogs/${catalogId}/items`,
-    jsonRequest({ items: [{ workId: 2 }] }, userCookie),
+    jsonMutation("PATCH", { items: [{ workId: 2, sortOrder: 0 }] }, userCookie),
     403,
   );
   await expectStatus(
@@ -359,7 +367,7 @@ try {
     200,
   );
   const removeItemPayload = await removeItemResponse.json();
-  assert.deepEqual(removeItemPayload.catalog.items.map((item) => item.workId), [5, 2], "catalog item removal preserves remaining order");
+  assert.deepEqual(removeItemPayload.catalog.items.map((item) => item.workId), [2, 5], "catalog item removal preserves remaining order");
 
   await expectStatus("catalog deletion", `/api/catalogs/${catalogId}`, mutationRequest("DELETE", uploaderCookie), 200);
   catalogId = null;
@@ -440,13 +448,13 @@ DELETE FROM works WHERE id IN (${fixtureIds.join(",")});
 
 async function createTranslationFixture() {
   await executeLocalSql(`
-INSERT INTO works (id,original_title,chinese_title,sort_title,is_original,language,status,created_by_user_id,published_at)
+INSERT INTO works (id,original_title,chinese_title,is_original,language,status,created_by_user_id,published_at)
 VALUES
-  (${fixtureOriginalId},'Domain Contract Original','领域契约原版','领域契约原版',0,'ja','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationAId},'Domain Contract Translation A','领域契约译本 A','领域契约译本 A',0,'zh-CN','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationBId},'Domain Contract Translation B','领域契约译本 B','领域契约译本 B',0,'en','published',3,CURRENT_TIMESTAMP),
-  (${fixtureOriginalBId},'Domain Contract Original B','领域契约原版 B','领域契约原版 B',0,'ja','published',3,CURRENT_TIMESTAMP),
-  (${fixtureTranslationCId},'Domain Contract Translation C','领域契约译本 C','领域契约译本 C',0,'ko','published',3,CURRENT_TIMESTAMP);
+  (${fixtureOriginalId},'Domain Contract Original','领域契约原版',0,'ja','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationAId},'Domain Contract Translation A','领域契约译本 A',0,'zh-CN','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationBId},'Domain Contract Translation B','领域契约译本 B',0,'en','published',3,CURRENT_TIMESTAMP),
+  (${fixtureOriginalBId},'Domain Contract Original B','领域契约原版 B',0,'ja','published',3,CURRENT_TIMESTAMP),
+  (${fixtureTranslationCId},'Domain Contract Translation C','领域契约译本 C',0,'ko','published',3,CURRENT_TIMESTAMP);
 INSERT INTO work_uploaders (work_id,user_id) VALUES
   (${fixtureOriginalId},3),(${fixtureTranslationAId},3),(${fixtureTranslationBId},3),(${fixtureOriginalBId},3),(${fixtureTranslationCId},3);
 `, "create translation fixture");

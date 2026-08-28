@@ -20,14 +20,14 @@
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
 - Cache API 不作为游戏文件主存储；只用于 EasyRPG runtime 壳资源缓存或后续 fallback。
 - EasyRPG 存档先沿用 Emscripten IDBFS；存档云同步不进入 MVP。
-- `works.uses_maniacs_patch = true` 的作品在 MVP 阶段隐藏在线游玩入口，只保留下载。
+- `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
 
 ## 2. 总体流程
 
 ```text
 用户进入 /play/{archiveVersionId}
   -> 查询 ArchiveVersion 和 Work 元数据
-  -> uses_maniacs_patch=true 时不展示在线游玩入口
+  -> RPG Maker 2003 Maniac 作品显示兼容性提示
   -> 检查 IndexedDB 是否已有 ready 安装
   -> 没有 ready 安装时启动 Web Worker
   -> Web Worker fetch 现有下载 ZIP URL
@@ -241,7 +241,7 @@ Service Worker scope 固定覆盖 `/play/`。
 
 `/play/{archiveVersionId}` 至少需要这些状态：
 
-- 不支持：作品使用 Maniacs Patch，显示只能下载。
+- Maniac 作品：允许尝试在线游玩，并显示兼容性提示。
 - 未安装：显示游戏大小、浏览器存储用量、安装按钮。
 - 安装中：显示 ZIP 下载进度、解包进度、当前文件、已写入容量；关闭页面前用 `beforeunload` 拦截。
 - 安装失败：显示失败阶段、错误和“清理重装”。
@@ -299,15 +299,15 @@ const persisted = await navigator.storage.persist();
 - ZIP entry 解包必须拒绝路径穿越。
 - 同一页面内同一 `playKey` 同时只能有一个安装任务；刷新或崩溃后的遗留 `installing` 状态按中断安装处理并清理重装。跨标签页强锁可在后续缓存管理阶段补入。
 - 安装完成前不能启动 EasyRPG。
-- `uses_maniacs_patch = true` 的作品 MVP 不展示在线游玩入口。
+- `rpg_maker_2003_maniac` 作品允许在线游玩，但页面显示兼容性提示。
 - 非 UTF-8 路径问题会直接影响 EasyRPG 运行；如果真实样本出现路径损坏，应回到主架构中的 `path_bytes_b64` 暂缓决策重新评估。
 - Service Worker 和 OPFS 都是同源能力，跨域官方播放器无法访问本站 OPFS，因此不能用跨域 EasyRPG iframe。
 - Service Worker 对非法路径返回 400，对缺失文件返回 404，并把路径和错误原因发送到页面日志面板。
 
 ## 15. MVP 验收
 
-- 未使用 Maniacs Patch 的 ArchiveVersion 显示在线游玩入口。
-- 使用 Maniacs Patch 的 Work 不显示在线游玩入口。
+- 所有可归档的 ArchiveVersion 显示在线游玩入口。
+- RPG Maker 2003 Maniac 作品显示兼容性提示。
 - 首次点击在线游玩时显示下载进度、解包进度、当前文件和本地缓存状态。
 - 下载 ZIP 复用现有下载 URL；命中 Workers Cache/CDN 时下载观测记录不增加 R2 Get。
 - 安装完成后 OPFS 中有 Web Play 运行目录、`index.json`、`pack-index.json` 和少量 `packs/*.pack`；不会出现完整 ZIP，也不会出现逐文件资源树。
@@ -335,7 +335,6 @@ const persisted = await navigator.storage.persist();
 - 跨标签页安装锁和半成品安装修复。
 - 安装校验和修复：按 `pack-index.json` 中的 CRC32 和 canonical manifest SHA-256 检查 pack 切片。
 - 存档导出、导入和云同步。
-- 支持管理员手动开启 Maniacs Patch 游戏的实验性在线游玩。
 - 对超大游戏增加下载前空间预估、排队安装和后台恢复策略。
 
 ## 17. 参考链接

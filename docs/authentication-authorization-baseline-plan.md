@@ -69,6 +69,8 @@
 | 上传 | import 与 storage permission | import job 属于当前上传者且状态允许操作 |
 | 作品资料 | read/update permission | own/any、目标状态及关联一致性 |
 | 作品关系与目录 | create/update/delete permission | 创建者、owner、反向关系和成员约束 |
+| 作品评论与点赞 | `work_comment.manage_any`（管理员）或作者 own-scope | published Work、活跃用户、主楼/回复关系和评论状态 |
+| 自定义表情 | `custom_emoji.manage` | 管理员上传、图片 blob 状态、shortcode 不可改名、只能退休或恢复 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |
 | 用户与角色 | user/role permission 或 bootstrap 身份 | 双方 priority、角色 kind/status、自操作禁令 |
 | 媒体、下载与游玩 | 公开入口 | Work、ArchiveVersion 和引用链完整 published |
@@ -83,6 +85,7 @@
 - `npm run check:security:api`：匿名 401、缺权 403、同源保护、ownership 和层级约束。
 - `npm run check` 与 `npm run build`：类型、lint 和生产构建。
 - Worker preview：下载、媒体和在线游玩只读取完整 published 引用链。
+- 评论、点赞、游玩和待玩写请求沿用同源校验；公开评论还必须确认 Work、主楼和作者均处于可公开状态。
 
 涉及有状态 D1 或 API 的检查必须串行执行，并在测试前使用明确的本地 reset/seed 基线。
 

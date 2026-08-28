@@ -87,10 +87,24 @@ export const VERIFICATION_EMAIL_HINT =
 
 export function engineLabel(value: string): string {
   switch (value) {
+    case "rpg_maker_xp":
+      return "RPG Maker XP";
     case "rpg_maker_2000":
       return "RPG Maker 2000";
     case "rpg_maker_2003":
       return "RPG Maker 2003";
+    case "rpg_maker_2003_maniac":
+      return "RPG Maker 2003 Maniac";
+    case "rpg_maker_vx":
+      return "RPG Maker VX";
+    case "rpg_maker_vx_ace":
+      return "RPG Maker VX Ace";
+    case "rpg_maker_mv":
+      return "RPG Maker MV";
+    case "rpg_maker_mz":
+      return "RPG Maker MZ";
+    case "rpg_maker_unite":
+      return "RPG Maker Unite";
     case "mixed":
       return "混合引擎";
     case "other":

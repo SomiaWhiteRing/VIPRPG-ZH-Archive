@@ -26,7 +26,6 @@ import type {
   WebPlayStorageSnapshot,
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { formatBytes } from "@/lib/format";
-import { publicCopy } from "@/lib/public-copy";
 import { installStatusLabel } from "@/lib/labels";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
@@ -52,7 +51,7 @@ declare global {
   }
 }
 
-export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
+export function WebPlayClient({ metadata, isAuthenticated }: { metadata: WebPlayMetadata; isAuthenticated: boolean }) {
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(null);
   const [loadingLocalState, setLoadingLocalState] = useState(true);
   const [installSessionActive, setInstallSessionActive] = useState(false);
@@ -70,6 +69,15 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
   const interruptedInstalling = installing && !installSessionActive;
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void fetch(`/api/works/${metadata.workId}/played`, {
+      method: "POST",
+      credentials: "same-origin",
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [isAuthenticated, metadata.workId]);
 
   const addLog = useCallback((level: WebPlayLog["level"], message: string) => {
     setLogs((current) =>
@@ -347,16 +355,6 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
     ];
   }, [installation]);
 
-  if (!metadata.canPlay) {
-    return (
-      <div className="grid gap-3">
-        <Pane heading="在线游玩不可用">
-          <p>该作品使用 Maniacs Patch，暂不支持在线游玩，请下载 ZIP。</p>
-        </Pane>
-      </div>
-    );
-  }
-
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
       <aside className="grid gap-3">
@@ -386,10 +384,6 @@ export function WebPlayClient({ metadata }: { metadata: WebPlayMetadata }) {
               {
                 label: "安装内容",
                 value: `${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`,
-              },
-              {
-                label: "当前快照",
-                value: publicCopy(metadata.archiveLabel) ?? metadata.archiveLabel,
               },
             ]}
             variant="tiles"

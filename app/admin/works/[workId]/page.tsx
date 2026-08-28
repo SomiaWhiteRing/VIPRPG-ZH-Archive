@@ -63,9 +63,6 @@ export default async function AdminWorkEditPage({
                 name="chinese_title"
               />
             </FormField>
-            <FormField label="排序名">
-              <Input defaultValue={work.sortTitle ?? ""} name="sort_title" />
-            </FormField>
             <FormField label="原作发布日期">
               <Input
                 defaultValue={work.originalReleaseDate ?? ""}
@@ -98,28 +95,17 @@ export default async function AdminWorkEditPage({
                 options={[
                   { value: "rpg_maker_2000", label: "RPG Maker 2000" },
                   { value: "rpg_maker_2003", label: "RPG Maker 2003" },
+                  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac" },
+                  { value: "rpg_maker_xp", label: "RPG Maker XP" },
+                  { value: "rpg_maker_vx", label: "RPG Maker VX" },
+                  { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace" },
+                  { value: "rpg_maker_mv", label: "RPG Maker MV" },
+                  { value: "rpg_maker_mz", label: "RPG Maker MZ" },
+                  { value: "rpg_maker_unite", label: "RPG Maker Unite" },
                   { value: "mixed", label: "混合" },
                   { value: "unknown", label: "未知" },
                   { value: "other", label: "其他" },
                 ]}
-              />
-            </FormField>
-            <FormField label="引擎备注">
-              <Input
-                defaultValue={work.engineDetail ?? ""}
-                name="engine_detail"
-              />
-            </FormField>
-            <FormField label="图标 blob SHA-256">
-              <Input
-                defaultValue={work.iconBlobSha256 ?? ""}
-                name="icon_blob_sha256"
-              />
-            </FormField>
-            <FormField label="缩略图 blob SHA-256">
-              <Input
-                defaultValue={work.thumbnailBlobSha256 ?? ""}
-                name="thumbnail_blob_sha256"
               />
             </FormField>
             <FormField label="状态">
@@ -133,11 +119,6 @@ export default async function AdminWorkEditPage({
                 ]}
               />
             </FormField>
-            <CheckboxField
-              defaultChecked={work.usesManiacsPatch}
-              label="使用 Maniacs Patch"
-              name="uses_maniacs_patch"
-            />
             <FormField label="简介" wide>
               <Textarea
                 defaultValue={work.description ?? ""}

@@ -26,31 +26,34 @@ import type { MetadataBlobUpload } from "@/app/upload/upload-types";
 
 type FileInputMode = "folder" | "zip";
 type EngineFamily =
-  "rpg_maker_2000" | "rpg_maker_2003" | "mixed" | "unknown" | "other";
+  | "rpg_maker_2000"
+  | "rpg_maker_2003"
+  | "rpg_maker_2003_maniac"
+  | "rpg_maker_xp"
+  | "rpg_maker_vx"
+  | "rpg_maker_vx_ace"
+  | "rpg_maker_mv"
+  | "rpg_maker_mz"
+  | "rpg_maker_unite"
+  | "mixed"
+  | "unknown"
+  | "other";
 type FlatMetadata = {
   originalTitle: string;
   chineseTitle: string;
   aliasTitles: string;
-  sortTitle: string;
   engineFamily: EngineFamily;
-  engineDetail: string;
   description: string;
   tags: string;
   characters: string;
   creatorName: string;
   creatorUrl: string;
-  usesManiacsPatch: boolean;
   isOriginal: boolean;
   targetMode: "create" | "update";
   targetWorkId: number | null;
-  archiveLabel: string;
   language: string;
   sourceName: string;
   sourceUrl: string;
-  executablePath: string;
-  rightsNotes: string;
-  isProofread: boolean;
-  isImageEdited: boolean;
 };
 
 type WorkLookupResult = {
@@ -58,13 +61,8 @@ type WorkLookupResult = {
   originalTitle: string;
   chineseTitle: string | null;
   aliases: string[];
-  sortTitle: string | null;
   description: string | null;
   engineFamily: EngineFamily | "mixed" | "unknown" | "other";
-  engineDetail: string | null;
-  usesManiacsPatch: boolean;
-  iconBlobSha256: string | null;
-  thumbnailBlobSha256: string | null;
   language: string;
   isOriginal: boolean;
   canEdit: boolean;
@@ -78,14 +76,11 @@ type CurrentUser = {
 };
 
 type ImageSelections = {
-  icon: File | null;
-  thumbnail: File | null;
+  cover: File | null;
   browsingImages: File[];
 };
 
 type ImageHashes = {
-  iconBlobSha256: string | null;
-  thumbnailBlobSha256: string | null;
   browsingImageBlobSha256s: string[];
 };
 
@@ -95,26 +90,18 @@ const defaultForm: FlatMetadata = {
   originalTitle: "",
   chineseTitle: "",
   aliasTitles: "",
-  sortTitle: "",
   engineFamily: "rpg_maker_2000",
-  engineDetail: "",
   description: "",
   tags: "",
   characters: "",
   creatorName: "",
   creatorUrl: "",
-  usesManiacsPatch: false,
   isOriginal: false,
   targetMode: "create",
   targetWorkId: null,
-  archiveLabel: "默认归档",
   language: "zh-CN",
   sourceName: "",
   sourceUrl: "",
-  executablePath: "RPG_RT.exe",
-  rightsNotes: "",
-  isProofread: false,
-  isImageEdited: false,
 };
 
 export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
@@ -123,8 +110,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [form, setForm] = useState<FlatMetadata>(defaultForm);
   const [imageSelections, setImageSelections] = useState<ImageSelections>({
-    icon: null,
-    thumbnail: null,
+    cover: null,
     browsingImages: [],
   });
   const [lookupState, setLookupState] = useState<{
@@ -138,6 +124,10 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const canUploadFiles =
+    form.engineFamily === "rpg_maker_2000" ||
+    form.engineFamily === "rpg_maker_2003" ||
+    form.engineFamily === "rpg_maker_2003_maniac";
 
   const selectedSourceSize = selectedFiles.reduce(
     (sum, file) => sum + file.size,
@@ -186,7 +176,14 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
   }, [form.originalTitle]);
 
   function onSourceFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setSelectedFiles(Array.from(event.target.files ?? []));
+    const files = Array.from(event.target.files ?? []);
+    setSelectedFiles(files);
+    if (!form.originalTitle.trim()) {
+      const inferred = inferTitleFromFiles(files, mode);
+      if (inferred) {
+        setForm((current) => ({ ...current, originalTitle: inferred }));
+      }
+    }
   }
 
   function onOriginalTitleChange(value: string) {
@@ -197,7 +194,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     setForm((current) => ({
       ...current,
       originalTitle: value,
-      sortTitle: current.sortTitle || value,
       targetMode: "create",
       targetWorkId: null,
     }));
@@ -216,11 +212,8 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
       originalTitle,
       chineseTitle: work.chineseTitle ?? "",
       aliasTitles: work.aliases.join("\n"),
-      sortTitle: work.sortTitle || current.sortTitle || originalTitle,
       engineFamily,
-      engineDetail: work.engineDetail ?? "",
       description: work.description ?? "",
-      usesManiacsPatch: work.usesManiacsPatch,
       language: work.language || "zh-CN",
       isOriginal: work.isOriginal,
       targetMode: "update",
@@ -232,6 +225,11 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
     event.preventDefault();
     setSubmitError(null);
 
+    if (!canUploadFiles) {
+      setSubmitError("站点不支持上传非 RPG Maker 2000/2003 系游戏，请提供可供下载的外部链接。");
+      return;
+    }
+
     if (selectedFiles.length === 0) {
       setSubmitError("请先选择游戏目录或 ZIP。");
       return;
@@ -242,8 +240,12 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
       return;
     }
 
-    if (!form.archiveLabel.trim()) {
-      setSubmitError("请填写归档名称。");
+    if (!selectedWork && !imageSelections.cover) {
+      setSubmitError("新建游戏必须选择封面图。");
+      return;
+    }
+    if (selectedWork && !imageSelections.cover && imageSelections.browsingImages.length) {
+      setSubmitError("更新游戏时，选择浏览图也需要同时选择封面图。");
       return;
     }
 
@@ -276,7 +278,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
       <aside className="rounded-lg border border-border bg-card p-4">
         <Pane>
           <SectionHeading eyebrow="上传来源" title="游戏文件" />
-          <div
+          {canUploadFiles ? <div
             className="flex flex-wrap gap-2"
             role="tablist"
             aria-label="源类型"
@@ -303,9 +305,13 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
             >
               本地 ZIP
             </Button>
-          </div>
+          </div> : null}
 
-          {mode === "folder" ? (
+          {!canUploadFiles ? (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              站点不支持上传非 RPG Maker 2000/2003 系游戏，请提供可供下载的外部链接。
+            </p>
+          ) : mode === "folder" ? (
             <FilePicker
               accept=""
               directory
@@ -360,6 +366,13 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 options={[
                   { value: "rpg_maker_2000", label: "RPG Maker 2000" },
                   { value: "rpg_maker_2003", label: "RPG Maker 2003" },
+                  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac" },
+                  { value: "rpg_maker_xp", label: "RPG Maker XP" },
+                  { value: "rpg_maker_vx", label: "RPG Maker VX" },
+                  { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace" },
+                  { value: "rpg_maker_mv", label: "RPG Maker MV" },
+                  { value: "rpg_maker_mz", label: "RPG Maker MZ" },
+                  { value: "rpg_maker_unite", label: "RPG Maker Unite" },
                   { value: "mixed", label: "混合引擎" },
                   { value: "unknown", label: "未知" },
                   { value: "other", label: "其他引擎" },
@@ -368,12 +381,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 value={form.engineFamily}
               />
             </FormField>
-            <TextField
-              form={form}
-              label="引擎备注"
-              name="engineDetail"
-              setForm={setForm}
-            />
             <TextField
               form={form}
               label="中文名"
@@ -416,34 +423,14 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Label className="flex min-h-10 items-center gap-2">
-              <Checkbox
-                checked={form.usesManiacsPatch}
-                onCheckedChange={(checked) =>
-                  setForm((current) => ({
-                    ...current,
-                    usesManiacsPatch: checked === true,
-                  }))
-                }
-              />
-              Maniacs Patch
-            </Label>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <ImageField
-              label="图标"
-              onChange={(file) =>
-                setImageSelections((current) => ({ ...current, icon: file }))
-              }
-            />
-            <ImageField
-              label="预览图"
+              label="封面图"
+              required={!selectedWork}
               onChange={(file) =>
                 setImageSelections((current) => ({
                   ...current,
-                  thumbnail: file,
+                  cover: file,
                 }))
               }
             />
@@ -465,12 +452,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
           <details className="grid gap-2">
             <summary>更多作品信息</summary>
             <div className="grid gap-4 md:grid-cols-2">
-              <TextField
-                form={form}
-                label="排序标题"
-                name="sortTitle"
-                setForm={setForm}
-              />
               <TextAreaField
                 form={form}
                 label="别名"
@@ -544,18 +525,6 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 value={form.targetMode}
               />
             </FormField>
-            <FormField label="归档名称 *">
-              <Input
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    archiveLabel: event.target.value,
-                  }))
-                }
-                required
-                value={form.archiveLabel}
-              />
-            </FormField>
             <div className="bg-muted/10">
               <FormField label="上传者">
                 <Input
@@ -584,25 +553,7 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
                 name="sourceUrl"
                 setForm={setForm}
               />
-              <TextField
-                form={form}
-                label="可执行入口"
-                name="executablePath"
-                setForm={setForm}
-              />
             </div>
-            <FormField label="版权/授权备注">
-              <Textarea
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    rightsNotes: event.target.value,
-                  }))
-                }
-                rows={3}
-                value={form.rightsNotes}
-              />
-            </FormField>
           </details>
         </Pane>
 
@@ -632,39 +583,13 @@ export function UploadClient({ currentUser }: { currentUser: CurrentUser }) {
               </Label>
             </FormField>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Label className="flex min-h-10 items-center gap-2">
-              <Checkbox
-                checked={form.isProofread}
-                onCheckedChange={(checked) =>
-                  setForm((current) => ({
-                    ...current,
-                    isProofread: checked === true,
-                  }))
-                }
-              />
-              已校对
-            </Label>
-            <Label className="flex min-h-10 items-center gap-2">
-              <Checkbox
-                checked={form.isImageEdited}
-                onCheckedChange={(checked) =>
-                  setForm((current) => ({
-                    ...current,
-                    isImageEdited: checked === true,
-                  }))
-                }
-              />
-              已修图
-            </Label>
-          </div>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             {submitError ? (
               <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">
                 {submitError}
               </p>
             ) : null}
-            <Button disabled={preparing} type="submit">
+            <Button disabled={preparing || !canUploadFiles} type="submit">
               {preparing ? "正在准备…" : "开始导入"}
             </Button>
           </div>
@@ -726,9 +651,11 @@ function TextAreaField({
 
 function ImageField({
   label,
+  required = false,
   onChange,
 }: {
   label: string;
+  required?: boolean;
   onChange: (file: File | null) => void;
 }) {
   return (
@@ -737,6 +664,7 @@ function ImageField({
         accept="image/*"
         label={`选择${label}`}
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+        required={required}
       />
     </FormField>
   );
@@ -748,12 +676,14 @@ function FilePicker({
   label,
   multiple = false,
   onChange,
+  required = false,
 }: {
   accept: string;
   directory?: boolean;
   label: string;
   multiple?: boolean;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
 }) {
   const inputId = `file-picker-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
@@ -769,6 +699,7 @@ function FilePicker({
         id={inputId}
         multiple={multiple}
         onChange={onChange}
+        required={required}
         type="file"
         {...(directory ? { webkitdirectory: "", directory: "" } : {})}
       />
@@ -781,7 +712,6 @@ function buildMetadata(
   imageHashes: ImageHashes,
 ): ArchiveCommitMetadata {
   const originalTitle = form.originalTitle.trim();
-  const chineseTitle = form.chineseTitle.trim();
   const optionalWorkText = (value: string): string | null =>
     form.targetMode === "update" ? value.trim() : cleanNullable(value);
   const creator =
@@ -795,27 +725,16 @@ function buildMetadata(
           },
         ]
       : [];
-  const archiveVersionLabel = `${form.archiveLabel.trim()}・${timestampLabel()}`;
-  const sortTitle =
-    form.targetMode === "update"
-      ? form.sortTitle.trim()
-      : (cleanNullable(form.sortTitle) ?? (chineseTitle || originalTitle));
-
   return {
     game: {
       originalTitle,
       chineseTitle: optionalWorkText(form.chineseTitle),
-      sortTitle,
       description: optionalWorkText(form.description),
       originalReleaseDate: null,
       originalReleasePrecision: "unknown",
       engineFamily: form.engineFamily,
-      engineDetail: optionalWorkText(form.engineDetail),
       isOriginal: form.isOriginal,
       language: form.language,
-      usesManiacsPatch: form.usesManiacsPatch,
-      iconBlobSha256: imageHashes.iconBlobSha256,
-      thumbnailBlobSha256: imageHashes.thumbnailBlobSha256,
       browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s,
       status: "published",
       extra: {},
@@ -825,13 +744,8 @@ function buildMetadata(
       workId: form.targetWorkId,
     },
     archiveVersion: {
-      label: archiveVersionLabel,
-      isProofread: form.isProofread,
-      isImageEdited: form.isImageEdited,
       sourceName: cleanNullable(form.sourceName),
       sourceUrl: cleanNullable(form.sourceUrl),
-      executablePath: cleanNullable(form.executablePath),
-      rightsNotes: cleanNullable(form.rightsNotes),
     },
     workTitles: [
       ...parseAliases(form.aliasTitles).map((title) => ({
@@ -866,20 +780,20 @@ async function prepareSelectedImages(
   input: ImageSelections,
 ): Promise<PreparedImages> {
   const blobs: MetadataBlobUpload[] = [];
-  const iconBlobSha256 = input.icon
-    ? await prepareMetadataImage(input.icon, blobs)
-    : null;
-  const thumbnailBlobSha256 = input.thumbnail
-    ? await prepareMetadataImage(input.thumbnail, blobs)
-    : null;
   const browsingImageBlobSha256s: string[] = [];
+
+  if (input.cover) {
+    browsingImageBlobSha256s.push(
+      await prepareMetadataImage(input.cover, blobs),
+    );
+  }
 
   for (const file of input.browsingImages) {
     browsingImageBlobSha256s.push(await prepareMetadataImage(file, blobs));
   }
 
   return {
-    hashes: { iconBlobSha256, thumbnailBlobSha256, browsingImageBlobSha256s },
+    hashes: { browsingImageBlobSha256s },
     blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()],
   };
 }
@@ -938,20 +852,16 @@ function parseCharacterLines(
     .filter((item) => item.name);
 }
 
-function localDateString(now = new Date()): string {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function timestampLabel(): string {
-  const now = new Date();
-  const date = localDateString(now);
-  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
-    .map((part) => String(part).padStart(2, "0"))
-    .join(":");
-
-  return `${date} ${time}`;
+function inferTitleFromFiles(
+  files: File[],
+  sourceKind: FileInputMode,
+): string {
+  const first = files[0];
+  if (!first) return "";
+  if (sourceKind === "zip") {
+    return first.name.replace(/\.zip$/i, "");
+  }
+  const relativePath = (first as File & { webkitRelativePath?: string })
+    .webkitRelativePath;
+  return relativePath?.split("/")[0] || first.name;
 }

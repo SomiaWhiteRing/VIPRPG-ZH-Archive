@@ -571,13 +571,8 @@ async function buildManifest(input: {
       isOriginal: input.task.metadata.game.isOriginal,
     },
     archiveVersion: {
-      label: input.task.metadata.archiveVersion.label,
-      isProofread: input.task.metadata.archiveVersion.isProofread,
-      isImageEdited: input.task.metadata.archiveVersion.isImageEdited,
       sourceName: input.task.metadata.archiveVersion.sourceName,
       sourceUrl: input.task.metadata.archiveVersion.sourceUrl,
-      executablePath: input.task.metadata.archiveVersion.executablePath,
-      rightsNotes: input.task.metadata.archiveVersion.rightsNotes,
       createdAt: new Date().toISOString(),
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
