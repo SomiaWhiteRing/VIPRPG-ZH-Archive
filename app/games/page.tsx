@@ -77,7 +77,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   };
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
+    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
         <div>
           <h1>全部游戏</h1>

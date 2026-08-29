@@ -35,7 +35,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const directory = query && scope !== "works" ? await listDirectory(scope, query, page) : null;
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
+    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
       <header className="mb-6 border-b border-border pb-6">
         <h1 className="text-3xl font-extrabold tracking-tight">搜索作品与分类</h1>
         <p className="mt-2 text-muted">按标题、作者、标签或角色查找内容。</p>

@@ -14,7 +14,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 sm:py-16">
+    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
       <section
         className="gap-8 border-b border-border py-6 pb-10 hidden md:grid"
         aria-label="作品发现"
@@ -115,7 +115,7 @@ function HomeGameSection({
           </Link>
         </div>
         {works.length > 0 ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {works.map((work) => <HomeGameCard key={work.id} work={work} />)}
           </div>
         ) : (
