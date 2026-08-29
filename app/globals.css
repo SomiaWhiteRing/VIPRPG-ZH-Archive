@@ -19,5 +19,6 @@
   --color-rm2k-green-2: #1a4729;
   --font-sans: "Inter", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
-  --shadow-surface: 0 12px 30px rgb(23 33 43 / 9%);
+  --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
+  --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
 }

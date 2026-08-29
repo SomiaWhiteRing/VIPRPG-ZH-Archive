@@ -36,7 +36,7 @@ export async function SiteHeader() {
       loginLink={
         !currentUser ? (
           <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-md border-2 border-white bg-gradient-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 px-3 text-sm font-semibold text-white shadow-[3px_3px_0_rgb(23_33_43_/_30%),inset_0_0_0_2px_rgb(0_0_0_/_20%)] hover:brightness-110"
+            className="inline-flex min-h-8 items-center justify-center rounded-md border-2 border-white bg-gradient-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 px-3 py-1.5 text-xs font-semibold text-white shadow-[3px_3px_0_rgb(23_33_43_/_30%),inset_0_0_0_2px_rgb(0_0_0_/_20%)] hover:brightness-110"
             href="/login"
           >
             登录
