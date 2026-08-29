@@ -58,7 +58,7 @@ export default async function MePage() {
             <form action="/api/auth/logout" method="post" className="inline-flex">
               <input type="hidden" name="next" value="/" />
               <Button variant="outline" type="submit">
-                退出登录
+                登出
               </Button>
             </form>
           </div>

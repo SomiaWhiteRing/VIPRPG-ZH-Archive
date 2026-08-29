@@ -16,6 +16,8 @@ import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import { AdminLanguageField } from "../language-field";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
+import { StructuredWorkFields } from "../structured-work-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,7 @@ export default async function AdminWorkEditPage({
   return (
     <main>
       <PageHeader
+        compact
         title={work.chineseTitle || work.originalTitle}
         actions={
           <>
@@ -136,53 +139,17 @@ export default async function AdminWorkEditPage({
                 rows={5}
               />
             </FormField>
-            <FormField hint="每行一个标签。" label="标签">
-              <Textarea
-                defaultValue={work.tags.join("\n")}
-                name="tags"
-                rows={5}
+            <div className="md:col-span-2">
+              <StructuredWorkFields
+                characters={work.characters}
+                externalLinks={work.externalLinks}
+                previewBlobSha256s={work.media.filter((media) => media.kind === "preview").map((media) => media.blobSha256)}
+                tags={work.tags}
               />
-            </FormField>
-            <FormField hint="每行一个角色名。" label="登场角色">
-              <Textarea
-                defaultValue={work.characters.join("\n")}
-                name="characters"
-                rows={5}
-              />
-            </FormField>
-            <FormField
-              hint="每行一个图片 blob SHA-256；第一行作为主浏览图。"
-              label="浏览图"
-            >
-              <Textarea
-                defaultValue={work.media
-                  .filter((media) => media.kind === "preview")
-                  .map((media) => media.blobSha256)
-                  .join("\n")}
-                name="preview_blob_sha256s"
-                rows={5}
-              />
-            </FormField>
-            <FormField
-              hint="每行：名称|网址|类型；字段中的 | 写成 \|。"
-              label="外部链接"
-              wide
-            >
-              <Textarea
-                defaultValue={work.externalLinks
-                  .map((link) =>
-                    [link.label, link.url, link.linkType]
-                      .map(escapeLinkPart)
-                      .join("|"),
-                  )
-                  .join("\n")}
-                name="external_links"
-                rows={5}
-              />
-            </FormField>
+            </div>
           </div>
         </Pane>
-        <div className="flex flex-wrap items-center gap-3">
+        <StickySaveBar>
           <Button type="submit">保存游戏资料</Button>
           {work.status === "published" ? (
             <Link
@@ -198,7 +165,7 @@ export default async function AdminWorkEditPage({
           >
             查看归档历史
           </Link>
-        </div>
+        </StickySaveBar>
       </form>
       <Pane heading="关系资料">
         <p className="text-sm text-muted">
@@ -222,7 +189,4 @@ function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
   if (!Number.isSafeInteger(id) || id <= 0) notFound();
   return id;
-}
-function escapeLinkPart(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }

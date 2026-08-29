@@ -253,9 +253,7 @@ export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUse
   const rows = await getD1()
     .prepare(
       `${USER_SELECT}
-      ORDER BY
-        created_at DESC
-      LIMIT 500`,
+      ORDER BY created_at DESC, id DESC`,
     )
     .all<UserRow>();
 
@@ -266,6 +264,24 @@ export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUse
   }
 
   return users.filter((user) => user.id !== actor.id && canManageUser(actor, user));
+}
+
+export async function searchUsersForAdmin(input: {
+  actor: ArchiveUser;
+  query?: string;
+  status?: string;
+  sort?: "default" | "name";
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: ArchiveUser[]; total: number; page: number; pageSize: number }> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 50)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const query = input.query?.trim().toLocaleLowerCase() ?? "";
+  const users = (await listUsersForAdmin(input.actor))
+    .filter((user) => input.status && input.status !== "all" ? user.status === input.status : true)
+    .filter((user) => query ? user.displayName.toLocaleLowerCase().includes(query) || user.email.toLocaleLowerCase().includes(query) || String(user.id) === query : true)
+    .sort((left, right) => input.sort === "name" ? left.displayName.localeCompare(right.displayName, "zh-CN") || right.id - left.id : right.createdAt.localeCompare(left.createdAt) || right.id - left.id);
+  return { items: users.slice((page - 1) * pageSize, page * pageSize), total: users.length, page, pageSize };
 }
 
 export async function setUserStatusForAdmin(input: {

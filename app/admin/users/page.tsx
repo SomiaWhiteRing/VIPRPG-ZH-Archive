@@ -1,12 +1,11 @@
 import { Button } from "@/app/components/ui/button";
-import { BackLink } from "@/app/components/ui/back-link";
-import { InboxLink } from "@/app/components/ui/inbox-link";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
+import { AdminListControls, AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { listUsersForAdmin } from "@/lib/server/db/users";
+import { searchUsersForAdmin } from "@/lib/server/db/users";
 import { listAssignableRoles } from "@/lib/server/db/permissions";
 import { RoleAssignmentControl } from "./role-assignment-control";
 import { formatDate } from "@/lib/format";
@@ -14,29 +13,31 @@ import { hasPermission } from "@/lib/authz/permissions";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminUsersPage() {
+const PAGE_SIZE = 50;
+
+export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const adminUser = await requirePagePermission("/admin/users", "user.read");
   const canAssignRoles = hasPermission(adminUser, "user.role.assign");
   const canUpdateStatus = hasPermission(adminUser, "user.status.update");
-  const [users, roles, unreadInboxCount] = await Promise.all([
-    listUsersForAdmin(adminUser),
+  const params = await searchParams;
+  const query = searchParam(params.q);
+  const status = allowed(searchParam(params.status), ["all", "active", "disabled"], "all");
+  const sort = allowed(searchParam(params.sort), ["default", "name"], "default");
+  const page = parseAdminPage(params.page);
+  const [result, roles] = await Promise.all([
+    searchUsersForAdmin({ actor: adminUser, query, status, sort, page, pageSize: PAGE_SIZE }),
     canAssignRoles ? listAssignableRoles(adminUser) : Promise.resolve([]),
-    countUnreadInboxItemsForUser(adminUser),
   ]);
 
   return (
     <main>
       <PageHeader
+        compact
         title="用户与上传权限"
-        actions={
-          <>
-            <BackLink href="/admin" label="返回管理端" />
-            <InboxLink unread={unreadInboxCount} />
-          </>
-        }
+        subtitle="管理账户状态以及当前管理员有权分配的角色。"
       />
-
-      <TableWrap label="用户列表">
+      <AdminListControls action="/admin/users" noun="用户" query={query} status={status} statusOptions={[{ value: "all", label: "全部状态" }, { value: "active", label: "正常" }, { value: "disabled", label: "已禁用" }]} sort={sort} sortOptions={[{ value: "default", label: "最近注册" }, { value: "name", label: "显示名称" }]} total={result.total} />
+      {result.items.length > 0 ? <TableWrap compact label="用户列表">
         <thead>
           <tr>
             <th>用户</th>
@@ -47,7 +48,7 @@ export default async function AdminUsersPage() {
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => (
+          {result.items.map((user) => (
             <tr key={user.id}>
               <td>
                 <strong>{user.displayName}</strong>
@@ -84,7 +85,10 @@ export default async function AdminUsersPage() {
             </tr>
           ))}
         </tbody>
-      </TableWrap>
+      </TableWrap> : <EmptyState title="没有找到匹配的用户。" />}
+      <AdminPagination basePath="/admin/users" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort }} />
     </main>
   );
 }
+
+function allowed<T extends string>(value: string, values: readonly T[], fallback: T): T { return values.includes(value as T) ? value as T : fallback; }

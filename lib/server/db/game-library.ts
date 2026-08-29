@@ -158,6 +158,7 @@ export type AdminArchiveVersionEdit = {
 
 type Filters = {
   query?: string;
+  status?: string;
   engine?: string;
   tag?: number;
   character?: number;
@@ -378,6 +379,34 @@ export async function listEditableWorksForAdmin(
   limit = 200,
 ): Promise<GameWorkSummary[]> {
   return listGameWorks({ includeNonPublic: true, limit });
+}
+export async function searchEditableWorksForAdmin(input: {
+  query?: string;
+  status?: string;
+  sort?: "id" | "title" | "release";
+  page?: number;
+  pageSize?: number;
+}): Promise<PaginatedGameSearch> {
+  const pageSize = clamp(input.pageSize ?? 50, 1, 100);
+  const page = clamp(input.page ?? 1, 1, 9999);
+  const filters = {
+    query: input.query,
+    status: input.status,
+    includeNonPublic: true,
+  };
+  const total = await countGameWorks(filters);
+  return {
+    items: await listGameWorks({
+      ...filters,
+      sort: input.sort,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 export async function getWorkForAdminEdit(
   workId: number,
@@ -843,6 +872,10 @@ function buildWhere(input: Filters): {
       `(w.original_title LIKE ? OR w.chinese_title LIKE ? OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ?))`,
     );
     binds.push(q, q, q);
+  }
+  if (input.status && input.status !== "all") {
+    clauses.push("w.status=?");
+    binds.push(input.status);
   }
   if (input.engine && input.engine !== "all") {
     clauses.push("w.engine_family=?");

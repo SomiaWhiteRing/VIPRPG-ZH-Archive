@@ -87,6 +87,40 @@ export async function listAdminAuditLogs(limit = 200): Promise<AdminAuditLog[]> 
   }));
 }
 
+export async function searchAdminAuditLogs(input: {
+  query?: string;
+  eventType?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: AdminAuditLog[]; total: number; page: number; pageSize: number }> {
+  const pageSize = clampLimit(input.pageSize ?? 50);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const clauses: string[] = [];
+  const binds: Array<string | number> = [];
+  if (input.query?.trim()) {
+    const value = `%${input.query.trim()}%`;
+    clauses.push("(u.display_name LIKE ? OR COALESCE(a.email,u.email) LIKE ? OR CAST(a.user_id AS TEXT)=?)");
+    binds.push(value, value, input.query.trim());
+  }
+  if (input.eventType?.trim()) {
+    clauses.push("a.event_type LIKE ?");
+    binds.push(`%${input.eventType.trim()}%`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const database = getD1();
+  const [rows, count] = await Promise.all([
+    database.prepare(
+      `SELECT a.id,a.user_id,u.display_name AS actor_name,COALESCE(a.email,u.email) AS email,a.event_type,a.ip_hash,a.user_agent_hash,a.detail_json,a.created_at
+       FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where}
+       ORDER BY datetime(a.created_at) DESC,a.id DESC LIMIT ? OFFSET ?`,
+    ).bind(...binds, pageSize, (page - 1) * pageSize).all<AuditLogRow>(),
+    database.prepare(
+      `SELECT COUNT(*) AS count FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where}`,
+    ).bind(...binds).first<{ count: number }>(),
+  ]);
+  return { items: (rows.results ?? []).map(mapAuditLog), total: count?.count ?? 0, page, pageSize };
+}
+
 export async function listAdminRoleEvents(limit = 100): Promise<AdminRoleEvent[]> {
   const rows = await getD1()
     .prepare(
@@ -136,6 +170,20 @@ function parseDetail(value: string | null): unknown {
   } catch {
     return value;
   }
+}
+
+function mapAuditLog(row: AuditLogRow): AdminAuditLog {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    actorName: row.actor_name,
+    email: row.email,
+    eventType: row.event_type,
+    ipHash: row.ip_hash,
+    userAgentHash: row.user_agent_hash,
+    detail: parseDetail(row.detail_json),
+    createdAt: row.created_at,
+  };
 }
 
 function clampLimit(value: number): number {

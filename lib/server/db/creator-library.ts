@@ -93,6 +93,36 @@ export async function listCreatorsForAdmin(
     .all<CreatorRow>();
   return (rows.results ?? []).map(mapSummary);
 }
+export async function searchCreatorsForAdmin(input: {
+  query?: string;
+  sort?: "default" | "name" | "works";
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: PublicCreatorSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = limitValue(input.pageSize ?? 50, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const binds: Array<string | number> = [];
+  const clauses: string[] = [];
+  if (input.query?.trim()) {
+    const value = `%${input.query.trim()}%`;
+    clauses.push("(c.name LIKE ? OR c.original_name LIKE ?)");
+    binds.push(value, value);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const order = input.sort === "name"
+    ? "c.name ASC,c.id DESC"
+    : input.sort === "works"
+      ? "work_credit_count DESC,c.id DESC"
+      : "c.updated_at DESC,c.id DESC";
+  const database = getD1();
+  const [rows, count] = await Promise.all([
+    database.prepare(`${summarySql()} FROM creators c ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
+      .bind(...binds, pageSize, (page - 1) * pageSize).all<CreatorRow>(),
+    database.prepare(`SELECT COUNT(*) AS count FROM creators c ${where}`)
+      .bind(...binds).first<{ count: number }>(),
+  ]);
+  return { items: (rows.results ?? []).map(mapSummary), total: count?.count ?? 0, page, pageSize };
+}
 export async function getCreatorForAdminEdit(
   id: number,
 ): Promise<AdminCreatorEdit | null> {

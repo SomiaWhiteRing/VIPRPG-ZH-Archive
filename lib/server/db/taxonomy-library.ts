@@ -75,6 +75,30 @@ export async function listCharactersForAdmin(
     .all<CharacterRow>();
   return (rows.results ?? []).map(mapCharacter);
 }
+export async function searchCharactersForAdmin(input: {
+  query?: string;
+  sort?: "default" | "name" | "works";
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: PublicCharacterSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = limitValue(input.pageSize ?? 50, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const binds: Array<string | number> = [];
+  const clauses: string[] = [];
+  if (input.query?.trim()) {
+    const value = `%${input.query.trim()}%`;
+    clauses.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ?)");
+    binds.push(value, value);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const order = input.sort === "name" ? "ch.primary_name ASC,ch.id DESC" : input.sort === "works" ? "work_count DESC,ch.id DESC" : "ch.updated_at DESC,ch.id DESC";
+  const database = getD1();
+  const [rows, count] = await Promise.all([
+    database.prepare(`${characterSql()} FROM characters ch ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize).all<CharacterRow>(),
+    database.prepare(`SELECT COUNT(*) AS count FROM characters ch ${where}`).bind(...binds).first<{ count: number }>(),
+  ]);
+  return { items: (rows.results ?? []).map(mapCharacter), total: count?.count ?? 0, page, pageSize };
+}
 export async function getCharacterForAdminEdit(
   id: number,
 ): Promise<AdminCharacterEdit | null> {
@@ -167,6 +191,28 @@ export async function listTagsForAdmin(
     .bind(limitValue(limit, 500))
     .all<TagRow>();
   return (rows.results ?? []).map(mapTag);
+}
+export async function searchTagsForAdmin(input: {
+  query?: string;
+  namespace?: string;
+  sort?: "default" | "name" | "works";
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: PublicTagSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = limitValue(input.pageSize ?? 50, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const binds: Array<string | number> = [];
+  const clauses: string[] = [];
+  if (input.query?.trim()) { clauses.push("t.name LIKE ?"); binds.push(`%${input.query.trim()}%`); }
+  if (input.namespace && input.namespace !== "all") { clauses.push("t.namespace=?"); binds.push(input.namespace); }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const order = input.sort === "name" ? "t.name ASC,t.id DESC" : input.sort === "works" ? "work_count DESC,t.id DESC" : "t.updated_at DESC,t.id DESC";
+  const database = getD1();
+  const [rows, count] = await Promise.all([
+    database.prepare(`${tagSql()} FROM tags t ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize).all<TagRow>(),
+    database.prepare(`SELECT COUNT(*) AS count FROM tags t ${where}`).bind(...binds).first<{ count: number }>(),
+  ]);
+  return { items: (rows.results ?? []).map(mapTag), total: count?.count ?? 0, page, pageSize };
 }
 export async function getTagForAdminEdit(
   id: number,

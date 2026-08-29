@@ -15,6 +15,7 @@ import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function AdminArchiveVersionEditPage({
   return (
     <main>
       <PageHeader
+        compact
         eyebrow="编辑归档快照"
         title={`归档 #${archiveVersion.id}`}
         subtitle={`所属游戏：${archiveVersion.workTitle}`}
@@ -96,7 +98,7 @@ export default async function AdminArchiveVersionEditPage({
             </FormField>
           </div>
         </Pane>
-        <div className="flex flex-wrap items-center gap-3">
+        <StickySaveBar>
           <Button type="submit">保存归档</Button>
           {archiveVersion.status === "published" &&
           !archiveVersion.isCurrent ? (
@@ -108,7 +110,7 @@ export default async function AdminArchiveVersionEditPage({
               设为当前
             </Button>
           ) : null}
-        </div>
+        </StickySaveBar>
       </form>
       {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
         <form

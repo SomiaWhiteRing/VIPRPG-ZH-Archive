@@ -1,38 +1,71 @@
 import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
-import { BackLink } from "@/app/components/ui/back-link";
 import { ChipList } from "@/app/components/ui/chip-list";
-import { InboxLink } from "@/app/components/ui/inbox-link";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
+import {
+  AdminListControls,
+  AdminPagination,
+  parseAdminPage,
+  searchParam,
+} from "@/app/admin/admin-list-controls";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { listEditableWorksForAdmin } from "@/lib/server/db/game-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { searchEditableWorksForAdmin } from "@/lib/server/db/game-library";
 import { formatNumber, formatBytes } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminWorksPage() {
-  const adminUser = await requirePagePermission("/admin/works", "work.read_private");
-  const [works, unreadInboxCount] = await Promise.all([
-    listEditableWorksForAdmin(200),
-    countUnreadInboxItemsForUser(adminUser),
-  ]);
+const PAGE_SIZE = 50;
+
+export default async function AdminWorksPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await requirePagePermission("/admin/works", "work.read_private");
+  const params = await searchParams;
+  const query = searchParam(params.q);
+  const status = allowed(searchParam(params.status), ["all", "published", "processing", "hidden"], "all");
+  const sort = allowed(searchParam(params.sort), ["default", "title", "release"], "default");
+  const page = parseAdminPage(params.page);
+  const result = await searchEditableWorksForAdmin({
+    query,
+    status,
+    sort: sort === "default" ? "id" : sort,
+    page,
+    pageSize: PAGE_SIZE,
+  });
 
   return (
     <main>
       <PageHeader
+        compact
         title="作品资料维护"
-        actions={
-          <>
-            <BackLink href="/admin" label="返回管理端" />
-            <InboxLink unread={unreadInboxCount} />
-          </>
-        }
+        subtitle="维护作品发布状态、分发方式和关联资料。"
+      />
+      <AdminListControls
+        action="/admin/works"
+        noun="作品"
+        query={query}
+        sort={sort}
+        sortOptions={[
+          { value: "default", label: "最近创建" },
+          { value: "title", label: "标题" },
+          { value: "release", label: "发布日期" },
+        ]}
+        status={status}
+        statusOptions={[
+          { value: "all", label: "全部状态" },
+          { value: "published", label: "已发布" },
+          { value: "processing", label: "处理中" },
+          { value: "hidden", label: "隐藏" },
+        ]}
+        total={result.total}
       />
 
-      <TableWrap label="作品列表" minWidth={980}>
+      {result.items.length > 0 ? <TableWrap compact label="作品列表" minWidth={980}>
         <thead>
           <tr>
             <th>作品</th>
@@ -43,7 +76,7 @@ export default async function AdminWorksPage() {
           </tr>
         </thead>
         <tbody>
-          {works.map((work) => (
+          {result.items.map((work) => (
             <tr key={work.id}>
               <td>
                 <strong>{work.chineseTitle || work.originalTitle}</strong>
@@ -70,21 +103,23 @@ export default async function AdminWorksPage() {
                 )}
               </td>
               <td>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Link className={buttonVariants()} href={`/admin/works/${work.id}`}>
-                    编辑
-                  </Link>
-                  {work.status === "published" ? (
-                    <Link className={buttonVariants({ variant: "outline" })} href={`/games/${work.id}`}>
-                      查看公开页
-                    </Link>
-                  ) : null}
-                </div>
+                <Link className={buttonVariants()} href={`/admin/works/${work.id}`}>编辑</Link>
               </td>
             </tr>
           ))}
         </tbody>
-      </TableWrap>
+      </TableWrap> : <EmptyState title="没有找到匹配的作品。" />}
+      <AdminPagination
+        basePath="/admin/works"
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={result.total}
+        params={{ q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort }}
+      />
     </main>
   );
+}
+
+function allowed<T extends string>(value: string, values: readonly T[], fallback: T): T {
+  return values.includes(value as T) ? value as T : fallback;
 }

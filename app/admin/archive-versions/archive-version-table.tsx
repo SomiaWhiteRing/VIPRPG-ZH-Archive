@@ -23,7 +23,7 @@ export function ArchiveVersionTable({
   }
 
   return (
-    <TableWrap label="文件版本列表" minWidth={1040}>
+    <TableWrap compact label="文件版本列表" minWidth={1040}>
       <thead>
         <tr>
           <th>文件版本</th>

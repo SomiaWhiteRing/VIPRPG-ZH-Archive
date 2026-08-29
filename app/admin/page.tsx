@@ -22,14 +22,11 @@ export default async function AdminPage() {
 
   const metrics = [
     ["用户", formatNumber(summary.users)],
-    ["游戏", formatNumber(summary.works)],
+    ["作品", formatNumber(summary.works)],
     ["文件版本", formatNumber(summary.archiveVersions)],
-    ["文件对象数", formatNumber(summary.blobs.count)],
-    ["文件对象容量", formatBytes(summary.blobs.sizeBytes)],
-    ["引擎公共文件数", formatNumber(summary.corePacks.count)],
-    ["引擎公共文件容量", formatBytes(summary.corePacks.sizeBytes)],
+    ["对象存储", formatBytes(summary.blobs.sizeBytes)],
+    ["公共文件", formatBytes(summary.corePacks.sizeBytes)],
     ["导入任务", formatNumber(summary.importJobs)],
-    ["下载构建记录", formatNumber(summary.downloadBuilds)],
   ];
 
   const importStatus = observability.imports.statusCounts;
@@ -39,34 +36,50 @@ export default async function AdminPage() {
 
   return (
     <main>
-      <PageHeader title="管理控制台" />
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="存储摘要">
-        {metrics.map(([label, value]) => (
-          <article className="min-h-24 rounded-lg border border-border bg-card p-4 shadow-sm" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </article>
-        ))}
-      </section>
+      <PageHeader compact title="管理控制台" subtitle="处理异常、检查近期任务并进入站点治理。" />
 
       <Pane heading="待办与告警">
-        <ul className="mt-3 grid gap-3">
-          <li>
-            <strong>导入任务</strong>
-            <span className="text-sm text-muted">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Link className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50" href="/admin/archive-versions">
+            <strong>导入与版本</strong>
+            <span className={failedImports?.count ? "text-sm text-red-700" : "text-sm text-muted"}>
               进行中 {formatNumber(totalPending)} · 失败 {formatNumber(failedImports?.count ?? 0)}
             </span>
-          </li>
-          <li>
-            <strong>下载</strong>
-            <span className="text-sm text-muted">
-              累计 {formatNumber(observability.downloads.totalDownloadCount)} · 失败{" "}
-              {formatNumber(observability.downloads.failureCount)}
+          </Link>
+          <Link className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50" href="/admin/maintenance">
+            <strong>下载构建</strong>
+            <span className={observability.downloads.failureCount ? "text-sm text-red-700" : "text-sm text-muted"}>
+              失败 {formatNumber(observability.downloads.failureCount)} · 累计 {formatNumber(observability.downloads.totalDownloadCount)}
             </span>
-          </li>
-        </ul>
-        <div className="flex flex-wrap items-center gap-3">
+          </Link>
+        </div>
+        {!failedImports?.count && !totalPending && !observability.downloads.failureCount ? <p className="mt-3 text-sm text-muted">当前没有待处理的任务或失败记录。</p> : null}
+      </Pane>
+
+      <Pane heading="近期导入">
+        {observability.imports.recent.length > 0 ? (
+          <TableWrap compact label="近期导入" minWidth={760}>
+            <thead><tr><th>任务</th><th>状态</th><th>新增对象</th><th>耗时</th></tr></thead>
+            <tbody>{observability.imports.recent.slice(0, 10).map((job) => (
+              <tr key={job.id}>
+                <td>{job.archiveVersionId ? <Link href={`/admin/archive-versions/${job.archiveVersionId}`}>#{job.id} {job.sourceName ?? "未知来源"}</Link> : <>#{job.id} {job.sourceName ?? "未知来源"}</>}</td>
+                <td><StatusBadge kind="import-task" value={job.status} />{job.failedStage ? <span className="text-sm text-muted">{importTaskStageLabel(job.failedStage)}</span> : null}</td>
+                <td>{formatNumber(job.uploadedBlobCount)} 个文件对象<span className="text-sm text-muted">{formatBytes(job.uploadedBlobSizeBytes + job.uploadedCorePackSizeBytes)}</span></td>
+                <td>检查 {formatNullableDuration(job.preflightDurationMs)}<span className="text-sm text-muted">入库 {formatNullableDuration(job.commitDurationMs)}</span></td>
+              </tr>
+            ))}</tbody>
+          </TableWrap>
+        ) : <EmptyState title="暂无导入任务。" />}
+      </Pane>
+
+      <section className="border-y border-border py-3" aria-label="关键摘要">
+        <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+          {metrics.map(([label, value]) => <div key={label}><dt className="text-xs text-muted">{label}</dt><dd className="m-0 mt-1 font-mono text-sm font-semibold">{value}</dd></div>)}
+        </dl>
+      </section>
+
+      <Pane heading="系统治理" compact>
+        <div className="flex flex-wrap items-center gap-2">
           {adminUser.isBootstrapAdmin ? (
             <Link className={buttonVariants({ variant: "outline" })} href="/admin/permissions">
               角色与权限
@@ -88,52 +101,6 @@ export default async function AdminPage() {
             </Link>
           ) : null}
         </div>
-      </Pane>
-
-      <Pane heading="近期导入">
-        {observability.imports.recent.length > 0 ? (
-          <TableWrap compact label="近期导入" minWidth={760}>
-            <thead>
-              <tr>
-                <th>任务</th>
-                <th>状态</th>
-                <th>新增对象</th>
-                <th>耗时</th>
-              </tr>
-            </thead>
-            <tbody>
-              {observability.imports.recent.slice(0, 10).map((job) => (
-                <tr key={job.id}>
-                  <td>
-                    #{job.id} {job.sourceName ?? "未知来源"}
-                    <span className="text-sm text-muted">
-                      {job.archiveVersionId ? `文件版本 #${job.archiveVersionId}` : "未提交"}
-                    </span>
-                  </td>
-                  <td>
-                    <StatusBadge kind="import-task" value={job.status} />
-                    {job.failedStage ? (
-                      <span className="text-sm text-muted">{importTaskStageLabel(job.failedStage)}</span>
-                    ) : null}
-                  </td>
-                  <td>
-                    {formatNumber(job.uploadedBlobCount)} 个文件对象 / {formatNumber(job.uploadedCorePackCount)}{" "}
-                    个引擎公共文件
-                    <span className="text-sm text-muted">
-                      {formatBytes(job.uploadedBlobSizeBytes + job.uploadedCorePackSizeBytes)}
-                    </span>
-                  </td>
-                  <td>
-                    上传前检查 {formatNullableDuration(job.preflightDurationMs)}
-                    <span className="text-sm text-muted">提交入库 {formatNullableDuration(job.commitDurationMs)}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
-        ) : (
-          <EmptyState title="暂无导入任务。" />
-        )}
       </Pane>
     </main>
   );

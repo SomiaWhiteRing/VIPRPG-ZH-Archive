@@ -13,6 +13,7 @@ import { SelectField } from "@/app/components/ui/select";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit, listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
   return (
     <main>
       <PageHeader
+        compact
         title={character.primaryName}
         actions={
           <>
@@ -93,9 +95,9 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
           </FormField>
         </Pane>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <StickySaveBar>
           <Button type="submit">保存角色资料</Button>
-        </div>
+        </StickySaveBar>
       </ConfirmingForm>
     </main>
   );
