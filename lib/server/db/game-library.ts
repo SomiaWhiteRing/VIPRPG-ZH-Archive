@@ -67,6 +67,7 @@ export type GameWorkRelation = {
   relationOrder: number;
   viceVersa: boolean;
   createdByUserId: number | null;
+  previewBlobSha256?: string | null;
 };
 export type GameTranslationRelation = {
   id: number;
@@ -76,6 +77,7 @@ export type GameTranslationRelation = {
   language: string;
   relationOrder: number;
   createdByUserId: number | null;
+  previewBlobSha256?: string | null;
 };
 export type GameWorkSummary = {
   id: number;
@@ -89,6 +91,8 @@ export type GameWorkSummary = {
   language: string;
   status: string;
   previewBlobSha256: string | null;
+  currentArchiveVersionId: number | null;
+  externalDownloadUrl: string | null;
   archiveVersionCount: number;
   totalSizeBytes: number;
   latestPublishedAt: string | null;
@@ -162,7 +166,7 @@ type Filters = {
   includeNonPublic?: boolean;
 };
 type ListInput = Filters & {
-  sort?: "id" | "title" | "engine";
+  sort?: "id" | "title" | "release";
   limit?: number;
   offset?: number;
 };
@@ -178,10 +182,11 @@ type SummaryRow = {
   language: string;
   status: string;
   preview_blob_sha256: string | null;
+  current_archive_version_id: number | null;
+  external_download_url: string | null;
   archive_version_count: number;
   total_size_bytes: number | null;
   latest_published_at: string | null;
-  has_current_archive: number;
   download_link_count: number;
 };
 type WorkRow = {
@@ -287,8 +292,8 @@ export async function listGameWorks(
   const order =
     input.sort === "title"
       ? "COALESCE(w.chinese_title,w.original_title) ASC"
-      : input.sort === "engine"
-        ? "w.engine_family ASC,w.original_title ASC"
+      : input.sort === "release"
+        ? "w.original_release_date IS NULL ASC,w.original_release_date DESC"
         : "w.id DESC";
   const rows = await getD1()
     .prepare(
@@ -788,6 +793,15 @@ function summarySql(): string {
       ORDER BY wma.is_primary DESC, wma.sort_order
       LIMIT 1
     ) AS preview_blob_sha256,
+    av.id AS current_archive_version_id,
+    (
+      SELECT wel.url
+      FROM work_external_links wel
+      WHERE wel.work_id = w.id
+        AND wel.link_type = 'download_page'
+      ORDER BY wel.id
+      LIMIT 1
+    ) AS external_download_url,
     (
       SELECT COUNT(*)
       FROM archive_versions av2
@@ -806,13 +820,6 @@ function summarySql(): string {
       WHERE av2.work_id = w.id
         AND av2.status = 'published'
     ) AS latest_published_at,
-    EXISTS(
-      SELECT 1
-      FROM archive_versions av3
-      WHERE av3.work_id = w.id
-        AND av3.status = 'published'
-        AND av3.is_current = 1
-    ) AS has_current_archive,
     (
       SELECT COUNT(*)
       FROM work_external_links wel
@@ -883,11 +890,15 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       language: row.language,
       status: row.status,
       previewBlobSha256: row.preview_blob_sha256,
+      currentArchiveVersionId: row.current_archive_version_id,
+      externalDownloadUrl: isHttpUrl(row.external_download_url)
+        ? row.external_download_url
+        : null,
       archiveVersionCount: row.archive_version_count,
       totalSizeBytes: row.total_size_bytes ?? 0,
       latestPublishedAt: row.latest_published_at,
       distribution: deriveWorkDistribution({
-        hasCurrentArchive: row.has_current_archive === 1,
+        hasCurrentArchive: row.current_archive_version_id !== null,
         downloadLinkCount: row.download_link_count,
       }),
       tags,
@@ -1041,6 +1052,17 @@ async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
     uploaderName: x.uploader_name,
   }));
 }
+
+const RELATED_PREVIEW_SQL = `(
+  SELECT ma.blob_sha256
+  FROM work_media_assets wma
+  JOIN media_assets ma ON ma.id = wma.media_asset_id
+  WHERE wma.work_id = w.id
+    AND ma.kind IN ('cover', 'preview')
+  ORDER BY wma.is_primary DESC, wma.sort_order
+  LIMIT 1
+) AS preview_blob_sha256`;
+
 async function listRelations(
   id: number,
   includeNonPublic = false,
@@ -1057,7 +1079,8 @@ async function listRelations(
           wr.vice_versa,
           wr.created_by_user_id,
           w.id AS work_id,
-          COALESCE(w.chinese_title, w.original_title) AS title
+          COALESCE(w.chinese_title, w.original_title) AS title,
+          ${RELATED_PREVIEW_SQL}
        FROM work_relations wr
        JOIN works w ON w.id = wr.to_work_id
        WHERE wr.from_work_id = ?
@@ -1074,6 +1097,7 @@ async function listRelations(
       created_by_user_id: number | null;
       work_id: number;
       title: string;
+      preview_blob_sha256: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
     id: x.id,
@@ -1085,6 +1109,7 @@ async function listRelations(
     createdByUserId: x.created_by_user_id,
     workId: x.work_id,
     title: x.title,
+    previewBlobSha256: x.preview_blob_sha256,
   }));
 }
 async function listTranslations(
@@ -1102,7 +1127,8 @@ async function listTranslations(
           tr.created_by_user_id,
           w.id AS work_id,
           COALESCE(w.chinese_title, w.original_title) AS title,
-          w.language
+          w.language,
+          ${RELATED_PREVIEW_SQL}
        FROM translation_relations tr
        JOIN works w ON w.id = tr.target_work_id
        WHERE tr.source_work_id = ?
@@ -1118,6 +1144,7 @@ async function listTranslations(
       work_id: number;
       title: string;
       language: string;
+      preview_blob_sha256: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
     id: x.id,
@@ -1127,6 +1154,7 @@ async function listTranslations(
     language: x.language,
     relationOrder: x.relation_order,
     createdByUserId: x.created_by_user_id,
+    previewBlobSha256: x.preview_blob_sha256,
   }));
 }
 async function replaceAliases(id: number, values: string[]): Promise<void> {

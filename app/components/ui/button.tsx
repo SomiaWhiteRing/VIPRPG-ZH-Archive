@@ -14,7 +14,7 @@ export const buttonVariants = cva(
         outline: "border border-border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary",
         ghost: "text-foreground hover:bg-muted/15",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        rm2k: "border-2 border-white bg-gradient-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 text-white shadow-[3px_3px_0_rgb(23_33_43_/_30%),inset_0_0_0_2px_rgb(0_0_0_/_20%)] hover:brightness-110 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_rgb(23_33_43_/_30%),inset_0_0_0_2px_rgb(0_0_0_/_20%)]",
+        rm2k: "border-2 border-white bg-linear-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 text-white shadow-[3px_3px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)] hover:brightness-110 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)]",
       },
       size: {
         default: "min-h-10 px-3 py-2",

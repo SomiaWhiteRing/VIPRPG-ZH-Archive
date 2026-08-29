@@ -32,6 +32,23 @@ export async function listCatalogs(): Promise<CatalogSummary[]> {
   return (rows.results ?? []).map(mapSummary);
 }
 
+export async function listCatalogsContainingWork(
+  workId: number,
+): Promise<CatalogSummary[]> {
+  const rows = await getD1()
+    .prepare(
+      `${CATALOG_SUMMARY_SELECT}
+       AND EXISTS (
+         SELECT 1 FROM catalog_items ci
+         WHERE ci.catalog_id = c.id AND ci.work_id = ?
+       )
+       ORDER BY c.updated_at DESC,c.id DESC LIMIT 200`,
+    )
+    .bind(workId)
+    .all<Row>();
+  return (rows.results ?? []).map(mapSummary);
+}
+
 export async function searchCatalogs(
   query: string,
   limit = 300,

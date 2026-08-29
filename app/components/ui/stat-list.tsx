@@ -18,7 +18,7 @@ export function StatList({ items, variant = "rows", columns }: StatListProps) {
           key={`${item.label}-${index}`}
         >
           <dt className="text-sm font-semibold text-muted">{item.label}</dt>
-          <dd className={variant === "tiles" ? "mt-1 m-0 font-bold" : "m-0 text-right font-bold break-words"}>{item.value}</dd>
+          <dd className={variant === "tiles" ? "mt-1 m-0 font-bold" : "m-0 text-right font-bold wrap-break-word"}>{item.value}</dd>
         </div>
       ))}
     </dl>
