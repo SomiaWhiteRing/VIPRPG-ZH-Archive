@@ -46,15 +46,76 @@ type IdentityRow = {
   uploader_id: number | null;
 };
 type Filter = "all" | "active" | "trash";
+type AdminArchiveSearchInput = {
+  actor: ArchiveUser;
+  filter?: Filter;
+  query?: string;
+  status?: string;
+  sort?: "default" | "size";
+  page?: number;
+  pageSize?: number;
+};
+export type PaginatedAdminArchiveVersions = {
+  items: AdminArchiveVersion[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export async function searchArchiveVersionsForAdmin(
+  input: AdminArchiveSearchInput,
+): Promise<PaginatedAdminArchiveVersions> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 50)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const { clauses, binds } = archiveClauses(input.actor, input.filter ?? "all", input.query, input.status);
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const order = input.sort === "size"
+    ? "av.total_size_bytes DESC, av.id DESC"
+    : "av.created_at DESC, av.id DESC";
+  const database = getD1();
+  const [rows, count] = await Promise.all([
+    database.prepare(
+      `${archiveSelect()} ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
+    ).bind(...binds, pageSize, (page - 1) * pageSize).all<Row>(),
+    database.prepare(
+      `SELECT COUNT(*) AS count FROM archive_versions av JOIN works w ON w.id=av.work_id ${where}`,
+    ).bind(...binds).first<{ count: number }>(),
+  ]);
+  return { items: (rows.results ?? []).map(mapRow), total: count?.count ?? 0, page, pageSize };
+}
+
 export async function listArchiveVersionsForAdmin(
   limit = 100,
   filter: Filter = "all",
   actor: ArchiveUser,
 ): Promise<AdminArchiveVersion[]> {
+  const { clauses, binds } = archiveClauses(actor, filter);
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = await getD1()
+    .prepare(
+      `${archiveSelect()} ${where}
+       ORDER BY av.created_at DESC, av.id DESC
+       LIMIT ?`,
+    )
+    .bind(...binds, Math.max(1, Math.min(300, limit)))
+    .all<Row>();
+  return (rows.results ?? []).map(mapRow);
+}
+
+function archiveClauses(actor: ArchiveUser, filter: Filter, query?: string, status?: string) {
   const clauses: string[] = [];
   const binds: Array<string | number> = [];
   if (filter === "active") clauses.push("av.status <> 'deleted'");
   if (filter === "trash") clauses.push("av.status='deleted'");
+  if (status && status !== "all") {
+    clauses.push("av.status=?");
+    binds.push(status);
+  }
+  if (query?.trim()) {
+    const value = `%${query.trim()}%`;
+    clauses.push("(COALESCE(w.chinese_title,w.original_title) LIKE ? OR CAST(av.id AS TEXT) LIKE ?)");
+    binds.push(value, value);
+  }
   const canReadAny =
     hasPermission(actor, "archive_version.read_private") ||
     hasPermission(actor, "archive_version.update") ||
@@ -65,34 +126,28 @@ export async function listArchiveVersionsForAdmin(
     clauses.push("av.uploader_id=?");
     binds.push(actor.id);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const rows = await getD1()
-    .prepare(
-      `SELECT av.id,
-          av.work_id,
-          COALESCE(w.chinese_title, w.original_title) AS work_title,
-          w.language,
-          av.status,
-          av.is_current,
-          av.total_files,
-          av.total_size_bytes,
-          av.estimated_r2_get_count,
-          av.created_at,
-          av.published_at,
-          av.deleted_at,
-          av.purged_at,
-          av.uploader_id,
-          u.display_name AS uploader_name
-       FROM archive_versions av
-       JOIN works w ON w.id = av.work_id
-       LEFT JOIN users u ON u.id = av.uploader_id
-       ${where}
-       ORDER BY av.created_at DESC, av.id DESC
-       LIMIT ?`,
-    )
-    .bind(...binds, Math.max(1, Math.min(300, limit)))
-    .all<Row>();
-  return (rows.results ?? []).map(mapRow);
+  return { clauses, binds };
+}
+
+function archiveSelect(): string {
+  return `SELECT av.id,
+      av.work_id,
+      COALESCE(w.chinese_title, w.original_title) AS work_title,
+      w.language,
+      av.status,
+      av.is_current,
+      av.total_files,
+      av.total_size_bytes,
+      av.estimated_r2_get_count,
+      av.created_at,
+      av.published_at,
+      av.deleted_at,
+      av.purged_at,
+      av.uploader_id,
+      u.display_name AS uploader_name
+    FROM archive_versions av
+    JOIN works w ON w.id = av.work_id
+    LEFT JOIN users u ON u.id = av.uploader_id`;
 }
 export function canDeleteArchiveVersion(
   actor: ArchiveUser,

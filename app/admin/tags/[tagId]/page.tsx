@@ -13,6 +13,7 @@ import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getTagForAdminEdit, listTagsForAdmin } from "@/lib/server/db/taxonomy-library";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
   return (
     <main>
       <PageHeader
+        compact
         title={tag.name}
         actions={
           <>
@@ -104,9 +106,9 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
           </FormField>
         </Pane>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <StickySaveBar>
           <Button type="submit">保存标签资料</Button>
-        </div>
+        </StickySaveBar>
       </ConfirmingForm>
     </main>
   );

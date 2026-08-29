@@ -1,4 +1,3 @@
-import { Button } from "@/app/components/ui/button";
 import Link from "next/link";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
@@ -19,19 +18,6 @@ export async function SiteHeader() {
               isBootstrapAdmin: currentUser.isBootstrapAdmin,
             }
           : null
-      }
-      logout={
-        currentUser ? (
-          <form action="/api/auth/logout" method="post" className="inline-form">
-            <input type="hidden" name="next" value="/" />
-            <Button
-              className="inline-flex min-h-9 items-center rounded-md px-2.5 text-sm font-semibold text-foreground hover:bg-muted/15"
-              type="submit"
-            >
-              退出
-            </Button>
-          </form>
-        ) : null
       }
       loginLink={
         !currentUser ? (

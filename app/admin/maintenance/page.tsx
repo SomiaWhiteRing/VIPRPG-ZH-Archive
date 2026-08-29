@@ -1,6 +1,5 @@
 import { buttonVariants } from "@/app/components/ui/button";
 import { AdminOperationPanel } from "@/app/admin/admin-operation-panel";
-import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { StatList } from "@/app/components/ui/stat-list";
@@ -63,9 +62,9 @@ export default async function AdminMaintenancePage() {
 
   return (
     <main>
-      <PageHeader title="维护与一致性" actions={<BackLink href="/admin" label="返回控制台" />} />
+      <PageHeader compact title="维护与一致性" subtitle="先检查当前状态和清理范围，再执行会修改数据的操作。" />
 
-      <Pane heading="健康检查">
+      <Pane heading="只读诊断">
         <div className="flex flex-wrap items-center gap-3">
           {HEALTH_LINKS.map((link) => (
             <a className={buttonVariants({ variant: "outline" })} href={link.href} key={link.href}>
@@ -75,7 +74,7 @@ export default async function AdminMaintenancePage() {
         </div>
       </Pane>
 
-      <section className="grid gap-3 md:grid-cols-3" aria-label="观测摘要">
+      <section className="grid gap-3 md:grid-cols-2" aria-label="观测摘要">
         <Pane heading="下载观测">
           <StatList items={downloadMetrics.map(([label, value]) => ({ label, value }))} />
         </Pane>
@@ -86,8 +85,8 @@ export default async function AdminMaintenancePage() {
         </Pane>
       </section>
 
-      <Pane heading="危险区" tone="danger">
-        <p>最终清理会永久删除对象，无法撤销。</p>
+      <Pane heading="执行维护" tone="danger">
+        <p className="text-sm">最终清理会永久删除已进入清理范围的文件引用和对象，无法撤销。</p>
         <AdminOperationPanel canRunFinalCleanup={canRunFinalCleanup} />
       </Pane>
     </main>

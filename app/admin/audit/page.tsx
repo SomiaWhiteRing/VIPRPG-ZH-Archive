@@ -1,36 +1,46 @@
-import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { InboxLink } from "@/app/components/ui/inbox-link";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import Link from "next/link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { listAdminAuditLogs, listAdminRoleEvents } from "@/lib/server/db/admin-audit";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
+import { listAdminRoleEvents, searchAdminAuditLogs } from "@/lib/server/db/admin-audit";
+import { AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminAuditPage() {
-  const adminUser = await requirePagePermission("/admin/audit", "audit.read");
-  const [auditLogs, roleEvents, unreadInboxCount] = await Promise.all([
-    listAdminAuditLogs(200),
+const PAGE_SIZE = 50;
+
+export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requirePagePermission("/admin/audit", "audit.read");
+  const params = await searchParams;
+  const query = searchParam(params.q);
+  const eventType = searchParam(params.action);
+  const page = parseAdminPage(params.page);
+  const [auditResult, roleEvents] = await Promise.all([
+    searchAdminAuditLogs({ query, eventType, page, pageSize: PAGE_SIZE }),
     listAdminRoleEvents(100),
-    countUnreadInboxItemsForUser(adminUser),
   ]);
 
   return (
     <main>
       <PageHeader
+        compact
         title="审计日志"
         subtitle="登录、版本维护与权限调整的审计日志。"
-        actions={
-          <>
-            <BackLink href="/admin" label="返回管理端" />
-            <InboxLink unread={unreadInboxCount} />
-          </>
-        }
       />
+
+      <form action="/admin/audit" className="flex flex-wrap items-end gap-2 border-b border-border pb-3" method="get">
+        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">操作者<Input defaultValue={query} name="q" placeholder="名称、邮箱或用户 ID" /></Label>
+        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">动作<Input defaultValue={eventType} name="action" placeholder="事件类型" /></Label>
+        <Button type="submit">应用</Button>
+        {query || eventType ? <Link className={buttonVariants({ variant: "ghost" })} href="/admin/audit">清除</Link> : null}
+        <span className="pb-2 font-mono text-xs text-muted">共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志</span>
+      </form>
 
       <Pane heading="用户角色事件">
         {roleEvents.length > 0 ? (
@@ -79,7 +89,7 @@ export default async function AdminAuditPage() {
       </Pane>
 
       <Pane heading="系统审计日志">
-        {auditLogs.length > 0 ? (
+        {auditResult.items.length > 0 ? (
           <TableWrap compact label="系统审计日志" minWidth={980}>
             <thead>
               <tr>
@@ -90,7 +100,7 @@ export default async function AdminAuditPage() {
               </tr>
             </thead>
             <tbody>
-              {auditLogs.map((log) => (
+              {auditResult.items.map((log) => (
                 <tr key={log.id}>
                   <td>{formatDate(log.createdAt)}</td>
                   <td>
@@ -115,6 +125,7 @@ export default async function AdminAuditPage() {
           <EmptyState title="暂无系统审计日志。" />
         )}
       </Pane>
+      <AdminPagination basePath="/admin/audit" page={page} pageSize={PAGE_SIZE} total={auditResult.total} params={{ q: query || undefined, action: eventType || undefined }} />
     </main>
   );
 }

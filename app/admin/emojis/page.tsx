@@ -8,7 +8,7 @@ export default async function AdminEmojiPage() {
   await requirePagePermission("/admin/emojis", "custom_emoji.manage");
   return (
     <main>
-      <PageHeader title="站点表情" />
+      <PageHeader compact title="站点表情" subtitle="上传表情并管理其公开状态。" />
       <EmojiAdminPanel />
     </main>
   );

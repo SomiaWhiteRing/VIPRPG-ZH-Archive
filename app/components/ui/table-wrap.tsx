@@ -14,7 +14,7 @@ export function TableWrap({ minWidth = 820, compact = false, label, children }: 
   return (
     <div className={`w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>
       <Table
-        className={`${minWidthClass} [&_th]:h-11 [&_th]:px-4 [&_th]:text-left [&_th]:align-middle [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted [&_td]:p-4 [&_td]:align-middle [&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0`}
+        className={`${minWidthClass} ${compact ? "[&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3" : "[&_th]:h-11 [&_th]:px-4 [&_td]:p-4"} [&_th]:text-left [&_th]:align-middle [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted [&_td]:align-middle [&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0`}
         aria-label={label}
       >
         {children}

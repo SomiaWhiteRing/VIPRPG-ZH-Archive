@@ -13,6 +13,7 @@ import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
   return (
     <main>
       <PageHeader
+        compact
         title={creator.name}
         actions={
           <>
@@ -70,9 +72,9 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
           </div>
         </Pane>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <StickySaveBar>
           <Button type="submit">保存作者资料</Button>
-        </div>
+        </StickySaveBar>
       </form>
 
       <section className="grid gap-3 md:grid-cols-3 grid gap-4 lg:grid-cols-2" aria-label="作者关联">
