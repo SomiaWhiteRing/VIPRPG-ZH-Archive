@@ -5,6 +5,7 @@ node_modules/
 .next/
 .open-next/
 out/
+next-env.d.ts
 
 # Cloudflare local state
 .wrangler/

@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { LayoutGrid, List } from "lucide-react";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { HomeGameCard } from "@/app/components/home/game-card";
+import { GameCard } from "@/app/components/home/game-card";
+import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { countGameWorks, listGameWorks } from "@/lib/server/db/game-library";
 import {
+  listPublicTags,
   getPublicCharacterSummary,
   getPublicTagSummary,
 } from "@/lib/server/db/taxonomy-library";
@@ -16,7 +19,7 @@ export const dynamic = "force-dynamic";
 type GamesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 20;
 const ENGINES = [
   ["all", "全部"],
   ["rpg_maker_2000", "RPG Maker 2000"],
@@ -40,9 +43,11 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const character = parseOptionalId(stringParam(params.character));
   const language = stringParam(params.language);
   const original = stringParam(params.original);
+  const requestedView = stringParam(params.view);
+  const view = requestedView === "grid" ? "grid" : "list";
   const requestedSort = stringParam(params.sort);
   const sort =
-    requestedSort === "title" || requestedSort === "engine"
+    requestedSort === "title" || requestedSort === "release"
       ? requestedSort
       : "id";
   const page = Math.max(
@@ -56,7 +61,13 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
     language: language || undefined,
     isOriginal: original === "1" ? true : original === "0" ? false : undefined,
   };
-  const [works, total, selectedTag, selectedCharacter] = await Promise.all([
+  const [
+    works,
+    total,
+    selectedTag,
+    selectedCharacter,
+    popularTags,
+  ] = await Promise.all([
     listGameWorks({
       ...filters,
       sort,
@@ -66,6 +77,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
     countGameWorks(filters),
     tag ? getPublicTagSummary(tag) : Promise.resolve(null),
     character ? getPublicCharacterSummary(character) : Promise.resolve(null),
+    listPublicTags({ limit: 12 }),
   ]);
   const activeParams = {
     engine: engine !== "all" ? engine : undefined,
@@ -74,186 +86,99 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
     language: language || undefined,
     original: original || undefined,
     sort: sort !== "id" ? sort : undefined,
+    view: view !== "list" ? view : undefined,
   };
+  const isListView = view === "list";
+  const WorkCard = isListView ? GameLibraryListRow : GameCard;
+  const hasFilters = engine !== "all" || Boolean(tag || character || language || original);
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
+    <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
+      <header className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b border-border pb-4.5">
         <div>
-          <h1>全部游戏</h1>
-          <p>浏览可游玩与下载的游戏。</p>
+          <h1 className="m-0 font-display text-[clamp(24px,3vw,30px)] font-bold leading-[1.2]">全部游戏</h1>
+          <p className="mt-1.5 text-[13.5px] text-muted">浏览可游玩与下载的游戏。</p>
         </div>
-        <span className="text-sm font-bold text-muted">
-          第 {page} 页 · 共 {formatNumber(total)} 个作品
-        </span>
+        <span className="pb-0.5 font-mono text-[12.5px] text-muted">共 {formatNumber(total)} 个作品</span>
       </header>
-      <section
-        className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold text-muted"
-        aria-label="游戏排序"
-      >
-        <span>排序</span>
-        {(["id", "title", "engine"] as const).map((value) => (
-          <Link
-            className={
-              sort === value
-                ? "text-primary underline decoration-2 underline-offset-4"
-                : undefined
-            }
-            href={gamesHref({
-              ...activeParams,
-              sort: value === "id" ? undefined : value,
-            })}
-            key={value}
-          >
-            {value === "id"
-              ? "编号"
-              : value === "title"
-                ? "标题"
-                : "引擎"}
-          </Link>
-        ))}
-      </section>
-      <div className="mb-5 grid gap-3" aria-label="游戏筛选">
-        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
-          <span className="text-muted">引擎</span>
-          {ENGINES.map(([value, label]) => (
-            <Link
-              className={
-                engine === value
-                  ? "text-primary underline underline-offset-4"
-                  : undefined
-              }
-              href={gamesHref({
-                ...activeParams,
-                engine: value === "all" ? undefined : value,
-              })}
-              key={value}
+      <div className="grid gap-x-9 pb-11 min-[981px]:grid-cols-[minmax(0,1fr)_252px]">
+        <div className="@container min-w-0">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5" aria-label="游戏工具栏">
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-muted" aria-label="游戏排序">
+              <span className="text-[13px]">排序</span>
+              {(["id", "title", "release"] as const).map((value) => (
+                <Link className={sort === value ? "min-h-8 py-1.5 text-primary" : "min-h-8 py-1.5 hover:text-foreground"} href={gamesHref({ ...activeParams, sort: value === "id" ? undefined : value, page: undefined })} key={value}>
+                  {value === "id" ? "默认" : value === "title" ? "标题" : "发布日期"}
+                </Link>
+              ))}
+            </div>
+            <div className="ml-auto inline-flex overflow-hidden rounded-md border border-border bg-card text-[13px] font-semibold" aria-label="显示方式">
+              <Link aria-current={view === "list" ? "page" : undefined} aria-label="列表视图" className={view === "list" ? "inline-flex min-h-8 items-center gap-1.5 bg-foreground px-3 text-white" : "inline-flex min-h-8 items-center gap-1.5 px-3 text-muted hover:text-foreground"} href={gamesHref({ ...activeParams, view: undefined, page: undefined })}><List aria-hidden size={14} /><span className="max-[560px]:hidden">列表</span></Link>
+              <Link aria-current={view === "grid" ? "page" : undefined} aria-label="网格视图" className={view === "grid" ? "inline-flex min-h-8 items-center gap-1.5 border-l border-border bg-foreground px-3 text-white" : "inline-flex min-h-8 items-center gap-1.5 border-l border-border px-3 text-muted hover:text-foreground"} href={gamesHref({ ...activeParams, view: "grid", page: undefined })}><LayoutGrid aria-hidden size={14} /><span className="max-[560px]:hidden">网格</span></Link>
+            </div>
+          </div>
+          {hasFilters ? (
+            <div className="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="当前筛选">
+              <span className="font-bold text-muted">当前筛选</span>
+              <Link className="font-bold text-accent hover:underline" href="/games">清除全部</Link>
+              {engine !== "all" ? <FilterChip href={gamesHref({ ...activeParams, engine: undefined })} label={`引擎：${ENGINES.find(([value]) => value === engine)?.[1] ?? engine}`} /> : null}
+              {tag ? <FilterChip href={gamesHref({ ...activeParams, tag: undefined })} label={`标签：${selectedTag?.name ?? tag}`} /> : null}
+              {character ? <FilterChip href={gamesHref({ ...activeParams, character: undefined })} label={`角色：${selectedCharacter?.primaryName ?? character}`} /> : null}
+              {language ? <FilterChip href={gamesHref({ ...activeParams, language: undefined })} label={`语言：${languageLabel(language)}`} /> : null}
+              {original ? <FilterChip href={gamesHref({ ...activeParams, original: undefined })} label={original === "1" ? "本站原创" : "社区收录"} /> : null}
+            </div>
+          ) : null}
+          {works.length > 0 ? (
+            <section
+              aria-label={isListView ? "作品列表" : "作品网格"}
+              className={isListView ? "divide-y divide-border border-y border-border" : "grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4"}
             >
-              {label}
-            </Link>
-          ))}
+              {works.map((work) => <WorkCard key={work.id} work={work} />)}
+            </section>
+          ) : <EmptyState title="没有找到匹配的作品。" />}
+          <PaginationLinks basePath="/games" page={page} hasNext={page * PAGE_SIZE < total} params={activeParams} />
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
-          <span className="text-muted">原创</span>
-          <Link
-            className={
-              !original
-                ? "text-primary underline underline-offset-4"
-                : undefined
-            }
-            href={gamesHref({ ...activeParams, original: undefined })}
-          >
-            全部
-          </Link>
-          <Link
-            className={
-              original === "1"
-                ? "text-primary underline underline-offset-4"
-                : undefined
-            }
-            href={gamesHref({ ...activeParams, original: "1" })}
-          >
-            本站原创
-          </Link>
-          <Link
-            className={
-              original === "0"
-                ? "text-primary underline underline-offset-4"
-                : undefined
-            }
-            href={gamesHref({ ...activeParams, original: "0" })}
-          >
-            社区收录
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm font-bold">
-          <span className="text-muted">语言</span>
-          <Link
-            className={
-              !language
-                ? "text-primary underline underline-offset-4"
-                : undefined
-            }
-            href={gamesHref({ ...activeParams, language: undefined })}
-          >
-            全部
-          </Link>
-          {LANGUAGE_OPTIONS.map((item) => (
-            <Link
-              className={
-                language === item.value
-                  ? "text-primary underline underline-offset-4"
-                  : undefined
-              }
-              href={gamesHref({ ...activeParams, language: item.value })}
-              key={item.value}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+        <aside className="mt-5 rounded-lg border border-border bg-muted/5 p-3 min-[981px]:sticky min-[981px]:top-18.5 min-[981px]:mt-1 min-[981px]:self-start min-[981px]:border-0 min-[981px]:bg-transparent min-[981px]:p-0" aria-label="游戏筛选">
+          <FilterSection label="来源">
+            <FilterLink active={!original} href={gamesHref({ ...activeParams, original: undefined, page: undefined })} label="全部" />
+            <FilterLink active={original === "1"} href={gamesHref({ ...activeParams, original: "1", page: undefined })} label="本站原创" />
+            <FilterLink active={original === "0"} href={gamesHref({ ...activeParams, original: "0", page: undefined })} label="社区收录" />
+          </FilterSection>
+          <FilterSection label="引擎">
+            {ENGINES.map(([value, label]) => <FilterLink active={engine === value} href={gamesHref({ ...activeParams, engine: value === "all" ? undefined : value, page: undefined })} key={value} label={label} />)}
+          </FilterSection>
+          <FilterSection label="语言">
+            <FilterLink active={!language} href={gamesHref({ ...activeParams, language: undefined, page: undefined })} label="全部" />
+            {LANGUAGE_OPTIONS.map((item) => <FilterLink active={language === item.value} href={gamesHref({ ...activeParams, language: item.value, page: undefined })} key={item.value} label={item.label} />)}
+          </FilterSection>
+          <FilterSection label="标签" moreHref="/tags">
+            <FilterLink active={!tag} href={gamesHref({ ...activeParams, tag: undefined, page: undefined })} label="全部" />
+            {popularTags.map((item) => <FilterLink active={tag === item.id} href={gamesHref({ ...activeParams, tag: String(item.id), page: undefined })} key={item.id} label={item.name} />)}
+          </FilterSection>
+        </aside>
       </div>
-      {engine !== "all" ||
-      tag ||
-      character ||
-      language ||
-      original ||
-      sort !== "id" ? (
-        <div
-          className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted"
-          aria-label="当前筛选"
-        >
-          <span>当前筛选</span>
-          <Link href="/games">清除全部</Link>
-          {engine !== "all" ? (
-            <Link href={gamesHref({ ...activeParams, engine: undefined })}>
-              引擎：{ENGINES.find(([value]) => value === engine)?.[1] ?? engine}{" "}
-              ×
-            </Link>
-          ) : null}
-          {tag ? (
-            <Link href={gamesHref({ ...activeParams, tag: undefined })}>
-              标签：{selectedTag?.name ?? tag} ×
-            </Link>
-          ) : null}
-          {character ? (
-            <Link href={gamesHref({ ...activeParams, character: undefined })}>
-              角色：
-              {selectedCharacter?.primaryName ?? character} ×
-            </Link>
-          ) : null}
-          {language ? (
-            <Link href={gamesHref({ ...activeParams, language: undefined })}>
-              语言：{languageLabel(language)} ×
-            </Link>
-          ) : null}
-          {original ? (
-            <Link href={gamesHref({ ...activeParams, original: undefined })}>
-              {original === "1" ? "本站原创" : "社区收录"} ×
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-      {works.length > 0 ? (
-        <section
-          className="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
-          aria-label="作品列表"
-        >
-          {works.map((work) => (
-            <HomeGameCard key={work.id} work={work} />
-          ))}
-        </section>
-      ) : (
-        <EmptyState title="没有找到匹配的作品。" />
-      )}
-      <PaginationLinks
-        basePath="/games"
-        page={page}
-        hasNext={page * PAGE_SIZE < total}
-        params={activeParams}
-      />
     </main>
   );
+}
+
+function FilterSection({ label, moreHref, children }: { label: string; moreHref?: string; children: React.ReactNode }) {
+  return (
+    <section className="border-b border-border py-3 last:border-b-0" aria-labelledby={`filter-${label}`}>
+      <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-card px-3 py-1.5">
+        <h3 className="m-0 font-display text-base font-normal" id={`filter-${label}`}>{label}</h3>
+        {moreHref ? <Link className="shrink-0 text-xs font-semibold text-primary hover:text-accent" href={moreHref}>更多 →</Link> : null}
+      </div>
+      <div className="flex flex-wrap gap-x-1.5 gap-y-1">{children}</div>
+    </section>
+  );
+}
+
+function FilterLink({ active, href, label }: { active: boolean; href: string; label: string }) {
+  return <Link aria-current={active ? "true" : undefined} className={active ? "inline-flex min-h-8 items-center rounded-full bg-accent px-2.5 text-sm font-bold text-white" : "inline-flex min-h-8 items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10"} href={href}>{label}</Link>;
+}
+
+function FilterChip({ href, label }: { href: string; label: string }) {
+  return <Link className="inline-flex min-h-8 items-center rounded-full border border-primary/30 bg-primary/5 px-2.5 text-xs font-bold text-primary hover:border-primary" href={href}>{label} <span className="ml-1" aria-hidden="true">×</span></Link>;
 }
 
 function gamesHref(params: Record<string, string | undefined>) {

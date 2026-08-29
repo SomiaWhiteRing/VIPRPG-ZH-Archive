@@ -9,7 +9,7 @@ type TableWrapProps = {
 };
 
 export function TableWrap({ minWidth = 820, compact = false, label, children }: TableWrapProps) {
-  const minWidthClass = minWidth === 760 ? "min-w-[760px]" : minWidth === 900 ? "min-w-[900px]" : minWidth === 980 ? "min-w-[980px]" : minWidth === 1040 ? "min-w-[1040px]" : "min-w-[820px]";
+  const minWidthClass = minWidth === 760 ? "min-w-190" : minWidth === 900 ? "min-w-225" : minWidth === 980 ? "min-w-245" : minWidth === 1040 ? "min-w-260" : "min-w-205";
 
   return (
     <div className={`w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>

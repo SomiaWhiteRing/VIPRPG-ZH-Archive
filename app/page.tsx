@@ -2,15 +2,15 @@ import Link from "next/link";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { listGameWorks } from "@/lib/server/db/game-library";
 import { HomeAnchors } from "@/app/components/home/home-tabs";
-import { HomeGameCard } from "@/app/components/home/game-card";
+import { GameCard } from "@/app/components/home/game-card";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [currentUser, recentWorks, recentOriginalWorks] = await Promise.all([
     getCurrentUserFromCookies(),
-    listGameWorks({ limit: 9 }),
-    listGameWorks({ limit: 9, isOriginal: true }),
+    listGameWorks({ limit: 12 }),
+    listGameWorks({ limit: 12, isOriginal: true }),
   ]);
 
   return (
@@ -102,7 +102,7 @@ function HomeGameSection({
   works: Awaited<ReturnType<typeof listGameWorks>>;
 }) {
   return (
-    <section className={`${className ?? ""} scroll-mt-36`} id={id} aria-labelledby={`${id}-title`}>
+    <section className={`${className ?? ""} @container scroll-mt-36`} id={id} aria-labelledby={`${id}-title`}>
         <div className="mb-5 flex items-end justify-between gap-5">
           <div>
             <h2 className="text-2xl font-bold tracking-tight" id={`${id}-title`}>
@@ -115,11 +115,11 @@ function HomeGameSection({
           </Link>
         </div>
         {works.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {works.map((work) => <HomeGameCard key={work.id} work={work} />)}
+          <div className="grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4">
+            {works.map((work) => <GameCard key={work.id} work={work} />)}
           </div>
         ) : (
-          <p className="max-w-[700px] text-muted leading-7">目前还没有公开作品。</p>
+          <p className="max-w-175 text-muted leading-7">目前还没有公开作品。</p>
         )}
       </section>
   );

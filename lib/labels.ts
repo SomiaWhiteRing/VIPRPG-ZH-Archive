@@ -114,6 +114,35 @@ export function engineLabel(value: string): string {
   }
 }
 
+export function engineShortLabel(value: string): string {
+  switch (value) {
+    case "rpg_maker_2000":
+      return "RM2000";
+    case "rpg_maker_2003":
+      return "RM2003";
+    case "rpg_maker_2003_maniac":
+      return "Maniac";
+    case "rpg_maker_xp":
+      return "RMXP";
+    case "rpg_maker_vx":
+      return "RMVX";
+    case "rpg_maker_vx_ace":
+      return "VXAce";
+    case "rpg_maker_mv":
+      return "RMMV";
+    case "rpg_maker_mz":
+      return "RMMZ";
+    case "rpg_maker_unite":
+      return "Unite";
+    case "mixed":
+      return "混合";
+    case "other":
+      return "其他";
+    default:
+      return "未知";
+  }
+}
+
 export function creatorRoleLabel(value: string): string {
   return CREATOR_ROLE_LABELS[value] ?? value;
 }
