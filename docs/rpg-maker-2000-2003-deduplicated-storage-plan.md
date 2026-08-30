@@ -217,15 +217,10 @@ GC 实现位于 `lib/server/storage/admin-storage-checks.ts` 和 `worker/archive
 变更归档链路时至少执行：
 
 - `npm run check`
+- `npm test`
 - `npm run build`
-- `npm run check:domain`
-- 本地 D1 reset/seed 后的上传、preflight 和 commit
-- manifest SHA-256 与 R2 对象抽验
-- 下载 ZIP entry、顺序、CRC32 和总大小验证
-- GC consistency/dry-run；只有明确授权时运行 sweep
-- 在线游玩安装后确认 OPFS 中没有完整 ZIP
 
-有状态 D1、API、Worker 和 GC 检查串行执行，避免共享状态污染被误判为产品缺陷。
+`npm test` 在隔离状态中串行验证上传、preflight、commit、manifest/R2、原生 ZIP、GC 和 OPFS 安装。远端 sweep 只在明确授权时运行，不属于测试流程。
 
 ## 12. 参考
 

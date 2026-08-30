@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { listCatalogs } from "@/lib/server/db/catalogs";
@@ -7,32 +7,18 @@ export const dynamic = "force-dynamic";
 export default async function CatalogsPage() {
   const catalogs = await listCatalogs();
   return (
-    <main>
-      <PageHeader title="目录" subtitle="玩家创建的游戏整理与阅读顺序。" />
+    <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
+      <PageHeader compact title="目录" subtitle="玩家创建的游戏整理与阅读顺序。" />
       {catalogs.length ? (
-        <ul className="grid gap-4 md:grid-cols-2">
+        <section aria-label="目录列表" className="mt-5 divide-y divide-border border-y border-border">
           {catalogs.map((catalog) => (
-            <li
-              className="rounded-lg border border-border bg-card p-5"
-              key={catalog.id}
-            >
-              <Link
-                className="text-lg font-bold"
-                href={`/catalogs/${catalog.id}`}
-              >
-                {catalog.title}
-              </Link>
-              <p className="text-sm text-muted">
-                {catalog.description || "未填写说明。"}
-              </p>
-              <span className="text-sm text-muted">
-                {catalog.itemCount} 个游戏 · {catalog.ownerName}
-              </span>
-            </li>
+            <CatalogListRow catalog={catalog} key={catalog.id} />
           ))}
-        </ul>
+        </section>
       ) : (
-        <EmptyState title="还没有公开目录。" />
+        <div className="mt-5">
+          <EmptyState title="还没有公开目录。" />
+        </div>
       )}
     </main>
   );

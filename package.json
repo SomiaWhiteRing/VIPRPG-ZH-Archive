@@ -13,13 +13,9 @@
     "db:local:reset": "node scripts/local-d1-reset.mjs",
     "db:local:seed": "node scripts/dev-seed.mjs",
     "cf-typegen": "node scripts/cf-typegen.mjs",
-    "check": "next typegen && tsc --noEmit && eslint .",
-    "check:security": "tsx scripts/security-self-check.ts",
-    "check:security:d1": "node scripts/security-d1-self-check.mjs",
-    "check:security:api": "node scripts/security-api-self-check.mjs",
-    "check:domain": "node scripts/domain-contract-self-check.mjs",
+    "check": "next typegen && tsc --noEmit --project tsconfig.check.json && eslint . && tsx scripts/security-self-check.ts && tsx scripts/ui-self-check.ts",
+    "test": "tsx scripts/system-self-check.ts",
     "auth:calibrate-password": "tsx scripts/password-calibration.ts",
-    "check:ui": "tsx scripts/ui-self-check.ts",
     "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"
   },
   "dependencies": {
@@ -43,6 +39,7 @@
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
     "typescript": "latest",

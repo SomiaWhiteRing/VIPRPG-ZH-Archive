@@ -3,6 +3,8 @@ node_modules/
 
 # Next.js / OpenNext build output
 .next/
+.next-system-test/
+.next-system-test.tsconfig.json
 .open-next/
 out/
 next-env.d.ts

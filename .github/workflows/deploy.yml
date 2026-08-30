@@ -58,6 +58,12 @@ jobs:
       - name: Check
         run: npm run check
 
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm test
+
       - name: Apply staging D1 migrations
         run: npx wrangler d1 migrations apply DB --env staging --remote
 
@@ -103,6 +109,12 @@ jobs:
 
       - name: Check
         run: npm run check
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm test
 
       - name: Apply production D1 migrations
         run: npx wrangler d1 migrations apply DB --remote

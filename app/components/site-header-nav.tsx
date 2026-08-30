@@ -32,6 +32,7 @@ type Props = {
 const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/", label: "首页", exact: true },
   { href: "/games", label: "游戏库" },
+  { href: "/catalogs", label: "目录" },
   { href: "/upload", label: "上传" },
 ];
 

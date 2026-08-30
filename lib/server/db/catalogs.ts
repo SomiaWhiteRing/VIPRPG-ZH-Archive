@@ -5,6 +5,12 @@ import { HttpError } from "@/lib/server/http/json";
 export type CatalogItem = {
   workId: number;
   title: string;
+  originalTitle: string;
+  chineseTitle: string | null;
+  originalReleaseDate: string | null;
+  engineFamily: string;
+  language: string;
+  previewBlobSha256: string | null;
   sortOrder: number;
   note: string | null;
 };
@@ -15,6 +21,8 @@ export type CatalogSummary = {
   title: string;
   description: string | null;
   itemCount: number;
+  coverBlobSha256: string | null;
+  createdAt: string;
   updatedAt: string;
 };
 export type CatalogDetail = CatalogSummary & { items: CatalogItem[] };
@@ -242,7 +250,27 @@ async function loadCatalogDetail(id: number): Promise<CatalogDetail | null> {
   if (!row) return null;
   const items = await getD1()
     .prepare(
-      `SELECT ci.work_id,COALESCE(w.chinese_title,w.original_title) AS title,ci.sort_order,ci.note FROM catalog_items ci JOIN works w ON w.id=ci.work_id WHERE ci.catalog_id=? AND w.status='published' ORDER BY ci.sort_order,ci.work_id`,
+      `SELECT
+         ci.work_id,
+         w.original_title,
+         w.chinese_title,
+         w.original_release_date,
+         w.engine_family,
+         w.language,
+         (
+           SELECT ma.blob_sha256
+           FROM work_media_assets wma
+           JOIN media_assets ma ON ma.id = wma.media_asset_id
+           WHERE wma.work_id = w.id AND ma.kind = 'preview'
+           ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+           LIMIT 1
+         ) AS preview_blob_sha256,
+         ci.sort_order,
+         ci.note
+       FROM catalog_items ci
+       JOIN works w ON w.id = ci.work_id
+       WHERE ci.catalog_id = ? AND w.status = 'published'
+       ORDER BY ci.sort_order, ci.work_id`,
     )
     .bind(row.id)
     .all<ItemRow>();
@@ -250,7 +278,13 @@ async function loadCatalogDetail(id: number): Promise<CatalogDetail | null> {
     ...mapSummary(row),
     items: (items.results ?? []).map((item) => ({
       workId: item.work_id,
-      title: item.title,
+      title: item.chinese_title || item.original_title,
+      originalTitle: item.original_title,
+      chineseTitle: item.chinese_title,
+      originalReleaseDate: item.original_release_date,
+      engineFamily: item.engine_family,
+      language: item.language,
+      previewBlobSha256: item.preview_blob_sha256,
       sortOrder: item.sort_order,
       note: item.note,
     })),
@@ -307,6 +341,8 @@ function mapSummary(row: Row): CatalogSummary {
     title: row.title,
     description: row.description,
     itemCount: row.item_count,
+    coverBlobSha256: row.cover_blob_sha256,
+    createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
@@ -331,13 +367,53 @@ type Row = {
   title: string;
   description: string | null;
   item_count: number;
+  cover_blob_sha256: string | null;
+  created_at: string;
   updated_at: string;
 };
 type ItemRow = {
   work_id: number;
-  title: string;
+  original_title: string;
+  chinese_title: string | null;
+  original_release_date: string | null;
+  engine_family: string;
+  language: string;
+  preview_blob_sha256: string | null;
   sort_order: number;
   note: string | null;
 };
 
-const CATALOG_SUMMARY_SELECT = `SELECT c.id,c.owner_user_id,u.display_name AS owner_name,c.title,c.description,(SELECT COUNT(*) FROM catalog_items ci JOIN works cw ON cw.id=ci.work_id WHERE ci.catalog_id=c.id AND cw.status='published') AS item_count,c.updated_at FROM catalogs c JOIN users u ON u.id=c.owner_user_id WHERE c.status='published'`;
+const CATALOG_SUMMARY_SELECT = `
+  SELECT
+    c.id,
+    c.owner_user_id,
+    u.display_name AS owner_name,
+    c.title,
+    c.description,
+    (
+      SELECT COUNT(*)
+      FROM catalog_items ci
+      JOIN works cw ON cw.id = ci.work_id
+      WHERE ci.catalog_id = c.id AND cw.status = 'published'
+    ) AS item_count,
+    (
+      SELECT ma.blob_sha256
+      FROM work_media_assets wma
+      JOIN media_assets ma ON ma.id = wma.media_asset_id
+      WHERE wma.work_id = (
+        SELECT first_item.work_id
+        FROM catalog_items first_item
+        JOIN works first_work ON first_work.id = first_item.work_id
+        WHERE first_item.catalog_id = c.id AND first_work.status = 'published'
+        ORDER BY first_item.sort_order, first_item.work_id
+        LIMIT 1
+      )
+        AND ma.kind = 'preview'
+      ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+      LIMIT 1
+    ) AS cover_blob_sha256,
+    c.created_at,
+    c.updated_at
+  FROM catalogs c
+  JOIN users u ON u.id = c.owner_user_id
+  WHERE c.status = 'published'`;
