@@ -42,6 +42,12 @@ export async function GET(_request: Request, context: RouteContext) {
               WHERE ce.image_blob_sha256 = b.sha256
                 AND ce.status IN ('active', 'retired')
             )
+            OR EXISTS (
+              SELECT 1
+              FROM users u
+              WHERE u.avatar_blob_sha256 = b.sha256
+                AND u.status = 'active'
+            )
           )
         LIMIT 1`,
       )

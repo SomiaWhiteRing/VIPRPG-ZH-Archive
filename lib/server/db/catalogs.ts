@@ -32,6 +32,24 @@ export async function listCatalogs(): Promise<CatalogSummary[]> {
   return (rows.results ?? []).map(mapSummary);
 }
 
+export async function searchCatalogsForOwner(input: {
+  userId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: CatalogSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const total = await getD1()
+    .prepare(`SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published'`)
+    .bind(input.userId)
+    .first<{ count: number }>();
+  const rows = await getD1()
+    .prepare(`${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
+    .bind(input.userId, pageSize, (page - 1) * pageSize)
+    .all<Row>();
+  return { items: (rows.results ?? []).map(mapSummary), total: total?.count ?? 0, page, pageSize };
+}
+
 export async function listCatalogsContainingWork(
   workId: number,
 ): Promise<CatalogSummary[]> {

@@ -13,6 +13,7 @@ export async function SiteHeader() {
         currentUser
           ? {
               displayName: currentUser.displayName,
+              avatarBlobSha256: currentUser.avatarBlobSha256,
               unread,
               permissionKeys: currentUser.permissionKeys,
               isBootstrapAdmin: currentUser.isBootstrapAdmin,

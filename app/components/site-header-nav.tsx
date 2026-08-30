@@ -4,19 +4,21 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { HeaderNavigation, type HeaderNavigationLink } from "@/app/components/header-navigation";
 import { Label } from "@/app/components/ui/label";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { ChevronDown, Search, UserRound, Menu, X } from "lucide-react";
+import { ChevronDown, Search, Menu, X } from "lucide-react";
 import Image from "next/image";
 import { hasPermissionKey, type PermissionKey } from "@/lib/authz/permissions";
 import { formatUnreadCount } from "@/lib/format";
 import { DropdownMenu } from "radix-ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type Session = {
   displayName: string;
+  avatarBlobSha256: string | null;
   unread: number;
   permissionKeys: PermissionKey[];
   isBootstrapAdmin: boolean;
@@ -227,11 +229,13 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
 function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) {
   const canAccessConsole = hasPermissionKey(session.permissionKeys, "system.dashboard.read");
+  const logoutFormRef = useRef<HTMLFormElement>(null);
   const itemClass =
     "flex min-h-9 w-full cursor-default items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
 
   return (
-    <DropdownMenu.Root>
+    <>
+      <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <Button
           aria-label={`${session.displayName} 用户菜单`}
@@ -240,7 +244,12 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
           type="button"
           variant="ghost"
         >
-          <UserRound aria-hidden />
+          <UserAvatar
+            avatarBlobSha256={session.avatarBlobSha256}
+            className="size-6"
+            displayName={session.displayName}
+            size={24}
+          />
           <span className="hidden max-w-28 truncate sm:inline">{session.displayName}</span>
           <ChevronDown aria-hidden className="hidden text-muted sm:block" />
         </Button>
@@ -257,8 +266,15 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
             </Link>
           </DropdownMenu.Item>
           <DropdownMenu.Item asChild>
+            <Link className={itemClass} href="/me/favorites">收藏</Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link className={itemClass} href="/me/catalogs">我的目录</Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator className="my-1 h-px bg-border" />
+          <DropdownMenu.Item asChild>
             <Link className={itemClass} href="/inbox">
-              <span>站内信</span>
+              <span>提醒</span>
               {session.unread > 0 ? (
                 <Badge className="min-h-5 px-1.5 text-[11px]" variant="negative">
                   {formatUnreadCount(session.unread)}
@@ -280,16 +296,21 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
             </DropdownMenu.Item>
           ) : null}
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          <form action="/api/auth/logout" method="post">
-            <input name="next" type="hidden" value="/" />
-            <DropdownMenu.Item asChild>
-              <Button className="w-full justify-start rounded-sm px-2.5 font-normal" size="sm" type="submit" variant="ghost">
-                登出
-              </Button>
-            </DropdownMenu.Item>
-          </form>
+          <DropdownMenu.Item
+            className={itemClass}
+            onSelect={(event) => {
+              event.preventDefault();
+              logoutFormRef.current?.requestSubmit();
+            }}
+          >
+            登出
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+      </DropdownMenu.Root>
+      <form action="/api/auth/logout" className="hidden" method="post" ref={logoutFormRef}>
+        <input name="next" type="hidden" value="/" />
+      </form>
+    </>
   );
 }

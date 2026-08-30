@@ -53,6 +53,32 @@ export async function sendPasswordResetCodeEmail(input: {
   });
 }
 
+export async function sendEmailChangeCodeEmail(input: {
+  to: string;
+  code: string;
+  callbackUrl: string;
+}): Promise<void> {
+  await sendAuthEmail({
+    to: input.to,
+    subject: "VIPRPG.org邮箱修改验证码",
+    html: renderAuthEmailHtml({
+      title: "邮箱修改验证码",
+      intro: "你正在把这个邮箱绑定到 VIPRPG.org账户。",
+      code: input.code,
+      callbackUrl: input.callbackUrl,
+      actionLabel: "返回个人资料",
+    }),
+    text: [
+      "你正在把这个邮箱绑定到 VIPRPG.org账户。",
+      "",
+      `验证码：${input.code}`,
+      `返回个人资料：${input.callbackUrl}`,
+      "",
+      "验证码 10 分钟内有效。若这不是你本人操作，可以忽略这封邮件。",
+    ].join("\n"),
+  });
+}
+
 async function sendAuthEmail(input: {
   to: string;
   subject: string;

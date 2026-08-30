@@ -150,7 +150,7 @@ export async function markInboxItemRead(input: {
   const item = await requiredInboxItem(input.itemId, input.user);
 
   if (!canViewInboxItem(input.user, item)) {
-    throw new Error("没有权限读取这条站内信");
+    throw new Error("没有权限读取这条提醒");
   }
 
   await getD1()
@@ -209,13 +209,13 @@ async function requiredInboxItem(
     .first<InboxItemRow>();
 
   if (!row) {
-    throw new Error("站内信不存在");
+    throw new Error("提醒不存在");
   }
 
   const item = mapInboxItemRow(row);
 
   if (!canViewInboxItem(viewer, item)) {
-    throw new Error("没有权限读取这条站内信");
+    throw new Error("没有权限读取这条提醒");
   }
 
   return item;

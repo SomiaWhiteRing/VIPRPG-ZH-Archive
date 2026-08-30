@@ -11,7 +11,7 @@ Work
   作品身份与公开资料
   -> titles / creators / characters / tags / media / links
   -> work relations / translation relations / catalogs
-  -> engagement stats / user play-wishlist entries / comments
+  -> engagement stats / user play-favorite entries / comments
   -> ArchiveVersion 0..n
 
 ArchiveVersion
@@ -87,7 +87,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 
 ### 互动与评论
 
-- `work_engagement_stats` 保存近似浏览数；`user_work_entries` 保存登录用户最近游玩时间和待玩时间。下载与在线游玩在用户记录中统一为一次游玩。
+- `work_engagement_stats` 保存近似浏览数；`user_work_entries` 保存登录用户最近游玩时间和收藏时间。下载与在线游玩在用户记录中统一为一次游玩。
 - `work_comments` 使用主楼加同主楼平铺回复：回复回复仍绑定原主楼，`reply_to_comment_id` 只用于展示回复对象，不形成第三层层级。
 - 评论正文是纯文本和站点表情短代码；评论可编辑、软删除、隐藏和点赞。删除主楼会让整楼退出公开查询，作者自己的记录仍可见。
 - `custom_emojis` 由管理员维护，图片通过 blob 引用；退休表情仍可渲染，未知短代码原样显示。评分及评分快照不属于当前模型。
@@ -115,7 +115,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 | 别名、作者、角色、标签、媒体、外链 | Work | Work 更新事务同步维护 |
 | 普通与翻译关系 | 独立关系记录 | 关系服务按创建者或 any-scope 管理 |
 | 目录及成员顺序 | Catalog owner | 目录服务 |
-| 浏览、游玩、待玩和评论 | 当前用户或 Work | 社区服务；公开查询再次检查 Work 与作者状态 |
+| 浏览、游玩、收藏和评论 | 当前用户或 Work | 社区服务；公开查询再次检查 Work 与作者状态 |
 | 站点自定义表情 | 管理员 | 社区服务与 blob 生命周期 |
 | 文件与来源 | ArchiveVersion | 归档服务；文件变化创建新版本 |
 | 文件路径与 storage mapping | Manifest | commit 时冻结，不在 D1 逐文件编辑 |

@@ -43,7 +43,7 @@ export default async function InboxPage() {
         subtitle={`当前角色：${currentUser.roleNames.join("、") || "未分配角色"}`}
         title={
           <>
-            站内信
+            提醒
             {unreadInboxCount > 0 ? (
               <span className="ml-2 align-middle">{formatUnreadCount(unreadInboxCount)}</span>
             ) : null}
@@ -52,11 +52,11 @@ export default async function InboxPage() {
       />
 
       {items.length === 0 ? (
-        <EmptyState title="暂无站内信。" />
+        <EmptyState title="暂无提醒。" />
       ) : (
         <>
           <div className="w-full overflow-x-auto">
-            <TableWrap label="站内信列表" minWidth={820}>
+            <TableWrap label="提醒列表" minWidth={820}>
               <thead>
                 <tr>
                   <th>标题</th>
@@ -89,7 +89,7 @@ export default async function InboxPage() {
             </TableWrap>
           </div>
 
-          <ul className="grid gap-3" aria-label="站内信列表">
+          <ul className="grid gap-3" aria-label="提醒列表">
             {items.map((item) => (
               <li
                 className={`rounded-lg border border-border bg-card p-4 shadow-sm${item.readAt ? "" : " border-l-4 border-accent"}`}

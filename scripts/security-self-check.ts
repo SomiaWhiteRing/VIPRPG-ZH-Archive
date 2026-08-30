@@ -144,6 +144,8 @@ function fakeUser(
     email: `${id}@example.test`,
     externalAuthId: `email:${id}@example.test`,
     displayName: `user-${id}`,
+    avatarBlobSha256: null,
+    bio: "",
     roleIds: [],
     roleKeys: [],
     roleNames: [],
@@ -154,5 +156,6 @@ function fakeUser(
     emailVerifiedAt: "2026-01-01",
     lastLoginAt: null,
     createdAt: "2026-01-01",
+    updatedAt: "2026-01-01",
   };
 }
