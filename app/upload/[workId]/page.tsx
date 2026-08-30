@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UploadClient, type UploadInitialWork } from "@/app/upload/upload-client";
+import { loadUploadSuggestions } from "@/app/upload/upload-suggestions";
 import { hasPermission } from "@/lib/authz/permissions";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { getOwnedWorkForEdit } from "@/lib/server/db/game-library";
@@ -25,6 +26,7 @@ export default async function UploadWorkVersionPage({
   }
   const work = await getOwnedWorkForEdit(workId, currentUser);
   if (!work || work.distribution !== "archive" || !isArchiveEngineFamily(work.engineFamily)) notFound();
+  const suggestions = await loadUploadSuggestions();
   const initialWork: UploadInitialWork = {
     id: work.id,
     originalTitle: work.originalTitle,
@@ -66,11 +68,10 @@ export default async function UploadWorkVersionPage({
       .map((media) => media.blobSha256),
   };
   return (
-    <main>
+    <main className="mx-auto w-[min(1120px,calc(100%-2rem))] py-6">
       <PageHeader
         actions={<BackLink href={`/me/uploads/${work.id}`} label="返回作品维护" />}
-        subtitle="文件上传开始后仍可继续填写或修改资料。"
-        title={`上传新版本：${work.chineseTitle || work.originalTitle}`}
+        title={`编辑信息：${work.chineseTitle || work.originalTitle}`}
       />
       <UploadClient
         currentUser={{
@@ -78,6 +79,7 @@ export default async function UploadWorkVersionPage({
           permissionKeys: currentUser.permissionKeys,
         }}
         initialWork={initialWork}
+        suggestions={suggestions}
       />
     </main>
   );

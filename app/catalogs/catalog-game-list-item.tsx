@@ -46,12 +46,15 @@ export function CatalogGameListItem({
         )}
       </Link>
       <div className="min-w-0 flex-1">
-        <Link
-          className="text-[15.5px] font-bold leading-[1.45] hover:text-primary hover:underline hover:underline-offset-3"
-          href={href}
-        >
-          {item.title}
-        </Link>
+        <div className="flex min-w-0 items-start gap-2">
+          <Link
+            className="min-w-0 flex-1 text-[15.5px] font-bold leading-[1.45] hover:text-primary hover:underline hover:underline-offset-3"
+            href={href}
+          >
+            {item.title}
+          </Link>
+          {management ? <div className="shrink-0">{management}</div> : null}
+        </div>
         {item.chineseTitle ? (
           <p className="mt-0.5 text-[12.5px] text-muted">{item.originalTitle}</p>
         ) : null}
@@ -60,11 +63,6 @@ export function CatalogGameListItem({
           <p className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-muted/5 px-3 py-2 text-[13px] leading-[1.6]">
             {item.note}
           </p>
-        ) : null}
-        {management ? (
-          <div className="mt-2 flex flex-wrap justify-end gap-1 border-t border-border/70 pt-2">
-            {management}
-          </div>
         ) : null}
       </div>
     </li>

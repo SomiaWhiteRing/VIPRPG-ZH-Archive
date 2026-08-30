@@ -3,6 +3,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { requireAccountUser } from "@/lib/server/auth/account-user";
 import { getOwnedWorkForEdit } from "@/lib/server/db/game-library";
+import { loadUploadSuggestions } from "@/app/upload/upload-suggestions";
 import { WorkEditClient } from "./work-edit-client";
 
 export const dynamic = "force-dynamic";
@@ -16,15 +17,16 @@ export default async function UploadedWorkPage({
   const user = await requireAccountUser(`/me/uploads/${workId}`);
   const work = await getOwnedWorkForEdit(workId, user);
   if (!work) notFound();
+  const suggestions = await loadUploadSuggestions();
 
   return (
     <div>
       <PageHeader
         actions={<BackLink href="/me/uploads" label="返回我的上传" />}
-        subtitle={work.distribution === "archive" ? "本站归档作品" : "外部下载作品"}
-        title={work.chineseTitle || work.originalTitle}
+        title={`维护资料：${work.chineseTitle || work.originalTitle}`}
       />
       <WorkEditClient
+        suggestions={suggestions}
         work={{
           id: work.id,
           originalTitle: work.originalTitle,
@@ -42,6 +44,10 @@ export default async function UploadedWorkPage({
             .map((creator) => creator.name),
           distribution: work.distribution,
           externalDownloadUrl: work.externalDownloadUrl,
+          previewBlobSha256s: work.media
+            .filter((media) => media.kind === "preview")
+            .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+            .map((media) => media.blobSha256),
         }}
       />
     </div>

@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/authz/permissions";
 import { UploadClient } from "@/app/upload/upload-client";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
+import { loadUploadSuggestions } from "@/app/upload/upload-suggestions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,14 +37,17 @@ export default async function UploadPage() {
     );
   }
 
+  const suggestions = await loadUploadSuggestions();
+
   return (
-    <main>
-      <PageHeader subtitle="2000/2003 系游戏可上传本地文件，其他引擎请填写外部下载地址。" title="上传游戏" />
+    <main className="mx-auto w-[min(1120px,calc(100%-2rem))] py-6">
+      <PageHeader title="上传游戏" />
       <UploadClient
         currentUser={{
           id: currentUser.id,
           permissionKeys: currentUser.permissionKeys,
         }}
+        suggestions={suggestions}
       />
     </main>
   );

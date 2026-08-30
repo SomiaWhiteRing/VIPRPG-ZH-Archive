@@ -37,6 +37,11 @@ export type MetadataBlobUpload = {
   contentType: string;
 };
 
+export type UploadTaxonomySuggestion = {
+  value: string;
+  meta: string;
+};
+
 export type PreparedArchiveSource = {
   sourceKind: UploadSourceKind;
   sourceName: string;
