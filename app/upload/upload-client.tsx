@@ -1,27 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
   type Dispatch,
   type DragEvent,
   type FormEvent,
   type SetStateAction,
+  useId,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import {
+  Check,
+  FileArchive,
+  FolderOpen,
+  Link as LinkIcon,
+  Upload,
+} from "lucide-react";
 import { LanguageField } from "@/app/admin/works/language-field";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Pane } from "@/app/components/ui/pane";
 import { Progress } from "@/app/components/ui/progress";
-import { SectionHeading } from "@/app/components/ui/section-heading";
 import { SelectField } from "@/app/components/ui/select";
-import { StatList } from "@/app/components/ui/stat-list";
 import { Textarea } from "@/app/components/ui/textarea";
+import { EnginePicker } from "@/app/upload/engine-picker";
+import { CoverPicker, PreviewPicker } from "@/app/upload/media-picker";
+import { TokenPicker } from "@/app/upload/token-picker";
 import { useUploadController } from "@/app/upload/upload-controller";
 import type {
   BrowserUploadTaskSnapshot,
@@ -29,11 +36,14 @@ import type {
   UploadRecoveryDraft,
   UploadSourceFile,
   UploadSourceKind,
+  UploadTaxonomySuggestion,
 } from "@/app/upload/upload-types";
+import { WorkbenchField } from "@/app/upload/workbench-field";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes, formatDate } from "@/lib/format";
-import { ENGINE_OPTIONS, isArchiveEngineFamily } from "@/lib/labels";
+import { isArchiveEngineFamily } from "@/lib/labels";
+import { cn } from "@/lib/ui/cn";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
@@ -53,8 +63,8 @@ type FlatMetadata = {
   aliasTitles: string;
   engineFamily: EngineFamily;
   description: string;
-  tags: string;
-  characters: string;
+  tags: string[];
+  characters: string[];
   creatorNames: string;
   creatorUrl: string;
   isOriginal: boolean;
@@ -95,15 +105,22 @@ type PreparedImages = {
 export function UploadClient({
   currentUser,
   initialWork = null,
+  suggestions,
 }: {
   currentUser: CurrentUser;
   initialWork?: UploadInitialWork | null;
+  suggestions: {
+    tags: UploadTaxonomySuggestion[];
+    characters: UploadTaxonomySuggestion[];
+  };
 }) {
   const router = useRouter();
   const upload = useUploadController(currentUser.id);
   const canArchiveUpload = currentUser.permissionKeys.includes("import_job.create");
   const [mode, setMode] = useState<UploadSourceKind>("folder");
-  const [form, setForm] = useState<FlatMetadata>(() => initialForm(initialWork, canArchiveUpload));
+  const [form, setForm] = useState<FlatMetadata>(() =>
+    initialForm(initialWork, canArchiveUpload),
+  );
   const [associationDefaults, setAssociationDefaults] = useState<AssociationDefaults>(
     () => initialAssociations(initialWork),
   );
@@ -118,13 +135,13 @@ export function UploadClient({
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
-  const canUploadFiles =
-    initialWork !== null ||
-    sourceSummary !== null ||
-    (canArchiveUpload && isArchiveEngineFamily(form.engineFamily));
-  const engineOptions = ENGINE_OPTIONS
-    .filter((option) => !initialWork || option.distribution === "archive")
-    .map(({ value, label }) => ({ value, label }));
+  const archiveMode = isArchiveEngineFamily(form.engineFamily);
+  const metadataLocked = upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
+  const formDisabled = preparing || metadataLocked;
+  const gameFileLocksType = Boolean(
+    initialWork || sourceSummary || upload.active || upload.task?.sourceReady,
+  );
+  const externalLinkLocksType = Boolean(form.externalDownloadUrl.trim());
   const relevantDrafts = upload.drafts.filter(
     (draft) =>
       draft.targetWorkId === (initialWork?.id ?? null) &&
@@ -167,15 +184,27 @@ export function UploadClient({
     });
   }
 
-  async function onFolderDrop(event: DragEvent<HTMLDivElement>) {
+  async function onSourceDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    if (sourceSummary || upload.active) return;
+    if (preparing || sourceSummary || upload.active) return;
     setPreparing(true);
     try {
-      const dropped = await readDroppedFolder(event.dataTransfer);
-      await startFolder(dropped.files, dropped.sourceName);
+      const firstItem = event.dataTransfer.items[0];
+      const getEntry = firstItem
+        ? (firstItem as DataTransferItem & {
+            webkitGetAsEntry?: () => DroppedEntry | null;
+          }).webkitGetAsEntry
+        : undefined;
+      const entry = getEntry?.call(firstItem) ?? null;
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length === 1 && !entry?.isDirectory && /\.zip$/i.test(files[0].name)) {
+        startSource("zip", files[0].name, [{ file: files[0], relativePath: files[0].name }]);
+      } else {
+        const dropped = await readDroppedFolder(event.dataTransfer);
+        await startFolder(dropped.files, dropped.sourceName);
+      }
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "无法读取拖入的文件夹。");
+      setSubmitError(error instanceof Error ? error.message : "无法读取拖入的游戏文件。");
     } finally {
       setPreparing(false);
     }
@@ -188,11 +217,11 @@ export function UploadClient({
       setSubmitError("请填写作品原名。");
       return;
     }
-    if (initialWork && !isArchiveEngineFamily(form.engineFamily)) {
-      setSubmitError("已有归档作品只能选择 RPG Maker 2000/2003 系引擎。");
+    if (initialWork && !archiveMode) {
+      setSubmitError("已有游戏文件，不能切换到外链类型。");
       return;
     }
-    if (!canUploadFiles) {
+    if (!archiveMode) {
       if (!imageSelections.cover) {
         setSubmitError("新建外链作品必须选择封面图。");
         return;
@@ -217,7 +246,7 @@ export function UploadClient({
       return;
     }
     if (!imageSelections.cover && imageSelections.browsingImages.length) {
-      setSubmitError("选择浏览图时也需要选择封面图。");
+      setSubmitError("添加预览图时须同时更新封面图。");
       return;
     }
     setPreparing(true);
@@ -268,133 +297,511 @@ export function UploadClient({
   return (
     <div className="grid gap-5">
       {relevantDrafts.length ? (
-        <Pane heading="可继续的上传">
-          <ul className="divide-y divide-border">
+        <section className="overflow-hidden rounded-lg border border-border bg-card">
+          <header className="border-b border-border px-4 py-3">
+            <h2 className="m-0 text-base font-bold">可继续的上传</h2>
+          </header>
+          <ul className="divide-y divide-border px-4">
             {relevantDrafts.map((draft) => {
               const committing = upload.committingDraftIds.includes(draft.serverImportJobId);
               return (
-                <li className="flex flex-wrap items-center justify-between gap-3 py-3" key={draft.key}>
-                  <div>
-                    <strong>{draft.preparedSource.sourceName}</strong>
+                <li
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  key={draft.key}
+                >
+                  <div className="min-w-0">
+                    <strong className="block truncate">{draft.preparedSource.sourceName}</strong>
                     <p className="mt-1 text-sm text-muted">
-                      {committing ? "正在提交，暂时不能继续编辑" : `文件已上传 · 更新于 ${formatDate(draft.updatedAt)}`}
+                      {committing
+                        ? "正在提交，暂时不能继续编辑"
+                        : `游戏文件已就绪 · ${formatDate(draft.updatedAt)}`}
                     </p>
                   </div>
                   {!committing ? (
                     <div className="flex gap-2">
-                      <Button onClick={() => void restore(draft)} type="button">继续填写</Button>
-                      <Button onClick={() => void upload.discardDraft(draft)} type="button" variant="outline">放弃</Button>
+                      <Button onClick={() => void restore(draft)} size="sm" type="button">
+                        继续填写
+                      </Button>
+                      <Button
+                        onClick={() => void upload.discardDraft(draft)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        放弃
+                      </Button>
                     </div>
                   ) : null}
                 </li>
               );
             })}
           </ul>
-        </Pane>
+        </section>
       ) : null}
-      {upload.controllerError ? <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900">{upload.controllerError}</p> : null}
-      <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
-        <aside className="grid content-start gap-4">
-          <Pane>
-            <SectionHeading eyebrow="游戏来源" title={canUploadFiles ? "游戏文件" : "外部下载"} />
-            {canUploadFiles ? (
-              <>
-                {!sourceSummary && !upload.active ? <div className="mb-3 flex flex-wrap gap-2" role="tablist" aria-label="源类型">
-                  <Button onClick={() => setMode("folder")} type="button" variant={mode === "folder" ? "default" : "outline"}>文件夹</Button>
-                  <Button onClick={() => setMode("zip")} type="button" variant={mode === "zip" ? "default" : "outline"}>本地 ZIP</Button>
-                </div> : null}
-                {sourceSummary ? (
-                  <StatList columns={2} items={[
-                    { label: "来源", value: sourceSummary.name },
-                    { label: "文件", value: (upload.task?.stats.sourceFileCount || sourceSummary.fileCount).toLocaleString("zh-CN") },
-                    { label: "大小", value: formatBytes(upload.task?.stats.sourceSizeBytes || sourceSummary.sizeBytes) },
-                  ]} variant="tiles" />
-                ) : mode === "folder" ? (
-                  <div className="grid gap-3 border-2 border-dashed border-border p-6 text-center" onDragOver={(event) => event.preventDefault()} onDrop={(event) => void onFolderDrop(event)}>
-                    <strong>拖入游戏文件夹</strong>
-                    <span className="text-sm text-muted">或选择包含 RPG_RT.lmt 的游戏根目录</span>
-                    <FilePicker directory label="选择游戏目录" multiple onChange={(event) => {
-                      const files = Array.from(event.target.files ?? []);
-                      const sourceName = folderNameFromPicker(files);
-                      void startFolder(files.map((file) => ({ file, relativePath: webkitPath(file) })), sourceName);
-                    }} />
+
+      {upload.controllerError ? (
+        <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+          {upload.controllerError}
+        </p>
+      ) : null}
+
+      <form onSubmit={onSubmit}>
+        <section className="overflow-visible rounded-lg border border-border bg-card shadow-sm">
+          <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-[84px_minmax(0,1fr)] sm:items-start sm:gap-x-3">
+            <span className="text-sm font-bold sm:pt-2">游戏引擎</span>
+            <EnginePicker
+              disabled={metadataLocked}
+              disabledReason={(option) => {
+                if (option.distribution === "archive" && !canArchiveUpload) {
+                  return "当前账户没有本站归档上传权限";
+                }
+                const targetArchive = option.distribution === "archive";
+                if (targetArchive === archiveMode) return null;
+                if (gameFileLocksType) return "已有游戏文件，不能切换到外链类型";
+                if (externalLinkLocksType) return "请先清空外部下载链接再切换到保存库类型";
+                return null;
+              }}
+              onValueChange={(engineFamily) => {
+                setSubmitError(null);
+                setForm((current) => ({ ...current, engineFamily }));
+              }}
+              value={form.engineFamily}
+            />
+          </div>
+
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0 divide-y divide-border">
+              <section className="p-4 sm:p-5">
+                {archiveMode ? (
+                  <ArchiveSourceSection
+                    disabled={preparing || Boolean(sourceSummary) || upload.active}
+                    mode={mode}
+                    onCancel={() => void upload.cancelTask()}
+                    onDrop={onSourceDrop}
+                    onFolder={(files, sourceName) => void startFolder(files, sourceName)}
+                    onModeChange={setMode}
+                    onRestart={restart}
+                    onZip={(file) =>
+                      startSource("zip", file.name, [{ file, relativePath: file.name }])
+                    }
+                    sourceSummary={sourceSummary}
+                    task={upload.task}
+                  />
+                ) : (
+                  <ExternalSourceSection
+                    disabled={formDisabled}
+                    onChange={(externalDownloadUrl) =>
+                      setForm((current) => ({ ...current, externalDownloadUrl }))
+                    }
+                    value={form.externalDownloadUrl}
+                  />
+                )}
+              </section>
+
+              <section className="p-4 sm:p-5">
+                {upload.metadataConfirmed ? (
+                  <div className="grid min-h-44 place-items-center text-center">
+                    <div>
+                      <span className="mx-auto mb-3 grid size-11 place-items-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700">
+                        <Check className="size-5" />
+                      </span>
+                      <h2 className="m-0 text-lg font-bold">作品资料已确认</h2>
+                      <p className="mt-1 text-sm text-muted">
+                        {form.chineseTitle.trim() || form.originalTitle.trim()}
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <FilePicker accept=".zip,application/zip" label="选择本地 ZIP" onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) startSource("zip", file.name, [{ file, relativePath: file.name }]);
-                  }} />
+                  <MetadataFields
+                    disabled={preparing}
+                    form={form}
+                    imageSelections={imageSelections}
+                    initialWork={initialWork}
+                    setForm={setForm}
+                    setImageSelections={setImageSelections}
+                    suggestions={suggestions}
+                  />
                 )}
-              </>
-            ) : <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">非 RPG Maker 2000/2003 系作品使用外部下载地址。</p>}
-          </Pane>
-          {upload.task ? <UploadProgress task={upload.task} onCancel={() => void upload.cancelTask()} onRestart={restart} /> : null}
-        </aside>
+              </section>
+            </div>
 
-        {upload.metadataConfirmed ? (
-          <Pane heading="作品资料已确认">
-            <p>{form.chineseTitle.trim() || form.originalTitle.trim()}</p>
-            {!sourceSummary ? <p className="text-sm text-muted">现在选择游戏文件；文件准备完成后会自动提交。</p> : null}
-            {!upload.task?.commitStarted ? <Button onClick={upload.revokeMetadata} type="button" variant="outline">修改资料</Button> : <p className="text-sm text-muted">正在提交，资料已锁定。</p>}
-          </Pane>
-        ) : (
-          <form className="grid gap-4" onSubmit={onSubmit}>
-            <Pane heading="作品资料">
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextField form={form} label="原名 *" name="originalTitle" setForm={setForm} required />
-                <FormField label="游戏引擎 *"><SelectField onValueChange={(value) => setForm((current) => ({ ...current, engineFamily: value as EngineFamily }))} options={engineOptions.map((option) => ({ ...option, disabled: (isArchiveEngineFamily(option.value) && !canArchiveUpload) || (!initialWork && sourceSummary !== null && !isArchiveEngineFamily(option.value)) }))} value={form.engineFamily} required /></FormField>
-                <TextField form={form} label="中文名" name="chineseTitle" setForm={setForm} />
-                <FormField label="游戏语言 *"><LanguageField onValueChange={(language) => setForm((current) => ({ ...current, language }))} value={form.language} /></FormField>
-                {initialWork ? <FormField label="公开状态"><SelectField onValueChange={(value) => setForm((current) => ({ ...current, status: value as "published" | "hidden" }))} options={[{ value: "published", label: "已发布" }, { value: "hidden", label: "隐藏" }]} value={form.status} /></FormField> : null}
-                <FormField label="作品属性"><Label className="flex min-h-10 items-center gap-2"><Checkbox checked={form.isOriginal} onCheckedChange={(checked) => setForm((current) => ({ ...current, isOriginal: checked === true }))} />本站原创</Label></FormField>
-                <FormField label="简介" wide><Textarea onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={5} value={form.description} /></FormField>
+            <aside className="min-w-0 border-t border-border bg-background/40 lg:border-l lg:border-t-0">
+              <div className="lg:sticky lg:top-16">
+                <div className="border-b border-border p-4">
+                  <CoverPicker
+                    disabled={formDisabled}
+                    existingBlobSha256={initialWork?.previewBlobSha256s[0]}
+                    file={imageSelections.cover}
+                    onChange={(cover) =>
+                      setImageSelections((current) => ({ ...current, cover }))
+                    }
+                    required={!initialWork}
+                  />
+                  {initialWork ? (
+                    <p className="mt-2 text-xs text-muted">
+                      不选择则保留现有封面；添加预览图时须同时更新封面。
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="border-b border-border p-4">
+                  <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.12em] text-muted">
+                    准备状态
+                  </p>
+                  <ReadinessList
+                    archiveMode={archiveMode}
+                    metadataConfirmed={upload.metadataConfirmed}
+                    preparing={preparing}
+                    sourceSummary={sourceSummary}
+                    task={upload.task}
+                  />
+                </div>
+
+                <fieldset className="grid gap-4 border-b border-border p-4" disabled={formDisabled}>
+                  <div className="grid gap-2">
+                    <span className="text-sm font-bold">游戏语言 <span className="text-accent">*</span></span>
+                    <LanguageField
+                      onValueChange={(language) =>
+                        setForm((current) => ({ ...current, language }))
+                      }
+                      value={form.language}
+                    />
+                  </div>
+                  {initialWork ? (
+                    <div className="grid gap-2">
+                      <Label className="font-bold">公开状态</Label>
+                      <SelectField
+                        onValueChange={(status) =>
+                          setForm((current) => ({
+                            ...current,
+                            status: status as "published" | "hidden",
+                          }))
+                        }
+                        options={[
+                          { value: "published", label: "已发布" },
+                          { value: "hidden", label: "隐藏" },
+                        ]}
+                        value={form.status}
+                      />
+                    </div>
+                  ) : null}
+                </fieldset>
+
+                <div className="grid gap-3 p-4">
+                  {submitError ? (
+                    <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+                      {submitError}
+                    </p>
+                  ) : null}
+                  {upload.task?.commitStarted && !upload.task.result ? (
+                    <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                      正在提交，资料已锁定，当前不能取消或离开页面。
+                    </p>
+                  ) : null}
+                  {archiveMode && upload.metadataConfirmed ? (
+                    <Button
+                      className="min-h-12 w-full"
+                      disabled={Boolean(upload.task?.commitStarted)}
+                      onClick={upload.revokeMetadata}
+                      type="button"
+                      variant="rm2k"
+                    >
+                      {upload.task?.commitStarted ? "正在提交…" : "修改资料"}
+                    </Button>
+                  ) : (
+                    <Button
+                      className="min-h-12 w-full"
+                      disabled={preparing}
+                      type="submit"
+                      variant="rm2k"
+                    >
+                      {preparing
+                        ? archiveMode
+                          ? "正在确认…"
+                          : "正在发布…"
+                        : archiveMode
+                          ? "确认作品资料"
+                          : "发布外链作品"}
+                    </Button>
+                  )}
+                  {initialWork ? (
+                    <Link
+                      className={buttonVariants({ className: "w-full", variant: "outline" })}
+                      href={`/me/uploads/${initialWork.id}`}
+                    >
+                      只维护资料
+                    </Link>
+                  ) : null}
+                </div>
               </div>
-            </Pane>
-            <Pane heading="图片与分类">
-              <div className="grid gap-4 md:grid-cols-2">
-                <ImageField label="封面图" onChange={(cover) => setImageSelections((current) => ({ ...current, cover }))} required={!initialWork} />
-                <FormField label="浏览图"><FilePicker accept="image/*" label="选择浏览图" multiple onChange={(event) => setImageSelections((current) => ({ ...current, browsingImages: Array.from(event.target.files ?? []) }))} /></FormField>
-                <TextAreaField form={form} label="别名" name="aliasTitles" setForm={setForm} />
-                <TextField form={form} label="标签" name="tags" setForm={setForm} />
-                <TextAreaField form={form} label="登场角色" name="characters" setForm={setForm} />
-                {initialWork ? <TextAreaField form={form} label="作者（每行一个）" name="creatorNames" setForm={setForm} /> : <div className="grid gap-4"><TextField form={form} label="作者名" name="creatorNames" setForm={setForm} /><TextField form={form} label="作者链接" name="creatorUrl" setForm={setForm} /></div>}
-              </div>
-            </Pane>
-            <Pane heading={canUploadFiles ? "归档资料" : "外部下载"}>
-              {canUploadFiles ? <div className="grid gap-4 md:grid-cols-2"><TextField form={form} label="来源名" name="sourceName" setForm={setForm} /><TextField form={form} label="来源链接" name="sourceUrl" setForm={setForm} /></div> : <FormField hint="该地址是作品的唯一下载入口。" label="外部下载地址 *"><Input onChange={(event) => setForm((current) => ({ ...current, externalDownloadUrl: event.target.value }))} required type="url" value={form.externalDownloadUrl} /></FormField>}
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button disabled={preparing} type="submit">{preparing ? "正在确认…" : canUploadFiles ? "确认作品资料" : "发布外链作品"}</Button>
-                {initialWork ? <Link className={buttonVariants({ variant: "outline" })} href={`/me/uploads/${initialWork.id}`}>只维护资料</Link> : null}
-                {submitError ? <p className="text-sm text-red-700" role="alert">{submitError}</p> : null}
-              </div>
-            </Pane>
-          </form>
-        )}
+            </aside>
+          </div>
+        </section>
+      </form>
+    </div>
+  );
+}
+
+function ArchiveSourceSection({
+  disabled,
+  mode,
+  onCancel,
+  onDrop,
+  onFolder,
+  onModeChange,
+  onRestart,
+  onZip,
+  sourceSummary,
+  task,
+}: {
+  disabled: boolean;
+  mode: UploadSourceKind;
+  onCancel: () => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onFolder: (files: UploadSourceFile[], sourceName: string) => void;
+  onModeChange: (mode: UploadSourceKind) => void;
+  onRestart: () => void;
+  onZip: (file: File) => void;
+  sourceSummary: { name: string; fileCount: number; sizeBytes: number } | null;
+  task: BrowserUploadTaskSnapshot | null;
+}) {
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-bold">游戏文件</h2>
+      {sourceSummary ? (
+        <UploadTaskCard
+          mode={mode}
+          onCancel={onCancel}
+          onRestart={onRestart}
+          sourceSummary={sourceSummary}
+          task={task}
+        />
+      ) : (
+        <div
+          className={cn(
+            "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center",
+            disabled && "opacity-60",
+          )}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => void onDrop(event)}
+        >
+          <div className="grid justify-items-center gap-2">
+            <Upload className="size-8 text-primary" />
+            <strong>拖入游戏文件夹或 ZIP 压缩包</strong>
+            <span className="text-sm text-muted">文件夹根目录或 ZIP 内须包含 RPG_RT.lmt</span>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              <FilePicker
+                accept=".zip,application/zip"
+                disabled={disabled}
+                label="选择 ZIP"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    onModeChange("zip");
+                    onZip(file);
+                  }
+                }}
+              />
+              <FilePicker
+                directory
+                disabled={disabled}
+                label="以文件夹方式选择"
+                multiple
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  onModeChange("folder");
+                  onFolder(
+                    files.map((file) => ({ file, relativePath: webkitPath(file) })),
+                    folderNameFromPicker(files),
+                  );
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExternalSourceSection({ disabled, onChange, value }: {
+  disabled: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div>
+      <header className="mb-4">
+        <h2 className="m-0 text-lg font-bold">外部下载</h2>
+        <p className="mt-1 text-sm text-muted">
+          保存库暂不支持RM2k系以外作品，您可以提交外部网盘链接。
+        </p>
+      </header>
+      <div className="grid grid-cols-[20px_minmax(0,1fr)] items-center gap-2.5">
+        <LinkIcon className="size-5 text-muted" />
+        <Input
+          aria-label="外部下载地址"
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="https://"
+          required
+          type="url"
+          value={value}
+        />
       </div>
     </div>
   );
 }
 
-function UploadProgress({
-  task,
-  onCancel,
-  onRestart,
+function MetadataFields({
+  disabled,
+  form,
+  imageSelections,
+  initialWork,
+  setForm,
+  setImageSelections,
+  suggestions,
 }: {
-  task: BrowserUploadTaskSnapshot;
+  disabled: boolean;
+  form: FlatMetadata;
+  imageSelections: ImageSelections;
+  initialWork: UploadInitialWork | null;
+  setForm: Dispatch<SetStateAction<FlatMetadata>>;
+  setImageSelections: Dispatch<SetStateAction<ImageSelections>>;
+  suggestions: {
+    tags: UploadTaxonomySuggestion[];
+    characters: UploadTaxonomySuggestion[];
+  };
+}) {
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-bold">作品资料</h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        <WorkbenchField controlId="upload-chinese-title" label="中文名">
+          <Input disabled={disabled} id="upload-chinese-title" onChange={(event) => setForm((current) => ({ ...current, chineseTitle: event.target.value }))} value={form.chineseTitle} />
+        </WorkbenchField>
+        <WorkbenchField controlId="upload-original-title" label="原名" required>
+          <Input disabled={disabled} id="upload-original-title" onChange={(event) => setForm((current) => ({ ...current, originalTitle: event.target.value }))} required value={form.originalTitle} />
+        </WorkbenchField>
+        <WorkbenchField className="md:col-span-2" controlId="upload-author" label="作者">
+          <div className="grid gap-2">
+            <Input disabled={disabled} id="upload-author" onChange={(event) => setForm((current) => ({ ...current, creatorNames: event.target.value }))} value={form.creatorNames} />
+            <Label className="flex w-fit items-center gap-2 text-xs font-semibold text-red-700">
+              <Checkbox checked={form.isOriginal} className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700" disabled={disabled} onCheckedChange={(checked) => setForm((current) => ({ ...current, isOriginal: checked === true }))} />
+              本作品为我原创。
+            </Label>
+          </div>
+        </WorkbenchField>
+        <WorkbenchField className="md:col-span-2" controlId="upload-description" label="简介">
+          <Textarea disabled={disabled} id="upload-description" onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} value={form.description} />
+        </WorkbenchField>
+        <WorkbenchField className="md:col-span-2" controlId="upload-tags" label="标签">
+          <TokenPicker disabled={disabled} id="upload-tags" onChange={(tags) => setForm((current) => ({ ...current, tags }))} placeholder="搜索或创建标签" recommendationLabel="推荐标签" suggestions={suggestions.tags} values={form.tags} />
+        </WorkbenchField>
+        <WorkbenchField className="md:col-span-2" controlId="upload-characters" label="登场角色">
+          <TokenPicker disabled={disabled} id="upload-characters" onChange={(characters) => setForm((current) => ({ ...current, characters }))} placeholder="搜索或添加角色" recommendationLabel="常用角色" suggestions={suggestions.characters} values={form.characters} />
+        </WorkbenchField>
+        <details className="md:col-span-2">
+          <summary className="cursor-pointer py-1 text-sm font-bold">更多设置</summary>
+          <div className="mt-3 grid gap-4 border-t border-border pt-4 md:grid-cols-2">
+            <WorkbenchField className="md:col-span-2" label="预览图">
+              <PreviewPicker disabled={disabled} existingCount={Math.max(0, (initialWork?.previewBlobSha256s.length ?? 0) - 1)} files={imageSelections.browsingImages} onChange={(browsingImages) => setImageSelections((current) => ({ ...current, browsingImages }))} />
+            </WorkbenchField>
+            <WorkbenchField controlId="upload-aliases" label="别名">
+              <Textarea disabled={disabled} id="upload-aliases" onChange={(event) => setForm((current) => ({ ...current, aliasTitles: event.target.value }))} rows={3} value={form.aliasTitles} />
+            </WorkbenchField>
+            {!initialWork ? (
+              <WorkbenchField controlId="upload-creator-url" label="作者链接">
+                <Input disabled={disabled} id="upload-creator-url" onChange={(event) => setForm((current) => ({ ...current, creatorUrl: event.target.value }))} type="url" value={form.creatorUrl} />
+              </WorkbenchField>
+            ) : null}
+            {isArchiveEngineFamily(form.engineFamily) ? (
+              <>
+                <WorkbenchField controlId="upload-source-name" label="来源名">
+                  <Input disabled={disabled} id="upload-source-name" onChange={(event) => setForm((current) => ({ ...current, sourceName: event.target.value }))} value={form.sourceName} />
+                </WorkbenchField>
+                <WorkbenchField controlId="upload-source-url" label="来源链接">
+                  <Input disabled={disabled} id="upload-source-url" onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))} type="url" value={form.sourceUrl} />
+                </WorkbenchField>
+              </>
+            ) : null}
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+function UploadTaskCard({ mode, onCancel, onRestart, sourceSummary, task }: {
+  mode: UploadSourceKind;
   onCancel: () => void;
   onRestart: () => void;
+  sourceSummary: { name: string; fileCount: number; sizeBytes: number };
+  task: BrowserUploadTaskSnapshot | null;
 }) {
-  return <Pane heading="上传进度">
-    <p className="text-sm text-muted">{phaseLabel(task.phase)}</p>
-    <Progress aria-label="上传进度" value={Math.min(100, task.progress.percent)} />
-    <p className="mt-2 font-mono text-xs text-muted">{Math.round(task.progress.percent)}%{task.progress.currentPath ? ` · ${task.progress.currentPath}` : ""}</p>
-    {task.error ? <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900">{task.error}</p> : null}
-    {task.result ? <p className="border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">上传完成。<Link className="font-semibold underline" href={`/games/${task.result.workId}`}>查看作品</Link></p> : null}
-    <div className="mt-3 flex flex-wrap gap-2">
-      {["running", "waiting"].includes(task.status) && task.phase !== "committing" ? <Button onClick={onCancel} type="button" variant="outline">取消上传</Button> : null}
-      {["failed", "canceled"].includes(task.status) ? <Button onClick={onRestart} type="button">重新开始</Button> : null}
+  const progress = Math.min(100, task?.progress.percent ?? 0);
+  const canCancel = Boolean(task && ["running", "waiting"].includes(task.status) && task.phase !== "committing");
+  const canRestart = Boolean(task && ["failed", "canceled"].includes(task.status));
+  return (
+    <article className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="p-4">
+        <div className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-md bg-primary/10 text-primary">
+            {mode === "folder" ? <FolderOpen className="size-5" /> : <FileArchive className="size-5" />}
+          </span>
+          <span className="min-w-0">
+            <strong className="block truncate">{sourceSummary.name}</strong>
+            <span className="mt-0.5 block text-xs text-muted">
+              {mode === "folder" ? "文件夹" : "ZIP 压缩包"} · {sourceSummary.fileCount.toLocaleString("zh-CN")} 个文件 · {formatBytes(sourceSummary.sizeBytes)}
+            </span>
+          </span>
+          <strong className="font-mono text-lg">{Math.round(progress)}%</strong>
+        </div>
+        <Progress aria-label="上传进度" className="mt-4" value={progress} />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <strong>{task ? phaseLabel(task.phase) : "准备上传"}</strong>
+          {task?.progress.currentPath ? <span className="max-w-full truncate font-mono">{task.progress.currentPath}</span> : null}
+        </div>
+        {task?.error ? <p className="mt-3 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">{task.error}</p> : null}
+        {task?.result ? <p className="mt-3 border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">上传完成。<Link className="font-semibold underline" href={`/games/${task.result.workId}`}>查看作品</Link></p> : null}
+      </div>
+      {canCancel || canRestart ? (
+        <footer className="flex justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
+          {canCancel ? <Button onClick={onCancel} size="sm" type="button" variant="outline">取消上传</Button> : null}
+          {canRestart ? <Button onClick={onRestart} size="sm" type="button">重新开始</Button> : null}
+        </footer>
+      ) : null}
+    </article>
+  );
+}
+
+function ReadinessList({ archiveMode, metadataConfirmed, preparing, sourceSummary, task }: {
+  archiveMode: boolean;
+  metadataConfirmed: boolean;
+  preparing: boolean;
+  sourceSummary: { name: string; fileCount: number; sizeBytes: number } | null;
+  task: BrowserUploadTaskSnapshot | null;
+}) {
+  const items = archiveMode
+    ? [
+        { label: "游戏文件", value: task?.sourceReady ? "已就绪" : task ? phaseLabel(task.phase) : sourceSummary ? "准备中" : "尚未选择", tone: task?.sourceReady ? "ready" : task ? "running" : "idle" },
+        { label: "作品资料", value: task?.commitStarted ? "已锁定" : metadataConfirmed ? "已确认" : "编辑中", tone: metadataConfirmed ? "ready" : "idle" },
+        { label: "发布", value: task?.result ? "已完成" : task?.commitStarted ? phaseLabel(task.phase) : task?.sourceReady && !metadataConfirmed ? "等待作品资料" : !task?.sourceReady && metadataConfirmed ? "等待游戏文件" : "等待两项就绪", tone: task?.result ? "ready" : task?.commitStarted ? "running" : "idle" },
+      ]
+    : [
+        { label: "作品资料", value: preparing ? "正在发布" : "编辑中", tone: preparing ? "running" : "idle" },
+        { label: "发布", value: preparing ? "提交中" : "等待发布", tone: preparing ? "running" : "idle" },
+      ];
+  return (
+    <div className="grid gap-3">
+      {items.map((item) => (
+        <div className="grid grid-cols-[10px_minmax(0,1fr)] items-start gap-2.5" key={item.label}>
+          <span className={cn("mt-1.5 size-2.5 rounded-full bg-muted/40", item.tone === "ready" && "bg-emerald-500", item.tone === "running" && "animate-pulse bg-primary")} />
+          <span><strong className="block text-sm">{item.label}</strong><span className="block text-xs text-muted">{item.value}</span></span>
+        </div>
+      ))}
     </div>
-  </Pane>;
+  );
 }
 
 function initialForm(work: UploadInitialWork | null, canArchiveUpload: boolean): FlatMetadata {
@@ -404,9 +811,9 @@ function initialForm(work: UploadInitialWork | null, canArchiveUpload: boolean):
     aliasTitles: work?.aliases.join("\n") ?? "",
     engineFamily: work?.engineFamily ?? (canArchiveUpload ? "rpg_maker_2000" : "other"),
     description: work?.description ?? "",
-    tags: work?.tags.join("\n") ?? "",
-    characters: work?.characterCredits.map((character) => character.name).join("\n") ?? "",
-    creatorNames: work?.authorCredits.map((author) => author.creator.name).join("\n") ?? "",
+    tags: work?.tags ?? [],
+    characters: work?.characterCredits.map((character) => character.name) ?? [],
+    creatorNames: work?.authorCredits.map((author) => author.creator.name).join(", ") ?? "",
     creatorUrl: "",
     isOriginal: work?.isOriginal ?? false,
     language: work?.language ?? "zh-CN",
@@ -418,47 +825,32 @@ function initialForm(work: UploadInitialWork | null, canArchiveUpload: boolean):
 }
 
 function initialAssociations(work: UploadInitialWork | null): AssociationDefaults {
-  return work
-    ? { characters: work.characterCredits, authors: work.authorCredits }
-    : { characters: [], authors: [] };
+  return work ? { characters: work.characterCredits, authors: work.authorCredits } : { characters: [], authors: [] };
 }
 
 function associationsFromMetadata(metadata: ArchiveCommitMetadata): AssociationDefaults {
-  const creators = new Map(
-    metadata.creators.map((creator) => [entityNameKey(creator.name), creator]),
-  );
+  const creators = new Map(metadata.creators.map((creator) => [entityNameKey(creator.name), creator]));
   return {
     characters: metadata.characters ?? [],
-    authors: metadata.workStaff
-      .filter((staff) => staff.roleKey === "author")
-      .map((staff) => ({
-        creator: creators.get(entityNameKey(staff.creatorName)) ?? {
-          name: staff.creatorName,
-          originalName: null,
-          websiteUrl: null,
-          extra: {},
-        },
-        staff,
-      })),
+    authors: metadata.workStaff.filter((staff) => staff.roleKey === "author").map((staff) => ({
+      creator: creators.get(entityNameKey(staff.creatorName)) ?? { name: staff.creatorName, originalName: null, websiteUrl: null, extra: {} },
+      staff,
+    })),
   };
 }
 
 function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
-  const authorNames = metadata.workStaff
-    .filter((staff) => staff.roleKey === "author")
-    .map((staff) => staff.creatorName);
-  const creator = metadata.creators.find(
-    (item) => entityNameKey(item.name) === entityNameKey(authorNames[0] ?? ""),
-  );
+  const authorNames = metadata.workStaff.filter((staff) => staff.roleKey === "author").map((staff) => staff.creatorName);
+  const creator = metadata.creators.find((item) => entityNameKey(item.name) === entityNameKey(authorNames[0] ?? ""));
   return {
     originalTitle: metadata.game.originalTitle,
     chineseTitle: metadata.game.chineseTitle ?? "",
     aliasTitles: metadata.workTitles.map((item) => item.title).join("\n"),
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
-    tags: metadata.tags.join("\n"),
-    characters: (metadata.characters ?? []).map((item) => item.name).join("\n"),
-    creatorNames: authorNames.join("\n"),
+    tags: metadata.tags,
+    characters: (metadata.characters ?? []).map((item) => item.name),
+    creatorNames: authorNames.join(", "),
     creatorUrl: creator?.websiteUrl ?? "",
     isOriginal: metadata.game.isOriginal,
     language: metadata.game.language,
@@ -469,69 +861,31 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
   };
 }
 
-function buildMetadata(
-  form: FlatMetadata,
-  imageHashes: { browsingImageBlobSha256s: string[] },
-  targetWorkId: number | null,
-  defaults: AssociationDefaults,
-): ArchiveCommitMetadata {
-  const characterDefaults = new Map(
-    defaults.characters.map((character) => [entityNameKey(character.name), character]),
-  );
-  const characters = parseList(form.characters).map((name, index) => {
+function buildMetadata(form: FlatMetadata, imageHashes: { browsingImageBlobSha256s: string[] }, targetWorkId: number | null, defaults: AssociationDefaults): ArchiveCommitMetadata {
+  const characterDefaults = new Map(defaults.characters.map((character) => [entityNameKey(character.name), character]));
+  const characters = uniqueTokens(form.characters).map((name, index) => {
     const existing = characterDefaults.get(entityNameKey(name));
-    return {
-      name,
-      originalName: existing?.originalName ?? null,
-      roleKey: existing?.roleKey ?? "supporting",
-      spoilerLevel: existing?.spoilerLevel ?? 0,
-      sortOrder: index + 1,
-      notes: existing?.notes ?? null,
-    } satisfies CharacterCredit;
+    return { name, originalName: existing?.originalName ?? null, roleKey: existing?.roleKey ?? "supporting", spoilerLevel: existing?.spoilerLevel ?? 0, sortOrder: index + 1, notes: existing?.notes ?? null } satisfies CharacterCredit;
   });
-  const authorDefaults = new Map(
-    defaults.authors.map((author) => [entityNameKey(author.creator.name), author]),
-  );
+  const authorDefaults = new Map(defaults.authors.map((author) => [entityNameKey(author.creator.name), author]));
   const authorNames = parseList(form.creatorNames);
   const creators = authorNames.map((name, index) => {
     const existing = authorDefaults.get(entityNameKey(name));
-    return {
-      name,
-      originalName: existing?.creator.originalName ?? null,
-      websiteUrl: existing?.creator.websiteUrl ?? (!targetWorkId && index === 0 ? cleanNullable(form.creatorUrl) : null),
-      extra: existing?.creator.extra ?? {},
-    } satisfies CreatorCredit;
+    return { name, originalName: existing?.creator.originalName ?? null, websiteUrl: existing?.creator.websiteUrl ?? (!targetWorkId && index === 0 ? cleanNullable(form.creatorUrl) : null), extra: existing?.creator.extra ?? {} } satisfies CreatorCredit;
   });
   const workStaff = authorNames.map((creatorName) => {
     const existing = authorDefaults.get(entityNameKey(creatorName));
-    return {
-      creatorName,
-      roleKey: "author",
-      roleLabel: existing?.staff.roleLabel ?? "作者",
-      notes: existing?.staff.notes ?? null,
-    } satisfies WorkStaffCredit;
+    return { creatorName, roleKey: "author", roleLabel: existing?.staff.roleLabel ?? "作者", notes: existing?.staff.notes ?? null } satisfies WorkStaffCredit;
   });
   return {
-    game: {
-      originalTitle: form.originalTitle.trim(),
-      chineseTitle: cleanNullable(form.chineseTitle),
-      description: cleanNullable(form.description),
-      originalReleaseDate: null,
-      originalReleasePrecision: "unknown",
-      engineFamily: form.engineFamily,
-      isOriginal: form.isOriginal,
-      language: form.language,
-      browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s,
-      status: form.status,
-      extra: {},
-    },
+    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: null, originalReleasePrecision: "unknown", engineFamily: form.engineFamily, isOriginal: form.isOriginal, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: {} },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
     archiveVersion: { sourceName: cleanNullable(form.sourceName), sourceUrl: cleanNullable(form.sourceUrl) },
     workTitles: parseList(form.aliasTitles).map((title) => ({ title, language: null, titleType: "alias" })),
     characters,
     creators,
     workStaff,
-    tags: parseList(form.tags),
+    tags: uniqueTokens(form.tags),
     externalLinks: { work: [] },
   };
 }
@@ -562,8 +916,8 @@ async function submitExternalWork(form: FlatMetadata, images: ImageSelections): 
   if (form.isOriginal) body.set("is_original", "1");
   body.set("language", form.language);
   body.set("aliases", form.aliasTitles);
-  body.set("tags", form.tags);
-  body.set("characters", form.characters);
+  body.set("tags", form.tags.join("\n"));
+  body.set("characters", form.characters.join("\n"));
   body.set("creator_name", parseList(form.creatorNames)[0] ?? "");
   body.set("creator_url", form.creatorUrl.trim());
   body.set("download_url", form.externalDownloadUrl.trim());
@@ -575,18 +929,16 @@ async function submitExternalWork(form: FlatMetadata, images: ImageSelections): 
   return { workId: payload.workId };
 }
 
-function TextField({ form, name, label, setForm, required = false }: { form: FlatMetadata; name: keyof FlatMetadata; label: string; setForm: Dispatch<SetStateAction<FlatMetadata>>; required?: boolean }) {
-  return <FormField label={label}><Input onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} required={required} type="text" value={String(form[name])} /></FormField>;
-}
-function TextAreaField({ form, name, label, setForm }: { form: FlatMetadata; name: keyof FlatMetadata; label: string; setForm: Dispatch<SetStateAction<FlatMetadata>> }) {
-  return <FormField label={label}><Textarea onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} rows={4} value={String(form[name])} /></FormField>;
-}
-function ImageField({ label, required, onChange }: { label: string; required: boolean; onChange: (file: File | null) => void }) {
-  return <FormField label={label}><FilePicker accept="image/*" label={`选择${label}`} onChange={(event) => onChange(event.target.files?.[0] ?? null)} required={required} /></FormField>;
-}
-function FilePicker({ accept, directory = false, label, multiple = false, onChange, required = false }: { accept?: string; directory?: boolean; label: string; multiple?: boolean; onChange: (event: ChangeEvent<HTMLInputElement>) => void; required?: boolean }) {
-  const id = `file-picker-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
-  return <div className="grid gap-2"><Button asChild variant="outline"><Label className="cursor-pointer" htmlFor={id}>{label}</Label></Button><input accept={accept} className="sr-only" id={id} multiple={multiple} onChange={onChange} required={required} type="file" {...(directory ? { webkitdirectory: "", directory: "" } : {})} /></div>;
+function FilePicker({ accept, directory = false, disabled = false, label, multiple = false, onChange }: {
+  accept?: string;
+  directory?: boolean;
+  disabled?: boolean;
+  label: string;
+  multiple?: boolean;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const id = useId();
+  return <div><Button asChild className={disabled ? "pointer-events-none opacity-50" : undefined} size="sm" variant="outline"><Label aria-disabled={disabled || undefined} className="cursor-pointer" htmlFor={id}>{label}</Label></Button><input accept={accept} className="sr-only" disabled={disabled} id={id} multiple={multiple} onChange={onChange} type="file" {...(directory ? { webkitdirectory: "", directory: "" } : {})} /></div>;
 }
 
 function normalizeFolderSource(rawFiles: UploadSourceFile[], suggestedName: string) {
@@ -600,12 +952,10 @@ function normalizeFolderSource(rawFiles: UploadSourceFile[], suggestedName: stri
 }
 
 async function readDroppedFolder(dataTransfer: DataTransfer): Promise<{ sourceName: string; files: UploadSourceFile[] }> {
-  const entries = Array.from(dataTransfer.items)
-    .map((item): DroppedEntry | null => {
-      const getEntry = (item as unknown as { webkitGetAsEntry?: () => DroppedEntry | null }).webkitGetAsEntry;
-      return getEntry?.call(item) ?? null;
-    })
-    .filter((entry): entry is DroppedEntry => entry !== null);
+  const entries = Array.from(dataTransfer.items).map((item): DroppedEntry | null => {
+    const getEntry = (item as unknown as { webkitGetAsEntry?: () => DroppedEntry | null }).webkitGetAsEntry;
+    return getEntry?.call(item) ?? null;
+  }).filter((entry): entry is DroppedEntry => entry !== null);
   if (entries.length === 1 && entries[0].isDirectory) {
     const files = await readDroppedEntry(entries[0], entries[0].name);
     return { sourceName: entries[0].name, files };
@@ -636,9 +986,10 @@ type DroppedDirectoryEntry = DroppedEntry & { createReader: () => { readEntries:
 
 function webkitPath(file: File): string { return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name; }
 function folderNameFromPicker(files: File[]): string { const first = files[0] ? webkitPath(files[0]).split("/")[0] : "local-folder"; return first || "local-folder"; }
-function entityNameKey(value: string): string { return value.toLowerCase(); }
+function entityNameKey(value: string): string { return value.toLocaleLowerCase(); }
 function cleanNullable(value: string): string | null { return value.trim() || null; }
 function parseList(value: string): string[] { return [...new Set(value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean))]; }
+function uniqueTokens(values: string[]): string[] { const seen = new Set<string>(); return values.filter((value) => { const key = entityNameKey(value.trim()); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
 function phaseLabel(phase: string): string {
   const labels: Record<string, string> = { enumerating: "读取文件", hashing: "校验文件", building_core_pack: "整理公共文件", creating_import_job: "创建上传任务", preflighting: "检查已有对象", uploading_source: "上传游戏文件", verifying_source: "确认游戏文件", awaiting_metadata: "等待作品资料", uploading_metadata: "上传资料图片", committing: "提交入库", completed: "完成" };
   return labels[phase] ?? "准备";

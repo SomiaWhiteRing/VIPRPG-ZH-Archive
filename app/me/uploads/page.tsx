@@ -50,8 +50,12 @@ export default async function UploadsPage({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Rm2kButton className="min-h-9 px-3 text-xs" href={`/me/uploads/${work.id}`}>维护资料</Rm2kButton>
-                {work.distribution === "archive" ? <Rm2kButton className="min-h-9 px-3 text-xs" href={`/upload/${work.id}`}>上传新版本</Rm2kButton> : null}
+                <Rm2kButton
+                  className="min-h-9 px-3 text-xs"
+                  href={work.distribution === "archive" ? `/upload/${work.id}` : `/me/uploads/${work.id}`}
+                >
+                  编辑信息
+                </Rm2kButton>
               </div>
             </li>
           ))}

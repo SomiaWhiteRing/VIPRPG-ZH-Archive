@@ -1,8 +1,9 @@
 "use client";
 
+import { EllipsisVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Dialog } from "radix-ui";
+import { Dialog, DropdownMenu } from "radix-ui";
 import { CatalogGameListItem } from "@/app/catalogs/catalog-game-list-item";
 import {
   AlertDialog,
@@ -12,7 +13,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -49,9 +49,12 @@ export function CatalogItemsSection({
   const [position, setPosition] = useState("1");
   const [editMessage, setEditMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pendingRemovalWorkId, setPendingRemovalWorkId] = useState<number | null>(null);
   const [removingWorkId, setRemovingWorkId] = useState<number | null>(null);
   const [listMessage, setListMessage] = useState<string | null>(null);
   const selectedItem = items.find((item) => item.workId === selectedWorkId) ?? null;
+  const pendingRemovalItem =
+    items.find((item) => item.workId === pendingRemovalWorkId) ?? null;
 
   function changeAddOpen(nextOpen: boolean) {
     if (adding) return;
@@ -170,6 +173,7 @@ export function CatalogItemsSection({
         setListMessage(body.detail ?? "条目移除失败。");
         return;
       }
+      setPendingRemovalWorkId(null);
       router.refresh();
     } catch {
       setListMessage("网络请求失败。");
@@ -215,52 +219,12 @@ export function CatalogItemsSection({
               item={item}
               key={item.workId}
               management={canEdit ? (
-                <>
-                  <Button
-                    aria-label={`编辑条目：${item.title}`}
-                    onClick={() => openEditor(item, index)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    编辑条目
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        aria-label={`从目录移除：${item.title}`}
-                        className="text-destructive hover:text-destructive"
-                        disabled={removingWorkId !== null}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        移除
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogTitle className="m-0 text-lg font-bold">移除“{item.title}”？</AlertDialogTitle>
-                      <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
-                        这只会移除目录中的条目，不会删除游戏。
-                      </AlertDialogDescription>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel asChild>
-                          <Button type="button" variant="outline">取消</Button>
-                        </AlertDialogCancel>
-                        <AlertDialogAction asChild>
-                          <Button
-                            disabled={removingWorkId !== null}
-                            onClick={() => void removeItem(item.workId)}
-                            type="button"
-                            variant="destructive"
-                          >
-                            确认移除
-                          </Button>
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </>
+                <CatalogItemActions
+                  disabled={removingWorkId !== null}
+                  item={item}
+                  onEdit={() => openEditor(item, index)}
+                  onRemove={() => setPendingRemovalWorkId(item.workId)}
+                />
               ) : null}
             />
           ))}
@@ -270,6 +234,39 @@ export function CatalogItemsSection({
           <EmptyState title="这个目录还没有游戏。" />
         </div>
       )}
+
+      <AlertDialog
+        open={pendingRemovalItem !== null}
+        onOpenChange={(open) => {
+          if (!open && removingWorkId === null) setPendingRemovalWorkId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle className="m-0 text-lg font-bold">
+            移除“{pendingRemovalItem?.title}”？
+          </AlertDialogTitle>
+          <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
+            这只会移除目录中的条目，不会删除游戏。
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button type="button" variant="outline">取消</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                disabled={removingWorkId !== null || !pendingRemovalItem}
+                onClick={() => {
+                  if (pendingRemovalItem) void removeItem(pendingRemovalItem.workId);
+                }}
+                type="button"
+                variant="destructive"
+              >
+                确认移除
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog.Root open={addOpen} onOpenChange={changeAddOpen}>
         <Dialog.Portal>
@@ -372,5 +369,81 @@ export function CatalogItemsSection({
         </Dialog.Portal>
       </Dialog.Root>
     </section>
+  );
+}
+
+function CatalogItemActions({
+  disabled,
+  item,
+  onEdit,
+  onRemove,
+}: {
+  disabled: boolean;
+  item: CatalogItem;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const menuItemClass =
+    "flex min-h-9 w-full cursor-default items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+
+  return (
+    <>
+      <div className="hidden items-center gap-1 sm:flex">
+        <Button
+          aria-label={`编辑条目：${item.title}`}
+          className="h-7 min-h-7 rounded-full px-2.5 text-xs shadow-none"
+          disabled={disabled}
+          onClick={onEdit}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          编辑
+        </Button>
+        <Button
+          aria-label={`从目录移除：${item.title}`}
+          className="h-7 min-h-7 rounded-full px-2.5 text-xs text-destructive shadow-none hover:border-destructive hover:text-destructive"
+          disabled={disabled}
+          onClick={onRemove}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          移除
+        </Button>
+      </div>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button
+            aria-label={`管理条目：${item.title}`}
+            className="size-8 rounded-full sm:hidden"
+            disabled={disabled}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <EllipsisVertical aria-hidden />
+          </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            className="z-50 min-w-36 rounded-md border border-border bg-card p-1 text-foreground shadow-surface"
+            sideOffset={6}
+          >
+            <DropdownMenu.Item className={menuItemClass} onSelect={onEdit}>
+              编辑条目
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className={`${menuItemClass} text-destructive focus:text-destructive`}
+              disabled={disabled}
+              onSelect={onRemove}
+            >
+              移除
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </>
   );
 }
