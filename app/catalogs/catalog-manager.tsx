@@ -1,15 +1,18 @@
 "use client";
 
 import { Button } from "@/app/components/ui/button";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import type { CatalogSummary } from "@/lib/server/db/catalogs";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Dialog } from "radix-ui";
 
 export function CatalogCreateForm() {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -42,36 +45,34 @@ export function CatalogCreateForm() {
     }
   }
   return (
-    <form
-      className="grid gap-3 rounded-md border border-border bg-muted/10 p-4"
-      onSubmit={submit}
-    >
-      <strong>创建目录</strong>
-      <FormField label="标题">
-        <Input
-          required
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-      </FormField>
-      <FormField label="说明">
-        <Textarea
-          rows={2}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </FormField>
-      <div>
-        <Button disabled={busy || !title.trim()} type="submit">
-          创建目录
-        </Button>
-      </div>
-      {message ? (
-        <p className="text-sm text-muted" role="status">
-          {message}
-        </p>
-      ) : null}
-    </form>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!busy) setOpen(nextOpen); }}>
+      <div><Rm2kButton onClick={() => setOpen(true)} type="button">创建目录</Rm2kButton></div>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
+        <Dialog.Content
+          aria-describedby="catalog-create-description"
+          className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 shadow-surface"
+        >
+          <Dialog.Title className="m-0 text-lg font-bold">创建目录</Dialog.Title>
+          <Dialog.Description className="sr-only" id="catalog-create-description">
+            填写目录标题和说明。
+          </Dialog.Description>
+          <form className="grid gap-4" onSubmit={submit}>
+            <FormField label="标题">
+              <Input required value={title} onChange={(event) => setTitle(event.target.value)} />
+            </FormField>
+            <FormField label="说明">
+              <Textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
+            </FormField>
+            {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Rm2kButton disabled={busy} onClick={() => setOpen(false)} type="button">取消</Rm2kButton>
+              <Rm2kButton disabled={busy || !title.trim()} type="submit">{busy ? "正在创建…" : "创建目录"}</Rm2kButton>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

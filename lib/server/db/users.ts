@@ -12,6 +12,8 @@ export type ArchiveUser = {
   email: string;
   externalAuthId: string;
   displayName: string;
+  avatarBlobSha256: string | null;
+  bio: string;
   roleIds: number[];
   roleKeys: string[];
   roleNames: string[];
@@ -22,17 +24,26 @@ export type ArchiveUser = {
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
+
+export type PublicUserProfile = Pick<
+  ArchiveUser,
+  "id" | "displayName" | "avatarBlobSha256" | "bio" | "createdAt"
+>;
 
 type UserRow = {
   id: number;
   external_auth_id: string;
   email: string | null;
   display_name: string;
+  avatar_blob_sha256: string | null;
+  bio: string;
   status: UserStatus;
   email_verified_at: string | null;
   last_login_at: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 type UserAuthRow = UserRow & {
@@ -46,10 +57,13 @@ const USER_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
+  avatar_blob_sha256,
+  bio,
   status,
   email_verified_at,
   last_login_at,
-  created_at
+  created_at,
+  updated_at
 FROM users`;
 
 const USER_AUTH_SELECT = `SELECT
@@ -57,10 +71,13 @@ const USER_AUTH_SELECT = `SELECT
   external_auth_id,
   email,
   display_name,
+  avatar_blob_sha256,
+  bio,
   status,
   email_verified_at,
   last_login_at,
   created_at,
+  updated_at,
   password_hash,
   failed_login_count,
   locked_until
@@ -93,6 +110,18 @@ export async function findUserByEmail(rawEmail: string): Promise<ArchiveUser | n
   const row = await findUserRowByEmail(normalizeEmail(rawEmail));
 
   return row ? hydrateUser(row) : null;
+}
+
+export async function findPublicUserById(id: number): Promise<PublicUserProfile | null> {
+  const user = await findUserById(id);
+  if (!user || user.status !== "active") return null;
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    avatarBlobSha256: user.avatarBlobSha256,
+    bio: user.bio,
+    createdAt: user.createdAt,
+  };
 }
 
 export async function createOrActivateVerifiedUser(input: {
@@ -249,6 +278,88 @@ export async function setUserPasswordByEmail(input: {
   ]);
 }
 
+export async function updateOwnProfile(input: {
+  userId: number;
+  displayName: string;
+  bio: string;
+}): Promise<ArchiveUser> {
+  const displayName = input.displayName.trim();
+  const bio = input.bio.trim();
+  if (!displayName || [...displayName].length > 80)
+    throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
+  if ([...bio].length > 500) throw new HttpError(400, "简介不能超过 500 个字符");
+  const user = await findUserById(input.userId);
+  if (!user) throw new HttpError(404, "账户不存在");
+  await getD1().batch([
+    getD1().prepare(`UPDATE users SET display_name=?,bio=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(displayName, bio, input.userId),
+    getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'profile_updated')`)
+      .bind(input.userId, user.email),
+  ]);
+  return requiredUserById(input.userId);
+}
+
+export async function updateOwnAvatar(userId: number, sha256: string | null): Promise<ArchiveUser> {
+  const user = await findUserById(userId);
+  if (!user) throw new HttpError(404, "账户不存在");
+  await getD1().batch([
+    getD1().prepare(`UPDATE users SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(sha256, userId),
+    getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'avatar_updated')`)
+      .bind(userId, user.email),
+  ]);
+  return requiredUserById(userId);
+}
+
+export async function verifyOwnPassword(userId: number, password: string): Promise<void> {
+  const row = await findUserAuthRowById(userId);
+  const validLength = password.length >= 12 && password.length <= 256;
+  const valid = await verifyPassword(validLength ? password : "invalid-password-placeholder", row?.password_hash ?? null);
+  if (!row || row.status !== "active" || !validLength || !valid)
+    throw new HttpError(400, "当前密码不正确");
+}
+
+export async function changeOwnPassword(input: {
+  userId: number;
+  currentSessionId: number;
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  await verifyOwnPassword(input.userId, input.currentPassword);
+  if (input.newPassword.length < 12 || input.newPassword.length > 256)
+    throw new HttpError(400, "新密码长度必须为 12 至 256 个字符");
+  const user = await requiredUserById(input.userId);
+  const passwordHash = await hashPassword(input.newPassword);
+  await getD1().batch([
+    getD1().prepare(`UPDATE users SET password_hash=?,password_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(passwordHash, input.userId),
+    getD1().prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=? AND id<>? AND revoked_at IS NULL`)
+      .bind(input.userId, input.currentSessionId),
+    getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'password_changed')`)
+      .bind(input.userId, user.email),
+  ]);
+}
+
+export async function changeOwnEmail(input: {
+  userId: number;
+  currentSessionId: number;
+  newEmail: string;
+}): Promise<ArchiveUser> {
+  const newEmail = normalizeEmail(input.newEmail);
+  const existing = await findUserRowByEmail(newEmail);
+  if (existing && existing.id !== input.userId) throw new HttpError(409, "该邮箱已被使用");
+  const user = await requiredUserById(input.userId);
+  await getD1().batch([
+    getD1().prepare(`UPDATE users SET email=?,external_auth_id=?,email_verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(newEmail, emailToExternalAuthId(newEmail), input.userId),
+    getD1().prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=? AND id<>? AND revoked_at IS NULL`)
+      .bind(input.userId, input.currentSessionId),
+    getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,'email_changed',?)`)
+      .bind(input.userId, newEmail, JSON.stringify({ previousEmail: user.email })),
+  ]);
+  return requiredUserById(input.userId);
+}
+
 export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUser[]> {
   const rows = await getD1()
     .prepare(
@@ -373,6 +484,10 @@ async function findUserAuthRowByEmail(email: string): Promise<UserAuthRow | null
     .first<UserAuthRow>();
 }
 
+async function findUserAuthRowById(id: number): Promise<UserAuthRow | null> {
+  return getD1().prepare(`${USER_AUTH_SELECT} WHERE id=? LIMIT 1`).bind(id).first<UserAuthRow>();
+}
+
 async function ensureInitialBootstrapRole(userId: number, email: string): Promise<void> {
   const database = getD1();
   if (getBootstrapAdminEmail() !== email) return;
@@ -434,6 +549,8 @@ async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
     email: row.email ?? externalAuthIdToEmail(row.external_auth_id),
     externalAuthId: row.external_auth_id,
     displayName: row.display_name,
+    avatarBlobSha256: row.avatar_blob_sha256,
+    bio: row.bio,
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),
@@ -444,6 +561,7 @@ async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 

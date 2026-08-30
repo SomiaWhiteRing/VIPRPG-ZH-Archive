@@ -13,7 +13,7 @@ export function InboxLink({ unread, variant = "button" }: InboxLinkProps) {
       className={`inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm font-semibold hover:bg-muted/15 ${variant === "button" ? "border border-border bg-card shadow-sm" : ""}`}
       href="/inbox"
     >
-      站内信
+      提醒
       {unread > 0 ? (
         <Badge className="min-h-5 px-1.5 text-[11px]" variant="negative">
           {formatUnreadCount(unread)}

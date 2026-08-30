@@ -38,7 +38,7 @@
 - 根账户轮换只通过 `scripts/rotate-bootstrap-admin.mjs` 完成；命令必须原子移动角色、撤销新旧根账户 session 并写入审计。
 - `user_role_events` 每行只记录一次 `assigned | removed`，并保存 actor、target、role snapshot、原因和可选的来源 inbox item。
 
-角色读取和写入集中在 `lib/server/db/permissions.ts`；页面、站内信和用户 API 不应各自实现角色状态转换。
+角色读取和写入集中在 `lib/server/db/permissions.ts`；页面、提醒和用户 API 不应各自实现角色状态转换。
 
 ## 3. Session 与认证
 
@@ -85,7 +85,7 @@
 - `npm run check:security:api`：匿名 401、缺权 403、同源保护、ownership 和层级约束。
 - `npm run check` 与 `npm run build`：类型、lint 和生产构建。
 - Worker preview：下载、媒体和在线游玩只读取完整 published 引用链。
-- 评论、点赞、游玩和待玩写请求沿用同源校验；公开评论还必须确认 Work、主楼和作者均处于可公开状态。
+- 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认 Work、主楼和作者均处于可公开状态。
 
 涉及有状态 D1 或 API 的检查必须串行执行，并在测试前使用明确的本地 reset/seed 基线。
 

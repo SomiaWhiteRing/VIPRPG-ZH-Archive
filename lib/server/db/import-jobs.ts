@@ -130,6 +130,41 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
     .first<ImportJobRow>();
 }
 
+export type UserImportJobSummary = {
+  id: number;
+  workId: number | null;
+  workTitle: string | null;
+  archiveVersionId: number | null;
+  status: string;
+  sourceName: string | null;
+  sourceSizeBytes: number | null;
+  fileCount: number;
+  failedStage: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export async function searchImportJobsForUser(input: {
+  userId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: UserImportJobSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const total = await getD1().prepare(`SELECT COUNT(*) AS count FROM import_jobs WHERE uploader_id=?`).bind(input.userId).first<{ count: number }>();
+  const rows = await getD1()
+    .prepare(`SELECT ij.id,ij.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,ij.archive_version_id,ij.status,ij.source_name,ij.source_size_bytes,ij.file_count,ij.failed_stage,ij.error_message,ij.created_at,ij.completed_at FROM import_jobs ij LEFT JOIN works w ON w.id=ij.work_id WHERE ij.uploader_id=? ORDER BY ij.created_at DESC,ij.id DESC LIMIT ? OFFSET ?`)
+    .bind(input.userId, pageSize, (page - 1) * pageSize)
+    .all<{ id: number; work_id: number | null; work_title: string | null; archive_version_id: number | null; status: string; source_name: string | null; source_size_bytes: number | null; file_count: number; failed_stage: string | null; error_message: string | null; created_at: string; completed_at: string | null }>();
+  return {
+    items: (rows.results ?? []).map((row) => ({ id: row.id, workId: row.work_id, workTitle: row.work_title, archiveVersionId: row.archive_version_id, status: row.status, sourceName: row.source_name, sourceSizeBytes: row.source_size_bytes, fileCount: row.file_count, failedStage: row.failed_stage, errorMessage: row.error_message, createdAt: row.created_at, completedAt: row.completed_at })),
+    total: total?.count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
 export async function requiredOwnedImportJob(
   id: number,
   user: ArchiveUser,

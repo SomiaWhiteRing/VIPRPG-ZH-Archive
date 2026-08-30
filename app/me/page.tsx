@@ -1,153 +1,47 @@
-import { Button, buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { Pane } from "@/app/components/ui/pane";
-import { StatList } from "@/app/components/ui/stat-list";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { hasPermission } from "@/lib/authz/permissions";
-import { countUnreadInboxItemsForUser, listInboxItemsForUser } from "@/lib/server/db/inbox";
-import { formatNumber, formatDate } from "@/lib/format";
-import { listMyComments, listMyPlayed, listMyWishlist } from "@/lib/server/db/work-community";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { requireAccountUser } from "@/lib/server/auth/account-user";
+import { searchUserWorks } from "@/lib/server/db/game-library";
+import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
+import { searchUserComments } from "@/lib/server/db/work-community";
+import { searchImportJobsForUser } from "@/lib/server/db/import-jobs";
+import { canUpload } from "@/lib/server/db/users";
+import { formatDate } from "@/lib/format";
+import { AccountEmpty, AccountSection, AccountWorkGrid } from "./account-content";
 
 export const dynamic = "force-dynamic";
 
 export default async function MePage() {
-  const currentUser = await getCurrentUserFromCookies();
-
-  if (!currentUser) {
-    redirect(`/login?next=${encodeURIComponent("/me")}`);
-  }
-
-  const canUpload = hasPermission(currentUser, "import_job.create");
-
-  const [unread, inbox, played, comments, wishlist] = await Promise.all([
-    countUnreadInboxItemsForUser(currentUser),
-    listInboxItemsForUser(currentUser),
-    listMyPlayed(currentUser.id, 3),
-    listMyComments(currentUser.id, null, 3),
-    listMyWishlist(currentUser.id, 3),
+  const user = await requireAccountUser("/me");
+  const showUploads = canUpload(user);
+  const [played, favorites, catalogs, comments, uploads] = await Promise.all([
+    searchUserWorks({ userId: user.id, kind: "played", pageSize: 4 }),
+    searchUserWorks({ userId: user.id, kind: "favorite", pageSize: 4 }),
+    searchCatalogsForOwner({ userId: user.id, pageSize: 3 }),
+    searchUserComments({ userId: user.id, pageSize: 3 }),
+    showUploads ? searchImportJobsForUser({ userId: user.id, pageSize: 3 }) : Promise.resolve(null),
   ]);
 
-  const pendingUploadRequest = inbox.find(
-    (item) =>
-      item.type === "role_change_request" &&
-      item.status === "pending" &&
-      item.requestedRole?.key === "uploader" &&
-      item.targetUserId === currentUser.id,
-  );
-
   return (
-    <main>
-      <PageHeader title="我的账户" />
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
-        <Pane heading="账号状态">
-          <StatList
-            items={[
-              { label: "显示名", value: currentUser.displayName },
-              {
-                label: "当前角色",
-                value: currentUser.roleNames.join("、") || "未分配角色",
-              },
-              { label: "站内信未读", value: formatNumber(unread) },
-            ]}
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <form action="/api/auth/logout" method="post" className="inline-flex">
-              <input type="hidden" name="next" value="/" />
-              <Button variant="outline" type="submit">
-                登出
-              </Button>
-            </form>
-          </div>
-
-          <div className="rounded-md border border-border bg-muted/10 p-4">
-            <h3>上传权限</h3>
-            {canUpload ? (
-              <p>当前账户已有上传权限，可以提交游戏；上传进度会在当前标签页显示。</p>
-            ) : pendingUploadRequest ? (
-              <p>
-                申请已提交，等待管理员处理。结果会通过
-                <Link href="/inbox">站内信</Link>
-                通知。
-              </p>
-            ) : (
-              <>
-                <p>当前为普通用户。提交上传者申请后，管理员会通过站内信回复结果。</p>
-                <form
-                  action="/api/account/request-upload-access"
-                  method="post"
-                  className="flex flex-wrap items-center gap-3"
-                >
-                  <Button type="submit">提交申请</Button>
-                </form>
-              </>
-            )}
-          </div>
-
-          {hasPermission(currentUser, "system.dashboard.read") ? (
-            <div className="rounded-md border border-border bg-muted/10 p-4">
-              <h3>管理工具</h3>
-              <div className="flex flex-wrap items-center gap-3">
-                <Link className={buttonVariants()} href="/admin">
-                  进入控制台
-                </Link>
-                {hasPermission(currentUser, "audit.read") ? (
-                  <Link className={buttonVariants({ variant: "outline" })} href="/admin/audit">
-                    审计日志
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </Pane>
-
-        <Pane heading="站内信">
-          {inbox.length === 0 ? (
-            <p className="text-sm text-muted">暂时没有站内信。</p>
-          ) : (
-            <ul className="mt-3 grid gap-3">
-              {inbox.slice(0, 6).map((item) => (
-                <li key={item.id}>
-                  <strong>{item.title}</strong>
-                  <span className="text-sm text-muted">{item.body}</span>
-                  <span className="text-sm text-muted">
-                    {formatDate(item.createdAt)}
-                    {!item.readAt ? " · 未读" : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <InboxLink unread={unread} />
-            <Link className={buttonVariants({ variant: "outline" })} href="/me/games">
-              我的游戏记录
-            </Link>
-          </div>
-        </Pane>
-
-        <Pane heading="近期游戏记录">
-          <div className="grid gap-3 text-sm">
-            <section>
-              <strong>最近游玩</strong>
-              {played.length ? <ul>{played.map((item) => <li key={item.workId}><Link href={`/games/${item.workId}`}>{item.title}</Link></li>)}</ul> : <p className="text-muted">暂无记录。</p>}
-            </section>
-            <section>
-              <strong>最新评论</strong>
-              {comments.items.length ? <ul>{comments.items.map((item) => <li key={item.id}><Link href={`/games/${item.workId}#comment-${item.id}`}>#{item.id} 评论</Link></li>)}</ul> : <p className="text-muted">暂无评论。</p>}
-            </section>
-            <section>
-              <strong>待玩</strong>
-              {wishlist.length ? <ul>{wishlist.map((item) => <li key={item.workId}><Link href={`/games/${item.workId}`}>{item.title}</Link></li>)}</ul> : <p className="text-muted">暂无待玩游戏。</p>}
-            </section>
-          </div>
-          <Link className={buttonVariants({ variant: "outline" })} href="/me/games">查看全部记录</Link>
-        </Pane>
-
-      </div>
-    </main>
+    <div className="grid gap-7">
+      <PageHeader title="个人中心" subtitle="从这里继续最近的游戏、收藏和内容维护。" />
+      <AccountSection href="/me/profile" title="资料摘要">
+        <div className="flex items-center gap-4">
+          <UserAvatar avatarBlobSha256={user.avatarBlobSha256} className="size-16" displayName={user.displayName} size={64} />
+          <div className="min-w-0"><strong className="block truncate text-lg">{user.displayName}</strong><p className="mt-1 line-clamp-2 text-sm text-muted">{user.bio || "还没有填写简介。"}</p></div>
+        </div>
+      </AccountSection>
+      <AccountSection href="/me/history" title="最近游玩">{played.items.length ? <AccountWorkGrid items={played.items} /> : <AccountEmpty><Link href="/games">前往游戏库</Link>开始游玩。</AccountEmpty>}</AccountSection>
+      <AccountSection href="/me/favorites" title="最近收藏">{favorites.items.length ? <AccountWorkGrid items={favorites.items} /> : <AccountEmpty><Link href="/games">前往游戏库</Link>收藏感兴趣的作品。</AccountEmpty>}</AccountSection>
+      <AccountSection href="/me/catalogs" title="我的目录">
+        {catalogs.items.length ? <ul className="divide-y divide-border border-y border-border">{catalogs.items.map((catalog, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={catalog.id}><Link className="font-semibold" href={`/catalogs/${catalog.id}`}>{catalog.title}</Link><p className="mt-1 text-sm text-muted">{catalog.itemCount} 部作品 · 更新于 {formatDate(catalog.updatedAt)}</p></li>)}</ul> : <AccountEmpty>创建目录，把作品整理成便于分享的清单。</AccountEmpty>}
+      </AccountSection>
+      <AccountSection href="/me/comments" title="我的评论">
+        {comments.items.length ? <ul className="divide-y divide-border border-y border-border">{comments.items.map((comment, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={comment.id}><Link className="font-semibold" href={`/games/${comment.workId}#comment-${comment.id}`}>{comment.workTitle}</Link><p className="mt-1 line-clamp-2 text-sm text-muted">{comment.body || "这条评论已删除。"}</p></li>)}</ul> : <AccountEmpty>浏览作品并留下第一条评论。</AccountEmpty>}
+      </AccountSection>
+      {uploads ? <AccountSection href="/me/uploads" title="最近上传">{uploads.items.length ? <ul className="divide-y divide-border border-y border-border">{uploads.items.map((job, index) => <li className={`flex items-center justify-between gap-3 py-3 ${index >= 2 ? "hidden sm:flex" : ""}`} key={job.id}><div className="min-w-0"><strong className="block truncate">{job.sourceName || `任务 #${job.id}`}</strong><span className="text-sm text-muted">{formatDate(job.createdAt)}</span></div><StatusBadge kind="import-task" value={job.status} /></li>)}</ul> : <AccountEmpty><Link href="/upload">开始上传</Link>第一部作品。</AccountEmpty>}</AccountSection> : null}
+    </div>
   );
 }

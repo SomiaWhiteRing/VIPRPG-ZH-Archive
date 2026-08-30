@@ -14,12 +14,13 @@ export function generateVerificationCode(): string {
 }
 
 export async function hashVerificationCode(input: {
+  userId?: number | null;
   email: string;
   purpose: string;
   code: string;
 }): Promise<string> {
   return hmacSha256(
-    ["verification-code", input.purpose, input.email, input.code].join(":"),
+    ["verification-code", String(input.userId ?? ""), input.purpose, input.email, input.code].join(":"),
   );
 }
 

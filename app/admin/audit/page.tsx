@@ -74,7 +74,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
                   </td>
                   <td>
                     {event.sourceInboxItemId ? (
-                      <span className="font-mono text-sm text-primary">站内信 #{event.sourceInboxItemId}</span>
+                      <span className="font-mono text-sm text-primary">提醒 #{event.sourceInboxItemId}</span>
                     ) : (
                       "直接调整"
                     )}

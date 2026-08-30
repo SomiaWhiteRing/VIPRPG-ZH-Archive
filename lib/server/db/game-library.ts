@@ -304,6 +304,37 @@ export async function listGameWorks(
     .all<SummaryRow>();
   return hydrate(rows.results ?? []);
 }
+
+export type UserWorkListItem = {
+  work: GameWorkSummary;
+  occurredAt: string;
+};
+
+export async function searchUserWorks(input: {
+  userId: number;
+  kind: "favorite" | "played";
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: UserWorkListItem[]; total: number; page: number; pageSize: number }> {
+  const pageSize = clamp(input.pageSize ?? 20, 1, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const column = input.kind === "favorite" ? "favorited_at" : "last_played_at";
+  const totalRow = await getD1()
+    .prepare(`SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`)
+    .bind(input.userId)
+    .first<{ count: number }>();
+  const rows = await getD1()
+    .prepare(`SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`)
+    .bind(input.userId, pageSize, (page - 1) * pageSize)
+    .all<SummaryRow & { occurred_at: string }>();
+  const works = await hydrate(rows.results ?? []);
+  return {
+    items: works.map((work, index) => ({ work, occurredAt: (rows.results ?? [])[index].occurred_at })),
+    total: totalRow?.count ?? 0,
+    page,
+    pageSize,
+  };
+}
 export async function countGameWorks(input: Filters = {}): Promise<number> {
   const { where, binds } = buildWhere(input);
   const row = await getD1()

@@ -5,12 +5,15 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT,
   password_updated_at TEXT,
   display_name TEXT NOT NULL,
+  avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
+  bio TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
   failed_login_count INTEGER NOT NULL DEFAULT 0,
   locked_until TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -120,8 +123,9 @@ END;
 
 CREATE TABLE IF NOT EXISTS email_verification_challenges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
-  purpose TEXT NOT NULL CHECK (purpose IN ('register', 'password_reset')),
+  purpose TEXT NOT NULL CHECK (purpose IN ('register', 'password_reset', 'email_change')),
   code_hash TEXT NOT NULL,
   pending_password_hash TEXT,
   expires_at TEXT NOT NULL,
@@ -136,6 +140,9 @@ CREATE TABLE IF NOT EXISTS email_verification_challenges (
 
 CREATE INDEX IF NOT EXISTS idx_email_verification_challenges_email
   ON email_verification_challenges(email, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_email_verification_challenges_user
+  ON email_verification_challenges(user_id, purpose, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_email_verification_challenges_expires
   ON email_verification_challenges(expires_at);
@@ -279,7 +286,7 @@ CREATE TABLE IF NOT EXISTS user_work_entries (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   last_played_at TEXT,
-  wishlisted_at TEXT,
+  favorited_at TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (work_id, user_id)
 );
@@ -288,9 +295,9 @@ CREATE INDEX IF NOT EXISTS idx_user_work_entries_played
   ON user_work_entries(user_id, last_played_at DESC, work_id)
   WHERE last_played_at IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_user_work_entries_wishlist
-  ON user_work_entries(user_id, wishlisted_at DESC, work_id)
-  WHERE wishlisted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_work_entries_favorites
+  ON user_work_entries(user_id, favorited_at DESC, work_id)
+  WHERE favorited_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS work_comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -626,6 +633,14 @@ CREATE TABLE IF NOT EXISTS core_packs (
   status TEXT NOT NULL DEFAULT 'active'
 );
 
+CREATE TRIGGER IF NOT EXISTS users_avatar_require_active_blob
+BEFORE UPDATE OF avatar_blob_sha256 ON users
+WHEN NEW.avatar_blob_sha256 IS NOT NULL
+  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.avatar_blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'user avatar blob must be active');
+END;
+
 CREATE TABLE IF NOT EXISTS custom_emojis (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   shortcode TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -808,6 +823,11 @@ WHEN NEW.status IN ('purging', 'purged')
     SELECT 1 FROM custom_emojis
     WHERE image_blob_sha256 = OLD.sha256
   )
+  OR NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM users
+    WHERE avatar_blob_sha256 = OLD.sha256
+  )
 BEGIN
   SELECT RAISE(ABORT, 'referenced blob cannot be purged');
 END;
@@ -874,6 +894,9 @@ CREATE INDEX IF NOT EXISTS idx_import_jobs_work
 
 CREATE INDEX IF NOT EXISTS idx_import_jobs_archive_version
   ON import_jobs(archive_version_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_import_jobs_uploader
+  ON import_jobs(uploader_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS import_job_excluded_file_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

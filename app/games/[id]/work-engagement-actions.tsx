@@ -9,22 +9,22 @@ import { useState } from "react";
 export function WorkEngagementActions({
   catalogs,
   currentUserId,
-  initialWishlisted,
+  initialFavorited,
   workId,
 }: {
   catalogs: CatalogSummary[];
   currentUserId: number | null;
-  initialWishlisted: boolean;
+  initialFavorited: boolean;
   workId: number;
 }) {
-  const [wishlisted, setWishlisted] = useState(initialWishlisted);
+  const [favorited, setFavorited] = useState(initialFavorited);
   const [catalogId, setCatalogId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function toggleWishlist() {
+  async function toggleFavorite() {
     if (!currentUserId || busy) return;
-    const next = !wishlisted;
+    const next = !favorited;
     setBusy(true);
     setMessage(null);
     try {
@@ -32,12 +32,12 @@ export function WorkEngagementActions({
         method: "PATCH",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ wishlisted: next }),
+        body: JSON.stringify({ favorited: next }),
       });
       if (!response.ok) throw new Error();
-      setWishlisted(next);
+      setFavorited(next);
     } catch {
-      setMessage("待玩状态保存失败。");
+      setMessage("收藏状态保存失败。");
     } finally {
       setBusy(false);
     }
@@ -63,22 +63,22 @@ export function WorkEngagementActions({
   }
 
   if (!currentUserId) {
-    return <p className="m-0 text-xs text-muted">登录后可以加入待玩或目录。</p>;
+    return <p className="m-0 text-xs text-muted">登录后可以收藏作品或加入目录。</p>;
   }
 
   return (
     <div className="grid gap-3.5">
       <div className="flex gap-2 max-[560px]:flex-wrap">
         <Button
-          aria-pressed={wishlisted}
+          aria-pressed={favorited}
           className="min-w-0 flex-1 max-[560px]:basis-[calc(50%-0.25rem)]"
           disabled={busy}
-          onClick={() => void toggleWishlist()}
+          onClick={() => void toggleFavorite()}
           type="button"
-          variant={wishlisted ? "default" : "outline"}
+          variant={favorited ? "default" : "outline"}
         >
           <Heart aria-hidden />
-          {wishlisted ? "已加入待玩" : "加入待玩"}
+          {favorited ? "已收藏" : "收藏"}
         </Button>
         {catalogs.length ? (
           <Button

@@ -1,10 +1,11 @@
 import { getD1 } from "@/lib/server/db/d1";
 import { timingSafeEqualString } from "@/lib/server/crypto/sha256";
 
-export type ChallengePurpose = "register" | "password_reset";
+export type ChallengePurpose = "register" | "password_reset" | "email_change";
 
 export type EmailVerificationChallenge = {
   id: number;
+  userId: number | null;
   email: string;
   purpose: ChallengePurpose;
   codeHash: string;
@@ -16,6 +17,7 @@ export type EmailVerificationChallenge = {
 
 type ChallengeRow = {
   id: number;
+  user_id: number | null;
   email: string;
   purpose: ChallengePurpose;
   code_hash: string;
@@ -30,6 +32,7 @@ type CountRow = {
 };
 
 export async function assertEmailChallengeQuota(input: {
+  userId?: number | null;
   email: string;
   purpose: ChallengePurpose;
 }): Promise<void> {
@@ -39,9 +42,10 @@ export async function assertEmailChallengeQuota(input: {
       FROM email_verification_challenges
       WHERE email = ?
         AND purpose = ?
+        AND user_id IS ?
         AND created_at >= datetime('now', '-1 hour')`,
     )
-    .bind(input.email, input.purpose)
+    .bind(input.email, input.purpose, input.userId ?? null)
     .first<CountRow>();
 
   if ((row?.count ?? 0) >= 5) {
@@ -50,6 +54,7 @@ export async function assertEmailChallengeQuota(input: {
 }
 
 export async function createEmailChallenge(input: {
+  userId?: number | null;
   email: string;
   purpose: ChallengePurpose;
   codeHash: string;
@@ -58,14 +63,16 @@ export async function createEmailChallenge(input: {
   await getD1()
     .prepare(
       `INSERT INTO email_verification_challenges (
+        user_id,
         email,
         purpose,
         code_hash,
         pending_password_hash,
         expires_at
-      ) VALUES (?, ?, ?, ?, datetime('now', '+10 minutes'))`,
+      ) VALUES (?, ?, ?, ?, ?, datetime('now', '+10 minutes'))`,
     )
     .bind(
+      input.userId ?? null,
       input.email,
       input.purpose,
       input.codeHash,
@@ -75,6 +82,7 @@ export async function createEmailChallenge(input: {
 }
 
 export async function deletePendingEmailChallenge(input: {
+  userId?: number | null;
   email: string;
   purpose: ChallengePurpose;
   codeHash: string;
@@ -84,14 +92,16 @@ export async function deletePendingEmailChallenge(input: {
       `DELETE FROM email_verification_challenges
       WHERE email = ?
         AND purpose = ?
+        AND user_id IS ?
         AND code_hash = ?
         AND consumed_at IS NULL`,
     )
-    .bind(input.email, input.purpose, input.codeHash)
+    .bind(input.email, input.purpose, input.userId ?? null, input.codeHash)
     .run();
 }
 
 export async function consumeLatestEmailChallenge(input: {
+  userId?: number | null;
   email: string;
   purpose: ChallengePurpose;
   codeHash: string;
@@ -100,6 +110,7 @@ export async function consumeLatestEmailChallenge(input: {
     .prepare(
       `SELECT
         id,
+        user_id,
         email,
         purpose,
         code_hash,
@@ -110,12 +121,13 @@ export async function consumeLatestEmailChallenge(input: {
       FROM email_verification_challenges
       WHERE email = ?
         AND purpose = ?
+        AND user_id IS ?
         AND consumed_at IS NULL
         AND expires_at > CURRENT_TIMESTAMP
       ORDER BY created_at DESC
       LIMIT 1`,
     )
-    .bind(input.email, input.purpose)
+    .bind(input.email, input.purpose, input.userId ?? null)
     .first<ChallengeRow>();
 
   if (!row) {
@@ -164,6 +176,7 @@ async function incrementChallengeAttempts(id: number): Promise<void> {
 function mapChallengeRow(row: ChallengeRow): EmailVerificationChallenge {
   return {
     id: row.id,
+    userId: row.user_id,
     email: row.email,
     purpose: row.purpose,
     codeHash: row.code_hash,

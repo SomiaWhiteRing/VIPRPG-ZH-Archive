@@ -332,7 +332,7 @@ export default async function GameDetailPage({
               <WorkEngagementActions
                 catalogs={userCatalogs}
                 currentUserId={currentUser?.id ?? null}
-                initialWishlisted={community.wishlistedByMe}
+                initialFavorited={community.favoritedByMe}
                 workId={work.id}
               />
               <hr className="h-px border-0 bg-border" />

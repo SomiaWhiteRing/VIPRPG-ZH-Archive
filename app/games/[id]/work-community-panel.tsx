@@ -3,12 +3,12 @@
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { CommentBodySegment, CommentDto, CustomEmojiDto } from "@/lib/server/db/work-community";
 import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-
-const AVATAR_TONES = ["bg-[#3d6fb4]", "bg-[#3f8f6a]", "bg-[#c0584f]", "bg-[#7d5ba6]"];
 
 type Props = {
   workId: number;
@@ -267,12 +267,7 @@ function CommentCard({
       className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0"
       id={`comment-${comment.id}`}
     >
-      <span
-        className={`grid size-9.5 place-items-center rounded-lg font-serif text-base font-bold text-white [text-shadow:0_1px_0_rgb(0_0_0/30%)] ${avatarTone(comment.id)}`}
-        aria-hidden="true"
-      >
-        {comment.author?.displayName?.slice(0, 1) ?? "删"}
-      </span>
+      {comment.author ? <Link aria-label={`查看${comment.author.displayName}的主页`} href={`/users/${comment.author.id}`}><UserAvatar avatarBlobSha256={comment.author.avatarBlobSha256} className="size-9.5" displayName={comment.author.displayName} size={38} /></Link> : <UserAvatar className="size-9.5 opacity-60" displayName="已删除用户" size={38} />}
       <div className="min-w-0">
         <CommentLine comment={comment} />
         <CommentControls
@@ -312,7 +307,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <strong className="text-sm">{comment.author?.displayName ?? "已删除用户"}</strong>
+        {comment.author ? <Link className="text-sm font-bold hover:underline" href={`/users/${comment.author.id}`}>{comment.author.displayName}</Link> : <strong className="text-sm">已删除用户</strong>}
         <span className="font-mono text-[11px] text-muted">{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
         {comment.editedAt ? <span className="font-mono text-[11px] text-muted">已编辑</span> : null}
         {comment.status === "deleted" ? <span className="font-mono text-[11px] text-muted">已删除</span> : null}
@@ -416,8 +411,4 @@ function EmojiPicker({ emojis, onSelect }: { emojis: CustomEmojiDto[]; onSelect:
       ) : null}
     </div>
   );
-}
-
-function avatarTone(id: number): string {
-  return AVATAR_TONES[Math.abs(id) % AVATAR_TONES.length];
 }
