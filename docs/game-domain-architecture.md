@@ -218,9 +218,8 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 领域模型变更至少执行：
 
 - `npm run check`
+- `npm test`
 - `npm run build`
-- `npm run check:domain`
-- 本地 D1 reset/seed 后串行运行关系、翻译、目录和 current 状态检查
 - `rg` 扫描已废弃表、字段、路由和类型残留
 - 对照 `migrations/0001_init_archive_schema.sql` 检查本文不变量，而不是复制 SQL
 

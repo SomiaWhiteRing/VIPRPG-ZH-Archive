@@ -80,14 +80,13 @@
 
 ## 5. 安全验证
 
-- `npm run check:security`：权限目录、系统角色 grant、未知 key fail closed 和静态边界。
-- `npm run check:security:d1`：session 生命周期、验证码消费、角色事件、权限并集和 D1 状态转换。
-- `npm run check:security:api`：匿名 401、缺权 403、同源保护、ownership 和层级约束。
-- `npm run check` 与 `npm run build`：类型、lint 和生产构建。
-- Worker preview：下载、媒体和在线游玩只读取完整 published 引用链。
+- `npm run check`：类型、lint、权限目录、系统角色 grant、未知 key fail closed 和静态 UI 边界。
+- `npm test`：在独立临时 D1/R2 中串行验证匿名 401、同源 403、权限刷新、ownership、真实上传与恢复、归档生命周期、原生下载/GC 和浏览器安装。
+- `npm run build`：生产构建。
+- `npm run smoke:staging`：部署后只验证 staging 的健康入口。
 - 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认 Work、主楼和作者均处于可公开状态。
 
-涉及有状态 D1 或 API 的检查必须串行执行，并在测试前使用明确的本地 reset/seed 基线。
+有状态 D1、API 和 Worker 检查只通过 `npm test` 串行运行。测试自行迁移和 seed 临时状态，不依赖也不重置开发环境的 `.wrangler/state`。
 
 ## 6. 非目标
 
@@ -98,6 +97,6 @@
 1. 说明受保护资源、操作、scope 和领域所有权；现有 key 能准确表达时不新增。
 2. 在 `PERMISSIONS` 增加 typed key，并在 `SYSTEM_ROLE_PERMISSIONS` 显式授予需要该能力的系统角色。
 3. route/page 只添加身份和 permission guard；ownership、published 链、状态机或 priority 进入对应领域服务。
-4. 扩展 `check:security`；涉及 D1 或 HTTP 状态时同步扩展对应检查。
-5. 运行安全检查、`npm run check`、`npm run build` 和 Worker preview。
+4. 纯权限规则扩展 `npm run check` 中的静态断言；只有跨层关键流程改变时才调整单条 `npm test` 综合故事，不为每个端点新增测试。
+5. 运行 `npm run check`、`npm test` 和 `npm run build`。
 6. 只有稳定边界发生变化时更新本文；具体 key、角色 grant 和路由清单始终从代码读取。

@@ -54,13 +54,14 @@ npm run dev -- -p 3001
 ## 常用命令
 
 ```powershell
-npm run check            # TypeScript + ESLint
-npm run check:security   # typed 权限目录与领域边界自检
-npm run check:security:d1 # 已 seed 的本地 D1 安全集成检查
-npm run check:security:api # 本地服务运行时的 401/403/ownership 检查
-npm run build            # Next.js 生产构建
-npm run preview          # OpenNext/Cloudflare Workers 本地预览
+npm run check          # 类型、lint 和快速静态边界
+npm test               # 隔离 D1/R2 的单条 Chromium 综合流程
+npm run smoke:staging  # 已部署 staging 的最小健康检查
+npm run build          # Next.js 生产构建
+npm run preview        # OpenNext/Cloudflare Workers 本地预览
 ```
+
+首次在本机运行综合测试前执行 `npx playwright install chromium`。`npm test` 不依赖开发 seed，也不修改 `.wrangler/state`；成功后删除临时 D1/R2，失败时输出保留的日志与截图目录。
 
 `npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
 

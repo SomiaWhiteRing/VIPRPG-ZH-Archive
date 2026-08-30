@@ -5,6 +5,7 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = [
   globalIgnores([
     ".next/**",
+    ".next-system-test/**",
     ".open-next/**",
     "out/**",
     "cloudflare-env.d.ts",
