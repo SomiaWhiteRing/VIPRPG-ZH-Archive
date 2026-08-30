@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { UploadTaskProvider } from "@/app/upload/upload-task-provider";
 import { SiteHeader } from "@/app/components/site-header";
 import { SiteFooter } from "@/app/components/site-footer";
 import "./globals.css";
@@ -20,11 +19,9 @@ export default function RootLayout({
   return (
     <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans">
       <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
-        <UploadTaskProvider>
-          <SiteHeader />
-          {children}
-          <SiteFooter />
-        </UploadTaskProvider>
+        <SiteHeader />
+        {children}
+        <SiteFooter />
       </body>
     </html>
   );

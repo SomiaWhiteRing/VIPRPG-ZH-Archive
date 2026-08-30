@@ -6,6 +6,7 @@ import { HttpError, json, jsonError } from "@/lib/server/http/json";
 export const dynamic = "force-dynamic";
 
 type CreateImportRequest = {
+  targetWorkId?: number | null;
   sourceName?: string;
   sourceSizeBytes?: number;
   fileCount?: number;
@@ -38,7 +39,11 @@ export async function POST(request: Request) {
     }
 
     const job = await createImportJob({
-      uploaderId: auth.user.id,
+      uploader: auth.user,
+      targetWorkId: readNullablePositiveInteger(
+        payload.targetWorkId,
+        "targetWorkId",
+      ),
       sourceName: readString(payload.sourceName, "sourceName"),
       sourceSizeBytes: readNonNegativeInteger(
         payload.sourceSizeBytes,
@@ -84,6 +89,14 @@ function readNonNegativeInteger(value: unknown, name: string): number {
   return Number(value);
 }
 
+function readNullablePositiveInteger(value: unknown, name: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) {
+    throw new HttpError(400, `Invalid ${name}`);
+  }
+  return Number(value);
+}
+
 async function parseCreateImportRequest(
   request: Request,
 ): Promise<CreateImportRequest> {
@@ -109,6 +122,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function mapImportJob(job: Awaited<ReturnType<typeof createImportJob>>) {
   return {
     id: job.id,
+    workId: job.work_id,
     status: job.status,
     sourceName: job.source_name,
     sourceSizeBytes: job.source_size_bytes,

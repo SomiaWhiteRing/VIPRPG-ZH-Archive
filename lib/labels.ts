@@ -36,6 +36,38 @@ export const LANGUAGE_OPTIONS = [
   { value: "vi", label: "越南语" },
 ] as const;
 
+export const ENGINE_OPTIONS = [
+  { value: "rpg_maker_2000", label: "RPG Maker 2000", distribution: "archive" },
+  { value: "rpg_maker_2003", label: "RPG Maker 2003", distribution: "archive" },
+  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac", distribution: "archive" },
+  { value: "rpg_maker_xp", label: "RPG Maker XP", distribution: "external" },
+  { value: "rpg_maker_vx", label: "RPG Maker VX", distribution: "external" },
+  { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace", distribution: "external" },
+  { value: "rpg_maker_mv", label: "RPG Maker MV", distribution: "external" },
+  { value: "rpg_maker_mz", label: "RPG Maker MZ", distribution: "external" },
+  { value: "rpg_maker_unite", label: "RPG Maker Unite", distribution: "external" },
+  { value: "mixed", label: "混合引擎", distribution: "external" },
+  { value: "unknown", label: "未知", distribution: "external" },
+  { value: "other", label: "其他引擎", distribution: "external" },
+] as const;
+
+export type ArchiveEngineFamily = Extract<
+  (typeof ENGINE_OPTIONS)[number],
+  { distribution: "archive" }
+>["value"];
+
+export function isArchiveEngineFamily(value: string): value is ArchiveEngineFamily {
+  return ENGINE_OPTIONS.some(
+    (option) => option.value === value && option.distribution === "archive",
+  );
+}
+
+export function isExternalEngineFamily(value: string): boolean {
+  return ENGINE_OPTIONS.some(
+    (option) => option.value === value && option.distribution === "external",
+  );
+}
+
 const RELATION_LABELS: Record<string, string> = {
   adaptation: "改编",
   prequel: "前传",
@@ -72,46 +104,29 @@ export const TRANSLATION_ROLE_LABELS = {
   translation: "译版",
 } as const;
 
-const IMPORT_TASK_STATUS_LABELS: Record<string, string> = {
-  created: "已创建",
-  preflighted: "检查完成",
-  uploading: "上传中",
-  completed: "已完成",
-  failed: "失败",
-  canceled: "已取消",
-};
+export const IMPORT_TASK_STATUS_OPTIONS = [
+  { value: "created", label: "已创建" },
+  { value: "preflighted", label: "准备上传文件" },
+  { value: "uploading_source", label: "上传游戏文件" },
+  { value: "awaiting_metadata", label: "等待作品资料" },
+  { value: "uploading_metadata", label: "上传资料图片" },
+  { value: "committing", label: "提交入库" },
+  { value: "completed", label: "已完成" },
+  { value: "failed", label: "失败" },
+  { value: "canceled", label: "已取消" },
+  { value: "expired", label: "已过期" },
+] as const;
+
+const IMPORT_TASK_STATUS_LABELS = Object.fromEntries(
+  IMPORT_TASK_STATUS_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<string, string>;
 
 
 export const VERIFICATION_EMAIL_HINT =
   "验证码已发送至 {email}，未收到时请检查垃圾邮件。";
 
 export function engineLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_xp":
-      return "RPG Maker XP";
-    case "rpg_maker_2000":
-      return "RPG Maker 2000";
-    case "rpg_maker_2003":
-      return "RPG Maker 2003";
-    case "rpg_maker_2003_maniac":
-      return "RPG Maker 2003 Maniac";
-    case "rpg_maker_vx":
-      return "RPG Maker VX";
-    case "rpg_maker_vx_ace":
-      return "RPG Maker VX Ace";
-    case "rpg_maker_mv":
-      return "RPG Maker MV";
-    case "rpg_maker_mz":
-      return "RPG Maker MZ";
-    case "rpg_maker_unite":
-      return "RPG Maker Unite";
-    case "mixed":
-      return "混合引擎";
-    case "other":
-      return "其他引擎";
-    default:
-      return "引擎未知";
-  }
+  return ENGINE_OPTIONS.find((option) => option.value === value)?.label ?? "引擎未知";
 }
 
 export function engineShortLabel(value: string): string {
@@ -232,23 +247,6 @@ export function importTaskStageLabel(value: string): string {
     return "提交入库";
   }
   return value;
-}
-
-export function uploadTaskStatusLabel(value: string): string {
-  switch (value) {
-    case "running":
-      return "处理中";
-    case "paused":
-      return "已暂停";
-    case "completed":
-      return "完成";
-    case "failed":
-      return "失败";
-    case "canceled":
-      return "已取消";
-    default:
-      return "已创建";
-  }
 }
 
 export function installStatusLabel(value: string): string {

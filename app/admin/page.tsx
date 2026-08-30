@@ -31,7 +31,10 @@ export default async function AdminPage() {
 
   const importStatus = observability.imports.statusCounts;
   const failedImports = importStatus.find((row) => row.status === "failed");
-  const pendingImports = importStatus.filter((row) => ["created", "preflighted", "uploading"].includes(row.status));
+  const pendingImports = importStatus.filter((row) => [
+    "created", "preflighted", "uploading_source", "awaiting_metadata",
+    "uploading_metadata", "committing",
+  ].includes(row.status));
   const totalPending = pendingImports.reduce((acc, row) => acc + row.count, 0);
 
   return (
@@ -40,7 +43,7 @@ export default async function AdminPage() {
 
       <Pane heading="待办与告警">
         <div className="grid gap-2 sm:grid-cols-2">
-          <Link className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50" href="/admin/archive-versions">
+          <Link className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50" href="/admin/import-jobs">
             <strong>导入与版本</strong>
             <span className={failedImports?.count ? "text-sm text-red-700" : "text-sm text-muted"}>
               进行中 {formatNumber(totalPending)} · 失败 {formatNumber(failedImports?.count ?? 0)}
@@ -62,7 +65,7 @@ export default async function AdminPage() {
             <thead><tr><th>任务</th><th>状态</th><th>新增对象</th><th>耗时</th></tr></thead>
             <tbody>{observability.imports.recent.slice(0, 10).map((job) => (
               <tr key={job.id}>
-                <td>{job.archiveVersionId ? <Link href={`/admin/archive-versions/${job.archiveVersionId}`}>#{job.id} {job.sourceName ?? "未知来源"}</Link> : <>#{job.id} {job.sourceName ?? "未知来源"}</>}</td>
+                <td><Link href={`/admin/import-jobs/${job.id}`}>#{job.id} {job.sourceName ?? "未知来源"}</Link></td>
                 <td><StatusBadge kind="import-task" value={job.status} />{job.failedStage ? <span className="text-sm text-muted">{importTaskStageLabel(job.failedStage)}</span> : null}</td>
                 <td>{formatNumber(job.uploadedBlobCount)} 个文件对象<span className="text-sm text-muted">{formatBytes(job.uploadedBlobSizeBytes + job.uploadedCorePackSizeBytes)}</span></td>
                 <td>检查 {formatNullableDuration(job.preflightDurationMs)}<span className="text-sm text-muted">入库 {formatNullableDuration(job.commitDurationMs)}</span></td>

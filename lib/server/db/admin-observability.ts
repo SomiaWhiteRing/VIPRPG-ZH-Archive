@@ -7,6 +7,8 @@ export type StatusCount = {
 
 export type RecentImportJob = {
   id: number;
+  workId: number | null;
+  workTitle: string | null;
   status: string;
   sourceName: string | null;
   sourceSizeBytes: number | null;
@@ -24,9 +26,11 @@ export type RecentImportJob = {
   uploadDurationMs: number;
   commitDurationMs: number | null;
   failedStage: string | null;
+  errorMessage: string | null;
   archiveVersionId: number | null;
   uploaderName: string | null;
   createdAt: string;
+  updatedAt: string;
   completedAt: string | null;
 };
 
@@ -125,6 +129,8 @@ type DownloadTotalsRow = {
 
 type RecentImportRow = {
   id: number;
+  work_id: number | null;
+  work_title: string | null;
   status: string;
   source_name: string | null;
   source_size_bytes: number | null;
@@ -142,9 +148,11 @@ type RecentImportRow = {
   upload_duration_ms: number;
   commit_duration_ms: number | null;
   failed_stage: string | null;
+  error_message: string | null;
   archive_version_id: number | null;
   uploader_name: string | null;
   created_at: string;
+  updated_at: string;
   completed_at: string | null;
 };
 
@@ -290,38 +298,91 @@ async function getImportTotals(): Promise<ImportTotalsRow> {
 async function listRecentImports(): Promise<RecentImportJob[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT
-        ij.id,
-        ij.status,
-        ij.source_name,
-        ij.source_size_bytes,
-        ij.file_count,
-        ij.excluded_file_count,
-        ij.excluded_size_bytes,
-        ij.missing_blob_count,
-        ij.missing_core_pack_count,
-        ij.uploaded_blob_count,
-        ij.uploaded_blob_size_bytes,
-        ij.uploaded_core_pack_count,
-        ij.uploaded_core_pack_size_bytes,
-        ij.r2_put_count,
-        ij.preflight_duration_ms,
-        ij.upload_duration_ms,
-        ij.commit_duration_ms,
-        ij.failed_stage,
-        ij.archive_version_id,
-        u.display_name AS uploader_name,
-        ij.created_at,
-        ij.completed_at
-      FROM import_jobs ij
-      LEFT JOIN users u ON u.id = ij.uploader_id
-      ORDER BY ij.created_at DESC
-      LIMIT 10`,
+      `${adminImportSelect()}
+       ORDER BY ij.created_at DESC
+       LIMIT 10`,
     )
     .all<RecentImportRow>();
 
-  return (rows.results ?? []).map((row) => ({
+  return (rows.results ?? []).map(mapRecentImport);
+}
+
+export type AdminImportJobDetail = RecentImportJob & {
+  excludedFileTypes: Array<{
+    fileType: string;
+    fileCount: number;
+    totalSizeBytes: number;
+    examplePath: string | null;
+  }>;
+};
+
+export async function searchAdminImportJobs(input: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+}): Promise<{ items: RecentImportJob[]; total: number; page: number; pageSize: number }> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 50)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const status = input.status && input.status !== "all" ? input.status : null;
+  const where = status ? "WHERE ij.status = ?" : "";
+  const binds: Array<string | number> = status ? [status] : [];
+  const total = await getD1()
+    .prepare(`SELECT COUNT(*) AS count FROM import_jobs ij ${where}`)
+    .bind(...binds)
+    .first<{ count: number }>();
+  const rows = await getD1()
+    .prepare(`${adminImportSelect()} ${where} ORDER BY datetime(ij.created_at) DESC, ij.id DESC LIMIT ? OFFSET ?`)
+    .bind(...binds, pageSize, (page - 1) * pageSize)
+    .all<RecentImportRow>();
+  return {
+    items: (rows.results ?? []).map(mapRecentImport),
+    total: total?.count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+export async function getAdminImportJob(id: number): Promise<AdminImportJobDetail | null> {
+  const row = await getD1()
+    .prepare(`${adminImportSelect()} WHERE ij.id = ? LIMIT 1`)
+    .bind(id)
+    .first<RecentImportRow>();
+  if (!row) return null;
+  const excluded = await getD1()
+    .prepare(`SELECT file_type,file_count,total_size_bytes,example_path FROM import_job_excluded_file_types WHERE import_job_id=? ORDER BY total_size_bytes DESC,file_type`)
+    .bind(id)
+    .all<{ file_type: string; file_count: number; total_size_bytes: number; example_path: string | null }>();
+  return {
+    ...mapRecentImport(row),
+    excludedFileTypes: (excluded.results ?? []).map((item) => ({
+      fileType: item.file_type,
+      fileCount: item.file_count,
+      totalSizeBytes: item.total_size_bytes,
+      examplePath: item.example_path,
+    })),
+  };
+}
+
+function adminImportSelect(): string {
+  return `SELECT
+    ij.id,ij.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,
+    ij.status,ij.source_name,ij.source_size_bytes,ij.file_count,
+    ij.excluded_file_count,ij.excluded_size_bytes,ij.missing_blob_count,
+    ij.missing_core_pack_count,ij.uploaded_blob_count,ij.uploaded_blob_size_bytes,
+    ij.uploaded_core_pack_count,ij.uploaded_core_pack_size_bytes,ij.r2_put_count,
+    ij.preflight_duration_ms,ij.upload_duration_ms,ij.commit_duration_ms,
+    ij.failed_stage,ij.error_message,ij.archive_version_id,
+    u.display_name AS uploader_name,ij.created_at,ij.updated_at,ij.completed_at
+    FROM import_jobs ij
+    LEFT JOIN users u ON u.id=ij.uploader_id
+    LEFT JOIN works w ON w.id=ij.work_id`;
+}
+
+function mapRecentImport(row: RecentImportRow): RecentImportJob {
+  return {
     id: row.id,
+    workId: row.work_id,
+    workTitle: row.work_title,
     status: row.status,
     sourceName: row.source_name,
     sourceSizeBytes: row.source_size_bytes,
@@ -339,11 +400,13 @@ async function listRecentImports(): Promise<RecentImportJob[]> {
     uploadDurationMs: row.upload_duration_ms,
     commitDurationMs: row.commit_duration_ms,
     failedStage: row.failed_stage,
+    errorMessage: row.error_message,
     archiveVersionId: row.archive_version_id,
     uploaderName: row.uploader_name,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     completedAt: row.completed_at,
-  }));
+  };
 }
 
 async function getDownloadTotals(): Promise<DownloadTotalsRow> {

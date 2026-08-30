@@ -5,7 +5,8 @@ import type {
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { commitArchiveImport } from "@/lib/server/db/archive-commit";
 import {
-  markImportJobFailed,
+  claimImportJobCommit,
+  markImportJobCommitFailed,
   parseImportJobId,
   recordImportCommitSucceeded,
   requiredOwnedImportJob,
@@ -37,17 +38,14 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { importJobId } = await context.params;
   let id: number | null = null;
-  let authorizedForJob = false;
+  let claimedCommit = false;
 
   try {
     id = parseImportJobId(importJobId);
     const job = await requiredOwnedImportJob(id, auth.user);
-    authorizedForJob = true;
-    if (job.status === "completed") throw new HttpError(409, "导入任务已完成");
-    if (job.status === "canceled") {
-      throw new HttpError(409, "导入任务已取消");
-    }
     const payload = await parseCommitRequest(request);
+    await claimImportJobCommit(job.id);
+    claimedCommit = true;
 
     const result = await commitArchiveImport({
       importJobId: id,
@@ -71,11 +69,10 @@ export async function POST(request: Request, context: RouteContext) {
       result,
     });
   } catch (error) {
-    if (id !== null && authorizedForJob) {
-      await markImportJobFailed(
+    if (id !== null && claimedCommit) {
+      await markImportJobCommitFailed(
         id,
         error instanceof Error ? error.message : "Unknown error",
-        "commit",
       ).catch(() => undefined);
     }
     return jsonError("Import commit failed", error);

@@ -1,32 +1,7 @@
 import { HttpError } from "@/lib/server/http/json";
-
-export const ARCHIVE_ENGINE_FAMILIES = [
-  "rpg_maker_2000",
-  "rpg_maker_2003",
-  "rpg_maker_2003_maniac",
-] as const;
-
-export const EXTERNAL_ENGINE_FAMILIES = [
-  "rpg_maker_xp",
-  "rpg_maker_vx",
-  "rpg_maker_vx_ace",
-  "rpg_maker_mv",
-  "rpg_maker_mz",
-  "rpg_maker_unite",
-  "mixed",
-  "unknown",
-  "other",
-] as const;
+import { isArchiveEngineFamily, isExternalEngineFamily } from "@/lib/labels";
 
 export type WorkDistribution = "archive" | "external" | "invalid";
-
-export function isArchiveEngineFamily(value: string): boolean {
-  return (ARCHIVE_ENGINE_FAMILIES as readonly string[]).includes(value);
-}
-
-export function isExternalEngineFamily(value: string): boolean {
-  return (EXTERNAL_ENGINE_FAMILIES as readonly string[]).includes(value);
-}
 
 export function deriveWorkDistribution(input: {
   hasCurrentArchive: boolean;

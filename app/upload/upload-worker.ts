@@ -18,6 +18,9 @@ import type {
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
+  PreparedArchiveSource,
+  UploadRecoveryDraft,
+  UploadSourceFile,
   UploadSourceKind,
   UploadTaskCommitResult,
   UploadTaskPhase,
@@ -25,6 +28,12 @@ import type {
   UploadWorkerInput,
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
+import {
+  deleteUploadDraft,
+  draftKey,
+  putUploadDraft,
+  sourceObjectReferences,
+} from "@/app/upload/upload-drafts";
 
 type SourceFile = {
   path: string;
@@ -54,7 +63,6 @@ type BlobObject = {
   size: number;
   contentType: string;
   source: SourceFile;
-  uploaded: boolean;
 };
 
 type CorePackObject = {
@@ -88,24 +96,38 @@ type ScanFileResult =
 
 type LegacyZipEncoding = "utf-8" | "shift_jis" | "gb18030";
 
+type UploadRuntime = {
+  task: BrowserUploadTaskSnapshot;
+  preparedSource: PreparedArchiveSource | null;
+  metadata: ArchiveCommitMetadata | null;
+  metadataBlobs: MetadataBlobUpload[];
+  joining: boolean;
+  creatingJob: Promise<BrowserUploadTaskSnapshot> | null;
+  cancelAttempt: Promise<boolean> | null;
+  settled: boolean;
+};
+
+type OwnedImportJobState = {
+  status: string;
+  result: UploadTaskCommitResult | null;
+};
+
 const stageWeights: Record<UploadTaskPhase, { base: number; weight: number }> = {
-  created: { base: 0, weight: 0 },
-  source_selected: { base: 0, weight: 0 },
   enumerating: { base: 0, weight: 5 },
   hashing: { base: 5, weight: 30 },
   building_core_pack: { base: 35, weight: 15 },
-  manifest_ready: { base: 50, weight: 0 },
   creating_import_job: { base: 50, weight: 5 },
   preflighting: { base: 55, weight: 5 },
-  uploading_missing_objects: { base: 60, weight: 30 },
-  verifying_objects: { base: 90, weight: 0 },
-  committing: { base: 90, weight: 10 },
+  uploading_source: { base: 60, weight: 30 },
+  verifying_source: { base: 90, weight: 0 },
+  awaiting_metadata: { base: 90, weight: 0 },
+  uploading_metadata: { base: 90, weight: 4 },
+  committing: { base: 94, weight: 6 },
   completed: { base: 100, weight: 0 },
 };
 
-const pausedTasks = new Set<string>();
-const canceledTasks = new Set<string>();
-const lastEmitAt = new Map<string, number>();
+let currentRuntime: UploadRuntime | null = null;
+let lastEmitAt = 0;
 const utf8ZipTextDecoder = new TextDecoder("utf-8");
 const fatalUtf8ZipTextDecoder = new TextDecoder("utf-8", { fatal: true });
 const shiftJisZipTextDecoder = new TextDecoder("shift_jis");
@@ -128,93 +150,86 @@ const hashByteBudgetBytes = 256 * 1024 * 1024;
 self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
   const message = event.data;
 
-  if (message.type === "start") {
-    runUpload(message).catch((error: unknown) => {
-      postLog(
-        message.localTaskId,
-        error instanceof Error ? error.message : "上传任务失败",
-      );
-    });
+  if (message.type === "start_source") {
+    void startSource(message);
     return;
   }
-
-  if (message.type === "pause") {
-    pausedTasks.add(message.localTaskId);
+  if (message.type === "confirm_metadata") {
+    void confirmMetadata(message);
     return;
   }
-
-  if (message.type === "resume") {
-    pausedTasks.delete(message.localTaskId);
+  if (message.type === "revoke_metadata") {
+    void revokeMetadata(message.localTaskId);
     return;
   }
-
+  if (message.type === "restore") {
+    void restoreDraft(message.draft);
+    return;
+  }
   if (message.type === "cancel") {
-    canceledTasks.add(message.localTaskId);
+    void cancelRuntime(message.localTaskId);
   }
 };
 
-async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>) {
+async function startSource(
+  message: Extract<UploadWorkerInput, { type: "start_source" }>,
+): Promise<void> {
+  if (currentRuntime) return;
   const localTaskId = message.localTaskId;
   const now = new Date().toISOString();
   let task = createInitialTask({
+    accountId: message.accountId,
     localTaskId,
     sourceKind: message.sourceKind,
-    sourceName: inferSourceName(message.files, message.sourceKind),
-    metadata: message.metadata,
+    sourceName: message.sourceName,
+    targetWorkId: message.targetWorkId,
     now,
   });
-
-  canceledTasks.delete(localTaskId);
-  pausedTasks.delete(localTaskId);
-  task = await persistAndPost(task, true);
+  const runtime: UploadRuntime = {
+    task,
+    preparedSource: null,
+    metadata: null,
+    metadataBlobs: [],
+    joining: false,
+    creatingJob: null,
+    cancelAttempt: null,
+    settled: false,
+  };
+  currentRuntime = runtime;
 
   try {
     task = setPhase(task, "enumerating", 1, null);
-    task = await persistAndPost(task, true);
+    runtime.task = task = emitTask(task, true);
     const sourceFiles = await enumerateSourceFiles(message.files, message.sourceKind);
+    await waitForCancellation(runtime);
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
     task = {
       ...task,
-      sourceName: inferCleanSourceName(message.files, message.sourceKind),
+      sourceName: message.sourceName,
       stats: {
         ...task.stats,
         sourceFileCount: sourceFiles.length,
         sourceSizeBytes: sourceSize,
       },
-      progress: {
-        ...task.progress,
-        totalBytes: sourceSize,
-        totalFiles: sourceFiles.length,
-      },
     };
     task = setPhase(task, "hashing", 0, null);
-    task = await persistAndPost(task, true);
+    runtime.task = task = emitTask(task, true);
 
     const scan = await scanAndHash(task, sourceFiles);
-    task = scan.task;
+    runtime.task = task = scan.task;
+    await waitForCancellation(runtime);
 
     const corePack = await buildCorePack(task, scan.coreFiles);
-    task = corePack.task;
-
-    const manifestResult = await buildManifest({
-      task,
-      includedFiles: scan.includedFiles,
-      blobObjects: scan.blobObjects,
-      corePack: corePack.corePack,
-      sourceKind: message.sourceKind,
-    });
+    runtime.task = task = corePack.task;
+    await waitForCancellation(runtime);
     task = {
       ...task,
-      phase: "manifest_ready",
-      manifestSha256: manifestResult.manifestSha256,
-      manifestJson: manifestResult.manifestJson,
-      corePackSha256: manifestResult.corePack.sha256,
       stats: {
         ...task.stats,
-        corePackFileCount: manifestResult.corePack.fileCount,
-        corePackRawSizeBytes: manifestResult.corePack.uncompressedSize,
-        corePackZipSizeBytes: manifestResult.corePack.bytes.byteLength,
+        corePackFileCount: corePack.corePack.fileCount,
+        corePackRawSizeBytes: corePack.corePack.uncompressedSize,
+        corePackZipSizeBytes: corePack.corePack.bytes.byteLength,
         estimatedR2GetCount: scan.blobObjects.size + 1,
       },
       progress: {
@@ -222,10 +237,21 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
         percent: 50,
       },
     };
-    task = await persistAndPost(task, true);
+    runtime.task = task = emitTask(task, true);
 
-    task = await createImportJob(task);
-    await uploadMetadataBlobs(message.metadataBlobs, task.serverImportJobId);
+    await waitForCancellation(runtime);
+    const creatingJob = createImportJob(task).then((nextTask) => {
+      runtime.task = nextTask;
+      return nextTask;
+    });
+    runtime.creatingJob = creatingJob;
+    try {
+      task = await creatingJob;
+    } finally {
+      if (runtime.creatingJob === creatingJob) runtime.creatingJob = null;
+    }
+    runtime.task = task;
+    await waitForCancellation(runtime);
     const preflight = await preflightObjects(
       task,
       [...scan.blobObjects.values()].map((blob) => ({
@@ -234,71 +260,313 @@ async function runUpload(message: Extract<UploadWorkerInput, { type: "start" }>)
       })),
       [
         {
-          sha256: manifestResult.corePack.sha256,
-          sizeBytes: manifestResult.corePack.bytes.byteLength,
+          sha256: corePack.corePack.sha256,
+          sizeBytes: corePack.corePack.bytes.byteLength,
         },
       ],
     );
-    task = preflight.task;
+    runtime.task = task = preflight.task;
+    await waitForCancellation(runtime);
 
     task = await uploadMissingObjects({
       task,
       blobObjects: scan.blobObjects,
-      corePack: manifestResult.corePack,
+      corePack: corePack.corePack,
       missingBlobs: preflight.missingBlobs,
       missingCorePacks: preflight.missingCorePacks,
     });
 
-    task = setPhase(task, "committing", 0, null);
-    task = await persistAndPost(task, true);
-    const result = await commitTask(task, message.metadata, task.stats.excludedFileTypes);
-    task = {
+    runtime.task = task;
+    await waitForCancellation(runtime);
+    const preparedSource: PreparedArchiveSource = {
+      sourceKind: message.sourceKind,
+      sourceName: task.sourceName,
+      files: toManifestFiles(scan.includedFiles),
+      corePack: {
+        sha256: corePack.corePack.sha256,
+        size: corePack.corePack.bytes.byteLength,
+        uncompressedSize: corePack.corePack.uncompressedSize,
+        fileCount: corePack.corePack.fileCount,
+      },
+      stats: task.stats,
+    };
+    await markSourceReady(task.serverImportJobId, preparedSource);
+    await waitForCancellation(runtime);
+    runtime.preparedSource = preparedSource;
+    runtime.task = task = {
       ...task,
-      status: "completed",
-      phase: "completed",
-      completedAt: new Date().toISOString(),
-      result,
+      status: "waiting",
+      phase: "awaiting_metadata",
+      sourceReady: true,
       progress: {
         ...task.progress,
-        percent: 100,
+        percent: 90,
+        currentPath: null,
       },
     };
-    await persistAndPost(task, true);
+    runtime.task = emitTask(task, true);
+    await saveRuntimeDraft(runtime);
+    await tryJoin(runtime);
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : "上传任务失败";
-    const failedTask: BrowserUploadTaskSnapshot = {
-      ...task,
-      status: canceledTasks.has(localTaskId) ? "canceled" : "failed",
-      updatedAt: new Date().toISOString(),
-      error: messageText,
-    };
-
-    await persistAndPost(failedTask, true);
-
-    if (failedTask.serverImportJobId && failedTask.status === "canceled") {
-      await fetch(`/api/imports/${failedTask.serverImportJobId}/cancel`, {
-        method: "POST",
-        credentials: "same-origin",
-      }).catch(() => undefined);
-    }
+    if (error instanceof RuntimeSettledError || runtime.settled) return;
+    if (runtime.cancelAttempt && await runtime.cancelAttempt) return;
+    await failRuntime(runtime, error);
   }
 }
 
+async function confirmMetadata(
+  message: Extract<UploadWorkerInput, { type: "confirm_metadata" }>,
+): Promise<void> {
+  const runtime = runtimeFor(message.localTaskId);
+  if (!runtime || runtime.cancelAttempt || runtime.task.commitStarted || isTerminal(runtime.task.status)) return;
+  runtime.metadata = message.metadata;
+  runtime.metadataBlobs = message.metadataBlobs;
+  runtime.task = emitTask(
+    { ...runtime.task, metadataConfirmed: true, error: null },
+    true,
+  );
+  if (runtime.preparedSource) await saveRuntimeDraft(runtime);
+  await tryJoin(runtime);
+}
+
+async function revokeMetadata(localTaskId: string): Promise<void> {
+  const runtime = runtimeFor(localTaskId);
+  if (!runtime || runtime.cancelAttempt || runtime.task.commitStarted || isTerminal(runtime.task.status)) return;
+  runtime.metadata = null;
+  runtime.metadataBlobs = [];
+  runtime.task = emitTask(
+    { ...runtime.task, metadataConfirmed: false, status: runtime.task.sourceReady ? "waiting" : "running" },
+    true,
+  );
+  if (runtime.preparedSource) await saveRuntimeDraft(runtime);
+}
+
+async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
+  if (currentRuntime) return;
+  const task = createInitialTask({
+    accountId: draft.accountId,
+    localTaskId: draft.localTaskId,
+    sourceKind: draft.preparedSource.sourceKind,
+    sourceName: draft.preparedSource.sourceName,
+    targetWorkId: draft.targetWorkId,
+    now: draft.createdAt,
+  });
+  const runtime: UploadRuntime = {
+    task: {
+      ...task,
+      serverImportJobId: draft.serverImportJobId,
+      status: "waiting",
+      phase: "awaiting_metadata",
+      sourceReady: true,
+      metadataConfirmed: draft.metadataConfirmed,
+      stats: draft.preparedSource.stats,
+      progress: { ...task.progress, percent: 90 },
+    },
+    preparedSource: draft.preparedSource,
+    metadata: draft.metadata,
+    metadataBlobs: draft.metadataBlobs,
+    joining: false,
+    creatingJob: null,
+    cancelAttempt: null,
+    settled: false,
+  };
+  currentRuntime = runtime;
+  try {
+    runtime.task = emitTask(runtime.task, true);
+    await tryJoin(runtime);
+  } catch (error) {
+    if (error instanceof RuntimeSettledError || runtime.settled) return;
+    if (runtime.cancelAttempt && await runtime.cancelAttempt) return;
+    await failRuntime(runtime, error);
+  }
+}
+
+async function tryJoin(runtime: UploadRuntime): Promise<void> {
+  if (
+    runtime.joining ||
+    !runtime.preparedSource ||
+    !runtime.metadata ||
+    !runtime.task.metadataConfirmed ||
+    !runtime.task.serverImportJobId ||
+    runtime.cancelAttempt ||
+    runtime.settled ||
+    isTerminal(runtime.task.status)
+  ) return;
+  await waitForCancellation(runtime);
+  const importJobId = runtime.task.serverImportJobId;
+  const preparedSource = runtime.preparedSource;
+  const metadata = runtime.metadata;
+  runtime.joining = true;
+  runtime.task = {
+    ...runtime.task,
+    status: "running",
+    phase: "uploading_metadata",
+    commitStarted: true,
+    progress: { ...runtime.task.progress, percent: 90 },
+  };
+  runtime.task = emitTask(runtime.task, true);
+  try {
+    await markMetadataReady(importJobId);
+    await waitForCancellation(runtime);
+    await uploadMetadataBlobs(runtime.metadataBlobs, importJobId);
+    await waitForCancellation(runtime);
+    const manifestResult = await buildManifest(preparedSource, metadata);
+    await waitForCancellation(runtime);
+    runtime.task = setPhase(runtime.task, "committing", 0, null);
+    runtime.task = emitTask(runtime.task, true);
+    const result = await commitTask(
+      importJobId,
+      manifestResult.manifestSha256,
+      manifestResult.manifestJson,
+      metadata,
+      preparedSource.stats.excludedFileTypes,
+    );
+    await settleRuntime(runtime, {
+      ...runtime.task,
+      status: "completed",
+      phase: "completed",
+      error: null,
+      result,
+      progress: { ...runtime.task.progress, percent: 100, currentPath: null },
+    });
+  } catch (error) {
+    if (error instanceof RuntimeSettledError || runtime.settled) return;
+    if (runtime.cancelAttempt && await runtime.cancelAttempt) return;
+    await failRuntime(runtime, error);
+  } finally {
+    runtime.joining = false;
+  }
+}
+
+async function cancelRuntime(localTaskId: string): Promise<void> {
+  const runtime = runtimeFor(localTaskId);
+  if (!runtime || runtime.settled) return;
+  if (runtime.task.phase === "committing" || isTerminal(runtime.task.status)) {
+    await rejectCancellation(runtime, "任务正在提交，当前不能取消或离开上传页。");
+    return;
+  }
+  if (runtime.cancelAttempt) return;
+  const attempt = performCancellation(runtime);
+  runtime.cancelAttempt = attempt;
+  try {
+    await attempt;
+  } finally {
+    if (runtime.cancelAttempt === attempt) runtime.cancelAttempt = null;
+  }
+}
+
+async function performCancellation(runtime: UploadRuntime): Promise<boolean> {
+  if (runtime.creatingJob) {
+    await runtime.creatingJob.catch(() => null);
+  }
+  if (runtime.settled) return true;
+  if (runtime.task.phase === "committing") {
+    await rejectCancellation(runtime, "任务正在提交，当前不能取消或离开上传页。");
+    return false;
+  }
+  const importJobId = runtime.task.serverImportJobId;
+  if (!importJobId) {
+    await settleRuntime(runtime, {
+      ...runtime.task,
+      status: "canceled",
+      error: null,
+    });
+    return true;
+  }
+
+  const state = await requestTerminalTransition(
+    importJobId,
+    "cancel",
+    undefined,
+    "canceled",
+  );
+  if (!state || !isTerminalImportJobStatus(state.status)) {
+    await rejectCancellation(runtime, "服务端尚未确认取消，上传任务和恢复草稿均已保留。");
+    return false;
+  }
+  await settleRuntime(runtime, terminalTaskFromState(runtime.task, state, "上传任务已结束"));
+  return true;
+}
+
+async function rejectCancellation(runtime: UploadRuntime, message: string): Promise<void> {
+  runtime.task = emitTask({
+    ...runtime.task,
+    error: message,
+  }, true);
+  postMessage({
+    type: "cancel_rejected",
+    task: runtime.task,
+    message,
+  } satisfies UploadWorkerOutput);
+}
+
+async function failRuntime(runtime: UploadRuntime, error: unknown): Promise<void> {
+  if (runtime.settled) return;
+  const message = error instanceof Error ? error.message : "上传任务失败";
+  let state: OwnedImportJobState | null = null;
+  if (runtime.task.serverImportJobId) {
+    state = await requestTerminalTransition(
+      runtime.task.serverImportJobId,
+      "fail",
+      { message, stage: runtime.task.phase },
+      "failed",
+    );
+  }
+  if (!runtime.task.serverImportJobId) {
+    await settleRuntime(runtime, {
+      ...runtime.task,
+      status: "failed",
+      error: message,
+    });
+    return;
+  }
+  if (state && isTerminalImportJobStatus(state.status)) {
+    await settleRuntime(runtime, terminalTaskFromState(runtime.task, state, message));
+    return;
+  }
+
+  runtime.task = emitTask({
+    ...runtime.task,
+    status: runtime.preparedSource ? "waiting" : "running",
+    error: runtime.preparedSource
+      ? `${message}；服务端终态尚未确认，恢复草稿已保留。`
+      : `${message}；服务端终态尚未确认，请重试取消。`,
+  }, true);
+  if (runtime.preparedSource) await saveRuntimeDraft(runtime);
+}
+
+function terminalTaskFromState(
+  task: BrowserUploadTaskSnapshot,
+  state: OwnedImportJobState,
+  fallbackError: string,
+): BrowserUploadTaskSnapshot {
+  if (state.status === "completed") {
+    return {
+      ...task,
+      status: "completed",
+      phase: "completed",
+      error: null,
+      result: state.result,
+      progress: { ...task.progress, percent: 100, currentPath: null },
+    };
+  }
+  if (state.status === "canceled") {
+    return { ...task, status: "canceled", error: null };
+  }
+  return { ...task, status: "failed", error: fallbackError };
+}
+
 async function enumerateSourceFiles(
-  files: File[],
+  files: UploadSourceFile[],
   sourceKind: UploadSourceKind,
 ): Promise<SourceFile[]> {
   if (sourceKind === "zip") {
     return enumerateZipSourceFiles(files);
   }
-
-  const rawPaths = files.map((file) => rawRelativePath(file));
-  const stripped = stripCommonRoot(rawPaths);
-
   return files
-    .map((file) => {
-      const rawPath = rawRelativePath(file);
-      const path = stripped.get(rawPath) ?? rawPath;
+    .map((source) => {
+      const path = normalizeArchivePath(source.relativePath);
+      const file = source.file;
 
       return {
         path,
@@ -311,8 +579,8 @@ async function enumerateSourceFiles(
     .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
 }
 
-async function enumerateZipSourceFiles(files: File[]): Promise<SourceFile[]> {
-  const zipFile = files[0];
+async function enumerateZipSourceFiles(files: UploadSourceFile[]): Promise<SourceFile[]> {
+  const zipFile = files[0]?.file;
 
   if (!zipFile) {
     throw new Error("未选择 ZIP 文件");
@@ -380,7 +648,6 @@ async function scanAndHash(
 
         task = updateHashProgress(task, {
           processedBytes,
-          processedFiles,
           currentPath: result.source.path,
           includedFileCount: includedFiles.length,
           includedSizeBytes: includedSize,
@@ -388,7 +655,7 @@ async function scanAndHash(
           excludedSizeBytes: excludedSize,
           excludedFileTypes: [...excluded.values()],
         });
-        task = await persistAndPost(task);
+        task = emitTask(task);
       });
 
       await recordResult;
@@ -410,7 +677,6 @@ async function scanAndHash(
       size: included.size,
       contentType: included.contentType,
       source: included.source,
-      uploaded: false,
     });
   }
 
@@ -447,8 +713,7 @@ async function scanOneFile(
   localTaskId: string,
   source: SourceFile,
 ): Promise<ScanFileResult> {
-  await waitIfPaused(localTaskId);
-  assertNotCanceled(localTaskId);
+  assertRuntimeActive(localTaskId);
 
   const classification = classifyArchivePath(source.path);
 
@@ -489,17 +754,13 @@ async function buildCorePack(
   coreFiles: IncludedFile[],
 ): Promise<{ task: BrowserUploadTaskSnapshot; corePack: CorePackObject }> {
   let task = setPhase(initialTask, "building_core_pack", 0, null);
-  task = await persistAndPost(task, true);
+  task = emitTask(task, true);
   const zipEntries: Record<string, Uint8Array> = {};
   let rawSize = 0;
   let processed = 0;
-  const sortedCoreFiles = coreFiles
-    .slice()
-    .sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
 
-  for (const file of sortedCoreFiles) {
-    await waitIfPaused(task.localTaskId);
-    assertNotCanceled(task.localTaskId);
+  for (const file of coreFiles) {
+    assertRuntimeActive(task.localTaskId);
     zipEntries[file.packEntryPath ?? file.path] =
       file.cachedBytes ?? (await file.source.bytes());
     rawSize += file.size;
@@ -507,10 +768,10 @@ async function buildCorePack(
     task = setPhase(
       task,
       "building_core_pack",
-      processed / Math.max(sortedCoreFiles.length, 1),
+      processed / Math.max(coreFiles.length, 1),
       file.path,
     );
-    task = await persistAndPost(task);
+    task = emitTask(task);
   }
 
   const bytes = await zipEntriesAsync(zipEntries);
@@ -527,91 +788,80 @@ async function buildCorePack(
   };
 }
 
-async function buildManifest(input: {
-  task: BrowserUploadTaskSnapshot;
-  includedFiles: IncludedFile[];
-  blobObjects: Map<string, BlobObject>;
-  corePack: CorePackObject;
-  sourceKind: UploadSourceKind;
-}): Promise<{
-  manifest: ArchiveManifest;
+async function buildManifest(
+  source: PreparedArchiveSource,
+  metadata: ArchiveCommitMetadata,
+): Promise<{
   manifestJson: string;
   manifestSha256: string;
-  corePack: CorePackObject;
 }> {
-  const files: ArchiveManifestFile[] = input.includedFiles
-    .slice()
-    .sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey))
-    .map((file) => ({
-      path: file.path,
-      pathSortKey: file.pathSortKey,
-      role: file.role,
-      sha256: file.sha256,
-      crc32: file.crc32,
-      size: file.size,
-      mtimeMs: file.mtimeMs,
-      storage:
-        file.storageKind === "blob"
-          ? {
-              kind: "blob",
-              blobSha256: file.sha256,
-            }
-          : {
-              kind: "core_pack",
-              packId: "core-main",
-              entry: file.packEntryPath ?? file.path,
-            },
-    }));
   const manifest: ArchiveManifest = {
     schema: "viprpg-archive.manifest.v1",
     game: {
-      originalTitle: input.task.metadata.game.originalTitle,
-      chineseTitle: input.task.metadata.game.chineseTitle,
-      language: input.task.metadata.game.language,
-      isOriginal: input.task.metadata.game.isOriginal,
+      originalTitle: metadata.game.originalTitle,
+      chineseTitle: metadata.game.chineseTitle,
+      language: metadata.game.language,
+      isOriginal: metadata.game.isOriginal,
     },
     archiveVersion: {
-      sourceName: input.task.metadata.archiveVersion.sourceName,
-      sourceUrl: input.task.metadata.archiveVersion.sourceUrl,
+      sourceName: metadata.archiveVersion.sourceName,
+      sourceUrl: metadata.archiveVersion.sourceUrl,
       createdAt: new Date().toISOString(),
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
-      sourceType: input.sourceKind === "zip" ? "browser_zip" : "browser_folder",
-      sourceFileCount: input.task.stats.sourceFileCount,
-      sourceSize: input.task.stats.sourceSizeBytes,
-      includedFileCount: input.task.stats.includedFileCount,
-      includedSize: input.task.stats.includedSizeBytes,
-      excludedFileCount: input.task.stats.excludedFileCount,
-      excludedSize: input.task.stats.excludedSizeBytes,
+      sourceType: source.sourceKind === "zip" ? "browser_zip" : "browser_folder",
+      sourceFileCount: source.stats.sourceFileCount,
+      sourceSize: source.stats.sourceSizeBytes,
+      includedFileCount: source.stats.includedFileCount,
+      includedSize: source.stats.includedSizeBytes,
+      excludedFileCount: source.stats.excludedFileCount,
+      excludedSize: source.stats.excludedSizeBytes,
     },
     corePacks: [
       {
         id: "core-main",
-        sha256: input.corePack.sha256,
-        size: input.corePack.bytes.byteLength,
-        uncompressedSize: input.corePack.uncompressedSize,
-        fileCount: input.corePack.fileCount,
+        sha256: source.corePack.sha256,
+        size: source.corePack.size,
+        uncompressedSize: source.corePack.uncompressedSize,
+        fileCount: source.corePack.fileCount,
         format: "zip",
         compression: "deflate-low",
       },
     ],
-    files,
+    files: source.files,
   };
   const manifestJson = JSON.stringify(manifest);
 
   return {
-    manifest,
     manifestJson,
     manifestSha256: await sha256Text(manifestJson),
-    corePack: input.corePack,
   };
+}
+
+function toManifestFiles(includedFiles: IncludedFile[]): ArchiveManifestFile[] {
+  return includedFiles.map((file) => ({
+    path: file.path,
+    pathSortKey: file.pathSortKey,
+    role: file.role,
+    sha256: file.sha256,
+    crc32: file.crc32,
+    size: file.size,
+    mtimeMs: file.mtimeMs,
+    storage: file.storageKind === "blob"
+      ? { kind: "blob", blobSha256: file.sha256 }
+      : {
+          kind: "core_pack",
+          packId: "core-main",
+          entry: file.packEntryPath ?? file.path,
+        },
+  }));
 }
 
 async function createImportJob(
   initialTask: BrowserUploadTaskSnapshot,
 ): Promise<BrowserUploadTaskSnapshot> {
   let task = setPhase(initialTask, "creating_import_job", 0, null);
-  task = await persistAndPost(task, true);
+  task = emitTask(task, true);
   const response = await jsonFetch<{
     ok: true;
     importJob: { id: number };
@@ -624,6 +874,7 @@ async function createImportJob(
       excludedFileCount: task.stats.excludedFileCount,
       excludedSizeBytes: task.stats.excludedSizeBytes,
       filePolicyVersion: FILE_POLICY_VERSION,
+      targetWorkId: task.targetWorkId,
     }),
   });
 
@@ -653,7 +904,7 @@ async function preflightObjects(
   missingCorePacks: Set<string>;
 }> {
   let task = setPhase(initialTask, "preflighting", 0, null);
-  task = await persistAndPost(task, true);
+  task = emitTask(task, true);
 
   if (!task.serverImportJobId) {
     throw new Error("上传任务缺少导入记录，无法进行上传前检查。");
@@ -672,19 +923,15 @@ async function preflightObjects(
   });
   const missingBlobs = new Set(response.blobs.missing);
   const missingCorePacks = new Set(response.corePacks.missing);
-  const uploadBytesTotal =
-    task.stats.uniqueBlobSizeBytes + task.stats.corePackZipSizeBytes;
 
   task = {
     ...task,
     progress: {
       ...task.progress,
       percent: 60,
-      uploadBytesTotal,
-      totalUploadObjects: missingBlobs.size + missingCorePacks.size,
     },
   };
-  task = await persistAndPost(task, true);
+  task = emitTask(task, true);
 
   return {
     task,
@@ -702,10 +949,8 @@ async function uploadMissingObjects(input: {
 }): Promise<BrowserUploadTaskSnapshot> {
   if (!input.task.serverImportJobId) throw new Error("上传任务缺少导入记录");
   const importJobId = input.task.serverImportJobId;
-  let task = setPhase(input.task, "uploading_missing_objects", 0, null);
-  let uploadedObjects = 0;
+  let task = setPhase(input.task, "uploading_source", 0, null);
   let uploadedBytes = 0;
-  const totalObjects = input.missingBlobs.size + input.missingCorePacks.size;
   const totalBytes =
     [...input.missingBlobs].reduce(
       (sum, sha256) => sum + (input.blobObjects.get(sha256)?.size ?? 0),
@@ -715,31 +960,19 @@ async function uploadMissingObjects(input: {
       ? input.corePack.bytes.byteLength
       : 0);
 
-  task = {
-    ...task,
-    progress: {
-      ...task.progress,
-      totalUploadObjects: totalObjects,
-      uploadBytesTotal: totalBytes,
-    },
-  };
-  task = await persistAndPost(task, true);
+  task = emitTask(task, true);
 
   if (input.missingCorePacks.has(input.corePack.sha256)) {
-    await waitIfPaused(task.localTaskId);
-    assertNotCanceled(task.localTaskId);
+    assertRuntimeActive(task.localTaskId);
     await uploadCorePack(input.corePack, importJobId);
-    uploadedObjects += 1;
     uploadedBytes += input.corePack.bytes.byteLength;
     task = updateUploadProgress(
       task,
-      uploadedObjects,
-      totalObjects,
       uploadedBytes,
       totalBytes,
       "引擎公共文件",
     );
-    task = await persistAndPost(task, true);
+    task = emitTask(task, true);
   }
 
   const missingBlobObjects = [...input.missingBlobs]
@@ -748,52 +981,193 @@ async function uploadMissingObjects(input: {
     .sort((a, b) => b.size - a.size);
 
   await runWithConcurrency(missingBlobObjects, resolveUploadConcurrency(), async (blob) => {
-    await waitIfPaused(task.localTaskId);
-    assertNotCanceled(task.localTaskId);
+    assertRuntimeActive(task.localTaskId);
     await uploadBlob(blob, importJobId);
-    blob.uploaded = true;
-    uploadedObjects += 1;
     uploadedBytes += blob.size;
     task = updateUploadProgress(
       task,
-      uploadedObjects,
-      totalObjects,
       uploadedBytes,
       totalBytes,
       blob.source.path,
     );
-    await persistAndPost(task);
+    emitTask(task);
   });
 
-  task = setPhase(task, "verifying_objects", 1, null);
-  return persistAndPost(task, true);
+  task = setPhase(task, "verifying_source", 1, null);
+  return emitTask(task, true);
 }
 
 async function commitTask(
-  task: BrowserUploadTaskSnapshot,
+  importJobId: number,
+  manifestSha256: string,
+  manifestJson: string,
   metadata: ArchiveCommitMetadata,
   excludedFileTypes: ExcludedFileTypeSummary[],
 ): Promise<UploadTaskCommitResult> {
-  if (!task.serverImportJobId || !task.manifestSha256 || !task.manifestJson) {
-    throw new Error("上传任务尚未准备好，无法提交入库。");
-  }
-
   const body = JSON.stringify({
-    manifestSha256: task.manifestSha256,
-    manifestJson: task.manifestJson,
+    manifestSha256,
+    manifestJson,
     metadata,
     excludedFileTypes,
   });
 
-  const response = await jsonFetch<{
-    ok: true;
-    result: UploadTaskCommitResult;
-  }>(`/api/imports/${task.serverImportJobId}/commit`, {
-    method: "POST",
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/imports/${importJobId}/commit`, {
+      method: "POST",
+      body,
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+    });
+  } catch (error) {
+    const completed = await waitForCompletedImportResult(importJobId);
+    if (completed) return completed;
+    throw error;
+  }
+  const payload = (await response.json().catch(() => null)) as
+    | { ok: true; result: UploadTaskCommitResult }
+    | { ok: false; detail?: string; error?: string }
+    | null;
+  if (response.ok && payload?.ok) return payload.result;
+  const completed = await waitForCompletedImportResult(importJobId);
+  if (completed) return completed;
+  throw new Error(
+    payload && "detail" in payload
+      ? payload.detail || payload.error || "提交入库失败"
+      : "提交入库失败",
+  );
+}
 
-  return response.result;
+async function waitForCompletedImportResult(
+  importJobId: number,
+): Promise<UploadTaskCommitResult | null> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const state = await readOwnedImportJobState(importJobId).catch(() => null);
+    if (state?.status === "completed") return state.result;
+    if (state?.status !== "committing") return null;
+    if (attempt < 5) await sleep(250 * 2 ** Math.min(attempt, 3));
+  }
+  return null;
+}
+
+async function readOwnedImportJobState(
+  importJobId: number,
+): Promise<OwnedImportJobState | null> {
+  const response = await fetch(`/api/imports/${importJobId}`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json().catch(() => null)) as {
+    ok: true;
+    importJob: {
+      status: string;
+      result: UploadTaskCommitResult | null;
+    };
+  } | null;
+  return payload?.ok ? payload.importJob : null;
+}
+
+async function requestTerminalTransition(
+  importJobId: number,
+  action: "cancel" | "fail",
+  body: { message: string; stage: string } | undefined,
+  expectedStatus: "canceled" | "failed",
+): Promise<OwnedImportJobState | null> {
+  const response = await fetch(`/api/imports/${importJobId}/${action}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: body ? { "content-type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(() => null);
+  if (response?.ok) {
+    return await readOwnedImportJobState(importJobId).catch(() => null) ?? {
+      status: expectedStatus,
+      result: null,
+    };
+  }
+  return readOwnedImportJobState(importJobId).catch(() => null);
+}
+
+function isTerminalImportJobStatus(status: string): boolean {
+  return status === "completed" || status === "failed" || status === "canceled" || status === "expired";
+}
+
+async function markSourceReady(
+  importJobId: number | null,
+  source: PreparedArchiveSource,
+): Promise<void> {
+  if (!importJobId) throw new Error("上传任务缺少导入记录");
+  const references = sourceObjectReferences(source);
+  await jsonFetch(`/api/imports/${importJobId}/source-ready`, {
+    method: "POST",
+    body: JSON.stringify(references),
+  });
+}
+
+async function markMetadataReady(importJobId: number): Promise<void> {
+  await jsonFetch(`/api/imports/${importJobId}/metadata-ready`, {
+    method: "POST",
+  });
+}
+
+async function saveRuntimeDraft(runtime: UploadRuntime): Promise<void> {
+  const { task, preparedSource } = runtime;
+  if (!task.serverImportJobId || !preparedSource) return;
+  const draft: UploadRecoveryDraft = {
+    key: draftKey(task.accountId, task.serverImportJobId),
+    accountId: task.accountId,
+    localTaskId: task.localTaskId,
+    serverImportJobId: task.serverImportJobId,
+    targetWorkId: task.targetWorkId,
+    preparedSource,
+    metadata: runtime.metadata,
+    metadataBlobs: runtime.metadataBlobs,
+    metadataConfirmed: task.metadataConfirmed,
+    createdAt: task.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+  await putUploadDraft(draft);
+  postMessage({ type: "draft_saved", draft } satisfies UploadWorkerOutput);
+}
+
+async function removeRuntimeDraft(runtime: UploadRuntime): Promise<boolean> {
+  const jobId = runtime.task.serverImportJobId;
+  if (!jobId) return true;
+  try {
+    await deleteUploadDraft(runtime.task.accountId, jobId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function settleRuntime(
+  runtime: UploadRuntime,
+  task: BrowserUploadTaskSnapshot,
+): Promise<void> {
+  if (runtime.settled) return;
+  runtime.settled = true;
+  runtime.task = emitTask(task, true);
+  const draftRemoved = await removeRuntimeDraft(runtime);
+  postMessage({
+    type: "settled",
+    task: runtime.task,
+    draftRemoved,
+  } satisfies UploadWorkerOutput);
+}
+
+async function waitForCancellation(runtime: UploadRuntime): Promise<void> {
+  const attempt = runtime.cancelAttempt;
+  if (attempt && await attempt) throw new RuntimeSettledError();
+  if (runtime.settled) throw new RuntimeSettledError();
+}
+
+function runtimeFor(localTaskId: string): UploadRuntime | null {
+  return currentRuntime?.task.localTaskId === localTaskId ? currentRuntime : null;
+}
+
+function isTerminal(status: BrowserUploadTaskSnapshot["status"]): boolean {
+  return status === "completed" || status === "failed" || status === "canceled";
 }
 
 async function uploadCorePack(
@@ -856,36 +1230,28 @@ function uploadObjectUrl(path: string, importJobId: number): string {
 }
 
 function createInitialTask(input: {
+  accountId: number;
   localTaskId: string;
   sourceKind: UploadSourceKind;
   sourceName: string;
-  metadata: ArchiveCommitMetadata;
+  targetWorkId: number | null;
   now: string;
 }): BrowserUploadTaskSnapshot {
   return {
+    accountId: input.accountId,
     localTaskId: input.localTaskId,
     serverImportJobId: null,
+    targetWorkId: input.targetWorkId,
     status: "running",
-    phase: "created",
+    phase: "enumerating",
     sourceKind: input.sourceKind,
     sourceName: input.sourceName,
-    metadata: input.metadata,
-    manifestSha256: null,
-    manifestJson: null,
-    corePackSha256: null,
+    sourceReady: false,
+    metadataConfirmed: false,
+    commitStarted: false,
     createdAt: input.now,
-    updatedAt: input.now,
-    completedAt: null,
     progress: {
       percent: 0,
-      processedBytes: 0,
-      totalBytes: 0,
-      uploadedBytes: 0,
-      uploadBytesTotal: 0,
-      processedFiles: 0,
-      totalFiles: 0,
-      uploadedObjects: 0,
-      totalUploadObjects: 0,
       currentPath: null,
     },
     stats: emptyStats(),
@@ -916,7 +1282,6 @@ function updateHashProgress(
   task: BrowserUploadTaskSnapshot,
   input: {
     processedBytes: number;
-    processedFiles: number;
     currentPath: string;
     includedFileCount: number;
     includedSizeBytes: number;
@@ -931,8 +1296,6 @@ function updateHashProgress(
     progress: {
       ...task.progress,
       percent: 5 + ratio * 30,
-      processedBytes: input.processedBytes,
-      processedFiles: input.processedFiles,
       currentPath: input.currentPath,
     },
     stats: {
@@ -948,8 +1311,6 @@ function updateHashProgress(
 
 function updateUploadProgress(
   task: BrowserUploadTaskSnapshot,
-  uploadedObjects: number,
-  totalObjects: number,
   uploadedBytes: number,
   totalBytes: number,
   currentPath: string,
@@ -957,14 +1318,9 @@ function updateUploadProgress(
   const ratio = totalBytes > 0 ? uploadedBytes / totalBytes : 1;
   return {
     ...task,
-    updatedAt: new Date().toISOString(),
     progress: {
       ...task.progress,
       percent: 60 + ratio * 30,
-      uploadedBytes,
-      uploadBytesTotal: totalBytes,
-      uploadedObjects,
-      totalUploadObjects: totalObjects,
       currentPath,
     },
   };
@@ -981,7 +1337,6 @@ function setPhase(
     ...task,
     status: "running",
     phase,
-    updatedAt: new Date().toISOString(),
     progress: {
       ...task.progress,
       percent: Math.min(100, stage.base + Math.max(0, Math.min(1, ratio)) * stage.weight),
@@ -990,37 +1345,23 @@ function setPhase(
   };
 }
 
-async function persistAndPost(
+function emitTask(
   task: BrowserUploadTaskSnapshot,
   force = false,
-): Promise<BrowserUploadTaskSnapshot> {
+): BrowserUploadTaskSnapshot {
   const now = Date.now();
-  const last = lastEmitAt.get(task.localTaskId) ?? 0;
 
-  if (!force && now - last < 250) {
+  if (!force && now - lastEmitAt < 250) {
     return task;
   }
 
-  lastEmitAt.set(task.localTaskId, now);
-  const nextTask = {
-    ...task,
-    updatedAt: new Date().toISOString(),
-  };
-
+  lastEmitAt = now;
   postMessage({
     type: "task",
-    task: nextTask,
+    task,
   } satisfies UploadWorkerOutput);
 
-  return nextTask;
-}
-
-function postLog(localTaskId: string, message: string): void {
-  postMessage({
-    type: "log",
-    localTaskId,
-    message,
-  } satisfies UploadWorkerOutput);
+  return task;
 }
 
 async function jsonFetch<T>(url: string, init: RequestInit): Promise<T> {
@@ -1187,17 +1528,12 @@ function resolveUploadConcurrency(): number {
   );
 }
 
-async function waitIfPaused(localTaskId: string): Promise<void> {
-  while (pausedTasks.has(localTaskId)) {
-    await sleep(250);
-  }
+function assertRuntimeActive(localTaskId: string): void {
+  const runtime = runtimeFor(localTaskId);
+  if (!runtime || runtime.settled) throw new RuntimeSettledError();
 }
 
-function assertNotCanceled(localTaskId: string): void {
-  if (canceledTasks.has(localTaskId)) {
-    throw new Error("任务已取消");
-  }
-}
+class RuntimeSettledError extends Error {}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1580,11 +1916,6 @@ function readUint32(bytes: Uint8Array, offset: number): number {
   ) >>> 0;
 }
 
-function rawRelativePath(file: File): string {
-  const withWebkit = file as File & { webkitRelativePath?: string };
-  return normalizeArchivePath(withWebkit.webkitRelativePath || file.name);
-}
-
 function stripCommonRoot(paths: string[]): Map<string, string> {
   const normalized = paths.map(normalizeArchivePath);
   const firstParts = normalized[0]?.split("/") ?? [];
@@ -1602,22 +1933,4 @@ function stripCommonRoot(paths: string[]): Map<string, string> {
   }
 
   return result;
-}
-
-function inferSourceName(files: File[], sourceKind: UploadSourceKind): string {
-  if (sourceKind === "zip") {
-    return files[0]?.name ?? "local.zip";
-  }
-
-  return inferCleanSourceName(files, sourceKind);
-}
-
-function inferCleanSourceName(files: File[], sourceKind: UploadSourceKind): string {
-  if (sourceKind === "zip") {
-    return files[0]?.name ?? "local.zip";
-  }
-
-  const first = files[0] ? rawRelativePath(files[0]) : "local-folder";
-  const parts = first.split("/");
-  return parts.length > 1 ? parts[0] : "local-folder";
 }

@@ -1,4 +1,8 @@
-import { isLanguageCode } from "@/lib/labels";
+import {
+  isArchiveEngineFamily,
+  isExternalEngineFamily,
+  isLanguageCode,
+} from "@/lib/labels";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { getD1 } from "@/lib/server/db/d1";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
@@ -9,7 +13,6 @@ import {
   assertStableDistribution,
   assertSingleDownloadLink,
   deriveWorkDistribution,
-  isExternalEngineFamily,
   type WorkDistribution,
 } from "@/lib/server/db/work-distribution";
 import type { ArchiveUser } from "@/lib/server/db/users";
@@ -32,6 +35,7 @@ export type GameCreatorCredit = {
   websiteUrl: string | null;
   roleKey: string;
   roleLabel: string | null;
+  notes: string | null;
 };
 export type GameMediaAsset = {
   blobSha256: string;
@@ -103,6 +107,7 @@ export type GameWorkSummary = {
 };
 export type GameWorkDetail = GameWorkSummary & {
   aliases: string[];
+  creators: GameCreatorCredit[];
   media: GameMediaAsset[];
   externalLinks: GameExternalLink[];
   archiveVersions: GameArchiveVersionDetail[];
@@ -122,6 +127,7 @@ export type AdminWorkEdit = {
   language: string;
   status: "processing" | "published" | "hidden" | "deleted";
   aliases: string[];
+  creators: GameCreatorCredit[];
   tags: string[];
   characters: string[];
   characterCredits: GameCharacter[];
@@ -310,6 +316,29 @@ export type UserWorkListItem = {
   occurredAt: string;
 };
 
+export type UploaderWorkEdit = AdminWorkEdit & {
+  distribution: "archive" | "external";
+  externalDownloadUrl: string | null;
+};
+
+export type UploaderWorkUpdateInput = {
+  user: ArchiveUser;
+  workId: number;
+  originalTitle: string;
+  chineseTitle: string | null;
+  description: string | null;
+  engineFamily: string;
+  isOriginal: boolean;
+  language: string;
+  status: "published" | "hidden";
+  aliases: string[];
+  tags: string[];
+  characters: string[];
+  authors: string[];
+  previewBlobSha256s: string[];
+  downloadUrl: string | null;
+};
+
 export async function searchUserWorks(input: {
   userId: number;
   kind: "favorite" | "played";
@@ -331,6 +360,44 @@ export async function searchUserWorks(input: {
   return {
     items: works.map((work, index) => ({ work, occurredAt: (rows.results ?? [])[index].occurred_at })),
     total: totalRow?.count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+export async function searchUploadedWorks(input: {
+  userId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: GameWorkSummary[]; total: number; page: number; pageSize: number }> {
+  const pageSize = clamp(input.pageSize ?? 20, 1, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const total = await getD1()
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM work_uploaders wu
+       JOIN works w ON w.id=wu.work_id
+       WHERE wu.user_id=? AND w.status<>'deleted'`,
+    )
+    .bind(input.userId)
+    .first<{ count: number }>();
+  const rows = await getD1()
+    .prepare(
+      `SELECT ${summarySql()}
+       FROM work_uploaders wu
+       JOIN works w ON w.id=wu.work_id
+       LEFT JOIN archive_versions av
+         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
+       WHERE wu.user_id=? AND w.status<>'deleted'
+       GROUP BY w.id
+       ORDER BY datetime(w.updated_at) DESC,w.id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(input.userId, pageSize, (page - 1) * pageSize)
+    .all<SummaryRow>();
+  return {
+    items: await hydrate(rows.results ?? []),
+    total: total?.count ?? 0,
     page,
     pageSize,
   };
@@ -449,11 +516,12 @@ export async function getWorkForAdminEdit(
     .bind(workId)
     .first<WorkRow>();
   if (!row) return null;
-  const [aliases, tags, characters, media, relations, translations, links] =
+  const [aliases, tags, characters, creators, media, relations, translations, links] =
     await Promise.all([
       listAliases(workId),
       listTags(workId),
       listCharacters(workId),
+      listCreators(workId),
       listMedia(workId),
       listRelations(workId, true),
       listTranslations(workId, true),
@@ -474,6 +542,7 @@ export async function getWorkForAdminEdit(
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
     aliases,
+    creators,
     tags: tags.map((item) => item.name),
     characters: characters.map((item) => item.primaryName),
     characterCredits: characters,
@@ -485,6 +554,203 @@ export async function getWorkForAdminEdit(
       : [],
     externalLinks: links,
   };
+}
+
+export async function getOwnedWorkForEdit(
+  workId: number,
+  user: ArchiveUser,
+): Promise<UploaderWorkEdit | null> {
+  const owned = await getD1()
+    .prepare(
+      `SELECT 1 AS allowed
+       FROM work_uploaders wu
+       JOIN works w ON w.id=wu.work_id
+       WHERE wu.work_id=? AND wu.user_id=? AND w.status<>'deleted'
+       LIMIT 1`,
+    )
+    .bind(workId, user.id)
+    .first<{ allowed: number }>();
+  if (!owned) return null;
+  const work = await getWorkForAdminEdit(workId);
+  if (!work || work.status === "processing" || work.status === "deleted") return null;
+  const distributionState = await getWorkDistributionState(workId);
+  const downloadLink = work.externalLinks.find(
+    (link) => link.linkType === "download_page",
+  );
+  const distribution = deriveWorkDistribution({
+    hasCurrentArchive: distributionState.hasCurrentArchive,
+    downloadLinkCount: downloadLink ? 1 : 0,
+  });
+  if (distribution === "invalid") return null;
+  return {
+    ...work,
+    distribution,
+    externalDownloadUrl: downloadLink?.url ?? null,
+  };
+}
+
+export async function updateOwnedWork(
+  input: UploaderWorkUpdateInput,
+): Promise<void> {
+  const before = await getOwnedWorkForEdit(input.workId, input.user);
+  if (!before) throw new HttpError(404, "作品不存在或不属于当前上传者");
+  const originalTitle = input.originalTitle.trim();
+  if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
+  if (!(["published", "hidden"] as const).includes(input.status)) {
+    throw new HttpError(400, "作品状态不合法");
+  }
+  if (before.distribution === "archive" && !isArchiveEngineFamily(input.engineFamily)) {
+    throw new HttpError(400, "本站归档作品必须使用 RPG Maker 2000/2003 系引擎");
+  }
+  if (before.distribution === "external" && !isExternalEngineFamily(input.engineFamily)) {
+    throw new HttpError(400, "外链作品必须使用非 RPG Maker 2000/2003 系引擎");
+  }
+  await assertTranslationLanguageChangeAllowed(input.workId, input.language);
+
+  const aliases = uniqueText(input.aliases);
+  const tags = uniqueText(input.tags.map(normalizeEntityName));
+  const characters = uniqueText(input.characters.map(normalizeEntityName));
+  const authors = uniqueText(input.authors.map(normalizeEntityName));
+  const previewHashes = uniqueText(
+    input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
+  );
+  await validatePreviewHashes(previewHashes);
+  if (previewHashes.length === 0) throw new HttpError(400, "作品必须保留至少一张封面图");
+  const downloadUrl = before.distribution === "external"
+    ? normalizeHttpUrl(input.downloadUrl, "外部下载地址")
+    : null;
+  if (before.distribution === "external" && !downloadUrl) {
+    throw new HttpError(400, "外部下载地址不能为空");
+  }
+
+  const distributionState = await getWorkDistributionState(input.workId);
+  assertStableDistribution({
+    status: input.status,
+    engineFamily: input.engineFamily,
+    hasCurrentArchive: distributionState.hasCurrentArchive,
+    archiveVersionCount: distributionState.archiveVersionCount,
+    downloadLinkCount: downloadUrl ? 1 : 0,
+  });
+
+  const database = getD1();
+  const existingCharacters = new Map(
+    before.characterCredits.map((character) => [entityNameKey(character.primaryName), character]),
+  );
+  const characterCredits = characters.map((name, index) => {
+    const existing = existingCharacters.get(entityNameKey(name));
+    return {
+      name,
+      originalName: existing?.originalName ?? null,
+      roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
+      spoilerLevel: existing?.spoilerLevel ?? 0,
+      sortOrder: index + 1,
+      notes: existing?.notes ?? null,
+    };
+  });
+  const existingAuthors = new Map(
+    before.creators
+      .filter((creator) => creator.roleKey === "author")
+      .map((creator) => [entityNameKey(creator.name), creator]),
+  );
+  const authorCredits = authors.map((name) => {
+    const existing = existingAuthors.get(entityNameKey(name));
+    return {
+      name,
+      roleLabel: existing?.roleLabel ?? "作者",
+      notes: existing?.notes ?? null,
+    };
+  });
+  const statements: D1PreparedStatement[] = [
+    database
+      .prepare(
+        `UPDATE works
+         SET original_title=?,chinese_title=?,description=?,engine_family=?,
+           is_original=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
+           published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
+         WHERE id=? AND status<>'deleted'`,
+      )
+      .bind(
+        originalTitle,
+        input.chineseTitle?.trim() || null,
+        input.description?.trim() || null,
+        input.engineFamily,
+        input.isOriginal ? 1 : 0,
+        input.language,
+        input.status,
+        input.status,
+        input.workId,
+      ),
+    database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
+    database.prepare(`DELETE FROM work_tags WHERE work_id=? AND source='uploader'`).bind(input.workId),
+    database.prepare(`DELETE FROM work_characters WHERE work_id=?`).bind(input.workId),
+    database.prepare(`DELETE FROM work_staff WHERE work_id=? AND role_key='author'`).bind(input.workId),
+    database
+      .prepare(
+        `DELETE FROM work_media_assets
+         WHERE work_id=? AND media_asset_id IN (SELECT id FROM media_assets WHERE kind='preview')`,
+      )
+      .bind(input.workId),
+    database
+      .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'`)
+      .bind(input.workId),
+  ];
+  for (const title of aliases) {
+    statements.push(
+      database
+        .prepare(`INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?,'alias')`)
+        .bind(input.workId, title),
+    );
+  }
+  for (const tag of tags) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')`).bind(tag),
+      database
+        .prepare(`INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`)
+        .bind(input.workId, tag),
+    );
+  }
+  for (const character of characterCredits) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO characters(primary_name,original_name,extra_json) VALUES(?,?,'{}')`).bind(character.name, character.originalName),
+      database
+        .prepare(`INSERT OR IGNORE INTO work_characters(work_id,character_id,role_key,spoiler_level,sort_order,notes) SELECT ?,id,?,?,?,? FROM characters WHERE primary_name=? COLLATE NOCASE`)
+        .bind(input.workId, character.roleKey, character.spoilerLevel, character.sortOrder, character.notes, character.name),
+    );
+  }
+  for (const author of authorCredits) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?,'{}')`).bind(author.name),
+      database.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label,notes) SELECT ?,id,'author',?,? FROM creators WHERE name=? COLLATE NOCASE`).bind(input.workId, author.roleLabel, author.notes, author.name),
+    );
+  }
+  for (const [index, hash] of previewHashes.entries()) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`).bind(hash),
+      database.prepare(`INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`).bind(input.workId, index + 1, index === 0 ? 1 : 0, hash),
+    );
+  }
+  if (downloadUrl) {
+    statements.push(
+      database.prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,'外部下载',?,'download_page')`).bind(input.workId, downloadUrl),
+    );
+  }
+  statements.push(
+    database
+      .prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,'uploader_work_update',?)`)
+      .bind(
+        input.user.id,
+        input.user.email,
+        JSON.stringify({
+          workId: input.workId,
+          oldOriginalTitle: before.originalTitle,
+          newOriginalTitle: originalTitle,
+          oldStatus: before.status,
+          newStatus: input.status,
+        }),
+      ),
+  );
+  await database.batch(statements);
 }
 export async function updateWorkForAdmin(
   input: WorkEditInput,
@@ -590,25 +856,7 @@ export async function createExternalWork(
   if (previewBlobSha256s.length === 0) {
     throw new HttpError(400, "外链作品必须提供封面图");
   }
-  if (previewBlobSha256s.some((value) => !/^[a-f0-9]{64}$/.test(value))) {
-    throw new HttpError(400, "封面图 SHA-256 不合法");
-  }
-  const blobRows = await getD1()
-    .prepare(
-      `SELECT sha256,content_type_hint FROM blobs WHERE status='active' AND sha256 IN (${previewBlobSha256s.map(() => "?").join(",")})`,
-    )
-    .bind(...previewBlobSha256s)
-    .all<{ sha256: string; content_type_hint: string | null }>();
-  const blobMap = new Map(
-    (blobRows.results ?? []).map((row) => [row.sha256, row.content_type_hint]),
-  );
-  if (
-    previewBlobSha256s.some(
-      (sha256) => !blobMap.has(sha256) || !blobMap.get(sha256)?.startsWith("image/"),
-    )
-  ) {
-    throw new HttpError(400, "封面或浏览图对象不存在，或不是图片");
-  }
+  await validatePreviewHashes(previewBlobSha256s);
 
   const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
   const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
@@ -1016,7 +1264,7 @@ async function listCharacters(id: number): Promise<GameCharacter[]> {
 async function listCreators(id: number): Promise<GameCreatorCredit[]> {
   const rows = await getD1()
     .prepare(
-      `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label FROM work_staff ws JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? ORDER BY c.name`,
+      `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes FROM work_staff ws JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? ORDER BY c.name`,
     )
     .bind(id)
     .all<{
@@ -1026,6 +1274,7 @@ async function listCreators(id: number): Promise<GameCreatorCredit[]> {
       website_url: string | null;
       role_key: string;
       role_label: string | null;
+      notes: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
     id: x.id,
@@ -1034,6 +1283,7 @@ async function listCreators(id: number): Promise<GameCreatorCredit[]> {
     websiteUrl: isHttpUrl(x.website_url) ? x.website_url : null,
     roleKey: x.role_key,
     roleLabel: x.role_label,
+    notes: x.notes,
   }));
 }
 async function listMedia(id: number): Promise<GameMediaAsset[]> {
@@ -1341,23 +1591,8 @@ async function getWorkDistributionState(workId: number): Promise<{
   };
 }
 async function replaceMedia(workId: number, values: string[]): Promise<void> {
-  const hashes = [
-    ...new Set(
-      values.map((value) => value.trim().toLowerCase()).filter(Boolean),
-    ),
-  ];
-  if (hashes.some((value) => !/^[a-f0-9]{64}$/.test(value)))
-    throw new Error("浏览图 SHA-256 不合法");
-  if (hashes.length) {
-    const rows = await getD1()
-      .prepare(
-        `SELECT sha256 FROM blobs WHERE status='active' AND sha256 IN (${hashes.map(() => "?").join(",")})`,
-      )
-      .bind(...hashes)
-      .all<{ sha256: string }>();
-    if ((rows.results ?? []).length !== hashes.length)
-      throw new Error("浏览图对象不存在");
-  }
+  const hashes = uniqueText(values.map((value) => value.toLowerCase()));
+  await validatePreviewHashes(hashes);
   const database = getD1();
   const statements = [
     database
@@ -1396,6 +1631,44 @@ async function replaceMedia(workId: number, values: string[]): Promise<void> {
           .bind(workId, mediaAssetId, index + 1, index === 0 ? 1 : 0),
       ),
     );
+  }
+}
+
+function entityNameKey(value: string): string {
+  return value.toLowerCase();
+}
+
+function isCharacterRoleKey(
+  value: string | undefined,
+): value is "main" | "supporting" | "cameo" | "mentioned" | "other" {
+  return value === "main" || value === "supporting" || value === "cameo" || value === "mentioned" || value === "other";
+}
+
+function uniqueText(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+async function validatePreviewHashes(hashes: string[]): Promise<void> {
+  if (hashes.some((value) => !/^[a-f0-9]{64}$/.test(value))) {
+    throw new HttpError(400, "封面或浏览图哈希不合法");
+  }
+  if (!hashes.length) return;
+  const rows = await getD1()
+    .prepare(
+      `SELECT sha256,content_type_hint FROM blobs
+       WHERE status='active' AND sha256 IN (${hashes.map(() => "?").join(",")})`,
+    )
+    .bind(...hashes)
+    .all<{ sha256: string; content_type_hint: string | null }>();
+  const found = new Map(
+    (rows.results ?? []).map((row) => [row.sha256, row.content_type_hint]),
+  );
+  if (
+    hashes.some(
+      (hash) => !found.has(hash) || !found.get(hash)?.startsWith("image/"),
+    )
+  ) {
+    throw new HttpError(400, "封面或浏览图对象不存在，或不是图片");
   }
 }
 function parseLinks(value: FormDataEntryValue | null): GameExternalLink[] {

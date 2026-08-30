@@ -118,7 +118,7 @@ assert.match(migration, /blobs_purge_requires_unreferenced/);
 assert.match(migration, /core_packs_purge_requires_unreferenced/);
 assert.match(
   migration,
-  /status IN \('created', 'preflighted', 'uploading', 'completed', 'failed', 'canceled'\)/,
+  /status IN \(\s*'created', 'preflighted', 'uploading_source', 'awaiting_metadata',\s*'uploading_metadata', 'committing', 'completed', 'failed', 'canceled', 'expired'\s*\)/,
 );
 assert.match(
   migration,
