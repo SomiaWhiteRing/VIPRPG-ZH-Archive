@@ -156,10 +156,19 @@ const createPayload = await createResponse.json();
 const importJobId = createPayload.importJob.id;
 assert.ok(Number.isSafeInteger(importJobId) && importJobId > 0);
 
-await expectStatus(
-  "removed import result route",
+const statusResponse = await expectStatus(
+  "owner reads upload status",
   `/api/imports/${importJobId}`,
   { headers: { cookie: uploaderCookie } },
+  200,
+);
+const statusPayload = await statusResponse.json();
+assert.equal(statusPayload.importJob.id, importJobId);
+assert.equal(statusPayload.importJob.status, "created");
+await expectStatus(
+  "other uploader cannot read upload status",
+  `/api/imports/${importJobId}`,
+  { headers: { cookie: adminCookie } },
   404,
 );
 

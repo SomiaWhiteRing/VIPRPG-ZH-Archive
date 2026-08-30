@@ -105,19 +105,25 @@ R2 key 只由 `lib/server/storage/archive-keys.ts` 生成：
 ## 5. 上传流程
 
 ```text
-选择文件夹或 ZIP
-  -> 浏览器 Worker 枚举和规范化路径
-  -> 应用文件策略并记录排除统计
-  -> 计算每个文件的 SHA-256 与 CRC32
-  -> 生成 core pack 和 manifest
-  -> 创建 owned import job
-  -> job-scoped preflight 查询 existing / missing
-  -> 只上传 missing blob 和 core pack
+文件分支：选择文件夹或 ZIP
+  -> 浏览器 Worker 枚举路径、应用文件策略并计算 hash
+  -> 生成 core pack
+  -> 创建绑定上传者的 import job；已有作品的新版本同时绑定目标 Work
+  -> job-scoped preflight 并只上传 missing 对象
+  -> 服务端确认 source ready
+  -> 写入不含原始游戏文件的 IndexedDB 恢复草稿
+
+资料分支：填写作品资料
+  -> 确认资料；进入 commit 前可以撤回
+
+source ready + metadata confirmed
+  -> 上传资料图片并生成最终 manifest
+  -> 条件更新取得 committing 提交权
   -> commit 校验对象、manifest 和元数据
   -> 原子创建或更新 Work，创建 ArchiveVersion 和引用
 ```
 
-上传任务只在当前标签页会话中执行。服务端 `import_jobs` 记录授权、状态、阶段统计和失败位置，但不承诺浏览器重启后恢复本地文件或继续 Worker。
+普通用户只在当前上传页看到任务进度，不提供跨页面任务管理器。source ready 后的草稿可以在同一浏览器、同一账号下跨刷新或浏览器重启恢复；草稿只保存路径/hash 描述、core pack 引用、统计和资料图片，不保存原始游戏文件。浏览器锁保证同一草稿只由一个标签页接管。source ready 前的中断、跨设备接力和长期任务历史不在恢复范围内，服务端陈旧任务在 24 小时后过期。
 
 ### Preflight
 
@@ -130,7 +136,7 @@ R2 key 只由 `lib/server/storage/archive-keys.ts` 生成：
 - blob PUT 校验 hash、长度、owned job 和 preflight 预期。
 - core pack PUT 校验外层 hash、ZIP 结构、entry 清单、解压大小和文件数。
 - 上传成功后更新 D1 对象状态与 import job 统计；并发相同 hash 必须得到一致结果。
-- 对象上传失败可以在同一任务仍有效时重试，已成功对象不重复写入。
+- 单次对象请求可以做有限的瞬时重试；任务进入 `failed` 后必须重新开始，新任务仍可命中已经写入的内容寻址对象。
 
 ### Commit
 

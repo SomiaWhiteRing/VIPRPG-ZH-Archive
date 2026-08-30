@@ -3,10 +3,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { requireAccountUser } from "@/lib/server/auth/account-user";
-import { searchUserWorks } from "@/lib/server/db/game-library";
+import { searchUploadedWorks, searchUserWorks } from "@/lib/server/db/game-library";
 import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
 import { searchUserComments } from "@/lib/server/db/work-community";
-import { searchImportJobsForUser } from "@/lib/server/db/import-jobs";
 import { canUpload } from "@/lib/server/db/users";
 import { formatDate } from "@/lib/format";
 import { AccountEmpty, AccountSection, AccountWorkGrid } from "./account-content";
@@ -21,7 +20,7 @@ export default async function MePage() {
     searchUserWorks({ userId: user.id, kind: "favorite", pageSize: 4 }),
     searchCatalogsForOwner({ userId: user.id, pageSize: 3 }),
     searchUserComments({ userId: user.id, pageSize: 3 }),
-    showUploads ? searchImportJobsForUser({ userId: user.id, pageSize: 3 }) : Promise.resolve(null),
+    showUploads ? searchUploadedWorks({ userId: user.id, pageSize: 3 }) : Promise.resolve(null),
   ]);
 
   return (
@@ -41,7 +40,7 @@ export default async function MePage() {
       <AccountSection href="/me/comments" title="我的评论">
         {comments.items.length ? <ul className="divide-y divide-border border-y border-border">{comments.items.map((comment, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={comment.id}><Link className="font-semibold" href={`/games/${comment.workId}#comment-${comment.id}`}>{comment.workTitle}</Link><p className="mt-1 line-clamp-2 text-sm text-muted">{comment.body || "这条评论已删除。"}</p></li>)}</ul> : <AccountEmpty>浏览作品并留下第一条评论。</AccountEmpty>}
       </AccountSection>
-      {uploads ? <AccountSection href="/me/uploads" title="最近上传">{uploads.items.length ? <ul className="divide-y divide-border border-y border-border">{uploads.items.map((job, index) => <li className={`flex items-center justify-between gap-3 py-3 ${index >= 2 ? "hidden sm:flex" : ""}`} key={job.id}><div className="min-w-0"><strong className="block truncate">{job.sourceName || `任务 #${job.id}`}</strong><span className="text-sm text-muted">{formatDate(job.createdAt)}</span></div><StatusBadge kind="import-task" value={job.status} /></li>)}</ul> : <AccountEmpty><Link href="/upload">开始上传</Link>第一部作品。</AccountEmpty>}</AccountSection> : null}
+      {uploads ? <AccountSection href="/me/uploads" title="最近上传">{uploads.items.length ? <ul className="divide-y divide-border border-y border-border">{uploads.items.map((work, index) => <li className={`flex items-center justify-between gap-3 py-3 ${index >= 2 ? "hidden sm:flex" : ""}`} key={work.id}><div className="min-w-0"><Link className="block truncate font-semibold" href={`/me/uploads/${work.id}`}>{work.chineseTitle || work.originalTitle}</Link><span className="text-sm text-muted">{work.distribution === "archive" ? "本站归档" : "外部下载"}</span></div><StatusBadge kind="publication" value={work.status} /></li>)}</ul> : <AccountEmpty><Link href="/upload">开始上传</Link>第一部作品。</AccountEmpty>}</AccountSection> : null}
     </div>
   );
 }

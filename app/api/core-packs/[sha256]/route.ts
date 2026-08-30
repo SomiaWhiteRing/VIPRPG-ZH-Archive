@@ -12,7 +12,7 @@ import {
 import {
   parseImportJobId,
   recordImportObjectUpload,
-  requiredActiveOwnedImportJob,
+  requiredObjectUploadOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import { readIntegerHeader } from "@/lib/server/http/request";
@@ -116,13 +116,13 @@ export async function PUT(request: Request, context: RouteContext) {
 
 async function requiredAuthorizedImportJobId(
   request: Request,
-  user: Parameters<typeof requiredActiveOwnedImportJob>[1],
+  user: Parameters<typeof requiredObjectUploadOwnedImportJob>[1],
 ): Promise<number> {
   const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
   if (!rawImportJobId) throw new HttpError(400, "import_job_id is required");
 
   const importJobId = parseImportJobId(rawImportJobId);
-  await requiredActiveOwnedImportJob(importJobId, user);
+  await requiredObjectUploadOwnedImportJob(importJobId, user);
   return importJobId;
 }
 

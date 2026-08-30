@@ -41,9 +41,7 @@ export default async function UploadPage() {
       <PageHeader subtitle="2000/2003 系游戏可上传本地文件，其他引擎请填写外部下载地址。" title="上传游戏" />
       <UploadClient
         currentUser={{
-          displayName: currentUser.displayName,
-          email: currentUser.email,
-          roleKeys: currentUser.roleKeys,
+          id: currentUser.id,
           permissionKeys: currentUser.permissionKeys,
         }}
       />

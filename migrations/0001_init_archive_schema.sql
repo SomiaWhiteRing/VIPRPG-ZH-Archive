@@ -860,7 +860,10 @@ CREATE TABLE IF NOT EXISTS import_jobs (
   archive_version_id INTEGER REFERENCES archive_versions(id) ON DELETE SET NULL,
   uploader_id INTEGER REFERENCES users(id),
   status TEXT NOT NULL DEFAULT 'created' CHECK (
-    status IN ('created', 'preflighted', 'uploading', 'completed', 'failed', 'canceled')
+    status IN (
+      'created', 'preflighted', 'uploading_source', 'awaiting_metadata',
+      'uploading_metadata', 'committing', 'completed', 'failed', 'canceled', 'expired'
+    )
   ),
   source_name TEXT,
   source_size_bytes INTEGER,
@@ -897,6 +900,14 @@ CREATE INDEX IF NOT EXISTS idx_import_jobs_archive_version
 
 CREATE INDEX IF NOT EXISTS idx_import_jobs_uploader
   ON import_jobs(uploader_id, created_at DESC, id DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_import_jobs_one_active_work
+  ON import_jobs(work_id)
+  WHERE work_id IS NOT NULL
+    AND status IN (
+      'created', 'preflighted', 'uploading_source', 'awaiting_metadata',
+      'uploading_metadata', 'committing'
+    );
 
 CREATE TABLE IF NOT EXISTS import_job_excluded_file_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

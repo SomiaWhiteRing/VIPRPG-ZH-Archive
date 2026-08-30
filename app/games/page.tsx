@@ -12,7 +12,7 @@ import {
 } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
-import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
+import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 import { parsePositiveId } from "@/lib/server/http/request";
 
 export const dynamic = "force-dynamic";
@@ -21,20 +21,9 @@ type GamesPageProps = {
 };
 const PAGE_SIZE = 20;
 const ENGINES = [
-  ["all", "全部"],
-  ["rpg_maker_2000", "RPG Maker 2000"],
-  ["rpg_maker_2003", "RPG Maker 2003"],
-  ["rpg_maker_2003_maniac", "RPG Maker 2003 Maniac"],
-  ["rpg_maker_xp", "RPG Maker XP"],
-  ["rpg_maker_vx", "RPG Maker VX"],
-  ["rpg_maker_vx_ace", "RPG Maker VX Ace"],
-  ["rpg_maker_mv", "RPG Maker MV"],
-  ["rpg_maker_mz", "RPG Maker MZ"],
-  ["rpg_maker_unite", "RPG Maker Unite"],
-  ["mixed", "混合"],
-  ["unknown", "未知"],
-  ["other", "其他"],
-] as const;
+  { value: "all", label: "全部" },
+  ...ENGINE_OPTIONS.map(({ value, label }) => ({ value, label })),
+];
 
 export default async function GamesPage({ searchParams }: GamesPageProps) {
   const params = await searchParams;
@@ -121,7 +110,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
             <div className="mb-5 flex flex-wrap items-center gap-2 text-sm" aria-label="当前筛选">
               <span className="font-bold text-muted">当前筛选</span>
               <Link className="font-bold text-accent hover:underline" href="/games">清除全部</Link>
-              {engine !== "all" ? <FilterChip href={gamesHref({ ...activeParams, engine: undefined })} label={`引擎：${ENGINES.find(([value]) => value === engine)?.[1] ?? engine}`} /> : null}
+              {engine !== "all" ? <FilterChip href={gamesHref({ ...activeParams, engine: undefined })} label={`引擎：${ENGINES.find((option) => option.value === engine)?.label ?? engine}`} /> : null}
               {tag ? <FilterChip href={gamesHref({ ...activeParams, tag: undefined })} label={`标签：${selectedTag?.name ?? tag}`} /> : null}
               {character ? <FilterChip href={gamesHref({ ...activeParams, character: undefined })} label={`角色：${selectedCharacter?.primaryName ?? character}`} /> : null}
               {language ? <FilterChip href={gamesHref({ ...activeParams, language: undefined })} label={`语言：${languageLabel(language)}`} /> : null}
@@ -145,7 +134,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
             <FilterLink active={original === "0"} href={gamesHref({ ...activeParams, original: "0", page: undefined })} label="社区收录" />
           </FilterSection>
           <FilterSection label="引擎">
-            {ENGINES.map(([value, label]) => <FilterLink active={engine === value} href={gamesHref({ ...activeParams, engine: value === "all" ? undefined : value, page: undefined })} key={value} label={label} />)}
+            {ENGINES.map(({ value, label }) => <FilterLink active={engine === value} href={gamesHref({ ...activeParams, engine: value === "all" ? undefined : value, page: undefined })} key={value} label={label} />)}
           </FilterSection>
           <FilterSection label="语言">
             <FilterLink active={!language} href={gamesHref({ ...activeParams, language: undefined, page: undefined })} label="全部" />

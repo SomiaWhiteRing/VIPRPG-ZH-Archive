@@ -568,14 +568,12 @@ function jsonRequest(body, cookie) {
 
 function externalWorkRequest(metadata, downloadUrl, includeCover = true) {
   const form = new FormData();
-  form.set("metadata", JSON.stringify({
-    ...metadata,
-    isOriginal: false,
-    language: "zh-CN",
-    aliases: [],
-    tags: [],
-    characters: [],
-  }));
+  form.set("original_title", metadata.originalTitle);
+  form.set("engine_family", metadata.engineFamily);
+  form.set("language", "zh-CN");
+  form.set("aliases", "");
+  form.set("tags", "");
+  form.set("characters", "");
   form.set("download_url", downloadUrl);
   if (includeCover) {
     form.set("cover", new File([new Uint8Array([1, 2, 3])], "cover.png", { type: "image/png" }));

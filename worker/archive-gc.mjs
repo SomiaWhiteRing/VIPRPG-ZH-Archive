@@ -95,24 +95,7 @@ async function expireStaleProcessing(env, limit) {
   const failed = [];
 
   for (const row of candidates.results ?? []) {
-    const reservation = row.import_job_id
-      ? await env.DB
-          .prepare(
-            `UPDATE import_jobs
-             SET status = 'canceled',
-                 failed_stage = 'processing_expiry',
-                 error_message = '归档处理中超过 24 小时，已自动清理',
-                 updated_at = CURRENT_TIMESTAMP,
-                 completed_at = CURRENT_TIMESTAMP
-             WHERE id = ?
-               AND status IN ('created', 'preflighted', 'uploading', 'failed', 'canceled')
-               AND datetime(updated_at) <= datetime('now', ?)`,
-          )
-          .bind(row.import_job_id, cutoff)
-          .run()
-      : { meta: { changes: 1 } };
-
-    if ((reservation.meta?.changes ?? 0) === 0) {
+    if (!(await expireProcessingImportJob(env.DB, row.import_job_id, cutoff))) {
       skipped.push({ archiveVersionId: row.archive_version_id });
       continue;
     }
@@ -174,24 +157,7 @@ async function expireStaleProcessing(env, limit) {
     .all();
 
   for (const row of orphanWorks.results ?? []) {
-    const reservation = row.import_job_id
-      ? await env.DB
-          .prepare(
-            `UPDATE import_jobs
-             SET status = 'canceled',
-                 failed_stage = 'processing_expiry',
-                 error_message = '归档处理中超过 24 小时，已自动清理',
-                 updated_at = CURRENT_TIMESTAMP,
-                 completed_at = CURRENT_TIMESTAMP
-             WHERE id = ?
-               AND status IN ('created', 'preflighted', 'uploading', 'failed', 'canceled')
-               AND datetime(updated_at) <= datetime('now', ?)`,
-          )
-          .bind(row.import_job_id, cutoff)
-          .run()
-      : { meta: { changes: 1 } };
-
-    if ((reservation.meta?.changes ?? 0) === 0) {
+    if (!(await expireProcessingImportJob(env.DB, row.import_job_id, cutoff))) {
       skipped.push({ workId: row.id });
       continue;
     }
@@ -211,16 +177,64 @@ async function expireStaleProcessing(env, limit) {
     }
   }
 
+  // Expire otherwise-unattached upload tasks only after processing archives and
+  // provisional works have had a chance to use the original activity timestamp.
+  const staleJobs = await env.DB
+    .prepare(
+      `UPDATE import_jobs
+       SET status = 'expired',
+           failed_stage = 'upload_expiry',
+           error_message = '上传任务超过 24 小时没有活动，已自动失效',
+           updated_at = CURRENT_TIMESTAMP,
+           completed_at = CURRENT_TIMESTAMP
+       WHERE id IN (
+         SELECT id FROM import_jobs
+         WHERE archive_version_id IS NULL
+           AND status IN (
+             'created', 'preflighted', 'uploading_source', 'awaiting_metadata',
+             'uploading_metadata', 'committing'
+           )
+           AND datetime(updated_at) <= datetime('now', ?)
+         ORDER BY datetime(updated_at) ASC, id ASC
+         LIMIT ?
+       )`,
+    )
+    .bind(cutoff, limit)
+    .run();
+
   return {
     expiryHours: processingExpiryHours,
-    scannedCount: (candidates.results ?? []).length + (orphanWorks.results ?? []).length,
-    expiredCount: expired.length,
+    scannedCount: (staleJobs.meta?.changes ?? 0) + (candidates.results ?? []).length + (orphanWorks.results ?? []).length,
+    expiredCount: (staleJobs.meta?.changes ?? 0) + expired.length,
+    expiredImportJobCount: staleJobs.meta?.changes ?? 0,
     skippedCount: skipped.length,
     failedCount: failed.length,
     expired: expired.slice(0, maxReturnedIssues),
     skipped: skipped.slice(0, maxReturnedIssues),
     failed: failed.slice(0, maxReturnedIssues),
   };
+}
+
+async function expireProcessingImportJob(db, importJobId, cutoff) {
+  if (!importJobId) return true;
+  const result = await db
+    .prepare(
+      `UPDATE import_jobs
+       SET status = 'expired',
+           failed_stage = 'processing_expiry',
+           error_message = '归档处理中超过 24 小时，已自动清理',
+           updated_at = CURRENT_TIMESTAMP,
+           completed_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+         AND status IN (
+           'created', 'preflighted', 'uploading_source', 'awaiting_metadata',
+           'uploading_metadata', 'committing', 'failed', 'canceled', 'expired'
+         )
+         AND datetime(updated_at) <= datetime('now', ?)`,
+    )
+    .bind(importJobId, cutoff)
+    .run();
+  return (result.meta?.changes ?? 0) > 0;
 }
 
 async function listEligibleGcRows(db, type, graceDays, limit) {
@@ -550,6 +564,7 @@ async function writeGcAuditLog(db, report) {
         graceDays: report.graceDays,
         processingExpiryHours: report.processing.expiryHours,
         expiredProcessingCount: report.processing.expiredCount,
+        expiredImportJobCount: report.processing.expiredImportJobCount,
         skippedProcessingCount: report.processing.skippedCount,
         failedProcessingCount: report.processing.failedCount,
         limitPerType: report.limitPerType,

@@ -1,6 +1,5 @@
-import { archiveStatusLabel, importTaskStatusLabel, inboxStatusLabel, installStatusLabel, uploadTaskStatusLabel, userStatusLabel, workStatusLabel } from "@/lib/labels";
+import { archiveStatusLabel, importTaskStatusLabel, inboxStatusLabel, installStatusLabel, userStatusLabel, workStatusLabel } from "@/lib/labels";
 import type { WebPlayInstallStatus } from "@/app/play/[archiveVersionId]/web-play-types";
-import type { UploadTaskStatus } from "@/app/upload/upload-types";
 import { Badge } from "@/app/components/ui/badge";
 
 type StatusBadgeProps =
@@ -9,7 +8,6 @@ type StatusBadgeProps =
       value: string;
       purgedAt?: string | null;
     }
-  | { kind: "upload-task"; value: UploadTaskStatus; purgedAt?: never }
   | {
       kind: "browser-install";
       value: WebPlayInstallStatus | "loading";
@@ -51,11 +49,6 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
         label: importTaskStatusLabel(props.value),
         tone: importTaskTone(props.value),
       };
-    case "upload-task":
-      return {
-        label: uploadTaskStatusLabel(props.value),
-        tone: uploadTaskTone(props.value),
-      };
     case "browser-install":
       return {
         label: installStatusLabel(props.value),
@@ -77,16 +70,6 @@ function badgeMeta(props: StatusBadgeProps): BadgeMeta {
         tone: props.value === "active" ? "positive" : "negative",
       };
   }
-}
-
-function uploadTaskTone(value: UploadTaskStatus): BadgeTone {
-  if (value === "completed") {
-    return "positive";
-  }
-  if (value === "failed" || value === "canceled") {
-    return "negative";
-  }
-  return "pending";
 }
 
 function browserInstallTone(value: WebPlayInstallStatus | "loading"): BadgeTone {
@@ -114,7 +97,7 @@ function importTaskTone(value: string): BadgeTone {
   if (value === "completed") {
     return "positive";
   }
-  if (value === "failed" || value === "canceled") return "negative";
+  if (value === "failed" || value === "canceled" || value === "expired") return "negative";
   return "pending";
 }
 

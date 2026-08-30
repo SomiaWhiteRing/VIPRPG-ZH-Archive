@@ -6,7 +6,7 @@ import type {
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { normalizeEntityName } from "@/lib/entity-name";
-import { isLanguageCode } from "@/lib/labels";
+import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
@@ -18,10 +18,7 @@ import { putManifest } from "@/lib/server/storage/archive-bucket";
 import { validateCorePackReferences } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
-import {
-  assertSingleDownloadLink,
-  isArchiveEngineFamily,
-} from "@/lib/server/db/work-distribution";
+import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
   importJobId: number;
@@ -61,8 +58,9 @@ export async function commitArchiveImport(
   input: CommitArchiveImportInput,
 ): Promise<CommitArchiveImportResult> {
   const job = await requiredOwnedImportJob(input.importJobId, input.user);
-  if (job.status === "completed") throw new HttpError(409, "导入任务已完成");
-  if (job.status === "canceled") throw new HttpError(409, "导入任务已取消");
+  if (job.status !== "committing") {
+    throw new HttpError(409, "导入任务尚未进入提交阶段");
+  }
 
   if (
     typeof input.manifestSha256 !== "string" ||
@@ -155,54 +153,32 @@ export async function commitArchiveImport(
     .first<{ id: number }>();
   if (!work) throw new Error("Game was not created");
   if (metadata.target.mode === "update") {
-    const existingWork = await getD1()
+    const preserved = await getD1()
       .prepare(
-        `SELECT chinese_title,description,original_release_date,
-           original_release_precision,status,extra_json
-         FROM works WHERE id = ? LIMIT 1`,
+        `SELECT original_release_date,original_release_precision,extra_json
+         FROM works WHERE id=? LIMIT 1`,
       )
       .bind(workId)
       .first<{
-        chinese_title: string | null;
-        description: string | null;
         original_release_date: string | null;
         original_release_precision: "year" | "month" | "day" | "unknown";
-        status: "processing" | "published" | "hidden";
         extra_json: string;
       }>();
-    if (existingWork) {
+    if (preserved) {
       metadata = {
         ...metadata,
         game: {
           ...metadata.game,
-          chineseTitle: mergeNullableWorkText(
-            metadata.game.chineseTitle,
-            existingWork.chinese_title,
-          ),
-          description: mergeNullableWorkText(
-            metadata.game.description,
-            existingWork.description,
-          ),
-          originalReleaseDate: mergeNullableWorkText(
-            metadata.game.originalReleaseDate,
-            existingWork.original_release_date,
-          ),
-          originalReleasePrecision:
-            metadata.game.originalReleaseDate ||
-            metadata.game.originalReleasePrecision !== "unknown"
-              ? metadata.game.originalReleasePrecision
-              : existingWork.original_release_precision,
-          status: existingWork.status,
+          originalReleaseDate: preserved.original_release_date,
+          originalReleasePrecision: preserved.original_release_precision,
           extra: {
-            ...parseJsonObject(existingWork.extra_json),
+            ...parseJsonObject(preserved.extra_json),
             ...metadata.game.extra,
           },
         },
       };
     }
   }
-  // The server may fill omitted update fields from the existing work. Keep the
-  // signed manifest in lockstep with those effective game fields.
   if (
     manifest.game.originalTitle !== metadata.game.originalTitle ||
     manifest.game.chineseTitle !== metadata.game.chineseTitle ||
@@ -448,6 +424,13 @@ function validateManifest(
 
       validateManifestPath(file.storage.entry);
     }
+  }
+
+  if (
+    manifest.archiveVersion.sourceType === "browser_folder" &&
+    !manifest.files.some((file) => file.path.toLowerCase() === "rpg_rt.lmt")
+  ) {
+    throw new Error("所选文件夹根目录缺少 RPG_RT.lmt");
   }
 }
 
@@ -859,13 +842,6 @@ function normalizeNullableWorkText(value: string | null): string | null {
   return value === null ? null : value.trim();
 }
 
-function mergeNullableWorkText(
-  value: string | null,
-  existing: string | null,
-): string | null {
-  return value === null ? existing : value || null;
-}
-
 function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
   return unique(
     metadata.game.browsingImageBlobSha256s,
@@ -880,26 +856,14 @@ async function resolveTargetWork(
 ): Promise<number> {
   const game = metadata.game;
   if (metadata.target.mode === "update") {
-    if (existingJobWorkId && existingJobWorkId !== metadata.target.workId) {
-      throw new HttpError(409, "导入任务已经绑定了另一款游戏");
+    if (existingJobWorkId !== metadata.target.workId) {
+      throw new HttpError(409, "导入任务与更新目标不匹配");
     }
     if (
       !metadata.target.workId ||
       !(await canEditWork(metadata.target.workId, user))
     ) {
       throw new HttpError(403, "无权更新此游戏");
-    }
-    const identity = await getD1()
-      .prepare(
-        `SELECT original_title FROM works WHERE id=? AND status <> 'deleted' LIMIT 1`,
-      )
-      .bind(metadata.target.workId)
-      .first<{ original_title: string }>();
-    if (
-      !identity ||
-      identity.original_title !== game.originalTitle
-    ) {
-      throw new HttpError(409, "更新目标的原名不匹配");
     }
     await assertTranslationLanguageChangeAllowed(
       metadata.target.workId,
@@ -1063,15 +1027,19 @@ async function finalizeArchiveCommit(input: {
 }): Promise<void> {
   const database = getD1();
   const game = input.metadata.game;
-  const creating = input.metadata.target.mode === "create";
   const characters = input.metadata.characters ?? [];
   const statements: D1PreparedStatement[] = [];
+  const before = await database
+    .prepare(`SELECT original_title,status FROM works WHERE id=? LIMIT 1`)
+    .bind(input.workId)
+    .first<{ original_title: string; status: string }>();
 
   statements.push(
     database
       .prepare(
       `UPDATE works
-       SET chinese_title = ?,
+       SET original_title = ?,
+         chinese_title = ?,
          description = ?,
          is_original = ?,
          language = ?,
@@ -1088,6 +1056,7 @@ async function finalizeArchiveCommit(input: {
        WHERE id = ? AND status <> 'deleted'`,
       )
       .bind(
+        game.originalTitle,
         game.chineseTitle,
         game.description,
         game.isOriginal ? 1 : 0,
@@ -1102,153 +1071,126 @@ async function finalizeArchiveCommit(input: {
       ),
   );
 
-  if (creating || input.metadata.workTitles.length > 0) {
-    if (creating) {
-      statements.push(
-        database
-          .prepare(`DELETE FROM work_titles WHERE work_id = ?`)
-          .bind(input.workId),
-      );
-    }
-    for (const title of input.metadata.workTitles) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO work_titles (
+  statements.push(
+    database
+      .prepare(`DELETE FROM work_titles WHERE work_id = ?`)
+      .bind(input.workId),
+  );
+  for (const title of input.metadata.workTitles) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_titles (
              work_id, title, language, title_type, is_searchable
            ) VALUES (?, ?, ?, ?, 1)`,
-          )
-          .bind(input.workId, title.title, title.language, title.titleType),
-      );
-    }
+        )
+        .bind(input.workId, title.title, title.language, title.titleType),
+    );
   }
 
-  if (
-    creating ||
-    input.metadata.creators.length > 0 ||
-    input.metadata.workStaff.length > 0
-  ) {
-    for (const creator of input.metadata.creators) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO creators (
+  for (const creator of input.metadata.creators) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO creators (
              name, original_name, website_url, extra_json
            ) VALUES (?, ?, ?, ?)`,
-          )
-          .bind(
-            creator.name,
-            creator.originalName,
-            creator.websiteUrl,
-            jsonText(creator.extra),
-          ),
-      );
-    }
-    if (creating) {
-      statements.push(
-        database
-          .prepare(`DELETE FROM work_staff WHERE work_id = ?`)
-          .bind(input.workId),
-      );
-    }
-    for (const staff of input.metadata.workStaff) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO work_staff (
+        )
+        .bind(
+          creator.name,
+          creator.originalName,
+          creator.websiteUrl,
+          jsonText(creator.extra),
+        ),
+    );
+  }
+  statements.push(
+    database
+      .prepare(`DELETE FROM work_staff WHERE work_id = ? AND role_key = 'author'`)
+      .bind(input.workId),
+  );
+  for (const staff of input.metadata.workStaff) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_staff (
              work_id, creator_id, role_key, role_label, notes
            ) SELECT ?, id, ?, ?, ? FROM creators WHERE name = ? COLLATE NOCASE`,
-          )
-          .bind(
-            input.workId,
-            staff.roleKey,
-            staff.roleLabel,
-            staff.notes,
-            staff.creatorName,
-          ),
-      );
-    }
+        )
+        .bind(
+          input.workId,
+          staff.roleKey,
+          staff.roleLabel,
+          staff.notes,
+          staff.creatorName,
+        ),
+    );
   }
 
-  if (creating || characters.length > 0) {
-    for (const character of characters) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO characters (
+  for (const character of characters) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO characters (
              primary_name, original_name, extra_json
            ) VALUES (?, ?, '{}')`,
-          )
-          .bind(character.name, character.originalName),
-      );
-    }
-    if (creating) {
-      statements.push(
-        database
-          .prepare(`DELETE FROM work_characters WHERE work_id = ?`)
-          .bind(input.workId),
-      );
-    }
-    for (const character of characters) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR REPLACE INTO work_characters (
+        )
+        .bind(character.name, character.originalName),
+    );
+  }
+  statements.push(
+    database
+      .prepare(`DELETE FROM work_characters WHERE work_id = ?`)
+      .bind(input.workId),
+  );
+  for (const character of characters) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR REPLACE INTO work_characters (
              work_id, character_id, role_key, spoiler_level, sort_order, notes
            ) SELECT ?, id, ?, ?, ?, ? FROM characters WHERE primary_name = ? COLLATE NOCASE`,
-          )
-          .bind(
-            input.workId,
-            character.roleKey,
-            character.spoilerLevel,
-            character.sortOrder,
-            character.notes,
-            character.name,
-          ),
-      );
-    }
+        )
+        .bind(
+          input.workId,
+          character.roleKey,
+          character.spoilerLevel,
+          character.sortOrder,
+          character.notes,
+          character.name,
+        ),
+    );
   }
 
-  if (creating || input.metadata.tags.length > 0) {
-    for (const tag of input.metadata.tags) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO tags (name, namespace) VALUES (?, 'other')`,
-          )
-          .bind(tag),
-      );
-    }
-    if (creating) {
-      statements.push(
-        database
-          .prepare(
-            `DELETE FROM work_tags WHERE work_id = ? AND source = 'uploader'`,
-          )
-          .bind(input.workId),
-      );
-    }
-    for (const tag of input.metadata.tags) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO work_tags (work_id, tag_id, source)
+  for (const tag of input.metadata.tags) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO tags (name, namespace) VALUES (?, 'other')`,
+        )
+        .bind(tag),
+    );
+  }
+  statements.push(
+    database
+      .prepare(
+        `DELETE FROM work_tags WHERE work_id = ? AND source = 'uploader'`,
+      )
+      .bind(input.workId),
+  );
+  for (const tag of input.metadata.tags) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_tags (work_id, tag_id, source)
            SELECT ?, id, 'uploader' FROM tags WHERE name = ? COLLATE NOCASE`,
-          )
-          .bind(input.workId, tag),
-      );
-    }
+        )
+        .bind(input.workId, tag),
+    );
   }
 
   const links = input.metadata.externalLinks.work;
-  if (creating || links.length > 0) {
-    if (creating) {
-      statements.push(
-        database
-          .prepare(`DELETE FROM work_external_links WHERE work_id = ?`)
-          .bind(input.workId),
-      );
-    }
+  if (links.length > 0) {
     for (const link of links) {
       statements.push(
         database
@@ -1275,44 +1217,40 @@ async function finalizeArchiveCommit(input: {
   }
 
   const browsingImages = game.browsingImageBlobSha256s;
-  if (creating || browsingImages.length > 0) {
-    for (const sha256 of browsingImages) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO media_assets (blob_sha256, kind) VALUES (?, 'preview')`,
-          )
-          .bind(sha256),
-      );
-    }
-    if (creating || browsingImages.length > 0) {
-      statements.push(
-        database
-          .prepare(
-            `DELETE FROM work_media_assets
+  for (const sha256 of browsingImages) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO media_assets (blob_sha256, kind) VALUES (?, 'preview')`,
+        )
+        .bind(sha256),
+    );
+  }
+  statements.push(
+    database
+      .prepare(
+        `DELETE FROM work_media_assets
            WHERE work_id = ?
              AND media_asset_id IN (SELECT id FROM media_assets WHERE kind = 'preview')`,
-          )
-          .bind(input.workId),
-      );
-    }
-    for (const [index, sha256] of browsingImages.entries()) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT OR REPLACE INTO work_media_assets (
+      )
+      .bind(input.workId),
+  );
+  for (const [index, sha256] of browsingImages.entries()) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR REPLACE INTO work_media_assets (
              work_id, media_asset_id, sort_order, is_primary
          ) SELECT ?, id, ?, ? FROM media_assets
              WHERE blob_sha256 = ? AND kind = 'preview'`,
-          )
-          .bind(
-            input.workId,
-            index + 1,
-            index === 0 ? 1 : 0,
-            sha256,
-          ),
-      );
-    }
+        )
+        .bind(
+          input.workId,
+          index + 1,
+          index === 0 ? 1 : 0,
+          sha256,
+        ),
+    );
   }
 
   statements.push(
@@ -1338,7 +1276,7 @@ async function finalizeArchiveCommit(input: {
        SET work_id = ?,
           archive_version_id = ?,
           status = 'completed',
-          source_name = ?,
+          source_name = COALESCE(?, source_name),
          source_size_bytes = ?,
          file_count = ?,
          excluded_file_count = ?,
@@ -1363,6 +1301,26 @@ async function finalizeArchiveCommit(input: {
         input.manifest.archiveVersion.filePolicyVersion,
         input.missingBlobCount,
         input.missingCorePackCount,
+        input.importJobId,
+      ),
+    database
+      .prepare(
+        `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+         SELECT ij.uploader_id,u.email,'archive_work_commit',?
+         FROM import_jobs ij
+         LEFT JOIN users u ON u.id=ij.uploader_id
+         WHERE ij.id=?`,
+      )
+      .bind(
+        JSON.stringify({
+          workId: input.workId,
+          archiveVersionId: input.archiveVersionId,
+          mode: input.metadata.target.mode,
+          oldOriginalTitle: before?.original_title ?? null,
+          newOriginalTitle: game.originalTitle,
+          oldStatus: before?.status ?? null,
+          newStatus: game.status,
+        }),
         input.importJobId,
       ),
     database
@@ -1650,14 +1608,10 @@ function jsonText(value: Record<string, unknown>): string {
 function parseJsonObject(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
+    return isRecord(parsed) ? parsed : {};
   } catch {
-    // The database CHECK normally prevents this; keep the update path safe if
-    // an older local database contains malformed auxiliary data.
+    return {};
   }
-  return {};
 }
 
 function unique(values: string[]): string[] {

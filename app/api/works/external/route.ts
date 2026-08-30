@@ -1,25 +1,9 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { createExternalWork } from "@/lib/server/db/game-library";
-import { assertObjectUploadAllowed, insertBlobRecord, findExistingObjects } from "@/lib/server/db/archive-objects";
-import { sha256Hex } from "@/lib/server/crypto/sha256";
-import { putBlob } from "@/lib/server/storage/archive-bucket";
+import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
-
-type ExternalMetadataPayload = {
-  originalTitle?: unknown;
-  chineseTitle?: unknown;
-  description?: unknown;
-  engineFamily?: unknown;
-  isOriginal?: unknown;
-  language?: unknown;
-  aliases?: unknown;
-  tags?: unknown;
-  characters?: unknown;
-  creatorName?: unknown;
-  creatorUrl?: unknown;
-};
 
 export async function POST(request: Request) {
   const auth = await requirePermission(request, "work.external_create");
@@ -27,14 +11,14 @@ export async function POST(request: Request) {
 
   try {
     const form = await request.formData();
-    const metadata = parseMetadata(form.get("metadata"));
+    const metadata = parseMetadata(form);
     const downloadUrl = readRequiredString(form.get("download_url"), "download_url");
-    const cover = readImageFile(form.get("cover"), "cover");
+    const cover = readWorkImage(form.get("cover"), "cover");
     const browsingImages = form
       .getAll("browsing_images[]")
-      .map((value) => readImageFile(value, "browsing_images[]"));
+      .map((value) => readWorkImage(value, "browsing_images[]"));
     const imageFiles = [cover, ...browsingImages];
-    const previewBlobSha256s = await storeImages(imageFiles);
+    const previewBlobSha256s = await storeWorkImages(imageFiles);
     const result = await createExternalWork({
       user: auth.user,
       ...metadata,
@@ -47,7 +31,7 @@ export async function POST(request: Request) {
   }
 }
 
-function parseMetadata(value: FormDataEntryValue | null): {
+function parseMetadata(form: FormData): {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
@@ -60,35 +44,18 @@ function parseMetadata(value: FormDataEntryValue | null): {
   creatorName: string | null;
   creatorUrl: string | null;
 } {
-  if (typeof value !== "string") throw new HttpError(400, "metadata 必须是 JSON 字符串");
-  let parsed: ExternalMetadataPayload;
-  try {
-    const candidate: unknown = JSON.parse(value);
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-      throw new Error("metadata must be an object");
-    }
-    parsed = candidate as ExternalMetadataPayload;
-  } catch {
-    throw new HttpError(400, "metadata JSON 格式不合法");
-  }
-  const originalTitle = readRequiredString(parsed.originalTitle, "originalTitle");
-  const engineFamily = readRequiredString(parsed.engineFamily, "engineFamily");
-  const language = readRequiredString(parsed.language, "language");
-  if (typeof parsed.isOriginal !== "boolean") {
-    throw new HttpError(400, "isOriginal 必须是布尔值");
-  }
   return {
-    originalTitle,
-    chineseTitle: readNullableString(parsed.chineseTitle),
-    description: readNullableString(parsed.description),
-    engineFamily,
-    isOriginal: parsed.isOriginal,
-    language,
-    aliases: readStringArray(parsed.aliases, "aliases"),
-    tags: readStringArray(parsed.tags, "tags"),
-    characters: readStringArray(parsed.characters, "characters"),
-    creatorName: readNullableString(parsed.creatorName),
-    creatorUrl: readNullableString(parsed.creatorUrl),
+    originalTitle: readRequiredString(form.get("original_title"), "original_title"),
+    chineseTitle: readNullableString(form.get("chinese_title")),
+    description: readNullableString(form.get("description")),
+    engineFamily: readRequiredString(form.get("engine_family"), "engine_family"),
+    isOriginal: form.has("is_original"),
+    language: readRequiredString(form.get("language"), "language"),
+    aliases: readList(form.get("aliases")),
+    tags: readList(form.get("tags")),
+    characters: readList(form.get("characters")),
+    creatorName: readNullableString(form.get("creator_name")),
+    creatorUrl: readNullableString(form.get("creator_url")),
   };
 }
 
@@ -105,50 +72,9 @@ function readNullableString(value: unknown): string | null {
   return value.trim() || null;
 }
 
-function readStringArray(value: unknown, field: string): string[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new HttpError(400, `${field} 必须是字符串数组`);
-  }
-  return value.map((item) => item.trim()).filter(Boolean);
-}
-
-function readImageFile(value: FormDataEntryValue | null, field: string): File {
-  if (!(value instanceof File) || value.size <= 0) {
-    throw new HttpError(400, `${field} 必须是图片文件`);
-  }
-  if (!value.type.toLowerCase().startsWith("image/")) {
-    throw new HttpError(400, `${field} 必须是图片文件`);
-  }
-  return value;
-}
-
-async function storeImages(files: File[]): Promise<string[]> {
-  const hashes: string[] = [];
-  const seen = new Set<string>();
-  for (const file of files) {
-    const body = await file.arrayBuffer();
-    const sha256 = await sha256Hex(body);
-    if (seen.has(sha256)) {
-      hashes.push(sha256);
-      continue;
-    }
-    seen.add(sha256);
-    const existing = await findExistingObjects({
-      blobSha256: [sha256],
-      corePackSha256: [],
-    });
-    if (!existing.blobs.has(sha256)) {
-      await assertObjectUploadAllowed({ kind: "blob", sha256 });
-      await putBlob(sha256, body, body.byteLength, file.type);
-      await insertBlobRecord({
-        sha256,
-        sizeBytes: body.byteLength,
-        contentTypeHint: file.type,
-        observedExt: null,
-      });
-    }
-    hashes.push(sha256);
-  }
-  return hashes;
+function readList(value: FormDataEntryValue | null): string[] {
+  return String(value ?? "")
+    .split(/[,，\r\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
