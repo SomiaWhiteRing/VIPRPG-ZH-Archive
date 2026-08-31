@@ -16,6 +16,8 @@ export function TokenPicker({
   onChange,
   placeholder,
   recommendationLabel,
+  showRecommendations = true,
+  showSelectionCount = true,
   suggestions,
   values,
 }: {
@@ -24,7 +26,9 @@ export function TokenPicker({
   name?: string;
   onChange: (values: string[]) => void;
   placeholder: string;
-  recommendationLabel: string;
+  recommendationLabel?: string;
+  showRecommendations?: boolean;
+  showSelectionCount?: boolean;
   suggestions: UploadTaxonomySuggestion[];
   values: string[];
 }) {
@@ -174,13 +178,20 @@ export function TokenPicker({
           </div>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-        <span>已选 {values.length} 项</span>
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2 text-xs text-muted",
+          showSelectionCount && "justify-between",
+        )}
+      >
+        {showSelectionCount ? <span>已选 {values.length} 项</span> : null}
         <span>输入后按 Enter 添加</span>
       </div>
-      {recommended.length ? (
+      {showRecommendations && recommended.length ? (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs text-muted">{recommendationLabel}</span>
+          {recommendationLabel ? (
+            <span className="mr-1 text-xs text-muted">{recommendationLabel}</span>
+          ) : null}
           {recommended.map((item) => (
             <Button
               className="min-h-7 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"

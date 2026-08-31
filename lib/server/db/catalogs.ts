@@ -147,54 +147,46 @@ export async function deleteCatalog(
     .run();
 }
 
-export async function replaceCatalogItems(
+export async function updateCatalogItem(
   catalogId: number,
-  items: Array<{ workId: number; sortOrder: number; note?: string | null }>,
+  workId: unknown,
+  sortOrder: unknown,
+  note: unknown,
   actor: ArchiveUser,
 ): Promise<CatalogDetail> {
   await ownedCatalog(catalogId, actor, "catalog.reorder_own");
-  if (!Array.isArray(items)) throw new HttpError(400, "目录项目顺序不合法");
-  const seen = new Set<number>();
-  const normalized = items.map((item) => {
-    if (
-      !item ||
-      typeof item !== "object" ||
-      !Number.isSafeInteger(item.workId) ||
-      item.workId <= 0 ||
-      !Number.isSafeInteger(item.sortOrder) ||
-      seen.has(item.workId)
-    )
-      throw new HttpError(400, "目录项目顺序不合法");
-    seen.add(item.workId);
-    return { workId: item.workId, sortOrder: item.sortOrder, note: clean(item.note) };
-  });
-  if (normalized.length) {
-    const rows = await getD1()
-      .prepare(
-        `SELECT id FROM works WHERE id IN (${normalized.map(() => "?").join(",")}) AND status='published'`,
-      )
-      .bind(...normalized.map((item) => item.workId))
-      .all<{ id: number }>();
-    if ((rows.results ?? []).length !== normalized.length)
-      throw new HttpError(400, "目录只能收录已发布游戏");
-  }
+  if (
+    typeof workId !== "number" ||
+    !Number.isSafeInteger(workId) ||
+    workId <= 0
+  )
+    throw new HttpError(400, "目录条目不合法");
+  if (
+    typeof sortOrder !== "number" ||
+    !Number.isSafeInteger(sortOrder) ||
+    sortOrder < 0
+  )
+    throw new HttpError(400, "目录条目排序值必须是 0 或正整数");
+  if (note !== null && note !== undefined && typeof note !== "string")
+    throw new HttpError(400, "目录条目备注必须是字符串");
   const database = getD1();
-  const statements = [
+  const results = await database.batch([
     database
-      .prepare(`DELETE FROM catalog_items WHERE catalog_id=?`)
-      .bind(catalogId),
-    ...normalized.map((item) =>
-      database
-        .prepare(
-          `INSERT INTO catalog_items(catalog_id,work_id,sort_order,note) VALUES(?,?,?,?)`,
-        )
-        .bind(catalogId, item.workId, item.sortOrder, item.note),
-    ),
+      .prepare(
+        `UPDATE catalog_items SET sort_order=?,note=? WHERE catalog_id=? AND work_id=?`,
+      )
+      .bind(sortOrder, clean(note), catalogId, workId),
     database
-      .prepare(`UPDATE catalogs SET updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(catalogId),
-  ];
-  await database.batch(statements);
+      .prepare(
+        `UPDATE catalogs SET updated_at=CURRENT_TIMESTAMP
+         WHERE id=? AND EXISTS (
+           SELECT 1 FROM catalog_items WHERE catalog_id=? AND work_id=?
+         )`,
+      )
+      .bind(catalogId, catalogId, workId),
+  ]);
+  if (Number(results[0]?.meta.changes ?? 0) !== 1)
+    throw new HttpError(404, "目录条目不存在");
   return requiredCatalog(catalogId);
 }
 
@@ -214,7 +206,7 @@ export async function addCatalogItem(
   if (!work) throw new HttpError(400, "目录只能收录已发布游戏");
   await getD1().batch([
     getD1()
-      .prepare(`INSERT OR IGNORE INTO catalog_items(catalog_id,work_id,sort_order,note) VALUES(?,?,0,?)`)
+      .prepare(`INSERT OR IGNORE INTO catalog_items(catalog_id,work_id,note) VALUES(?,?,?)`)
       .bind(catalogId, workId, clean(note)),
     getD1()
       .prepare(`UPDATE catalogs SET updated_at=CURRENT_TIMESTAMP WHERE id=?`)
@@ -270,7 +262,7 @@ async function loadCatalogDetail(id: number): Promise<CatalogDetail | null> {
        FROM catalog_items ci
        JOIN works w ON w.id = ci.work_id
        WHERE ci.catalog_id = ? AND w.status = 'published'
-       ORDER BY ci.sort_order, ci.work_id`,
+       ORDER BY ci.sort_order ASC, ci.work_id DESC`,
     )
     .bind(row.id)
     .all<ItemRow>();
@@ -405,7 +397,7 @@ const CATALOG_SUMMARY_SELECT = `
         FROM catalog_items first_item
         JOIN works first_work ON first_work.id = first_item.work_id
         WHERE first_item.catalog_id = c.id AND first_work.status = 'published'
-        ORDER BY first_item.sort_order, first_item.work_id
+        ORDER BY first_item.sort_order ASC, first_item.work_id DESC
         LIMIT 1
       )
         AND ma.kind = 'preview'

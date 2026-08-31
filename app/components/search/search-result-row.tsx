@@ -11,12 +11,12 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
       className="grid gap-4 rounded-lg border border-border bg-card p-3 text-foreground no-underline hover:border-primary hover:shadow-surface md:grid-cols-[148px_minmax(0,1fr)]"
       href={`/games/${work.id}`}
     >
-      <div className="grid aspect-video place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
+      <div className="grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
           <Image
             alt=""
             className="h-auto w-full object-cover"
-            height={84}
+            height={111}
             src={`/api/media/blobs/${work.previewBlobSha256}`}
             unoptimized
             width={148}

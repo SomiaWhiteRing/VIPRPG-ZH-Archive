@@ -27,12 +27,12 @@ export function GameCard({ work }: { work: GameWorkSummary }) {
       className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-foreground transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       href={`/games/${work.id}`}
     >
-      <div className="relative grid aspect-video place-items-center overflow-hidden bg-muted/15 font-mono text-xs font-bold text-muted">
+      <div className="relative grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 font-mono text-xs font-bold text-muted">
         {work.previewBlobSha256 ? (
           <Image
             alt=""
             className="h-full w-full object-cover"
-            height={236}
+            height={315}
             src={`/api/media/blobs/${work.previewBlobSha256}`}
             unoptimized
             width={420}

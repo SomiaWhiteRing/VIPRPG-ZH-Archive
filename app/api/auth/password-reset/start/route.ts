@@ -4,7 +4,6 @@ import { buildAuthCallbackUrl } from "@/lib/server/auth/callback-url";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
 import { generateVerificationCode, hashVerificationCode } from "@/lib/server/auth/tokens";
-import { verifyTurnstile } from "@/lib/server/auth/turnstile";
 import {
   assertEmailChallengeQuota,
   createEmailChallenge,
@@ -24,10 +23,6 @@ export async function POST(request: Request) {
 
   try {
     assertSameOrigin(request);
-    await verifyTurnstile({
-      token: readRequiredFormString(formData, "cf-turnstile-response"),
-      request,
-    });
     await assertAuthEmailRateLimit(`password-reset:${email}`);
 
     const user = await findUserByEmail(email);

@@ -13,6 +13,7 @@ type WorkLookupRow = {
   engine_family: string;
   language: string;
   is_original: number;
+  is_translation: number;
   can_edit: number;
 };
 
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
           w.engine_family,
           w.language,
           w.is_original,
+          w.is_translation,
           CASE
             WHEN (
               ? = 1 AND EXISTS (
@@ -112,6 +114,7 @@ export async function GET(request: Request) {
         engineFamily: work.engine_family,
         language: work.language,
         isOriginal: work.is_original === 1,
+        isTranslation: work.is_translation === 1,
         canEdit: work.can_edit === 1,
       })),
     });

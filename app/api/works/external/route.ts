@@ -35,27 +35,33 @@ function parseMetadata(form: FormData): {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   aliases: string[];
   tags: string[];
   characters: string[];
   creatorName: string | null;
-  creatorUrl: string | null;
+  translatorName: string | null;
+  sourceUrl: string | null;
 } {
   return {
     originalTitle: readRequiredString(form.get("original_title"), "original_title"),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
+    originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(form.get("engine_family"), "engine_family"),
     isOriginal: form.has("is_original"),
+    isTranslation: form.has("is_translation"),
     language: readRequiredString(form.get("language"), "language"),
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
     characters: readList(form.get("characters")),
     creatorName: readNullableString(form.get("creator_name")),
-    creatorUrl: readNullableString(form.get("creator_url")),
+    translatorName: readNullableString(form.get("translator")),
+    sourceUrl: readNullableString(form.get("source_url")),
   };
 }
 

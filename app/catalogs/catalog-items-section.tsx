@@ -46,7 +46,7 @@ export function CatalogItemsSection({
   const [adding, setAdding] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [note, setNote] = useState("");
-  const [position, setPosition] = useState("1");
+  const [sortOrder, setSortOrder] = useState("0");
   const [editMessage, setEditMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingRemovalWorkId, setPendingRemovalWorkId] = useState<number | null>(null);
@@ -99,10 +99,12 @@ export function CatalogItemsSection({
     setAdding(true);
     setAddMessage(null);
     try {
-      const response = await replaceItems([
-        ...items.map((item) => ({ workId: item.workId, note: item.note })),
-        { workId: candidate.id, note: null },
-      ]);
+      const response = await fetch(`/api/catalogs/${catalogId}/items`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workId: candidate.id }),
+      });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
         setAddMessage(body.detail ?? "游戏添加失败。");
@@ -117,35 +119,37 @@ export function CatalogItemsSection({
     }
   }
 
-  function openEditor(item: CatalogItem, index: number) {
+  function openEditor(item: CatalogItem) {
     setSelectedWorkId(item.workId);
     setNote(item.note ?? "");
-    setPosition(String(index + 1));
+    setSortOrder(String(item.sortOrder));
     setEditMessage(null);
   }
 
   async function saveSelectedItem() {
     if (!selectedItem) return;
-    setSaving(true);
     setEditMessage(null);
+    const parsedSortOrder = Number(sortOrder);
+    if (
+      !sortOrder.trim() ||
+      !Number.isSafeInteger(parsedSortOrder) ||
+      parsedSortOrder < 0
+    ) {
+      setEditMessage("排序值必须是 0 或正整数。");
+      return;
+    }
+    setSaving(true);
     try {
-      const currentIndex = items.findIndex((item) => item.workId === selectedItem.workId);
-      const requestedPosition = Number.parseInt(position, 10);
-      const targetIndex = Math.max(
-        0,
-        Math.min(
-          items.length - 1,
-          Number.isFinite(requestedPosition) ? requestedPosition - 1 : currentIndex,
-        ),
-      );
-      const ordered = items.filter((item) => item.workId !== selectedItem.workId);
-      ordered.splice(targetIndex, 0, {
-        ...selectedItem,
-        note: note.trim() || null,
+      const response = await fetch(`/api/catalogs/${catalogId}/items`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workId: selectedItem.workId,
+          sortOrder: parsedSortOrder,
+          note: note.trim() || null,
+        }),
       });
-      const response = await replaceItems(
-        ordered.map((item) => ({ workId: item.workId, note: item.note })),
-      );
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
         setEditMessage(body.detail ?? "条目保存失败。");
@@ -182,23 +186,6 @@ export function CatalogItemsSection({
     }
   }
 
-  function replaceItems(
-    nextItems: Array<{ workId: number; note: string | null }>,
-  ): Promise<Response> {
-    return fetch(`/api/catalogs/${catalogId}/items`, {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        items: nextItems.map((item, index) => ({
-          workId: item.workId,
-          sortOrder: index,
-          note: item.note,
-        })),
-      }),
-    });
-  }
-
   return (
     <section aria-labelledby="catalog-games-heading" className="mt-8">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
@@ -222,7 +209,7 @@ export function CatalogItemsSection({
                 <CatalogItemActions
                   disabled={removingWorkId !== null}
                   item={item}
-                  onEdit={() => openEditor(item, index)}
+                  onEdit={() => openEditor(item)}
                   onRemove={() => setPendingRemovalWorkId(item.workId)}
                 />
               ) : null}
@@ -277,7 +264,7 @@ export function CatalogItemsSection({
           >
             <Dialog.Title className="m-0 text-lg font-bold">添加游戏</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-add-game-description">
-              搜索并将一个游戏添加到目录末尾。
+              搜索并以默认排序值 0 将一个游戏加入目录。
             </Dialog.Description>
             <form className="flex gap-2 max-sm:flex-col" onSubmit={(event) => { event.preventDefault(); void lookup(); }}>
               <Input
@@ -329,7 +316,7 @@ export function CatalogItemsSection({
           >
             <Dialog.Title className="m-0 text-lg font-bold">编辑条目</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-item-edit-description">
-              修改所选游戏在目录中的备注和位置。
+              修改所选游戏在目录中的备注和排序值。
             </Dialog.Description>
             {selectedItem ? (
               <>
@@ -343,15 +330,21 @@ export function CatalogItemsSection({
                     value={note}
                   />
                 </FormField>
-                <FormField controlId="catalog-item-position" hint={`1–${items.length}`} label="目录位置">
+                <FormField
+                  controlId="catalog-item-sort-order"
+                  hint="0 或正整数；越小越靠前，同值按游戏 ID 倒序。"
+                  label="排序值"
+                >
                   <Input
-                    id="catalog-item-position"
+                    id="catalog-item-sort-order"
                     inputMode="numeric"
-                    max={items.length}
-                    min={1}
-                    onChange={(event) => setPosition(event.target.value)}
+                    max={Number.MAX_SAFE_INTEGER}
+                    min={0}
+                    onChange={(event) => setSortOrder(event.target.value)}
+                    required
+                    step={1}
                     type="number"
-                    value={position}
+                    value={sortOrder}
                   />
                 </FormField>
               </>

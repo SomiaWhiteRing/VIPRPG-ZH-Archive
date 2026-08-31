@@ -5,8 +5,12 @@ import type {
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
-import { normalizeEntityName } from "@/lib/entity-name";
+import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
+import {
+  ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  parseOriginalReleaseDate,
+} from "@/lib/original-release-date";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { findExistingObjects } from "@/lib/server/db/archive-objects";
@@ -155,13 +159,10 @@ export async function commitArchiveImport(
   if (metadata.target.mode === "update") {
     const preserved = await getD1()
       .prepare(
-        `SELECT original_release_date,original_release_precision,extra_json
-         FROM works WHERE id=? LIMIT 1`,
+        `SELECT extra_json FROM works WHERE id=? LIMIT 1`,
       )
       .bind(workId)
       .first<{
-        original_release_date: string | null;
-        original_release_precision: "year" | "month" | "day" | "unknown";
         extra_json: string;
       }>();
     if (preserved) {
@@ -169,8 +170,6 @@ export async function commitArchiveImport(
         ...metadata,
         game: {
           ...metadata.game,
-          originalReleaseDate: preserved.original_release_date,
-          originalReleasePrecision: preserved.original_release_precision,
           extra: {
             ...parseJsonObject(preserved.extra_json),
             ...metadata.game.extra,
@@ -329,6 +328,10 @@ function validateManifest(
     throw new Error("Manifest game originality does not match metadata");
   }
 
+  if (manifest.game.isTranslation !== metadata.game.isTranslation) {
+    throw new Error("Manifest game translation declaration does not match metadata");
+  }
+
   const snapshotFields: Array<[unknown, unknown, string]> = [
     [
       manifest.archiveVersion.sourceName,
@@ -426,11 +429,14 @@ function validateManifest(
     }
   }
 
+  const isBrowserUpload =
+    manifest.archiveVersion.sourceType === "browser_folder" ||
+    manifest.archiveVersion.sourceType === "browser_zip";
   if (
-    manifest.archiveVersion.sourceType === "browser_folder" &&
+    isBrowserUpload &&
     !manifest.files.some((file) => file.path.toLowerCase() === "rpg_rt.lmt")
   ) {
-    throw new Error("所选文件夹根目录缺少 RPG_RT.lmt");
+    throw new Error("游戏根目录缺少 RPG_RT.lmt");
   }
 }
 
@@ -482,7 +488,8 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
     typeof game.originalTitle !== "string" ||
     (game.chineseTitle !== null && typeof game.chineseTitle !== "string") ||
     typeof game.language !== "string" ||
-    typeof game.isOriginal !== "boolean"
+    typeof game.isOriginal !== "boolean" ||
+    typeof game.isTranslation !== "boolean"
   ) {
     throw new HttpError(400, "Manifest game fields are invalid");
   }
@@ -610,11 +617,10 @@ function normalizeMetadata(
       "rpg_maker_mv",
       "rpg_maker_mz",
       "rpg_maker_unite",
-      "mixed",
-      "unknown",
       "other",
     ] as const) ||
     typeof game.isOriginal !== "boolean" ||
+    typeof game.isTranslation !== "boolean" ||
     typeof game.language !== "string" ||
       !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
     !isRecord(game.extra) ||
@@ -625,8 +631,18 @@ function normalizeMetadata(
   if (!isLanguageCode(game.language)) {
     throw new HttpError(400, "Unsupported game language");
   }
+  const releaseDate = parseOriginalReleaseDate(game.originalReleaseDate);
+  if (
+    !releaseDate ||
+    releaseDate.precision !== game.originalReleasePrecision
+  ) {
+    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+  }
   if (!isArchiveEngineFamily(game.engineFamily)) {
     throw new HttpError(400, "非 RPG Maker 2000/2003 系游戏不能通过归档上传");
+  }
+  if (game.isOriginal && game.isTranslation) {
+    throw new HttpError(400, "原创声明与翻译声明不能同时选择");
   }
 
   if (
@@ -740,7 +756,7 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata creator is invalid");
       }
       return {
-        name: normalizeEntityName(creator.name),
+        name: normalizeCreatorName(creator.name),
         originalName: creator.originalName?.trim() || null,
         websiteUrl: normalizeHttpUrl(creator.websiteUrl, "作者网站"),
         extra: creator.extra,
@@ -771,13 +787,38 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata staff entry is invalid");
       }
       return {
-        creatorName: normalizeEntityName(staff.creatorName),
+        creatorName: normalizeCreatorName(staff.creatorName),
         roleKey: staff.roleKey,
         roleLabel: staff.roleLabel?.trim() || null,
         notes: staff.notes?.trim() || null,
       };
     })
-    .filter((staff) => staff.creatorName);
+    .filter((staff) => staff.creatorName)
+    .filter((staff) => game.isTranslation || staff.roleKey !== "translator")
+    .filter(uniqueStaffEntry());
+
+  if (
+    game.isTranslation &&
+    !workStaff.some((staff) => staff.roleKey === "translator")
+  ) {
+    throw new HttpError(400, "翻译作品必须填写译者");
+  }
+
+  const referencedCreatorNames = new Set(
+    workStaff.map((staff) => creatorNameKey(staff.creatorName)),
+  );
+  const seenCreatorNames = new Set<string>();
+  const effectiveCreators = creators.filter((creator) => {
+    const key = creatorNameKey(creator.name);
+    if (!referencedCreatorNames.has(key) || seenCreatorNames.has(key)) return false;
+    seenCreatorNames.add(key);
+    return true;
+  });
+  if (
+    [...referencedCreatorNames].some((name) => !seenCreatorNames.has(name))
+  ) {
+    throw new HttpError(400, "作品职员缺少对应的 Creator");
+  }
 
   const workLinks = externalLinks.work
     .map((link) => {
@@ -819,7 +860,8 @@ function normalizeMetadata(
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       description: normalizeNullableWorkText(game.description),
-      originalReleaseDate: normalizeNullableWorkText(game.originalReleaseDate),
+      originalReleaseDate: releaseDate.value,
+      originalReleasePrecision: releaseDate.precision,
       language: game.language.trim(),
       browsingImageBlobSha256s,
     },
@@ -831,7 +873,7 @@ function normalizeMetadata(
     },
     workTitles,
     characters,
-    creators,
+    creators: effectiveCreators,
     workStaff,
     tags,
     externalLinks: { work: workLinks },
@@ -878,13 +920,14 @@ async function resolveTargetWork(
     }
     const identity = await getD1()
       .prepare(
-        `SELECT original_title,language,is_original,status FROM works WHERE id=? LIMIT 1`,
+        `SELECT original_title,language,is_original,is_translation,status FROM works WHERE id=? LIMIT 1`,
       )
       .bind(existingJobWorkId)
       .first<{
         original_title: string;
         language: string;
         is_original: number;
+        is_translation: number;
         status: string;
       }>();
     if (
@@ -892,7 +935,8 @@ async function resolveTargetWork(
       identity.status === "deleted" ||
       identity.original_title !== game.originalTitle ||
       identity.language !== game.language ||
-      identity.is_original !== (game.isOriginal ? 1 : 0)
+      identity.is_original !== (game.isOriginal ? 1 : 0) ||
+      identity.is_translation !== (game.isTranslation ? 1 : 0)
     )
       throw new HttpError(409, "导入任务的游戏身份或语言属性不匹配");
     return existingJobWorkId;
@@ -902,16 +946,17 @@ async function resolveTargetWork(
   const result = await database
     .prepare(
       `INSERT INTO works (
-        original_title, chinese_title, description, is_original, language,
+        original_title, chinese_title, description, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status, extra_json,
         created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
     )
     .bind(
       game.originalTitle,
       game.chineseTitle,
       game.description,
       game.isOriginal ? 1 : 0,
+      game.isTranslation ? 1 : 0,
       game.language,
       game.originalReleaseDate,
       game.originalReleasePrecision,
@@ -1042,6 +1087,7 @@ async function finalizeArchiveCommit(input: {
          chinese_title = ?,
          description = ?,
          is_original = ?,
+         is_translation = ?,
          language = ?,
          original_release_date = ?,
          original_release_precision = ?,
@@ -1060,6 +1106,7 @@ async function finalizeArchiveCommit(input: {
         game.chineseTitle,
         game.description,
         game.isOriginal ? 1 : 0,
+        game.isTranslation ? 1 : 0,
         game.language,
         game.originalReleaseDate,
         game.originalReleasePrecision,
@@ -1106,7 +1153,7 @@ async function finalizeArchiveCommit(input: {
   }
   statements.push(
     database
-      .prepare(`DELETE FROM work_staff WHERE work_id = ? AND role_key = 'author'`)
+      .prepare(`DELETE FROM work_staff WHERE work_id = ? AND role_key IN ('author', 'translator')`)
       .bind(input.workId),
   );
   for (const staff of input.metadata.workStaff) {
@@ -1616,6 +1663,22 @@ function parseJsonObject(value: string): Record<string, unknown> {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function creatorNameKey(value: string): string {
+  return value.toLocaleLowerCase();
+}
+
+function uniqueStaffEntry(): (
+  staff: ArchiveCommitMetadata["workStaff"][number],
+) => boolean {
+  const seen = new Set<string>();
+  return (staff) => {
+    const key = `${staff.roleKey}\u0000${creatorNameKey(staff.creatorName)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  };
 }
 
 function uniqueNumbers(values: number[]): number[] {

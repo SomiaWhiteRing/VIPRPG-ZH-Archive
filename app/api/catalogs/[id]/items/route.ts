@@ -2,7 +2,7 @@ import { requireAnyPermission } from "@/lib/server/auth/authorize";
 import {
   addCatalogItem,
   removeCatalogItem,
-  replaceCatalogItems,
+  updateCatalogItem,
 } from "@/lib/server/db/catalogs";
 import { json, jsonError } from "@/lib/server/http/json";
 import { parsePositiveId, readJsonObject } from "@/lib/server/http/request";
@@ -48,16 +48,14 @@ export async function PATCH(
   ]);
   if ("response" in auth) return auth.response;
   try {
-    const body = (await readJsonObject(request, "Invalid catalog items body")) as {
-      items?: Array<{ workId: number; sortOrder: number; note?: string | null }>;
-    };
-    if (!Array.isArray(body.items))
-      return json({ ok: false, error: "items is required" }, { status: 400 });
+    const body = await readJsonObject(request, "Invalid catalog item body");
     return json({
       ok: true,
-      catalog: await replaceCatalogItems(
+      catalog: await updateCatalogItem(
         parsePositiveId((await context.params).id, "catalog id"),
-        body.items,
+        body.workId,
+        body.sortOrder,
+        body.note,
         auth.user,
       ),
     });

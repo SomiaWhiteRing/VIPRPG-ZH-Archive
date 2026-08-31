@@ -1,13 +1,15 @@
 /// <reference lib="webworker" />
 
-import { inflate, zip } from "fflate";
+import { zip } from "fflate";
 import {
   classifyArchivePath,
-  contentTypeForArchivePath,
   FILE_POLICY_VERSION,
-  normalizeArchivePath,
   PACKER_VERSION,
 } from "@/lib/archive/file-policy";
+import {
+  enumerateUploadSourceFiles,
+  type UploadSourceEntry as SourceFile,
+} from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
 import type {
   ArchiveCommitMetadata,
@@ -20,7 +22,6 @@ import type {
   MetadataBlobUpload,
   PreparedArchiveSource,
   UploadRecoveryDraft,
-  UploadSourceFile,
   UploadSourceKind,
   UploadTaskCommitResult,
   UploadTaskPhase,
@@ -34,14 +35,6 @@ import {
   putUploadDraft,
   sourceObjectReferences,
 } from "@/app/upload/upload-drafts";
-
-type SourceFile = {
-  path: string;
-  size: number;
-  mtimeMs: number | null;
-  contentType: string;
-  bytes: () => Promise<Uint8Array>;
-};
 
 type IncludedFile = {
   path: string;
@@ -72,16 +65,6 @@ type CorePackObject = {
   fileCount: number;
 };
 
-type ZipCentralEntry = {
-  normalizedPath: string;
-  compressedSize: number;
-  uncompressedSize: number;
-  compression: number;
-  flags: number;
-  localHeaderOffset: number;
-  mtimeMs: number | null;
-};
-
 type ScanFileResult =
   | {
       kind: "excluded";
@@ -93,8 +76,6 @@ type ScanFileResult =
       source: SourceFile;
       included: IncludedFile;
     };
-
-type LegacyZipEncoding = "utf-8" | "shift_jis" | "gb18030";
 
 type UploadRuntime = {
   task: BrowserUploadTaskSnapshot;
@@ -114,31 +95,20 @@ type OwnedImportJobState = {
 
 const stageWeights: Record<UploadTaskPhase, { base: number; weight: number }> = {
   enumerating: { base: 0, weight: 5 },
-  hashing: { base: 5, weight: 30 },
-  building_core_pack: { base: 35, weight: 15 },
-  creating_import_job: { base: 50, weight: 5 },
-  preflighting: { base: 55, weight: 5 },
-  uploading_source: { base: 60, weight: 30 },
-  verifying_source: { base: 90, weight: 0 },
-  awaiting_metadata: { base: 90, weight: 0 },
-  uploading_metadata: { base: 90, weight: 4 },
-  committing: { base: 94, weight: 6 },
+  hashing: { base: 5, weight: 40 },
+  building_core_pack: { base: 45, weight: 20 },
+  creating_import_job: { base: 65, weight: 3 },
+  preflighting: { base: 68, weight: 5 },
+  uploading_source: { base: 73, weight: 25 },
+  verifying_source: { base: 98, weight: 2 },
+  awaiting_metadata: { base: 100, weight: 0 },
+  uploading_metadata: { base: 100, weight: 0 },
+  committing: { base: 100, weight: 0 },
   completed: { base: 100, weight: 0 },
 };
 
 let currentRuntime: UploadRuntime | null = null;
 let lastEmitAt = 0;
-const utf8ZipTextDecoder = new TextDecoder("utf-8");
-const fatalUtf8ZipTextDecoder = new TextDecoder("utf-8", { fatal: true });
-const shiftJisZipTextDecoder = new TextDecoder("shift_jis");
-const gb18030ZipTextDecoder = new TextDecoder("gb18030");
-const localFileHeaderSignature = 0x04034b50;
-const centralDirectorySignature = 0x02014b50;
-const endOfCentralDirectorySignature = 0x06054b50;
-const zipUtf8Flag = 0x0800;
-const zipMethodStore = 0;
-const zipMethodDeflate = 8;
-const zipEncryptedFlag = 0x0001;
 const maxHashConcurrency = 16;
 const minHashConcurrency = 4;
 const hashConcurrencyPerHardwareThread = 2;
@@ -198,9 +168,12 @@ async function startSource(
   currentRuntime = runtime;
 
   try {
-    task = setPhase(task, "enumerating", 1, null);
+    task = setPhase(task, "enumerating", 0, null);
     runtime.task = task = emitTask(task, true);
-    const sourceFiles = await enumerateSourceFiles(message.files, message.sourceKind);
+    const sourceFiles = await enumerateUploadSourceFiles(
+      message.files,
+      message.sourceKind,
+    );
     await waitForCancellation(runtime);
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
@@ -231,10 +204,6 @@ async function startSource(
         corePackRawSizeBytes: corePack.corePack.uncompressedSize,
         corePackZipSizeBytes: corePack.corePack.bytes.byteLength,
         estimatedR2GetCount: scan.blobObjects.size + 1,
-      },
-      progress: {
-        ...task.progress,
-        percent: 50,
       },
     };
     runtime.task = task = emitTask(task, true);
@@ -294,15 +263,9 @@ async function startSource(
     await waitForCancellation(runtime);
     runtime.preparedSource = preparedSource;
     runtime.task = task = {
-      ...task,
+      ...setPhase(task, "awaiting_metadata", 1, null),
       status: "waiting",
-      phase: "awaiting_metadata",
       sourceReady: true,
-      progress: {
-        ...task.progress,
-        percent: 90,
-        currentPath: null,
-      },
     };
     runtime.task = emitTask(task, true);
     await saveRuntimeDraft(runtime);
@@ -360,7 +323,7 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
       sourceReady: true,
       metadataConfirmed: draft.metadataConfirmed,
       stats: draft.preparedSource.stats,
-      progress: { ...task.progress, percent: 90 },
+      progress: { ...task.progress, percent: 100 },
     },
     preparedSource: draft.preparedSource,
     metadata: draft.metadata,
@@ -398,11 +361,8 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
   const metadata = runtime.metadata;
   runtime.joining = true;
   runtime.task = {
-    ...runtime.task,
-    status: "running",
-    phase: "uploading_metadata",
+    ...setPhase(runtime.task, "uploading_metadata", 0, null),
     commitStarted: true,
-    progress: { ...runtime.task.progress, percent: 90 },
   };
   runtime.task = emitTask(runtime.task, true);
   try {
@@ -554,54 +514,6 @@ function terminalTaskFromState(
     return { ...task, status: "canceled", error: null };
   }
   return { ...task, status: "failed", error: fallbackError };
-}
-
-async function enumerateSourceFiles(
-  files: UploadSourceFile[],
-  sourceKind: UploadSourceKind,
-): Promise<SourceFile[]> {
-  if (sourceKind === "zip") {
-    return enumerateZipSourceFiles(files);
-  }
-  return files
-    .map((source) => {
-      const path = normalizeArchivePath(source.relativePath);
-      const file = source.file;
-
-      return {
-        path,
-        size: file.size,
-        mtimeMs: Number.isFinite(file.lastModified) ? file.lastModified : null,
-        contentType: file.type || contentTypeForArchivePath(path),
-        bytes: async () => new Uint8Array(await file.arrayBuffer()),
-      };
-    })
-    .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
-}
-
-async function enumerateZipSourceFiles(files: UploadSourceFile[]): Promise<SourceFile[]> {
-  const zipFile = files[0]?.file;
-
-  if (!zipFile) {
-    throw new Error("未选择 ZIP 文件");
-  }
-
-  const entries = await readZipCentralDirectory(zipFile);
-  const paths = stripCommonRoot(entries.map((entry) => entry.normalizedPath));
-
-  return entries
-    .map((entry) => {
-      const path = paths.get(entry.normalizedPath) ?? entry.normalizedPath;
-
-      return {
-        path,
-        size: entry.uncompressedSize,
-        mtimeMs: entry.mtimeMs,
-        contentType: contentTypeForArchivePath(path),
-        bytes: async () => readZipEntryBytes(zipFile, entry),
-      } satisfies SourceFile;
-    })
-    .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
 }
 
 async function scanAndHash(
@@ -768,14 +680,17 @@ async function buildCorePack(
     task = setPhase(
       task,
       "building_core_pack",
-      processed / Math.max(coreFiles.length, 1),
+      (processed / Math.max(coreFiles.length, 1)) * 0.6,
       file.path,
     );
     task = emitTask(task);
   }
 
   const bytes = await zipEntriesAsync(zipEntries);
+  task = setPhase(task, "building_core_pack", 0.9, null);
+  task = emitTask(task, true);
   const sha256 = await sha256Bytes(bytes);
+  task = setPhase(task, "building_core_pack", 1, null);
 
   return {
     task,
@@ -802,6 +717,7 @@ async function buildManifest(
       chineseTitle: metadata.game.chineseTitle,
       language: metadata.game.language,
       isOriginal: metadata.game.isOriginal,
+      isTranslation: metadata.game.isTranslation,
     },
     archiveVersion: {
       sourceName: metadata.archiveVersion.sourceName,
@@ -879,12 +795,8 @@ async function createImportJob(
   });
 
   return {
-    ...task,
+    ...setPhase(task, "creating_import_job", 1, null),
     serverImportJobId: response.importJob.id,
-    progress: {
-      ...task.progress,
-      percent: 55,
-    },
   };
 }
 
@@ -924,13 +836,7 @@ async function preflightObjects(
   const missingBlobs = new Set(response.blobs.missing);
   const missingCorePacks = new Set(response.corePacks.missing);
 
-  task = {
-    ...task,
-    progress: {
-      ...task.progress,
-      percent: 60,
-    },
-  };
+  task = setPhase(task, "preflighting", 1, null);
   task = emitTask(task, true);
 
   return {
@@ -951,6 +857,7 @@ async function uploadMissingObjects(input: {
   const importJobId = input.task.serverImportJobId;
   let task = setPhase(input.task, "uploading_source", 0, null);
   let uploadedBytes = 0;
+  let uploadedObjects = 0;
   const totalBytes =
     [...input.missingBlobs].reduce(
       (sum, sha256) => sum + (input.blobObjects.get(sha256)?.size ?? 0),
@@ -959,6 +866,9 @@ async function uploadMissingObjects(input: {
     (input.missingCorePacks.has(input.corePack.sha256)
       ? input.corePack.bytes.byteLength
       : 0);
+  const totalObjects =
+    input.missingBlobs.size +
+    (input.missingCorePacks.has(input.corePack.sha256) ? 1 : 0);
 
   task = emitTask(task, true);
 
@@ -966,10 +876,13 @@ async function uploadMissingObjects(input: {
     assertRuntimeActive(task.localTaskId);
     await uploadCorePack(input.corePack, importJobId);
     uploadedBytes += input.corePack.bytes.byteLength;
+    uploadedObjects += 1;
     task = updateUploadProgress(
       task,
       uploadedBytes,
       totalBytes,
+      uploadedObjects,
+      totalObjects,
       "引擎公共文件",
     );
     task = emitTask(task, true);
@@ -984,16 +897,19 @@ async function uploadMissingObjects(input: {
     assertRuntimeActive(task.localTaskId);
     await uploadBlob(blob, importJobId);
     uploadedBytes += blob.size;
+    uploadedObjects += 1;
     task = updateUploadProgress(
       task,
       uploadedBytes,
       totalBytes,
+      uploadedObjects,
+      totalObjects,
       blob.source.path,
     );
     emitTask(task);
   });
 
-  task = setPhase(task, "verifying_source", 1, null);
+  task = setPhase(task, "verifying_source", 0, null);
   return emitTask(task, true);
 }
 
@@ -1290,14 +1206,12 @@ function updateHashProgress(
     excludedFileTypes: ExcludedFileTypeSummary[];
   },
 ): BrowserUploadTaskSnapshot {
-  const ratio = input.processedBytes / Math.max(task.stats.sourceSizeBytes, 1);
+  const byteRatio = input.processedBytes / Math.max(task.stats.sourceSizeBytes, 1);
+  const processedFiles = input.includedFileCount + input.excludedFileCount;
+  const fileRatio = processedFiles / Math.max(task.stats.sourceFileCount, 1);
+  const ratio = weightedRatio(byteRatio, fileRatio, 0.8);
   return {
     ...setPhase(task, "hashing", ratio, input.currentPath),
-    progress: {
-      ...task.progress,
-      percent: 5 + ratio * 30,
-      currentPath: input.currentPath,
-    },
     stats: {
       ...task.stats,
       includedFileCount: input.includedFileCount,
@@ -1313,17 +1227,30 @@ function updateUploadProgress(
   task: BrowserUploadTaskSnapshot,
   uploadedBytes: number,
   totalBytes: number,
+  uploadedObjects: number,
+  totalObjects: number,
   currentPath: string,
 ): BrowserUploadTaskSnapshot {
-  const ratio = totalBytes > 0 ? uploadedBytes / totalBytes : 1;
-  return {
-    ...task,
-    progress: {
-      ...task.progress,
-      percent: 60 + ratio * 30,
-      currentPath,
-    },
-  };
+  const byteRatio = totalBytes > 0 ? uploadedBytes / totalBytes : 1;
+  const objectRatio = totalObjects > 0 ? uploadedObjects / totalObjects : 1;
+  return setPhase(
+    task,
+    "uploading_source",
+    weightedRatio(byteRatio, objectRatio, 0.7),
+    currentPath,
+  );
+}
+
+function weightedRatio(
+  primaryRatio: number,
+  secondaryRatio: number,
+  primaryWeight: number,
+): number {
+  const clampedWeight = Math.max(0, Math.min(1, primaryWeight));
+  return (
+    Math.max(0, Math.min(1, primaryRatio)) * clampedWeight +
+    Math.max(0, Math.min(1, secondaryRatio)) * (1 - clampedWeight)
+  );
 }
 
 function setPhase(
@@ -1552,19 +1479,6 @@ async function zipEntriesAsync(entries: Record<string, Uint8Array>): Promise<Uin
   });
 }
 
-async function inflateBytes(bytes: Uint8Array, size: number): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    inflate(bytes, { size, consume: true }, (error, data) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve(data);
-    });
-  });
-}
-
 async function sha256Bytes(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", asArrayBufferView(bytes));
   return [...new Uint8Array(digest)]
@@ -1611,326 +1525,4 @@ function addExcluded(
   if (source.path.localeCompare(existing.examplePath) < 0) {
     existing.examplePath = source.path;
   }
-}
-
-async function readZipCentralDirectory(zipFile: File): Promise<ZipCentralEntry[]> {
-  const tailLength = Math.min(zipFile.size, 22 + 65535);
-  const tailStart = zipFile.size - tailLength;
-  const tail = new Uint8Array(await zipFile.slice(tailStart).arrayBuffer());
-  const eocdOffset = findEndOfCentralDirectory(tail);
-  const diskNumber = readUint16(tail, eocdOffset + 4);
-  const centralDirectoryDisk = readUint16(tail, eocdOffset + 6);
-  const entryCount = readUint16(tail, eocdOffset + 10);
-  const centralDirectorySize = readUint32(tail, eocdOffset + 12);
-  const centralDirectoryOffset = readUint32(tail, eocdOffset + 16);
-
-  if (diskNumber !== 0 || centralDirectoryDisk !== 0) {
-    throw new Error("暂不支持分卷 ZIP 上传。");
-  }
-
-  if (
-    entryCount === 0xffff ||
-    centralDirectorySize === 0xffffffff ||
-    centralDirectoryOffset === 0xffffffff
-  ) {
-    throw new Error("暂不支持 ZIP64 上传。");
-  }
-
-  const central = new Uint8Array(
-    await zipFile
-      .slice(centralDirectoryOffset, centralDirectoryOffset + centralDirectorySize)
-      .arrayBuffer(),
-  );
-  const legacyEncoding = chooseLegacyZipEncoding(central);
-  const entries: ZipCentralEntry[] = [];
-  let offset = 0;
-
-  while (offset < central.byteLength) {
-    if (offset + 46 > central.byteLength) {
-      throw new Error("ZIP 中央目录截断。");
-    }
-
-    if (readUint32(central, offset) !== centralDirectorySignature) {
-      throw new Error("ZIP 中央目录损坏。");
-    }
-
-    const flags = readUint16(central, offset + 8);
-    const compression = readUint16(central, offset + 10);
-    const modifiedTime = readUint16(central, offset + 12);
-    const modifiedDate = readUint16(central, offset + 14);
-    const compressedSize = readUint32(central, offset + 20);
-    const uncompressedSize = readUint32(central, offset + 24);
-    const nameLength = readUint16(central, offset + 28);
-    const extraLength = readUint16(central, offset + 30);
-    const commentLength = readUint16(central, offset + 32);
-    const localHeaderOffset = readUint32(central, offset + 42);
-    const nameStart = offset + 46;
-    const nameEnd = nameStart + nameLength;
-
-    if (nameEnd + extraLength + commentLength > central.byteLength) {
-      throw new Error("ZIP 中央目录文件名截断。");
-    }
-
-    if (
-      compressedSize === 0xffffffff ||
-      uncompressedSize === 0xffffffff ||
-      localHeaderOffset === 0xffffffff
-    ) {
-      throw new Error("暂不支持包含 ZIP64 entry 的上传包。");
-    }
-
-    if ((flags & zipEncryptedFlag) !== 0) {
-      throw new Error("暂不支持加密 ZIP 上传。");
-    }
-
-    if (compression !== zipMethodStore && compression !== zipMethodDeflate) {
-      throw new Error(`暂不支持 ZIP 压缩方法 ${compression}。`);
-    }
-
-    const name = decodeZipPath(
-      central.subarray(nameStart, nameEnd),
-      flags,
-      legacyEncoding,
-    );
-    const normalizedPath = normalizeArchivePath(name);
-
-    if (normalizedPath && !normalizedPath.endsWith("/")) {
-      entries.push({
-        normalizedPath,
-        compressedSize,
-        uncompressedSize,
-        compression,
-        flags,
-        localHeaderOffset,
-        mtimeMs: dosDateTimeToMs(modifiedDate, modifiedTime),
-      });
-    }
-
-    offset = nameEnd + extraLength + commentLength;
-  }
-
-  return entries;
-}
-
-async function readZipEntryBytes(
-  zipFile: File,
-  entry: ZipCentralEntry,
-): Promise<Uint8Array> {
-  const fixed = new Uint8Array(
-    await zipFile
-      .slice(entry.localHeaderOffset, entry.localHeaderOffset + 30)
-      .arrayBuffer(),
-  );
-
-  if (fixed.byteLength !== 30 || readUint32(fixed, 0) !== localFileHeaderSignature) {
-    throw new Error(`ZIP local header 损坏：${entry.normalizedPath}`);
-  }
-
-  const nameLength = readUint16(fixed, 26);
-  const extraLength = readUint16(fixed, 28);
-  const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength;
-  const compressed = new Uint8Array(
-    await zipFile.slice(dataOffset, dataOffset + entry.compressedSize).arrayBuffer(),
-  );
-
-  if (compressed.byteLength !== entry.compressedSize) {
-    throw new Error(`ZIP entry 数据截断：${entry.normalizedPath}`);
-  }
-
-  if (entry.compression === zipMethodStore) {
-    if (compressed.byteLength !== entry.uncompressedSize) {
-      throw new Error(`ZIP store entry 大小异常：${entry.normalizedPath}`);
-    }
-
-    return compressed;
-  }
-
-  return inflateBytes(compressed, entry.uncompressedSize);
-}
-
-function findEndOfCentralDirectory(bytes: Uint8Array): number {
-  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
-    if (readUint32(bytes, offset) === endOfCentralDirectorySignature) {
-      return offset;
-    }
-  }
-
-  throw new Error("未找到 ZIP 中央目录。");
-}
-
-function chooseLegacyZipEncoding(central: Uint8Array): LegacyZipEncoding {
-  const scores: Record<LegacyZipEncoding, number> = {
-    "utf-8": 0,
-    shift_jis: 0,
-    gb18030: 0,
-  };
-  let offset = 0;
-  let sampled = 0;
-
-  while (offset < central.byteLength && sampled < 1000) {
-    if (offset + 46 > central.byteLength) {
-      break;
-    }
-
-    if (readUint32(central, offset) !== centralDirectorySignature) {
-      break;
-    }
-
-    const flags = readUint16(central, offset + 8);
-    const nameLength = readUint16(central, offset + 28);
-    const extraLength = readUint16(central, offset + 30);
-    const commentLength = readUint16(central, offset + 32);
-    const nameStart = offset + 46;
-    const nameEnd = nameStart + nameLength;
-
-    if (nameEnd + extraLength + commentLength > central.byteLength) {
-      break;
-    }
-
-    if ((flags & zipUtf8Flag) === 0) {
-      const bytes = central.subarray(nameStart, nameEnd);
-      const utf8 = tryDecodeUtf8(bytes);
-
-      scores["utf-8"] += utf8 ? scoreLegacyZipPath(utf8) : -1000;
-      scores.shift_jis += scoreLegacyZipPath(shiftJisZipTextDecoder.decode(bytes));
-      scores.gb18030 += scoreLegacyZipPath(gb18030ZipTextDecoder.decode(bytes));
-      sampled += 1;
-    }
-
-    offset = nameEnd + extraLength + commentLength;
-  }
-
-  if (sampled === 0) {
-    return "utf-8";
-  }
-
-  return (Object.entries(scores) as Array<[LegacyZipEncoding, number]>).sort(
-    (left, right) => right[1] - left[1],
-  )[0]?.[0] ?? "shift_jis";
-}
-
-function decodeZipPath(
-  bytes: Uint8Array,
-  flags: number,
-  legacyEncoding: LegacyZipEncoding,
-): string {
-  if ((flags & zipUtf8Flag) !== 0) {
-    return utf8ZipTextDecoder.decode(bytes);
-  }
-
-  switch (legacyEncoding) {
-    case "utf-8":
-      return utf8ZipTextDecoder.decode(bytes);
-    case "gb18030":
-      return gb18030ZipTextDecoder.decode(bytes);
-    case "shift_jis":
-      return shiftJisZipTextDecoder.decode(bytes);
-  }
-}
-
-function tryDecodeUtf8(bytes: Uint8Array): string | null {
-  try {
-    return fatalUtf8ZipTextDecoder.decode(bytes);
-  } catch {
-    return null;
-  }
-}
-
-function scoreLegacyZipPath(value: string): number {
-  let score = 0;
-
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0;
-
-    if (char === "\uFFFD" || code === 0 || (code < 0x20 && char !== "\t")) {
-      score -= 100;
-      continue;
-    }
-
-    if (isHiragana(code) || isKatakana(code)) {
-      score += 8;
-      continue;
-    }
-
-    if (isCjk(code)) {
-      score += 2;
-      continue;
-    }
-
-    if (code >= 0x20 && code <= 0x7e) {
-      score += 1;
-      continue;
-    }
-
-    score -= 1;
-  }
-
-  return score;
-}
-
-function isHiragana(code: number): boolean {
-  return code >= 0x3040 && code <= 0x309f;
-}
-
-function isKatakana(code: number): boolean {
-  return (
-    (code >= 0x30a0 && code <= 0x30ff) ||
-    (code >= 0xff65 && code <= 0xff9f)
-  );
-}
-
-function isCjk(code: number): boolean {
-  return (
-    (code >= 0x3400 && code <= 0x4dbf) ||
-    (code >= 0x4e00 && code <= 0x9fff) ||
-    (code >= 0xf900 && code <= 0xfaff)
-  );
-}
-
-function dosDateTimeToMs(date: number, time: number): number | null {
-  if (date === 0) {
-    return null;
-  }
-
-  const year = ((date >> 9) & 0x7f) + 1980;
-  const month = ((date >> 5) & 0x0f) - 1;
-  const day = date & 0x1f;
-  const hour = (time >> 11) & 0x1f;
-  const minute = (time >> 5) & 0x3f;
-  const second = (time & 0x1f) * 2;
-  const value = new Date(year, month, day, hour, minute, second).getTime();
-
-  return Number.isFinite(value) ? value : null;
-}
-
-function readUint16(bytes: Uint8Array, offset: number): number {
-  return bytes[offset] | (bytes[offset + 1] << 8);
-}
-
-function readUint32(bytes: Uint8Array, offset: number): number {
-  return (
-    bytes[offset] |
-    (bytes[offset + 1] << 8) |
-    (bytes[offset + 2] << 16) |
-    (bytes[offset + 3] << 24)
-  ) >>> 0;
-}
-
-function stripCommonRoot(paths: string[]): Map<string, string> {
-  const normalized = paths.map(normalizeArchivePath);
-  const firstParts = normalized[0]?.split("/") ?? [];
-  const commonRoot = firstParts.length > 1 ? firstParts[0] : null;
-  const shouldStrip =
-    commonRoot !== null &&
-    normalized.every((path) => {
-      const parts = path.split("/");
-      return parts.length > 1 && parts[0] === commonRoot;
-    });
-  const result = new Map<string, string>();
-
-  for (const path of normalized) {
-    result.set(path, shouldStrip ? path.split("/").slice(1).join("/") : path);
-  }
-
-  return result;
 }

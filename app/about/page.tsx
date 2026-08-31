@@ -20,8 +20,8 @@ export default function AboutPage() {
         </p>
       </Pane>
 
-      <Pane heading="资料结构">
-        <p>每次上传对应一个游戏和一个不可变归档快照；同一游戏的历史快照只在管理端保留，翻译关系和其他关联在上传后追加。</p>
+      <Pane heading="资料与索引">
+        <p>每个游戏有独立资料页。本站归档的作品公开当前可下载版本，历史版本仅供管理和校对；翻译关系和其他关联连接不同游戏。</p>
         <p>
           作者与制作人员、登场角色、标签、目录分别独立索引，可以在
           <Link href="/creators">作者目录</Link>、<Link href="/characters">角色目录</Link>、
@@ -29,29 +29,13 @@ export default function AboutPage() {
         </p>
       </Pane>
 
-      <Pane heading="技术架构">
+      <Pane heading="归档与下载">
         <p>
-          网站运行在 Cloudflare Workers 上，D1 保存作品资料，R2 保存游戏文件。
-          上传时，浏览器会完成上传前检查，只补传对象存储中缺少的文件；服务器随后完成入库。
+          上传 RPG Maker 2000/2003 游戏时，浏览器会先检查文件，只上传本站尚未保存的内容。
+          文件按内容去重保存；下载时再按该版本的文件清单生成完整 ZIP，并缓存重复下载。
         </p>
-        <p>R2 保存以下三类内容：</p>
-        <ul>
-          <li>
-            <span className="font-mono text-sm text-primary">原始文件</span>
-            ：校验后去重保存的游戏文件。
-          </li>
-          <li>
-            <span className="font-mono text-sm text-primary">引擎公共文件</span>
-            ：作品共用的 RTP 与引擎文件。
-          </li>
-          <li>
-            <span className="font-mono text-sm text-primary">文件清单</span>
-            ：每个可下载版本的目录与文件记录。
-          </li>
-        </ul>
         <p>
-          完整游戏 ZIP <strong>不会</strong>常驻 R2；下载时由 Workers 根据文件清单流式生成， 并通过 Workers Cache / CDN
-          缓存重复请求。
+          在线游玩会把所需内容安装到当前浏览器的本地存储。删除本地游戏缓存不会同时删除 EasyRPG 存档。
         </p>
       </Pane>
 

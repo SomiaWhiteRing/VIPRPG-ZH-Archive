@@ -356,7 +356,10 @@ export function WebPlayClient({ metadata, isAuthenticated }: { metadata: WebPlay
   }, [installation]);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
+    <div
+      className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]"
+      data-web-play-status={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
+    >
       <aside className="grid gap-3">
         <Pane>
           <SectionHeading
@@ -403,7 +406,7 @@ export function WebPlayClient({ metadata, isAuthenticated }: { metadata: WebPlay
 
           <div className="flex flex-wrap items-center gap-3">
             {!installed && !installing ? (
-              <Button onClick={startInstall} type="button">
+              <Button data-web-play-action="install" onClick={startInstall} type="button">
                 安装到浏览器
               </Button>
             ) : null}

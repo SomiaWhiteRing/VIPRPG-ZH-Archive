@@ -134,11 +134,34 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
             <FilterLink active={original === "0"} href={gamesHref({ ...activeParams, original: "0", page: undefined })} label="社区收录" />
           </FilterSection>
           <FilterSection label="引擎">
-            {ENGINES.map(({ value, label }) => <FilterLink active={engine === value} href={gamesHref({ ...activeParams, engine: value === "all" ? undefined : value, page: undefined })} key={value} label={label} />)}
+            <CollapsibleFilterLinks
+              options={ENGINES.map(({ value, label }) => ({
+                active: engine === value,
+                href: gamesHref({ ...activeParams, engine: value === "all" ? undefined : value, page: undefined }),
+                label,
+                value,
+              }))}
+              visibleCount={4}
+            />
           </FilterSection>
           <FilterSection label="语言">
-            <FilterLink active={!language} href={gamesHref({ ...activeParams, language: undefined, page: undefined })} label="全部" />
-            {LANGUAGE_OPTIONS.map((item) => <FilterLink active={language === item.value} href={gamesHref({ ...activeParams, language: item.value, page: undefined })} key={item.value} label={item.label} />)}
+            <CollapsibleFilterLinks
+              options={[
+                {
+                  active: !language,
+                  href: gamesHref({ ...activeParams, language: undefined, page: undefined }),
+                  label: "全部",
+                  value: "all",
+                },
+                ...LANGUAGE_OPTIONS.map(({ value, label }) => ({
+                  active: language === value,
+                  href: gamesHref({ ...activeParams, language: value, page: undefined }),
+                  label,
+                  value,
+                })),
+              ]}
+              visibleCount={3}
+            />
           </FilterSection>
           <FilterSection label="标签" moreHref="/tags">
             <FilterLink active={!tag} href={gamesHref({ ...activeParams, tag: undefined, page: undefined })} label="全部" />
@@ -147,6 +170,33 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
         </aside>
       </div>
     </main>
+  );
+}
+
+type FilterOptionLink = {
+  active: boolean;
+  href: string;
+  label: string;
+  value: string;
+};
+
+function CollapsibleFilterLinks({ options, visibleCount }: { options: readonly FilterOptionLink[]; visibleCount: number }) {
+  const visibleOptions = options.slice(0, visibleCount);
+  const overflowOptions = options.slice(visibleCount);
+
+  return (
+    <>
+      {visibleOptions.map((option) => <FilterLink active={option.active} href={option.href} key={option.value} label={option.label} />)}
+      {overflowOptions.length > 0 ? (
+        <details className="group contents" open={overflowOptions.some((option) => option.active)}>
+          <summary className="order-last inline-flex min-h-8 cursor-pointer list-none items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10 [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">展开其余 {overflowOptions.length} 项</span>
+            <span className="hidden group-open:inline">收起选项</span>
+          </summary>
+          {overflowOptions.map((option) => <FilterLink active={option.active} href={option.href} key={option.value} label={option.label} />)}
+        </details>
+      ) : null}
+    </>
   );
 }
 

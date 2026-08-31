@@ -27,14 +27,14 @@ export function CatalogGameListItem({
       </span>
       <Link
         aria-label={`查看游戏：${item.title}`}
-        className="group relative block aspect-video w-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
+        className="group relative block aspect-4/3 w-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
         href={href}
       >
         {item.previewBlobSha256 ? (
           <Image
             alt=""
             className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-            height={72}
+            height={96}
             src={`/api/media/blobs/${item.previewBlobSha256}`}
             unoptimized
             width={128}

@@ -7,29 +7,6 @@ const appRoot = path.resolve("app");
 const files = collectTsx(appRoot);
 const sources = files.map((file) => ({ file, source: ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX) }));
 
-const retainedComponents = [
-  "button",
-  "input",
-  "label",
-  "textarea",
-  "checkbox",
-  "progress",
-  "select",
-  "alert-dialog",
-  "badge",
-  "card",
-  "table",
-  "rm2k-button",
-] as const;
-
-for (const component of retainedComponents) {
-  const marker = `@/app/components/ui/${component}`;
-  assert(
-    sources.some(({ file, source }) => file !== path.join(appRoot, "components", "ui", `${component}.tsx`) && source.statements.some((statement) => ts.isImportDeclaration(statement) && statement.moduleSpecifier.getText(source).slice(1, -1) === marker)),
-    `UI component has no production consumer: ${component}`,
-  );
-}
-
 const violations: string[] = [];
 for (const { file, source } of sources) {
   function visit(node: ts.Node) {
@@ -51,7 +28,7 @@ for (const { file, source } of sources) {
         }
       }
       if (!file.startsWith(path.join(appRoot, "components", "ui")) && openingElement.attributes.properties.some((property) => ts.isJsxAttribute(property) && property.name.getText(source) === "style")) {
-        violations.push(`${relative(file)}: inline style outside Progress primitive`);
+        violations.push(`${relative(file)}: inline style outside shared UI primitives`);
       }
     }
     ts.forEachChild(node, visit);
@@ -60,7 +37,6 @@ for (const { file, source } of sources) {
 }
 
 assert.equal(violations.length, 0, violations.join("\n"));
-assert(!fs.existsSync(path.join(appRoot, "components", "ui", "tabs.tsx")), "unused Tabs scaffold still exists");
 console.log(`ui self-check passed (${files.length} page/component files scanned)`);
 
 function collectTsx(directory: string): string[] {

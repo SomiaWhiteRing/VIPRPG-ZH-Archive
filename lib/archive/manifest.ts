@@ -7,6 +7,7 @@ export type ArchiveManifest = {
     chineseTitle: string | null;
     language: string;
     isOriginal: boolean;
+    isTranslation: boolean;
   };
   archiveVersion: {
     sourceName: string | null;
@@ -74,10 +75,9 @@ export type ArchiveCommitMetadata = {
       | "rpg_maker_mv"
       | "rpg_maker_mz"
       | "rpg_maker_unite"
-      | "mixed"
-      | "unknown"
       | "other";
     isOriginal: boolean;
+    isTranslation: boolean;
     language: string;
     browsingImageBlobSha256s: string[];
     status: "processing" | "published" | "hidden";

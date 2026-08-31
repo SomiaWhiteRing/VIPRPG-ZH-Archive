@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS works (
   chinese_title TEXT,
   description TEXT,
   is_original INTEGER NOT NULL DEFAULT 0 CHECK (is_original IN (0, 1)),
+  is_translation INTEGER NOT NULL DEFAULT 0 CHECK (is_translation IN (0, 1)),
   language TEXT NOT NULL DEFAULT 'zh-CN' CHECK (
     language IN ('zh-CN', 'ja', 'en', 'zh-TW', 'ko', 'fr', 'de', 'es', 'ru', 'pt-BR', 'it', 'th', 'vi')
   ),
@@ -260,9 +261,9 @@ CREATE TABLE IF NOT EXISTS works (
       'rpg_maker_2000', 'rpg_maker_2003', 'rpg_maker_2003_maniac',
       'rpg_maker_xp', 'rpg_maker_vx', 'rpg_maker_vx_ace',
       'rpg_maker_mv', 'rpg_maker_mz', 'rpg_maker_unite',
-      'mixed', 'unknown', 'other'
+      'other'
     )
-  ) DEFAULT 'unknown',
+  ) DEFAULT 'other',
   status TEXT NOT NULL CHECK (
     status IN ('processing', 'published', 'hidden', 'deleted')
   ) DEFAULT 'processing',
@@ -270,7 +271,8 @@ CREATE TABLE IF NOT EXISTS works (
   created_by_user_id INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  published_at TEXT
+  published_at TEXT,
+  CHECK (NOT (is_original = 1 AND is_translation = 1))
 );
 
 CREATE INDEX IF NOT EXISTS idx_works_original_title
@@ -538,14 +540,15 @@ CREATE INDEX IF NOT EXISTS idx_catalogs_owner_status
 CREATE TABLE IF NOT EXISTS catalog_items (
   catalog_id INTEGER NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
-  sort_order REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+    CHECK (typeof(sort_order) = 'integer' AND sort_order BETWEEN 0 AND 9007199254740991),
   note TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (catalog_id, work_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_catalog_items_order
-  ON catalog_items(catalog_id, sort_order, work_id);
+  ON catalog_items(catalog_id, sort_order ASC, work_id DESC);
 
 CREATE TABLE IF NOT EXISTS archive_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

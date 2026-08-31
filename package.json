@@ -14,7 +14,9 @@
     "db:local:seed": "node scripts/dev-seed.mjs",
     "cf-typegen": "node scripts/cf-typegen.mjs",
     "check": "next typegen && tsc --noEmit --project tsconfig.check.json && eslint . && tsx scripts/security-self-check.ts && tsx scripts/ui-self-check.ts",
-    "test": "tsx scripts/system-self-check.ts",
+    "test": "tsx scripts/system-self-check.ts contract",
+    "test:flow": "tsx scripts/system-self-check.ts flow",
+    "verify:preprod": "npm run check && npm run test:flow && npm run build",
     "auth:calibrate-password": "tsx scripts/password-calibration.ts",
     "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"
   },

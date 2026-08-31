@@ -27,7 +27,7 @@ initOpenNextCloudflareForDev(
 const nextConfig: NextConfig = systemTestDistDir
   ? {
       distDir: systemTestDistDir,
-      typescript: { tsconfigPath: ".next-system-test.tsconfig.json" },
+      typescript: { tsconfigPath: `${systemTestDistDir}.tsconfig.json` },
     }
   : {};
 

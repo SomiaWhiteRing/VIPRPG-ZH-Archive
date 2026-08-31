@@ -44,6 +44,7 @@ export function useUploadController(accountId: number) {
   const [controllerError, setControllerError] = useState<string | null>(null);
   const [pendingMetadataConfirmed, setPendingMetadataConfirmed] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const taskRef = useRef<BrowserUploadTaskSnapshot | null>(null);
   const pendingLocalTaskIdRef = useRef<string | null>(null);
@@ -176,6 +177,7 @@ export function useUploadController(accountId: number) {
   function resolvePendingCancel(canceled: boolean) {
     const pending = pendingCancelRef.current;
     pendingCancelRef.current = null;
+    if (!disposedRef.current) setCanceling(false);
     pending?.resolve(canceled);
   }
 
@@ -391,6 +393,7 @@ export function useUploadController(accountId: number) {
     let resolve!: (canceled: boolean) => void;
     const promise = new Promise<boolean>((done) => { resolve = done; });
     pendingCancelRef.current = { promise, resolve };
+    setCanceling(true);
     workerRef.current.postMessage({
       type: "cancel",
       localTaskId,
@@ -403,6 +406,7 @@ export function useUploadController(accountId: number) {
     drafts,
     committingDraftIds,
     active,
+    canceling,
     controllerError,
     metadataConfirmed: task?.metadataConfirmed ?? pendingMetadataConfirmed,
     startSource,
@@ -415,6 +419,7 @@ export function useUploadController(accountId: number) {
       if (workerRef.current) return;
       updateTask(null);
       setStarting(false);
+      setCanceling(false);
       pendingLocalTaskIdRef.current = null;
       pendingMetadataRef.current = null;
       setPendingMetadataConfirmed(false);

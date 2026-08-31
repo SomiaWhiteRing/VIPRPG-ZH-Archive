@@ -1,6 +1,6 @@
-# EasyRPG 在线游玩架构设计
+# EasyRPG 在线游玩架构
 
-本文档描述 VIPRPG-ZH-Archive 如何在不把完整游戏 ZIP 写入 R2 的前提下，引入 EasyRPG Web Player，让用户可以在浏览器中安装并游玩已归档的 RPG Maker 2000/2003 游戏。
+本文档定义 VIPRPG-ZH-Archive 当前 EasyRPG Web Player 的稳定边界：在不把完整游戏 ZIP 写入 R2 的前提下，让用户可以在浏览器中安装并游玩已归档的 RPG Maker 2000/2003 游戏。
 
 相关主文档：
 
@@ -13,13 +13,13 @@
 - R2 仍然只保存 canonical 数据：`blobs/`、`core-packs/`、`manifests/` 和元数据资产。
 - 完整游戏 ZIP 只允许作为响应流、Workers Cache/CDN 边缘缓存，或浏览器下载过程中的临时数据存在。
 - 浏览器拿到 ZIP 后在本地解包，解包完成后丢弃 ZIP，不长期保存完整 ZIP。
-- 解包后的 Web Play 运行目录写入 OPFS；MVP 跳过所有 `.txt`、`.exe`、`.dll` 文件，这些文件仍保留在普通下载 ZIP 中。
+- 解包后的 Web Play 运行目录写入 OPFS；安装器跳过所有 `.txt`、`.exe`、`.dll` 文件，这些文件仍保留在普通下载 ZIP 中。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
-- Cache API 不作为游戏文件主存储；只用于 EasyRPG runtime 壳资源缓存或后续 fallback。
-- EasyRPG 存档先沿用 Emscripten IDBFS；存档云同步不进入 MVP。
+- Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
+- EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
 
 ## 2. 总体流程
@@ -54,7 +54,7 @@ GET /play/games/{playKey}/index.json
 GET /play/games/{playKey}/{path...}
 ```
 
-`/play/runtime/easyrpg/{version}/` 可以通过 `public/play/runtime/easyrpg/{version}/` 提供静态文件，也可以由专用路由提供。MVP 优先使用静态文件，升级 EasyRPG 时新增版本目录，不覆盖旧目录。
+`/play/runtime/easyrpg/{version}/` 由 `public/play/runtime/easyrpg/{version}/` 提供静态文件。当前版本路径由 `easyRpgRuntimeBasePath` 统一生成；升级 EasyRPG 时新增版本目录，不覆盖旧目录。
 
 ### 3.2 Play key
 
@@ -68,13 +68,13 @@ web_play_installer_version
 easyrpg_runtime_version
 ```
 
-建议生成：
+当前由 `lib/archive/web-play.ts` 的 `buildWebPlayKey()` 生成：
 
 ```text
 playKey = av-{archiveVersionId}-{manifestSha256Short}-{downloadZipBuilderVersion}-{webPlayInstallerVersion}-{easyrpgRuntimeVersion}
 ```
 
-任一版本键变化，都视为新的本地安装。旧安装可以继续保留，也可以由缓存管理页提示清理。
+任一版本键变化，都视为新的本地安装。当前页面只管理当前 `playKey`，不会自动复用旧版本的本地数据。
 
 ## 4. CDN ZIP Bootstrap
 
@@ -96,7 +96,7 @@ GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBu
 
 ## 5. OPFS 本地目录
 
-建议 OPFS 根目录：
+当前 OPFS 根目录：
 
 ```text
 OPFS/
@@ -115,12 +115,12 @@ OPFS/
 - 安装开始前将 `status` 写为 `installing`。
 - 安装过程中顺序写入 `games/{playKey}/packs/*.pack`。
 - 全部 entry 写入、`index.json` 和 `pack-index.json` 生成完成后，最后一次事务把 `status` 改为 `ready`。
-- 浏览器崩溃后，如果看到长期停留的 `installing`，UI 提供“继续安装”或“清理重装”。
+- 浏览器崩溃后，如果看到遗留的 `installing`，UI 提供“清理并重装”。
 - `ready` 之前 Service Worker 不把该目录当作可运行游戏。
 
 ## 6. IndexedDB 状态
 
-MVP 建议建立两个 object store。
+当前使用两个 object store。
 
 ### 6.1 `web_play_installations`
 
@@ -182,7 +182,7 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 - ZIP fetch 或读取过程中出现 `network error`、`Failed to fetch`、HTTP 408/429/5xx、连接重置或 ZIP 截断这类可重试错误时，安装器最多自动重试 3 次。每次重试前必须清理半成品 OPFS 目录和 IndexedDB 文件记录；路径冲突、ZIP 格式不兼容、空间不足、取消安装等确定性错误不能自动重试。
 - 安装完成后生成 `index.json` 和 `pack-index.json`，再把安装状态改为 `ready`。
 
-MVP 不使用 `fflate` 的流式 unzip 处理下载 ZIP。下载 ZIP 已固定为 STORE + local header 明确 size/CRC，安装器只需要极小的顺序 ZIP parser，不需要完整 unzip 抽象。
+安装器不使用 `fflate` 的流式 unzip 处理下载 ZIP。下载 ZIP 已固定为 STORE + local header 明确 size/CRC，安装器只需要极小的顺序 ZIP parser，不需要完整 unzip 抽象。
 
 ## 8. EasyRPG `index.json`
 
@@ -234,8 +234,8 @@ Service Worker scope 固定覆盖 `/play/`。
 - `index.json` 直接从 OPFS 根目录读取。
 - 其他路径读取 `pack-index.json`，按小写规范化路径定位 `{ pack, offset, length }`，再从 `packs/{pack}` 切片返回 `new Response(slice.stream(), headers)`。
 - 设置合适的 `Content-Type`；未知类型使用 `application/octet-stream`。
-- 缺失文件返回 404，并把缺失路径发送到页面日志面板。
-- MVP 不做按文件云端 fallback；避免用户以为已经本地安装完成但仍持续消耗 R2。
+- 缺失文件返回 404，并通知页面显示重新安装提示。
+- 不做按文件云端回退；避免用户以为已经本地安装完成但仍持续消耗 R2。
 
 ## 10. 在线游玩页面
 
@@ -245,11 +245,11 @@ Service Worker scope 固定覆盖 `/play/`。
 - 未安装：显示游戏大小、浏览器存储用量、安装按钮。
 - 安装中：显示 ZIP 下载进度、解包进度、当前文件、已写入容量；关闭页面前用 `beforeunload` 拦截。
 - 安装失败：显示失败阶段、错误和“清理重装”。
-- 已安装：显示启动按钮、删除本地缓存、重新安装、最后游玩时间；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
+- 已安装：显示启动按钮、删除本地缓存和重新安装；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
 - 运行中：展示 EasyRPG canvas、全屏按钮、返回作品页、日志面板；全屏使用外层播放器容器的浏览器原生 fullscreen，不调用 EasyRPG runtime 自带 fullscreen。
-- 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。MVP 不尝试从半截 ZIP 继续恢复。
+- 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
-缓存管理页面可以先并入 `/play/{archiveVersionId}`，后续再独立为 `/settings/storage` 或 `/me/storage`。
+本地缓存管理并入 `/play/{archiveVersionId}`。
 
 ## 11. EasyRPG runtime
 
@@ -265,17 +265,17 @@ public/play/runtime/easyrpg/{version}/index.wasm
 - `index.wasm` 返回 `Content-Type: application/wasm`。
 - runtime 文件使用长期 immutable 缓存；升级时新增 `{version}` 目录。
 - 页面直接加载同源 runtime，不使用跨域 iframe。
-- 如需 iframe，必须是同源 iframe；但 MVP 优先直接在 React 页面中挂载 canvas 并调用 `createEasyRpgPlayer(...)`。
+- React 页面直接挂载 canvas 并调用 `createEasyRpgPlayer(...)`，不使用 iframe。
 - CSP 需要允许同源 WASM 执行；具体指令在实现时以当前浏览器和 OpenNext 输出验证为准。
 
 ## 12. 存档策略
 
-MVP 不把游戏存档放入 OPFS 游戏目录。
+游戏存档不放入 OPFS 游戏目录。
 
 - EasyRPG 存档沿用 Emscripten IDBFS。
 - 游戏资源安装和存档生命周期分开。
-- 删除本地游戏缓存时，默认不删除存档；UI 需要单独提供“清除本游戏存档”。
-- 后续如做云存档同步，再单独设计 save slots、备份和冲突合并。
+- 删除本地游戏缓存时不删除存档。
+- 当前不提供单独清除存档、导出、导入或云同步界面。
 
 ## 13. 浏览器存储策略
 
@@ -297,16 +297,16 @@ const persisted = await navigator.storage.persist();
 ## 14. 安全和兼容
 
 - ZIP entry 解包必须拒绝路径穿越。
-- 同一页面内同一 `playKey` 同时只能有一个安装任务；刷新或崩溃后的遗留 `installing` 状态按中断安装处理并清理重装。跨标签页强锁可在后续缓存管理阶段补入。
+- 同一页面内同一 `playKey` 同时只能有一个安装任务；刷新或崩溃后的遗留 `installing` 状态按中断安装处理并清理重装。当前不提供跨标签页强锁，同时在多个标签安装同一 `playKey` 不属于支持场景。
 - 安装完成前不能启动 EasyRPG。
 - `rpg_maker_2003_maniac` 作品允许在线游玩，但页面显示兼容性提示。
-- 非 UTF-8 路径问题会直接影响 EasyRPG 运行；如果真实样本出现路径损坏，应回到主架构中的 `path_bytes_b64` 暂缓决策重新评估。
+- 非 UTF-8 路径问题会直接影响 EasyRPG 运行；如果真实样本出现路径损坏，应回到主架构中的 `pathBytesB64` 暂缓决策重新评估。
 - Service Worker 和 OPFS 都是同源能力，跨域官方播放器无法访问本站 OPFS，因此不能用跨域 EasyRPG iframe。
-- Service Worker 对非法路径返回 400，对缺失文件返回 404，并把路径和错误原因发送到页面日志面板。
+- Service Worker 对非法路径返回 400，对缺失文件返回 404 并通知页面；页面当前显示通用的重新安装提示，不承诺展示具体缺失路径。
 
-## 15. MVP 验收
+## 15. 当前验收边界
 
-- 所有可归档的 ArchiveVersion 显示在线游玩入口。
+- 已发布且存在当前已发布归档版本的作品显示在线游玩入口。
 - RPG Maker 2003 Maniac 作品显示兼容性提示。
 - 首次点击在线游玩时显示下载进度、解包进度、当前文件和本地缓存状态。
 - 下载 ZIP 复用现有下载 URL；命中 Workers Cache/CDN 时下载观测记录不增加 R2 Get。
@@ -314,28 +314,27 @@ const persisted = await navigator.storage.persist();
 - `pack-index.json` 中不包含 `.txt`、`.exe`、`.dll` 文件。
 - 刷新页面后无需重新请求云端即可启动已安装游戏。
 - 删除本地缓存后再次进入会重新安装。
-- 浏览器崩溃或安装中关闭页面后，再进入能清理或继续安装。
+- 浏览器崩溃或安装中关闭页面后，再进入能清理并重新安装。
 - EasyRPG 能启动一个已知可玩的样本游戏。
-- 缺失文件会显示在前端日志面板中。
+- 缺失文件会触发前端错误和重新安装提示。
 - 运行中不能删除本地缓存或重新安装；重复点击启动不会重复加载 runtime。
 
-## 15.1 MVP 收束记录
+## 15.1 实现约束
 
 - 资源索引必须同时写入真实文件名和图像/音频资源的去扩展名别名。EasyRPG 会以 `System/sys-thin2`、`Title/titq`、`Music/Ad Astra` 这类无扩展名路径查询资源，仅保存 `*.png` / `*.ogg` 键会导致 Web 端素材缺失。
 - Web Play 本地写入跳过所有 `.txt`、`.exe`、`.dll` 文件。EasyRPG Web Player 不依赖 Windows 可执行文件和 DLL，RPG Maker 2000/2003 运行时也不依赖说明文本；跳过后可以减少 `StringScripts*` 等大量小文本和运行时二进制造成的 OPFS 写入压力。
-- 2026-05-03 B + Pack 改造后，安装器不再逐文件写入 OPFS，而是边下载边顺序写入 pack 文件。这个取舍消除了大量小文件的 `createWritable/close` 成本，并保留普通下载 ZIP/CDN cache 的复用。
-- 2026-05-03 `/play/13` 诊断显示，未聚合写入时 107.10 MB 本地安装耗时 37.08s，其中 OPFS write 等待 33.14s、write 调用 7185 次；改为约 1 MB 聚合写入后，同样安装耗时 23.26s，OPFS write 等待降至 1.47s、write 调用降至 106 次。
+- 安装器不逐文件写入 OPFS，而是边下载边顺序写入 pack 文件。这个取舍减少大量小文件的 `createWritable/close` 成本，并保留普通下载 ZIP/CDN cache 的复用。
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
 - 全屏应让外层播放器容器进入浏览器原生 fullscreen。直接调用 EasyRPG/Emscripten runtime 的 fullscreen 路径会在当前 runtime 下造成 canvas 尺寸异常，表现为黑屏。
-- 当前 MVP 明确支持最新版 Chrome / Edge。Firefox / Safari 的 OPFS、持久化存储和 WASM 行为后续再做兼容性承诺。
+- 当前兼容目标是支持 OPFS、Service Worker 和 WASM 的 Chromium 桌面浏览器；不承诺 Firefox 和 Safari 的行为一致。
 
-## 16. 后续扩展
+## 16. 当前非目标
 
-- 本地缓存管理页独立化。
-- 跨标签页安装锁和半成品安装修复。
-- 安装校验和修复：按 `pack-index.json` 中的 CRC32 和 canonical manifest SHA-256 检查 pack 切片。
+- 独立的本地缓存管理页。
+- 跨标签页安装锁和半成品续传。
+- 按 `pack-index.json` 中的 CRC32 和 canonical manifest SHA-256 修复 pack 切片。
 - 存档导出、导入和云同步。
-- 对超大游戏增加下载前空间预估、排队安装和后台恢复策略。
+- 超大游戏的排队安装和后台恢复。
 
 ## 17. 参考链接
 

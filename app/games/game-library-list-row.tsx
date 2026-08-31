@@ -26,14 +26,14 @@ export function GameLibraryListRow({ work }: { work: GameWorkSummary }) {
   return (
     <article className="flex items-start gap-3.5 py-3.5">
       <Link
-        className="group relative block aspect-video w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
+        className="group relative block aspect-4/3 w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
         href={`/games/${work.id}`}
       >
         {work.previewBlobSha256 ? (
           <Image
             alt={title}
             className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-            height={72}
+            height={96}
             src={`/api/media/blobs/${work.previewBlobSha256}`}
             unoptimized
             width={128}

@@ -54,15 +54,19 @@ function parseMetadata(form: FormData) {
     originalTitle: readRequiredString(form.get("original_title"), "original_title"),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
+    originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(form.get("engine_family"), "engine_family"),
     isOriginal: form.has("is_original"),
+    isTranslation: form.has("is_translation"),
     language: readRequiredString(form.get("language"), "language"),
     status: status as "published" | "hidden",
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
     characters: readList(form.get("characters")),
-    authors: readList(form.get("authors")),
+    authors: singleName(form.get("author")),
+    translators: singleName(form.get("translator")),
     downloadUrl: readNullableString(form.get("download_url")),
+    sourceUrl: readNullableString(form.get("source_url")),
   };
 }
 
@@ -90,4 +94,9 @@ function readList(value: FormDataEntryValue | null): string[] {
     .split(/[,，\r\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function singleName(value: FormDataEntryValue | null): string[] {
+  const name = readNullableString(value);
+  return name ? [name] : [];
 }

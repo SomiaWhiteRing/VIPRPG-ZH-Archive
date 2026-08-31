@@ -10,14 +10,14 @@ export function CatalogListRow({ catalog }: { catalog: CatalogSummary }) {
     <article className="flex items-start gap-3.5 py-3.5">
       <Link
         aria-label={`查看目录：${catalog.title}`}
-        className="group relative block aspect-video w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
+        className="group relative block aspect-4/3 w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
         href={href}
       >
         {catalog.coverBlobSha256 ? (
           <Image
             alt=""
             className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-            height={72}
+            height={96}
             src={`/api/media/blobs/${catalog.coverBlobSha256}`}
             unoptimized
             width={128}

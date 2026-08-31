@@ -17,11 +17,7 @@ npm install
 Copy-Item .env.example .env.local
 ```
 
-如果已经有自己的 `.env.local`，不要覆盖它；只需确认至少设置了 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。本地登录开发时可在 `.env.local` 加上：
-
-```dotenv
-TURNSTILE_ENABLED=false
-```
+如果已经有自己的 `.env.local`，不要覆盖它；只需确认至少设置了 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。
 
 首次使用或需要演示数据时，初始化本地 D1 和 R2：
 
@@ -54,14 +50,16 @@ npm run dev -- -p 3001
 ## 常用命令
 
 ```powershell
-npm run check          # 类型、lint 和快速静态边界
-npm test               # 隔离 D1/R2 的单条 Chromium 综合流程
-npm run smoke:staging  # 已部署 staging 的最小健康检查
-npm run build          # Next.js 生产构建
-npm run preview        # OpenNext/Cloudflare Workers 本地预览
+npm run check           # 类型、lint、静态架构和安全规则
+npm test                # 隔离 D1/API 的持久契约，不启动浏览器
+npm run test:flow       # 预生产关键流程：Chromium、Worker、R2/OPFS
+npm run verify:preprod  # check + test:flow + production build
+npm run smoke:staging   # 已部署 staging 的最小健康检查
+npm run build           # Next.js 生产构建
+npm run preview         # OpenNext/Cloudflare Workers 本地预览
 ```
 
-首次在本机运行综合测试前执行 `npx playwright install chromium`。`npm test` 不依赖开发 seed，也不修改 `.wrangler/state`；成功后删除临时 D1/R2，失败时输出保留的日志与截图目录。
+敏捷开发默认按改动选择 `npm run check` 或 `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。两种测试都不依赖开发 seed，也不修改 `.wrangler/state`；成功后删除临时状态，失败时输出保留的日志与截图目录。
 
 `npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
 
@@ -75,14 +73,13 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 
 ## Cloudflare 部署
 
-部署前先配置 Cloudflare 凭据和远端 secrets。生产环境命令具有外部副作用，请确认目标环境后再执行：
+部署前先配置 Cloudflare 凭据和远端 secrets，并运行预生产验收：
 
 ```powershell
-npm run deploy:staging
-npm run deploy
+npm run verify:preprod
 ```
 
-详细的 OpenNext、D1、R2 和 GitHub Actions 说明见 [`docs/README.md`](docs/README.md) 及其中链接的架构文档。
+远程 D1 migration、部署和 smoke test 必须按目标环境串行执行。具体命令不在快速入门中复制，以 [`docs/README.md`](docs/README.md) 链接的 OpenNext 与 GitHub Actions 运行手册为准。
 
 ## 目录概览
 

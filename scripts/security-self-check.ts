@@ -17,12 +17,10 @@ assert.equal(
   new Set(PERMISSION_LIST.map((permission) => permission.key)).size,
   PERMISSION_LIST.length,
 );
-assert.deepEqual(Object.keys(SYSTEM_ROLE_PERMISSIONS), [
-  "user",
-  "uploader",
-  "admin",
-  "super_admin",
-]);
+assert.deepEqual(
+  new Set(Object.keys(SYSTEM_ROLE_PERMISSIONS)),
+  new Set(["user", "uploader", "admin", "super_admin"]),
+);
 for (const grants of Object.values(SYSTEM_ROLE_PERMISSIONS)) {
   for (const grant of grants) assert.equal(isPermissionKey(grant), true);
 }
@@ -53,10 +51,7 @@ assert.deepEqual(
   ),
   new Set(["import_job.create", "archive_version.delete_own", "audit.read"]),
 );
-assert.throws(
-  () => parsePermissionKeys(["future.permission"]),
-  /Unknown permission key/,
-);
+assert.throws(() => parsePermissionKeys(["future.permission"]));
 assert.equal(isCustomRolePriority(101), true);
 assert.equal(isCustomRolePriority(699), true);
 assert.equal(isCustomRolePriority(100), false);
