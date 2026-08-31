@@ -51,6 +51,12 @@ type RelationRow = {
   created_by_user_id: number | null;
 };
 
+type TranslationRoleRow = {
+  source_work_id: number;
+  target_work_id: number;
+  target_role: TranslationRole;
+};
+
 export async function createWorkRelation(
   input: WorkRelationInput,
   actor: ArchiveUser,
@@ -327,25 +333,66 @@ export async function createTranslationRelation(
   if (input.targetRole !== "original" && input.targetRole !== "translation")
     throw new HttpError(400, "翻译角色不合法");
   assertCanCreateTranslationRelation(actor);
-  await assertAccessibleWorks(
-    actor,
-    "translation",
-    input.sourceWorkId,
-    input.targetWorkId,
-  );
-  const works = await getD1()
-    .prepare(`SELECT id,language,status FROM works WHERE id IN (?,?)`)
-    .bind(input.sourceWorkId, input.targetWorkId)
-    .all<{ id: number; language: string; status: string }>();
-  const source = works.results?.find((work) => work.id === input.sourceWorkId);
-  const target = works.results?.find((work) => work.id === input.targetWorkId);
-  if (
-    !source ||
-    !target ||
-    source.status === "deleted" ||
-    target.status === "deleted"
-  )
-    throw new HttpError(404, "目标游戏不存在");
+  const database = getD1();
+  const canReadPrivate = actor.permissionKeys.includes("work.read_private") ||
+    actor.permissionKeys.includes("translation_relation.manage_any");
+  const canReadOwn = actor.permissionKeys.includes("work.update_own");
+  const originalSourceId = input.targetRole === "original"
+    ? input.sourceWorkId
+    : input.targetWorkId;
+  const validation = await database.batch([
+    database
+      .prepare(
+        `SELECT w.id,w.language
+         FROM works w
+         WHERE w.id IN (?,?) AND w.status<>'deleted'
+           AND (
+             w.status='published' OR ?=1 OR
+             (?=1 AND EXISTS(
+               SELECT 1 FROM work_uploaders wu
+               WHERE wu.work_id=w.id AND wu.user_id=?
+             ))
+           )`,
+      )
+      .bind(
+        input.sourceWorkId,
+        input.targetWorkId,
+        canReadPrivate ? 1 : 0,
+        canReadOwn ? 1 : 0,
+        actor.id,
+      ),
+    database
+      .prepare(
+        `SELECT source_work_id,target_work_id,target_role
+         FROM translation_relations
+         WHERE source_work_id IN (?,?) OR target_work_id IN (?,?)`,
+      )
+      .bind(input.sourceWorkId, input.targetWorkId, input.sourceWorkId, input.targetWorkId),
+    database
+      .prepare(
+        `SELECT 1 AS present FROM translation_relations
+         WHERE source_work_id=? AND target_role='original' LIMIT 1`,
+      )
+      .bind(originalSourceId),
+    database
+      .prepare(
+        `SELECT 1 AS present FROM translation_relations
+         WHERE (source_work_id=? AND target_work_id=?)
+            OR (source_work_id=? AND target_work_id=?)
+         LIMIT 1`,
+      )
+      .bind(input.sourceWorkId, input.targetWorkId, input.targetWorkId, input.sourceWorkId),
+    database
+      .prepare(`SELECT MAX(relation_order) AS max_order FROM translation_relations WHERE source_work_id=?`)
+      .bind(input.sourceWorkId),
+    database
+      .prepare(`SELECT MAX(relation_order) AS max_order FROM translation_relations WHERE source_work_id=?`)
+      .bind(input.targetWorkId),
+  ]);
+  const works = (validation[0].results ?? []) as Array<{ id: number; language: string }>;
+  const source = works.find((work) => work.id === input.sourceWorkId);
+  const target = works.find((work) => work.id === input.targetWorkId);
+  if (!source || !target) throw new HttpError(404, "目标游戏不存在");
   if (
     !isLanguageCode(source.language) ||
     !isLanguageCode(target.language) ||
@@ -357,60 +404,25 @@ export async function createTranslationRelation(
     input.targetRole === "original" ? "translation" : "original";
   const targetGameRole: TranslationRole =
     sourceGameRole === "original" ? "translation" : "original";
-  const currentRole = await getTranslationRole(input.sourceWorkId);
+  const relationRows = (validation[1].results ?? []) as TranslationRoleRow[];
+  const currentRole = translationRoleFromRows(input.sourceWorkId, relationRows);
   if (currentRole && currentRole !== sourceGameRole)
     throw new HttpError(400, "一个游戏不能同时作为原版和译版");
-  const targetExistingRole = await getTranslationRole(input.targetWorkId);
+  const targetExistingRole = translationRoleFromRows(input.targetWorkId, relationRows);
   if (targetExistingRole && targetExistingRole !== targetGameRole)
     throw new HttpError(400, "一个游戏不能同时作为原版和译版");
   const targetRole =
     input.targetRole === "original" ? "translation" : "original";
-  if (input.targetRole === "original") {
-    const existing = await getD1()
-      .prepare(
-        `SELECT 1 FROM translation_relations WHERE source_work_id=? AND target_role='original' LIMIT 1`,
-      )
-      .bind(input.sourceWorkId)
-      .first();
-    if (existing) throw new HttpError(409, "一个译本最多关联一个原版");
-  } else {
-    const existing = await getD1()
-      .prepare(
-        `SELECT 1 FROM translation_relations WHERE source_work_id=? AND target_role='original' LIMIT 1`,
-      )
-      .bind(input.targetWorkId)
-      .first();
-    if (existing) throw new HttpError(409, "一个译本最多关联一个原版");
-  }
-  const pairExisting = await getD1()
-    .prepare(
-      `SELECT 1 FROM translation_relations WHERE (source_work_id=? AND target_work_id=?) OR (source_work_id=? AND target_work_id=?) LIMIT 1`,
-    )
-    .bind(
-      input.sourceWorkId,
-      input.targetWorkId,
-      input.targetWorkId,
-      input.sourceWorkId,
-    )
-    .first();
-  if (pairExisting) throw new HttpError(409, "该翻译关联已存在");
+  if (validation[2].results?.length) throw new HttpError(409, "一个译本最多关联一个原版");
+  if (validation[3].results?.length) throw new HttpError(409, "该翻译关联已存在");
 
-  const database = getD1();
   const order =
     input.relationOrder === undefined
-      ? await nextOrder(
-          "translation_relations",
-          "source_work_id",
-          input.sourceWorkId,
-        )
+      ? Number((validation[4].results?.[0] as { max_order?: number | null } | undefined)?.max_order ?? -1) + 1
       : finiteOrder(input.relationOrder);
   const inverseOrder =
     input.relationOrder === undefined
-      ? await nextOrder(
-          "translation_relations",
-          "source_work_id",
-          input.targetWorkId,
-        )
+      ? Number((validation[5].results?.[0] as { max_order?: number | null } | undefined)?.max_order ?? -1) + 1
       : order;
   let result: Awaited<ReturnType<typeof database.batch>>;
   try {
@@ -586,20 +598,12 @@ async function relationById(id: number): Promise<RelationRow | null> {
     .first<RelationRow>();
 }
 
-async function getTranslationRole(
+function translationRoleFromRows(
   workId: number,
-): Promise<TranslationRole | null> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT source_work_id,target_work_id,target_role FROM translation_relations WHERE source_work_id=? OR target_work_id=?`,
-    )
-    .bind(workId, workId)
-    .all<{
-      source_work_id: number;
-      target_work_id: number;
-      target_role: TranslationRole;
-    }>();
-  for (const row of rows.results ?? []) {
+  rows: TranslationRoleRow[],
+): TranslationRole | null {
+  for (const row of rows) {
+    if (row.source_work_id !== workId && row.target_work_id !== workId) continue;
     return row.source_work_id === workId
       ? row.target_role === "original"
         ? "translation"

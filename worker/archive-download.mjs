@@ -96,7 +96,6 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
           .then(() => recordMissAccess)
-          .then(() => markDownloadCachePut(env.DB, cacheKey))
           .catch((error) => {
             console.warn("Native download cache put failed", error?.message ?? error);
           }),
@@ -725,19 +724,6 @@ async function recordDownloadAccess(db, input) {
     });
 }
 
-async function markDownloadCachePut(db, cacheKey) {
-  await db
-    .prepare(
-      `UPDATE download_builds
-      SET last_cache_put_at = CURRENT_TIMESTAMP
-      WHERE cache_key = ?`,
-    )
-    .bind(cacheKey)
-    .run()
-    .catch((error) => {
-      console.warn("Download cache put observability write failed", error?.message ?? error);
-    });
-}
 
 async function recordDownloadFailure(db, input) {
   await db

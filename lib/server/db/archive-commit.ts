@@ -13,19 +13,21 @@ import {
 } from "@/lib/original-release-date";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
-import { findExistingObjects } from "@/lib/server/db/archive-objects";
 import { chunkArray } from "@/lib/server/db/chunks";
 import { getD1 } from "@/lib/server/db/d1";
-import { requiredOwnedImportJob } from "@/lib/server/db/import-jobs";
+import type { ImportJobRow } from "@/lib/server/db/import-jobs";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { putManifest } from "@/lib/server/storage/archive-bucket";
-import { validateCorePackReferences } from "@/lib/server/storage/core-pack-validation";
+import {
+  validateCorePackReferences,
+  type CorePackMetadata,
+} from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
-  importJobId: number;
+  job: ImportJobRow;
   user: ArchiveUser;
   manifestSha256: string;
   manifestJson: string;
@@ -42,13 +44,14 @@ export type CommitArchiveImportResult = {
   corePackCount: number;
 };
 
-type IdRow = {
-  id: number;
+type BlobMetadata = {
+  sha256: string;
+  sizeBytes: number;
 };
 
-type CorePackIdRow = {
-  id: number;
-  sha256: string;
+type ArchiveObjectLedger = {
+  blobs: Map<string, BlobMetadata>;
+  corePacks: Map<string, CorePackMetadata>;
 };
 
 type ArchiveVersionLookupRow = {
@@ -61,7 +64,7 @@ type ArchiveVersionLookupRow = {
 export async function commitArchiveImport(
   input: CommitArchiveImportInput,
 ): Promise<CommitArchiveImportResult> {
-  const job = await requiredOwnedImportJob(input.importJobId, input.user);
+  const job = input.job;
   if (job.status !== "committing") {
     throw new HttpError(409, "导入任务尚未进入提交阶段");
   }
@@ -125,15 +128,12 @@ export async function commitArchiveImport(
   const corePackHashes = manifest.corePacks.map((corePack) =>
     normalizeSha256(corePack.sha256),
   );
-  const existing = await findExistingObjects({
-    blobSha256: allBlobHashes,
-    corePackSha256: corePackHashes,
-  });
+  const objectLedger = await loadArchiveObjectLedger(allBlobHashes, corePackHashes);
   const missingBlobs = allBlobHashes.filter(
-    (sha256) => !existing.blobs.has(sha256),
+    (sha256) => !objectLedger.blobs.has(sha256),
   );
   const missingCorePacks = corePackHashes.filter(
-    (sha256) => !existing.corePacks.has(sha256),
+    (sha256) => !objectLedger.corePacks.has(sha256),
   );
 
   if (missingBlobs.length > 0 || missingCorePacks.length > 0) {
@@ -143,19 +143,14 @@ export async function commitArchiveImport(
     );
   }
 
-  await validateBlobReferences(manifest);
-  await validateCorePackReferences(manifest);
+  validateBlobReferences(manifest, objectLedger.blobs);
+  await validateCorePackReferences(manifest, objectLedger.corePacks);
   const workId = await resolveTargetWork(
     metadata,
     input.user,
     job.work_id,
-    input.importJobId,
+    job.id,
   );
-  const work = await getD1()
-    .prepare(`SELECT id FROM works WHERE id = ? LIMIT 1`)
-    .bind(workId)
-    .first<{ id: number }>();
-  if (!work) throw new Error("Game was not created");
   if (metadata.target.mode === "update") {
     const preserved = await getD1()
       .prepare(
@@ -194,13 +189,6 @@ export async function commitArchiveImport(
     );
     validateManifest(manifest, metadata);
   }
-  await getD1()
-    .prepare(
-      `UPDATE import_jobs SET work_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    )
-    .bind(workId, input.importJobId)
-    .run();
-
   const existingArchiveVersion = await findReusableDraftByManifest(
     workId,
     manifestSha256,
@@ -227,15 +215,13 @@ export async function commitArchiveImport(
     archiveVersionId,
   });
 
-  const corePackIds = await loadCorePackIds(corePackHashes);
-  await updateObjectFirstSeen(archiveVersionId, blobHashes, corePackHashes);
-  await insertArchiveVersionRefs({
+  await writeArchiveObjectLinks({
     archiveVersionId,
-    manifest,
-    corePackIds,
+    blobHashes,
+    corePacks: corePackHashes.map((sha256) => objectLedger.corePacks.get(sha256)!),
   });
   await finalizeArchiveCommit({
-    importJobId: input.importJobId,
+    importJobId: job.id,
     workId,
     archiveVersionId,
     manifest,
@@ -255,9 +241,10 @@ export async function commitArchiveImport(
   };
 }
 
-async function validateBlobReferences(
+function validateBlobReferences(
   manifest: ArchiveManifest,
-): Promise<void> {
+  blobs: ReadonlyMap<string, BlobMetadata>,
+): void {
   const expected = new Map<string, number>();
   for (const file of manifest.files) {
     if (file.storage.kind !== "blob") continue;
@@ -271,29 +258,75 @@ async function validateBlobReferences(
     }
     expected.set(sha256, file.size);
   }
-  const hashes = [...expected.keys()];
-  for (const chunk of chunkArray(hashes, 100)) {
-    if (chunk.length === 0) continue;
-    const rows = await getD1()
-      .prepare(
-        `SELECT sha256,size_bytes FROM blobs WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
-      )
-      .bind(...chunk)
-      .all<{ sha256: string; size_bytes: number }>();
-    const found = new Map(
-      (rows.results ?? []).map((row) => [row.sha256, row.size_bytes]),
-    );
-    for (const sha256 of chunk) {
-      const size = found.get(sha256);
-      if (size === undefined)
-        throw new HttpError(409, `Blob record is missing: ${sha256}`);
-      if (size !== expected.get(sha256))
-        throw new HttpError(
-          400,
-          `Blob metadata does not match manifest: ${sha256}`,
-        );
+  for (const [sha256, expectedSize] of expected) {
+    const blob = blobs.get(sha256);
+    if (!blob) throw new HttpError(409, `Blob record is missing: ${sha256}`);
+    if (blob.sizeBytes !== expectedSize) {
+      throw new HttpError(400, `Blob metadata does not match manifest: ${sha256}`);
     }
   }
+}
+
+async function loadArchiveObjectLedger(
+  blobHashes: string[],
+  corePackHashes: string[],
+): Promise<ArchiveObjectLedger> {
+  const database = getD1();
+  const queries: Array<{
+    kind: "blob" | "core_pack";
+    statement: D1PreparedStatement;
+  }> = [];
+  for (const chunk of chunkArray(unique(blobHashes), 100)) {
+    queries.push({
+      kind: "blob",
+      statement: database
+        .prepare(
+          `SELECT sha256,size_bytes
+           FROM blobs
+           WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
+        )
+        .bind(...chunk),
+    });
+  }
+  for (const chunk of chunkArray(unique(corePackHashes), 100)) {
+    queries.push({
+      kind: "core_pack",
+      statement: database
+        .prepare(
+          `SELECT id,sha256,size_bytes,uncompressed_size_bytes,file_count
+           FROM core_packs
+           WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
+        )
+        .bind(...chunk),
+    });
+  }
+  const ledger: ArchiveObjectLedger = { blobs: new Map(), corePacks: new Map() };
+  if (queries.length === 0) return ledger;
+  const results = await database.batch(queries.map((query) => query.statement));
+  results.forEach((result, index) => {
+    if (queries[index].kind === "blob") {
+      for (const row of (result.results ?? []) as Array<{ sha256: string; size_bytes: number }>) {
+        ledger.blobs.set(row.sha256, { sha256: row.sha256, sizeBytes: row.size_bytes });
+      }
+      return;
+    }
+    for (const row of (result.results ?? []) as Array<{
+      id: number;
+      sha256: string;
+      size_bytes: number;
+      uncompressed_size_bytes: number;
+      file_count: number;
+    }>) {
+      ledger.corePacks.set(row.sha256, {
+        id: row.id,
+        sha256: row.sha256,
+        sizeBytes: row.size_bytes,
+        uncompressedSizeBytes: row.uncompressed_size_bytes,
+        fileCount: row.file_count,
+      });
+    }
+  });
+  return ledger;
 }
 
 function validateManifest(
@@ -1411,7 +1444,7 @@ async function insertArchiveVersion(input: {
   const manifest = input.manifest;
   const webPlayTotals = calculateWebPlayTotals(manifest);
 
-  await getD1()
+  const result = await getD1()
     .prepare(
       `INSERT INTO archive_versions (
         work_id,
@@ -1461,151 +1494,73 @@ async function insertArchiveVersion(input: {
       input.uploaderId,
     )
     .run();
-
-  return requiredId(
-    `SELECT id FROM archive_versions WHERE work_id = ? AND manifest_sha256 = ?`,
-    [input.workId, input.manifestSha256],
-  );
+  const archiveVersionId = Number(result.meta.last_row_id);
+  if (!Number.isSafeInteger(archiveVersionId) || archiveVersionId <= 0) {
+    throw new Error("Archive version was not created");
+  }
+  return archiveVersionId;
 }
 
-async function loadCorePackIds(hashes: string[]): Promise<Map<string, number>> {
-  const result = new Map<string, number>();
-
-  for (const sha256 of hashes) {
-    const row = await getD1()
-      .prepare(`SELECT id, sha256 FROM core_packs WHERE sha256 = ?`)
-      .bind(sha256)
-      .first<CorePackIdRow>();
-
-    if (!row) {
-      throw new Error(`Core pack record missing: ${sha256}`);
-    }
-
-    result.set(row.sha256, row.id);
-  }
-
-  return result;
-}
-
-async function updateObjectFirstSeen(
-  archiveVersionId: number,
-  blobHashes: string[],
-  corePackHashes: string[],
-): Promise<void> {
-  for (const chunk of chunkArray(blobHashes, 50)) {
-    if (chunk.length === 0) {
-      continue;
-    }
-
-    await getD1()
-      .prepare(
-        `UPDATE blobs
-        SET first_seen_archive_version_id = COALESCE(first_seen_archive_version_id, ?)
-        WHERE sha256 IN (${chunk.map(() => "?").join(", ")})`,
-      )
-      .bind(archiveVersionId, ...chunk)
-      .run();
-  }
-
-  for (const chunk of chunkArray(corePackHashes, 50)) {
-    if (chunk.length === 0) {
-      continue;
-    }
-
-    await getD1()
-      .prepare(
-        `UPDATE core_packs
-        SET first_seen_archive_version_id = COALESCE(first_seen_archive_version_id, ?)
-        WHERE sha256 IN (${chunk.map(() => "?").join(", ")})`,
-      )
-      .bind(archiveVersionId, ...chunk)
-      .run();
-  }
-}
-
-async function insertArchiveVersionRefs(input: {
+async function writeArchiveObjectLinks(input: {
   archiveVersionId: number;
-  manifest: ArchiveManifest;
-  corePackIds: Map<string, number>;
+  blobHashes: string[],
+  corePacks: CorePackMetadata[];
 }): Promise<void> {
-  const blobHashes = unique(
-    input.manifest.files
-      .filter((file) => file.storage.kind === "blob")
-      .map((file) =>
-        file.storage.kind === "blob"
-          ? normalizeSha256(file.storage.blobSha256)
-          : "",
-      ),
-  );
-  const corePackIds = uniqueNumbers(
-    input.manifest.corePacks.map((corePack) => {
-      const sha256 = normalizeSha256(corePack.sha256);
-      const id = input.corePackIds.get(sha256);
-
-      if (!id) {
-        throw new Error(`Core pack id missing: ${sha256}`);
-      }
-
-      return id;
-    }),
-  );
-
+  const database = getD1();
+  const statements: D1PreparedStatement[] = [];
+  const blobHashes = unique(input.blobHashes);
+  const corePacks = new Map(input.corePacks.map((pack) => [pack.sha256, pack]));
   for (const chunk of chunkArray(blobHashes, 50)) {
-    if (chunk.length === 0) {
-      continue;
-    }
-
+    statements.push(
+      database.prepare(
+        `UPDATE blobs
+         SET first_seen_archive_version_id=COALESCE(first_seen_archive_version_id,?)
+         WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
+      )
+      .bind(input.archiveVersionId, ...chunk),
+    );
+  }
+  for (const chunk of chunkArray([...corePacks.keys()], 50)) {
+    statements.push(
+      database.prepare(
+        `UPDATE core_packs
+         SET first_seen_archive_version_id=COALESCE(first_seen_archive_version_id,?)
+         WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
+      )
+      .bind(input.archiveVersionId, ...chunk),
+    );
+  }
+  for (const chunk of chunkArray(blobHashes, 50)) {
     const placeholders = chunk.map(() => "(?, ?)").join(", ");
     const values = chunk.flatMap((sha256) => [input.archiveVersionId, sha256]);
-
-    await getD1()
-      .prepare(
+    statements.push(
+      database.prepare(
         `INSERT OR IGNORE INTO archive_version_blob_refs (
           archive_version_id,
           blob_sha256
         ) VALUES ${placeholders}`,
       )
-      .bind(...values)
-      .run();
+      .bind(...values),
+    );
   }
-
+  const corePackIds = uniqueNumbers([...corePacks.values()].map((pack) => pack.id));
   for (const chunk of chunkArray(corePackIds, 50)) {
-    if (chunk.length === 0) {
-      continue;
-    }
-
     const placeholders = chunk.map(() => "(?, ?)").join(", ");
     const values = chunk.flatMap((corePackId) => [
       input.archiveVersionId,
       corePackId,
     ]);
-
-    await getD1()
-      .prepare(
+    statements.push(
+      database.prepare(
         `INSERT OR IGNORE INTO archive_version_core_pack_refs (
           archive_version_id,
           core_pack_id
         ) VALUES ${placeholders}`,
       )
-      .bind(...values)
-      .run();
+      .bind(...values),
+    );
   }
-}
-
-async function requiredId(
-  sql: string,
-  bindings: Array<string | number | null>,
-): Promise<number> {
-  const row = await getD1()
-    .prepare(sql)
-    .bind(...bindings)
-    .first<IdRow>();
-
-  if (!row) {
-    throw new Error("Expected row id was not found");
-  }
-
-  return row.id;
+  if (statements.length) await database.batch(statements);
 }
 
 function sumUniqueBlobBytes(manifest: ArchiveManifest): number {

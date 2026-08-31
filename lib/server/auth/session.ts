@@ -14,8 +14,8 @@ export async function createSessionCookie(userId: number, request: Request): Pro
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
   const fingerprints = await getRequestFingerprints(request);
   await getD1().prepare(`
-    INSERT INTO user_sessions (user_id, session_hash, expires_at, last_seen_at, ip_hash, user_agent_hash)
-    VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+    INSERT INTO user_sessions (user_id, session_hash, expires_at, ip_hash, user_agent_hash)
+    VALUES (?, ?, ?, ?, ?)
   `).bind(userId, sessionHash, expiresAt, fingerprints.ipHash, fingerprints.userAgentHash).run();
   return serializeCookie(SESSION_COOKIE_NAME, token, { maxAge: SESSION_TTL_SECONDS, requestUrl: request.url });
 }
@@ -24,20 +24,10 @@ export function createClearSessionCookie(requestUrl: string): string {
   return serializeCookie(SESSION_COOKIE_NAME, "", { maxAge: 0, requestUrl });
 }
 
-export async function readSessionFromCookieHeader(cookieHeader: string | null): Promise<SessionIdentity | null> {
+export async function getSessionHashFromCookieHeader(cookieHeader: string | null): Promise<string | null> {
   const token = parseCookie(cookieHeader, SESSION_COOKIE_NAME);
   if (!isSessionToken(token)) return null;
-  const row = await getD1().prepare(`
-    SELECT id, user_id FROM user_sessions
-    WHERE session_hash = ? AND revoked_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP
-    LIMIT 1
-  `).bind(await hashSessionToken(token)).first<{ id: number; user_id: number }>();
-  if (!row) return null;
-  await getD1().prepare(`
-    UPDATE user_sessions SET last_seen_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < datetime('now', '-1 day'))
-  `).bind(row.id).run();
-  return { id: row.id, userId: row.user_id };
+  return hashSessionToken(token);
 }
 
 export async function revokeSessionFromCookieHeader(cookieHeader: string | null): Promise<void> {

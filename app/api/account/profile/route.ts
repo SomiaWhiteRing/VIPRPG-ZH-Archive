@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     if (!auth) return redirectWithParams(request, "/login", { next: "/me/profile" });
     const form = await request.formData();
     await updateOwnProfile({
-      userId: auth.user.id,
+      user: auth.user,
       displayName: String(form.get("displayName") ?? ""),
       bio: String(form.get("bio") ?? ""),
     });

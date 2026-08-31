@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { getD1 } from "@/lib/server/db/d1";
 import { HttpError } from "@/lib/server/http/json";
@@ -83,31 +84,32 @@ type CommentRow = {
 };
 
 export async function recordWorkView(workId: number): Promise<void> {
-  await assertPublishedWork(workId);
-  await getD1()
+  const result = await getD1()
     .prepare(
       `INSERT INTO work_engagement_stats(work_id, view_count, updated_at)
-       VALUES (?, 1, CURRENT_TIMESTAMP)
+       SELECT id,1,CURRENT_TIMESTAMP FROM works WHERE id=? AND status='published'
        ON CONFLICT(work_id) DO UPDATE SET
          view_count = work_engagement_stats.view_count + 1,
          updated_at = CURRENT_TIMESTAMP`,
     )
     .bind(workId)
     .run();
+  if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
 }
 
 export async function recordWorkPlayed(workId: number, userId: number): Promise<void> {
-  await assertPublishedWork(workId);
-  await getD1()
+  const result = await getD1()
     .prepare(
       `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
-       VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+       FROM works WHERE id=? AND status='published'
        ON CONFLICT(work_id, user_id) DO UPDATE SET
          last_played_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP`,
     )
-    .bind(workId, userId)
+    .bind(userId, workId)
     .run();
+  if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
 }
 
 export async function setWorkFavorite(
@@ -115,26 +117,28 @@ export async function setWorkFavorite(
   userId: number,
   favorited: boolean,
 ): Promise<void> {
-  await assertPublishedWork(workId);
   const database = getD1();
-  await database.batch([
+  const results = await database.batch([
     database
       .prepare(
         `INSERT INTO user_work_entries(work_id, user_id, favorited_at, updated_at)
-         VALUES (?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END, CURRENT_TIMESTAMP)
+         SELECT id,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP
+         FROM works WHERE id=? AND status='published'
          ON CONFLICT(work_id, user_id) DO UPDATE SET
            favorited_at = excluded.favorited_at,
            updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(workId, userId, favorited ? 1 : 0),
+      .bind(userId, favorited ? 1 : 0, workId),
     database
       .prepare(
         `DELETE FROM user_work_entries
          WHERE work_id = ? AND user_id = ?
-           AND last_played_at IS NULL AND favorited_at IS NULL`,
+           AND last_played_at IS NULL AND favorited_at IS NULL
+           AND changes()=1`,
       )
       .bind(workId, userId),
   ]);
+  if ((results[0].meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
 }
 
 export async function getWorkCommunitySummary(workId: number, userId: number | null): Promise<{
@@ -143,7 +147,6 @@ export async function getWorkCommunitySummary(workId: number, userId: number | n
   commentCount: number;
   favoritedByMe: boolean;
 }> {
-  await assertPublishedWork(workId);
   const row = await getD1()
     .prepare(
       `SELECT
@@ -168,22 +171,16 @@ export async function getWorkCommunitySummary(workId: number, userId: number | n
 }
 
 export async function listPickerEmojis(): Promise<CustomEmojiDto[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT id,shortcode,name,category,image_blob_sha256,visible_in_picker,status
-       FROM custom_emojis
-       WHERE status = 'active' AND visible_in_picker = 1
-       ORDER BY category, shortcode`,
-    )
-    .all<EmojiRow>();
-  return (rows.results ?? []).map(mapEmoji);
+  return (await listAllRenderEmojis())
+    .filter((row) => row.status === "active" && row.visible_in_picker === 1)
+    .map(mapEmoji);
 }
 
 export async function listAdminEmojis(): Promise<CustomEmojiDto[]> {
   return (await listAllRenderEmojis()).map(mapEmoji);
 }
 
-export async function listAllRenderEmojis(): Promise<EmojiRow[]> {
+export const listAllRenderEmojis = cache(async (): Promise<EmojiRow[]> => {
   const rows = await getD1()
     .prepare(
       `SELECT id,shortcode,name,category,image_blob_sha256,visible_in_picker,status
@@ -193,7 +190,7 @@ export async function listAllRenderEmojis(): Promise<EmojiRow[]> {
     )
     .all<EmojiRow>();
   return rows.results ?? [];
-}
+});
 
 export async function createCustomEmoji(input: {
   shortcode: string;
@@ -268,7 +265,6 @@ export async function listRootComments(
   cursor: string | null,
   limit = 20,
 ): Promise<CommentPage> {
-  await assertPublishedWork(workId);
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
   const clauses = ["c.work_id = ?", "c.root_comment_id IS NULL", "c.status = 'published'", "u.status = 'active'"];
@@ -277,8 +273,10 @@ export async function listRootComments(
     clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
   }
-  const rows = await getD1()
-    .prepare(
+  const database = getD1();
+  const [workResult, rowsResult] = await database.batch([
+    database.prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`).bind(workId),
+    database.prepare(
       `SELECT c.id,c.work_id,c.root_comment_id,c.reply_to_comment_id,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
@@ -288,10 +286,10 @@ export async function listRootComments(
        FROM work_comments c JOIN users u ON u.id=c.user_id
        WHERE ${clauses.join(" AND ")}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
-    )
-    .bind(...(currentUserId ? [currentUserId, ...binds, size + 1] : [...binds, size + 1]))
-    .all<CommentRow>();
-  return await pageFromRows(rows.results ?? [], size, currentUserId);
+    ).bind(...(currentUserId ? [currentUserId, ...binds, size + 1] : [...binds, size + 1])),
+  ]);
+  if (!workResult.results?.length) throw new HttpError(404, "作品不存在");
+  return pageFromRows((rowsResult.results ?? []) as CommentRow[], size, currentUserId);
 }
 
 export async function listReplies(
@@ -300,12 +298,6 @@ export async function listReplies(
   cursor: string | null,
   limit = 20,
 ): Promise<CommentPage> {
-  const root = await getD1()
-    .prepare(`SELECT id,work_id,status FROM work_comments WHERE id=? AND root_comment_id IS NULL LIMIT 1`)
-    .bind(rootCommentId)
-    .first<{ id: number; work_id: number; status: string }>();
-  if (!root || root.status !== "published") throw new HttpError(404, "主楼不存在");
-  await assertPublishedWork(root.work_id);
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
   const clauses = ["c.root_comment_id = ?", "c.status IN ('published','deleted')"];
@@ -314,8 +306,18 @@ export async function listReplies(
     clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
   }
-  const rows = await getD1()
-    .prepare(
+  const database = getD1();
+  const [rootResult, rowsResult] = await database.batch([
+    database
+      .prepare(
+        `SELECT c.id
+         FROM work_comments c JOIN works w ON w.id=c.work_id
+         WHERE c.id=? AND c.root_comment_id IS NULL
+           AND c.status='published' AND w.status='published'
+         LIMIT 1`,
+      )
+      .bind(rootCommentId),
+    database.prepare(
       `SELECT c.id,c.work_id,c.root_comment_id,c.reply_to_comment_id,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
@@ -328,10 +330,10 @@ export async function listReplies(
        LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE ${clauses.join(" AND ")}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
-    )
-    .bind(...(currentUserId ? [currentUserId, ...binds, size + 1] : [...binds, size + 1]))
-    .all<CommentRow>();
-  return await pageFromRows(rows.results ?? [], size, currentUserId);
+    ).bind(...(currentUserId ? [currentUserId, ...binds, size + 1] : [...binds, size + 1])),
+  ]);
+  if (!rootResult.results?.length) throw new HttpError(404, "主楼不存在");
+  return pageFromRows((rowsResult.results ?? []) as CommentRow[], size, currentUserId);
 }
 
 export async function searchUserComments(input: {
@@ -346,14 +348,17 @@ export async function searchUserComments(input: {
     ? "AND c.status='published' AND root.status='published' AND u.status='active'"
     : "";
   const from = `FROM work_comments c JOIN works w ON w.id=c.work_id JOIN users u ON u.id=c.user_id LEFT JOIN work_comments root ON root.id=COALESCE(c.root_comment_id,c.id) WHERE c.user_id=? AND w.status='published' ${publicClause}`;
-  const total = await getD1().prepare(`SELECT COUNT(*) AS count ${from}`).bind(input.userId).first<{ count: number }>();
-  const rows = await getD1()
-    .prepare(`SELECT c.id,c.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
-    .bind(input.userId, pageSize, (page - 1) * pageSize)
-    .all<{ id: number; work_id: number; work_title: string; body: string; status: "published" | "hidden" | "deleted"; updated_at: string; like_count: number }>();
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    database.prepare(`SELECT COUNT(*) AS count ${from}`).bind(input.userId),
+    database
+      .prepare(`SELECT c.id,c.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
+      .bind(input.userId, pageSize, (page - 1) * pageSize),
+  ]);
+  const rows = (rowsResult.results ?? []) as Array<{ id: number; work_id: number; work_title: string; body: string; status: "published" | "hidden" | "deleted"; updated_at: string; like_count: number }>;
   return {
-    items: (rows.results ?? []).map((row) => ({ id: row.id, workId: row.work_id, workTitle: row.work_title, body: row.body, status: row.status, likeCount: row.like_count, updatedAt: row.updated_at })),
-    total: total?.count ?? 0,
+    items: rows.map((row) => ({ id: row.id, workId: row.work_id, workTitle: row.work_title, body: row.body, status: row.status, likeCount: row.like_count, updatedAt: row.updated_at })),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
     page,
     pageSize,
   };

@@ -47,25 +47,14 @@ export async function clearWebPlayFileRecords(playKey: string): Promise<void> {
 
 export async function deleteWebPlayInstallation(playKey: string): Promise<void> {
   const db = await openWebPlayDb();
-  await Promise.all([
-    deleteValue(db, STORE_INSTALLATIONS, playKey),
-    deleteByIndex(db, STORE_FILES, "playKey", playKey),
-  ]);
+  await deleteInstallationData(db, playKey);
   db.close();
 }
 
 export async function markWebPlayLastPlayed(playKey: string): Promise<void> {
-  const existing = await getWebPlayInstallation(playKey);
-
-  if (!existing) {
-    return;
-  }
-
-  await saveWebPlayInstallation({
-    ...existing,
-    lastPlayedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+  const db = await openWebPlayDb();
+  await updateLastPlayed(db, playKey);
+  db.close();
 }
 
 function openWebPlayDb(): Promise<IDBDatabase> {
@@ -132,16 +121,39 @@ function getValue<T>(
   });
 }
 
-function deleteValue(
-  db: IDBDatabase,
-  storeName: string,
-  key: IDBValidKey,
-): Promise<void> {
+function deleteInstallationData(db: IDBDatabase, playKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const request = tx.objectStore(storeName).delete(key);
+    const tx = db.transaction([STORE_INSTALLATIONS, STORE_FILES], "readwrite");
+    tx.objectStore(STORE_INSTALLATIONS).delete(playKey);
+    const request = tx
+      .objectStore(STORE_FILES)
+      .index("playKey")
+      .openCursor(IDBKeyRange.only(playKey));
 
     request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      cursor.delete();
+      cursor.continue();
+    };
+    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => resolve();
+  });
+}
+
+function updateLastPlayed(db: IDBDatabase, playKey: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_INSTALLATIONS, "readwrite");
+    const store = tx.objectStore(STORE_INSTALLATIONS);
+    const request = store.get(playKey);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const existing = request.result as WebPlayInstallation | undefined;
+      if (!existing) return;
+      const now = new Date().toISOString();
+      store.put({ ...existing, lastPlayedAt: now, updatedAt: now });
+    };
     tx.onerror = () => reject(tx.error);
     tx.oncomplete = () => resolve();
   });

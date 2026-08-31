@@ -254,8 +254,22 @@ export async function recordImportObjectUpload(input: {
   sizeBytes: number;
   durationMs: number;
 }): Promise<void> {
+  const result = await recordImportObjectUploadStatement(getD1(), input).run();
+  assertChanged(result, "Import job does not accept object uploads");
+}
+
+export function recordImportObjectUploadStatement(
+  database: D1Database,
+  input: {
+    id: number;
+    objectKind: "blob" | "core_pack";
+    sizeBytes: number;
+    durationMs: number;
+  },
+  options: { requirePreviousChange?: boolean } = {},
+): D1PreparedStatement {
   const isBlob = input.objectKind === "blob";
-  const result = await getD1()
+  return database
     .prepare(
       `UPDATE import_jobs
        SET status = CASE
@@ -269,8 +283,9 @@ export async function recordImportObjectUpload(input: {
          r2_put_count = r2_put_count + 1,
          upload_duration_ms = upload_duration_ms + ?,
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?
-         AND status IN ('preflighted', 'uploading_source', 'uploading_metadata')`,
+        WHERE id = ?
+          AND status IN ('preflighted', 'uploading_source', 'uploading_metadata')
+          ${options.requirePreviousChange ? "AND changes()=1" : ""}`,
     )
     .bind(
       isBlob ? 1 : 0,
@@ -279,9 +294,7 @@ export async function recordImportObjectUpload(input: {
       isBlob ? 0 : input.sizeBytes,
       Math.max(0, input.durationMs),
       input.id,
-    )
-    .run();
-  assertChanged(result, "Import job does not accept object uploads");
+    );
 }
 
 export async function markImportJobSourceReady(id: number): Promise<void> {
@@ -308,16 +321,38 @@ export async function markImportJobMetadataReady(id: number): Promise<void> {
   assertChanged(result, "Import job metadata state can no longer be changed");
 }
 
-export async function claimImportJobCommit(id: number): Promise<void> {
-  const result = await getD1()
-    .prepare(
-      `UPDATE import_jobs
-       SET status = 'committing', updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'uploading_metadata'`,
-    )
-    .bind(id)
-    .run();
-  assertChanged(result, "Import job is not ready to commit");
+export async function claimOwnedImportJobCommit(
+  id: number,
+  user: ArchiveUser,
+): Promise<ImportJobRow> {
+  const database = getD1();
+  const [jobResult, updateResult] = await database.batch([
+    database
+      .prepare(
+        `SELECT id,work_id,archive_version_id,uploader_id,status,source_name,
+          source_size_bytes,file_count,excluded_file_count,excluded_size_bytes,
+          file_policy_version,missing_blob_count,missing_core_pack_count,
+          missing_blob_size_bytes,missing_core_pack_size_bytes,
+          uploaded_blob_count,uploaded_blob_size_bytes,uploaded_core_pack_count,
+          uploaded_core_pack_size_bytes,manifest_put_count,manifest_size_bytes,
+          r2_put_count,preflight_duration_ms,upload_duration_ms,
+          commit_duration_ms,failed_stage,error_message,created_at,updated_at,
+          completed_at
+         FROM import_jobs WHERE id=? AND uploader_id=? LIMIT 1`,
+      )
+      .bind(id, user.id),
+    database
+      .prepare(
+        `UPDATE import_jobs
+         SET status='committing',updated_at=CURRENT_TIMESTAMP
+         WHERE id=? AND uploader_id=? AND status='uploading_metadata'`,
+      )
+      .bind(id, user.id),
+  ]);
+  const job = jobResult.results?.[0] as ImportJobRow | undefined;
+  if (!job) throw new HttpError(404, "Import job not found");
+  assertChanged(updateResult, "Import job is not ready to commit");
+  return { ...job, status: "committing" };
 }
 
 export async function recordImportCommitSucceeded(input: {

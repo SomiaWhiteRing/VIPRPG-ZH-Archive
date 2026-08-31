@@ -405,20 +405,18 @@ async function releaseArchiveVersionPurgeReservation(db, archiveVersionId) {
 }
 
 async function deleteArchiveVersionRefs(db, archiveVersionId) {
-  await db
-    .prepare(
+  await db.batch([
+    db.prepare(
       `DELETE FROM archive_version_blob_refs
        WHERE archive_version_id = ?`,
     )
-    .bind(archiveVersionId)
-    .run();
-  await db
-    .prepare(
+    .bind(archiveVersionId),
+    db.prepare(
       `DELETE FROM archive_version_core_pack_refs
        WHERE archive_version_id = ?`,
     )
-    .bind(archiveVersionId)
-    .run();
+    .bind(archiveVersionId),
+  ]);
 }
 
 function mapArchiveVersionPurgeCandidate(row) {

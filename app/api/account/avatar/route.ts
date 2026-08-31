@@ -21,7 +21,7 @@ export async function PUT(request: Request) {
     await assertObjectUploadAllowed({ kind: "blob", sha256 });
     await putBlob(sha256, body, body.byteLength, "image/png");
     await insertBlobRecord({ sha256, sizeBytes: body.byteLength, contentTypeHint: "image/png", observedExt: "png" });
-    await updateOwnAvatar(auth.user.id, sha256);
+    await updateOwnAvatar(auth.user, sha256);
     return json({ ok: true, avatarBlobSha256: sha256 });
   } catch (error) {
     return jsonError("头像上传失败", error);
@@ -33,7 +33,7 @@ export async function DELETE(request: Request) {
     assertSameOrigin(request);
     const auth = await getAuthContextFromRequest(request);
     if (!auth) return json({ ok: false, error: "Authentication required" }, { status: 401 });
-    await updateOwnAvatar(auth.user.id, null);
+    await updateOwnAvatar(auth.user, null);
     return json({ ok: true });
   } catch (error) {
     return jsonError("头像删除失败", error);

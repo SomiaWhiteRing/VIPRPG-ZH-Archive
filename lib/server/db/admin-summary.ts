@@ -1,13 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
 
-type CountRow = {
-  count: number;
-};
-
-type SumRow = {
-  total: number | null;
-};
-
 export type AdminSummary = {
   users: number;
   works: number;
@@ -25,57 +17,43 @@ export type AdminSummary = {
 };
 
 export async function getAdminSummary(): Promise<AdminSummary> {
-  const [
-    users,
-    works,
-    archiveVersions,
-    blobs,
-    blobSize,
-    corePacks,
-    corePackSize,
-    importJobs,
-    downloadBuilds,
-  ] = await Promise.all([
-    countTable("users"),
-    countTable("works"),
-    countTable("archive_versions"),
-    countTable("blobs"),
-    sumTable("blobs", "size_bytes"),
-    countTable("core_packs"),
-    sumTable("core_packs", "size_bytes"),
-    countTable("import_jobs"),
-    countTable("download_builds"),
-  ]);
+  const row = await getD1().prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM users) AS users,
+       (SELECT COUNT(*) FROM works) AS works,
+       (SELECT COUNT(*) FROM archive_versions) AS archive_versions,
+       (SELECT COUNT(*) FROM blobs) AS blobs,
+       (SELECT COALESCE(SUM(size_bytes),0) FROM blobs) AS blob_size,
+       (SELECT COUNT(*) FROM core_packs) AS core_packs,
+       (SELECT COALESCE(SUM(size_bytes),0) FROM core_packs) AS core_pack_size,
+       (SELECT COUNT(*) FROM import_jobs) AS import_jobs,
+       (SELECT COUNT(*) FROM download_builds) AS download_builds`,
+  ).first<{
+    users: number;
+    works: number;
+    archive_versions: number;
+    blobs: number;
+    blob_size: number;
+    core_packs: number;
+    core_pack_size: number;
+    import_jobs: number;
+    download_builds: number;
+  }>();
+  if (!row) throw new Error("Admin summary query returned no row");
 
   return {
-    users,
-    works,
-    archiveVersions,
+    users: row.users,
+    works: row.works,
+    archiveVersions: row.archive_versions,
     blobs: {
-      count: blobs,
-      sizeBytes: blobSize,
+      count: row.blobs,
+      sizeBytes: row.blob_size,
     },
     corePacks: {
-      count: corePacks,
-      sizeBytes: corePackSize,
+      count: row.core_packs,
+      sizeBytes: row.core_pack_size,
     },
-    importJobs,
-    downloadBuilds,
+    importJobs: row.import_jobs,
+    downloadBuilds: row.download_builds,
   };
-}
-
-async function countTable(tableName: string): Promise<number> {
-  const row = await getD1()
-    .prepare(`SELECT COUNT(*) AS count FROM ${tableName}`)
-    .first<CountRow>();
-
-  return row?.count ?? 0;
-}
-
-async function sumTable(tableName: string, columnName: string): Promise<number> {
-  const row = await getD1()
-    .prepare(`SELECT SUM(${columnName}) AS total FROM ${tableName}`)
-    .first<SumRow>();
-
-  return row?.total ?? 0;
 }

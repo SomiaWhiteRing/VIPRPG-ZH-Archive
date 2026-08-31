@@ -199,12 +199,14 @@ export default async function CatalogPage({
                 这位用户还没有其他公开目录。
               </p>
             )}
-            <Link
-              className="mt-3 block border-t border-border pt-3 text-xs font-semibold text-primary hover:underline"
-              href={`/users/${catalog.ownerUserId}/catalogs`}
-            >
-              查看作者的全部目录
-            </Link>
+            {catalog.ownerProfileShowsCatalogs ? (
+              <Link
+                className="mt-3 block border-t border-border pt-3 text-xs font-semibold text-primary hover:underline"
+                href={`/users/${catalog.ownerUserId}/catalogs`}
+              >
+                查看作者的全部目录
+              </Link>
+            ) : null}
           </SidebarPanel>
 
           <SidebarPanel title="相关页面">

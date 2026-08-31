@@ -38,7 +38,7 @@ export async function POST(
       workId,
       ...metadata,
       previewBlobSha256s,
-    });
+    }, current);
     return json({ ok: true });
   } catch (error) {
     return jsonError("作品资料保存失败", error);

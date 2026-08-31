@@ -181,21 +181,92 @@ type ExpensiveArchiveRow = {
 };
 
 export async function getAdminObservability(): Promise<AdminObservability> {
-  const [
-    importStatusCounts,
-    importTotals,
-    recentImports,
-    downloadTotals,
-    recentDownloads,
-    expensiveArchives,
-  ] = await Promise.all([
-    listImportStatusCounts(),
-    getImportTotals(),
-    listRecentImports(),
-    getDownloadTotals(),
-    listRecentDownloads(),
-    listExpensiveArchiveVersions(),
+  const database = getD1();
+  const results = await database.batch([
+    database.prepare(
+      `SELECT status,COUNT(*) AS count
+       FROM import_jobs GROUP BY status ORDER BY count DESC,status`,
+    ),
+    database.prepare(
+      `SELECT
+         SUM(source_size_bytes) AS total_source_size_bytes,
+         SUM(COALESCE(source_size_bytes,0)-excluded_size_bytes) AS total_accepted_size_bytes,
+         SUM(excluded_size_bytes) AS total_excluded_size_bytes,
+         SUM(missing_blob_count) AS total_missing_blob_count,
+         SUM(missing_core_pack_count) AS total_missing_core_pack_count,
+         SUM(missing_blob_size_bytes) AS total_missing_blob_size_bytes,
+         SUM(missing_core_pack_size_bytes) AS total_missing_core_pack_size_bytes,
+         SUM(uploaded_blob_count) AS total_uploaded_blob_count,
+         SUM(uploaded_blob_size_bytes) AS total_uploaded_blob_size_bytes,
+         SUM(uploaded_core_pack_count) AS total_uploaded_core_pack_count,
+         SUM(uploaded_core_pack_size_bytes) AS total_uploaded_core_pack_size_bytes,
+         SUM(manifest_size_bytes) AS total_manifest_size_bytes,
+         SUM(r2_put_count) AS total_r2_put_count,
+         AVG(preflight_duration_ms) AS average_preflight_duration_ms,
+         AVG(NULLIF(upload_duration_ms,0)) AS average_upload_duration_ms,
+         AVG(commit_duration_ms) AS average_commit_duration_ms
+       FROM import_jobs`,
+    ),
+    database.prepare(`${adminImportSelect()} ORDER BY ij.created_at DESC LIMIT 10`),
+    database.prepare(
+      `SELECT COUNT(*) AS build_count,
+         SUM(download_count) AS total_download_count,
+         SUM(cache_hit_count) AS cache_hit_count,
+         SUM(cache_miss_count) AS cache_miss_count,
+         SUM(cache_bypass_count) AS cache_bypass_count,
+         SUM(failure_count) AS failure_count,
+         SUM(total_r2_get_count) AS total_r2_get_count,
+         SUM(COALESCE(size_bytes,0)*download_count) AS total_bytes_served,
+         SUM(COALESCE(size_bytes,0)*cache_hit_count) AS cached_bytes_served,
+         SUM(COALESCE(estimated_r2_get_count,0)*cache_hit_count) AS estimated_r2_get_saved_by_cache
+       FROM download_builds`,
+    ),
+    database.prepare(
+      `SELECT db.id,db.archive_version_id,
+         COALESCE(w.chinese_title,w.original_title) AS work_title,
+         db.download_count,db.cache_hit_count,db.cache_miss_count,db.failure_count,
+         db.total_r2_get_count,db.size_bytes,db.last_cache_status,db.last_duration_ms,
+         db.last_error_message,db.last_accessed_at
+       FROM download_builds db
+       JOIN archive_versions av ON av.id=db.archive_version_id
+       JOIN works w ON w.id=av.work_id
+       ORDER BY db.last_accessed_at DESC LIMIT 10`,
+    ),
+    database.prepare(
+      `SELECT av.id AS archive_version_id,
+         COALESCE(w.chinese_title,w.original_title) AS work_title,
+         av.total_files,av.total_size_bytes,av.estimated_r2_get_count
+       FROM archive_versions av JOIN works w ON w.id=av.work_id
+       WHERE av.status='published'
+       ORDER BY av.estimated_r2_get_count DESC,av.total_size_bytes DESC LIMIT 10`,
+    ),
   ]);
+  const importStatusCounts = (results[0].results ?? []) as StatusCount[];
+  const importTotals = (results[1].results?.[0] ?? {}) as Partial<ImportTotalsRow>;
+  const recentImports = ((results[2].results ?? []) as RecentImportRow[]).map(mapRecentImport);
+  const downloadTotals = (results[3].results?.[0] ?? {}) as Partial<DownloadTotalsRow>;
+  const recentDownloads = ((results[4].results ?? []) as RecentDownloadRow[]).map((row) => ({
+    id: row.id,
+    archiveVersionId: row.archive_version_id,
+    workTitle: row.work_title,
+    downloadCount: row.download_count,
+    cacheHitCount: row.cache_hit_count,
+    cacheMissCount: row.cache_miss_count,
+    failureCount: row.failure_count,
+    totalR2GetCount: row.total_r2_get_count,
+    sizeBytes: row.size_bytes,
+    lastCacheStatus: row.last_cache_status,
+    lastDurationMs: row.last_duration_ms,
+    lastErrorMessage: row.last_error_message,
+    lastAccessedAt: row.last_accessed_at,
+  }));
+  const expensiveArchives = ((results[5].results ?? []) as ExpensiveArchiveRow[]).map((row) => ({
+    archiveVersionId: row.archive_version_id,
+    workTitle: row.work_title,
+    totalFiles: row.total_files,
+    totalSizeBytes: row.total_size_bytes,
+    estimatedR2GetCount: row.estimated_r2_get_count,
+  }));
 
   return {
     imports: {
@@ -238,75 +309,6 @@ export async function getAdminObservability(): Promise<AdminObservability> {
   };
 }
 
-async function listImportStatusCounts(): Promise<StatusCount[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT status, COUNT(*) AS count
-      FROM import_jobs
-      GROUP BY status
-      ORDER BY count DESC, status`,
-    )
-    .all<StatusCount>();
-
-  return rows.results ?? [];
-}
-
-async function getImportTotals(): Promise<ImportTotalsRow> {
-  const row = await getD1()
-    .prepare(
-      `SELECT
-        SUM(source_size_bytes) AS total_source_size_bytes,
-        SUM(COALESCE(source_size_bytes, 0) - excluded_size_bytes) AS total_accepted_size_bytes,
-        SUM(excluded_size_bytes) AS total_excluded_size_bytes,
-        SUM(missing_blob_count) AS total_missing_blob_count,
-        SUM(missing_core_pack_count) AS total_missing_core_pack_count,
-        SUM(missing_blob_size_bytes) AS total_missing_blob_size_bytes,
-        SUM(missing_core_pack_size_bytes) AS total_missing_core_pack_size_bytes,
-        SUM(uploaded_blob_count) AS total_uploaded_blob_count,
-        SUM(uploaded_blob_size_bytes) AS total_uploaded_blob_size_bytes,
-        SUM(uploaded_core_pack_count) AS total_uploaded_core_pack_count,
-        SUM(uploaded_core_pack_size_bytes) AS total_uploaded_core_pack_size_bytes,
-        SUM(manifest_size_bytes) AS total_manifest_size_bytes,
-        SUM(r2_put_count) AS total_r2_put_count,
-        AVG(preflight_duration_ms) AS average_preflight_duration_ms,
-        AVG(NULLIF(upload_duration_ms, 0)) AS average_upload_duration_ms,
-        AVG(commit_duration_ms) AS average_commit_duration_ms
-      FROM import_jobs`,
-    )
-    .first<ImportTotalsRow>();
-
-  return row ?? {
-    total_source_size_bytes: 0,
-    total_accepted_size_bytes: 0,
-    total_excluded_size_bytes: 0,
-    total_missing_blob_count: 0,
-    total_missing_core_pack_count: 0,
-    total_missing_blob_size_bytes: 0,
-    total_missing_core_pack_size_bytes: 0,
-    total_uploaded_blob_count: 0,
-    total_uploaded_blob_size_bytes: 0,
-    total_uploaded_core_pack_count: 0,
-    total_uploaded_core_pack_size_bytes: 0,
-    total_manifest_size_bytes: 0,
-    total_r2_put_count: 0,
-    average_preflight_duration_ms: 0,
-    average_upload_duration_ms: 0,
-    average_commit_duration_ms: 0,
-  };
-}
-
-async function listRecentImports(): Promise<RecentImportJob[]> {
-  const rows = await getD1()
-    .prepare(
-      `${adminImportSelect()}
-       ORDER BY ij.created_at DESC
-       LIMIT 10`,
-    )
-    .all<RecentImportRow>();
-
-  return (rows.results ?? []).map(mapRecentImport);
-}
-
 export type AdminImportJobDetail = RecentImportJob & {
   excludedFileTypes: Array<{
     fileType: string;
@@ -326,17 +328,16 @@ export async function searchAdminImportJobs(input: {
   const status = input.status && input.status !== "all" ? input.status : null;
   const where = status ? "WHERE ij.status = ?" : "";
   const binds: Array<string | number> = status ? [status] : [];
-  const total = await getD1()
-    .prepare(`SELECT COUNT(*) AS count FROM import_jobs ij ${where}`)
-    .bind(...binds)
-    .first<{ count: number }>();
-  const rows = await getD1()
-    .prepare(`${adminImportSelect()} ${where} ORDER BY datetime(ij.created_at) DESC, ij.id DESC LIMIT ? OFFSET ?`)
-    .bind(...binds, pageSize, (page - 1) * pageSize)
-    .all<RecentImportRow>();
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    database.prepare(`SELECT COUNT(*) AS count FROM import_jobs ij ${where}`).bind(...binds),
+    database
+      .prepare(`${adminImportSelect()} ${where} ORDER BY datetime(ij.created_at) DESC,ij.id DESC LIMIT ? OFFSET ?`)
+      .bind(...binds, pageSize, (page - 1) * pageSize),
+  ]);
   return {
-    items: (rows.results ?? []).map(mapRecentImport),
-    total: total?.count ?? 0,
+    items: ((rowsResult.results ?? []) as RecentImportRow[]).map(mapRecentImport),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
     page,
     pageSize,
   };
@@ -407,105 +408,4 @@ function mapRecentImport(row: RecentImportRow): RecentImportJob {
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
   };
-}
-
-async function getDownloadTotals(): Promise<DownloadTotalsRow> {
-  const row = await getD1()
-    .prepare(
-      `SELECT
-        COUNT(*) AS build_count,
-        SUM(download_count) AS total_download_count,
-        SUM(cache_hit_count) AS cache_hit_count,
-        SUM(cache_miss_count) AS cache_miss_count,
-        SUM(cache_bypass_count) AS cache_bypass_count,
-        SUM(failure_count) AS failure_count,
-        SUM(total_r2_get_count) AS total_r2_get_count,
-        SUM(COALESCE(size_bytes, 0) * download_count) AS total_bytes_served,
-        SUM(COALESCE(size_bytes, 0) * cache_hit_count) AS cached_bytes_served,
-        SUM(COALESCE(estimated_r2_get_count, 0) * cache_hit_count)
-          AS estimated_r2_get_saved_by_cache
-      FROM download_builds`,
-    )
-    .first<DownloadTotalsRow>();
-
-  return row ?? {
-    build_count: 0,
-    total_download_count: 0,
-    cache_hit_count: 0,
-    cache_miss_count: 0,
-    cache_bypass_count: 0,
-    failure_count: 0,
-    total_r2_get_count: 0,
-    total_bytes_served: 0,
-    cached_bytes_served: 0,
-    estimated_r2_get_saved_by_cache: 0,
-  };
-}
-
-async function listRecentDownloads(): Promise<RecentDownloadBuild[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        db.id,
-        db.archive_version_id,
-        COALESCE(w.chinese_title, w.original_title) AS work_title,
-        db.download_count,
-        db.cache_hit_count,
-        db.cache_miss_count,
-        db.failure_count,
-        db.total_r2_get_count,
-        db.size_bytes,
-        db.last_cache_status,
-        db.last_duration_ms,
-        db.last_error_message,
-        db.last_accessed_at
-      FROM download_builds db
-      JOIN archive_versions av ON av.id = db.archive_version_id
-      JOIN works w ON w.id = av.work_id
-      ORDER BY db.last_accessed_at DESC
-      LIMIT 10`,
-    )
-    .all<RecentDownloadRow>();
-
-  return (rows.results ?? []).map((row) => ({
-    id: row.id,
-    archiveVersionId: row.archive_version_id,
-    workTitle: row.work_title,
-    downloadCount: row.download_count,
-    cacheHitCount: row.cache_hit_count,
-    cacheMissCount: row.cache_miss_count,
-    failureCount: row.failure_count,
-    totalR2GetCount: row.total_r2_get_count,
-    sizeBytes: row.size_bytes,
-    lastCacheStatus: row.last_cache_status,
-    lastDurationMs: row.last_duration_ms,
-    lastErrorMessage: row.last_error_message,
-    lastAccessedAt: row.last_accessed_at,
-  }));
-}
-
-async function listExpensiveArchiveVersions(): Promise<ExpensiveArchiveVersion[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        av.id AS archive_version_id,
-        COALESCE(w.chinese_title, w.original_title) AS work_title,
-        av.total_files,
-        av.total_size_bytes,
-        av.estimated_r2_get_count
-      FROM archive_versions av
-      JOIN works w ON w.id = av.work_id
-      WHERE av.status = 'published'
-      ORDER BY av.estimated_r2_get_count DESC, av.total_size_bytes DESC
-      LIMIT 10`,
-    )
-    .all<ExpensiveArchiveRow>();
-
-  return (rows.results ?? []).map((row) => ({
-    archiveVersionId: row.archive_version_id,
-    workTitle: row.work_title,
-    totalFiles: row.total_files,
-    totalSizeBytes: row.total_size_bytes,
-    estimatedR2GetCount: row.estimated_r2_get_count,
-  }));
 }

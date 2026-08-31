@@ -1,6 +1,6 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
-import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import {
+  getWorkForAdminEdit,
   parseWorkEditForm,
   updateWorkForAdmin,
 } from "@/lib/server/db/game-library";
@@ -32,26 +32,18 @@ export async function POST(request: Request, context: RouteContext) {
       throw new Error("Work id mismatch");
     }
 
-    const work = await updateWorkForAdmin(input);
-
-    await writeAuthAuditLog({
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_work_update",
-      detail: {
-        workId: work.id,
-        status: work.status,
-      },
-    });
+    await updateWorkForAdmin(input, auth.user);
 
     if (request.headers.get("accept")?.includes("application/json")) {
+      const work = await getWorkForAdminEdit(workId);
+      if (!work) throw new Error("游戏更新后不可读取");
       return json({
         ok: true,
         work,
       });
     }
 
-    return redirectResponse(new URL(`/admin/works/${work.id}`, request.url));
+    return redirectResponse(new URL(`/admin/works/${workId}`, request.url));
   } catch (error) {
     return jsonError("Work update failed", error);
   }

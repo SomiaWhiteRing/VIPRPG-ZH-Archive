@@ -190,8 +190,8 @@ function CollapsibleFilterLinks({ options, visibleCount }: { options: readonly F
       {overflowOptions.length > 0 ? (
         <details className="group contents" open={overflowOptions.some((option) => option.active)}>
           <summary className="order-last inline-flex min-h-8 cursor-pointer list-none items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10 [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">展开其余 {overflowOptions.length} 项</span>
-            <span className="hidden group-open:inline">收起选项</span>
+            <span className="group-open:hidden">展开</span>
+            <span className="hidden group-open:inline">折叠</span>
           </summary>
           {overflowOptions.map((option) => <FilterLink active={option.active} href={option.href} key={option.value} label={option.label} />)}
         </details>

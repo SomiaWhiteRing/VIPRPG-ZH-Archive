@@ -1,7 +1,6 @@
 import {
-  assertObjectUploadAllowed,
-  findExistingObjects,
-  insertBlobRecord,
+  findObjectStatuses,
+  insertBlobRecords,
 } from "@/lib/server/db/archive-objects";
 import { sha256Hex } from "@/lib/server/crypto/sha256";
 import { HttpError } from "@/lib/server/http/json";
@@ -22,30 +21,29 @@ export function readWorkImage(
 
 export async function storeWorkImages(files: File[]): Promise<string[]> {
   const hashes: string[] = [];
-  const seen = new Set<string>();
+  const unique = new Map<string, { body: ArrayBuffer; contentType: string }>();
   for (const file of files) {
     const body = await file.arrayBuffer();
     const sha256 = await sha256Hex(body);
-    if (seen.has(sha256)) {
-      hashes.push(sha256);
-      continue;
-    }
-    seen.add(sha256);
-    const existing = await findExistingObjects({
-      blobSha256: [sha256],
-      corePackSha256: [],
-    });
-    if (!existing.blobs.has(sha256)) {
-      await assertObjectUploadAllowed({ kind: "blob", sha256 });
-      await putBlob(sha256, body, body.byteLength, file.type);
-      await insertBlobRecord({
-        sha256,
-        sizeBytes: body.byteLength,
-        contentTypeHint: file.type,
-        observedExt: null,
-      });
-    }
     hashes.push(sha256);
+    if (!unique.has(sha256)) unique.set(sha256, { body, contentType: file.type });
   }
+
+  const statuses = await findObjectStatuses("blob", [...unique.keys()]);
+  const missing = [...unique.entries()].filter(([sha256]) => statuses.get(sha256) !== "active");
+  for (const [sha256] of missing) {
+    if (statuses.get(sha256) === "purging") {
+      throw new HttpError(409, "Blob is being garbage-collected; retry the upload");
+    }
+  }
+  for (const [sha256, file] of missing) {
+    await putBlob(sha256, file.body, file.body.byteLength, file.contentType);
+  }
+  await insertBlobRecords(missing.map(([sha256, file]) => ({
+    sha256,
+    sizeBytes: file.body.byteLength,
+    contentTypeHint: file.contentType,
+    observedExt: null,
+  })));
   return hashes;
 }

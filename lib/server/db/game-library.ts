@@ -9,6 +9,7 @@ import {
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { getD1 } from "@/lib/server/db/d1";
+import { chunkArray } from "@/lib/server/db/chunks";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
@@ -304,21 +305,7 @@ const VALID_PUBLISHED_DISTRIBUTION_SQL = `(
 export async function listGameWorks(
   input: ListInput = {},
 ): Promise<GameWorkSummary[]> {
-  const { where, binds } = buildWhere(input);
-  const limit = clamp(input.limit ?? 80, 1, 200),
-    offset = Math.max(0, Math.floor(input.offset ?? 0));
-  const order =
-    input.sort === "title"
-      ? "COALESCE(w.chinese_title,w.original_title) ASC"
-      : input.sort === "release"
-        ? "w.original_release_date IS NULL ASC,w.original_release_date DESC"
-        : "w.id DESC";
-  const rows = await getD1()
-    .prepare(
-      `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE ${where} GROUP BY w.id ORDER BY ${order},w.id DESC LIMIT ? OFFSET ?`,
-    )
-    .bind(...binds, limit, offset)
-    .all<SummaryRow>();
+  const rows = await gameWorksListStatement(getD1(), input).all<SummaryRow>();
   return hydrate(rows.results ?? []);
 }
 
@@ -331,6 +318,8 @@ export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
   sourceUrl: string | null;
+  archiveVersionCount: number;
+  hasCurrentArchive: boolean;
 };
 
 export type UploaderWorkUpdateInput = {
@@ -364,18 +353,20 @@ export async function searchUserWorks(input: {
   const pageSize = clamp(input.pageSize ?? 20, 1, 100);
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const column = input.kind === "favorite" ? "favorited_at" : "last_played_at";
-  const totalRow = await getD1()
-    .prepare(`SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`)
-    .bind(input.userId)
-    .first<{ count: number }>();
-  const rows = await getD1()
-    .prepare(`SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`)
-    .bind(input.userId, pageSize, (page - 1) * pageSize)
-    .all<SummaryRow & { occurred_at: string }>();
-  const works = await hydrate(rows.results ?? []);
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    database
+      .prepare(`SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`)
+      .bind(input.userId),
+    database
+      .prepare(`SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`)
+      .bind(input.userId, pageSize, (page - 1) * pageSize),
+  ]);
+  const rows = (rowsResult.results ?? []) as Array<SummaryRow & { occurred_at: string }>;
+  const works = await hydrate(rows);
   return {
-    items: works.map((work, index) => ({ work, occurredAt: (rows.results ?? [])[index].occurred_at })),
-    total: totalRow?.count ?? 0,
+    items: works.map((work, index) => ({ work, occurredAt: rows[index].occurred_at })),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
     page,
     pageSize,
   };
@@ -388,17 +379,15 @@ export async function searchUploadedWorks(input: {
 }): Promise<{ items: GameWorkSummary[]; total: number; page: number; pageSize: number }> {
   const pageSize = clamp(input.pageSize ?? 20, 1, 100);
   const page = Math.max(1, Math.floor(input.page ?? 1));
-  const total = await getD1()
-    .prepare(
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    database.prepare(
       `SELECT COUNT(*) AS count
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
        WHERE wu.user_id=? AND w.status<>'deleted'`,
-    )
-    .bind(input.userId)
-    .first<{ count: number }>();
-  const rows = await getD1()
-    .prepare(
+    ).bind(input.userId),
+    database.prepare(
       `SELECT ${summarySql()}
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
@@ -408,22 +397,17 @@ export async function searchUploadedWorks(input: {
        GROUP BY w.id
        ORDER BY datetime(w.updated_at) DESC,w.id DESC
        LIMIT ? OFFSET ?`,
-    )
-    .bind(input.userId, pageSize, (page - 1) * pageSize)
-    .all<SummaryRow>();
+    ).bind(input.userId, pageSize, (page - 1) * pageSize),
+  ]);
   return {
-    items: await hydrate(rows.results ?? []),
-    total: total?.count ?? 0,
+    items: await hydrate((rowsResult.results ?? []) as SummaryRow[]),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
     page,
     pageSize,
   };
 }
 export async function countGameWorks(input: Filters = {}): Promise<number> {
-  const { where, binds } = buildWhere(input);
-  const row = await getD1()
-    .prepare(`SELECT COUNT(*) AS count FROM works w WHERE ${where}`)
-    .bind(...binds)
-    .first<{ count: number }>();
+  const row = await gameWorksCountStatement(getD1(), input).first<{ count: number }>();
   return row?.count ?? 0;
 }
 export type PaginatedGameSearch = {
@@ -438,15 +422,21 @@ export async function searchGameWorks(input: {
   page?: number;
   pageSize?: number;
 }): Promise<PaginatedGameSearch> {
-  const pageSize = clamp(input.pageSize ?? 24, 1, 100),
-    page = clamp(input.page ?? 1, 1, 9999),
-    total = await countGameWorks({ query: input.query });
-  return {
-    items: await listGameWorks({
-      query: input.query,
+  const pageSize = clamp(input.pageSize ?? 24, 1, 100);
+  const page = clamp(input.page ?? 1, 1, 9999);
+  const filters = { query: input.query };
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    gameWorksCountStatement(database, filters),
+    gameWorksListStatement(database, {
+      ...filters,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
+  ]);
+  const total = Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0);
+  return {
+    items: await hydrate((rowsResult.results ?? []) as SummaryRow[]),
     total,
     page,
     pageSize,
@@ -463,29 +453,21 @@ export async function getGameWorkDetail(
     .bind(id)
     .first<
       SummaryRow
-    >();
+  >();
   if (!row) return null;
-  const [summary] = await hydrate([row]);
-  const [aliases, media, links, archives, relations, translations] =
-    await Promise.all([
-      listAliases(row.id),
-      listMedia(row.id),
-      listLinks(row.id),
-      listArchives(row.id),
-      listRelations(row.id),
-      listTranslations(row.id),
-    ]);
+  const collections = await loadWorkCollections(row.id);
+  const summary = mapSummaryRow(row, collections.tags, collections.characters, collections.creators);
   const originalId =
-    translations.find((item) => item.role === "original")?.workId ??
-    (translations.some((item) => item.role === "translation") ? row.id : null);
+    collections.translations.find((item) => item.role === "original")?.workId ??
+    (collections.translations.some((item) => item.role === "translation") ? row.id : null);
   return {
     ...summary,
-    aliases,
-    media,
-    externalLinks: links,
-    archiveVersions: archives,
-    relations,
-    translations,
+    aliases: collections.aliases,
+    media: collections.media,
+    externalLinks: collections.links,
+    archiveVersions: collections.archives,
+    relations: collections.relations,
+    translations: collections.translations,
     parallelTranslations: originalId ? await listTranslations(originalId) : [],
   };
 }
@@ -508,14 +490,19 @@ export async function searchEditableWorksForAdmin(input: {
     status: input.status,
     includeNonPublic: true,
   };
-  const total = await countGameWorks(filters);
-  return {
-    items: await listGameWorks({
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    gameWorksCountStatement(database, filters),
+    gameWorksListStatement(database, {
       ...filters,
       sort: input.sort,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
+  ]);
+  const total = Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0);
+  return {
+    items: await hydrate((rowsResult.results ?? []) as SummaryRow[]),
     total,
     page,
     pageSize,
@@ -532,20 +519,10 @@ export async function getWorkForAdminEdit(
     .bind(workId)
     .first<WorkRow>();
   if (!row) return null;
-  const [aliases, tags, characters, creators, media, relations, translations, links] =
-    await Promise.all([
-      listAliases(workId),
-      listTags(workId),
-      listCharacters(workId),
-      listCreators(workId),
-      listMedia(workId),
-      listRelations(workId, true),
-      listTranslations(workId, true),
-      listLinks(workId),
-    ]);
+  const collections = await loadWorkCollections(workId, true);
   const originalId =
-    translations.find((item) => item.role === "original")?.workId ??
-    (translations.some((item) => item.role === "translation") ? row.id : null);
+    collections.translations.find((item) => item.role === "original")?.workId ??
+    (collections.translations.some((item) => item.role === "translation") ? row.id : null);
   return {
     id: row.id,
     originalTitle: row.original_title,
@@ -558,18 +535,18 @@ export async function getWorkForAdminEdit(
     isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
-    aliases,
-    creators,
-    tags: tags.map((item) => item.name),
-    characters: characters.map((item) => item.primaryName),
-    characterCredits: characters,
-    media,
-    outgoingRelations: relations,
-    translations,
+    aliases: collections.aliases,
+    creators: collections.creators,
+    tags: collections.tags.map((item) => item.name),
+    characters: collections.characters.map((item) => item.primaryName),
+    characterCredits: collections.characters,
+    media: collections.media,
+    outgoingRelations: collections.relations,
+    translations: collections.translations,
     parallelTranslations: originalId
       ? await listTranslations(originalId, true)
       : [],
-    externalLinks: links,
+    externalLinks: collections.links,
   };
 }
 
@@ -579,24 +556,28 @@ export async function getOwnedWorkForEdit(
 ): Promise<UploaderWorkEdit | null> {
   const owned = await getD1()
     .prepare(
-      `SELECT 1 AS allowed
+      `SELECT
+         (SELECT COUNT(*) FROM archive_versions av WHERE av.work_id=w.id) AS archive_version_count,
+         EXISTS(
+           SELECT 1 FROM archive_versions av
+           WHERE av.work_id=w.id AND av.status='published' AND av.is_current=1
+         ) AS has_current_archive
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
        WHERE wu.work_id=? AND wu.user_id=? AND w.status<>'deleted'
        LIMIT 1`,
     )
     .bind(workId, user.id)
-    .first<{ allowed: number }>();
+    .first<{ archive_version_count: number; has_current_archive: number }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(workId);
   if (!work || work.status === "processing" || work.status === "deleted") return null;
-  const distributionState = await getWorkDistributionState(workId);
   const downloadLink = work.externalLinks.find(
     (link) => link.linkType === "download_page",
   );
   const sourceLink = work.externalLinks.find((link) => link.linkType === "source");
   const distribution = deriveWorkDistribution({
-    hasCurrentArchive: distributionState.hasCurrentArchive,
+    hasCurrentArchive: owned.has_current_archive === 1,
     downloadLinkCount: downloadLink ? 1 : 0,
   });
   if (distribution === "invalid") return null;
@@ -605,14 +586,16 @@ export async function getOwnedWorkForEdit(
     distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
     sourceUrl: sourceLink?.url ?? null,
+    archiveVersionCount: owned.archive_version_count,
+    hasCurrentArchive: owned.has_current_archive === 1,
   };
 }
 
 export async function updateOwnedWork(
   input: UploaderWorkUpdateInput,
+  before: UploaderWorkEdit,
 ): Promise<void> {
-  const before = await getOwnedWorkForEdit(input.workId, input.user);
-  if (!before) throw new HttpError(404, "作品不存在或不属于当前上传者");
+  if (before.id !== input.workId) throw new Error("Owned work snapshot does not match update target");
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
@@ -655,12 +638,11 @@ export async function updateOwnedWork(
     ? normalizeHttpUrl(input.sourceUrl, "来源链接")
     : null;
 
-  const distributionState = await getWorkDistributionState(input.workId);
   assertStableDistribution({
     status: input.status,
     engineFamily: input.engineFamily,
-    hasCurrentArchive: distributionState.hasCurrentArchive,
-    archiveVersionCount: distributionState.archiveVersionCount,
+    hasCurrentArchive: before.hasCurrentArchive,
+    archiveVersionCount: before.archiveVersionCount,
     downloadLinkCount: downloadUrl ? 1 : 0,
   });
 
@@ -820,7 +802,8 @@ export async function updateOwnedWork(
 }
 export async function updateWorkForAdmin(
   input: WorkEditInput,
-): Promise<AdminWorkEdit> {
+  actor: ArchiveUser,
+): Promise<void> {
   assertEnum(
     input.originalReleasePrecision,
     ["year", "month", "day", "unknown"],
@@ -859,10 +842,18 @@ export async function updateWorkForAdmin(
     ).length,
   });
   await assertTranslationLanguageChangeAllowed(input.workId, input.language);
-  await replaceMedia(input.workId, input.previewBlobSha256s);
-  await getD1()
-    .prepare(
-      `UPDATE works
+  const previewHashes = uniqueText(input.previewBlobSha256s.map((value) => value.toLowerCase()));
+  await validatePreviewHashes(previewHashes);
+  const aliases = uniqueText(input.aliases);
+  const tags = uniqueText(input.tags.map(normalizeEntityName));
+  const characters = uniqueText(
+    input.characters.map((value) => value.split("|")[0]).map(normalizeEntityName),
+  );
+  const database = getD1();
+  const statements: D1PreparedStatement[] = [
+    database
+      .prepare(
+        `UPDATE works
        SET chinese_title = ?,
          description = ?,
          original_release_date = ?,
@@ -877,27 +868,86 @@ export async function updateWorkForAdmin(
            ELSE published_at
          END
        WHERE id = ?`,
-    )
-    .bind(
-      input.chineseTitle,
-      input.description,
-      input.originalReleaseDate,
-      input.originalReleasePrecision,
-      input.engineFamily,
-      input.isOriginal ? 1 : 0,
-      input.language,
-      input.status,
-      input.status,
-      input.workId,
-    )
-    .run();
-  await replaceAliases(input.workId, input.aliases);
-  await replaceTags(input.workId, input.tags);
-  await replaceCharacters(input.workId, input.characters);
-  await replaceLinks(input.workId, externalLinks);
-  const updated = await getWorkForAdminEdit(input.workId);
-  if (!updated) throw new Error("游戏更新后不可读取");
-  return updated;
+      )
+      .bind(
+        input.chineseTitle,
+        input.description,
+        input.originalReleaseDate,
+        input.originalReleasePrecision,
+        input.engineFamily,
+        input.isOriginal ? 1 : 0,
+        input.language,
+        input.status,
+        input.status,
+        input.workId,
+      ),
+    database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
+    database.prepare(`DELETE FROM work_tags WHERE work_id=?`).bind(input.workId),
+    database.prepare(`DELETE FROM work_characters WHERE work_id=?`).bind(input.workId),
+    database
+      .prepare(
+        `DELETE FROM work_media_assets
+         WHERE work_id=? AND media_asset_id IN (SELECT id FROM media_assets WHERE kind='preview')`,
+      )
+      .bind(input.workId),
+    database.prepare(`DELETE FROM work_external_links WHERE work_id=?`).bind(input.workId),
+  ];
+  for (const alias of aliases) {
+    statements.push(
+      database
+        .prepare(`INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?,'alias')`)
+        .bind(input.workId, alias),
+    );
+  }
+  for (const tag of tags) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')`).bind(tag),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source)
+           SELECT ?,id,'admin' FROM tags WHERE name=? COLLATE NOCASE`,
+        )
+        .bind(input.workId, tag),
+    );
+  }
+  for (const character of characters) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO characters(primary_name) VALUES(?)`).bind(character),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_characters(work_id,character_id)
+           SELECT ?,id FROM characters WHERE primary_name=? COLLATE NOCASE`,
+        )
+        .bind(input.workId, character),
+    );
+  }
+  for (const [index, hash] of previewHashes.entries()) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`).bind(hash),
+      database
+        .prepare(
+          `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary)
+           SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
+        )
+        .bind(input.workId, index + 1, index === 0 ? 1 : 0, hash),
+    );
+  }
+  for (const link of externalLinks) {
+    statements.push(
+      database
+        .prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,?,?,?)`)
+        .bind(input.workId, link.label, link.url, link.linkType),
+    );
+  }
+  statements.push(
+    database
+      .prepare(
+        `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+         VALUES(?,?,'admin_work_update',?)`,
+      )
+      .bind(actor.id, actor.email, JSON.stringify({ workId: input.workId, status: input.status })),
+  );
+  await database.batch(statements);
 }
 
 export async function createExternalWork(
@@ -1224,6 +1274,34 @@ function summarySql(): string {
         AND wel.link_type = 'download_page'
     ) AS download_link_count`;
 }
+function gameWorksListStatement(database: D1Database, input: ListInput): D1PreparedStatement {
+  const { where, binds } = buildWhere(input);
+  const limit = clamp(input.limit ?? 80, 1, 200);
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  const order = input.sort === "title"
+    ? "COALESCE(w.chinese_title,w.original_title) ASC"
+    : input.sort === "release"
+      ? "w.original_release_date IS NULL ASC,w.original_release_date DESC"
+      : "w.id DESC";
+  return database
+    .prepare(
+      `SELECT ${summarySql()}
+       FROM works w
+       LEFT JOIN archive_versions av
+         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
+       WHERE ${where}
+       GROUP BY w.id
+       ORDER BY ${order},w.id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(...binds, limit, offset);
+}
+
+function gameWorksCountStatement(database: D1Database, input: Filters): D1PreparedStatement {
+  const { where, binds } = buildWhere(input);
+  return database.prepare(`SELECT COUNT(*) AS count FROM works w WHERE ${where}`).bind(...binds);
+}
+
 function buildWhere(input: Filters): {
   where: string;
   binds: Array<string | number>;
@@ -1272,170 +1350,304 @@ function buildWhere(input: Filters): {
   return { where: clauses.join(" AND "), binds };
 }
 async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
-  const output: GameWorkSummary[] = [];
-  for (const row of rows) {
-    const [tags, characters, creators] = await Promise.all([
-      listTags(row.id),
-      listCharacters(row.id),
-      listCreators(row.id),
-    ]);
-    output.push({
-      id: row.id,
-      originalTitle: row.original_title,
-      chineseTitle: row.chinese_title,
-      description: row.description,
-      originalReleaseDate: row.original_release_date,
-      originalReleasePrecision: row.original_release_precision,
-      engineFamily: row.engine_family,
-      isOriginal: row.is_original === 1,
-      isTranslation: row.is_translation === 1,
-      language: row.language,
-      status: row.status,
-      previewBlobSha256: row.preview_blob_sha256,
-      currentArchiveVersionId: row.current_archive_version_id,
-      externalDownloadUrl: isHttpUrl(row.external_download_url)
-        ? row.external_download_url
-        : null,
-      archiveVersionCount: row.archive_version_count,
-      totalSizeBytes: row.total_size_bytes ?? 0,
-      latestPublishedAt: row.latest_published_at,
-      distribution: deriveWorkDistribution({
-        hasCurrentArchive: row.current_archive_version_id !== null,
-        downloadLinkCount: row.download_link_count,
-      }),
-      tags,
-      characters,
-      creators,
-    });
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map((row) => row.id))];
+  const database = getD1();
+  const queries: Array<{ kind: "tag" | "character" | "creator"; statement: D1PreparedStatement }> = [];
+  for (const chunk of chunkArray(ids, 100)) {
+    const placeholders = chunk.map(() => "?").join(",");
+    queries.push(
+      {
+        kind: "tag",
+        statement: database
+          .prepare(
+            `SELECT wt.work_id,t.id,t.name,t.namespace
+             FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+             WHERE wt.work_id IN (${placeholders})
+             ORDER BY wt.work_id,t.name`,
+          )
+          .bind(...chunk),
+      },
+      {
+        kind: "character",
+        statement: database
+          .prepare(
+            `SELECT wc.work_id,c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+             FROM work_characters wc JOIN characters c ON c.id=wc.character_id
+             WHERE wc.work_id IN (${placeholders})
+             ORDER BY wc.work_id,wc.sort_order,c.primary_name`,
+          )
+          .bind(...chunk),
+      },
+      {
+        kind: "creator",
+        statement: database
+          .prepare(
+            `SELECT ws.work_id,c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+             FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
+             WHERE ws.work_id IN (${placeholders})
+             ORDER BY ws.work_id,c.name`,
+          )
+          .bind(...chunk),
+      },
+    );
   }
-  return output;
+  const results = await database.batch(queries.map((query) => query.statement));
+  const tagRows: Array<GameTag & { work_id: number }> = [];
+  const characterRows: Array<{
+    work_id: number;
+    id: number;
+    primary_name: string;
+    original_name: string | null;
+    role_key: string;
+    spoiler_level: number;
+    sort_order: number | null;
+    notes: string | null;
+  }> = [];
+  const creatorRows: Array<{
+    work_id: number;
+    id: number;
+    name: string;
+    original_name: string | null;
+    website_url: string | null;
+    role_key: string;
+    role_label: string | null;
+    notes: string | null;
+  }> = [];
+  results.forEach((result, index) => {
+    if (queries[index].kind === "tag") {
+      tagRows.push(...((result.results ?? []) as typeof tagRows));
+    } else if (queries[index].kind === "character") {
+      characterRows.push(...((result.results ?? []) as typeof characterRows));
+    } else {
+      creatorRows.push(...((result.results ?? []) as typeof creatorRows));
+    }
+  });
+  const tagsByWork = groupRowsByWork(
+    tagRows,
+    (tag) => ({ id: tag.id, name: tag.name, namespace: tag.namespace }),
+  );
+  const charactersByWork = groupRowsByWork(
+    characterRows,
+    (character) => ({
+      id: character.id,
+      primaryName: character.primary_name,
+      originalName: character.original_name,
+      roleKey: character.role_key,
+      spoilerLevel: character.spoiler_level,
+      sortOrder: character.sort_order,
+      notes: character.notes,
+    }),
+  );
+  const creatorsByWork = groupRowsByWork(
+    creatorRows,
+    (creator) => ({
+      id: creator.id,
+      name: creator.name,
+      originalName: creator.original_name,
+      websiteUrl: isHttpUrl(creator.website_url) ? creator.website_url : null,
+      roleKey: creator.role_key,
+      roleLabel: creator.role_label,
+      notes: creator.notes,
+    }),
+  );
+
+  return rows.map((row) => mapSummaryRow(
+    row,
+    tagsByWork.get(row.id) ?? [],
+    charactersByWork.get(row.id) ?? [],
+    creatorsByWork.get(row.id) ?? [],
+  ));
 }
-async function listAliases(id: number): Promise<string[]> {
-  const rows = await getD1()
-    .prepare(`SELECT title FROM work_titles WHERE work_id=? ORDER BY id`)
-    .bind(id)
-    .all<{ title: string }>();
-  return (rows.results ?? []).map((row) => row.title);
+
+function mapSummaryRow(
+  row: SummaryRow,
+  tags: GameTag[],
+  characters: GameCharacter[],
+  creators: GameCreatorCredit[],
+): GameWorkSummary {
+  return {
+    id: row.id,
+    originalTitle: row.original_title,
+    chineseTitle: row.chinese_title,
+    description: row.description,
+    originalReleaseDate: row.original_release_date,
+    originalReleasePrecision: row.original_release_precision,
+    engineFamily: row.engine_family,
+    isOriginal: row.is_original === 1,
+    isTranslation: row.is_translation === 1,
+    language: row.language,
+    status: row.status,
+    previewBlobSha256: row.preview_blob_sha256,
+    currentArchiveVersionId: row.current_archive_version_id,
+    externalDownloadUrl: isHttpUrl(row.external_download_url) ? row.external_download_url : null,
+    archiveVersionCount: row.archive_version_count,
+    totalSizeBytes: row.total_size_bytes ?? 0,
+    latestPublishedAt: row.latest_published_at,
+    distribution: deriveWorkDistribution({
+      hasCurrentArchive: row.current_archive_version_id !== null,
+      downloadLinkCount: row.download_link_count,
+    }),
+    tags,
+    characters,
+    creators,
+  };
 }
-async function listTags(id: number): Promise<GameTag[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT t.id,t.name,t.namespace FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=? ORDER BY t.name`,
-    )
-    .bind(id)
-    .all<GameTag>();
-  return rows.results ?? [];
+
+function groupRowsByWork<TRow extends { work_id: number }, TValue>(
+  rows: TRow[],
+  mapValue: (row: TRow) => TValue,
+): Map<number, TValue[]> {
+  const grouped = new Map<number, TValue[]>();
+  for (const row of rows) {
+    const values = grouped.get(row.work_id) ?? [];
+    values.push(mapValue(row));
+    grouped.set(row.work_id, values);
+  }
+  return grouped;
 }
-async function listCharacters(id: number): Promise<GameCharacter[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
-    )
-    .bind(id)
-    .all<{
-      id: number;
-      primary_name: string;
-      original_name: string | null;
-      role_key: string;
-      spoiler_level: number;
-      sort_order: number | null;
-      notes: string | null;
-    }>();
-  return (rows.results ?? []).map((x) => ({
-    id: x.id,
-    primaryName: x.primary_name,
-    originalName: x.original_name,
-    roleKey: x.role_key,
-    spoilerLevel: x.spoiler_level,
-    sortOrder: x.sort_order,
-    notes: x.notes,
+
+type WorkCollections = {
+  aliases: string[];
+  tags: GameTag[];
+  characters: GameCharacter[];
+  creators: GameCreatorCredit[];
+  media: GameMediaAsset[];
+  links: GameExternalLink[];
+  archives: GameArchiveVersionDetail[];
+  relations: GameWorkRelation[];
+  translations: GameTranslationRelation[];
+};
+
+async function loadWorkCollections(
+  workId: number,
+  includeNonPublic = false,
+): Promise<WorkCollections> {
+  const database = getD1();
+  const targetStatus = includeNonPublic ? "w.status<>'deleted'" : "w.status='published'";
+  const results = await database.batch([
+    database.prepare(`SELECT title FROM work_titles WHERE work_id=? ORDER BY id`).bind(workId),
+    database
+      .prepare(
+        `SELECT t.id,t.name,t.namespace
+         FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+         WHERE wt.work_id=? ORDER BY t.name`,
+      )
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+         FROM work_characters wc JOIN characters c ON c.id=wc.character_id
+         WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
+      )
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+         FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
+         WHERE ws.work_id=? ORDER BY c.name`,
+      )
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT ma.blob_sha256,ma.kind,ma.title,ma.alt_text,wma.sort_order,wma.is_primary
+         FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
+         WHERE wma.work_id=? ORDER BY wma.sort_order`,
+      )
+      .bind(workId),
+    database
+      .prepare(`SELECT id,label,url,link_type FROM work_external_links WHERE work_id=? ORDER BY id`)
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
+                av.estimated_r2_get_count,av.published_at,u.display_name AS uploader_name
+         FROM archive_versions av
+         JOIN works w ON w.id=av.work_id
+         LEFT JOIN users u ON u.id=av.uploader_id
+         WHERE av.work_id=? AND av.status='published' AND av.is_current=1
+         ORDER BY av.id DESC`,
+      )
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT wr.id,wr.relation_type,wr.notes,wr.relation_order,wr.vice_versa,
+                wr.created_by_user_id,w.id AS work_id,
+                COALESCE(w.chinese_title,w.original_title) AS title,${RELATED_PREVIEW_SQL}
+         FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
+         WHERE wr.from_work_id=? AND ${targetStatus}
+         ORDER BY wr.relation_order,wr.id`,
+      )
+      .bind(workId),
+    database
+      .prepare(
+        `SELECT tr.id,tr.target_role AS role,tr.relation_order,tr.created_by_user_id,
+                w.id AS work_id,COALESCE(w.chinese_title,w.original_title) AS title,
+                w.language,${RELATED_PREVIEW_SQL}
+         FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
+         WHERE tr.source_work_id=? AND ${targetStatus}
+         ORDER BY tr.relation_order,tr.id`,
+      )
+      .bind(workId),
+  ]);
+  const characters = batchRows<{
+    id: number;
+    primary_name: string;
+    original_name: string | null;
+    role_key: string;
+    spoiler_level: number;
+    sort_order: number | null;
+    notes: string | null;
+  }>(results[2]).map((row) => ({
+    id: row.id,
+    primaryName: row.primary_name,
+    originalName: row.original_name,
+    roleKey: row.role_key,
+    spoilerLevel: row.spoiler_level,
+    sortOrder: row.sort_order,
+    notes: row.notes,
   }));
-}
-async function listCreators(id: number): Promise<GameCreatorCredit[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes FROM work_staff ws JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? ORDER BY c.name`,
-    )
-    .bind(id)
-    .all<{
-      id: number;
-      name: string;
-      original_name: string | null;
-      website_url: string | null;
-      role_key: string;
-      role_label: string | null;
-      notes: string | null;
-    }>();
-  return (rows.results ?? []).map((x) => ({
-    id: x.id,
-    name: x.name,
-    originalName: x.original_name,
-    websiteUrl: isHttpUrl(x.website_url) ? x.website_url : null,
-    roleKey: x.role_key,
-    roleLabel: x.role_label,
-    notes: x.notes,
+  const creators = batchRows<{
+    id: number;
+    name: string;
+    original_name: string | null;
+    website_url: string | null;
+    role_key: string;
+    role_label: string | null;
+    notes: string | null;
+  }>(results[3]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    originalName: row.original_name,
+    websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
+    roleKey: row.role_key,
+    roleLabel: row.role_label,
+    notes: row.notes,
   }));
-}
-async function listMedia(id: number): Promise<GameMediaAsset[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT ma.blob_sha256,ma.kind,ma.title,ma.alt_text,wma.sort_order,wma.is_primary FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=? ORDER BY wma.sort_order`,
-    )
-    .bind(id)
-    .all<{
+  return {
+    aliases: batchRows<{ title: string }>(results[0]).map((row) => row.title),
+    tags: batchRows<GameTag>(results[1]),
+    characters,
+    creators,
+    media: batchRows<{
       blob_sha256: string;
       kind: string;
       title: string | null;
       alt_text: string | null;
       sort_order: number | null;
       is_primary: number;
-    }>();
-  return (rows.results ?? []).map((x) => ({
-    blobSha256: x.blob_sha256,
-    kind: x.kind,
-    title: x.title,
-    altText: x.alt_text,
-    sortOrder: x.sort_order,
-    isPrimary: x.is_primary === 1,
-  }));
-}
-async function listLinks(id: number): Promise<GameExternalLink[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT id,label,url,link_type FROM work_external_links WHERE work_id=? ORDER BY id`,
-    )
-    .bind(id)
-    .all<{ id: number; label: string; url: string; link_type: string }>();
-  return (rows.results ?? [])
-    .filter((x) => isHttpUrl(x.url))
-    .map((x) => ({
-      id: x.id,
-      label: x.label,
-      url: x.url,
-      linkType: x.link_type,
-    }));
-}
-async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT av.id,
-          w.language,
-          av.is_current,
-          av.total_files,
-          av.total_size_bytes,
-          av.estimated_r2_get_count,
-          av.published_at,
-          u.display_name AS uploader_name
-       FROM archive_versions av
-       JOIN works w ON w.id = av.work_id
-       LEFT JOIN users u ON u.id = av.uploader_id
-       WHERE av.work_id = ?
-         AND av.status = 'published'
-         AND av.is_current = 1
-       ORDER BY av.id DESC`,
-    )
-    .bind(id)
-    .all<{
+    }>(results[4]).map((row) => ({
+      blobSha256: row.blob_sha256,
+      kind: row.kind,
+      title: row.title,
+      altText: row.alt_text,
+      sortOrder: row.sort_order,
+      isPrimary: row.is_primary === 1,
+    })),
+    links: batchRows<{ id: number; label: string; url: string; link_type: string }>(results[5])
+      .filter((row) => isHttpUrl(row.url))
+      .map((row) => ({ id: row.id, label: row.label, url: row.url, linkType: row.link_type })),
+    archives: batchRows<{
       id: number;
       language: string;
       is_current: number;
@@ -1444,19 +1656,63 @@ async function listArchives(id: number): Promise<GameArchiveVersionDetail[]> {
       estimated_r2_get_count: number;
       published_at: string | null;
       uploader_name: string | null;
-    }>();
-  return (rows.results ?? []).map((x) => ({
-    id: x.id,
-    language: x.language,
-    isCurrent: x.is_current === 1,
-    totalFiles: x.total_files,
-    totalSizeBytes: x.total_size_bytes,
-    estimatedR2GetCount: x.estimated_r2_get_count,
-    publishedAt: x.published_at,
-    uploaderName: x.uploader_name,
-  }));
+    }>(results[6]).map((row) => ({
+      id: row.id,
+      language: row.language,
+      isCurrent: row.is_current === 1,
+      totalFiles: row.total_files,
+      totalSizeBytes: row.total_size_bytes,
+      estimatedR2GetCount: row.estimated_r2_get_count,
+      publishedAt: row.published_at,
+      uploaderName: row.uploader_name,
+    })),
+    relations: batchRows<{
+      id: number;
+      relation_type: string;
+      notes: string | null;
+      relation_order: number;
+      vice_versa: number;
+      created_by_user_id: number | null;
+      work_id: number;
+      title: string;
+      preview_blob_sha256: string | null;
+    }>(results[7]).map((row) => ({
+      id: row.id,
+      direction: "from" as const,
+      relationType: row.relation_type,
+      notes: row.notes,
+      relationOrder: row.relation_order,
+      viceVersa: row.vice_versa === 1,
+      createdByUserId: row.created_by_user_id,
+      workId: row.work_id,
+      title: row.title,
+      previewBlobSha256: row.preview_blob_sha256,
+    })),
+    translations: batchRows<{
+      id: number;
+      role: "original" | "translation";
+      relation_order: number;
+      created_by_user_id: number | null;
+      work_id: number;
+      title: string;
+      language: string;
+      preview_blob_sha256: string | null;
+    }>(results[8]).map((row) => ({
+      id: row.id,
+      role: row.role,
+      workId: row.work_id,
+      title: row.title,
+      language: row.language,
+      relationOrder: row.relation_order,
+      createdByUserId: row.created_by_user_id,
+      previewBlobSha256: row.preview_blob_sha256,
+    })),
+  };
 }
 
+function batchRows<T>(result: D1Result): T[] {
+  return (result.results ?? []) as T[];
+}
 const RELATED_PREVIEW_SQL = `(
   SELECT ma.blob_sha256
   FROM work_media_assets wma
@@ -1467,55 +1723,6 @@ const RELATED_PREVIEW_SQL = `(
   LIMIT 1
 ) AS preview_blob_sha256`;
 
-async function listRelations(
-  id: number,
-  includeNonPublic = false,
-): Promise<GameWorkRelation[]> {
-  const targetStatus = includeNonPublic
-    ? "w.status <> 'deleted'"
-    : "w.status='published'";
-  const rows = await getD1()
-    .prepare(
-      `SELECT wr.id,
-          wr.relation_type,
-          wr.notes,
-          wr.relation_order,
-          wr.vice_versa,
-          wr.created_by_user_id,
-          w.id AS work_id,
-          COALESCE(w.chinese_title, w.original_title) AS title,
-          ${RELATED_PREVIEW_SQL}
-       FROM work_relations wr
-       JOIN works w ON w.id = wr.to_work_id
-       WHERE wr.from_work_id = ?
-         AND ${targetStatus}
-       ORDER BY wr.relation_order, wr.id`,
-    )
-    .bind(id)
-    .all<{
-      id: number;
-      relation_type: string;
-      notes: string | null;
-      relation_order: number;
-      vice_versa: number;
-      created_by_user_id: number | null;
-      work_id: number;
-      title: string;
-      preview_blob_sha256: string | null;
-    }>();
-  return (rows.results ?? []).map((x) => ({
-    id: x.id,
-    direction: "from",
-    relationType: x.relation_type,
-    notes: x.notes,
-    relationOrder: x.relation_order,
-    viceVersa: x.vice_versa === 1,
-    createdByUserId: x.created_by_user_id,
-    workId: x.work_id,
-    title: x.title,
-    previewBlobSha256: x.preview_blob_sha256,
-  }));
-}
 async function listTranslations(
   id: number,
   includeNonPublic = false,
@@ -1561,77 +1768,6 @@ async function listTranslations(
     previewBlobSha256: x.preview_blob_sha256,
   }));
 }
-async function replaceAliases(id: number, values: string[]): Promise<void> {
-  await getD1()
-    .prepare(`DELETE FROM work_titles WHERE work_id=?`)
-    .bind(id)
-    .run();
-  for (const value of values.map((x) => x.trim()).filter(Boolean))
-    await getD1()
-      .prepare(
-        `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?,'alias')`,
-      )
-      .bind(id, value)
-      .run();
-}
-async function replaceTags(id: number, values: string[]): Promise<void> {
-  await getD1().prepare(`DELETE FROM work_tags WHERE work_id=?`).bind(id).run();
-  for (const value of values.map(normalizeEntityName).filter(Boolean)) {
-    await getD1()
-      .prepare(
-        `INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`,
-      )
-      .bind(value)
-      .run();
-    await getD1()
-      .prepare(
-        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'admin' FROM tags WHERE name=? COLLATE NOCASE`,
-      )
-      .bind(id, value)
-      .run();
-  }
-}
-async function replaceCharacters(id: number, values: string[]): Promise<void> {
-  await getD1()
-    .prepare(`DELETE FROM work_characters WHERE work_id=?`)
-    .bind(id)
-    .run();
-  for (const value of values.map((x) => x.split("|")[0]).map(normalizeEntityName).filter(Boolean)) {
-    const name = value;
-    await getD1()
-      .prepare(
-        `INSERT OR IGNORE INTO characters(primary_name) VALUES(?)`,
-      )
-      .bind(name)
-      .run();
-    await getD1()
-      .prepare(
-        `INSERT OR IGNORE INTO work_characters(work_id,character_id) SELECT ?,id FROM characters WHERE primary_name=? COLLATE NOCASE`,
-      )
-      .bind(id, name)
-      .run();
-  }
-}
-async function replaceLinks(
-  id: number,
-  values: GameExternalLink[],
-): Promise<void> {
-  const links = normalizeExternalLinks(values);
-  const database = getD1();
-  const statements = [
-    database
-      .prepare(`DELETE FROM work_external_links WHERE work_id=?`)
-      .bind(id),
-    ...links.map((link) =>
-      database
-        .prepare(
-          `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,?,?,?)`,
-        )
-        .bind(id, link.label, link.url, link.linkType),
-    ),
-  ];
-  await database.batch(statements);
-}
 function normalizeExternalLinks(
   values: GameExternalLink[],
 ): GameExternalLink[] {
@@ -1667,63 +1803,23 @@ async function getWorkDistributionState(workId: number): Promise<{
   const row = await getD1()
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM archive_versions WHERE work_id=?) AS archive_version_count,
+         (SELECT COUNT(*) FROM archive_versions WHERE work_id=w.id) AS archive_version_count,
          EXISTS(
            SELECT 1 FROM archive_versions
-           WHERE work_id=? AND status='published' AND is_current=1
-         ) AS has_current_archive`,
+           WHERE work_id=w.id AND status='published' AND is_current=1
+         ) AS has_current_archive
+       FROM works w
+       WHERE w.id=? AND w.status<>'deleted'
+       LIMIT 1`,
     )
-    .bind(workId, workId)
+    .bind(workId)
     .first<{ archive_version_count: number; has_current_archive: number }>();
+  if (!row) throw new HttpError(404, "作品不存在");
   return {
-    archiveVersionCount: row?.archive_version_count ?? 0,
-    hasCurrentArchive: row?.has_current_archive === 1,
+    archiveVersionCount: row.archive_version_count,
+    hasCurrentArchive: row.has_current_archive === 1,
   };
 }
-async function replaceMedia(workId: number, values: string[]): Promise<void> {
-  const hashes = uniqueText(values.map((value) => value.toLowerCase()));
-  await validatePreviewHashes(hashes);
-  const database = getD1();
-  const statements = [
-    database
-      .prepare(
-        `DELETE FROM work_media_assets WHERE work_id=? AND media_asset_id IN (SELECT id FROM media_assets WHERE kind='preview')`,
-      )
-      .bind(workId),
-  ];
-  for (const hash of hashes) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`,
-        )
-        .bind(hash),
-    );
-  }
-  await database.batch(statements);
-  const links = [];
-  for (const hash of hashes) {
-    const row = await database
-      .prepare(
-        `SELECT id FROM media_assets WHERE blob_sha256=? AND kind='preview' LIMIT 1`,
-      )
-      .bind(hash)
-      .first<{ id: number }>();
-    if (row) links.push(row.id);
-  }
-  if (links.length) {
-    await database.batch(
-      links.map((mediaAssetId, index) =>
-        database
-          .prepare(
-            `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) VALUES(?,?,?,?)`,
-          )
-          .bind(workId, mediaAssetId, index + 1, index === 0 ? 1 : 0),
-      ),
-    );
-  }
-}
-
 function entityNameKey(value: string): string {
   return value.toLowerCase();
 }

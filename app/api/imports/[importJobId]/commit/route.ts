@@ -5,11 +5,10 @@ import type {
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { commitArchiveImport } from "@/lib/server/db/archive-commit";
 import {
-  claimImportJobCommit,
+  claimOwnedImportJobCommit,
   markImportJobCommitFailed,
   parseImportJobId,
   recordImportCommitSucceeded,
-  requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
@@ -42,13 +41,12 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     id = parseImportJobId(importJobId);
-    const job = await requiredOwnedImportJob(id, auth.user);
     const payload = await parseCommitRequest(request);
-    await claimImportJobCommit(job.id);
+    const job = await claimOwnedImportJobCommit(id, auth.user);
     claimedCommit = true;
 
     const result = await commitArchiveImport({
-      importJobId: id,
+      job,
       user: auth.user,
       manifestSha256: payload.manifestSha256,
       manifestJson: payload.manifestJson,
