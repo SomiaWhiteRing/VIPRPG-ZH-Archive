@@ -489,8 +489,8 @@ INSERT INTO user_roles (user_id, role_id)
 SELECT 1, id FROM roles WHERE key='super_admin';
 INSERT INTO user_roles (user_id, role_id)
 SELECT 2, id FROM roles WHERE key='admin';
-INSERT INTO user_sessions (user_id, session_hash, expires_at, last_seen_at)
-VALUES (2, '${sqlQuote(adminSessionHash)}', datetime('now', '+1 day'), CURRENT_TIMESTAMP);
+INSERT INTO user_sessions (user_id, session_hash, expires_at)
+VALUES (2, '${sqlQuote(adminSessionHash)}', datetime('now', '+1 day'));
 INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
 VALUES
   (${catalogWorkIds[0]}, 'Contract Work A', 'published', 2, CURRENT_TIMESTAMP),

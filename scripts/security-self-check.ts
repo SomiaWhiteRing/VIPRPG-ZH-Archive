@@ -89,6 +89,13 @@ function fakeUser(
     displayName: `user-${id}`,
     avatarBlobSha256: null,
     bio: "",
+    profileVisibility: {
+      bio: true,
+      favorites: true,
+      history: true,
+      catalogs: true,
+      comments: true,
+    },
     roleIds: [],
     roleKeys: [],
     roleNames: [],

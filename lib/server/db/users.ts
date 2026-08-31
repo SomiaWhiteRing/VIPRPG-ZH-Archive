@@ -1,9 +1,12 @@
+import { cache } from "react";
 import { getBootstrapAdminEmail } from "@/lib/server/auth/config";
 import { hashPassword, passwordHashNeedsUpgrade, verifyPassword } from "@/lib/server/auth/password";
-import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
+import { hasPermission, parsePermissionKeys, type PermissionKey } from "@/lib/authz/permissions";
+import type { RoleKind } from "@/lib/authz/roles";
 import { getD1 } from "@/lib/server/db/d1";
-import { canManageUser, listPermissionKeysForUser, listRolesForUser } from "@/lib/server/db/permissions";
+import { canManageUser } from "@/lib/server/db/permissions";
 import { HttpError } from "@/lib/server/http/json";
+import type { ProfileVisibility } from "@/lib/user-profile";
 
 export type UserStatus = "active" | "disabled";
 
@@ -14,6 +17,7 @@ export type ArchiveUser = {
   displayName: string;
   avatarBlobSha256: string | null;
   bio: string;
+  profileVisibility: ProfileVisibility;
   roleIds: number[];
   roleKeys: string[];
   roleNames: string[];
@@ -29,8 +33,8 @@ export type ArchiveUser = {
 
 export type PublicUserProfile = Pick<
   ArchiveUser,
-  "id" | "displayName" | "avatarBlobSha256" | "bio" | "createdAt"
->;
+  "id" | "displayName" | "avatarBlobSha256" | "profileVisibility" | "createdAt"
+> & { bio: string | null };
 
 type UserRow = {
   id: number;
@@ -39,6 +43,11 @@ type UserRow = {
   display_name: string;
   avatar_blob_sha256: string | null;
   bio: string;
+  profile_show_bio: number;
+  profile_show_favorites: number;
+  profile_show_history: number;
+  profile_show_catalogs: number;
+  profile_show_comments: number;
   status: UserStatus;
   email_verified_at: string | null;
   last_login_at: string | null;
@@ -52,6 +61,31 @@ type UserAuthRow = UserRow & {
   locked_until: string | null;
 };
 
+type UserAccessRow = UserRow & {
+  role_id: number | null;
+  role_key: string | null;
+  role_name: string | null;
+  role_priority: number | null;
+  role_kind: string | null;
+  permission_key: string | null;
+};
+
+type SessionUserAccessRow = UserAccessRow & { session_id: number };
+
+type ProfileVisibilityRow = Pick<
+  UserRow,
+  | "profile_show_bio"
+  | "profile_show_favorites"
+  | "profile_show_history"
+  | "profile_show_catalogs"
+  | "profile_show_comments"
+>;
+
+type PublicUserRow = Pick<
+  UserRow,
+  "id" | "display_name" | "avatar_blob_sha256" | "bio" | "created_at"
+> & ProfileVisibilityRow;
+
 const USER_SELECT = `SELECT
   id,
   external_auth_id,
@@ -59,6 +93,11 @@ const USER_SELECT = `SELECT
   display_name,
   avatar_blob_sha256,
   bio,
+  profile_show_bio,
+  profile_show_favorites,
+  profile_show_history,
+  profile_show_catalogs,
+  profile_show_comments,
   status,
   email_verified_at,
   last_login_at,
@@ -73,6 +112,11 @@ const USER_AUTH_SELECT = `SELECT
   display_name,
   avatar_blob_sha256,
   bio,
+  profile_show_bio,
+  profile_show_favorites,
+  profile_show_history,
+  profile_show_catalogs,
+  profile_show_comments,
   status,
   email_verified_at,
   last_login_at,
@@ -82,6 +126,35 @@ const USER_AUTH_SELECT = `SELECT
   failed_login_count,
   locked_until
 FROM users`;
+
+const USER_ACCESS_COLUMNS = `
+  u.id,
+  u.external_auth_id,
+  u.email,
+  u.display_name,
+  u.avatar_blob_sha256,
+  u.bio,
+  u.profile_show_bio,
+  u.profile_show_favorites,
+  u.profile_show_history,
+  u.profile_show_catalogs,
+  u.profile_show_comments,
+  u.status,
+  u.email_verified_at,
+  u.last_login_at,
+  u.created_at,
+  u.updated_at,
+  r.id AS role_id,
+  r.key AS role_key,
+  r.name AS role_name,
+  r.priority AS role_priority,
+  r.kind AS role_kind,
+  rp.permission_key`;
+
+const USER_ACCESS_JOINS = `
+  LEFT JOIN user_roles ur ON ur.user_id=u.id
+  LEFT JOIN roles r ON r.id=ur.role_id AND r.status='active'
+  LEFT JOIN role_permissions rp ON rp.role_id=r.id`;
 
 export function normalizeEmail(value: string): string {
   const email = value.trim().toLowerCase();
@@ -98,31 +171,80 @@ export function canUpload(user: ArchiveUser): boolean {
 }
 
 export async function findUserById(id: number): Promise<ArchiveUser | null> {
-  const row = await getD1()
-    .prepare(`${USER_SELECT} WHERE id = ?`)
+  const rows = await getD1()
+    .prepare(
+      `SELECT ${USER_ACCESS_COLUMNS}
+       FROM users u
+       ${USER_ACCESS_JOINS}
+       WHERE u.id=?
+       ORDER BY r.priority DESC,r.id,rp.permission_key`,
+    )
     .bind(id)
-    .first<UserRow>();
-
-  return row ? hydrateUser(row) : null;
+    .all<UserAccessRow>();
+  return mapUserAccessRows(rows.results ?? [])[0] ?? null;
 }
 
 export async function findUserByEmail(rawEmail: string): Promise<ArchiveUser | null> {
-  const row = await findUserRowByEmail(normalizeEmail(rawEmail));
-
-  return row ? hydrateUser(row) : null;
+  const email = normalizeEmail(rawEmail);
+  const rows = await getD1()
+    .prepare(
+      `SELECT ${USER_ACCESS_COLUMNS}
+       FROM users u
+       ${USER_ACCESS_JOINS}
+       WHERE u.email=? OR u.external_auth_id=? OR u.external_auth_id=?
+       ORDER BY r.priority DESC,r.id,rp.permission_key`,
+    )
+    .bind(email, emailToExternalAuthId(email), email)
+    .all<UserAccessRow>();
+  return mapUserAccessRows(rows.results ?? [])[0] ?? null;
 }
 
-export async function findPublicUserById(id: number): Promise<PublicUserProfile | null> {
-  const user = await findUserById(id);
-  if (!user || user.status !== "active") return null;
+export async function findActiveUserBySessionHash(sessionHash: string): Promise<{
+  sessionId: number;
+  user: ArchiveUser;
+} | null> {
+  const rows = await getD1()
+    .prepare(
+      `SELECT s.id AS session_id,${USER_ACCESS_COLUMNS}
+       FROM user_sessions s
+       JOIN users u ON u.id=s.user_id
+       ${USER_ACCESS_JOINS}
+       WHERE s.session_hash=?
+         AND s.revoked_at IS NULL
+         AND datetime(s.expires_at)>CURRENT_TIMESTAMP
+         AND u.status='active'
+       ORDER BY r.priority DESC,r.id,rp.permission_key`,
+    )
+    .bind(sessionHash)
+    .all<SessionUserAccessRow>();
+  const sessionId = rows.results?.[0]?.session_id;
+  const user = mapUserAccessRows(rows.results ?? [])[0];
+  return sessionId === undefined || !user ? null : { sessionId, user };
+}
+
+export const findPublicUserById = cache(async (id: number): Promise<PublicUserProfile | null> => {
+  const row = await getD1()
+    .prepare(
+      `SELECT id,display_name,avatar_blob_sha256,bio,
+              profile_show_bio,profile_show_favorites,profile_show_history,
+              profile_show_catalogs,profile_show_comments,created_at
+       FROM users
+       WHERE id=? AND status='active'
+       LIMIT 1`,
+    )
+    .bind(id)
+    .first<PublicUserRow>();
+  if (!row) return null;
+  const profileVisibility = mapProfileVisibility(row);
   return {
-    id: user.id,
-    displayName: user.displayName,
-    avatarBlobSha256: user.avatarBlobSha256,
-    bio: user.bio,
-    createdAt: user.createdAt,
+    id: row.id,
+    displayName: row.display_name,
+    avatarBlobSha256: row.avatar_blob_sha256,
+    bio: profileVisibility.bio ? row.bio : null,
+    profileVisibility,
+    createdAt: row.created_at,
   };
-}
+});
 
 export async function createOrActivateVerifiedUser(input: {
   email: string;
@@ -279,36 +401,56 @@ export async function setUserPasswordByEmail(input: {
 }
 
 export async function updateOwnProfile(input: {
-  userId: number;
+  user: ArchiveUser;
   displayName: string;
   bio: string;
-}): Promise<ArchiveUser> {
+}): Promise<void> {
   const displayName = input.displayName.trim();
   const bio = input.bio.trim();
   if (!displayName || [...displayName].length > 80)
     throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
   if ([...bio].length > 500) throw new HttpError(400, "简介不能超过 500 个字符");
-  const user = await findUserById(input.userId);
-  if (!user) throw new HttpError(404, "账户不存在");
   await getD1().batch([
     getD1().prepare(`UPDATE users SET display_name=?,bio=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(displayName, bio, input.userId),
+      .bind(displayName, bio, input.user.id),
     getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'profile_updated')`)
-      .bind(input.userId, user.email),
+      .bind(input.user.id, input.user.email),
   ]);
-  return requiredUserById(input.userId);
 }
 
-export async function updateOwnAvatar(userId: number, sha256: string | null): Promise<ArchiveUser> {
-  const user = await findUserById(userId);
-  if (!user) throw new HttpError(404, "账户不存在");
+export async function updateOwnProfileVisibility(input: {
+  user: ArchiveUser;
+  visibility: ProfileVisibility;
+}): Promise<void> {
+  await getD1().batch([
+    getD1()
+      .prepare(
+        `UPDATE users
+         SET profile_show_bio=?,profile_show_favorites=?,profile_show_history=?,
+             profile_show_catalogs=?,profile_show_comments=?,updated_at=CURRENT_TIMESTAMP
+         WHERE id=?`,
+      )
+      .bind(
+        input.visibility.bio ? 1 : 0,
+        input.visibility.favorites ? 1 : 0,
+        input.visibility.history ? 1 : 0,
+        input.visibility.catalogs ? 1 : 0,
+        input.visibility.comments ? 1 : 0,
+        input.user.id,
+      ),
+    getD1()
+      .prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'profile_visibility_updated')`)
+      .bind(input.user.id, input.user.email),
+  ]);
+}
+
+export async function updateOwnAvatar(user: ArchiveUser, sha256: string | null): Promise<void> {
   await getD1().batch([
     getD1().prepare(`UPDATE users SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(sha256, userId),
+      .bind(sha256, user.id),
     getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'avatar_updated')`)
-      .bind(userId, user.email),
+      .bind(user.id, user.email),
   ]);
-  return requiredUserById(userId);
 }
 
 export async function verifyOwnPassword(userId: number, password: string): Promise<void> {
@@ -320,61 +462,41 @@ export async function verifyOwnPassword(userId: number, password: string): Promi
 }
 
 export async function changeOwnPassword(input: {
-  userId: number;
+  user: ArchiveUser;
   currentSessionId: number;
   currentPassword: string;
   newPassword: string;
 }): Promise<void> {
-  await verifyOwnPassword(input.userId, input.currentPassword);
+  await verifyOwnPassword(input.user.id, input.currentPassword);
   if (input.newPassword.length < 12 || input.newPassword.length > 256)
     throw new HttpError(400, "新密码长度必须为 12 至 256 个字符");
-  const user = await requiredUserById(input.userId);
   const passwordHash = await hashPassword(input.newPassword);
   await getD1().batch([
     getD1().prepare(`UPDATE users SET password_hash=?,password_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(passwordHash, input.userId),
+      .bind(passwordHash, input.user.id),
     getD1().prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=? AND id<>? AND revoked_at IS NULL`)
-      .bind(input.userId, input.currentSessionId),
+      .bind(input.user.id, input.currentSessionId),
     getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'password_changed')`)
-      .bind(input.userId, user.email),
+      .bind(input.user.id, input.user.email),
   ]);
 }
 
 export async function changeOwnEmail(input: {
-  userId: number;
+  user: ArchiveUser;
   currentSessionId: number;
   newEmail: string;
-}): Promise<ArchiveUser> {
+}): Promise<void> {
   const newEmail = normalizeEmail(input.newEmail);
   const existing = await findUserRowByEmail(newEmail);
-  if (existing && existing.id !== input.userId) throw new HttpError(409, "该邮箱已被使用");
-  const user = await requiredUserById(input.userId);
+  if (existing && existing.id !== input.user.id) throw new HttpError(409, "该邮箱已被使用");
   await getD1().batch([
     getD1().prepare(`UPDATE users SET email=?,external_auth_id=?,email_verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .bind(newEmail, emailToExternalAuthId(newEmail), input.userId),
+      .bind(newEmail, emailToExternalAuthId(newEmail), input.user.id),
     getD1().prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=? AND id<>? AND revoked_at IS NULL`)
-      .bind(input.userId, input.currentSessionId),
+      .bind(input.user.id, input.currentSessionId),
     getD1().prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,'email_changed',?)`)
-      .bind(input.userId, newEmail, JSON.stringify({ previousEmail: user.email })),
+      .bind(input.user.id, newEmail, JSON.stringify({ previousEmail: input.user.email })),
   ]);
-  return requiredUserById(input.userId);
-}
-
-export async function listUsersForAdmin(actor?: ArchiveUser): Promise<ArchiveUser[]> {
-  const rows = await getD1()
-    .prepare(
-      `${USER_SELECT}
-      ORDER BY created_at DESC, id DESC`,
-    )
-    .all<UserRow>();
-
-  const users = await Promise.all((rows.results ?? []).map((row) => hydrateUser(row)));
-
-  if (!actor) {
-    return users;
-  }
-
-  return users.filter((user) => user.id !== actor.id && canManageUser(actor, user));
 }
 
 export async function searchUsersForAdmin(input: {
@@ -387,12 +509,61 @@ export async function searchUsersForAdmin(input: {
 }): Promise<{ items: ArchiveUser[]; total: number; page: number; pageSize: number }> {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 50)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
-  const query = input.query?.trim().toLocaleLowerCase() ?? "";
-  const users = (await listUsersForAdmin(input.actor))
-    .filter((user) => input.status && input.status !== "all" ? user.status === input.status : true)
-    .filter((user) => query ? user.displayName.toLocaleLowerCase().includes(query) || user.email.toLocaleLowerCase().includes(query) || String(user.id) === query : true)
-    .sort((left, right) => input.sort === "name" ? left.displayName.localeCompare(right.displayName, "zh-CN") || right.id - left.id : right.createdAt.localeCompare(left.createdAt) || right.id - left.id);
-  return { items: users.slice((page - 1) * pageSize, page * pageSize), total: users.length, page, pageSize };
+  const query = input.query?.trim() ?? "";
+  const clauses = [
+    "u.id<>?",
+    `COALESCE((
+       SELECT MAX(rm.priority)
+       FROM user_roles urm JOIN roles rm ON rm.id=urm.role_id AND rm.status='active'
+       WHERE urm.user_id=u.id
+     ),0)<?`,
+  ];
+  const binds: Array<string | number> = [input.actor.id, input.actor.maxRolePriority];
+  if (input.status && input.status !== "all") {
+    clauses.push("u.status=?");
+    binds.push(input.status);
+  }
+  if (query) {
+    clauses.push(
+      `(u.display_name LIKE ? COLLATE NOCASE
+        OR u.email LIKE ? COLLATE NOCASE
+        OR u.external_auth_id LIKE ? COLLATE NOCASE
+        OR u.id=?)`,
+    );
+    const pattern = `%${query}%`;
+    binds.push(pattern, pattern, pattern, /^\d+$/.test(query) ? Number(query) : -1);
+  }
+  const where = clauses.join(" AND ");
+  const order = input.sort === "name"
+    ? "u.display_name COLLATE NOCASE ASC,u.id DESC"
+    : "datetime(u.created_at) DESC,u.id DESC";
+  const database = getD1();
+  const [countResult, usersResult] = await database.batch([
+    database.prepare(`SELECT COUNT(*) AS count FROM users u WHERE ${where}`).bind(...binds),
+    database
+      .prepare(
+        `WITH eligible AS (
+           SELECT u.id
+           FROM users u
+           WHERE ${where}
+           ORDER BY ${order}
+           LIMIT ? OFFSET ?
+         )
+         SELECT ${USER_ACCESS_COLUMNS}
+         FROM eligible e
+         JOIN users u ON u.id=e.id
+         ${USER_ACCESS_JOINS}
+         ORDER BY ${order},r.priority DESC,r.id,rp.permission_key`,
+      )
+      .bind(...binds, pageSize, (page - 1) * pageSize),
+  ]);
+  const total = Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0);
+  return {
+    items: mapUserAccessRows((usersResult.results ?? []) as UserAccessRow[]),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 export async function setUserStatusForAdmin(input: {
@@ -539,11 +710,46 @@ function emailToExternalAuthId(email: string): string {
   return `email:${email}`;
 }
 
-async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
-  const [roles, permissionKeys] = await Promise.all([
-    listRolesForUser(row.id),
-    listPermissionKeysForUser(row.id),
-  ]);
+function mapUserAccessRows(rows: UserAccessRow[]): ArchiveUser[] {
+  const users = new Map<number, {
+    row: UserRow;
+    roles: Map<number, { id: number; key: string; name: string; priority: number; kind: RoleKind }>;
+    permissionKeys: Set<string>;
+  }>();
+  for (const row of rows) {
+    const entry = users.get(row.id) ?? {
+      row,
+      roles: new Map(),
+      permissionKeys: new Set<string>(),
+    };
+    if (row.role_id !== null) {
+      if (
+        row.role_key === null || row.role_name === null || row.role_priority === null ||
+        !isRoleKind(row.role_kind)
+      ) {
+        throw new Error(`Invalid role row for user ${row.id}`);
+      }
+      entry.roles.set(row.role_id, {
+        id: row.role_id,
+        key: row.role_key,
+        name: row.role_name,
+        priority: row.role_priority,
+        kind: row.role_kind,
+      });
+    }
+    if (row.permission_key !== null) entry.permissionKeys.add(row.permission_key);
+    users.set(row.id, entry);
+  }
+  return [...users.values()].map(({ row, roles, permissionKeys }) =>
+    mapArchiveUser(row, [...roles.values()], parsePermissionKeys([...permissionKeys]))
+  );
+}
+
+function mapArchiveUser(
+  row: UserRow,
+  roles: Array<{ id: number; key: string; name: string; priority: number; kind: RoleKind }>,
+  permissionKeys: PermissionKey[],
+): ArchiveUser {
   return {
     id: row.id,
     email: row.email ?? externalAuthIdToEmail(row.external_auth_id),
@@ -551,6 +757,7 @@ async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
     displayName: row.display_name,
     avatarBlobSha256: row.avatar_blob_sha256,
     bio: row.bio,
+    profileVisibility: mapProfileVisibility(row),
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),
@@ -562,6 +769,20 @@ async function hydrateUser(row: UserRow): Promise<ArchiveUser> {
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function isRoleKind(value: string | null): value is RoleKind {
+  return value === "built_in" || value === "bootstrap_admin" || value === "custom";
+}
+
+function mapProfileVisibility(row: ProfileVisibilityRow): ProfileVisibility {
+  return {
+    bio: row.profile_show_bio === 1,
+    favorites: row.profile_show_favorites === 1,
+    history: row.profile_show_history === 1,
+    catalogs: row.profile_show_catalogs === 1,
+    comments: row.profile_show_comments === 1,
   };
 }
 

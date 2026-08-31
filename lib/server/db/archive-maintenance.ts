@@ -73,15 +73,20 @@ export async function searchArchiveVersionsForAdmin(
     ? "av.total_size_bytes DESC, av.id DESC"
     : "av.created_at DESC, av.id DESC";
   const database = getD1();
-  const [rows, count] = await Promise.all([
+  const [rowsResult, countResult] = await database.batch([
     database.prepare(
       `${archiveSelect()} ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
-    ).bind(...binds, pageSize, (page - 1) * pageSize).all<Row>(),
+    ).bind(...binds, pageSize, (page - 1) * pageSize),
     database.prepare(
       `SELECT COUNT(*) AS count FROM archive_versions av JOIN works w ON w.id=av.work_id ${where}`,
-    ).bind(...binds).first<{ count: number }>(),
+    ).bind(...binds),
   ]);
-  return { items: (rows.results ?? []).map(mapRow), total: count?.count ?? 0, page, pageSize };
+  return {
+    items: ((rowsResult.results ?? []) as Row[]).map(mapRow),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 
 export async function listArchiveVersionsForAdmin(

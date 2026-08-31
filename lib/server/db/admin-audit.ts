@@ -108,17 +108,22 @@ export async function searchAdminAuditLogs(input: {
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const database = getD1();
-  const [rows, count] = await Promise.all([
+  const [rowsResult, countResult] = await database.batch([
     database.prepare(
       `SELECT a.id,a.user_id,u.display_name AS actor_name,COALESCE(a.email,u.email) AS email,a.event_type,a.ip_hash,a.user_agent_hash,a.detail_json,a.created_at
        FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where}
        ORDER BY datetime(a.created_at) DESC,a.id DESC LIMIT ? OFFSET ?`,
-    ).bind(...binds, pageSize, (page - 1) * pageSize).all<AuditLogRow>(),
+    ).bind(...binds, pageSize, (page - 1) * pageSize),
     database.prepare(
       `SELECT COUNT(*) AS count FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id ${where}`,
-    ).bind(...binds).first<{ count: number }>(),
+    ).bind(...binds),
   ]);
-  return { items: (rows.results ?? []).map(mapAuditLog), total: count?.count ?? 0, page, pageSize };
+  return {
+    items: ((rowsResult.results ?? []) as AuditLogRow[]).map(mapAuditLog),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 
 export async function listAdminRoleEvents(limit = 100): Promise<AdminRoleEvent[]> {

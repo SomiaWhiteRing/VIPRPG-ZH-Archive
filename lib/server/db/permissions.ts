@@ -313,12 +313,14 @@ export async function resolveRoleRequest(input: {
     return;
   }
 
-  const [target, role] = await Promise.all([
-    loadUserPriorityTarget(database, request.target_user_id),
-    database.prepare("SELECT id, key, name, priority, kind, status FROM roles WHERE id = ?")
-      .bind(request.requested_role_id).first<RoleTarget>(),
+  const [targetResult, roleResult] = await database.batch([
+    userPriorityTargetStatement(database, request.target_user_id),
+    database.prepare("SELECT id,key,name,priority,kind,status FROM roles WHERE id=?")
+      .bind(request.requested_role_id),
   ]);
-  assertManageableRoleChange(input.actor, request.target_user_id, target, role);
+  const target = targetResult.results?.[0] as UserPriorityTarget | undefined;
+  const role = roleResult.results?.[0] as RoleTarget | undefined;
+  assertManageableRoleChange(input.actor, request.target_user_id, target ?? null, role ?? null);
   const results = await database.batch([
     resolvedRoleRequestStatement(database, {
       itemId: input.itemId,
@@ -369,16 +371,30 @@ async function changeUserRole(input: {
   if (!hasPermission(input.actor, "user.role.assign")) throw new HttpError(403, "没有分配用户角色的权限");
   const database = getD1();
   const sourceInboxItemId = input.sourceInboxItemId ?? null;
-  const [target, role, membership, sourceRequest] = await Promise.all([
-    loadUserPriorityTarget(database, input.targetUserId),
-    database.prepare("SELECT id, key, name, priority, kind, status FROM roles WHERE id = ?").bind(input.roleId).first<RoleTarget>(),
-    database.prepare("SELECT 1 AS present FROM user_roles WHERE user_id = ? AND role_id = ?").bind(input.targetUserId, input.roleId).first<{ present: number }>(),
-    sourceInboxItemId
-      ? database.prepare(`SELECT type, status, target_user_id, requested_role_id FROM inbox_items WHERE id = ?`)
-        .bind(sourceInboxItemId).first<RoleRequestTarget>()
-      : Promise.resolve(null),
-  ]);
-  assertManageableRoleChange(input.actor, input.targetUserId, target, role, input.action === "assigned");
+  const validationStatements = [
+    userPriorityTargetStatement(database, input.targetUserId),
+    database.prepare("SELECT id,key,name,priority,kind,status FROM roles WHERE id=?").bind(input.roleId),
+    database.prepare("SELECT 1 AS present FROM user_roles WHERE user_id=? AND role_id=?")
+      .bind(input.targetUserId, input.roleId),
+    ...(sourceInboxItemId
+      ? [database.prepare(`SELECT type,status,target_user_id,requested_role_id FROM inbox_items WHERE id=?`)
+        .bind(sourceInboxItemId)]
+      : []),
+  ];
+  const validation = await database.batch(validationStatements);
+  const target = validation[0].results?.[0] as UserPriorityTarget | undefined;
+  const role = validation[1].results?.[0] as RoleTarget | undefined;
+  const membership = validation[2].results?.[0] as { present: number } | undefined;
+  const sourceRequest = sourceInboxItemId
+    ? validation[3].results?.[0] as RoleRequestTarget | undefined
+    : null;
+  assertManageableRoleChange(
+    input.actor,
+    input.targetUserId,
+    target ?? null,
+    role ?? null,
+    input.action === "assigned",
+  );
   if (sourceInboxItemId && (
     !sourceRequest || sourceRequest.type !== "role_change_request" || sourceRequest.status !== "pending" ||
     sourceRequest.target_user_id !== input.targetUserId || sourceRequest.requested_role_id !== input.roleId
@@ -435,15 +451,15 @@ async function changeUserRole(input: {
   }
 }
 
-async function loadUserPriorityTarget(
+function userPriorityTargetStatement(
   database: ReturnType<typeof getD1>,
   userId: number,
-): Promise<UserPriorityTarget | null> {
+): D1PreparedStatement {
   return database.prepare(`
     SELECT u.status, COALESCE(MAX(CASE WHEN r.status = 'active' THEN r.priority END), 0) AS priority
     FROM users u LEFT JOIN user_roles ur ON ur.user_id = u.id LEFT JOIN roles r ON r.id = ur.role_id
     WHERE u.id = ? GROUP BY u.id
-  `).bind(userId).first<UserPriorityTarget>();
+  `).bind(userId);
 }
 
 function assertManageableRoleChange(

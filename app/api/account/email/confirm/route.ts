@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     newEmail = normalizeEmail(String(form.get("newEmail") ?? ""));
     const code = String(form.get("code") ?? "").trim();
     await consumeLatestEmailChallenge({ userId: auth.user.id, email: newEmail, purpose: "email_change", codeHash: await hashVerificationCode({ userId: auth.user.id, email: newEmail, purpose: "email_change", code }) });
-    await changeOwnEmail({ userId: auth.user.id, currentSessionId: auth.session.id, newEmail });
+    await changeOwnEmail({ user: auth.user, currentSessionId: auth.session.id, newEmail });
     return redirectWithParams(request, "/me/profile/email", { emailUpdated: "1" });
   } catch (error) {
     return redirectWithParams(request, "/me/profile/email", { newEmail, emailSent: "1", error: error instanceof Error ? error.message : "邮箱更新失败" });

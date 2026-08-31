@@ -73,6 +73,7 @@
 | 自定义表情 | `custom_emoji.manage` | 管理员上传、图片 blob 状态、shortcode 不可改名、只能退休或恢复 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |
 | 用户与角色 | user/role permission 或 bootstrap 身份 | 双方 priority、角色 kind/status、自操作禁令 |
+| 用户公开主页 | 本人设置的栏目可见性 | 活跃账户；栏目内容继续满足各自的 published 规则 |
 | 媒体、下载与游玩 | 公开入口 | Work、ArchiveVersion 和引用链完整 published |
 | GC 与审计 | maintenance/sweep/audit permission | 显式确认、数量上限、状态转换和审计 |
 

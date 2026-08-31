@@ -25,7 +25,10 @@ export type CatalogSummary = {
   createdAt: string;
   updatedAt: string;
 };
-export type CatalogDetail = CatalogSummary & { items: CatalogItem[] };
+export type CatalogDetail = CatalogSummary & {
+  ownerProfileShowsCatalogs: boolean;
+  items: CatalogItem[];
+};
 export type CatalogInput = {
   title?: string;
   description?: string | null;
@@ -47,15 +50,21 @@ export async function searchCatalogsForOwner(input: {
 }): Promise<{ items: CatalogSummary[]; total: number; page: number; pageSize: number }> {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
-  const total = await getD1()
-    .prepare(`SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published'`)
-    .bind(input.userId)
-    .first<{ count: number }>();
-  const rows = await getD1()
-    .prepare(`${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
-    .bind(input.userId, pageSize, (page - 1) * pageSize)
-    .all<Row>();
-  return { items: (rows.results ?? []).map(mapSummary), total: total?.count ?? 0, page, pageSize };
+  const database = getD1();
+  const [countResult, rowsResult] = await database.batch([
+    database
+      .prepare(`SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published'`)
+      .bind(input.userId),
+    database
+      .prepare(`${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
+      .bind(input.userId, pageSize, (page - 1) * pageSize),
+  ]);
+  return {
+    items: ((rowsResult.results ?? []) as Row[]).map(mapSummary),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 
 export async function listCatalogsContainingWork(
@@ -268,6 +277,7 @@ async function loadCatalogDetail(id: number): Promise<CatalogDetail | null> {
     .all<ItemRow>();
   return {
     ...mapSummary(row),
+    ownerProfileShowsCatalogs: row.owner_profile_show_catalogs === 1,
     items: (items.results ?? []).map((item) => ({
       workId: item.work_id,
       title: item.chinese_title || item.original_title,
@@ -356,6 +366,7 @@ type Row = {
   id: number;
   owner_user_id: number;
   owner_name: string;
+  owner_profile_show_catalogs: number;
   title: string;
   description: string | null;
   item_count: number;
@@ -380,6 +391,7 @@ const CATALOG_SUMMARY_SELECT = `
     c.id,
     c.owner_user_id,
     u.display_name AS owner_name,
+    u.profile_show_catalogs AS owner_profile_show_catalogs,
     c.title,
     c.description,
     (

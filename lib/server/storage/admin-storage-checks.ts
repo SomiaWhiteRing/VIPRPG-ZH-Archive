@@ -201,11 +201,31 @@ export async function runStorageConsistencyCheck(
 ): Promise<StorageConsistencyReport> {
   const dbSampleLimit = clampInteger(input.dbSampleLimit ?? 100, 1, 300);
   const r2ScanLimit = clampInteger(input.r2ScanLimit ?? 1000, 1, 3000);
-  const [blobRows, corePackRows, manifestRows] = await Promise.all([
-    listBlobRows(dbSampleLimit),
-    listCorePackRows(dbSampleLimit),
-    listManifestRows(dbSampleLimit),
+  const database = getD1();
+  const [blobResult, corePackResult, manifestResult] = await database.batch([
+    database
+      .prepare(
+        `SELECT sha256,size_bytes FROM blobs
+         WHERE status='active' ORDER BY sha256 LIMIT ?`,
+      )
+      .bind(dbSampleLimit),
+    database
+      .prepare(
+        `SELECT sha256,size_bytes FROM core_packs
+         WHERE status='active' ORDER BY sha256 LIMIT ?`,
+      )
+      .bind(dbSampleLimit),
+    database
+      .prepare(
+        `SELECT manifest_sha256 AS sha256,NULL AS size_bytes
+         FROM archive_versions WHERE status<>'deleted'
+         GROUP BY manifest_sha256 ORDER BY manifest_sha256 LIMIT ?`,
+      )
+      .bind(dbSampleLimit),
   ]);
+  const blobRows = (blobResult.results ?? []) as D1ObjectRow[];
+  const corePackRows = (corePackResult.results ?? []) as D1ObjectRow[];
+  const manifestRows = (manifestResult.results ?? []) as D1ObjectRow[];
   const [blobCheck, corePackCheck, manifestCheck, r2Scan] = await Promise.all([
     checkD1ObjectsInR2("blob", blobRows),
     checkD1ObjectsInR2("core_pack", corePackRows),
@@ -250,12 +270,35 @@ export async function runGcDryRun(
   );
   const sampleLimit = clampInteger(input.sampleLimit ?? 50, 1, 200);
 
-  const [archiveVersionSummary, blobSummary, corePackSummary] =
-    await Promise.all([
-      getArchiveVersionPurgeSummary(graceDays, sampleLimit),
-      getGcObjectSummary("blob", graceDays, sampleLimit),
-      getGcObjectSummary("core_pack", graceDays, sampleLimit),
-    ]);
+  const database = getD1();
+  const results = await database.batch([
+    archiveVersionPurgeSummaryStatement(database, graceDays),
+    archiveVersionPurgeCandidatesStatement(database, graceDays, sampleLimit),
+    eligibleGcSummaryStatement(database, "blob", graceDays),
+    deletedOnlyGcSummaryStatement(database, "blob"),
+    gcCandidateRowsStatement(database, "blob", sampleLimit),
+    eligibleGcSummaryStatement(database, "core_pack", graceDays),
+    deletedOnlyGcSummaryStatement(database, "core_pack"),
+    gcCandidateRowsStatement(database, "core_pack", sampleLimit),
+  ]);
+  const archiveVersionSummary = mapArchiveVersionPurgeSummary(
+    (results[0].results?.[0] ?? {}) as GcArchiveVersionPurgeSummaryRow,
+    (results[1].results ?? []) as GcArchiveVersionPurgeCandidateRow[],
+  );
+  const blobSummary = mapGcObjectSummary(
+    "blob",
+    (results[2].results?.[0] ?? {}) as GcSummaryRow,
+    (results[3].results?.[0] ?? {}) as GcSummaryRow,
+    normalizeGcCandidateRows((results[4].results ?? []) as GcCandidateRow[]),
+    graceDays,
+  );
+  const corePackSummary = mapGcObjectSummary(
+    "core_pack",
+    (results[5].results?.[0] ?? {}) as GcSummaryRow,
+    (results[6].results?.[0] ?? {}) as GcSummaryRow,
+    normalizeGcCandidateRows((results[7].results ?? []) as GcCandidateRow[]),
+    graceDays,
+  );
 
   return {
     checkedAt: new Date().toISOString(),
@@ -305,54 +348,6 @@ export async function runGcSweep(
     blobs,
     corePacks,
   };
-}
-
-async function listBlobRows(limit: number): Promise<D1ObjectRow[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT sha256, size_bytes
-      FROM blobs
-      WHERE status = 'active'
-      ORDER BY sha256
-      LIMIT ?`,
-    )
-    .bind(limit)
-    .all<D1ObjectRow>();
-
-  return rows.results ?? [];
-}
-
-async function listCorePackRows(limit: number): Promise<D1ObjectRow[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT sha256, size_bytes
-      FROM core_packs
-      WHERE status = 'active'
-      ORDER BY sha256
-      LIMIT ?`,
-    )
-    .bind(limit)
-    .all<D1ObjectRow>();
-
-  return rows.results ?? [];
-}
-
-async function listManifestRows(limit: number): Promise<D1ObjectRow[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        manifest_sha256 AS sha256,
-        NULL AS size_bytes
-      FROM archive_versions
-      WHERE status <> 'deleted'
-      GROUP BY manifest_sha256
-      ORDER BY manifest_sha256
-      LIMIT ?`,
-    )
-    .bind(limit)
-    .all<D1ObjectRow>();
-
-  return rows.results ?? [];
 }
 
 async function checkD1ObjectsInR2(
@@ -506,58 +501,51 @@ async function findKnownR2Sha256(objects: R2ListedObject[]): Promise<{
     }
   }
 
-  return {
-    blob: await findExistingHashes("blobs", "sha256", [...hashes.blob]),
-    core_pack: await findExistingHashes("core_packs", "sha256", [
-      ...hashes.core_pack,
-    ]),
-    manifest: await findExistingHashes("archive_versions", "manifest_sha256", [
-      ...hashes.manifest,
-    ]),
-  };
-}
-
-async function findExistingHashes(
-  tableName: "blobs" | "core_packs" | "archive_versions",
-  columnName: "sha256" | "manifest_sha256",
-  hashes: string[],
-): Promise<Set<string>> {
-  const existing = new Set<string>();
-
-  for (const chunk of chunkArray([...new Set(hashes)], 100)) {
-    if (chunk.length === 0) {
-      continue;
-    }
-
-    const placeholders = chunk.map(() => "?").join(", ");
-    const rows = await getD1()
-      .prepare(
-        `SELECT ${columnName} AS sha256
-        FROM ${tableName}
-        WHERE ${columnName} IN (${placeholders})`,
-      )
-      .bind(...chunk)
-      .all<{ sha256: string }>();
-
-    for (const row of rows.results ?? []) {
-      existing.add(row.sha256);
+  const database = getD1();
+  const queries: Array<{
+    type: "blob" | "core_pack" | "manifest";
+    statement: D1PreparedStatement;
+  }> = [];
+  for (const [type, table, column] of [
+    ["blob", "blobs", "sha256"],
+    ["core_pack", "core_packs", "sha256"],
+    ["manifest", "archive_versions", "manifest_sha256"],
+  ] as const) {
+    for (const chunk of chunkArray([...hashes[type]], 100)) {
+      queries.push({
+        type,
+        statement: database
+          .prepare(
+            `SELECT ${column} AS sha256
+             FROM ${table}
+             WHERE ${column} IN (${chunk.map(() => "?").join(",")})`,
+          )
+          .bind(...chunk),
+      });
     }
   }
-
+  const existing = {
+    blob: new Set<string>(),
+    core_pack: new Set<string>(),
+    manifest: new Set<string>(),
+  };
+  if (!queries.length) return existing;
+  const results = await database.batch(queries.map((query) => query.statement));
+  results.forEach((result, index) => {
+    for (const row of (result.results ?? []) as Array<{ sha256: string }>) {
+      existing[queries[index].type].add(row.sha256);
+    }
+  });
   return existing;
 }
 
-async function getGcObjectSummary(
+function mapGcObjectSummary(
   type: "blob" | "core_pack",
+  eligible: GcSummaryRow,
+  deletedOnly: GcSummaryRow,
+  sampleRows: GcCandidateRow[],
   graceDays: number,
-  sampleLimit: number,
-): Promise<GcObjectSummary> {
-  const [eligible, deletedOnly, sampleRows] = await Promise.all([
-    getEligibleGcSummary(type, graceDays),
-    getDeletedOnlyGcSummary(type),
-    listGcCandidateRows(type, sampleLimit),
-  ]);
-
+): GcObjectSummary {
   return {
     eligibleCount: eligible.count ?? 0,
     eligibleSizeBytes: eligible.size_bytes ?? 0,
@@ -579,15 +567,10 @@ async function getGcObjectSummary(
   };
 }
 
-async function getArchiveVersionPurgeSummary(
-  graceDays: number,
-  sampleLimit: number,
-): Promise<GcArchiveVersionPurgeSummary> {
-  const [summary, sample] = await Promise.all([
-    getArchiveVersionPurgeSummaryRow(graceDays),
-    listArchiveVersionPurgeCandidates(graceDays, sampleLimit),
-  ]);
-
+function mapArchiveVersionPurgeSummary(
+  summary: GcArchiveVersionPurgeSummaryRow,
+  sample: GcArchiveVersionPurgeCandidateRow[],
+): GcArchiveVersionPurgeSummary {
   return {
     eligibleCount: summary.count ?? 0,
     eligibleFileCount: summary.file_count ?? 0,
@@ -596,51 +579,47 @@ async function getArchiveVersionPurgeSummary(
   };
 }
 
-async function getArchiveVersionPurgeSummaryRow(
-  graceDays: number,
-): Promise<GcArchiveVersionPurgeSummaryRow> {
-  const row = await getD1()
-    .prepare(
-      `SELECT
-        COUNT(*) AS count,
-        COALESCE(SUM(total_files), 0) AS file_count,
-        COALESCE(SUM(total_size_bytes), 0) AS size_bytes
-      FROM archive_versions
-      WHERE status = 'deleted'
-        AND purged_at IS NULL
-        AND deleted_at IS NOT NULL
-        AND datetime(deleted_at) <= datetime('now', ?)`,
-    )
-    .bind(`-${graceDays} days`)
-    .first<GcArchiveVersionPurgeSummaryRow>();
-
-  return row ?? { count: 0, file_count: 0, size_bytes: 0 };
-}
-
 async function listArchiveVersionPurgeCandidates(
   graceDays: number,
   limit: number,
 ): Promise<GcArchiveVersionPurgeCandidateRow[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        id,
-        deleted_at,
-        total_files,
-        total_size_bytes,
-        manifest_sha256
-      FROM archive_versions
-      WHERE status = 'deleted'
-        AND purged_at IS NULL
-        AND deleted_at IS NOT NULL
-        AND datetime(deleted_at) <= datetime('now', ?)
-      ORDER BY datetime(deleted_at) ASC, id ASC
-      LIMIT ?`,
-    )
-    .bind(`-${graceDays} days`, limit)
+  const rows = await archiveVersionPurgeCandidatesStatement(getD1(), graceDays, limit)
     .all<GcArchiveVersionPurgeCandidateRow>();
 
   return rows.results ?? [];
+}
+
+function archiveVersionPurgeSummaryStatement(
+  database: D1Database,
+  graceDays: number,
+): D1PreparedStatement {
+  return database
+    .prepare(
+      `SELECT COUNT(*) AS count,
+         COALESCE(SUM(total_files),0) AS file_count,
+         COALESCE(SUM(total_size_bytes),0) AS size_bytes
+       FROM archive_versions
+       WHERE status='deleted' AND purged_at IS NULL AND deleted_at IS NOT NULL
+         AND datetime(deleted_at)<=datetime('now',?)`,
+    )
+    .bind(`-${graceDays} days`);
+}
+
+function archiveVersionPurgeCandidatesStatement(
+  database: D1Database,
+  graceDays: number,
+  limit: number,
+): D1PreparedStatement {
+  return database
+    .prepare(
+      `SELECT id,deleted_at,total_files,total_size_bytes,manifest_sha256
+       FROM archive_versions
+       WHERE status='deleted' AND purged_at IS NULL AND deleted_at IS NOT NULL
+         AND datetime(deleted_at)<=datetime('now',?)
+       ORDER BY datetime(deleted_at) ASC,id ASC
+       LIMIT ?`,
+    )
+    .bind(`-${graceDays} days`, limit);
 }
 
 async function purgeDeletedArchiveVersions(
@@ -751,20 +730,19 @@ async function releaseArchiveVersionPurgeReservation(
 async function deleteArchiveVersionRefs(
   archiveVersionId: number,
 ): Promise<void> {
-  await getD1()
-    .prepare(
+  const database = getD1();
+  await database.batch([
+    database.prepare(
       `DELETE FROM archive_version_blob_refs
       WHERE archive_version_id = ?`,
     )
-    .bind(archiveVersionId)
-    .run();
-  await getD1()
-    .prepare(
+    .bind(archiveVersionId),
+    database.prepare(
       `DELETE FROM archive_version_core_pack_refs
       WHERE archive_version_id = ?`,
     )
-    .bind(archiveVersionId)
-    .run();
+    .bind(archiveVersionId),
+  ]);
 }
 
 function mapArchiveVersionPurgeCandidate(
@@ -778,10 +756,11 @@ function mapArchiveVersionPurgeCandidate(
   };
 }
 
-async function getEligibleGcSummary(
+function eligibleGcSummaryStatement(
+  database: D1Database,
   type: "blob" | "core_pack",
   graceDays: number,
-): Promise<GcSummaryRow> {
+): D1PreparedStatement {
   const sql =
     type === "blob"
       ? `SELECT COUNT(*) AS count, SUM(b.size_bytes) AS size_bytes
@@ -808,12 +787,7 @@ async function getEligibleGcSummary(
             WHERE avcpr.core_pack_id = cp.id
           )`;
 
-  const row = await getD1()
-    .prepare(sql)
-    .bind(`-${graceDays} days`)
-    .first<GcSummaryRow>();
-
-  return row ?? { count: 0, size_bytes: 0 };
+  return database.prepare(sql).bind(`-${graceDays} days`);
 }
 
 async function listEligibleGcRows(
@@ -1004,9 +978,10 @@ async function restoreGcCandidateActive(
   await getD1().prepare(sql).bind(id).run();
 }
 
-async function getDeletedOnlyGcSummary(
+function deletedOnlyGcSummaryStatement(
+  database: D1Database,
   type: "blob" | "core_pack",
-): Promise<GcSummaryRow> {
+): D1PreparedStatement {
   const sql =
     type === "blob"
       ? `SELECT COUNT(*) AS count, SUM(size_bytes) AS size_bytes
@@ -1037,15 +1012,14 @@ async function getDeletedOnlyGcSummary(
           HAVING SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) = 0
         )`;
 
-  const row = await getD1().prepare(sql).first<GcSummaryRow>();
-
-  return row ?? { count: 0, size_bytes: 0 };
+  return database.prepare(sql);
 }
 
-async function listGcCandidateRows(
+function gcCandidateRowsStatement(
+  database: D1Database,
   type: "blob" | "core_pack",
   limit: number,
-): Promise<GcCandidateRow[]> {
+): D1PreparedStatement {
   const sql =
     type === "blob"
       ? `SELECT
@@ -1088,9 +1062,11 @@ async function listGcCandidateRows(
         ORDER BY total_reference_count ASC, cp.created_at ASC
         LIMIT ?`;
 
-  const rows = await getD1().prepare(sql).bind(limit).all<GcCandidateRow>();
+  return database.prepare(sql).bind(limit);
+}
 
-  return (rows.results ?? []).map((row) => ({
+function normalizeGcCandidateRows(rows: GcCandidateRow[]): GcCandidateRow[] {
+  return rows.map((row) => ({
     ...row,
     live_reference_count: row.live_reference_count ?? 0,
     deleted_reference_count: row.deleted_reference_count ?? 0,

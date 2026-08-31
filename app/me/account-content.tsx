@@ -6,16 +6,21 @@ import type { UserWorkListItem } from "@/lib/server/db/game-library";
 export function AccountSection({
   title,
   href,
+  status,
   children,
 }: {
   title: string;
   href: string;
+  status?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="border-t border-border pt-5 first:border-t-0 first:pt-0">
       <header className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="m-0 text-lg font-bold">{title}</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="m-0 text-lg font-bold">{title}</h2>
+          {status}
+        </div>
         <Link className="shrink-0 text-sm font-semibold text-primary hover:underline" href={href}>
           更多 →
         </Link>

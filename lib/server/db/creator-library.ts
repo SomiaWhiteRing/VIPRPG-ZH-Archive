@@ -115,13 +115,18 @@ export async function searchCreatorsForAdmin(input: {
       ? "work_credit_count DESC,c.id DESC"
       : "c.updated_at DESC,c.id DESC";
   const database = getD1();
-  const [rows, count] = await Promise.all([
+  const [rowsResult, countResult] = await database.batch([
     database.prepare(`${summarySql()} FROM creators c ${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
-      .bind(...binds, pageSize, (page - 1) * pageSize).all<CreatorRow>(),
+      .bind(...binds, pageSize, (page - 1) * pageSize),
     database.prepare(`SELECT COUNT(*) AS count FROM creators c ${where}`)
-      .bind(...binds).first<{ count: number }>(),
+      .bind(...binds),
   ]);
-  return { items: (rows.results ?? []).map(mapSummary), total: count?.count ?? 0, page, pageSize };
+  return {
+    items: ((rowsResult.results ?? []) as CreatorRow[]).map(mapSummary),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 export async function getCreatorForAdminEdit(
   id: number,

@@ -5,15 +5,10 @@ import {
 } from "@/lib/server/crypto/sha256";
 import { requirePermission } from "@/lib/server/auth/authorize";
 import {
-  assertObjectUploadAllowed,
-  findExistingObjects,
-  insertBlobRecord,
+  prepareObjectUpload,
+  recordUploadedBlob,
 } from "@/lib/server/db/archive-objects";
-import {
-  parseImportJobId,
-  recordImportObjectUpload,
-  requiredObjectUploadOwnedImportJob,
-} from "@/lib/server/db/import-jobs";
+import { parseImportJobId } from "@/lib/server/db/import-jobs";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import { readContentType } from "@/lib/server/http/request";
 import { putBlob } from "@/lib/server/storage/archive-bucket";
@@ -37,21 +32,21 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { sha256: rawSha256 } = await context.params;
     const sha256 = normalizeSha256(rawSha256);
-    const importJobId = await requiredAuthorizedImportJobId(request, auth.user);
-    const existing = await findExistingObjects({
-      blobSha256: [sha256],
-      corePackSha256: [],
+    const importJobId = requiredImportJobId(request);
+    const uploadState = await prepareObjectUpload({
+      kind: "blob",
+      sha256,
+      importJobId,
+      userId: auth.user.id,
     });
 
-    if (existing.blobs.has(sha256)) {
+    if (uploadState === "exists") {
       return json({
         ok: true,
         status: "exists",
         sha256,
       });
     }
-    await assertObjectUploadAllowed({ kind: "blob", sha256 });
-
     const body = await request.arrayBuffer();
     const actualSha256 = await sha256Hex(body);
 
@@ -70,17 +65,12 @@ export async function PUT(request: Request, context: RouteContext) {
     const contentTypeHint = readContentType(request);
     await putBlob(sha256, body, body.byteLength, contentTypeHint);
 
-    await insertBlobRecord({
+    await recordUploadedBlob({
       sha256,
       sizeBytes: body.byteLength,
       contentTypeHint,
       observedExt: null,
-    });
-
-    await recordImportObjectUpload({
-      id: importJobId,
-      objectKind: "blob",
-      sizeBytes: body.byteLength,
+      importJobId,
       durationMs: Date.now() - startedAt,
     });
 
@@ -98,14 +88,8 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 }
 
-async function requiredAuthorizedImportJobId(
-  request: Request,
-  user: Parameters<typeof requiredObjectUploadOwnedImportJob>[1],
-): Promise<number> {
+function requiredImportJobId(request: Request): number {
   const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
   if (!rawImportJobId) throw new HttpError(400, "import_job_id is required");
-
-  const importJobId = parseImportJobId(rawImportJobId);
-  await requiredObjectUploadOwnedImportJob(importJobId, user);
-  return importJobId;
+  return parseImportJobId(rawImportJobId);
 }

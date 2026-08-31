@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
   bio TEXT NOT NULL DEFAULT '',
+  profile_show_bio INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_bio IN (0, 1)),
+  profile_show_favorites INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_favorites IN (0, 1)),
+  profile_show_history INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_history IN (0, 1)),
+  profile_show_catalogs INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_catalogs IN (0, 1)),
+  profile_show_comments INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_comments IN (0, 1)),
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
@@ -154,7 +159,6 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TEXT NOT NULL,
   revoked_at TEXT,
-  last_seen_at TEXT,
   ip_hash TEXT,
   user_agent_hash TEXT
 );
@@ -943,8 +947,7 @@ CREATE TABLE IF NOT EXISTS download_builds (
   last_duration_ms INTEGER,
   last_error_message TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  last_accessed_at TEXT,
-  last_cache_put_at TEXT
+  last_accessed_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_download_builds_archive_version

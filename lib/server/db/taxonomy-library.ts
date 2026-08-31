@@ -93,11 +93,16 @@ export async function searchCharactersForAdmin(input: {
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const order = input.sort === "name" ? "ch.primary_name ASC,ch.id DESC" : input.sort === "works" ? "work_count DESC,ch.id DESC" : "ch.updated_at DESC,ch.id DESC";
   const database = getD1();
-  const [rows, count] = await Promise.all([
-    database.prepare(`${characterSql()} FROM characters ch ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize).all<CharacterRow>(),
-    database.prepare(`SELECT COUNT(*) AS count FROM characters ch ${where}`).bind(...binds).first<{ count: number }>(),
+  const [rowsResult, countResult] = await database.batch([
+    database.prepare(`${characterSql()} FROM characters ch ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize),
+    database.prepare(`SELECT COUNT(*) AS count FROM characters ch ${where}`).bind(...binds),
   ]);
-  return { items: (rows.results ?? []).map(mapCharacter), total: count?.count ?? 0, page, pageSize };
+  return {
+    items: ((rowsResult.results ?? []) as CharacterRow[]).map(mapCharacter),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 export async function getCharacterForAdminEdit(
   id: number,
@@ -208,11 +213,16 @@ export async function searchTagsForAdmin(input: {
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const order = input.sort === "name" ? "t.name ASC,t.id DESC" : input.sort === "works" ? "work_count DESC,t.id DESC" : "t.updated_at DESC,t.id DESC";
   const database = getD1();
-  const [rows, count] = await Promise.all([
-    database.prepare(`${tagSql()} FROM tags t ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize).all<TagRow>(),
-    database.prepare(`SELECT COUNT(*) AS count FROM tags t ${where}`).bind(...binds).first<{ count: number }>(),
+  const [rowsResult, countResult] = await database.batch([
+    database.prepare(`${tagSql()} FROM tags t ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize),
+    database.prepare(`SELECT COUNT(*) AS count FROM tags t ${where}`).bind(...binds),
   ]);
-  return { items: (rows.results ?? []).map(mapTag), total: count?.count ?? 0, page, pageSize };
+  return {
+    items: ((rowsResult.results ?? []) as TagRow[]).map(mapTag),
+    total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
+    page,
+    pageSize,
+  };
 }
 export async function getTagForAdminEdit(
   id: number,

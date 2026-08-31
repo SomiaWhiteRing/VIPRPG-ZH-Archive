@@ -2,7 +2,6 @@ import { Unzip, UnzipInflate } from "fflate";
 import type { ArchiveManifest } from "@/lib/archive/manifest";
 import { crc32 } from "@/lib/archive/crc32";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
-import { getD1 } from "@/lib/server/db/d1";
 import { HttpError } from "@/lib/server/http/json";
 import { getCorePack } from "@/lib/server/storage/archive-bucket";
 
@@ -13,10 +12,12 @@ type ExpectedEntry = {
   crc32: number;
 };
 
-type CorePackRow = {
-  size_bytes: number;
-  uncompressed_size_bytes: number;
-  file_count: number;
+export type CorePackMetadata = {
+  id: number;
+  sha256: string;
+  sizeBytes: number;
+  uncompressedSizeBytes: number;
+  fileCount: number;
 };
 
 /**
@@ -26,6 +27,7 @@ type CorePackRow = {
  */
 export async function validateCorePackReferences(
   manifest: ArchiveManifest,
+  metadataBySha256: ReadonlyMap<string, CorePackMetadata>,
 ): Promise<void> {
   const expectedByPack = new Map<string, Map<string, ExpectedEntry>>();
 
@@ -70,22 +72,14 @@ export async function validateCorePackReferences(
       );
     }
 
-    const row = await getD1()
-      .prepare(
-        `SELECT size_bytes, uncompressed_size_bytes, file_count
-         FROM core_packs
-         WHERE sha256 = ? AND status = 'active'
-         LIMIT 1`,
-      )
-      .bind(corePackSha256)
-      .first<CorePackRow>();
+    const row = metadataBySha256.get(corePackSha256);
     if (!row) {
       throw new HttpError(409, `Core-pack record is missing: ${pack.sha256}`);
     }
     if (
-      row.size_bytes !== pack.size ||
-      row.uncompressed_size_bytes !== pack.uncompressedSize ||
-      row.file_count !== pack.fileCount
+      row.sizeBytes !== pack.size ||
+      row.uncompressedSizeBytes !== pack.uncompressedSize ||
+      row.fileCount !== pack.fileCount
     ) {
       throw new HttpError(
         400,
