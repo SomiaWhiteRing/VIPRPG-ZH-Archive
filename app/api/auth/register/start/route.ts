@@ -5,7 +5,6 @@ import { hashPassword } from "@/lib/server/auth/password";
 import { assertAuthEmailRateLimit } from "@/lib/server/auth/rate-limit";
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
 import { generateVerificationCode, hashVerificationCode } from "@/lib/server/auth/tokens";
-import { verifyTurnstile } from "@/lib/server/auth/turnstile";
 import {
   assertEmailChallengeQuota,
   createEmailChallenge,
@@ -31,10 +30,6 @@ export async function POST(request: Request) {
       throw new Error("该邮箱已经注册，请直接登录或找回密码");
     }
 
-    await verifyTurnstile({
-      token: readRequiredFormString(formData, "cf-turnstile-response"),
-      request,
-    });
     await assertAuthEmailRateLimit(`register:${email}`);
     await assertEmailChallengeQuota({ email, purpose: "register" });
 

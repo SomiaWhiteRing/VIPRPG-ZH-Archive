@@ -37,18 +37,16 @@ export const LANGUAGE_OPTIONS = [
 ] as const;
 
 export const ENGINE_OPTIONS = [
-  { value: "rpg_maker_2000", label: "RPG Maker 2000", distribution: "archive" },
-  { value: "rpg_maker_2003", label: "RPG Maker 2003", distribution: "archive" },
-  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac", distribution: "archive" },
-  { value: "rpg_maker_xp", label: "RPG Maker XP", distribution: "external" },
-  { value: "rpg_maker_vx", label: "RPG Maker VX", distribution: "external" },
-  { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace", distribution: "external" },
-  { value: "rpg_maker_mv", label: "RPG Maker MV", distribution: "external" },
-  { value: "rpg_maker_mz", label: "RPG Maker MZ", distribution: "external" },
-  { value: "rpg_maker_unite", label: "RPG Maker Unite", distribution: "external" },
-  { value: "mixed", label: "混合引擎", distribution: "external" },
-  { value: "unknown", label: "未知", distribution: "external" },
-  { value: "other", label: "其他引擎", distribution: "external" },
+  { value: "rpg_maker_2000", label: "RPG Maker 2000", shortLabel: "RPG Maker 2000", distribution: "archive" },
+  { value: "rpg_maker_2003", label: "RPG Maker 2003", shortLabel: "RPG Maker 2003", distribution: "archive" },
+  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac", shortLabel: "2003 Maniac", distribution: "archive" },
+  { value: "rpg_maker_xp", label: "RPG Maker XP", shortLabel: "XP", distribution: "external" },
+  { value: "rpg_maker_vx", label: "RPG Maker VX", shortLabel: "VX", distribution: "external" },
+  { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace", shortLabel: "VX Ace", distribution: "external" },
+  { value: "rpg_maker_mv", label: "RPG Maker MV", shortLabel: "MV", distribution: "external" },
+  { value: "rpg_maker_mz", label: "RPG Maker MZ", shortLabel: "MZ", distribution: "external" },
+  { value: "rpg_maker_unite", label: "RPG Maker Unite", shortLabel: "Unite", distribution: "external" },
+  { value: "other", label: "其他引擎", shortLabel: "其他引擎", distribution: "external" },
 ] as const;
 
 export type ArchiveEngineFamily = Extract<
@@ -126,36 +124,11 @@ export const VERIFICATION_EMAIL_HINT =
   "验证码已发送至 {email}，未收到时请检查垃圾邮件。";
 
 export function engineLabel(value: string): string {
-  return ENGINE_OPTIONS.find((option) => option.value === value)?.label ?? "引擎未知";
+  return ENGINE_OPTIONS.find((option) => option.value === value)?.label ?? "其他引擎";
 }
 
 export function engineShortLabel(value: string): string {
-  switch (value) {
-    case "rpg_maker_2000":
-      return "RM2000";
-    case "rpg_maker_2003":
-      return "RM2003";
-    case "rpg_maker_2003_maniac":
-      return "Maniac";
-    case "rpg_maker_xp":
-      return "RMXP";
-    case "rpg_maker_vx":
-      return "RMVX";
-    case "rpg_maker_vx_ace":
-      return "VXAce";
-    case "rpg_maker_mv":
-      return "RMMV";
-    case "rpg_maker_mz":
-      return "RMMZ";
-    case "rpg_maker_unite":
-      return "Unite";
-    case "mixed":
-      return "混合";
-    case "other":
-      return "其他";
-    default:
-      return "未知";
-  }
+  return ENGINE_OPTIONS.find((option) => option.value === value)?.shortLabel ?? "其他引擎";
 }
 
 export function creatorRoleLabel(value: string): string {

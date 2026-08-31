@@ -105,8 +105,6 @@ export default async function AdminWorkEditPage({
                   { value: "rpg_maker_mv", label: "RPG Maker MV" },
                   { value: "rpg_maker_mz", label: "RPG Maker MZ" },
                   { value: "rpg_maker_unite", label: "RPG Maker Unite" },
-                  { value: "mixed", label: "混合" },
-                  { value: "unknown", label: "未知" },
                   { value: "other", label: "其他" },
                 ]}
               />

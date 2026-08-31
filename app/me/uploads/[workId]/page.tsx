@@ -26,14 +26,17 @@ export default async function UploadedWorkPage({
         title={`维护资料：${work.chineseTitle || work.originalTitle}`}
       />
       <WorkEditClient
+        currentUserId={user.id}
         suggestions={suggestions}
         work={{
           id: work.id,
           originalTitle: work.originalTitle,
           chineseTitle: work.chineseTitle,
           description: work.description,
+          originalReleaseDate: work.originalReleaseDate,
           engineFamily: work.engineFamily,
           isOriginal: work.isOriginal,
+          isTranslation: work.isTranslation,
           language: work.language,
           status: work.status as "published" | "hidden",
           aliases: work.aliases,
@@ -42,8 +45,12 @@ export default async function UploadedWorkPage({
           authors: work.creators
             .filter((creator) => creator.roleKey === "author")
             .map((creator) => creator.name),
+          translators: work.creators
+            .filter((creator) => creator.roleKey === "translator")
+            .map((creator) => creator.name),
           distribution: work.distribution,
           externalDownloadUrl: work.externalDownloadUrl,
+          sourceUrl: work.sourceUrl,
           previewBlobSha256s: work.media
             .filter((media) => media.kind === "preview")
             .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))

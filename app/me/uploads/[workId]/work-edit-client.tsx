@@ -16,30 +16,41 @@ import { CoverPicker, PreviewPicker } from "@/app/upload/media-picker";
 import { TokenPicker } from "@/app/upload/token-picker";
 import type { UploadTaxonomySuggestion } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
+import { updateTranslationPreference } from "@/app/upload/translation-preference";
 import { isArchiveEngineFamily } from "@/lib/labels";
+import {
+  ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  parseOriginalReleaseDate,
+} from "@/lib/original-release-date";
 
 type EditableWork = {
   id: number;
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
   characters: string[];
   authors: string[];
+  translators: string[];
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
+  sourceUrl: string | null;
   previewBlobSha256s: string[];
 };
 
 export function WorkEditClient({
+  currentUserId,
   suggestions,
   work,
 }: {
+  currentUserId: number;
   suggestions: {
     tags: UploadTaxonomySuggestion[];
     characters: UploadTaxonomySuggestion[];
@@ -52,6 +63,9 @@ export function WorkEditClient({
   const [tags, setTags] = useState(work.tags);
   const [characters, setCharacters] = useState(work.characters);
   const [isOriginal, setIsOriginal] = useState(work.isOriginal);
+  const [isTranslation, setIsTranslation] = useState(work.isTranslation);
+  const [translatorName, setTranslatorName] = useState(work.translators[0] ?? "");
+  const [translatorError, setTranslatorError] = useState<string | null>(null);
   const [externalDownloadUrl, setExternalDownloadUrl] = useState(
     work.externalDownloadUrl ?? "",
   );
@@ -62,24 +76,60 @@ export function WorkEditClient({
   const [message, setMessage] = useState<string | null>(null);
   const archiveMode = isArchiveEngineFamily(engineFamily);
 
+  function changeOriginalDeclaration(checked: boolean) {
+    setTranslatorError(null);
+    setIsOriginal(checked);
+    if (checked) {
+      setIsTranslation(false);
+      updateTranslationPreference(currentUserId, { isTranslation: false });
+    }
+  }
+
+  function changeTranslationDeclaration(checked: boolean) {
+    setTranslatorError(null);
+    setIsTranslation(checked);
+    if (checked) setIsOriginal(false);
+    updateTranslationPreference(currentUserId, { isTranslation: checked });
+  }
+
+  function changeTranslatorName(value: string) {
+    setTranslatorError(null);
+    setTranslatorName(value);
+    updateTranslationPreference(currentUserId, {
+      isTranslation,
+      translatorText: value.trim() || null,
+    });
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = new FormData(event.currentTarget);
     setMessage(null);
+    setTranslatorError(null);
+    if (isOriginal && isTranslation) {
+      setMessage("原创声明与翻译声明不能同时选择。");
+      return;
+    }
+    if (isTranslation && !translatorName.trim()) {
+      setTranslatorError("请填写译者。");
+      document.getElementById("edit-translator")?.focus();
+      return;
+    }
+    if (!parseOriginalReleaseDate(String(form.get("original_release_date") ?? ""))) {
+      setMessage(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+      document.getElementById("edit-release-date")?.focus();
+      return;
+    }
     if (previewImages.length && !cover) {
       setMessage("添加预览图时须同时更新封面图。");
       return;
     }
     setBusy(true);
-    const form = new FormData(event.currentTarget);
-    const coverEntry = form.get("cover_image");
-    const previewEntries = form
-      .getAll("preview_images[]")
-      .filter((value): value is File => value instanceof File && value.size > 0);
     form.delete("cover_image");
     form.delete("preview_images[]");
-    if (coverEntry instanceof File && coverEntry.size > 0) {
-      form.append("images[]", coverEntry);
-      for (const preview of previewEntries) form.append("images[]", preview);
+    if (cover) {
+      form.append("images[]", cover);
+      for (const preview of previewImages) form.append("images[]", preview);
     }
     try {
       const response = await fetch(`/api/works/${work.id}/owned`, {
@@ -172,21 +222,72 @@ export function WorkEditClient({
                       required
                     />
                   </WorkbenchField>
-                  <WorkbenchField className="md:col-span-2" controlId="edit-authors" label="作者">
-                    <div className="grid gap-2">
-                      <Input
-                        defaultValue={work.authors.join(", ")}
-                        id="edit-authors"
-                        name="authors"
-                      />
+                  <WorkbenchField controlId="edit-author" label="作者">
+                    <Input
+                      defaultValue={work.authors[0] ?? ""}
+                      id="edit-author"
+                      name="author"
+                    />
+                  </WorkbenchField>
+                  {isTranslation ? (
+                    <WorkbenchField controlId="edit-translator" label="译者" required>
+                      <div className="grid gap-1.5">
+                        <Input
+                          aria-describedby={translatorError ? "edit-translator-error" : undefined}
+                          aria-invalid={translatorError ? true : undefined}
+                          id="edit-translator"
+                          name="translator"
+                          onChange={(event) => changeTranslatorName(event.target.value)}
+                          required
+                          value={translatorName}
+                        />
+                        {translatorError ? (
+                          <p className="text-sm text-red-700" id="edit-translator-error" role="alert">
+                            {translatorError}
+                          </p>
+                        ) : null}
+                      </div>
+                    </WorkbenchField>
+                  ) : null}
+                  <WorkbenchField
+                    className="md:col-span-2"
+                    controlId="edit-release-date"
+                    info="作品最初发表的日期"
+                    label="发布日期"
+                  >
+                    <Input
+                      defaultValue={work.originalReleaseDate ?? ""}
+                      id="edit-release-date"
+                      name="original_release_date"
+                    />
+                  </WorkbenchField>
+                  <WorkbenchField
+                    className="md:col-span-2"
+                    label={<span id="edit-declarations-label">发布声明</span>}
+                  >
+                    <div
+                      aria-labelledby="edit-declarations-label"
+                      className="flex flex-wrap gap-x-5 gap-y-3 py-2.5"
+                      role="group"
+                    >
                       {isOriginal ? <input name="is_original" type="hidden" value="1" /> : null}
-                      <Label className="flex w-fit items-center gap-2 text-xs font-semibold text-red-700">
+                      {isTranslation ? <input name="is_translation" type="hidden" value="1" /> : null}
+                      <Label className="flex w-fit items-center gap-2 text-sm text-red-700" htmlFor="edit-is-original">
                         <Checkbox
                           checked={isOriginal}
                           className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700"
-                          onCheckedChange={(checked) => setIsOriginal(checked === true)}
+                          id="edit-is-original"
+                          onCheckedChange={(checked) => changeOriginalDeclaration(checked === true)}
                         />
                         本作品为我原创。
+                      </Label>
+                      <Label className="flex w-fit items-center gap-2 text-sm" htmlFor="edit-is-translation">
+                        <Checkbox
+                          checked={isTranslation}
+                          id="edit-is-translation"
+                          onCheckedChange={(checked) => changeTranslationDeclaration(checked === true)}
+                        />
+                        本作品为翻译作品。
                       </Label>
                     </div>
                   </WorkbenchField>
@@ -240,6 +341,16 @@ export function WorkEditClient({
                           rows={3}
                         />
                       </WorkbenchField>
+                      {work.distribution === "external" ? (
+                        <WorkbenchField controlId="edit-source-url" label="来源链接">
+                          <Input
+                            defaultValue={work.sourceUrl ?? ""}
+                            id="edit-source-url"
+                            name="source_url"
+                            type="url"
+                          />
+                        </WorkbenchField>
+                      ) : null}
                     </div>
                   </details>
                 </div>
@@ -250,7 +361,8 @@ export function WorkEditClient({
               <div className="lg:sticky lg:top-16">
                 <div className="border-b border-border p-4">
                   <CoverPicker
-                    existingBlobSha256={work.previewBlobSha256s[0]}
+                    candidateFiles={previewImages}
+                    existingBlobSha256s={work.previewBlobSha256s}
                     file={cover}
                     key={`cover-${mediaRevision}`}
                     name="cover_image"

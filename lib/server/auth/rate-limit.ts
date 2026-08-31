@@ -1,5 +1,5 @@
 import { getCloudflareEnv } from "@/lib/server/cloudflare/env";
-import { getAppOrigin, isTurnstileEnabled } from "@/lib/server/auth/config";
+import { getAppOrigin } from "@/lib/server/auth/config";
 
 export async function assertAuthEmailRateLimit(key: string): Promise<void> {
   try {
@@ -13,8 +13,10 @@ export async function assertAuthEmailRateLimit(key: string): Promise<void> {
       throw error;
     }
     const hostname = new URL(getAppOrigin()).hostname;
-    const explicitlyDisabledLocally = !isTurnstileEnabled() &&
-      (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]");
-    if (!explicitlyDisabledLocally) throw new Error("认证限流服务不可用");
+    const isLocalhost =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]";
+    if (!isLocalhost) throw new Error("认证限流服务不可用");
   }
 }

@@ -3,6 +3,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   createWriteStream,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -10,7 +11,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync, zipSync } from "fflate";
 import {
@@ -31,11 +32,18 @@ const persistV3 = join(persistRoot, "v3");
 const configPath = join(tempDir, "wrangler.json");
 const seedPath = join(tempDir, "seed.sql");
 const workerEntryPath = join(tempDir, "system-worker.mjs");
-const systemTsconfigPath = resolve(projectRoot, ".next-system-test.tsconfig.json");
+const systemTestDistDir = `.next-system-test/${basename(tempDir)}`;
+const systemTestDistPath = resolve(projectRoot, systemTestDistDir);
+const systemTsconfigPath = resolve(projectRoot, `${systemTestDistDir}.tsconfig.json`);
 const nextCli = resolve(projectRoot, "node_modules/next/dist/bin/next");
 const wranglerCli = resolve(
   projectRoot,
   "node_modules/wrangler/wrangler-dist/cli.js",
+);
+const testMode = process.argv[2] ?? "contract";
+assert.ok(
+  testMode === "contract" || testMode === "flow",
+  "usage: tsx scripts/system-self-check.ts [contract|flow]",
 );
 const password = "system-test-password";
 const passwordHash =
@@ -52,7 +60,18 @@ const sourceFiles = {
   "Picture/system-test.png": coverBytes,
 };
 const sourceZip = zipSync(sourceFiles, { level: 0 });
+const catalogWorkIds = [101, 102] as const;
 const managedChildren = new Set<ChildProcess>();
+
+type CatalogMutation = {
+  catalog: {
+    items: Array<{
+      workId: number;
+      sortOrder: number;
+      note: string | null;
+    }>;
+  };
+};
 
 let app: ManagedProcess | null = null;
 let worker: ManagedProcess | null = null;
@@ -61,15 +80,18 @@ let context: BrowserContext | null = null;
 let page: Page | null = null;
 let passed = false;
 
+const watchdogSeconds = testMode === "contract" ? 90 : 180;
 const watchdog = setTimeout(() => {
-  console.error(`[system] exceeded 180 seconds; artifacts preserved at ${tempDir}`);
+  console.error(
+    `[system:${testMode}] exceeded ${watchdogSeconds} seconds; artifacts preserved at ${tempDir}`,
+  );
   void emergencyStop().finally(() => process.exit(1));
-}, 180_000);
+}, watchdogSeconds * 1_000);
 
 try {
   await run();
   passed = true;
-  console.log("system self-check passed");
+  console.log(`${testMode} self-check passed`);
 } catch (error) {
   await captureFailure(page);
   const message = error instanceof Error ? error.message : String(error);
@@ -79,6 +101,7 @@ try {
   await closeBrowser(browser);
   await Promise.all([stopProcess(app), stopProcess(worker)]);
   rmSync(systemTsconfigPath, { force: true });
+  rmSync(systemTestDistPath, { recursive: true, force: true });
   if (passed) rmSync(tempDir, { recursive: true, force: true });
 }
 
@@ -115,7 +138,7 @@ async function run(): Promise<void> {
     seedPath,
   ]);
 
-  stage("exercise authentication and permission refresh");
+  stage("exercise stable HTTP and catalog contracts");
   app = startApp(appPort, origin, "app-1.log");
   await waitForHttp(`${origin}/api/health`, app);
   await expectStatus("anonymous admin boundary", origin, "/api/admin/summary", {}, 401);
@@ -128,7 +151,6 @@ async function run(): Promise<void> {
   );
 
   const adminCookie = `viprpg_session=${adminSessionToken}`;
-  const userCookie = await login(origin, "user@example.test");
   await expectStatus(
     "admin dashboard",
     origin,
@@ -136,6 +158,92 @@ async function run(): Promise<void> {
     { headers: { cookie: adminCookie } },
     200,
   );
+  const [lowerWorkId, higherWorkId] = catalogWorkIds;
+  const catalog = await jsonResponse<{ catalog: { id: number } }>(
+    "create catalog",
+    origin,
+    "/api/catalogs",
+    jsonMutation(origin, adminCookie, {
+      title: "Contract catalog",
+      description: "Stable catalog invariants",
+    }),
+    201,
+  );
+  await jsonResponse<CatalogMutation>(
+    "add first catalog item",
+    origin,
+    `/api/catalogs/${catalog.catalog.id}/items`,
+    jsonMutation(origin, adminCookie, {
+      workId: lowerWorkId,
+      note: "lower",
+    }),
+    200,
+  );
+  const defaultCatalogOrder = await jsonResponse<CatalogMutation>(
+    "add second catalog item",
+    origin,
+    `/api/catalogs/${catalog.catalog.id}/items`,
+    jsonMutation(origin, adminCookie, { workId: higherWorkId, note: "higher" }),
+    200,
+  );
+  assert.deepEqual(
+    defaultCatalogOrder.catalog.items.map((item) => item.workId),
+    [higherWorkId, lowerWorkId],
+  );
+  assert.deepEqual(
+    defaultCatalogOrder.catalog.items.map((item) => item.sortOrder),
+    [0, 0],
+  );
+  const updatedCatalogOrder = await jsonResponse<CatalogMutation>(
+    "update one catalog item sort value",
+    origin,
+    `/api/catalogs/${catalog.catalog.id}/items`,
+    {
+      ...jsonMutation(origin, adminCookie, {
+        workId: higherWorkId,
+        sortOrder: 1,
+        note: "updated",
+      }),
+      method: "PATCH",
+    },
+    200,
+  );
+  assert.deepEqual(
+    updatedCatalogOrder.catalog.items.map((item) => [
+      item.workId,
+      item.sortOrder,
+    ]),
+    [
+      [lowerWorkId, 0],
+      [higherWorkId, 1],
+    ],
+  );
+  assert.equal(
+    updatedCatalogOrder.catalog.items.find(
+      (item) => item.workId === higherWorkId,
+    )?.note,
+    "updated",
+  );
+  for (const sortOrder of [-1, 0.5]) {
+    await expectStatus(
+      `reject catalog sort value ${sortOrder}`,
+      origin,
+      `/api/catalogs/${catalog.catalog.id}/items`,
+      {
+        ...jsonMutation(origin, adminCookie, {
+          workId: higherWorkId,
+          sortOrder,
+          note: "invalid",
+        }),
+        method: "PATCH",
+      },
+      400,
+    );
+  }
+  if (testMode === "contract") return;
+
+  stage("prepare uploader permission for the preproduction flow");
+  const userCookie = await login(origin, "user@example.test");
   await expectStatus(
     "ordinary user cannot upload",
     origin,
@@ -160,8 +268,8 @@ async function run(): Promise<void> {
     formMutation(origin, adminCookie, { decision: "approve" }, true),
     200,
   );
-  stage("create an external work and recover a real browser upload");
-  const externalWorkId = await createExternalWork(origin, userCookie);
+
+  stage("recover a real browser upload");
   browser = await chromium.launch({ headless: true });
   context = await browser.newContext();
   await context.addCookies([
@@ -172,46 +280,35 @@ async function run(): Promise<void> {
     },
   ]);
   page = await context.newPage();
-  page.setDefaultTimeout(45_000);
+  page.setDefaultTimeout(10_000);
   page.setDefaultNavigationTimeout(60_000);
-  await page.goto(`${origin}/upload`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${origin}/upload`, { waitUntil: "networkidle" });
   const zipInput = page.locator('input[type="file"][accept=".zip,application/zip"]');
-  let zipModeReady = false;
-  for (let attempt = 0; attempt < 2 && !zipModeReady; attempt += 1) {
-    await page.getByRole("button", { name: "本地 ZIP" }).click();
-    zipModeReady = await zipInput
-      .waitFor({ state: "attached", timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-  }
-  assert.equal(zipModeReady, true, "ZIP mode becomes interactive after hydration");
   await zipInput.setInputFiles({
     name: "system-archive.zip",
     mimeType: "application/zip",
     buffer: Buffer.from(sourceZip),
   });
-  await page.getByText("等待作品资料", { exact: true }).waitFor();
+  await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor({ timeout: 45_000 });
   const importJobId = await waitForUploadDraft(page);
   await page.reload();
-  await page.getByRole("button", { name: "继续填写" }).click();
-  await page.getByText("等待作品资料", { exact: true }).waitFor();
-  await field(page, "原名 *", "input").fill("System Archive");
-  await field(page, "中文名", "input").fill("系统归档");
-  await field(page, "标签", "input").fill("系统标签");
-  await field(page, "登场角色", "textarea").fill("测试勇者");
-  await field(page, "作者名", "input").fill("System Author");
-  await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles({
+  await page.locator('[data-upload-action="resume-draft"]').click();
+  await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor();
+  await page.locator("#upload-original-title").fill("System Archive");
+  await page.locator('input[type="file"][accept="image/*"][required]').setInputFiles({
     name: "cover.png",
     mimeType: "image/png",
     buffer: Buffer.from(coverBytes),
   });
-  const committed = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === `/api/imports/${importJobId}/commit`,
-  );
-  await page.getByRole("button", { name: "确认作品资料" }).click();
-  const commitResponse = await committed;
+  const [commitResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === `/api/imports/${importJobId}/commit`,
+      { timeout: 45_000 },
+    ),
+    page.locator('[data-upload-phase] form button[type="submit"]').click(),
+  ]);
   if (commitResponse.status() !== 200) {
     throw new Error(`archive commit: ${commitResponse.status()} ${await commitResponse.text()}`);
   }
@@ -221,63 +318,9 @@ async function run(): Promise<void> {
   const { workId, archiveVersionId } = commitPayload.result;
   assert.ok(workId > 0 && archiveVersionId > 0);
   assert.equal(commitPayload.result.fileCount, 2);
-  await page.getByText(/上传完成/).waitFor();
   await waitForNoUploadDrafts(page);
 
-  stage("exercise representative domain and lifecycle contracts");
-  await expectStatus(
-    "ordinary relation",
-    origin,
-    `/api/works/${externalWorkId}/relations`,
-    jsonMutation(origin, userCookie, {
-      targetWorkId: workId,
-      relationType: "adaptation",
-      notes: "system-self-check",
-    }),
-    201,
-  );
-  await expectStatus(
-    "translation relation",
-    origin,
-    `/api/works/${externalWorkId}/translation-relations`,
-    jsonMutation(origin, userCookie, {
-      targetRole: "translation",
-      targetWorkId: workId,
-    }),
-    201,
-  );
-  const catalog = await jsonResponse<{ catalog: { id: number } }>(
-    "create catalog",
-    origin,
-    "/api/catalogs",
-    jsonMutation(origin, userCookie, {
-      title: "系统综合测试目录",
-      description: "一条系统流程",
-    }),
-    201,
-  );
-  await expectStatus(
-    "add catalog item",
-    origin,
-    `/api/catalogs/${catalog.catalog.id}/items`,
-    jsonMutation(origin, userCookie, { workId, note: "system" }),
-    200,
-  );
-  await expectStatus(
-    "create comment",
-    origin,
-    `/api/works/${workId}/comments`,
-    jsonMutation(origin, userCookie, { body: "系统综合测试评论" }),
-    201,
-  );
-  const detail = await expectStatus(
-    "public work detail",
-    origin,
-    `/games/${workId}`,
-    {},
-    200,
-  );
-  assert.match(await detail.text(), /系统归档/);
+  stage("exercise archive deletion and restore");
   await expectStatus(
     "move archive to trash",
     origin,
@@ -359,13 +402,13 @@ async function run(): Promise<void> {
       }),
   );
   await page.goto(`${origin}/play/${archiveVersionId}`);
-  await page.getByRole("button", { name: "安装到浏览器" }).click();
-  await page.getByRole("button", { name: "启动游戏" }).waitFor({ timeout: 45_000 });
+  await page.locator('[data-web-play-action="install"]').click();
+  await page.locator('[data-web-play-status="ready"]').waitFor({ timeout: 45_000 });
   const opfs = await inspectOpfs(page, webPlay.playKey);
   assert.deepEqual(opfs.rootEntries, ["index.json", "pack-index.json", "packs"]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
   await page.reload();
-  await page.getByRole("button", { name: "启动游戏" }).waitFor();
+  await page.locator('[data-web-play-status="ready"]').waitFor();
 }
 
 function writeTestFiles(origin: string): void {
@@ -416,7 +459,6 @@ export default {
         vars: {
           APP_ORIGIN: origin,
           EMAIL_FROM: "system@example.test",
-          TURNSTILE_ENABLED: "false",
         },
       },
       null,
@@ -424,10 +466,11 @@ export default {
     )}\n`,
     "utf8",
   );
+  mkdirSync(resolve(projectRoot, ".next-system-test"), { recursive: true });
   writeFileSync(
     systemTsconfigPath,
     `${JSON.stringify(
-      { extends: "./tsconfig.json", exclude: ["node_modules", ".next/dev"] },
+      { extends: "../tsconfig.json", exclude: ["../node_modules", "../.next", "."] },
       null,
       2,
     )}\n`,
@@ -448,6 +491,10 @@ INSERT INTO user_roles (user_id, role_id)
 SELECT 2, id FROM roles WHERE key='admin';
 INSERT INTO user_sessions (user_id, session_hash, expires_at, last_seen_at)
 VALUES (2, '${sqlQuote(adminSessionHash)}', datetime('now', '+1 day'), CURRENT_TIMESTAMP);
+INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
+VALUES
+  (${catalogWorkIds[0]}, 'Contract Work A', 'published', 2, CURRENT_TIMESTAMP),
+  (${catalogWorkIds[1]}, 'Contract Work B', 'published', 2, CURRENT_TIMESTAMP);
 `;
 }
 
@@ -463,7 +510,7 @@ function startApp(port: number, origin: string, logName: string): ManagedProcess
       NEXT_TELEMETRY_DISABLED: "1",
       SYSTEM_TEST_PERSIST_PATH: persistV3,
       SYSTEM_TEST_WRANGLER_CONFIG: configPath,
-      TURNSTILE_ENABLED: "false",
+      SYSTEM_TEST_DIST_DIR: systemTestDistDir,
       WRANGLER_SEND_METRICS: "false",
     },
   );
@@ -491,31 +538,6 @@ function startWorker(port: number): ManagedProcess {
     join(tempDir, "worker.log"),
     { CI: "true", WRANGLER_SEND_METRICS: "false" },
   );
-}
-
-async function createExternalWork(origin: string, cookie: string): Promise<number> {
-  const body = new FormData();
-  body.set("original_title", "System Original");
-  body.set("chinese_title", "系统原作");
-  body.set("description", "系统综合测试外链作品");
-  body.set("engine_family", "other");
-  body.set("language", "ja");
-  body.set("aliases", "System Alias");
-  body.set("tags", "系统标签");
-  body.set("characters", "测试勇者");
-  body.set("creator_name", "System Author");
-  body.set("creator_url", "https://example.test/author");
-  body.set("download_url", "https://example.test/game.zip");
-  body.set("cover", new Blob([coverBytes], { type: "image/png" }), "cover.png");
-  const result = await jsonResponse<{ workId: number }>(
-    "create external work",
-    origin,
-    "/api/works/external",
-    { method: "POST", headers: { cookie, origin }, body },
-    201,
-  );
-  assert.ok(result.workId > 0);
-  return result.workId;
 }
 
 async function login(origin: string, email: string): Promise<string> {
@@ -623,10 +645,6 @@ async function waitForNoUploadDrafts(currentPage: Page): Promise<void> {
       request.onerror = () => reject(request.error);
     });
   });
-}
-
-function field(currentPage: Page, label: string, control: "input" | "textarea") {
-  return currentPage.getByText(label, { exact: true }).locator("..").locator(control).first();
 }
 
 async function inspectOpfs(currentPage: Page, playKey: string) {

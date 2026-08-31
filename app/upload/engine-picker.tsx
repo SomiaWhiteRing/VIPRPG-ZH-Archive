@@ -50,7 +50,7 @@ export function EnginePicker({
               type="button"
               variant="outline"
             >
-              {option.label}
+              {option.shortLabel}
             </Button>
           </span>
         );

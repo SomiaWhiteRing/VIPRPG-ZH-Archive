@@ -214,13 +214,12 @@ GC 实现位于 `lib/server/storage/admin-storage-checks.ts` 和 `worker/archive
 
 ## 11. 验证
 
-变更归档链路时至少执行：
+测试分层遵循根目录 `AGENTS.md`。敏捷阶段只运行与改动相关的静态检查或稳定契约：
 
-- `npm run check`
-- `npm test`
-- `npm run build`
+- 类型、静态架构或安全规则变化运行 `npm run check`
+- 独立数据约束或 HTTP 契约变化运行 `npm test`
 
-`npm test` 在隔离状态中串行验证上传、preflight、commit、manifest/R2、原生 ZIP、GC 和 OPFS 安装。远端 sweep 只在明确授权时运行，不属于测试流程。
+预生产或发布前运行 `npm run verify:preprod`；其中 `npm run test:flow` 在隔离状态中串行验证上传、preflight、commit、manifest/R2、原生 ZIP、GC 和 OPFS 安装。远端 sweep 只在明确授权时运行，不属于测试流程。
 
 ## 12. 参考
 

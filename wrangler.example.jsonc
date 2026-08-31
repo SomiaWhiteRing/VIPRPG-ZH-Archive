@@ -55,7 +55,6 @@
     }
   ],
   "vars": {
-    "TURNSTILE_SITE_KEY": "<production-turnstile-site-key>",
     "EMAIL_FROM": "noreply@example.com",
     "APP_ORIGIN": "https://example.com"
   },
@@ -110,7 +109,6 @@
         }
       ],
       "vars": {
-        "TURNSTILE_SITE_KEY": "<staging-turnstile-site-key>",
         "EMAIL_FROM": "noreply@example.com",
         "APP_ORIGIN": "https://staging.example.com"
       },

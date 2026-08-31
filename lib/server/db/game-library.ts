@@ -3,7 +3,11 @@ import {
   isExternalEngineFamily,
   isLanguageCode,
 } from "@/lib/labels";
-import { normalizeEntityName } from "@/lib/entity-name";
+import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
+import {
+  ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  parseOriginalReleaseDate,
+} from "@/lib/original-release-date";
 import { getD1 } from "@/lib/server/db/d1";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
@@ -92,6 +96,7 @@ export type GameWorkSummary = {
   originalReleasePrecision: string;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   status: string;
   previewBlobSha256: string | null;
@@ -124,6 +129,7 @@ export type AdminWorkEdit = {
   originalReleasePrecision: string;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   status: "processing" | "published" | "hidden" | "deleted";
   aliases: string[];
@@ -186,6 +192,7 @@ type SummaryRow = {
   original_release_precision: string;
   engine_family: string;
   is_original: number;
+  is_translation: number;
   language: string;
   status: string;
   preview_blob_sha256: string | null;
@@ -205,6 +212,7 @@ type WorkRow = {
   original_release_precision: string;
   engine_family: string;
   is_original: number;
+  is_translation: number;
   language: string;
   status: string;
 };
@@ -255,16 +263,19 @@ export type ExternalWorkInput = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   aliases: string[];
   tags: string[];
   characters: string[];
   creatorName: string | null;
-  creatorUrl: string | null;
+  translatorName: string | null;
   previewBlobSha256s: string[];
   downloadUrl: string;
+  sourceUrl: string | null;
 };
 type ArchiveEditInput = {
   archiveVersionId: number;
@@ -319,6 +330,7 @@ export type UserWorkListItem = {
 export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
+  sourceUrl: string | null;
 };
 
 export type UploaderWorkUpdateInput = {
@@ -327,16 +339,20 @@ export type UploaderWorkUpdateInput = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
   characters: string[];
   authors: string[];
+  translators: string[];
   previewBlobSha256s: string[];
   downloadUrl: string | null;
+  sourceUrl: string | null;
 };
 
 export async function searchUserWorks(input: {
@@ -539,6 +555,7 @@ export async function getWorkForAdminEdit(
     originalReleasePrecision: row.original_release_precision,
     engineFamily: row.engine_family,
     isOriginal: row.is_original === 1,
+    isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
     aliases,
@@ -577,6 +594,7 @@ export async function getOwnedWorkForEdit(
   const downloadLink = work.externalLinks.find(
     (link) => link.linkType === "download_page",
   );
+  const sourceLink = work.externalLinks.find((link) => link.linkType === "source");
   const distribution = deriveWorkDistribution({
     hasCurrentArchive: distributionState.hasCurrentArchive,
     downloadLinkCount: downloadLink ? 1 : 0,
@@ -586,6 +604,7 @@ export async function getOwnedWorkForEdit(
     ...work,
     distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
+    sourceUrl: sourceLink?.url ?? null,
   };
 }
 
@@ -596,7 +615,10 @@ export async function updateOwnedWork(
   if (!before) throw new HttpError(404, "作品不存在或不属于当前上传者");
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
+  const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
+  if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   if (!(["published", "hidden"] as const).includes(input.status)) {
     throw new HttpError(400, "作品状态不合法");
   }
@@ -611,7 +633,13 @@ export async function updateOwnedWork(
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
   const characters = uniqueText(input.characters.map(normalizeEntityName));
-  const authors = uniqueText(input.authors.map(normalizeEntityName));
+  const authors = uniqueText(input.authors.map(normalizeCreatorName));
+  const translators = input.isTranslation
+    ? uniqueText(input.translators.map(normalizeCreatorName))
+    : [];
+  if (input.isTranslation && translators.length === 0) {
+    throw new HttpError(400, "翻译作品必须填写译者");
+  }
   const previewHashes = uniqueText(
     input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
   );
@@ -623,6 +651,9 @@ export async function updateOwnedWork(
   if (before.distribution === "external" && !downloadUrl) {
     throw new HttpError(400, "外部下载地址不能为空");
   }
+  const sourceUrl = before.distribution === "external"
+    ? normalizeHttpUrl(input.sourceUrl, "来源链接")
+    : null;
 
   const distributionState = await getWorkDistributionState(input.workId);
   assertStableDistribution({
@@ -661,12 +692,26 @@ export async function updateOwnedWork(
       notes: existing?.notes ?? null,
     };
   });
+  const existingTranslators = new Map(
+    before.creators
+      .filter((creator) => creator.roleKey === "translator")
+      .map((creator) => [entityNameKey(creator.name), creator]),
+  );
+  const translatorCredits = translators.map((name) => {
+    const existing = existingTranslators.get(entityNameKey(name));
+    return {
+      name,
+      roleLabel: existing?.roleLabel ?? "译者",
+      notes: existing?.notes ?? null,
+    };
+  });
   const statements: D1PreparedStatement[] = [
     database
       .prepare(
         `UPDATE works
-         SET original_title=?,chinese_title=?,description=?,engine_family=?,
-           is_original=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
+         SET original_title=?,chinese_title=?,description=?,original_release_date=?,
+           original_release_precision=?,engine_family=?,
+           is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
          WHERE id=? AND status<>'deleted'`,
       )
@@ -674,8 +719,11 @@ export async function updateOwnedWork(
         originalTitle,
         input.chineseTitle?.trim() || null,
         input.description?.trim() || null,
+        releaseDate.value,
+        releaseDate.precision,
         input.engineFamily,
         input.isOriginal ? 1 : 0,
+        input.isTranslation ? 1 : 0,
         input.language,
         input.status,
         input.status,
@@ -684,7 +732,7 @@ export async function updateOwnedWork(
     database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_tags WHERE work_id=? AND source='uploader'`).bind(input.workId),
     database.prepare(`DELETE FROM work_characters WHERE work_id=?`).bind(input.workId),
-    database.prepare(`DELETE FROM work_staff WHERE work_id=? AND role_key='author'`).bind(input.workId),
+    database.prepare(`DELETE FROM work_staff WHERE work_id=? AND role_key IN ('author','translator')`).bind(input.workId),
     database
       .prepare(
         `DELETE FROM work_media_assets
@@ -695,6 +743,13 @@ export async function updateOwnedWork(
       .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'`)
       .bind(input.workId),
   ];
+  if (before.distribution === "external") {
+    statements.push(
+      database
+        .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='source'`)
+        .bind(input.workId),
+    );
+  }
   for (const title of aliases) {
     statements.push(
       database
@@ -724,6 +779,12 @@ export async function updateOwnedWork(
       database.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label,notes) SELECT ?,id,'author',?,? FROM creators WHERE name=? COLLATE NOCASE`).bind(input.workId, author.roleLabel, author.notes, author.name),
     );
   }
+  for (const translator of translatorCredits) {
+    statements.push(
+      database.prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?,'{}')`).bind(translator.name),
+      database.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label,notes) SELECT ?,id,'translator',?,? FROM creators WHERE name=? COLLATE NOCASE`).bind(input.workId, translator.roleLabel, translator.notes, translator.name),
+    );
+  }
   for (const [index, hash] of previewHashes.entries()) {
     statements.push(
       database.prepare(`INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`).bind(hash),
@@ -733,6 +794,11 @@ export async function updateOwnedWork(
   if (downloadUrl) {
     statements.push(
       database.prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,'外部下载',?,'download_page')`).bind(input.workId, downloadUrl),
+    );
+  }
+  if (sourceUrl) {
+    statements.push(
+      database.prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,'来源链接',?,'source')`).bind(input.workId, sourceUrl),
     );
   }
   statements.push(
@@ -772,8 +838,6 @@ export async function updateWorkForAdmin(
       "rpg_maker_mv",
       "rpg_maker_mz",
       "rpg_maker_unite",
-      "mixed",
-      "unknown",
       "other",
     ],
     "引擎",
@@ -844,6 +908,9 @@ export async function createExternalWork(
   }
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  assertPublicationDeclarations(input.isOriginal, input.isTranslation);
+  const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
+  if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
   const downloadUrl = normalizeHttpUrl(input.downloadUrl, "外部下载地址");
   if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空");
@@ -861,23 +928,39 @@ export async function createExternalWork(
   const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
   const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
   const characters = [...new Set(input.characters.map(normalizeEntityName).filter(Boolean))];
-  const creatorName = input.creatorName?.trim() || null;
-  const creatorUrl = normalizeHttpUrl(input.creatorUrl, "作者网站");
+  const creatorName = input.creatorName ? normalizeCreatorName(input.creatorName) || null : null;
+  const translatorName = input.isTranslation && input.translatorName
+    ? normalizeCreatorName(input.translatorName) || null
+    : null;
+  if (input.isTranslation && !translatorName) {
+    throw new HttpError(400, "翻译作品必须填写译者");
+  }
+  const sourceUrl = normalizeHttpUrl(input.sourceUrl, "来源链接");
+  const staffCredits: Array<{
+    name: string;
+    roleKey: "author" | "translator";
+    roleLabel: "作者" | "译者";
+  }> = [];
+  if (creatorName) staffCredits.push({ name: creatorName, roleKey: "author", roleLabel: "作者" });
+  if (translatorName) staffCredits.push({ name: translatorName, roleKey: "translator", roleLabel: "译者" });
   const database = getD1();
   const result = await database
     .prepare(
       `INSERT INTO works (
-        original_title, chinese_title, description, is_original, language,
+        original_title, chinese_title, description, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status,
         extra_json, created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, 'unknown', ?, 'published', '{}', ?, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', '{}', ?, CURRENT_TIMESTAMP)`,
     )
     .bind(
       originalTitle,
       input.chineseTitle?.trim() || null,
       input.description?.trim() || null,
       input.isOriginal ? 1 : 0,
+      input.isTranslation ? 1 : 0,
       input.language,
+      releaseDate.value,
+      releaseDate.precision,
       input.engineFamily,
       input.user.id,
     )
@@ -896,20 +979,16 @@ export async function createExternalWork(
         )
         .bind(workId, title),
     ),
-    ...(creatorName
-      ? [
-          database
-            .prepare(
-              `INSERT OR IGNORE INTO creators(name,website_url,extra_json) VALUES(?,?, '{}')`,
-            )
-            .bind(creatorName, creatorUrl),
-          database
-            .prepare(
-              `INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label) SELECT ?,id,'author','作者' FROM creators WHERE name=? COLLATE NOCASE`,
-            )
-            .bind(workId, creatorName),
-        ]
-      : []),
+    ...staffCredits.flatMap((credit) => [
+      database
+        .prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?, '{}')`)
+        .bind(credit.name),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label) SELECT ?,id,?,? FROM creators WHERE name=? COLLATE NOCASE`,
+        )
+        .bind(workId, credit.roleKey, credit.roleLabel, credit.name),
+    ]),
     ...characters.flatMap((name, index) => [
       database
         .prepare(`INSERT OR IGNORE INTO characters(primary_name,extra_json) VALUES(?, '{}')`)
@@ -935,6 +1014,15 @@ export async function createExternalWork(
         `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
       )
       .bind(workId, downloadUrl),
+    ...(sourceUrl
+      ? [
+          database
+            .prepare(
+              `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '来源链接', ?, 'source')`,
+            )
+            .bind(workId, sourceUrl),
+        ]
+      : []),
     ...previewBlobSha256s.flatMap((sha256, index) => [
       database
         .prepare(
@@ -1060,7 +1148,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     originalReleasePrecision: String(
       form.get("original_release_precision") ?? "unknown",
     ),
-    engineFamily: String(form.get("engine_family") ?? "unknown"),
+    engineFamily: String(form.get("engine_family") ?? "other"),
     isOriginal: checked(form, "is_original"),
     language: String(form.get("language") ?? "zh-CN"),
     status: String(form.get("status") ?? "published"),
@@ -1090,6 +1178,7 @@ function summarySql(): string {
     w.original_release_precision,
     w.engine_family,
     w.is_original,
+    w.is_translation,
     w.language,
     w.status,
     (
@@ -1199,6 +1288,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       originalReleasePrecision: row.original_release_precision,
       engineFamily: row.engine_family,
       isOriginal: row.is_original === 1,
+      isTranslation: row.is_translation === 1,
       language: row.language,
       status: row.status,
       previewBlobSha256: row.preview_blob_sha256,
@@ -1636,6 +1726,15 @@ async function replaceMedia(workId: number, values: string[]): Promise<void> {
 
 function entityNameKey(value: string): string {
   return value.toLowerCase();
+}
+
+function assertPublicationDeclarations(
+  isOriginal: boolean,
+  isTranslation: boolean,
+): void {
+  if (isOriginal && isTranslation) {
+    throw new HttpError(400, "原创声明与翻译声明不能同时选择");
+  }
 }
 
 function isCharacterRoleKey(

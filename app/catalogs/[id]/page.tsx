@@ -68,14 +68,14 @@ export default async function CatalogPage({
               {firstItem ? (
                 <Link
                   aria-label={`查看目录首项：${firstItem.title}`}
-                  className="relative block aspect-video w-full shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-52"
+                  className="relative block aspect-4/3 w-full shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-52"
                   href={`/games/${firstItem.workId}`}
                 >
                   {catalog.coverBlobSha256 ? (
                     <Image
                       alt=""
                       className="h-full w-full object-cover"
-                      height={117}
+                      height={156}
                       src={`/api/media/blobs/${catalog.coverBlobSha256}`}
                       unoptimized
                       width={208}
@@ -87,7 +87,7 @@ export default async function CatalogPage({
                   )}
                 </Link>
               ) : (
-                <div className="flex aspect-video w-full shrink-0 items-center justify-center rounded-md border border-border bg-card font-mono text-xs text-muted sm:w-52">
+                <div className="flex aspect-4/3 w-full shrink-0 items-center justify-center rounded-md border border-border bg-card font-mono text-xs text-muted sm:w-52">
                   暂无封面
                 </div>
               )}

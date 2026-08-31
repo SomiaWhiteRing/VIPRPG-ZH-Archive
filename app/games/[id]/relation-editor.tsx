@@ -24,6 +24,7 @@ type Candidate = {
   chineseTitle: string | null;
   language: string;
   isOriginal: boolean;
+  isTranslation: boolean;
 };
 
 export function RelationEditor({

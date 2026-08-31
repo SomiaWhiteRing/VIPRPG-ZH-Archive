@@ -47,11 +47,7 @@ npm install
 Copy-Item .env.example .env.local
 ```
 
-至少设置本地 `AUTH_SECRET` 和与开发地址一致的 `APP_ORIGIN`。需要绕过本地 Turnstile 时设置：
-
-```dotenv
-TURNSTILE_ENABLED=false
-```
+至少设置本地 `AUTH_SECRET` 和与开发地址一致的 `APP_ORIGIN`。本地认证邮件限流 binding 不可用时自动跳过；远程环境缺少 binding 时请求失败。
 
 初始化本地 D1/R2 演示状态：
 
@@ -97,7 +93,7 @@ npm run preview
 
 - schema 只由 `migrations/` 发布；当前项目未上线且没有需保留的生产数据时，直接推进唯一当前 migration 模型。
 - 本地 reset/seed 脚本是开发基线，不作为生产迁移工具。
-- migration 顺序固定为本地、staging、production，三者串行执行。
+- migration 与同一目标环境的部署必须串行执行；本地、staging 和 production 各自维护状态，不能用一个环境的成功结果推断另一个环境已经迁移。
 - D1 只保存可查询的资料、状态、统计和对象引用；归档内文件路径只存在于 manifest。
 
 常用命令：
@@ -128,39 +124,36 @@ manifests/sha256/...
 
 ## 7. 构建与部署
 
-本地接受检查：
+日常开发的检查分层遵循根目录 `AGENTS.md`。进入预生产或准备手动部署时运行完整入口：
 
 ```powershell
-npm run check
-npm run build
+npm run verify:preprod
 ```
 
-部署 staging：
+手动部署 staging：
 
 ```powershell
+npm run verify:preprod
 npx wrangler d1 migrations apply DB --env staging --remote
 npm run deploy:staging
 npm run smoke:staging
 ```
 
-部署 production：
+手动部署 production：
 
 ```powershell
+npm run verify:preprod
 npx wrangler d1 migrations apply DB --remote
 npm run deploy
 ```
 
 GitHub Actions 的实际触发条件、environment、secrets 和步骤以 `.github/workflows/deploy.yml` 为准；操作说明见[GitHub Actions 自动部署](./github-actions-deployment.md)。长期文档不记录某次部署的 UUID、测试 ArchiveVersion ID 或当时的线上响应。
 
-部署前后至少验证：
+发布验收只保留环境相关的增量检查：
 
-- `npm run check` 与 `npm run build`；
-- D1 migration 成功；
-- `/api/health`、`/api/health/db` 和 `/api/health/r2`；
-- 登录和权限拒绝路径；
-- 小样本上传、preflight、commit；
-- 原生下载和在线游玩 published 引用链；
-- scheduled GC 的 dry-run/日志，不通过文档中的旧结果推断当前状态。
+- 部署前确认 `npm run verify:preprod` 和目标 D1 migration 成功；
+- 部署后读取 `/api/health`、`/api/health/db`、`/api/health/r2` 的实际响应，staging 运行 `npm run smoke:staging`；
+- 从目标环境日志确认 scheduled GC 是否成功，不通过文档中的旧结果推断当前状态。
 
 ## 8. Windows
 

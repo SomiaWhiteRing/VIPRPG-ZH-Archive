@@ -38,7 +38,7 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
 
   return (
     <>
-      <aside className="sticky top-20 hidden self-start md:block" aria-label="个人中心导航">
+      <aside className="hidden md:block" aria-label="个人中心导航">
         <nav className="grid gap-1">{links(false)}</nav>
       </aside>
       <nav

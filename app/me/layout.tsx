@@ -10,7 +10,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <div className="md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
-        <div className="hidden md:block">
+        <div className="sticky top-20 hidden self-start md:block">
           {user ? (
             <div className="mb-5 flex min-w-0 items-center gap-3 px-2">
               <UserAvatar avatarBlobSha256={user.avatarBlobSha256} displayName={user.displayName} />

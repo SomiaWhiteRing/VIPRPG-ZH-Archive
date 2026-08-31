@@ -90,7 +90,7 @@ insert(
     kind: "preview",
     alt_text: `测试图 ${item.name}`,
     width: 320,
-    height: 180,
+    height: 240,
     created_at: NOW,
   })),
 );
@@ -103,6 +103,7 @@ insert("works", [
   }),
   game(2, "魔王の夏休み", "魔王的暑假（中文译本）", {
     language: "zh-CN",
+    isTranslation: 1,
     description: "魔王的暑假中文翻译。",
     date: "2019-08-14",
   }),
@@ -250,9 +251,16 @@ insert("creators", [
     created_at: NOW,
     updated_at: NOW,
   },
+  {
+    id: 3,
+    name: "本地测试译者",
+    created_at: NOW,
+    updated_at: NOW,
+  },
 ]);
 insert("work_staff", [
   { work_id: 1, creator_id: 1, role_key: "author" },
+  { work_id: 2, creator_id: 3, role_key: "translator", role_label: "译者" },
   { work_id: 3, creator_id: 1, role_key: "author" },
   { work_id: 4, creator_id: 2, role_key: "author" },
 ]);
@@ -416,6 +424,7 @@ function game(id, originalTitle, chineseTitle, options = {}) {
     chinese_title: chineseTitle,
     description: options.description ?? null,
     is_original: options.isOriginal ?? 0,
+    is_translation: options.isTranslation ?? 0,
     language: options.language ?? "zh-CN",
     original_release_date: options.date ?? null,
     original_release_precision: options.date ? "day" : "unknown",
@@ -434,20 +443,24 @@ function archive(id, work_id, language, files, size, current) {
     1: {
       title: "魔王の夏休み",
       isOriginal: false,
+      isTranslation: false,
     },
     2: {
       title: "魔王の夏休み",
       isOriginal: false,
+      isTranslation: true,
     },
     3: {
       title: "時空の狭間のモナー城",
       isOriginal: false,
+      isTranslation: false,
     },
     4: {
       title: "夏之阵原创短篇",
       isOriginal: true,
+      isTranslation: false,
     },
-    5: { title: "ギコの大冒険", isOriginal: false },
+    5: { title: "ギコの大冒険", isOriginal: false, isTranslation: false },
   }[work_id];
   const manifestJson = JSON.stringify({
     schema: "viprpg-archive.manifest.v1",
@@ -456,6 +469,7 @@ function archive(id, work_id, language, files, size, current) {
       chineseTitle: null,
       language,
       isOriginal: info.isOriginal,
+      isTranslation: info.isTranslation,
     },
     archiveVersion: {
       sourceName: null,
@@ -525,7 +539,7 @@ function manifestKey(sha) {
 }
 function image(name, color) {
   const width = 320,
-    height = 180,
+    height = 240,
     raw = Buffer.alloc(height * (1 + width * 3));
   for (let y = 0; y < height; y++) {
     const off = y * (1 + width * 3);

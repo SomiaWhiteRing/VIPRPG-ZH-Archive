@@ -45,6 +45,7 @@ export default async function UploadPage() {
       <UploadClient
         currentUser={{
           id: currentUser.id,
+          displayName: currentUser.displayName,
           permissionKeys: currentUser.permissionKeys,
         }}
         suggestions={suggestions}

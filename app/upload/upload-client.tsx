@@ -7,8 +7,12 @@ import {
   type Dispatch,
   type DragEvent,
   type FormEvent,
+  type RefObject,
   type SetStateAction,
+  useEffect,
   useId,
+  useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -16,6 +20,7 @@ import {
   FileArchive,
   FolderOpen,
   Link as LinkIcon,
+  LoaderCircle,
   Upload,
 } from "lucide-react";
 import { LanguageField } from "@/app/admin/works/language-field";
@@ -27,7 +32,12 @@ import { Progress } from "@/app/components/ui/progress";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
-import { CoverPicker, PreviewPicker } from "@/app/upload/media-picker";
+import { inspectUploadSource } from "@/app/upload/archive-source";
+import {
+  CoverPicker,
+  createDefaultCoverFile,
+  PreviewPicker,
+} from "@/app/upload/media-picker";
 import { TokenPicker } from "@/app/upload/token-picker";
 import { useUploadController } from "@/app/upload/upload-controller";
 import type {
@@ -39,37 +49,47 @@ import type {
   UploadTaxonomySuggestion,
 } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
+import {
+  readTranslationPreference,
+  updateTranslationPreference,
+} from "@/app/upload/translation-preference";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes, formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
+import {
+  ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  parseOriginalReleaseDate,
+} from "@/lib/original-release-date";
 import { cn } from "@/lib/ui/cn";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
 type CreatorCredit = ArchiveCommitMetadata["creators"][number];
 type WorkStaffCredit = ArchiveCommitMetadata["workStaff"][number];
-export type UploadAuthorCredit = {
+export type UploadStaffCredit = {
   creator: CreatorCredit;
   staff: WorkStaffCredit;
 };
 type AssociationDefaults = {
   characters: CharacterCredit[];
-  authors: UploadAuthorCredit[];
+  authors: UploadStaffCredit[];
+  translators: UploadStaffCredit[];
 };
 type FlatMetadata = {
   originalTitle: string;
   chineseTitle: string;
-  aliasTitles: string;
+  aliasTitles: string[];
   engineFamily: EngineFamily;
   description: string;
   tags: string[];
   characters: string[];
-  creatorNames: string;
-  creatorUrl: string;
+  creatorName: string;
+  translatorName: string;
+  originalReleaseDate: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   language: string;
-  sourceName: string;
   sourceUrl: string;
   externalDownloadUrl: string;
   status: "published" | "hidden";
@@ -77,6 +97,7 @@ type FlatMetadata = {
 
 type CurrentUser = {
   id: number;
+  displayName: string;
   permissionKeys: string[];
 };
 
@@ -86,13 +107,16 @@ export type UploadInitialWork = {
   chineseTitle: string | null;
   aliases: string[];
   description: string | null;
+  originalReleaseDate: string | null;
   engineFamily: "rpg_maker_2000" | "rpg_maker_2003" | "rpg_maker_2003_maniac";
   language: string;
   isOriginal: boolean;
+  isTranslation: boolean;
   status: "published" | "hidden";
   tags: string[];
   characterCredits: CharacterCredit[];
-  authorCredits: UploadAuthorCredit[];
+  authorCredits: UploadStaffCredit[];
+  translatorCredits: UploadStaffCredit[];
   previewBlobSha256s: string[];
 };
 
@@ -119,7 +143,7 @@ export function UploadClient({
   const canArchiveUpload = currentUser.permissionKeys.includes("import_job.create");
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [form, setForm] = useState<FlatMetadata>(() =>
-    initialForm(initialWork, canArchiveUpload),
+    initialForm(initialWork, canArchiveUpload, currentUser.displayName),
   );
   const [associationDefaults, setAssociationDefaults] = useState<AssociationDefaults>(
     () => initialAssociations(initialWork),
@@ -128,13 +152,21 @@ export function UploadClient({
     cover: null,
     browsingImages: [],
   });
+  const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>([]);
+  const sourceInspectionGenerationRef = useRef(0);
+  const automaticCoverRef = useRef<File | null>(null);
   const [sourceSummary, setSourceSummary] = useState<{
     name: string;
     fileCount: number;
     sizeBytes: number;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [translatorError, setTranslatorError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const coverCandidates = useMemo(
+    () => [...sourceCoverCandidates, ...imageSelections.browsingImages],
+    [imageSelections.browsingImages, sourceCoverCandidates],
+  );
   const archiveMode = isArchiveEngineFamily(form.engineFamily);
   const metadataLocked = upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
   const formDisabled = preparing || metadataLocked;
@@ -147,6 +179,86 @@ export function UploadClient({
       draft.targetWorkId === (initialWork?.id ?? null) &&
       draft.serverImportJobId !== upload.task?.serverImportJobId,
   );
+
+  useEffect(() => {
+    if (initialWork) return;
+    const timeoutId = window.setTimeout(() => {
+      const preference = readTranslationPreference(currentUser.id);
+      if (!preference) return;
+      setForm((current) => ({
+        ...current,
+        isOriginal: false,
+        isTranslation: preference.isTranslation,
+        translatorName: preference.translatorText ?? currentUser.displayName,
+      }));
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [currentUser.displayName, currentUser.id, initialWork]);
+
+  function changeOriginalDeclaration(checked: boolean) {
+    setTranslatorError(null);
+    setForm((current) => ({
+      ...current,
+      isOriginal: checked,
+      isTranslation: checked ? false : current.isTranslation,
+    }));
+    if (checked) {
+      updateTranslationPreference(currentUser.id, { isTranslation: false });
+    }
+  }
+
+  function changeTranslationDeclaration(checked: boolean) {
+    setTranslatorError(null);
+    setForm((current) => ({
+      ...current,
+      isOriginal: checked ? false : current.isOriginal,
+      isTranslation: checked,
+    }));
+    updateTranslationPreference(currentUser.id, { isTranslation: checked });
+  }
+
+  function changeTranslatorName(value: string) {
+    setTranslatorError(null);
+    setForm((current) => ({ ...current, translatorName: value }));
+    updateTranslationPreference(currentUser.id, {
+      isTranslation: form.isTranslation,
+      translatorText: value.trim() || null,
+    });
+  }
+
+  async function prefillSourceMetadata(
+    sourceKind: UploadSourceKind,
+    files: UploadSourceFile[],
+    canPrefillOriginalTitle: boolean,
+    generation: number,
+  ) {
+    try {
+      const prefill = await inspectUploadSource(files, sourceKind);
+      if (generation !== sourceInspectionGenerationRef.current) return;
+      setSourceCoverCandidates(prefill.titleImages);
+
+      if (canPrefillOriginalTitle && prefill.gameTitle) {
+        setForm((current) =>
+          current.originalTitle.trim()
+            ? current
+            : { ...current, originalTitle: prefill.gameTitle ?? current.originalTitle },
+        );
+      }
+
+      const latestTitleImage = prefill.titleImages[0];
+      if (!latestTitleImage || initialWork?.previewBlobSha256s.length) return;
+
+      const automaticCover = await createDefaultCoverFile(latestTitleImage);
+      if (generation !== sourceInspectionGenerationRef.current) return;
+      setImageSelections((current) => {
+        if (current.cover) return current;
+        automaticCoverRef.current = automaticCover;
+        return { ...current, cover: automaticCover };
+      });
+    } catch {
+      // Source inspection only supplies defaults; the upload worker reports source errors.
+    }
+  }
 
   async function startFolder(rawFiles: UploadSourceFile[], suggestedName: string) {
     setSubmitError(null);
@@ -167,21 +279,31 @@ export function UploadClient({
     files: UploadSourceFile[],
   ) {
     const sizeBytes = files.reduce((sum, item) => sum + item.file.size, 0);
+    const canPrefillOriginalTitle = !form.originalTitle.trim();
+    const generation = sourceInspectionGenerationRef.current + 1;
+    sourceInspectionGenerationRef.current = generation;
+    setSourceCoverCandidates([]);
+    const previousAutomaticCover = automaticCoverRef.current;
+    automaticCoverRef.current = null;
+    if (previousAutomaticCover) {
+      setImageSelections((current) =>
+        current.cover === previousAutomaticCover ? { ...current, cover: null } : current,
+      );
+    }
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
-    setForm((current) => ({
-      ...current,
-      originalTitle: current.originalTitle.trim()
-        ? current.originalTitle
-        : sourceName.replace(/\.zip$/i, ""),
-      sourceName: current.sourceName.trim() ? current.sourceName : sourceName,
-    }));
     upload.startSource({
       sourceKind,
       sourceName,
       files,
       targetWorkId: initialWork?.id ?? null,
     });
+    void prefillSourceMetadata(
+      sourceKind,
+      files,
+      canPrefillOriginalTitle,
+      generation,
+    );
   }
 
   async function onSourceDrop(event: DragEvent<HTMLDivElement>) {
@@ -213,8 +335,23 @@ export function UploadClient({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
+    setTranslatorError(null);
+    if (form.isOriginal && form.isTranslation) {
+      setSubmitError("原创声明与翻译声明不能同时选择。");
+      return;
+    }
+    if (form.isTranslation && !form.translatorName.trim()) {
+      setTranslatorError("请填写译者。");
+      document.getElementById("upload-translator")?.focus();
+      return;
+    }
     if (!form.originalTitle.trim()) {
       setSubmitError("请填写作品原名。");
+      return;
+    }
+    if (!parseOriginalReleaseDate(form.originalReleaseDate)) {
+      setSubmitError(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+      document.getElementById("upload-release-date")?.focus();
       return;
     }
     if (initialWork && !archiveMode) {
@@ -272,8 +409,12 @@ export function UploadClient({
 
   async function restore(draft: UploadRecoveryDraft) {
     if (!(await upload.restoreDraft(draft))) return;
+    sourceInspectionGenerationRef.current += 1;
+    automaticCoverRef.current = null;
+    setSourceCoverCandidates([]);
     if (draft.metadata) {
       setForm(formFromMetadata(draft.metadata));
+      setTranslatorError(null);
       setAssociationDefaults(associationsFromMetadata(draft.metadata));
       setImageSelections({
         cover: draft.metadataBlobs[0]?.file ?? null,
@@ -289,13 +430,26 @@ export function UploadClient({
   }
 
   function restart() {
+    sourceInspectionGenerationRef.current += 1;
+    setSourceCoverCandidates([]);
+    const previousAutomaticCover = automaticCoverRef.current;
+    automaticCoverRef.current = null;
+    if (previousAutomaticCover) {
+      setImageSelections((current) =>
+        current.cover === previousAutomaticCover ? { ...current, cover: null } : current,
+      );
+    }
     upload.resetTask();
     setSourceSummary(null);
     setSubmitError(null);
   }
 
+  async function cancelUpload() {
+    if (await upload.cancelTask()) restart();
+  }
+
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-5" data-upload-phase={upload.task?.phase ?? "idle"}>
       {relevantDrafts.length ? (
         <section className="overflow-hidden rounded-lg border border-border bg-card">
           <header className="border-b border-border px-4 py-3">
@@ -319,7 +473,12 @@ export function UploadClient({
                   </div>
                   {!committing ? (
                     <div className="flex gap-2">
-                      <Button onClick={() => void restore(draft)} size="sm" type="button">
+                      <Button
+                        data-upload-action="resume-draft"
+                        onClick={() => void restore(draft)}
+                        size="sm"
+                        type="button"
+                      >
                         继续填写
                       </Button>
                       <Button
@@ -374,9 +533,10 @@ export function UploadClient({
               <section className="p-4 sm:p-5">
                 {archiveMode ? (
                   <ArchiveSourceSection
+                    canceling={upload.canceling}
                     disabled={preparing || Boolean(sourceSummary) || upload.active}
                     mode={mode}
-                    onCancel={() => void upload.cancelTask()}
+                    onCancel={() => void cancelUpload()}
                     onDrop={onSourceDrop}
                     onFolder={(files, sourceName) => void startFolder(files, sourceName)}
                     onModeChange={setMode}
@@ -413,6 +573,9 @@ export function UploadClient({
                   </div>
                 ) : (
                   <MetadataFields
+                    changeOriginalDeclaration={changeOriginalDeclaration}
+                    changeTranslationDeclaration={changeTranslationDeclaration}
+                    changeTranslatorName={changeTranslatorName}
                     disabled={preparing}
                     form={form}
                     imageSelections={imageSelections}
@@ -420,6 +583,7 @@ export function UploadClient({
                     setForm={setForm}
                     setImageSelections={setImageSelections}
                     suggestions={suggestions}
+                    translatorError={translatorError}
                   />
                 )}
               </section>
@@ -429,12 +593,17 @@ export function UploadClient({
               <div className="lg:sticky lg:top-16">
                 <div className="border-b border-border p-4">
                   <CoverPicker
+                    candidateFiles={coverCandidates}
                     disabled={formDisabled}
-                    existingBlobSha256={initialWork?.previewBlobSha256s[0]}
+                    existingBlobSha256s={initialWork?.previewBlobSha256s}
                     file={imageSelections.cover}
-                    onChange={(cover) =>
-                      setImageSelections((current) => ({ ...current, cover }))
+                    includeSelectedFileCandidate={
+                      imageSelections.cover !== automaticCoverRef.current
                     }
+                    onChange={(cover) => {
+                      automaticCoverRef.current = null;
+                      setImageSelections((current) => ({ ...current, cover }));
+                    }}
                     required={!initialWork}
                   />
                   {initialWork ? (
@@ -543,6 +712,7 @@ export function UploadClient({
 }
 
 function ArchiveSourceSection({
+  canceling,
   disabled,
   mode,
   onCancel,
@@ -554,6 +724,7 @@ function ArchiveSourceSection({
   sourceSummary,
   task,
 }: {
+  canceling: boolean;
   disabled: boolean;
   mode: UploadSourceKind;
   onCancel: () => void;
@@ -565,11 +736,26 @@ function ArchiveSourceSection({
   sourceSummary: { name: string; fileCount: number; sizeBytes: number } | null;
   task: BrowserUploadTaskSnapshot | null;
 }) {
+  const dragDepthRef = useRef(0);
+  const instructionsId = useId();
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const zipInputRef = useRef<HTMLInputElement>(null);
+
+  function openZipPicker() {
+    if (!disabled) zipInputRef.current?.click();
+  }
+
+  function resetFileDrag() {
+    dragDepthRef.current = 0;
+    setFileDragActive(false);
+  }
+
   return (
     <div>
       <h2 className="mb-4 text-lg font-bold">游戏文件</h2>
       {sourceSummary ? (
         <UploadTaskCard
+          canceling={canceling}
           mode={mode}
           onCancel={onCancel}
           onRestart={onRestart}
@@ -578,21 +764,67 @@ function ArchiveSourceSection({
         />
       ) : (
         <div
+          aria-describedby={instructionsId}
+          aria-disabled={disabled || undefined}
+          aria-label={fileDragActive ? "松开以上传游戏文件" : "拖入游戏文件夹或 ZIP 压缩包"}
           className={cn(
-            "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center",
-            disabled && "opacity-60",
+            "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            disabled
+              ? "cursor-not-allowed opacity-60"
+              : "cursor-pointer hover:border-primary hover:bg-primary/5",
+            fileDragActive && !disabled && "border-primary bg-primary/10 ring-2 ring-primary/20",
           )}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => void onDrop(event)}
+          data-file-drag-active={fileDragActive || undefined}
+          onClick={(event) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest("[data-upload-picker]")) return;
+            openZipPicker();
+          }}
+          onDragEnter={(event) => {
+            if (!hasDraggedFiles(event)) return;
+            event.preventDefault();
+            if (disabled) return;
+            dragDepthRef.current += 1;
+            setFileDragActive(true);
+          }}
+          onDragLeave={() => {
+            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+            if (dragDepthRef.current === 0) setFileDragActive(false);
+          }}
+          onDragOver={(event) => {
+            if (!hasDraggedFiles(event)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = disabled ? "none" : "copy";
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const hasFiles = hasDraggedFiles(event);
+            resetFileDrag();
+            if (!disabled && hasFiles) void onDrop(event);
+          }}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) {
+              return;
+            }
+            event.preventDefault();
+            openZipPicker();
+          }}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
         >
           <div className="grid justify-items-center gap-2">
             <Upload className="size-8 text-primary" />
-            <strong>拖入游戏文件夹或 ZIP 压缩包</strong>
-            <span className="text-sm text-muted">文件夹根目录或 ZIP 内须包含 RPG_RT.lmt</span>
+            <strong aria-live="polite">
+              {fileDragActive ? "松开以上传" : "拖入游戏文件夹或 ZIP 压缩包"}
+            </strong>
+            <span className="text-sm text-muted" id={instructionsId}>
+              文件夹根目录或 ZIP 内须包含 RPG_RT.lmt
+            </span>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <FilePicker
                 accept=".zip,application/zip"
                 disabled={disabled}
+                inputRef={zipInputRef}
                 label="选择 ZIP"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -654,6 +886,9 @@ function ExternalSourceSection({ disabled, onChange, value }: {
 }
 
 function MetadataFields({
+  changeOriginalDeclaration,
+  changeTranslationDeclaration,
+  changeTranslatorName,
   disabled,
   form,
   imageSelections,
@@ -661,7 +896,11 @@ function MetadataFields({
   setForm,
   setImageSelections,
   suggestions,
+  translatorError,
 }: {
+  changeOriginalDeclaration: (checked: boolean) => void;
+  changeTranslationDeclaration: (checked: boolean) => void;
+  changeTranslatorName: (value: string) => void;
   disabled: boolean;
   form: FlatMetadata;
   imageSelections: ImageSelections;
@@ -672,6 +911,7 @@ function MetadataFields({
     tags: UploadTaxonomySuggestion[];
     characters: UploadTaxonomySuggestion[];
   };
+  translatorError: string | null;
 }) {
   return (
     <div>
@@ -683,12 +923,69 @@ function MetadataFields({
         <WorkbenchField controlId="upload-original-title" label="原名" required>
           <Input disabled={disabled} id="upload-original-title" onChange={(event) => setForm((current) => ({ ...current, originalTitle: event.target.value }))} required value={form.originalTitle} />
         </WorkbenchField>
-        <WorkbenchField className="md:col-span-2" controlId="upload-author" label="作者">
-          <div className="grid gap-2">
-            <Input disabled={disabled} id="upload-author" onChange={(event) => setForm((current) => ({ ...current, creatorNames: event.target.value }))} value={form.creatorNames} />
-            <Label className="flex w-fit items-center gap-2 text-xs font-semibold text-red-700">
-              <Checkbox checked={form.isOriginal} className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700" disabled={disabled} onCheckedChange={(checked) => setForm((current) => ({ ...current, isOriginal: checked === true }))} />
+        <WorkbenchField controlId="upload-author" label="作者">
+          <Input disabled={disabled} id="upload-author" onChange={(event) => setForm((current) => ({ ...current, creatorName: event.target.value }))} value={form.creatorName} />
+        </WorkbenchField>
+        {form.isTranslation ? (
+          <WorkbenchField controlId="upload-translator" label="译者" required>
+            <div className="grid gap-1.5">
+              <Input
+                aria-describedby={translatorError ? "upload-translator-error" : undefined}
+                aria-invalid={translatorError ? true : undefined}
+                disabled={disabled}
+                id="upload-translator"
+                onChange={(event) => changeTranslatorName(event.target.value)}
+                required
+                value={form.translatorName}
+              />
+              {translatorError ? (
+                <p className="text-sm text-red-700" id="upload-translator-error" role="alert">
+                  {translatorError}
+                </p>
+              ) : null}
+            </div>
+          </WorkbenchField>
+        ) : null}
+        <WorkbenchField
+          className="md:col-span-2"
+          controlId="upload-release-date"
+          info="作品最初发表的日期"
+          label="发布日期"
+        >
+          <Input
+            disabled={disabled}
+            id="upload-release-date"
+            onChange={(event) => setForm((current) => ({ ...current, originalReleaseDate: event.target.value }))}
+            value={form.originalReleaseDate}
+          />
+        </WorkbenchField>
+        <WorkbenchField
+          className="md:col-span-2"
+          label={<span id="upload-declarations-label">发布声明</span>}
+        >
+          <div
+            aria-labelledby="upload-declarations-label"
+            className="flex flex-wrap gap-x-5 gap-y-3 py-2.5"
+            role="group"
+          >
+            <Label className="flex w-fit items-center gap-2 text-sm text-red-700" htmlFor="upload-is-original">
+              <Checkbox
+                checked={form.isOriginal}
+                className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700"
+                disabled={disabled}
+                id="upload-is-original"
+                onCheckedChange={(checked) => changeOriginalDeclaration(checked === true)}
+              />
               本作品为我原创。
+            </Label>
+            <Label className="flex w-fit items-center gap-2 text-sm" htmlFor="upload-is-translation">
+              <Checkbox
+                checked={form.isTranslation}
+                disabled={disabled}
+                id="upload-is-translation"
+                onCheckedChange={(checked) => changeTranslationDeclaration(checked === true)}
+              />
+              本作品为翻译作品。
             </Label>
           </div>
         </WorkbenchField>
@@ -703,28 +1000,25 @@ function MetadataFields({
         </WorkbenchField>
         <details className="md:col-span-2">
           <summary className="cursor-pointer py-1 text-sm font-bold">更多设置</summary>
-          <div className="mt-3 grid gap-4 border-t border-border pt-4 md:grid-cols-2">
-            <WorkbenchField className="md:col-span-2" label="预览图">
+          <div className="mt-3 grid gap-4 border-t border-border pt-4">
+            <WorkbenchField label="预览图">
               <PreviewPicker disabled={disabled} existingCount={Math.max(0, (initialWork?.previewBlobSha256s.length ?? 0) - 1)} files={imageSelections.browsingImages} onChange={(browsingImages) => setImageSelections((current) => ({ ...current, browsingImages }))} />
             </WorkbenchField>
             <WorkbenchField controlId="upload-aliases" label="别名">
-              <Textarea disabled={disabled} id="upload-aliases" onChange={(event) => setForm((current) => ({ ...current, aliasTitles: event.target.value }))} rows={3} value={form.aliasTitles} />
+              <TokenPicker
+                disabled={disabled}
+                id="upload-aliases"
+                onChange={(aliasTitles) => setForm((current) => ({ ...current, aliasTitles }))}
+                placeholder="输入别名"
+                showRecommendations={false}
+                showSelectionCount={false}
+                suggestions={[]}
+                values={form.aliasTitles}
+              />
             </WorkbenchField>
-            {!initialWork ? (
-              <WorkbenchField controlId="upload-creator-url" label="作者链接">
-                <Input disabled={disabled} id="upload-creator-url" onChange={(event) => setForm((current) => ({ ...current, creatorUrl: event.target.value }))} type="url" value={form.creatorUrl} />
-              </WorkbenchField>
-            ) : null}
-            {isArchiveEngineFamily(form.engineFamily) ? (
-              <>
-                <WorkbenchField controlId="upload-source-name" label="来源名">
-                  <Input disabled={disabled} id="upload-source-name" onChange={(event) => setForm((current) => ({ ...current, sourceName: event.target.value }))} value={form.sourceName} />
-                </WorkbenchField>
-                <WorkbenchField controlId="upload-source-url" label="来源链接">
-                  <Input disabled={disabled} id="upload-source-url" onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))} type="url" value={form.sourceUrl} />
-                </WorkbenchField>
-              </>
-            ) : null}
+            <WorkbenchField controlId="upload-source-url" label="来源链接">
+              <Input disabled={disabled} id="upload-source-url" onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))} type="url" value={form.sourceUrl} />
+            </WorkbenchField>
           </div>
         </details>
       </div>
@@ -732,7 +1026,8 @@ function MetadataFields({
   );
 }
 
-function UploadTaskCard({ mode, onCancel, onRestart, sourceSummary, task }: {
+function UploadTaskCard({ canceling, mode, onCancel, onRestart, sourceSummary, task }: {
+  canceling: boolean;
   mode: UploadSourceKind;
   onCancel: () => void;
   onRestart: () => void;
@@ -740,8 +1035,14 @@ function UploadTaskCard({ mode, onCancel, onRestart, sourceSummary, task }: {
   task: BrowserUploadTaskSnapshot | null;
 }) {
   const progress = Math.min(100, task?.progress.percent ?? 0);
+  const progressLabel = task?.sourceReady
+    ? "游戏文件已上传"
+    : task
+      ? phaseLabel(task.phase)
+      : "准备上传";
   const canCancel = Boolean(task && ["running", "waiting"].includes(task.status) && task.phase !== "committing");
-  const canRestart = Boolean(task && ["failed", "canceled"].includes(task.status));
+  const showCancel = canceling || canCancel;
+  const canRestart = Boolean(!canceling && task && ["failed", "canceled"].includes(task.status));
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="p-4">
@@ -757,17 +1058,29 @@ function UploadTaskCard({ mode, onCancel, onRestart, sourceSummary, task }: {
           </span>
           <strong className="font-mono text-lg">{Math.round(progress)}%</strong>
         </div>
-        <Progress aria-label="上传进度" className="mt-4" value={progress} />
+        <Progress aria-label="游戏文件处理与上传进度" className="mt-4" value={progress} />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <strong>{task ? phaseLabel(task.phase) : "准备上传"}</strong>
+          <strong>{progressLabel}</strong>
           {task?.progress.currentPath ? <span className="max-w-full truncate font-mono">{task.progress.currentPath}</span> : null}
         </div>
         {task?.error ? <p className="mt-3 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">{task.error}</p> : null}
         {task?.result ? <p className="mt-3 border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">上传完成。<Link className="font-semibold underline" href={`/games/${task.result.workId}`}>查看作品</Link></p> : null}
       </div>
-      {canCancel || canRestart ? (
+      {showCancel || canRestart ? (
         <footer className="flex justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
-          {canCancel ? <Button onClick={onCancel} size="sm" type="button" variant="outline">取消上传</Button> : null}
+          {showCancel ? (
+            <Button
+              aria-busy={canceling}
+              disabled={canceling}
+              onClick={onCancel}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {canceling ? <LoaderCircle aria-hidden className="animate-spin" /> : null}
+              {canceling ? "取消中" : "取消上传"}
+            </Button>
+          ) : null}
           {canRestart ? <Button onClick={onRestart} size="sm" type="button">重新开始</Button> : null}
         </footer>
       ) : null}
@@ -804,20 +1117,27 @@ function ReadinessList({ archiveMode, metadataConfirmed, preparing, sourceSummar
   );
 }
 
-function initialForm(work: UploadInitialWork | null, canArchiveUpload: boolean): FlatMetadata {
+function initialForm(
+  work: UploadInitialWork | null,
+  canArchiveUpload: boolean,
+  displayName: string,
+): FlatMetadata {
   return {
     originalTitle: work?.originalTitle ?? "",
     chineseTitle: work?.chineseTitle ?? "",
-    aliasTitles: work?.aliases.join("\n") ?? "",
+    aliasTitles: uniqueTokens(work?.aliases ?? []),
     engineFamily: work?.engineFamily ?? (canArchiveUpload ? "rpg_maker_2000" : "other"),
     description: work?.description ?? "",
     tags: work?.tags ?? [],
     characters: work?.characterCredits.map((character) => character.name) ?? [],
-    creatorNames: work?.authorCredits.map((author) => author.creator.name).join(", ") ?? "",
-    creatorUrl: "",
+    creatorName: work?.authorCredits[0]?.creator.name ?? "",
+    translatorName: work
+      ? work.translatorCredits[0]?.creator.name ?? ""
+      : displayName,
+    originalReleaseDate: work?.originalReleaseDate ?? "",
     isOriginal: work?.isOriginal ?? false,
+    isTranslation: work?.isTranslation ?? false,
     language: work?.language ?? "zh-CN",
-    sourceName: "",
     sourceUrl: "",
     externalDownloadUrl: "",
     status: work?.status ?? "published",
@@ -825,7 +1145,13 @@ function initialForm(work: UploadInitialWork | null, canArchiveUpload: boolean):
 }
 
 function initialAssociations(work: UploadInitialWork | null): AssociationDefaults {
-  return work ? { characters: work.characterCredits, authors: work.authorCredits } : { characters: [], authors: [] };
+  return work
+    ? {
+        characters: work.characterCredits,
+        authors: work.authorCredits,
+        translators: work.translatorCredits,
+      }
+    : { characters: [], authors: [], translators: [] };
 }
 
 function associationsFromMetadata(metadata: ArchiveCommitMetadata): AssociationDefaults {
@@ -836,25 +1162,30 @@ function associationsFromMetadata(metadata: ArchiveCommitMetadata): AssociationD
       creator: creators.get(entityNameKey(staff.creatorName)) ?? { name: staff.creatorName, originalName: null, websiteUrl: null, extra: {} },
       staff,
     })),
+    translators: metadata.workStaff.filter((staff) => staff.roleKey === "translator").map((staff) => ({
+      creator: creators.get(entityNameKey(staff.creatorName)) ?? { name: staff.creatorName, originalName: null, websiteUrl: null, extra: {} },
+      staff,
+    })),
   };
 }
 
 function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
   const authorNames = metadata.workStaff.filter((staff) => staff.roleKey === "author").map((staff) => staff.creatorName);
-  const creator = metadata.creators.find((item) => entityNameKey(item.name) === entityNameKey(authorNames[0] ?? ""));
+  const translatorNames = metadata.workStaff.filter((staff) => staff.roleKey === "translator").map((staff) => staff.creatorName);
   return {
     originalTitle: metadata.game.originalTitle,
     chineseTitle: metadata.game.chineseTitle ?? "",
-    aliasTitles: metadata.workTitles.map((item) => item.title).join("\n"),
+    aliasTitles: uniqueTokens(metadata.workTitles.map((item) => item.title)),
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
     tags: metadata.tags,
     characters: (metadata.characters ?? []).map((item) => item.name),
-    creatorNames: authorNames.join(", "),
-    creatorUrl: creator?.websiteUrl ?? "",
+    creatorName: authorNames[0] ?? "",
+    translatorName: translatorNames[0] ?? "",
+    originalReleaseDate: metadata.game.originalReleaseDate ?? "",
     isOriginal: metadata.game.isOriginal,
+    isTranslation: metadata.game.isTranslation,
     language: metadata.game.language,
-    sourceName: metadata.archiveVersion.sourceName ?? "",
     sourceUrl: metadata.archiveVersion.sourceUrl ?? "",
     externalDownloadUrl: "",
     status: metadata.game.status === "hidden" ? "hidden" : "published",
@@ -862,29 +1193,40 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
 }
 
 function buildMetadata(form: FlatMetadata, imageHashes: { browsingImageBlobSha256s: string[] }, targetWorkId: number | null, defaults: AssociationDefaults): ArchiveCommitMetadata {
+  const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
+  if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   const characterDefaults = new Map(defaults.characters.map((character) => [entityNameKey(character.name), character]));
   const characters = uniqueTokens(form.characters).map((name, index) => {
     const existing = characterDefaults.get(entityNameKey(name));
     return { name, originalName: existing?.originalName ?? null, roleKey: existing?.roleKey ?? "supporting", spoilerLevel: existing?.spoilerLevel ?? 0, sortOrder: index + 1, notes: existing?.notes ?? null } satisfies CharacterCredit;
   });
   const authorDefaults = new Map(defaults.authors.map((author) => [entityNameKey(author.creator.name), author]));
-  const authorNames = parseList(form.creatorNames);
-  const creators = authorNames.map((name, index) => {
-    const existing = authorDefaults.get(entityNameKey(name));
-    return { name, originalName: existing?.creator.originalName ?? null, websiteUrl: existing?.creator.websiteUrl ?? (!targetWorkId && index === 0 ? cleanNullable(form.creatorUrl) : null), extra: existing?.creator.extra ?? {} } satisfies CreatorCredit;
+  const authorName = form.creatorName.trim();
+  const authorNames = authorName ? [authorName] : [];
+  const translatorDefaults = new Map(defaults.translators.map((translator) => [entityNameKey(translator.creator.name), translator]));
+  const translatorName = form.translatorName.trim();
+  const translatorNames = form.isTranslation && translatorName ? [translatorName] : [];
+  const creatorNames = uniqueTokens([...authorNames, ...translatorNames]);
+  const creators = creatorNames.map((name) => {
+    const existing = authorDefaults.get(entityNameKey(name)) ?? translatorDefaults.get(entityNameKey(name));
+    return { name, originalName: existing?.creator.originalName ?? null, websiteUrl: existing?.creator.websiteUrl ?? null, extra: existing?.creator.extra ?? {} } satisfies CreatorCredit;
   });
-  const workStaff = authorNames.map((creatorName) => {
+  const authorStaff = authorNames.map((creatorName) => {
     const existing = authorDefaults.get(entityNameKey(creatorName));
     return { creatorName, roleKey: "author", roleLabel: existing?.staff.roleLabel ?? "作者", notes: existing?.staff.notes ?? null } satisfies WorkStaffCredit;
   });
+  const translatorStaff = translatorNames.map((creatorName) => {
+    const existing = translatorDefaults.get(entityNameKey(creatorName));
+    return { creatorName, roleKey: "translator", roleLabel: existing?.staff.roleLabel ?? "译者", notes: existing?.staff.notes ?? null } satisfies WorkStaffCredit;
+  });
   return {
-    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: null, originalReleasePrecision: "unknown", engineFamily: form.engineFamily, isOriginal: form.isOriginal, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: {} },
+    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: releaseDate.value, originalReleasePrecision: releaseDate.precision, engineFamily: form.engineFamily, isOriginal: form.isOriginal, isTranslation: form.isTranslation, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: {} },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
-    archiveVersion: { sourceName: cleanNullable(form.sourceName), sourceUrl: cleanNullable(form.sourceUrl) },
-    workTitles: parseList(form.aliasTitles).map((title) => ({ title, language: null, titleType: "alias" })),
+    archiveVersion: { sourceName: null, sourceUrl: cleanNullable(form.sourceUrl) },
+    workTitles: uniqueTokens(form.aliasTitles).map((title) => ({ title, language: null, titleType: "alias" })),
     characters,
     creators,
-    workStaff,
+    workStaff: [...authorStaff, ...translatorStaff],
     tags: uniqueTokens(form.tags),
     externalLinks: { work: [] },
   };
@@ -912,15 +1254,18 @@ async function submitExternalWork(form: FlatMetadata, images: ImageSelections): 
   body.set("original_title", form.originalTitle.trim());
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
+  body.set("original_release_date", form.originalReleaseDate.trim());
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");
+  if (form.isTranslation) body.set("is_translation", "1");
   body.set("language", form.language);
-  body.set("aliases", form.aliasTitles);
+  body.set("aliases", form.aliasTitles.join("\n"));
   body.set("tags", form.tags.join("\n"));
   body.set("characters", form.characters.join("\n"));
-  body.set("creator_name", parseList(form.creatorNames)[0] ?? "");
-  body.set("creator_url", form.creatorUrl.trim());
+  body.set("creator_name", form.creatorName.trim());
+  body.set("translator", form.isTranslation ? form.translatorName.trim() : "");
   body.set("download_url", form.externalDownloadUrl.trim());
+  body.set("source_url", form.sourceUrl.trim());
   body.set("cover", images.cover);
   for (const image of images.browsingImages) body.append("browsing_images[]", image);
   const response = await fetch("/api/works/external", { method: "POST", body, credentials: "same-origin" });
@@ -929,16 +1274,51 @@ async function submitExternalWork(form: FlatMetadata, images: ImageSelections): 
   return { workId: payload.workId };
 }
 
-function FilePicker({ accept, directory = false, disabled = false, label, multiple = false, onChange }: {
+function FilePicker({ accept, directory = false, disabled = false, inputRef, label, multiple = false, onChange }: {
   accept?: string;
   directory?: boolean;
   disabled?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
   label: string;
   multiple?: boolean;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   const id = useId();
-  return <div><Button asChild className={disabled ? "pointer-events-none opacity-50" : undefined} size="sm" variant="outline"><Label aria-disabled={disabled || undefined} className="cursor-pointer" htmlFor={id}>{label}</Label></Button><input accept={accept} className="sr-only" disabled={disabled} id={id} multiple={multiple} onChange={onChange} type="file" {...(directory ? { webkitdirectory: "", directory: "" } : {})} /></div>;
+  const fallbackInputRef = useRef<HTMLInputElement>(null);
+  const controlRef = inputRef ?? fallbackInputRef;
+
+  return (
+    <div data-upload-picker>
+      <Button
+        aria-controls={id}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          controlRef.current?.click();
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {label}
+      </Button>
+      <input
+        accept={accept}
+        disabled={disabled}
+        hidden
+        id={id}
+        multiple={multiple}
+        onChange={onChange}
+        ref={controlRef}
+        type="file"
+        {...(directory ? { webkitdirectory: "", directory: "" } : {})}
+      />
+    </div>
+  );
+}
+
+function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
+  return Array.from(event.dataTransfer.types).includes("Files");
 }
 
 function normalizeFolderSource(rawFiles: UploadSourceFile[], suggestedName: string) {
@@ -988,7 +1368,6 @@ function webkitPath(file: File): string { return (file as File & { webkitRelativ
 function folderNameFromPicker(files: File[]): string { const first = files[0] ? webkitPath(files[0]).split("/")[0] : "local-folder"; return first || "local-folder"; }
 function entityNameKey(value: string): string { return value.toLocaleLowerCase(); }
 function cleanNullable(value: string): string | null { return value.trim() || null; }
-function parseList(value: string): string[] { return [...new Set(value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean))]; }
 function uniqueTokens(values: string[]): string[] { const seen = new Set<string>(); return values.filter((value) => { const key = entityNameKey(value.trim()); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
 function phaseLabel(phase: string): string {
   const labels: Record<string, string> = { enumerating: "读取文件", hashing: "校验文件", building_core_pack: "整理公共文件", creating_import_job: "创建上传任务", preflighting: "检查已有对象", uploading_source: "上传游戏文件", verifying_source: "确认游戏文件", awaiting_metadata: "等待作品资料", uploading_metadata: "上传资料图片", committing: "提交入库", completed: "完成" };

@@ -33,9 +33,11 @@ export default async function UploadWorkVersionPage({
     chineseTitle: work.chineseTitle,
     aliases: work.aliases,
     description: work.description,
+    originalReleaseDate: work.originalReleaseDate,
     engineFamily: work.engineFamily,
     language: work.language,
     isOriginal: work.isOriginal,
+    isTranslation: work.isTranslation,
     status: work.status === "hidden" ? "hidden" : "published",
     tags: work.tags,
     characterCredits: work.characterCredits.map((character) => ({
@@ -62,6 +64,22 @@ export default async function UploadWorkVersionPage({
           notes: creator.notes,
         },
       })),
+    translatorCredits: work.creators
+      .filter((creator) => creator.roleKey === "translator")
+      .map((creator) => ({
+        creator: {
+          name: creator.name,
+          originalName: creator.originalName,
+          websiteUrl: creator.websiteUrl,
+          extra: {},
+        },
+        staff: {
+          creatorName: creator.name,
+          roleKey: "translator",
+          roleLabel: creator.roleLabel,
+          notes: creator.notes,
+        },
+      })),
     previewBlobSha256s: work.media
       .filter((media) => media.kind === "preview")
       .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
@@ -76,6 +94,7 @@ export default async function UploadWorkVersionPage({
       <UploadClient
         currentUser={{
           id: currentUser.id,
+          displayName: currentUser.displayName,
           permissionKeys: currentUser.permissionKeys,
         }}
         initialWork={initialWork}

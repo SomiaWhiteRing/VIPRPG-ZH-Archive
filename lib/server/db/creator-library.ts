@@ -1,5 +1,5 @@
 import { getD1 } from "@/lib/server/db/d1";
-import { normalizeEntityName } from "@/lib/entity-name";
+import { normalizeCreatorName } from "@/lib/entity-name";
 import { isHttpUrl, normalizeHttpUrl } from "@/lib/server/http/safe-url";
 
 export type CreatorWorkCredit = {
@@ -148,7 +148,7 @@ export async function updateCreatorForAdmin(input: {
   websiteUrl: string | null;
   bio: string | null;
 }): Promise<AdminCreatorEdit> {
-  const name = normalizeEntityName(input.name);
+  const name = normalizeCreatorName(input.name);
   if (!name) throw new Error("作者名不能为空");
   const existing = await getCreatorForAdminEdit(input.creatorId);
   if (!existing) throw new Error("作者不存在");
