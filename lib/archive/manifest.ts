@@ -1,5 +1,7 @@
 import type { ArchiveFileRole, ArchiveStorageKind } from "@/lib/archive/file-policy";
 
+import type { CharacterSelection } from "@/lib/character-names";
+
 export type ArchiveManifest = {
   schema: "viprpg-archive.manifest.v1";
   game: {
@@ -23,6 +25,24 @@ export type ArchiveManifest = {
     excludedFileCount: number;
     excludedSize: number;
   };
+  corePacks: ArchiveManifestCorePack[];
+  files: ArchiveManifestFile[];
+};
+
+export type ArchiveSourceManifest = {
+  schema: ArchiveManifest["schema"];
+  archiveVersion: Pick<
+    ArchiveManifest["archiveVersion"],
+    | "filePolicyVersion"
+    | "packerVersion"
+    | "sourceType"
+    | "sourceFileCount"
+    | "sourceSize"
+    | "includedFileCount"
+    | "includedSize"
+    | "excludedFileCount"
+    | "excludedSize"
+  >;
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
 };
@@ -97,8 +117,7 @@ export type ArchiveCommitMetadata = {
     titleType: "alias";
   }>;
   characters?: Array<{
-    name: string;
-    originalName: string | null;
+    selection: CharacterSelection;
     roleKey: "main" | "supporting" | "cameo" | "mentioned" | "other";
     spoilerLevel: number;
     sortOrder: number | null;

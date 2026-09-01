@@ -239,14 +239,18 @@ Service Worker scope 固定覆盖 `/play/`。
 
 ## 10. 在线游玩页面
 
+`/play/{archiveVersionId}` 与 `/games/{workId}` 复用作品页头、导航标签和侧栏结构。桌面端把游玩画面放在主栏，侧栏默认展示评论并可切换作品信息；移动端依次展开游玩操作、评论和作品信息，不把评论藏进弹窗或独立页面。
+
+播放器主体固定使用 4:3 画面比例。容量、持久化授权、安装记录和运行日志属于诊断信息，默认收进折叠区；安装、启动、全屏和下载保留为直接操作。
+
 `/play/{archiveVersionId}` 至少需要这些状态：
 
 - Maniac 作品：允许尝试在线游玩，并显示兼容性提示。
-- 未安装：显示游戏大小、浏览器存储用量、安装按钮。
+- 未安装：显示游戏大小和安装按钮；浏览器存储用量放在诊断区。
 - 安装中：显示 ZIP 下载进度、解包进度、当前文件、已写入容量；关闭页面前用 `beforeunload` 拦截。
 - 安装失败：显示失败阶段、错误和“清理重装”。
-- 已安装：显示启动按钮、删除本地缓存和重新安装；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
-- 运行中：展示 EasyRPG canvas、全屏按钮、返回作品页、日志面板；全屏使用外层播放器容器的浏览器原生 fullscreen，不调用 EasyRPG runtime 自带 fullscreen。
+- 已安装：桌面端以全屏游玩为主操作；移动端明确提供横屏全屏、窗口游玩和竖屏游玩。删除本地缓存、重新安装和日志留在诊断区；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
+- 运行中：展示 EasyRPG canvas、全屏退出和横竖屏切换。全屏优先使用外层播放器容器的浏览器原生 fullscreen；浏览器拒绝时改为页面铺满，不调用 EasyRPG runtime 自带 fullscreen。
 - 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
 本地缓存管理并入 `/play/{archiveVersionId}`。
@@ -318,6 +322,9 @@ const persisted = await navigator.storage.persist();
 - EasyRPG 能启动一个已知可玩的样本游戏。
 - 缺失文件会触发前端错误和重新安装提示。
 - 运行中不能删除本地缓存或重新安装；重复点击启动不会重复加载 runtime。
+- 详情页和游玩页使用同一作品页头与侧栏；桌面端评论位于侧栏，移动端按顺序展开。
+- 播放器保持 4:3；移动端突出横屏全屏入口，并在沉浸模式内提供横竖屏切换与退出。
+- 不支持或拒绝原生 fullscreen、Screen Orientation Lock 的浏览器仍能页面铺满并旋转画面，同时提示用户手动旋转设备。
 
 ## 15.1 实现约束
 
@@ -326,7 +333,8 @@ const persisted = await navigator.storage.persist();
 - 安装器不逐文件写入 OPFS，而是边下载边顺序写入 pack 文件。这个取舍减少大量小文件的 `createWritable/close` 成本，并保留普通下载 ZIP/CDN cache 的复用。
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
 - 全屏应让外层播放器容器进入浏览器原生 fullscreen。直接调用 EasyRPG/Emscripten runtime 的 fullscreen 路径会在当前 runtime 下造成 canvas 尺寸异常，表现为黑屏。
-- 当前兼容目标是支持 OPFS、Service Worker 和 WASM 的 Chromium 桌面浏览器；不承诺 Firefox 和 Safari 的行为一致。
+- 移动端方向切换优先调用 Screen Orientation Lock；不可用或被拒绝时只旋转播放器画面并提示用户手动旋转设备，不能把方向锁定作为启动前提。
+- 当前兼容目标是支持 OPFS、Service Worker 和 WASM 的 Chromium 浏览器，并同时提供桌面和移动布局；不承诺 Firefox 和 Safari 的行为一致。
 
 ## 16. 当前非目标
 

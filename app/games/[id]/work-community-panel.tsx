@@ -8,7 +8,7 @@ import type { CommentBodySegment, CommentDto, CustomEmojiDto } from "@/lib/serve
 import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 type Props = {
   workId: number;
@@ -32,14 +32,6 @@ export function WorkCommunityPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    void fetch(`/api/works/${workId}/view`, {
-      method: "POST",
-      credentials: "same-origin",
-      keepalive: true,
-    }).catch(() => undefined);
-  }, [workId]);
 
   async function submitComment() {
     if (!currentUserId || !body.trim() || busy) return;
@@ -172,7 +164,7 @@ export function WorkCommunityPanel({
   }
 
   return (
-    <div className="grid gap-4" id="comments">
+    <div className="@container/comments grid gap-4" id="comments">
       {currentUserId ? (
         <div className="grid gap-2">
           {replyTarget ? (
@@ -183,7 +175,7 @@ export function WorkCommunityPanel({
               </Button>
             </div>
           ) : null}
-          <Label className="font-mono text-[11px] text-muted" htmlFor="comment-input">
+          <Label className="font-mono text-xs text-muted" htmlFor="comment-input">
             发表评论
           </Label>
           <Textarea
@@ -204,7 +196,7 @@ export function WorkCommunityPanel({
           </div>
         </div>
       ) : (
-        <p className="text-[13px] text-muted">登录后可以评论、回复和点赞。</p>
+        <p className="text-sm text-muted">登录后可以评论、回复和点赞。</p>
       )}
 
       <div className="grid">
@@ -217,7 +209,7 @@ export function WorkCommunityPanel({
             onLike={toggleLike}
             onReply={startReply}
           />
-        )) : <p className="text-[13px] text-muted">还没有评论。</p>}
+        )) : <p className="text-sm text-muted">还没有评论。</p>}
       </div>
       {nextCursor ? (
         <div>
@@ -226,7 +218,7 @@ export function WorkCommunityPanel({
           </Button>
         </div>
       ) : null}
-      {message ? <p className="text-[13px] text-muted" role="status">{message}</p> : null}
+      {message ? <p className="text-sm text-muted" role="status">{message}</p> : null}
     </div>
   );
 }
@@ -264,7 +256,7 @@ function CommentCard({
 
   return (
     <article
-      className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0"
+      className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0 @max-[320px]/comments:grid-cols-[32px_minmax(0,1fr)] @max-[320px]/comments:gap-2"
       id={`comment-${comment.id}`}
     >
       {comment.author ? <Link aria-label={`查看${comment.author.displayName}的主页`} href={`/users/${comment.author.id}`}><UserAvatar avatarBlobSha256={comment.author.avatarBlobSha256} className="size-9.5" displayName={comment.author.displayName} size={38} /></Link> : <UserAvatar className="size-9.5 opacity-60" displayName="已删除用户" size={38} />}
@@ -278,7 +270,7 @@ function CommentCard({
           onReply={onReply}
         />
         {(comment.replyCount ?? 0) > 0 ? (
-          <div className="mt-2.5 grid gap-2.5 border-l-2 border-border pl-3">
+          <div className="mt-2.5 grid gap-2.5 border-l-2 border-border pl-3 @max-[320px]/comments:pl-2">
             {replies?.map((reply) => (
               <div className="min-w-0" id={`comment-${reply.id}`} key={reply.id}>
                 <CommentLine comment={reply} />
@@ -308,10 +300,10 @@ function CommentLine({ comment }: { comment: CommentDto }) {
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         {comment.author ? <Link className="text-sm font-bold hover:underline" href={`/users/${comment.author.id}`}>{comment.author.displayName}</Link> : <strong className="text-sm">已删除用户</strong>}
-        <span className="font-mono text-[11px] text-muted">{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
-        {comment.editedAt ? <span className="font-mono text-[11px] text-muted">已编辑</span> : null}
-        {comment.status === "deleted" ? <span className="font-mono text-[11px] text-muted">已删除</span> : null}
-        <span className="ml-auto font-mono text-[11px] text-muted">#{comment.id}</span>
+        <span className="font-mono text-xs text-muted">{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
+        {comment.editedAt ? <span className="font-mono text-xs text-muted">已编辑</span> : null}
+        {comment.status === "deleted" ? <span className="font-mono text-xs text-muted">已删除</span> : null}
+        <span className="ml-auto font-mono text-xs text-muted">#{comment.id}</span>
       </div>
       <p className="m-0 mt-1 text-sm leading-[1.7] wrap-anywhere whitespace-pre-wrap">
         {comment.replyTo ? <span className="text-muted">回复 @{comment.replyTo.displayName ?? "已删除用户"}：</span> : null}
@@ -391,7 +383,7 @@ function EmojiPicker({ emojis, onSelect }: { emojis: CustomEmojiDto[]; onSelect:
         表情
       </Button>
       {open ? (
-        <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-80 overflow-hidden rounded-md border border-border bg-card p-2 shadow-lg">
+        <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-[min(20rem,calc(100vw-3rem))] overflow-hidden rounded-md border border-border bg-card p-2 shadow-lg">
           <div className="grid max-h-56 grid-cols-6 gap-1 overflow-y-auto">
             {emojis.length ? emojis.map((emoji) => (
               <Button

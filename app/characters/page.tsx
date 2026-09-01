@@ -31,7 +31,7 @@ export default async function CharactersPage({ searchParams }: CharactersPagePro
       >
         <Label>
           <span>搜索</span>
-          <Input defaultValue={query} name="q" placeholder="角色名、原名" type="search" />
+          <Input defaultValue={query} name="q" placeholder="角色名、原名或别名" type="search" />
         </Label>
         <Button type="submit">筛选</Button>
         {query ? (

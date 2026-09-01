@@ -6,6 +6,10 @@ import {
 } from "@/lib/server/db/taxonomy-library";
 import { redirectResponse } from "@/lib/server/http/form";
 import { json, jsonError } from "@/lib/server/http/json";
+import {
+  readCharacterPortrait,
+  storeCharacterPortraits,
+} from "@/lib/server/storage/character-portraits";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +30,15 @@ export async function POST(request: Request, context: RouteContext) {
     const { characterId: rawCharacterId } = await context.params;
     const characterId = parseId(rawCharacterId);
     const formData = await request.formData();
-    const input = parseCharacterEditForm(formData);
+    const parsedInput = parseCharacterEditForm(formData);
+    const portraitEntry = formData.get("portrait");
+    const portraitBlobSha256 =
+      portraitEntry instanceof File && portraitEntry.size > 0
+        ? (await storeCharacterPortraits([
+            readCharacterPortrait(portraitEntry),
+          ]))[0]
+        : undefined;
+    const input = { ...parsedInput, portraitBlobSha256 };
 
     if (input.characterId !== characterId) {
       throw new Error("Character id mismatch");
@@ -42,6 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
         characterId,
         resultingCharacterId: character.id,
         merged: Boolean(input.mergeTargetId),
+        portraitUpdated: Boolean(portraitBlobSha256),
       },
     });
 
@@ -52,6 +65,7 @@ export async function POST(request: Request, context: RouteContext) {
           id: character.id,
           primaryName: character.primaryName,
           originalName: character.originalName,
+          portraitBlobSha256: character.portraitBlobSha256,
           description: character.description,
           workCount: character.workCount,
         },

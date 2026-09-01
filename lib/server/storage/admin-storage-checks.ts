@@ -776,6 +776,20 @@ function eligibleGcSummaryStatement(
             SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
           )`
       : `SELECT COUNT(*) AS count, SUM(cp.size_bytes) AS size_bytes
         FROM core_packs cp
@@ -817,6 +831,20 @@ async function listEligibleGcRows(
             SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
           )
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
@@ -919,6 +947,20 @@ async function markGcCandidatePurging(
             SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = blobs.sha256 AND c.status = 'published'
           )`
       : `UPDATE core_packs
         SET status = 'purging'
@@ -997,6 +1039,20 @@ function deletedOnlyGcSummaryStatement(
               FROM media_assets ma
               WHERE ma.blob_sha256 = b.sha256
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM catalogs c
+              WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
+            )
           GROUP BY b.sha256
           HAVING SUM(CASE WHEN av.status <> 'deleted' THEN 1 ELSE 0 END) = 0
         )`
@@ -1039,6 +1095,20 @@ function gcCandidateRowsStatement(
             SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
           )
         GROUP BY b.sha256
         HAVING live_reference_count = 0

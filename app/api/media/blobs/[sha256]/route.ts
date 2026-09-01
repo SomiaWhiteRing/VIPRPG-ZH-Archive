@@ -48,6 +48,20 @@ export async function GET(_request: Request, context: RouteContext) {
               WHERE u.avatar_blob_sha256 = b.sha256
                 AND u.status = 'active'
             )
+            OR EXISTS (
+              SELECT 1
+              FROM catalogs c
+              WHERE c.cover_blob_sha256 = b.sha256
+                AND c.status = 'published'
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM characters ch
+              JOIN work_characters wc ON wc.character_id = ch.id
+              JOIN works w ON w.id = wc.work_id
+              WHERE ch.portrait_blob_sha256 = b.sha256
+                AND w.status = 'published'
+            )
           )
         LIMIT 1`,
       )

@@ -95,10 +95,11 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 ### 作者、角色与标签
 
 - Creator 表示作者或制作人员身份；`work_staff` 保存其在具体 Work 中的职责。
-- Character 表示角色资料；`work_characters` 保存出演角色、剧透级别、顺序和备注。
+- Character 表示角色身份，保存规范日语名和中文主名；`character_aliases` 保存可搜索的日语、中文别名及来源。
+- `work_characters` 保存出演角色、该作品选用的中文展示名、剧透级别、顺序和备注；筛选始终使用 Character ID，不使用展示名反查身份。
 - Tag 是规范化分类；`work_tags` 保存来源。
-- Creator name、Character primary name 和 Tag name 的唯一性及大小写规则以 migration 为准。
-- 上传表单可以提交文本候选，最终映射与合并由服务端执行。
+- Creator name、Character original name、Character alias 和 Tag name 的唯一性及大小写规则以 migration 为准；不同角色可以共享中文译名。
+- 上传表单提交已有角色 ID 和本作品展示名；新增名称同时提交日语名和中文名，由服务端在游戏提交事务中复用角色、新增别名或创建角色。
 
 ### 媒体与外链
 

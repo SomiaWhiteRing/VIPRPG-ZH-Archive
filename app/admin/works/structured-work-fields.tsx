@@ -5,18 +5,34 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
+import { CharacterPicker } from "@/app/upload/character-picker";
+import type {
+  CharacterSelection,
+  CharacterSuggestion,
+} from "@/lib/character-names";
 import type { GameExternalLink } from "@/lib/server/db/game-library";
 
 export function StructuredWorkFields(props: {
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
+  characterSuggestions: CharacterSuggestion[];
   previewBlobSha256s: string[];
   externalLinks: GameExternalLink[];
 }) {
+  const [characters, setCharacters] = useState(props.characters);
   return <div className="grid gap-5">
     <div className="grid gap-5 md:grid-cols-2">
       <TextList label="标签" name="tags" initialValues={props.tags} placeholder="标签名称" />
-      <TextList label="登场角色" name="characters" initialValues={props.characters} placeholder="角色名称" />
+      <fieldset className="grid gap-2 rounded-md border border-border p-3">
+        <legend className="px-1 text-sm font-semibold">登场角色</legend>
+        <CharacterPicker
+          id="admin-work-characters"
+          name="characters"
+          onChange={setCharacters}
+          suggestions={props.characterSuggestions}
+          values={characters}
+        />
+      </fieldset>
     </div>
     <PreviewList initialValues={props.previewBlobSha256s} />
     <ExternalLinkList initialValues={props.externalLinks} />

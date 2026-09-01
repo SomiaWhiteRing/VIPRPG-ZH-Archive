@@ -1,5 +1,12 @@
-import { buttonVariants } from "@/app/components/ui/button";
+import { AlertTriangle } from "lucide-react";
 import { notFound } from "next/navigation";
+import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
+import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
+import { WorkPageHeader, WorkPageNotice } from "@/app/components/work/work-page-header";
+import { WorkPageShell } from "@/app/components/work/work-page-layout";
+import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
+import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
+import { WorkCommunityPanel } from "@/app/games/[id]/work-community-panel";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
   buildArchiveDownloadUrl,
@@ -15,9 +22,13 @@ import {
 } from "@/lib/server/db/archive-downloads";
 import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
-import { BackLink } from "@/app/components/ui/back-link";
-import { PageHeader } from "@/app/components/ui/page-header";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
+import { getGameWorkDetail } from "@/lib/server/db/game-library";
+import {
+  getWorkCommunitySummary,
+  listPickerEmojis,
+  listRootComments,
+} from "@/lib/server/db/work-community";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +54,22 @@ export default async function WebPlayPage({ params }: PageProps) {
     notFound();
   }
 
-  const installTarget = await getWebPlayInstallTargetTotals(record.id);
-  const currentUser = await getCurrentUserFromCookies();
+  const [installTarget, currentUser, work] = await Promise.all([
+    getWebPlayInstallTargetTotals(record.id),
+    getCurrentUserFromCookies(),
+    getGameWorkDetail(record.workId),
+  ]);
+
+  if (!work) {
+    notFound();
+  }
+
+  const [community, comments, emojis] = await Promise.all([
+    getWorkCommunitySummary(work.id, currentUser?.id ?? null),
+    listRootComments(work.id, currentUser?.id ?? null, null),
+    listPickerEmojis(),
+  ]);
+  const current = work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
 
   const metadata: WebPlayMetadata = {
     ok: true,
@@ -72,34 +97,55 @@ export default async function WebPlayPage({ params }: PageProps) {
   };
 
   return (
-    <main>
-      <PageHeader
-        actions={
-          <>
-            <BackLink href="/" label="返回首页" />
-            <a
-              className={buttonVariants({ variant: "outline" })}
-              href={`/api/archive-versions/${record.id}/download?zip_builder=${downloadZipBuilderVersion}`}
-            >
-              下载 ZIP
-            </a>
-          </>
-        }
-        subtitle={
-          <>
-            {metadata.chineseTitle ? ` / ${metadata.originalTitle}` : ""}
-          </>
-        }
-        title={metadata.title}
+    <WorkPageShell>
+      <WorkViewTracker workId={work.id} />
+      <WorkPageHeader
+        aliases={work.aliases}
+        chineseTitle={work.chineseTitle}
+        engineFamily={work.engineFamily}
+        language={work.language}
+        originalTitle={work.originalTitle}
+        tabs={[
+          { href: `/games/${work.id}`, label: "详情" },
+          { href: `/play/${record.id}`, label: "在线游玩", active: true },
+          { href: "#comments", label: "评论", count: community.commentCount },
+        ]}
       />
-
-      {metadata.engineFamily === "rpg_maker_2003_maniac" ? (
-        <p className="text-sm text-amber-700">
-          该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。
-        </p>
-      ) : null}
-
-      <WebPlayClient isAuthenticated={Boolean(currentUser)} metadata={metadata} />
-    </main>
+      <WebPlayClient
+        comments={
+          <WorkCommunityPanel
+            currentUserId={currentUser?.id ?? null}
+            emojis={emojis}
+            initialComments={comments.items}
+            initialNextCursor={comments.nextCursor}
+            workId={work.id}
+          />
+        }
+        commentCount={community.commentCount}
+        engagement={
+          <WorkFavoriteButton
+            currentUserId={currentUser?.id ?? null}
+            initialFavorited={community.favoritedByMe}
+            workId={work.id}
+          />
+        }
+        isAuthenticated={Boolean(currentUser)}
+        metadata={metadata}
+        notice={metadata.engineFamily === "rpg_maker_2003_maniac" ? (
+          <WorkPageNotice>
+            <AlertTriangle aria-hidden className="mt-0.5 shrink-0" size={16} />
+            <span>该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。</span>
+          </WorkPageNotice>
+        ) : null}
+        secondary={<WorkSidebarInfo current={current} work={work} />}
+        stats={
+          <WorkCommunityStats
+            commentCount={community.commentCount}
+            playerCount={community.playerCount}
+            viewCount={community.viewCount}
+          />
+        }
+      />
+    </WorkPageShell>
   );
 }

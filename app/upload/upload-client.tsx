@@ -32,10 +32,10 @@ import { Progress } from "@/app/components/ui/progress";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
+import { CharacterPicker } from "@/app/upload/character-picker";
 import { inspectUploadSource } from "@/app/upload/archive-source";
 import {
   CoverPicker,
-  createDefaultCoverFile,
   PreviewPicker,
 } from "@/app/upload/media-picker";
 import { TokenPicker } from "@/app/upload/token-picker";
@@ -54,6 +54,11 @@ import {
   updateTranslationPreference,
 } from "@/app/upload/translation-preference";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
+import type {
+  CharacterSelection,
+  CharacterSuggestion,
+} from "@/lib/character-names";
+import { characterSelectionKey } from "@/lib/character-names";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes, formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
@@ -83,7 +88,7 @@ type FlatMetadata = {
   engineFamily: EngineFamily;
   description: string;
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   creatorName: string;
   translatorName: string;
   originalReleaseDate: string;
@@ -125,6 +130,11 @@ type PreparedImages = {
   hashes: { browsingImageBlobSha256s: string[] };
   blobs: MetadataBlobUpload[];
 };
+type CharacterPortraitFiles = Record<string, File>;
+type PreparedCharacterPortraits = {
+  hashesBySelectionKey: Record<string, string>;
+  blobs: MetadataBlobUpload[];
+};
 
 export function UploadClient({
   currentUser,
@@ -135,7 +145,7 @@ export function UploadClient({
   initialWork?: UploadInitialWork | null;
   suggestions: {
     tags: UploadTaxonomySuggestion[];
-    characters: UploadTaxonomySuggestion[];
+    characters: CharacterSuggestion[];
   };
 }) {
   const router = useRouter();
@@ -152,6 +162,8 @@ export function UploadClient({
     cover: null,
     browsingImages: [],
   });
+  const [characterPortraitFiles, setCharacterPortraitFiles] =
+    useState<CharacterPortraitFiles>({});
   const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>([]);
   const sourceInspectionGenerationRef = useRef(0);
   const automaticCoverRef = useRef<File | null>(null);
@@ -226,6 +238,28 @@ export function UploadClient({
     });
   }
 
+  function changeCharacters(characters: CharacterSelection[]) {
+    const keys = new Set(characters.map(characterSelectionKey));
+    setCharacterPortraitFiles((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => keys.has(key))),
+    );
+    setForm((current) => ({ ...current, characters }));
+  }
+
+  function changeCharacterPortraitFile(
+    selection: CharacterSelection,
+    file: File | null,
+  ) {
+    const key = characterSelectionKey(selection);
+    setCharacterPortraitFiles((current) => {
+      if (file) return { ...current, [key]: file };
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   async function prefillSourceMetadata(
     sourceKind: UploadSourceKind,
     files: UploadSourceFile[],
@@ -248,12 +282,11 @@ export function UploadClient({
       const latestTitleImage = prefill.titleImages[0];
       if (!latestTitleImage || initialWork?.previewBlobSha256s.length) return;
 
-      const automaticCover = await createDefaultCoverFile(latestTitleImage);
       if (generation !== sourceInspectionGenerationRef.current) return;
       setImageSelections((current) => {
         if (current.cover) return current;
-        automaticCoverRef.current = automaticCover;
-        return { ...current, cover: automaticCover };
+        automaticCoverRef.current = latestTitleImage;
+        return { ...current, cover: latestTitleImage };
       });
     } catch {
       // Source inspection only supplies defaults; the upload worker reports source errors.
@@ -354,6 +387,18 @@ export function UploadClient({
       document.getElementById("upload-release-date")?.focus();
       return;
     }
+    const characterWithoutPortrait = form.characters.find(
+      (selection) =>
+        !selection.portraitBlobSha256 &&
+        !characterPortraitFiles[characterSelectionKey(selection)],
+    );
+    if (characterWithoutPortrait) {
+      setSubmitError(
+        `角色“${characterWithoutPortrait.originalName}”还没有头像，请上传 48×48 PNG。`,
+      );
+      document.getElementById("upload-characters")?.focus();
+      return;
+    }
     if (initialWork && !archiveMode) {
       setSubmitError("已有游戏文件，不能切换到外链类型。");
       return;
@@ -369,7 +414,12 @@ export function UploadClient({
       }
       setPreparing(true);
       try {
-        const result = await submitExternalWork(form, imageSelections);
+        const portraits = await prepareCharacterPortraits(characterPortraitFiles);
+        const result = await submitExternalWork(
+          form,
+          imageSelections,
+          portraits,
+        );
         router.push(`/games/${result.workId}`);
       } catch (error) {
         setSubmitError(error instanceof Error ? error.message : "发布外链作品失败。");
@@ -388,6 +438,7 @@ export function UploadClient({
     }
     setPreparing(true);
     try {
+      const portraits = await prepareCharacterPortraits(characterPortraitFiles);
       const images = imageSelections.cover
         ? await prepareSelectedImages(imageSelections)
         : {
@@ -397,8 +448,14 @@ export function UploadClient({
             blobs: [],
           };
       upload.confirmMetadata(
-        buildMetadata(form, images.hashes, initialWork?.id ?? null, associationDefaults),
-        images.blobs,
+        buildMetadata(
+          form,
+          images.hashes,
+          portraits.hashesBySelectionKey,
+          initialWork?.id ?? null,
+          associationDefaults,
+        ),
+        uniqueMetadataBlobs([...images.blobs, ...portraits.blobs]),
       );
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "作品资料确认失败。");
@@ -416,10 +473,25 @@ export function UploadClient({
       setForm(formFromMetadata(draft.metadata));
       setTranslatorError(null);
       setAssociationDefaults(associationsFromMetadata(draft.metadata));
+      const filesByHash = new Map(
+        draft.metadataBlobs.map((blob) => [blob.sha256, blob.file]),
+      );
+      const previewFiles = draft.metadata.game.browsingImageBlobSha256s
+        .map((hash) => filesByHash.get(hash) ?? null)
+        .filter((file): file is File => Boolean(file));
       setImageSelections({
-        cover: draft.metadataBlobs[0]?.file ?? null,
-        browsingImages: draft.metadataBlobs.slice(1).map((item) => item.file),
+        cover: previewFiles[0] ?? null,
+        browsingImages: previewFiles.slice(1),
       });
+      setCharacterPortraitFiles(
+        Object.fromEntries(
+          (draft.metadata.characters ?? []).flatMap((credit) => {
+            const hash = credit.selection.portraitBlobSha256;
+            const file = hash ? filesByHash.get(hash) : null;
+            return file ? [[characterSelectionKey(credit.selection), file]] : [];
+          }),
+        ),
+      );
     }
     setMode(draft.preparedSource.sourceKind);
     setSourceSummary({
@@ -573,7 +645,10 @@ export function UploadClient({
                   </div>
                 ) : (
                   <MetadataFields
+                    characterPortraitFiles={characterPortraitFiles}
                     changeOriginalDeclaration={changeOriginalDeclaration}
+                    changeCharacterPortraitFile={changeCharacterPortraitFile}
+                    changeCharacters={changeCharacters}
                     changeTranslationDeclaration={changeTranslationDeclaration}
                     changeTranslatorName={changeTranslatorName}
                     disabled={preparing}
@@ -886,6 +961,9 @@ function ExternalSourceSection({ disabled, onChange, value }: {
 }
 
 function MetadataFields({
+  characterPortraitFiles,
+  changeCharacterPortraitFile,
+  changeCharacters,
   changeOriginalDeclaration,
   changeTranslationDeclaration,
   changeTranslatorName,
@@ -898,6 +976,9 @@ function MetadataFields({
   suggestions,
   translatorError,
 }: {
+  characterPortraitFiles: CharacterPortraitFiles;
+  changeCharacterPortraitFile: (selection: CharacterSelection, file: File | null) => void;
+  changeCharacters: (characters: CharacterSelection[]) => void;
   changeOriginalDeclaration: (checked: boolean) => void;
   changeTranslationDeclaration: (checked: boolean) => void;
   changeTranslatorName: (value: string) => void;
@@ -909,7 +990,7 @@ function MetadataFields({
   setImageSelections: Dispatch<SetStateAction<ImageSelections>>;
   suggestions: {
     tags: UploadTaxonomySuggestion[];
-    characters: UploadTaxonomySuggestion[];
+    characters: CharacterSuggestion[];
   };
   translatorError: string | null;
 }) {
@@ -996,7 +1077,15 @@ function MetadataFields({
           <TokenPicker disabled={disabled} id="upload-tags" onChange={(tags) => setForm((current) => ({ ...current, tags }))} placeholder="搜索或创建标签" recommendationLabel="推荐标签" suggestions={suggestions.tags} values={form.tags} />
         </WorkbenchField>
         <WorkbenchField className="md:col-span-2" controlId="upload-characters" label="登场角色">
-          <TokenPicker disabled={disabled} id="upload-characters" onChange={(characters) => setForm((current) => ({ ...current, characters }))} placeholder="搜索或添加角色" recommendationLabel="常用角色" suggestions={suggestions.characters} values={form.characters} />
+          <CharacterPicker
+            disabled={disabled}
+            id="upload-characters"
+            onChange={changeCharacters}
+            onPortraitFileChange={changeCharacterPortraitFile}
+            portraitFiles={characterPortraitFiles}
+            suggestions={suggestions.characters}
+            values={form.characters}
+          />
         </WorkbenchField>
         <details className="md:col-span-2">
           <summary className="cursor-pointer py-1 text-sm font-bold">更多设置</summary>
@@ -1036,7 +1125,7 @@ function UploadTaskCard({ canceling, mode, onCancel, onRestart, sourceSummary, t
 }) {
   const progress = Math.min(100, task?.progress.percent ?? 0);
   const progressLabel = task?.sourceReady
-    ? "游戏文件已上传"
+    ? "游戏文件已校验"
     : task
       ? phaseLabel(task.phase)
       : "准备上传";
@@ -1058,7 +1147,7 @@ function UploadTaskCard({ canceling, mode, onCancel, onRestart, sourceSummary, t
           </span>
           <strong className="font-mono text-lg">{Math.round(progress)}%</strong>
         </div>
-        <Progress aria-label="游戏文件处理与上传进度" className="mt-4" value={progress} />
+        <Progress aria-label="游戏文件处理、上传与校验进度" className="mt-4" value={progress} />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <strong>{progressLabel}</strong>
           {task?.progress.currentPath ? <span className="max-w-full truncate font-mono">{task.progress.currentPath}</span> : null}
@@ -1129,7 +1218,7 @@ function initialForm(
     engineFamily: work?.engineFamily ?? (canArchiveUpload ? "rpg_maker_2000" : "other"),
     description: work?.description ?? "",
     tags: work?.tags ?? [],
-    characters: work?.characterCredits.map((character) => character.name) ?? [],
+    characters: work?.characterCredits.map((character) => character.selection) ?? [],
     creatorName: work?.authorCredits[0]?.creator.name ?? "",
     translatorName: work
       ? work.translatorCredits[0]?.creator.name ?? ""
@@ -1179,7 +1268,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
     tags: metadata.tags,
-    characters: (metadata.characters ?? []).map((item) => item.name),
+    characters: (metadata.characters ?? []).map((item) => item.selection),
     creatorName: authorNames[0] ?? "",
     translatorName: translatorNames[0] ?? "",
     originalReleaseDate: metadata.game.originalReleaseDate ?? "",
@@ -1192,13 +1281,25 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
   };
 }
 
-function buildMetadata(form: FlatMetadata, imageHashes: { browsingImageBlobSha256s: string[] }, targetWorkId: number | null, defaults: AssociationDefaults): ArchiveCommitMetadata {
+function buildMetadata(
+  form: FlatMetadata,
+  imageHashes: { browsingImageBlobSha256s: string[] },
+  portraitHashes: Record<string, string>,
+  targetWorkId: number | null,
+  defaults: AssociationDefaults,
+): ArchiveCommitMetadata {
   const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
   if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  const characterDefaults = new Map(defaults.characters.map((character) => [entityNameKey(character.name), character]));
-  const characters = uniqueTokens(form.characters).map((name, index) => {
-    const existing = characterDefaults.get(entityNameKey(name));
-    return { name, originalName: existing?.originalName ?? null, roleKey: existing?.roleKey ?? "supporting", spoilerLevel: existing?.spoilerLevel ?? 0, sortOrder: index + 1, notes: existing?.notes ?? null } satisfies CharacterCredit;
+  const characterDefaults = new Map(defaults.characters.map((character) => [characterSelectionKey(character.selection), character]));
+  const characters = uniqueCharacterSelections(form.characters).map((selection, index) => {
+    const existing = characterDefaults.get(characterSelectionKey(selection));
+    return {
+      selection: withCharacterPortraitHash(selection, portraitHashes),
+      roleKey: existing?.roleKey ?? "supporting",
+      spoilerLevel: existing?.spoilerLevel ?? 0,
+      sortOrder: index + 1,
+      notes: existing?.notes ?? null,
+    } satisfies CharacterCredit;
   });
   const authorDefaults = new Map(defaults.authors.map((author) => [entityNameKey(author.creator.name), author]));
   const authorName = form.creatorName.trim();
@@ -1240,6 +1341,20 @@ async function prepareSelectedImages(input: ImageSelections): Promise<PreparedIm
   return { hashes: { browsingImageBlobSha256s: hashes }, blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()] };
 }
 
+async function prepareCharacterPortraits(
+  files: CharacterPortraitFiles,
+): Promise<PreparedCharacterPortraits> {
+  const blobs: MetadataBlobUpload[] = [];
+  const hashesBySelectionKey: Record<string, string> = {};
+  for (const [key, file] of Object.entries(files)) {
+    hashesBySelectionKey[key] = await prepareMetadataImage(file, blobs);
+  }
+  return {
+    hashesBySelectionKey,
+    blobs: uniqueMetadataBlobs(blobs),
+  };
+}
+
 async function prepareMetadataImage(file: File, blobs: MetadataBlobUpload[]): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error(`${file.name} 不是图片文件。`);
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -1248,7 +1363,11 @@ async function prepareMetadataImage(file: File, blobs: MetadataBlobUpload[]): Pr
   return sha256;
 }
 
-async function submitExternalWork(form: FlatMetadata, images: ImageSelections): Promise<{ workId: number }> {
+async function submitExternalWork(
+  form: FlatMetadata,
+  images: ImageSelections,
+  portraits: PreparedCharacterPortraits,
+): Promise<{ workId: number }> {
   if (!images.cover) throw new Error("外链作品必须提供封面图。");
   const body = new FormData();
   body.set("original_title", form.originalTitle.trim());
@@ -1261,17 +1380,45 @@ async function submitExternalWork(form: FlatMetadata, images: ImageSelections): 
   body.set("language", form.language);
   body.set("aliases", form.aliasTitles.join("\n"));
   body.set("tags", form.tags.join("\n"));
-  body.set("characters", form.characters.join("\n"));
+  body.set(
+    "characters",
+    JSON.stringify(
+      form.characters.map((selection) =>
+        withCharacterPortraitHash(selection, portraits.hashesBySelectionKey),
+      ),
+    ),
+  );
   body.set("creator_name", form.creatorName.trim());
   body.set("translator", form.isTranslation ? form.translatorName.trim() : "");
   body.set("download_url", form.externalDownloadUrl.trim());
   body.set("source_url", form.sourceUrl.trim());
   body.set("cover", images.cover);
   for (const image of images.browsingImages) body.append("browsing_images[]", image);
+  for (const portrait of portraits.blobs) {
+    body.append("character_portraits[]", portrait.file);
+  }
   const response = await fetch("/api/works/external", { method: "POST", body, credentials: "same-origin" });
   const payload = (await response.json().catch(() => null)) as { ok?: boolean; workId?: number; detail?: string; error?: string } | null;
   if (!response.ok || !payload?.ok || !payload.workId) throw new Error(payload?.detail || payload?.error || "发布外链作品失败。");
   return { workId: payload.workId };
+}
+
+function withCharacterPortraitHash(
+  selection: CharacterSelection,
+  hashesBySelectionKey: Record<string, string>,
+): CharacterSelection {
+  const portraitBlobSha256 =
+    selection.portraitBlobSha256 ??
+    hashesBySelectionKey[characterSelectionKey(selection)] ??
+    null;
+  if (!portraitBlobSha256) {
+    throw new Error(`角色“${selection.originalName}”还没有头像。`);
+  }
+  return { ...selection, portraitBlobSha256 };
+}
+
+function uniqueMetadataBlobs(blobs: MetadataBlobUpload[]): MetadataBlobUpload[] {
+  return [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()];
 }
 
 function FilePicker({ accept, directory = false, disabled = false, inputRef, label, multiple = false, onChange }: {
@@ -1369,7 +1516,8 @@ function folderNameFromPicker(files: File[]): string { const first = files[0] ? 
 function entityNameKey(value: string): string { return value.toLocaleLowerCase(); }
 function cleanNullable(value: string): string | null { return value.trim() || null; }
 function uniqueTokens(values: string[]): string[] { const seen = new Set<string>(); return values.filter((value) => { const key = entityNameKey(value.trim()); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
+function uniqueCharacterSelections(values: CharacterSelection[]): CharacterSelection[] { const seen = new Set<string>(); return values.filter((value) => { const key = characterSelectionKey(value); if (seen.has(key)) return false; seen.add(key); return true; }); }
 function phaseLabel(phase: string): string {
-  const labels: Record<string, string> = { enumerating: "读取文件", hashing: "校验文件", building_core_pack: "整理公共文件", creating_import_job: "创建上传任务", preflighting: "检查已有对象", uploading_source: "上传游戏文件", verifying_source: "确认游戏文件", awaiting_metadata: "等待作品资料", uploading_metadata: "上传资料图片", committing: "提交入库", completed: "完成" };
+  const labels: Record<string, string> = { enumerating: "读取文件", hashing: "校验文件", building_core_pack: "整理公共文件", creating_import_job: "创建上传任务", preflighting: "检查已有对象", uploading_source: "上传游戏文件", verifying_source: "服务器校验游戏文件", awaiting_metadata: "等待作品资料", uploading_metadata: "上传资料图片", committing: "提交入库", completed: "完成" };
   return labels[phase] ?? "准备";
 }

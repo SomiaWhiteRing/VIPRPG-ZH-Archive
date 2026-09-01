@@ -32,6 +32,7 @@ export type ImportJobRow = {
   excluded_file_count: number;
   excluded_size_bytes: number;
   file_policy_version: string | null;
+  source_manifest_sha256: string | null;
   missing_blob_count: number;
   missing_core_pack_count: number;
   missing_blob_size_bytes: number;
@@ -160,7 +161,7 @@ export async function findImportJob(id: number): Promise<ImportJobRow | null> {
       `SELECT
         id, work_id, archive_version_id, uploader_id, status, source_name,
         source_size_bytes, file_count, excluded_file_count, excluded_size_bytes,
-        file_policy_version, missing_blob_count, missing_core_pack_count,
+        file_policy_version, source_manifest_sha256, missing_blob_count, missing_core_pack_count,
         missing_blob_size_bytes, missing_core_pack_size_bytes,
         uploaded_blob_count, uploaded_blob_size_bytes, uploaded_core_pack_count,
         uploaded_core_pack_size_bytes, manifest_put_count, manifest_size_bytes,
@@ -297,14 +298,18 @@ export function recordImportObjectUploadStatement(
     );
 }
 
-export async function markImportJobSourceReady(id: number): Promise<void> {
+export async function markImportJobSourceReady(
+  id: number,
+  sourceManifestSha256: string,
+): Promise<void> {
   const result = await getD1()
     .prepare(
       `UPDATE import_jobs
-       SET status = 'awaiting_metadata', updated_at = CURRENT_TIMESTAMP
+       SET status = 'awaiting_metadata', source_manifest_sha256 = ?,
+         updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status IN ('preflighted', 'uploading_source', 'awaiting_metadata')`,
     )
-    .bind(id)
+    .bind(sourceManifestSha256, id)
     .run();
   assertChanged(result, "Import job source is no longer active");
 }
@@ -331,7 +336,7 @@ export async function claimOwnedImportJobCommit(
       .prepare(
         `SELECT id,work_id,archive_version_id,uploader_id,status,source_name,
           source_size_bytes,file_count,excluded_file_count,excluded_size_bytes,
-          file_policy_version,missing_blob_count,missing_core_pack_count,
+          file_policy_version,source_manifest_sha256,missing_blob_count,missing_core_pack_count,
           missing_blob_size_bytes,missing_core_pack_size_bytes,
           uploaded_blob_count,uploaded_blob_size_bytes,uploaded_core_pack_count,
           uploaded_core_pack_size_bytes,manifest_put_count,manifest_size_bytes,

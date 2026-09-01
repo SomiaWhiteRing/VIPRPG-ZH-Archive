@@ -41,8 +41,12 @@ export default async function UploadWorkVersionPage({
     status: work.status === "hidden" ? "hidden" : "published",
     tags: work.tags,
     characterCredits: work.characterCredits.map((character) => ({
-      name: character.primaryName,
-      originalName: character.originalName,
+      selection: {
+        kind: "existing",
+        characterId: character.id,
+        originalName: character.originalName,
+        displayName: character.displayName,
+      },
       roleKey: characterRole(character.roleKey),
       spoilerLevel: character.spoilerLevel,
       sortOrder: character.sortOrder,

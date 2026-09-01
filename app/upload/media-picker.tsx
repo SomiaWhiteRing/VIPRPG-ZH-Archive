@@ -22,16 +22,20 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 const EMPTY_FILES: File[] = [];
 const EMPTY_HASHES: string[] = [];
+const EMPTY_CANDIDATES: CoverPickerCandidate[] = [];
 
-type CoverCandidate = {
+export type CoverPickerCandidate = {
   fileType?: string;
   key: string;
   label: string;
+  originalFile?: File;
   src: string;
 };
 
 export function CoverPicker({
+  candidates: providedCandidates,
   candidateFiles,
+  currentImageSrc,
   disabled = false,
   existingBlobSha256s,
   file,
@@ -40,7 +44,9 @@ export function CoverPicker({
   onChange,
   required = false,
 }: {
+  candidates?: CoverPickerCandidate[];
   candidateFiles?: File[];
+  currentImageSrc?: string | null;
   disabled?: boolean;
   existingBlobSha256s?: string[];
   file: File | null;
@@ -51,12 +57,13 @@ export function CoverPicker({
 }) {
   const id = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadedSourceRef = useRef<CoverCandidate | null>(null);
+  const uploadedSourceRef = useRef<CoverPickerCandidate | null>(null);
   const files = candidateFiles ?? EMPTY_FILES;
   const blobSha256s = existingBlobSha256s ?? EMPTY_HASHES;
+  const suppliedCandidates = providedCandidates ?? EMPTY_CANDIDATES;
   const fileUrl = useFileUrl(file);
   const candidateFileUrls = useFileUrls(files);
-  const [uploadedSource, setUploadedSource] = useState<CoverCandidate | null>(null);
+  const [uploadedSource, setUploadedSource] = useState<CoverPickerCandidate | null>(null);
   const [open, setOpen] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -66,13 +73,14 @@ export function CoverPicker({
   const [message, setMessage] = useState<string | null>(null);
 
   const candidates = useMemo(() => {
-    const result: CoverCandidate[] = [];
+    const result: CoverPickerCandidate[] = [];
     if (uploadedSource) result.push(uploadedSource);
     if (includeSelectedFileCandidate && file && fileUrl) {
       result.push({
         fileType: file.type,
         key: "selected-file",
         label: file.name,
+        originalFile: file,
         src: fileUrl,
       });
     }
@@ -94,9 +102,11 @@ export function CoverPicker({
           "-" +
           entry.file.lastModified,
         label: entry.file.name,
+        originalFile: entry.file,
         src: entry.url,
       });
     }
+    result.push(...suppliedCandidates);
     return result;
   }, [
     blobSha256s,
@@ -104,13 +114,14 @@ export function CoverPicker({
     file,
     fileUrl,
     includeSelectedFileCandidate,
+    suppliedCandidates,
     uploadedSource,
   ]);
 
   const activeCandidate =
     candidates.find((candidate) => candidate.key === activeKey) ?? candidates[0] ?? null;
   const triggerSrc =
-    fileUrl || (blobSha256s[0] ? "/api/media/blobs/" + blobSha256s[0] : null);
+    fileUrl || currentImageSrc || (blobSha256s[0] ? "/api/media/blobs/" + blobSha256s[0] : null);
 
   useEffect(
     () => () => {
@@ -127,7 +138,7 @@ export function CoverPicker({
     setArea(null);
   }
 
-  function selectCandidate(candidate: CoverCandidate) {
+  function selectCandidate(candidate: CoverPickerCandidate) {
     setActiveKey(candidate.key);
     setMessage(null);
     resetCrop();
@@ -179,13 +190,17 @@ export function CoverPicker({
     setBusy(true);
     setMessage(null);
     try {
-      const cropped = await cropCoverToFile(
-        activeCandidate.src,
-        activeCandidate.label,
-        activeCandidate.fileType,
-        area,
-      );
-      onChange(cropped);
+      const originalFile = activeCandidate.originalFile;
+      const cover =
+        originalFile && zoom === MIN_ZOOM && crop.x === 0 && crop.y === 0
+        ? originalFile
+        : await cropCoverToFile(
+            activeCandidate.src,
+            activeCandidate.label,
+            activeCandidate.fileType,
+            area,
+          );
+      onChange(cover);
       setOpen(false);
     } catch (error) {
       setMessage(
@@ -556,30 +571,6 @@ async function cropCoverToFile(
     sourceType,
     area,
   );
-}
-
-export async function createDefaultCoverFile(file: File): Promise<File> {
-  const source = URL.createObjectURL(file);
-  try {
-    const image = await loadCoverImage(source);
-    const imageAspect = image.naturalWidth / image.naturalHeight;
-    const area = imageAspect > COVER_ASPECT
-      ? {
-          x: (image.naturalWidth - image.naturalHeight * COVER_ASPECT) / 2,
-          y: 0,
-          width: image.naturalHeight * COVER_ASPECT,
-          height: image.naturalHeight,
-        }
-      : {
-          x: 0,
-          y: (image.naturalHeight - image.naturalWidth / COVER_ASPECT) / 2,
-          width: image.naturalWidth,
-          height: image.naturalWidth / COVER_ASPECT,
-        };
-    return renderCroppedCover(image, file.name, file.type, area);
-  } finally {
-    URL.revokeObjectURL(source);
-  }
 }
 
 async function loadCoverImage(source: string): Promise<HTMLImageElement> {

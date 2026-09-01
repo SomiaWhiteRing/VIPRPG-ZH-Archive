@@ -12,12 +12,17 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
+import { CharacterPicker } from "@/app/upload/character-picker";
 import { CoverPicker, PreviewPicker } from "@/app/upload/media-picker";
 import { TokenPicker } from "@/app/upload/token-picker";
 import type { UploadTaxonomySuggestion } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
 import { updateTranslationPreference } from "@/app/upload/translation-preference";
 import { isArchiveEngineFamily } from "@/lib/labels";
+import type {
+  CharacterSelection,
+  CharacterSuggestion,
+} from "@/lib/character-names";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
   parseOriginalReleaseDate,
@@ -36,7 +41,7 @@ type EditableWork = {
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   authors: string[];
   translators: string[];
   distribution: "archive" | "external";
@@ -53,7 +58,7 @@ export function WorkEditClient({
   currentUserId: number;
   suggestions: {
     tags: UploadTaxonomySuggestion[];
-    characters: UploadTaxonomySuggestion[];
+    characters: CharacterSuggestion[];
   };
   work: EditableWork;
 }) {
@@ -311,12 +316,10 @@ export function WorkEditClient({
                     />
                   </WorkbenchField>
                   <WorkbenchField className="md:col-span-2" controlId="edit-characters" label="登场角色">
-                    <TokenPicker
+                    <CharacterPicker
                       id="edit-characters"
                       name="characters"
                       onChange={setCharacters}
-                      placeholder="搜索或添加角色"
-                      recommendationLabel="常用角色"
                       suggestions={suggestions.characters}
                       values={characters}
                     />

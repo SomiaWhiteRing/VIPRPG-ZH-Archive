@@ -1,7 +1,7 @@
 "use client";
 
 import { Select as SelectPrimitive } from "radix-ui";
-import { useState, type ComponentPropsWithoutRef } from "react";
+import { Fragment, useState, type ComponentPropsWithoutRef } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 
@@ -63,6 +63,7 @@ export type SelectFieldOption = {
   value: string;
   label: string;
   disabled?: boolean;
+  separatorBefore?: boolean;
 };
 
 type SelectFieldProps = {
@@ -105,13 +106,17 @@ export function SelectField({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem
-              disabled={option.disabled}
-              key={option.value || "__empty__"}
-              value={option.value || "__empty__"}
-            >
-              {option.label}
-            </SelectItem>
+            <Fragment key={option.value || "__empty__"}>
+              {option.separatorBefore ? (
+                <SelectPrimitive.Separator className="my-1 h-px bg-border" />
+              ) : null}
+              <SelectItem
+                disabled={option.disabled}
+                value={option.value || "__empty__"}
+              >
+                {option.label}
+              </SelectItem>
+            </Fragment>
           ))}
         </SelectContent>
       </SelectPrimitive.Root>

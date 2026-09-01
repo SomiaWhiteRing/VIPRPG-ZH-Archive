@@ -1,10 +1,13 @@
 import { getD1 } from "@/lib/server/db/d1";
+import type { CharacterSuggestion } from "@/lib/character-names";
+import { characterNameKey } from "@/lib/character-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 
 export type PublicCharacterSummary = {
   id: number;
   primaryName: string;
-  originalName: string | null;
+  originalName: string;
+  portraitBlobSha256: string | null;
   description: string | null;
   workCount: number;
   updatedAt: string;
@@ -24,7 +27,8 @@ export type AdminTagEdit = PublicTagSummary;
 type CharacterRow = {
   id: number;
   primary_name: string;
-  original_name: string | null;
+  original_name: string;
+  portrait_blob_sha256: string | null;
   description: string | null;
   extra_json: string;
   work_count: number;
@@ -48,8 +52,8 @@ export async function listPublicCharacters(
   ];
   if (input.query?.trim()) {
     const q = `%${input.query.trim()}%`;
-    where.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ?)");
-    binds.push(q, q);
+    where.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ? OR EXISTS(SELECT 1 FROM character_aliases ca WHERE ca.character_id=ch.id AND ca.name LIKE ?))");
+    binds.push(q, q, q);
   }
   const rows = await getD1()
     .prepare(
@@ -65,15 +69,52 @@ export async function getPublicCharacterSummary(
   return getCharacter(id, false);
 }
 export async function listCharactersForAdmin(
-  limit = 300,
+  limit = 1000,
 ): Promise<PublicCharacterSummary[]> {
   const rows = await getD1()
     .prepare(
       `${characterSql()} FROM characters ch ORDER BY ch.updated_at DESC,ch.primary_name ASC LIMIT ?`,
     )
-    .bind(limitValue(limit, 500))
+    .bind(limitValue(limit, 2000))
     .all<CharacterRow>();
   return (rows.results ?? []).map(mapCharacter);
+}
+
+export async function listCharacterSuggestions(): Promise<CharacterSuggestion[]> {
+  const rows = await getD1()
+    .prepare(
+      `${characterSql()},ca.name AS alias_name,ca.language AS alias_language
+       FROM characters ch
+       LEFT JOIN character_aliases ca ON ca.character_id=ch.id
+       ORDER BY work_count DESC,ch.primary_name ASC,ca.language,ca.name
+       LIMIT 5000`,
+    )
+    .all<CharacterRow & {
+      alias_name: string | null;
+      alias_language: "ja" | "zh" | null;
+    }>();
+  const suggestions = new Map<number, CharacterSuggestion>();
+  for (const row of rows.results ?? []) {
+    let suggestion = suggestions.get(row.id);
+    if (!suggestion) {
+      suggestion = {
+        id: row.id,
+        originalName: row.original_name,
+        primaryName: row.primary_name,
+        portraitBlobSha256: row.portrait_blob_sha256,
+        aliases: [],
+        workCount: row.work_count,
+      };
+      suggestions.set(row.id, suggestion);
+    }
+    if (row.alias_name && row.alias_language) {
+      suggestion.aliases.push({
+        name: row.alias_name,
+        language: row.alias_language,
+      });
+    }
+  }
+  return [...suggestions.values()];
 }
 export async function searchCharactersForAdmin(input: {
   query?: string;
@@ -87,8 +128,8 @@ export async function searchCharactersForAdmin(input: {
   const clauses: string[] = [];
   if (input.query?.trim()) {
     const value = `%${input.query.trim()}%`;
-    clauses.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ?)");
-    binds.push(value, value);
+    clauses.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ? OR EXISTS(SELECT 1 FROM character_aliases ca WHERE ca.character_id=ch.id AND ca.name LIKE ?))");
+    binds.push(value, value, value);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const order = input.sort === "name" ? "ch.primary_name ASC,ch.id DESC" : input.sort === "works" ? "work_count DESC,ch.id DESC" : "ch.updated_at DESC,ch.id DESC";
@@ -120,13 +161,26 @@ export async function getCharacterForAdminEdit(
 export async function updateCharacterForAdmin(input: {
   characterId: number;
   primaryName: string;
-  originalName: string | null;
+  originalName: string;
   description: string | null;
+  portraitBlobSha256?: string;
   mergeTargetId: number | null;
 }): Promise<AdminCharacterEdit> {
   const primaryName = normalizeEntityName(input.primaryName);
   if (!primaryName) throw new Error("角色名不能为空");
+  const originalName = normalizeEntityName(input.originalName);
+  if (!originalName) throw new Error("角色日语名不能为空");
   if (input.mergeTargetId) {
+    if (input.portraitBlobSha256) {
+      await getD1()
+        .prepare(
+          `UPDATE characters
+           SET portrait_blob_sha256=?,updated_at=CURRENT_TIMESTAMP
+           WHERE id=?`,
+        )
+        .bind(input.portraitBlobSha256, input.characterId)
+        .run();
+    }
     await mergeCharacter(input.characterId, input.mergeTargetId);
     const target = await getCharacterById(input.mergeTargetId, true);
     if (!target) throw new Error("合并目标不存在");
@@ -134,12 +188,18 @@ export async function updateCharacterForAdmin(input: {
   }
   await getD1()
     .prepare(
-      `UPDATE characters SET primary_name=?,original_name=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE characters
+       SET primary_name=?,primary_name_key=?,original_name=?,original_name_key=?,description=?,
+           portrait_blob_sha256=COALESCE(?,portrait_blob_sha256),updated_at=CURRENT_TIMESTAMP
+       WHERE id=?`,
     )
     .bind(
       primaryName,
-      input.originalName,
+      characterNameKey(primaryName),
+      originalName,
+      characterNameKey(originalName),
       input.description,
+      input.portraitBlobSha256 ?? null,
       input.characterId,
     )
     .run();
@@ -154,7 +214,7 @@ export function parseCharacterEditForm(
   return {
     characterId: id,
     primaryName: String(form.get("primary_name") ?? ""),
-    originalName: clean(form.get("original_name")),
+    originalName: String(form.get("original_name") ?? ""),
     description: clean(form.get("description")),
     mergeTargetId: positive(form.get("merge_target_id")),
   };
@@ -314,22 +374,104 @@ async function getTagById(
   return mapTag(row);
 }
 async function mergeCharacter(id: number, targetId: number): Promise<void> {
-  const target = await getD1()
-    .prepare(`SELECT id FROM characters WHERE id=? LIMIT 1`)
-    .bind(targetId)
-    .first<{ id: number }>();
-  if (!target || target.id === id) throw new Error("角色合并目标不合法");
   const database = getD1();
+  const [source, target] = await database.batch([
+    database
+      .prepare(`SELECT id,primary_name,primary_name_key,original_name,original_name_key,portrait_blob_sha256 FROM characters WHERE id=? LIMIT 1`)
+      .bind(id),
+    database
+      .prepare(`SELECT id,primary_name_key,original_name_key,portrait_blob_sha256 FROM characters WHERE id=? LIMIT 1`)
+      .bind(targetId),
+  ]);
+  const sourceRow = source.results?.[0] as {
+    id: number;
+    primary_name: string;
+    primary_name_key: string;
+    original_name: string;
+    original_name_key: string;
+    portrait_blob_sha256: string | null;
+  } | undefined;
+  const targetRow = target.results?.[0] as {
+    id: number;
+    primary_name_key: string;
+    original_name_key: string;
+    portrait_blob_sha256: string | null;
+  } | undefined;
+  if (!sourceRow || !targetRow || targetRow.id === sourceRow.id) {
+    throw new Error("角色合并目标不合法");
+  }
   await database.batch([
     database
       .prepare(
-        `INSERT OR IGNORE INTO work_characters(work_id,character_id,role_key,spoiler_level,sort_order,notes) SELECT work_id,?,role_key,spoiler_level,sort_order,notes FROM work_characters WHERE character_id=?`,
+        `UPDATE characters
+         SET portrait_blob_sha256=COALESCE(portrait_blob_sha256,?),updated_at=CURRENT_TIMESTAMP
+         WHERE id=?`,
       )
-      .bind(target.id, id),
+      .bind(sourceRow.portrait_blob_sha256, targetRow.id),
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO work_characters(work_id,character_id,display_name,role_key,spoiler_level,sort_order,notes)
+         SELECT work_id,?,display_name,role_key,spoiler_level,sort_order,notes
+         FROM work_characters WHERE character_id=?`,
+      )
+      .bind(targetRow.id, sourceRow.id),
     database
       .prepare(`DELETE FROM work_characters WHERE character_id=?`)
-      .bind(id),
-    database.prepare(`DELETE FROM characters WHERE id=?`).bind(id),
+      .bind(sourceRow.id),
+    database
+      .prepare(
+        `DELETE FROM character_aliases
+         WHERE character_id=? AND (
+           name_key IN (SELECT name_key FROM character_aliases WHERE character_id=?)
+           OR name_key=? OR name_key=?
+         )`,
+      )
+      .bind(
+        sourceRow.id,
+        targetRow.id,
+        targetRow.primary_name_key,
+        targetRow.original_name_key,
+      ),
+    database
+      .prepare(`UPDATE character_aliases SET character_id=? WHERE character_id=?`)
+      .bind(targetRow.id, sourceRow.id),
+    database.prepare(`DELETE FROM characters WHERE id=?`).bind(sourceRow.id),
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO character_aliases(character_id,name,name_key,language,source)
+         SELECT ?,?,?,'ja','admin'
+         WHERE ?<>? AND ?<>?
+           AND NOT EXISTS(SELECT 1 FROM character_aliases WHERE character_id=? AND name_key=?)`,
+      )
+      .bind(
+        targetRow.id,
+        sourceRow.original_name,
+        sourceRow.original_name_key,
+        sourceRow.original_name_key,
+        targetRow.original_name_key,
+        sourceRow.original_name_key,
+        targetRow.primary_name_key,
+        targetRow.id,
+        sourceRow.original_name_key,
+      ),
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO character_aliases(character_id,name,name_key,language,source)
+         SELECT ?,?,?,'zh','admin'
+         WHERE ?<>? AND ?<>?
+           AND NOT EXISTS(SELECT 1 FROM character_aliases WHERE character_id=? AND name_key=?)`,
+      )
+      .bind(
+        targetRow.id,
+        sourceRow.primary_name,
+        sourceRow.primary_name_key,
+        sourceRow.primary_name_key,
+        targetRow.primary_name_key,
+        sourceRow.primary_name_key,
+        targetRow.original_name_key,
+        targetRow.id,
+        sourceRow.primary_name_key,
+      ),
   ]);
 }
 async function mergeTag(id: number, targetId: number): Promise<void> {
@@ -350,7 +492,7 @@ async function mergeTag(id: number, targetId: number): Promise<void> {
   ]);
 }
 function characterSql(): string {
-  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at`;
+  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.portrait_blob_sha256,ch.description,ch.extra_json,(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at`;
 }
 function tagSql(): string {
   return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published') AS work_count,t.updated_at`;
@@ -360,6 +502,7 @@ function mapCharacter(row: CharacterRow): PublicCharacterSummary {
     id: row.id,
     primaryName: row.primary_name,
     originalName: row.original_name,
+    portraitBlobSha256: row.portrait_blob_sha256,
     description: row.description,
     workCount: row.work_count,
     updatedAt: row.updated_at,

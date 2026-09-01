@@ -3,12 +3,18 @@ import {
   isExternalEngineFamily,
   isLanguageCode,
 } from "@/lib/labels";
+import type { CharacterSelection } from "@/lib/character-names";
 import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { getD1 } from "@/lib/server/db/d1";
+import {
+  parseCharacterSelection,
+  parseCharacterSelectionsJson,
+  prepareWorkCharacterStatements,
+} from "@/lib/server/db/characters";
 import { chunkArray } from "@/lib/server/db/chunks";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
@@ -27,7 +33,9 @@ export type GameTag = { id: number; name: string; namespace: string };
 export type GameCharacter = {
   id: number;
   primaryName: string;
-  originalName: string | null;
+  originalName: string;
+  displayName: string;
+  portraitBlobSha256: string | null;
   roleKey: string;
   spoilerLevel: number;
   sortOrder: number | null;
@@ -70,7 +78,6 @@ export type GameWorkRelation = {
   id: number;
   direction: "from";
   relationType: string;
-  notes: string | null;
   workId: number;
   title: string;
   relationOrder: number;
@@ -136,7 +143,7 @@ export type AdminWorkEdit = {
   aliases: string[];
   creators: GameCreatorCredit[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   characterCredits: GameCharacter[];
   media: GameMediaAsset[];
   outgoingRelations: GameWorkRelation[];
@@ -180,7 +187,7 @@ type Filters = {
   includeNonPublic?: boolean;
 };
 type ListInput = Filters & {
-  sort?: "id" | "title" | "release";
+  sort?: "id" | "title" | "release" | "relevance";
   limit?: number;
   offset?: number;
 };
@@ -253,7 +260,7 @@ type WorkEditInput = {
   status: string;
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   previewBlobSha256s: string[];
   outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
@@ -271,7 +278,7 @@ export type ExternalWorkInput = {
   language: string;
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   creatorName: string | null;
   translatorName: string | null;
   previewBlobSha256s: string[];
@@ -336,7 +343,7 @@ export type UploaderWorkUpdateInput = {
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   authors: string[];
   translators: string[];
   previewBlobSha256s: string[];
@@ -430,6 +437,7 @@ export async function searchGameWorks(input: {
     gameWorksCountStatement(database, filters),
     gameWorksListStatement(database, {
       ...filters,
+      sort: "relevance",
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
@@ -538,7 +546,7 @@ export async function getWorkForAdminEdit(
     aliases: collections.aliases,
     creators: collections.creators,
     tags: collections.tags.map((item) => item.name),
-    characters: collections.characters.map((item) => item.primaryName),
+    characters: collections.characters.map(characterSelectionFromGameCharacter),
     characterCredits: collections.characters,
     media: collections.media,
     outgoingRelations: collections.relations,
@@ -615,7 +623,7 @@ export async function updateOwnedWork(
 
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
-  const characters = uniqueText(input.characters.map(normalizeEntityName));
+  const characters = input.characters.map(parseCharacterSelection);
   const authors = uniqueText(input.authors.map(normalizeCreatorName));
   const translators = input.isTranslation
     ? uniqueText(input.translators.map(normalizeCreatorName))
@@ -648,13 +656,14 @@ export async function updateOwnedWork(
 
   const database = getD1();
   const existingCharacters = new Map(
-    before.characterCredits.map((character) => [entityNameKey(character.primaryName), character]),
+    before.characterCredits.map((character) => [character.id, character]),
   );
-  const characterCredits = characters.map((name, index) => {
-    const existing = existingCharacters.get(entityNameKey(name));
+  const characterCredits = characters.map((selection, index) => {
+    const existing = selection.kind === "existing"
+      ? existingCharacters.get(selection.characterId)
+      : undefined;
     return {
-      name,
-      originalName: existing?.originalName ?? null,
+      selection,
       roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
@@ -713,7 +722,6 @@ export async function updateOwnedWork(
       ),
     database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_tags WHERE work_id=? AND source='uploader'`).bind(input.workId),
-    database.prepare(`DELETE FROM work_characters WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_staff WHERE work_id=? AND role_key IN ('author','translator')`).bind(input.workId),
     database
       .prepare(
@@ -747,14 +755,14 @@ export async function updateOwnedWork(
         .bind(input.workId, tag),
     );
   }
-  for (const character of characterCredits) {
-    statements.push(
-      database.prepare(`INSERT OR IGNORE INTO characters(primary_name,original_name,extra_json) VALUES(?,?,'{}')`).bind(character.name, character.originalName),
-      database
-        .prepare(`INSERT OR IGNORE INTO work_characters(work_id,character_id,role_key,spoiler_level,sort_order,notes) SELECT ?,id,?,?,?,? FROM characters WHERE primary_name=? COLLATE NOCASE`)
-        .bind(input.workId, character.roleKey, character.spoilerLevel, character.sortOrder, character.notes, character.name),
-    );
-  }
+  statements.push(
+    ...(await prepareWorkCharacterStatements({
+      database,
+      workId: input.workId,
+      credits: characterCredits,
+      source: "user",
+    })),
+  );
   for (const author of authorCredits) {
     statements.push(
       database.prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?,'{}')`).bind(author.name),
@@ -846,9 +854,24 @@ export async function updateWorkForAdmin(
   await validatePreviewHashes(previewHashes);
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
-  const characters = uniqueText(
-    input.characters.map((value) => value.split("|")[0]).map(normalizeEntityName),
+  const characters = input.characters.map(parseCharacterSelection);
+  const current = await getWorkForAdminEdit(input.workId);
+  if (!current) throw new HttpError(404, "作品不存在");
+  const existingCharacters = new Map(
+    current.characterCredits.map((character) => [character.id, character]),
   );
+  const characterCredits = characters.map((selection, index) => {
+    const existing = selection.kind === "existing"
+      ? existingCharacters.get(selection.characterId)
+      : undefined;
+    return {
+      selection,
+      roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
+      spoilerLevel: existing?.spoilerLevel ?? 0,
+      sortOrder: index + 1,
+      notes: existing?.notes ?? null,
+    };
+  });
   const database = getD1();
   const statements: D1PreparedStatement[] = [
     database
@@ -883,7 +906,6 @@ export async function updateWorkForAdmin(
       ),
     database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_tags WHERE work_id=?`).bind(input.workId),
-    database.prepare(`DELETE FROM work_characters WHERE work_id=?`).bind(input.workId),
     database
       .prepare(
         `DELETE FROM work_media_assets
@@ -910,17 +932,14 @@ export async function updateWorkForAdmin(
         .bind(input.workId, tag),
     );
   }
-  for (const character of characters) {
-    statements.push(
-      database.prepare(`INSERT OR IGNORE INTO characters(primary_name) VALUES(?)`).bind(character),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_characters(work_id,character_id)
-           SELECT ?,id FROM characters WHERE primary_name=? COLLATE NOCASE`,
-        )
-        .bind(input.workId, character),
-    );
-  }
+  statements.push(
+    ...(await prepareWorkCharacterStatements({
+      database,
+      workId: input.workId,
+      credits: characterCredits,
+      source: "admin",
+    })),
+  );
   for (const [index, hash] of previewHashes.entries()) {
     statements.push(
       database.prepare(`INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`).bind(hash),
@@ -977,7 +996,7 @@ export async function createExternalWork(
 
   const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
   const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
-  const characters = [...new Set(input.characters.map(normalizeEntityName).filter(Boolean))];
+  const characters = input.characters.map(parseCharacterSelection);
   const creatorName = input.creatorName ? normalizeCreatorName(input.creatorName) || null : null;
   const translatorName = input.isTranslation && input.translatorName
     ? normalizeCreatorName(input.translatorName) || null
@@ -1039,16 +1058,19 @@ export async function createExternalWork(
         )
         .bind(workId, credit.roleKey, credit.roleLabel, credit.name),
     ]),
-    ...characters.flatMap((name, index) => [
-      database
-        .prepare(`INSERT OR IGNORE INTO characters(primary_name,extra_json) VALUES(?, '{}')`)
-        .bind(name),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_characters(work_id,character_id,role_key,spoiler_level,sort_order) SELECT ?,id,'supporting',0,? FROM characters WHERE primary_name=? COLLATE NOCASE`,
-        )
-        .bind(workId, index + 1, name),
-    ]),
+    ...(await prepareWorkCharacterStatements({
+      database,
+      workId: workId as number,
+      credits: characters.map((selection, index) => ({
+        selection,
+        roleKey: "supporting",
+        spoilerLevel: 0,
+        sortOrder: index + 1,
+        notes: null,
+      })),
+      source: "user",
+      requirePortrait: true,
+    })),
     ...tags.flatMap((name) => [
       database
         .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`)
@@ -1204,7 +1226,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     status: String(form.get("status") ?? "published"),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
-    characters: lines(form.get("characters")),
+    characters: parseCharacterSelectionsJson(form.get("characters")),
     previewBlobSha256s: lines(form.get("preview_blob_sha256s")),
     outgoingRelations: [],
     externalLinks: parseLinks(form.get("external_links")),
@@ -1278,11 +1300,7 @@ function gameWorksListStatement(database: D1Database, input: ListInput): D1Prepa
   const { where, binds } = buildWhere(input);
   const limit = clamp(input.limit ?? 80, 1, 200);
   const offset = Math.max(0, Math.floor(input.offset ?? 0));
-  const order = input.sort === "title"
-    ? "COALESCE(w.chinese_title,w.original_title) ASC"
-    : input.sort === "release"
-      ? "w.original_release_date IS NULL ASC,w.original_release_date DESC"
-      : "w.id DESC";
+  const { order, orderBinds } = gameWorksOrder(input);
   return database
     .prepare(
       `SELECT ${summarySql()}
@@ -1294,7 +1312,48 @@ function gameWorksListStatement(database: D1Database, input: ListInput): D1Prepa
        ORDER BY ${order},w.id DESC
        LIMIT ? OFFSET ?`,
     )
-    .bind(...binds, limit, offset);
+    .bind(...binds, ...orderBinds, limit, offset);
+}
+
+function gameWorksOrder(input: ListInput): { order: string; orderBinds: string[] } {
+  if (input.sort === "relevance" && input.query) {
+    const { exact, prefix, contains } = searchPatterns(input.query);
+    return {
+      order: `CASE
+        WHEN w.chinese_title LIKE ? ESCAPE '\\' THEN 0
+        WHEN w.original_title LIKE ? ESCAPE '\\' THEN 1
+        WHEN EXISTS(SELECT 1 FROM work_titles wte WHERE wte.work_id=w.id AND wte.title LIKE ? ESCAPE '\\') THEN 2
+        WHEN w.chinese_title LIKE ? ESCAPE '\\' THEN 3
+        WHEN w.original_title LIKE ? ESCAPE '\\' THEN 4
+        WHEN EXISTS(SELECT 1 FROM work_titles wtp WHERE wtp.work_id=w.id AND wtp.title LIKE ? ESCAPE '\\') THEN 5
+        WHEN w.chinese_title LIKE ? ESCAPE '\\' THEN 6
+        WHEN w.original_title LIKE ? ESCAPE '\\' THEN 7
+        WHEN EXISTS(SELECT 1 FROM work_titles wtc WHERE wtc.work_id=w.id AND wtc.title LIKE ? ESCAPE '\\') THEN 8
+        ELSE 9
+      END`,
+      orderBinds: [
+        exact,
+        exact,
+        exact,
+        prefix,
+        prefix,
+        prefix,
+        contains,
+        contains,
+        contains,
+      ],
+    };
+  }
+  if (input.sort === "title") {
+    return { order: "COALESCE(w.chinese_title,w.original_title) ASC", orderBinds: [] };
+  }
+  if (input.sort === "release") {
+    return {
+      order: "w.original_release_date IS NULL ASC,w.original_release_date DESC",
+      orderBinds: [],
+    };
+  }
+  return { order: "w.id DESC", orderBinds: [] };
 }
 
 function gameWorksCountStatement(database: D1Database, input: Filters): D1PreparedStatement {
@@ -1313,11 +1372,11 @@ function buildWhere(input: Filters): {
     ],
     binds: Array<string | number> = [];
   if (input.query) {
-    const q = `%${input.query}%`;
+    const { contains } = searchPatterns(input.query);
     clauses.push(
-      `(w.original_title LIKE ? OR w.chinese_title LIKE ? OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ?))`,
+      `(w.original_title LIKE ? ESCAPE '\\' OR w.chinese_title LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ? ESCAPE '\\'))`,
     );
-    binds.push(q, q, q);
+    binds.push(contains, contains, contains);
   }
   if (input.status && input.status !== "all") {
     clauses.push("w.status=?");
@@ -1349,6 +1408,16 @@ function buildWhere(input: Filters): {
   }
   return { where: clauses.join(" AND "), binds };
 }
+
+function searchPatterns(query: string): {
+  exact: string;
+  prefix: string;
+  contains: string;
+} {
+  const escaped = query.replace(/[\\%_]/g, (match) => `\\${match}`);
+  return { exact: escaped, prefix: `${escaped}%`, contains: `%${escaped}%` };
+}
+
 async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((row) => row.id))];
@@ -1372,7 +1441,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
         kind: "character",
         statement: database
           .prepare(
-            `SELECT wc.work_id,c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+            `SELECT wc.work_id,c.id,c.primary_name,c.original_name,c.portrait_blob_sha256,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
              FROM work_characters wc JOIN characters c ON c.id=wc.character_id
              WHERE wc.work_id IN (${placeholders})
              ORDER BY wc.work_id,wc.sort_order,c.primary_name`,
@@ -1398,7 +1467,9 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
     work_id: number;
     id: number;
     primary_name: string;
-    original_name: string | null;
+    original_name: string;
+    portrait_blob_sha256: string | null;
+    display_name: string;
     role_key: string;
     spoiler_level: number;
     sort_order: number | null;
@@ -1433,6 +1504,8 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       id: character.id,
       primaryName: character.primary_name,
       originalName: character.original_name,
+      displayName: character.display_name,
+      portraitBlobSha256: character.portrait_blob_sha256,
       roleKey: character.role_key,
       spoilerLevel: character.spoiler_level,
       sortOrder: character.sort_order,
@@ -1536,7 +1609,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT c.id,c.primary_name,c.original_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+        `SELECT c.id,c.primary_name,c.original_name,c.portrait_blob_sha256,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
          FROM work_characters wc JOIN characters c ON c.id=wc.character_id
          WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
       )
@@ -1571,7 +1644,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT wr.id,wr.relation_type,wr.notes,wr.relation_order,wr.vice_versa,
+        `SELECT wr.id,wr.relation_type,wr.relation_order,wr.vice_versa,
                 wr.created_by_user_id,w.id AS work_id,
                 COALESCE(w.chinese_title,w.original_title) AS title,${RELATED_PREVIEW_SQL}
          FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
@@ -1593,7 +1666,9 @@ async function loadWorkCollections(
   const characters = batchRows<{
     id: number;
     primary_name: string;
-    original_name: string | null;
+    original_name: string;
+    portrait_blob_sha256: string | null;
+    display_name: string;
     role_key: string;
     spoiler_level: number;
     sort_order: number | null;
@@ -1602,6 +1677,8 @@ async function loadWorkCollections(
     id: row.id,
     primaryName: row.primary_name,
     originalName: row.original_name,
+    displayName: row.display_name,
+    portraitBlobSha256: row.portrait_blob_sha256,
     roleKey: row.role_key,
     spoilerLevel: row.spoiler_level,
     sortOrder: row.sort_order,
@@ -1669,7 +1746,6 @@ async function loadWorkCollections(
     relations: batchRows<{
       id: number;
       relation_type: string;
-      notes: string | null;
       relation_order: number;
       vice_versa: number;
       created_by_user_id: number | null;
@@ -1680,7 +1756,6 @@ async function loadWorkCollections(
       id: row.id,
       direction: "from" as const,
       relationType: row.relation_type,
-      notes: row.notes,
       relationOrder: row.relation_order,
       viceVersa: row.vice_versa === 1,
       createdByUserId: row.created_by_user_id,
@@ -1822,6 +1897,18 @@ async function getWorkDistributionState(workId: number): Promise<{
 }
 function entityNameKey(value: string): string {
   return value.toLowerCase();
+}
+
+function characterSelectionFromGameCharacter(
+  character: GameCharacter,
+): CharacterSelection {
+  return {
+    kind: "existing",
+    characterId: character.id,
+    originalName: character.originalName,
+    displayName: character.displayName,
+    portraitBlobSha256: character.portraitBlobSha256,
+  };
 }
 
 function assertPublicationDeclarations(

@@ -1,6 +1,13 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
+import type { CharacterSelection } from "@/lib/character-names";
+import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
 import { createExternalWork } from "@/lib/server/db/game-library";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
+import {
+  readCharacterPortrait,
+  storeCharacterPortraits,
+  validateCharacterPortraitHashes,
+} from "@/lib/server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +24,18 @@ export async function POST(request: Request) {
     const browsingImages = form
       .getAll("browsing_images[]")
       .map((value) => readWorkImage(value, "browsing_images[]"));
+    const characterPortraits = form
+      .getAll("character_portraits[]")
+      .filter((value): value is File => value instanceof File && value.size > 0)
+      .map((value) => readCharacterPortrait(value));
     const imageFiles = [cover, ...browsingImages];
     const previewBlobSha256s = await storeWorkImages(imageFiles);
+    await storeCharacterPortraits(characterPortraits);
+    await validateCharacterPortraitHashes(
+      metadata.characters.flatMap((selection) =>
+        selection.portraitBlobSha256 ? [selection.portraitBlobSha256] : [],
+      ),
+    );
     const result = await createExternalWork({
       user: auth.user,
       ...metadata,
@@ -42,7 +59,7 @@ function parseMetadata(form: FormData): {
   language: string;
   aliases: string[];
   tags: string[];
-  characters: string[];
+  characters: CharacterSelection[];
   creatorName: string | null;
   translatorName: string | null;
   sourceUrl: string | null;
@@ -58,7 +75,7 @@ function parseMetadata(form: FormData): {
     language: readRequiredString(form.get("language"), "language"),
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
-    characters: readList(form.get("characters")),
+    characters: parseCharacterSelectionsJson(form.get("characters")),
     creatorName: readNullableString(form.get("creator_name")),
     translatorName: readNullableString(form.get("translator")),
     sourceUrl: readNullableString(form.get("source_url")),

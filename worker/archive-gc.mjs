@@ -257,6 +257,20 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
             FROM media_assets ma
             WHERE ma.blob_sha256 = b.sha256
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
+          )
         ORDER BY b.created_at ASC, b.sha256 ASC
         LIMIT ?`
       : `SELECT
@@ -496,6 +510,20 @@ async function markCandidatePurging(db, type, id, graceDays) {
             SELECT 1
             FROM media_assets ma
             WHERE ma.blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM characters ch WHERE ch.portrait_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalogs c
+            WHERE c.cover_blob_sha256 = blobs.sha256 AND c.status = 'published'
           )`
       : `UPDATE core_packs
         SET status = 'purging'

@@ -50,7 +50,6 @@ export default async function CatalogPage({
   const canEditItems =
     canManageAny ||
     Boolean(ownsCatalog && hasPermission(currentUser, "catalog.reorder_own"));
-  const firstItem = catalog.items[0] ?? null;
 
   return (
     <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
@@ -65,32 +64,20 @@ export default async function CatalogPage({
             className="mt-4 rounded-lg border border-border bg-muted/5 p-4 sm:p-5"
           >
             <div className="flex flex-col gap-4 sm:flex-row">
-              {firstItem ? (
-                <Link
-                  aria-label={`查看目录首项：${firstItem.title}`}
-                  className="relative block aspect-4/3 w-full shrink-0 overflow-hidden rounded-md border border-border bg-card sm:w-52"
-                  href={`/games/${firstItem.workId}`}
-                >
-                  {catalog.coverBlobSha256 ? (
-                    <Image
-                      alt=""
-                      className="h-full w-full object-cover"
-                      height={156}
-                      src={`/api/media/blobs/${catalog.coverBlobSha256}`}
-                      unoptimized
-                      width={208}
-                    />
-                  ) : (
-                    <span className="flex h-full items-center justify-center font-mono text-xs text-muted">
-                      暂无封面
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <div className="flex aspect-4/3 w-full shrink-0 items-center justify-center rounded-md border border-border bg-card font-mono text-xs text-muted sm:w-52">
-                  暂无封面
-                </div>
-              )}
+              <div className="relative flex aspect-4/3 w-full shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-card font-mono text-xs text-muted sm:w-52">
+                {catalog.coverBlobSha256 ? (
+                  <Image
+                    alt=""
+                    className="h-full w-full object-cover"
+                    height={156}
+                    src={`/api/media/blobs/${catalog.coverBlobSha256}`}
+                    unoptimized
+                    width={208}
+                  />
+                ) : (
+                  <span>暂无封面</span>
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="m-0 whitespace-pre-wrap text-sm leading-[1.75]">
                   {catalog.description || "这个目录还没有填写说明。"}
