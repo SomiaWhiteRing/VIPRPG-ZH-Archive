@@ -56,11 +56,19 @@ export async function GET(_request: Request, context: RouteContext) {
             )
             OR EXISTS (
               SELECT 1
-              FROM characters ch
-              JOIN work_characters wc ON wc.character_id = ch.id
-              JOIN works w ON w.id = wc.work_id
-              WHERE ch.portrait_blob_sha256 = b.sha256
-                AND w.status = 'published'
+              FROM face_sheets fs
+              WHERE fs.blob_sha256 = b.sha256
+                AND (
+                  fs.library_status = 'approved'
+                  OR EXISTS (
+                    SELECT 1
+                    FROM character_portrait_refs cpr
+                    JOIN work_characters wc ON wc.portrait_ref_id = cpr.id
+                    JOIN works w ON w.id = wc.work_id
+                    WHERE cpr.face_sheet_id = fs.id
+                      AND w.status = 'published'
+                  )
+                )
             )
           )
         LIMIT 1`,

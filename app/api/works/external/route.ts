@@ -1,12 +1,12 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
-import type { CharacterSelection } from "@/lib/character-names";
+import type { CharacterCreditSelection } from "@/lib/character-names";
 import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
 import { createExternalWork } from "@/lib/server/db/game-library";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 import {
+  ensureCharacterPortraitFaceSheets,
   readCharacterPortrait,
   storeCharacterPortraits,
-  validateCharacterPortraitHashes,
 } from "@/lib/server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
@@ -31,10 +31,11 @@ export async function POST(request: Request) {
     const imageFiles = [cover, ...browsingImages];
     const previewBlobSha256s = await storeWorkImages(imageFiles);
     await storeCharacterPortraits(characterPortraits);
-    await validateCharacterPortraitHashes(
-      metadata.characters.flatMap((selection) =>
-        selection.portraitBlobSha256 ? [selection.portraitBlobSha256] : [],
+    await ensureCharacterPortraitFaceSheets(
+      metadata.characters.flatMap((credit) =>
+        credit.portrait ? [credit.portrait.blobSha256] : [],
       ),
+      auth.user.id,
     );
     const result = await createExternalWork({
       user: auth.user,
@@ -59,7 +60,7 @@ function parseMetadata(form: FormData): {
   language: string;
   aliases: string[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   creatorName: string | null;
   translatorName: string | null;
   sourceUrl: string | null;

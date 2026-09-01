@@ -7,11 +7,36 @@ export type CharacterAliasSuggestion = {
   language: CharacterNameLanguage;
 };
 
+export type CharacterPortrait = {
+  faceSheetId: number;
+  blobSha256: string;
+  width: number;
+  height: number;
+  row: number;
+  column: number;
+};
+
+export type CharacterPortraitChoice = {
+  blobSha256: string;
+  row: number;
+  column: number;
+};
+
+export type CharacterFaceSheet = {
+  id: number;
+  blobSha256: string;
+  width: number;
+  height: number;
+  sourcePageTitle: string | null;
+  sourceSectionTitle: string | null;
+};
+
 export type CharacterSuggestion = {
   id: number;
   originalName: string;
   primaryName: string;
-  portraitBlobSha256: string | null;
+  defaultPortrait: CharacterPortrait | null;
+  faceSheets: CharacterFaceSheet[];
   aliases: CharacterAliasSuggestion[];
   workCount: number;
 };
@@ -22,14 +47,17 @@ export type CharacterSelection =
       characterId: number;
       originalName: string;
       displayName: string;
-      portraitBlobSha256?: string | null;
     }
   | {
       kind: "new";
       originalName: string;
       displayName: string;
-      portraitBlobSha256?: string | null;
     };
+
+export type CharacterCreditSelection = {
+  selection: CharacterSelection;
+  portrait: CharacterPortraitChoice | null;
+};
 
 export function characterNameKey(value: string): string {
   return normalizeEntityName(value).toLowerCase();

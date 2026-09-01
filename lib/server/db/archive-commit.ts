@@ -16,7 +16,7 @@ import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relation
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { chunkArray } from "@/lib/server/db/chunks";
 import {
-  parseCharacterSelection,
+  parseCharacterCreditSelection,
   prepareWorkCharacterStatements,
 } from "@/lib/server/db/characters";
 import { getD1 } from "@/lib/server/db/d1";
@@ -30,7 +30,9 @@ import {
 } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
-import { validateCharacterPortraitHashes } from "@/lib/server/storage/character-portraits";
+import {
+  ensureCharacterPortraitFaceSheets,
+} from "@/lib/server/storage/character-portraits";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
@@ -160,13 +162,10 @@ export async function commitArchiveImport(
   }
 
   validateBlobReferences(manifest, objectLedger.blobs);
-  await validateCharacterPortraitHashes(
-    (metadata.characters ?? []).flatMap((credit) =>
-      credit.selection.portraitBlobSha256
-        ? [credit.selection.portraitBlobSha256]
-        : [],
-    ),
+  const portraitHashes = (metadata.characters ?? []).flatMap((credit) =>
+    credit.portrait ? [credit.portrait.blobSha256] : [],
   );
+  await ensureCharacterPortraitFaceSheets(portraitHashes, input.user.id);
   validateCorePackMetadata(manifest, objectLedger.corePacks);
   const workId = await resolveTargetWork(
     metadata,
@@ -252,6 +251,7 @@ export async function commitArchiveImport(
     missingBlobCount: missingBlobs.length,
     missingCorePackCount: missingCorePacks.length,
     excludedFileTypes: input.excludedFileTypes,
+    actorUserId: input.user.id,
   });
 
   return {
@@ -874,7 +874,10 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata character is invalid");
       }
       return {
-        selection: parseCharacterSelection(character.selection),
+        ...parseCharacterCreditSelection({
+          selection: character.selection,
+          portrait: character.portrait,
+        }),
         roleKey: character.roleKey,
         spoilerLevel: character.spoilerLevel,
         sortOrder: character.sortOrder ?? index + 1,
@@ -1027,8 +1030,8 @@ function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
     [
       ...metadata.game.browsingImageBlobSha256s,
       ...(metadata.characters ?? []).flatMap((credit) =>
-        credit.selection.portraitBlobSha256
-          ? [credit.selection.portraitBlobSha256]
+        credit.portrait
+          ? [credit.portrait.blobSha256]
           : [],
       ),
     ],
@@ -1214,6 +1217,7 @@ async function finalizeArchiveCommit(input: {
   missingBlobCount: number;
   missingCorePackCount: number;
   excludedFileTypes: ExcludedFileTypeSummary[];
+  actorUserId: number;
 }): Promise<void> {
   const database = getD1();
   const game = input.metadata.game;
@@ -1325,6 +1329,7 @@ async function finalizeArchiveCommit(input: {
       workId: input.workId,
       credits: characters,
       source: "user",
+      actorUserId: input.actorUserId,
       requirePortrait: true,
     })),
   );

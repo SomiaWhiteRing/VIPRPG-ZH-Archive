@@ -55,6 +55,7 @@ import {
 } from "@/app/upload/translation-preference";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import type {
+  CharacterCreditSelection,
   CharacterSelection,
   CharacterSuggestion,
 } from "@/lib/character-names";
@@ -88,7 +89,7 @@ type FlatMetadata = {
   engineFamily: EngineFamily;
   description: string;
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   creatorName: string;
   translatorName: string;
   originalReleaseDate: string;
@@ -238,8 +239,8 @@ export function UploadClient({
     });
   }
 
-  function changeCharacters(characters: CharacterSelection[]) {
-    const keys = new Set(characters.map(characterSelectionKey));
+  function changeCharacters(characters: CharacterCreditSelection[]) {
+    const keys = new Set(characters.map((credit) => characterSelectionKey(credit.selection)));
     setCharacterPortraitFiles((current) =>
       Object.fromEntries(Object.entries(current).filter(([key]) => keys.has(key))),
     );
@@ -387,14 +388,18 @@ export function UploadClient({
       document.getElementById("upload-release-date")?.focus();
       return;
     }
-    const characterWithoutPortrait = form.characters.find(
-      (selection) =>
-        !selection.portraitBlobSha256 &&
-        !characterPortraitFiles[characterSelectionKey(selection)],
-    );
+    const characterWithoutPortrait = form.characters.find((credit) => {
+      const selection = credit.selection;
+      if (credit.portrait || characterPortraitFiles[characterSelectionKey(selection)]) {
+        return false;
+      }
+      return selection.kind === "new" || !suggestions.characters.find(
+        (item) => item.id === selection.characterId,
+      )?.defaultPortrait;
+    });
     if (characterWithoutPortrait) {
       setSubmitError(
-        `角色“${characterWithoutPortrait.originalName}”还没有头像，请上传 48×48 PNG。`,
+        `角色“${characterWithoutPortrait.selection.originalName}”还没有头像，请从素材表选择或上传 48×48 PNG。`,
       );
       document.getElementById("upload-characters")?.focus();
       return;
@@ -486,7 +491,7 @@ export function UploadClient({
       setCharacterPortraitFiles(
         Object.fromEntries(
           (draft.metadata.characters ?? []).flatMap((credit) => {
-            const hash = credit.selection.portraitBlobSha256;
+            const hash = credit.portrait?.blobSha256;
             const file = hash ? filesByHash.get(hash) : null;
             return file ? [[characterSelectionKey(credit.selection), file]] : [];
           }),
@@ -978,7 +983,7 @@ function MetadataFields({
 }: {
   characterPortraitFiles: CharacterPortraitFiles;
   changeCharacterPortraitFile: (selection: CharacterSelection, file: File | null) => void;
-  changeCharacters: (characters: CharacterSelection[]) => void;
+  changeCharacters: (characters: CharacterCreditSelection[]) => void;
   changeOriginalDeclaration: (checked: boolean) => void;
   changeTranslationDeclaration: (checked: boolean) => void;
   changeTranslatorName: (value: string) => void;
@@ -1218,7 +1223,7 @@ function initialForm(
     engineFamily: work?.engineFamily ?? (canArchiveUpload ? "rpg_maker_2000" : "other"),
     description: work?.description ?? "",
     tags: work?.tags ?? [],
-    characters: work?.characterCredits.map((character) => character.selection) ?? [],
+    characters: work?.characterCredits.map(({ selection, portrait }) => ({ selection, portrait })) ?? [],
     creatorName: work?.authorCredits[0]?.creator.name ?? "",
     translatorName: work
       ? work.translatorCredits[0]?.creator.name ?? ""
@@ -1268,7 +1273,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
     tags: metadata.tags,
-    characters: (metadata.characters ?? []).map((item) => item.selection),
+    characters: (metadata.characters ?? []).map(({ selection, portrait }) => ({ selection, portrait })),
     creatorName: authorNames[0] ?? "",
     translatorName: translatorNames[0] ?? "",
     originalReleaseDate: metadata.game.originalReleaseDate ?? "",
@@ -1291,10 +1296,13 @@ function buildMetadata(
   const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
   if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   const characterDefaults = new Map(defaults.characters.map((character) => [characterSelectionKey(character.selection), character]));
-  const characters = uniqueCharacterSelections(form.characters).map((selection, index) => {
+  const characters = uniqueCharacterSelections(form.characters).map((credit, index) => {
+    const selection = credit.selection;
     const existing = characterDefaults.get(characterSelectionKey(selection));
+    const resolved = withCharacterPortraitHash(credit, portraitHashes);
     return {
-      selection: withCharacterPortraitHash(selection, portraitHashes),
+      selection,
+      portrait: resolved.portrait,
       roleKey: existing?.roleKey ?? "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
@@ -1383,8 +1391,8 @@ async function submitExternalWork(
   body.set(
     "characters",
     JSON.stringify(
-      form.characters.map((selection) =>
-        withCharacterPortraitHash(selection, portraits.hashesBySelectionKey),
+      form.characters.map((credit) =>
+        withCharacterPortraitHash(credit, portraits.hashesBySelectionKey),
       ),
     ),
   );
@@ -1404,17 +1412,13 @@ async function submitExternalWork(
 }
 
 function withCharacterPortraitHash(
-  selection: CharacterSelection,
+  credit: CharacterCreditSelection,
   hashesBySelectionKey: Record<string, string>,
-): CharacterSelection {
-  const portraitBlobSha256 =
-    selection.portraitBlobSha256 ??
-    hashesBySelectionKey[characterSelectionKey(selection)] ??
-    null;
-  if (!portraitBlobSha256) {
-    throw new Error(`角色“${selection.originalName}”还没有头像。`);
-  }
-  return { ...selection, portraitBlobSha256 };
+): CharacterCreditSelection {
+  const uploadedHash = hashesBySelectionKey[characterSelectionKey(credit.selection)];
+  return uploadedHash
+    ? { ...credit, portrait: { blobSha256: uploadedHash, row: 0, column: 0 } }
+    : credit;
 }
 
 function uniqueMetadataBlobs(blobs: MetadataBlobUpload[]): MetadataBlobUpload[] {
@@ -1516,7 +1520,7 @@ function folderNameFromPicker(files: File[]): string { const first = files[0] ? 
 function entityNameKey(value: string): string { return value.toLocaleLowerCase(); }
 function cleanNullable(value: string): string | null { return value.trim() || null; }
 function uniqueTokens(values: string[]): string[] { const seen = new Set<string>(); return values.filter((value) => { const key = entityNameKey(value.trim()); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
-function uniqueCharacterSelections(values: CharacterSelection[]): CharacterSelection[] { const seen = new Set<string>(); return values.filter((value) => { const key = characterSelectionKey(value); if (seen.has(key)) return false; seen.add(key); return true; }); }
+function uniqueCharacterSelections(values: CharacterCreditSelection[]): CharacterCreditSelection[] { const seen = new Set<string>(); return values.filter((value) => { const key = characterSelectionKey(value.selection); if (seen.has(key)) return false; seen.add(key); return true; }); }
 function phaseLabel(phase: string): string {
   const labels: Record<string, string> = { enumerating: "读取文件", hashing: "校验文件", building_core_pack: "整理公共文件", creating_import_job: "创建上传任务", preflighting: "检查已有对象", uploading_source: "上传游戏文件", verifying_source: "服务器校验游戏文件", awaiting_metadata: "等待作品资料", uploading_metadata: "上传资料图片", committing: "提交入库", completed: "完成" };
   return labels[phase] ?? "准备";

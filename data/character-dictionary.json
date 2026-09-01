@@ -212,11 +212,6 @@
       "aliases": []
     },
     {
-      "originalName": "こうもり",
-      "primaryName": "蝙蝠",
-      "aliases": []
-    },
-    {
       "originalName": "こうもりさん",
       "primaryName": "蝙蝠先生",
       "aliases": [
@@ -243,11 +238,6 @@
       ]
     },
     {
-      "originalName": "たんち",
-      "primaryName": "池田",
-      "aliases": []
-    },
-    {
       "originalName": "ちくちく言葉バリア",
       "primaryName": "刺耳之语屏障",
       "aliases": []
@@ -255,11 +245,6 @@
     {
       "originalName": "どら子",
       "primaryName": "多拉子",
-      "aliases": []
-    },
-    {
-      "originalName": "なすーん",
-      "primaryName": "纳苏",
       "aliases": []
     },
     {
@@ -3587,6 +3572,16 @@
         {
           "name": "マスクドN",
           "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "なすーん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "纳苏",
+          "language": "zh",
           "source": "base"
         },
         {

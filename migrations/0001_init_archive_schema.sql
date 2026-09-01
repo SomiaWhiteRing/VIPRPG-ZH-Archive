@@ -725,7 +725,6 @@ CREATE TABLE IF NOT EXISTS characters (
   primary_name_key TEXT NOT NULL,
   original_name TEXT NOT NULL,
   original_name_key TEXT NOT NULL UNIQUE,
-  portrait_blob_sha256 TEXT REFERENCES blobs(sha256),
   description TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -734,26 +733,6 @@ CREATE TABLE IF NOT EXISTS characters (
 
 CREATE INDEX IF NOT EXISTS idx_characters_primary_name_key
   ON characters(primary_name_key);
-
-CREATE INDEX IF NOT EXISTS idx_characters_portrait_blob
-  ON characters(portrait_blob_sha256)
-  WHERE portrait_blob_sha256 IS NOT NULL;
-
-CREATE TRIGGER IF NOT EXISTS characters_portrait_require_active_blob_insert
-BEFORE INSERT ON characters
-WHEN NEW.portrait_blob_sha256 IS NOT NULL
-  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.portrait_blob_sha256), '') <> 'active'
-BEGIN
-  SELECT RAISE(ABORT, 'character portrait blob must be active');
-END;
-
-CREATE TRIGGER IF NOT EXISTS characters_portrait_require_active_blob_update
-BEFORE UPDATE OF portrait_blob_sha256 ON characters
-WHEN NEW.portrait_blob_sha256 IS NOT NULL
-  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.portrait_blob_sha256), '') <> 'active'
-BEGIN
-  SELECT RAISE(ABORT, 'character portrait blob must be active');
-END;
 
 CREATE TABLE IF NOT EXISTS character_aliases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -811,9 +790,119 @@ BEGIN
   SELECT RAISE(ABORT, 'character alias already belongs to an original name');
 END;
 
+CREATE TABLE IF NOT EXISTS face_sheets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  blob_sha256 TEXT NOT NULL UNIQUE REFERENCES blobs(sha256),
+  width_px INTEGER NOT NULL CHECK (width_px BETWEEN 48 AND 192 AND width_px % 48 = 0),
+  height_px INTEGER NOT NULL CHECK (height_px BETWEEN 48 AND 192 AND height_px % 48 = 0),
+  source_kind TEXT NOT NULL CHECK (
+    source_kind IN ('atwiki', 'user_upload', 'admin_upload')
+  ),
+  source_page_url TEXT,
+  source_image_url TEXT,
+  source_page_title TEXT,
+  source_section_title TEXT,
+  library_status TEXT NOT NULL CHECK (
+    library_status IN ('pending', 'approved', 'rejected')
+  ) DEFAULT 'pending',
+  created_by_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_face_sheets_library
+  ON face_sheets(library_status, id);
+
+CREATE TRIGGER IF NOT EXISTS face_sheets_require_active_blob_insert
+BEFORE INSERT ON face_sheets
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256=NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'face sheet blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS face_sheets_require_active_blob_update
+BEFORE UPDATE OF blob_sha256 ON face_sheets
+WHEN COALESCE((SELECT status FROM blobs WHERE sha256=NEW.blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'face sheet blob must be active');
+END;
+
+CREATE TABLE IF NOT EXISTS character_face_sheet_bindings (
+  character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  face_sheet_id INTEGER NOT NULL REFERENCES face_sheets(id) ON DELETE CASCADE,
+  sort_order INTEGER,
+  PRIMARY KEY (character_id, face_sheet_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_face_sheet_bindings_sheet
+  ON character_face_sheet_bindings(face_sheet_id, character_id);
+
+CREATE TABLE IF NOT EXISTS character_portrait_refs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL,
+  face_sheet_id INTEGER NOT NULL,
+  cell_row INTEGER NOT NULL CHECK (cell_row >= 0),
+  cell_column INTEGER NOT NULL CHECK (cell_column >= 0),
+  created_by_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (character_id, face_sheet_id, cell_row, cell_column),
+  FOREIGN KEY (character_id, face_sheet_id)
+    REFERENCES character_face_sheet_bindings(character_id, face_sheet_id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_portrait_refs_sheet
+  ON character_portrait_refs(face_sheet_id, cell_row, cell_column);
+
+CREATE TRIGGER IF NOT EXISTS character_portrait_refs_require_valid_cell_insert
+BEFORE INSERT ON character_portrait_refs
+WHEN NOT EXISTS (
+  SELECT 1 FROM face_sheets fs
+  WHERE fs.id=NEW.face_sheet_id
+    AND NEW.cell_row * 48 < fs.height_px
+    AND NEW.cell_column * 48 < fs.width_px
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character portrait cell is outside the face sheet');
+END;
+
+CREATE TRIGGER IF NOT EXISTS character_portrait_refs_require_valid_cell_update
+BEFORE UPDATE OF face_sheet_id, cell_row, cell_column ON character_portrait_refs
+WHEN NOT EXISTS (
+  SELECT 1 FROM face_sheets fs
+  WHERE fs.id=NEW.face_sheet_id
+    AND NEW.cell_row * 48 < fs.height_px
+    AND NEW.cell_column * 48 < fs.width_px
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character portrait cell is outside the face sheet');
+END;
+
+CREATE TABLE IF NOT EXISTS character_default_portraits (
+  character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+  portrait_ref_id INTEGER NOT NULL UNIQUE REFERENCES character_portrait_refs(id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER IF NOT EXISTS character_default_portraits_require_matching_character_insert
+BEFORE INSERT ON character_default_portraits
+WHEN COALESCE((SELECT character_id FROM character_portrait_refs WHERE id=NEW.portrait_ref_id), 0)
+  <> NEW.character_id
+BEGIN
+  SELECT RAISE(ABORT, 'default portrait must belong to the character');
+END;
+
+CREATE TRIGGER IF NOT EXISTS character_default_portraits_require_matching_character_update
+BEFORE UPDATE OF character_id, portrait_ref_id ON character_default_portraits
+WHEN COALESCE((SELECT character_id FROM character_portrait_refs WHERE id=NEW.portrait_ref_id), 0)
+  <> NEW.character_id
+BEGIN
+  SELECT RAISE(ABORT, 'default portrait must belong to the character');
+END;
+
 CREATE TABLE IF NOT EXISTS work_characters (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  portrait_ref_id INTEGER REFERENCES character_portrait_refs(id) ON DELETE SET NULL,
   display_name TEXT NOT NULL,
   role_key TEXT NOT NULL CHECK (
     role_key IN ('main', 'supporting', 'cameo', 'mentioned', 'other')
@@ -823,6 +912,24 @@ CREATE TABLE IF NOT EXISTS work_characters (
   notes TEXT,
   PRIMARY KEY (work_id, character_id)
 );
+
+CREATE TRIGGER IF NOT EXISTS work_characters_require_matching_portrait_insert
+BEFORE INSERT ON work_characters
+WHEN NEW.portrait_ref_id IS NOT NULL
+  AND COALESCE((SELECT character_id FROM character_portrait_refs WHERE id=NEW.portrait_ref_id), 0)
+    <> NEW.character_id
+BEGIN
+  SELECT RAISE(ABORT, 'work portrait must belong to the character');
+END;
+
+CREATE TRIGGER IF NOT EXISTS work_characters_require_matching_portrait_update
+BEFORE UPDATE OF character_id, portrait_ref_id ON work_characters
+WHEN NEW.portrait_ref_id IS NOT NULL
+  AND COALESCE((SELECT character_id FROM character_portrait_refs WHERE id=NEW.portrait_ref_id), 0)
+    <> NEW.character_id
+BEGIN
+  SELECT RAISE(ABORT, 'work portrait must belong to the character');
+END;
 
 CREATE TABLE IF NOT EXISTS creators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -924,8 +1031,8 @@ WHEN NEW.status IN ('purging', 'purged')
   )
   OR NEW.status IN ('purging', 'purged')
   AND EXISTS (
-    SELECT 1 FROM characters
-    WHERE portrait_blob_sha256 = OLD.sha256
+    SELECT 1 FROM face_sheets
+    WHERE blob_sha256 = OLD.sha256
   )
 BEGIN
   SELECT RAISE(ABORT, 'referenced blob cannot be purged');

@@ -7,14 +7,14 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { CharacterPicker } from "@/app/upload/character-picker";
 import type {
-  CharacterSelection,
+  CharacterCreditSelection,
   CharacterSuggestion,
 } from "@/lib/character-names";
 import type { GameExternalLink } from "@/lib/server/db/game-library";
 
 export function StructuredWorkFields(props: {
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   characterSuggestions: CharacterSuggestion[];
   previewBlobSha256s: string[];
   externalLinks: GameExternalLink[];

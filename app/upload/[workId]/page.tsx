@@ -47,6 +47,7 @@ export default async function UploadWorkVersionPage({
         originalName: character.originalName,
         displayName: character.displayName,
       },
+      portrait: character.portraitChoice,
       roleKey: characterRole(character.roleKey),
       spoilerLevel: character.spoilerLevel,
       sortOrder: character.sortOrder,
