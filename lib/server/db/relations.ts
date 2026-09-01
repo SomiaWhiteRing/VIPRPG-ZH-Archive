@@ -24,13 +24,11 @@ export type WorkRelationInput = {
   toWorkId: number;
   relationType: RelationType;
   relationOrder?: number;
-  notes?: string | null;
 };
 
 export type WorkRelationUpdateInput = {
   relationType?: RelationType;
   relationOrder?: number;
-  notes?: string | null;
 };
 
 export type TranslationRelationInput = {
@@ -47,7 +45,6 @@ type RelationRow = {
   relation_type: RelationType;
   vice_versa: number;
   relation_order: number;
-  notes: string | null;
   created_by_user_id: number | null;
 };
 
@@ -93,19 +90,17 @@ export async function createWorkRelation(
       ? await nextOrder("work_relations", "from_work_id", input.toWorkId)
       : order
     : order;
-  const notes = clean(input.notes);
   const statements = [
     database
       .prepare(
-        `INSERT INTO work_relations (from_work_id,to_work_id,relation_type,vice_versa,relation_order,notes,created_by_user_id)
-       VALUES (?, ?, ?, 0, ?, ?, ?)`,
+        `INSERT INTO work_relations (from_work_id,to_work_id,relation_type,vice_versa,relation_order,created_by_user_id)
+       VALUES (?, ?, ?, 0, ?, ?)`,
       )
       .bind(
         input.fromWorkId,
         input.toWorkId,
         input.relationType,
         order,
-        notes,
         actor.id,
       ),
   ];
@@ -113,15 +108,14 @@ export async function createWorkRelation(
     statements.push(
       database
         .prepare(
-          `INSERT INTO work_relations (from_work_id,to_work_id,relation_type,vice_versa,relation_order,notes,created_by_user_id)
-         VALUES (?, ?, ?, 1, ?, ?, ?)`,
+          `INSERT INTO work_relations (from_work_id,to_work_id,relation_type,vice_versa,relation_order,created_by_user_id)
+         VALUES (?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           input.toWorkId,
           input.fromWorkId,
           inverse as RelationType,
           inverseOrder,
-          notes,
           actor.id,
         ),
     );
@@ -151,12 +145,11 @@ export async function updateWorkRelation(
   const changesType =
     input.relationType !== undefined &&
     input.relationType !== row.relation_type;
-  const changesNotes = input.notes !== undefined;
   const changesOrder = input.relationOrder !== undefined;
-  if (!changesType && !changesNotes && !changesOrder)
+  if (!changesType && !changesOrder)
     throw new HttpError(400, "没有可更新的关联资料");
   if (input.relationType !== undefined) assertRelationType(input.relationType);
-  if (row.vice_versa === 1 && (changesType || changesNotes)) {
+  if (row.vice_versa === 1 && changesType) {
     throw new HttpError(400, "系统生成的反向关联只能独立排序");
   }
   const order = changesOrder
@@ -195,13 +188,12 @@ export async function updateWorkRelation(
   ) {
     throw new HttpError(409, "该普通关联已存在");
   }
-  const notes = changesNotes ? clean(input.notes) : row.notes;
   const statements = [
     database
       .prepare(
-        `UPDATE work_relations SET relation_type=?,relation_order=?,notes=? WHERE id=?`,
+        `UPDATE work_relations SET relation_type=?,relation_order=? WHERE id=?`,
       )
-      .bind(nextType, order, notes, id),
+      .bind(nextType, order, id),
   ];
   if (changesType && inverseRow) {
     statements.push(
@@ -214,22 +206,15 @@ export async function updateWorkRelation(
     statements.push(
       database
         .prepare(
-          `INSERT INTO work_relations(from_work_id,to_work_id,relation_type,vice_versa,relation_order,notes,created_by_user_id) VALUES(?,?,?,1,?,?,?)`,
+          `INSERT INTO work_relations(from_work_id,to_work_id,relation_type,vice_versa,relation_order,created_by_user_id) VALUES(?,?,?,1,?,?)`,
         )
         .bind(
           row.to_work_id,
           row.from_work_id,
           inverse,
           inverseRow?.relation_order ?? row.relation_order,
-          notes,
           row.created_by_user_id,
         ),
-    );
-  } else if (changesNotes && inverseRow) {
-    statements.push(
-      database
-        .prepare(`UPDATE work_relations SET notes=? WHERE id=?`)
-        .bind(notes, inverseRow.id),
     );
   }
   try {
@@ -592,7 +577,7 @@ export async function moveTranslationRelation(
 async function relationById(id: number): Promise<RelationRow | null> {
   return getD1()
     .prepare(
-      `SELECT id,from_work_id,to_work_id,relation_type,vice_versa,relation_order,notes,created_by_user_id FROM work_relations WHERE id=?`,
+      `SELECT id,from_work_id,to_work_id,relation_type,vice_versa,relation_order,created_by_user_id FROM work_relations WHERE id=?`,
     )
     .bind(id)
     .first<RelationRow>();
@@ -756,10 +741,6 @@ function assertRelationType(value: string): asserts value is RelationType {
 function assertPositiveIds(...values: number[]): void {
   if (values.some((value) => !Number.isSafeInteger(value) || value <= 0))
     throw new HttpError(400, "游戏 ID 不合法");
-}
-function clean(value: string | null | undefined): string | null {
-  const result = value?.trim() ?? "";
-  return result || null;
 }
 function finiteOrder(value: number | undefined): number {
   if (!Number.isFinite(value)) throw new HttpError(400, "关联顺序不合法");

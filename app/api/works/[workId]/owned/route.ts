@@ -3,6 +3,7 @@ import {
   getOwnedWorkForEdit,
   updateOwnedWork,
 } from "@/lib/server/db/game-library";
+import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 
@@ -62,7 +63,7 @@ function parseMetadata(form: FormData) {
     status: status as "published" | "hidden",
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
-    characters: readList(form.get("characters")),
+    characters: parseCharacterSelectionsJson(form.get("characters")),
     authors: singleName(form.get("author")),
     translators: singleName(form.get("translator")),
     downloadUrl: readNullableString(form.get("download_url")),

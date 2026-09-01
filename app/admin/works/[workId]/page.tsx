@@ -12,6 +12,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getWorkForAdminEdit } from "@/lib/server/db/game-library";
+import { listCharacterSuggestions } from "@/lib/server/db/taxonomy-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
@@ -31,9 +32,10 @@ export default async function AdminWorkEditPage({
     `/admin/works/${workId}`,
     "work.update",
   );
-  const [work, unreadInboxCount] = await Promise.all([
+  const [work, unreadInboxCount, characterSuggestions] = await Promise.all([
     getWorkForAdminEdit(workId),
     countUnreadInboxItemsForUser(adminUser),
+    listCharacterSuggestions(),
   ]);
   if (!work) notFound();
   const relationCapabilities = getRelationEditorCapabilities(adminUser);
@@ -139,6 +141,7 @@ export default async function AdminWorkEditPage({
             </FormField>
             <div className="md:col-span-2">
               <StructuredWorkFields
+                characterSuggestions={characterSuggestions}
                 characters={work.characters}
                 externalLinks={work.externalLinks}
                 previewBlobSha256s={work.media.filter((media) => media.kind === "preview").map((media) => media.blobSha256)}

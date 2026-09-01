@@ -1,0 +1,7338 @@
+{
+  "schema": "viprpg-character-dictionary.v1",
+  "characters": [
+    {
+      "originalName": "2003エルフ",
+      "primaryName": "2003精灵",
+      "aliases": [
+        {
+          "name": "レクス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莱克斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "2003キャロル",
+      "primaryName": "2003卡萝尔",
+      "aliases": [
+        {
+          "name": "2011キャロル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "2011卡萝尔",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "2003ダーエロ",
+      "primaryName": "2003达艾罗",
+      "aliases": [
+        {
+          "name": "デルタ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "德尔塔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "2003达埃罗",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "2003メデューサ",
+      "primaryName": "2003美杜莎",
+      "aliases": [
+        {
+          "name": "メディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "梅迪",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "2003ラミア",
+      "primaryName": "2003拉米亚",
+      "aliases": [
+        {
+          "name": "ミア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米娅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "427",
+      "primaryName": "427",
+      "aliases": [
+        {
+          "name": "よんにーなな",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "四二七",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "WORLD",
+      "primaryName": "WORLD",
+      "aliases": [
+        {
+          "name": "ワールド",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ワールドさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "世界",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "世界小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "XPドラゴン",
+      "primaryName": "XP多拉贡",
+      "aliases": []
+    },
+    {
+      "originalName": "XPドール",
+      "primaryName": "XP人偶",
+      "aliases": []
+    },
+    {
+      "originalName": "XPハーピー",
+      "primaryName": "XP哈比",
+      "aliases": []
+    },
+    {
+      "originalName": "XP魔王",
+      "primaryName": "XP魔王",
+      "aliases": [
+        {
+          "name": "ディアボロス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "迪亚波罗斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "YHVH",
+      "primaryName": "YHVH",
+      "aliases": [
+        {
+          "name": "エホバ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヤーウェ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "耶和华",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "雅威",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "あぐり",
+      "primaryName": "阿格莉",
+      "aliases": []
+    },
+    {
+      "originalName": "あわび",
+      "primaryName": "鲍鱼",
+      "aliases": []
+    },
+    {
+      "originalName": "うんこマン",
+      "primaryName": "便便侠",
+      "aliases": [
+        {
+          "name": "大便超人",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "えまりー",
+      "primaryName": "艾玛莉",
+      "aliases": []
+    },
+    {
+      "originalName": "こうもり",
+      "primaryName": "蝙蝠",
+      "aliases": []
+    },
+    {
+      "originalName": "こうもりさん",
+      "primaryName": "蝙蝠先生",
+      "aliases": [
+        {
+          "name": "コウくん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "バーストIII",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "小蝙",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "爆发III",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "たんち",
+      "primaryName": "池田",
+      "aliases": []
+    },
+    {
+      "originalName": "ちくちく言葉バリア",
+      "primaryName": "刺耳之语屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "どら子",
+      "primaryName": "多拉子",
+      "aliases": []
+    },
+    {
+      "originalName": "なすーん",
+      "primaryName": "纳苏",
+      "aliases": []
+    },
+    {
+      "originalName": "はかせ",
+      "primaryName": "博士",
+      "aliases": []
+    },
+    {
+      "originalName": "ふもっふ",
+      "primaryName": "呼姆呼",
+      "aliases": []
+    },
+    {
+      "originalName": "まーくん",
+      "primaryName": "小马",
+      "aliases": [
+        {
+          "name": "マディラス・マディン・アハト・マークス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マーくん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マーディン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マー坊",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "马丁",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "马仔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "马迪拉斯·马丁·阿哈特·马克斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "みるみ",
+      "primaryName": "米尔米",
+      "aliases": []
+    },
+    {
+      "originalName": "ょぅι゛ょ",
+      "primaryName": "幼女",
+      "aliases": [
+        {
+          "name": "最強のようじょ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "最强幼女",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "最强的幼女",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アイスⅠ",
+      "primaryName": "冰Ⅰ",
+      "aliases": [
+        {
+          "name": "スワン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯旺",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アイスⅡ",
+      "primaryName": "冰Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "アイスⅢ",
+      "primaryName": "冰Ⅲ",
+      "aliases": [
+        {
+          "name": "アイスさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾丝小姐",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "艾斯小姐",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アクアバリア",
+      "primaryName": "流水屏障",
+      "aliases": [
+        {
+          "name": "あばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "くばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アクバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "クバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿库芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アクアフラッド",
+      "primaryName": "阿夸芙洛",
+      "aliases": [
+        {
+          "name": "洪水",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アクアリウム",
+      "primaryName": "阿夸利姆",
+      "aliases": [
+        {
+          "name": "水虎博士",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "水族馆",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アクオス",
+      "primaryName": "阿克奥斯",
+      "aliases": []
+    },
+    {
+      "originalName": "アグネファイア",
+      "primaryName": "阿格涅法亚",
+      "aliases": [
+        {
+          "name": "アグネ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アグ姉",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "阿格姐",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿格涅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アシュリー",
+      "primaryName": "艾什莉",
+      "aliases": []
+    },
+    {
+      "originalName": "アゼクラ",
+      "primaryName": "阿泽库拉",
+      "aliases": [
+        {
+          "name": "時魔道士",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "时魔道士",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "校仓",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アテナ",
+      "primaryName": "雅典娜",
+      "aliases": []
+    },
+    {
+      "originalName": "アトミックオスペシャス",
+      "primaryName": "原子吉兆",
+      "aliases": []
+    },
+    {
+      "originalName": "アナザーわてり",
+      "primaryName": "异样瓦特莉",
+      "aliases": []
+    },
+    {
+      "originalName": "アナザーウィンディ",
+      "primaryName": "异样温蒂",
+      "aliases": []
+    },
+    {
+      "originalName": "アナルの江戸っ子",
+      "primaryName": "肛门之江户小子",
+      "aliases": []
+    },
+    {
+      "originalName": "アニラストーム",
+      "primaryName": "阿尼拉斯托姆",
+      "aliases": [
+        {
+          "name": "阿尼拉风暴",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アマゾネスエロリア",
+      "primaryName": "亚马逊艾洛莉娅",
+      "aliases": [
+        {
+          "name": "エロリアマゾネス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾洛莉娅马逊",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アマゾネスリリア",
+      "primaryName": "亚马逊莉莉娅",
+      "aliases": [
+        {
+          "name": "リリアマゾネス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莉莉娅玛索尼斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アミィ",
+      "primaryName": "艾咪",
+      "aliases": []
+    },
+    {
+      "originalName": "アメリア",
+      "primaryName": "艾梅莉亚",
+      "aliases": []
+    },
+    {
+      "originalName": "アメリカンニンニンガール",
+      "primaryName": "美国忍忍女孩",
+      "aliases": [
+        {
+          "name": "アニー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "安妮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アラマキ",
+      "primaryName": "荒巻",
+      "aliases": [
+        {
+          "name": "レベッカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "丽贝卡",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アリサ",
+      "primaryName": "艾莉莎",
+      "aliases": [
+        {
+          "name": "アリサ・パニングス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾莉莎·潘宁斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿丽莎",
+          "language": "zh",
+          "source": "sub"
+        },
+        {
+          "name": "阿丽莎·潘宁斯",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "アリシア",
+      "primaryName": "艾丽西亚",
+      "aliases": []
+    },
+    {
+      "originalName": "アルシェス",
+      "primaryName": "阿尔谢斯",
+      "aliases": []
+    },
+    {
+      "originalName": "アルテマ",
+      "primaryName": "究极",
+      "aliases": [
+        {
+          "name": "アルテ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アルテマウェポン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "究极武器",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿尔特",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アルパカ",
+      "primaryName": "羊驼",
+      "aliases": []
+    },
+    {
+      "originalName": "アルベルト",
+      "primaryName": "阿尔贝特",
+      "aliases": []
+    },
+    {
+      "originalName": "アルラウネ",
+      "primaryName": "阿娜温",
+      "aliases": []
+    },
+    {
+      "originalName": "アレックス",
+      "primaryName": "亚历克斯",
+      "aliases": [
+        {
+          "name": "アレクサンダー・レクサス・クルセイダー・スミス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "亚历山大·历克萨斯·克鲁塞德·斯密斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アンガー",
+      "primaryName": "愤怒",
+      "aliases": []
+    },
+    {
+      "originalName": "アンシエントバリア",
+      "primaryName": "远古屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "アンデッドナイ",
+      "primaryName": "安迪德奈",
+      "aliases": [
+        {
+          "name": "テッド",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ナイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "奈伊",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "泰德",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アーサー",
+      "primaryName": "亚瑟",
+      "aliases": []
+    },
+    {
+      "originalName": "アースバリア",
+      "primaryName": "大地屏障",
+      "aliases": [
+        {
+          "name": "すばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アスバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "スバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "阿斯芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アーディス",
+      "primaryName": "阿迪斯",
+      "aliases": [
+        {
+          "name": "ルーク",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "卢克",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アーマーカース",
+      "primaryName": "护甲诅咒",
+      "aliases": []
+    },
+    {
+      "originalName": "アーマーブレス",
+      "primaryName": "护甲祝福",
+      "aliases": [
+        {
+          "name": "アマブレ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "阿玛布蕾",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "アーリマン",
+      "primaryName": "阿里曼",
+      "aliases": []
+    },
+    {
+      "originalName": "イシュタム",
+      "primaryName": "伊修塔姆",
+      "aliases": []
+    },
+    {
+      "originalName": "インプ",
+      "primaryName": "小恶魔",
+      "aliases": []
+    },
+    {
+      "originalName": "ウィンディオ",
+      "primaryName": "温迪奥",
+      "aliases": [
+        {
+          "name": "ウインディオ",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウィンドⅠ",
+      "primaryName": "风Ⅰ",
+      "aliases": [
+        {
+          "name": "ウィンディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ウィンド",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "温蒂",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "风",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウィンドⅡ",
+      "primaryName": "风Ⅱ",
+      "aliases": [
+        {
+          "name": "ウィル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ドニー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "多尼",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "威尔",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウィンドⅢ",
+      "primaryName": "风Ⅲ",
+      "aliases": [
+        {
+          "name": "ウィンドウ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "温德乌",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウェポンカース",
+      "primaryName": "武器诅咒",
+      "aliases": []
+    },
+    {
+      "originalName": "ウェポンブレス",
+      "primaryName": "武器祝福",
+      "aliases": []
+    },
+    {
+      "originalName": "ウェーブⅠ",
+      "primaryName": "波Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "ウェーブⅡ",
+      "primaryName": "波Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "ウェーブⅢ",
+      "primaryName": "波Ⅲ",
+      "aliases": [
+        {
+          "name": "ミナミ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米娜米",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウォーターⅠ",
+      "primaryName": "水Ⅰ",
+      "aliases": [
+        {
+          "name": "しょうゆ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "わてり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ウォーター",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "沃塔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "瓦特莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "酱油",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウォーターⅡ",
+      "primaryName": "水Ⅱ",
+      "aliases": [
+        {
+          "name": "水煮",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウォーターⅢ",
+      "primaryName": "水Ⅲ",
+      "aliases": [
+        {
+          "name": "水産",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "水产",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ウォーターⅣ",
+      "primaryName": "水Ⅳ",
+      "aliases": []
+    },
+    {
+      "originalName": "ウルトラ執事",
+      "primaryName": "究极执事",
+      "aliases": [
+        {
+          "name": "ジジイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リーガル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "利加尔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "老头",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エアロバリア",
+      "primaryName": "空气屏障",
+      "aliases": [
+        {
+          "name": "ろばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ロバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "罗芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エクルクシア",
+      "primaryName": "艾库鲁库西亚",
+      "aliases": []
+    },
+    {
+      "originalName": "エスケープ",
+      "primaryName": "脱逃",
+      "aliases": [
+        {
+          "name": "えいすけ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "えーすけ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "欸助",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "英助",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エステル",
+      "primaryName": "艾丝特尔",
+      "aliases": []
+    },
+    {
+      "originalName": "エターナル",
+      "primaryName": "永恒",
+      "aliases": []
+    },
+    {
+      "originalName": "エムラクール",
+      "primaryName": "艾姆菈柯尔",
+      "aliases": []
+    },
+    {
+      "originalName": "エリックス",
+      "primaryName": "艾莉克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "エリー",
+      "primaryName": "艾莉",
+      "aliases": [
+        {
+          "name": "使い魔エリー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "使魔艾莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エレキバリア",
+      "primaryName": "电气屏障",
+      "aliases": [
+        {
+          "name": "えばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "きばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "エバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "キバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "琪芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "艾芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エロリア",
+      "primaryName": "艾洛莉娅",
+      "aliases": [
+        {
+          "name": "アリア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "娅莉娅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "エンリュウ",
+      "primaryName": "炎龙",
+      "aliases": []
+    },
+    {
+      "originalName": "オトメ",
+      "primaryName": "乙女",
+      "aliases": []
+    },
+    {
+      "originalName": "オレンジミカン",
+      "primaryName": "橙子蜜柑",
+      "aliases": []
+    },
+    {
+      "originalName": "カオス",
+      "primaryName": "卡奥斯",
+      "aliases": []
+    },
+    {
+      "originalName": "カッターⅠ",
+      "primaryName": "刀刃Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "カッターⅡ",
+      "primaryName": "刀刃Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "カッターⅢ",
+      "primaryName": "刀刃Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "カナエール",
+      "primaryName": "卡娜艾尔",
+      "aliases": []
+    },
+    {
+      "originalName": "カプリミント",
+      "primaryName": "卡普里薄荷",
+      "aliases": [
+        {
+          "name": "カプリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "卡普里",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "カマソッソ",
+      "primaryName": "卡玛索索",
+      "aliases": []
+    },
+    {
+      "originalName": "カースバリア",
+      "primaryName": "诅咒屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "カーバンクル",
+      "primaryName": "卡班克尔",
+      "aliases": [
+        {
+          "name": "カーくん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "卡君",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "カービィ",
+      "primaryName": "卡比",
+      "aliases": []
+    },
+    {
+      "originalName": "カーミラ",
+      "primaryName": "卡米拉",
+      "aliases": [
+        {
+          "name": "カーブミラー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ミラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米拉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "路况镜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ガルカット",
+      "primaryName": "加尔卡特",
+      "aliases": []
+    },
+    {
+      "originalName": "ガルディア",
+      "primaryName": "加尔迪亚",
+      "aliases": []
+    },
+    {
+      "originalName": "ガンタイ",
+      "primaryName": "眼带",
+      "aliases": []
+    },
+    {
+      "originalName": "キャプテンドラゴナス",
+      "primaryName": "多拉格纳斯队长",
+      "aliases": []
+    },
+    {
+      "originalName": "キャロリアン",
+      "primaryName": "卡萝莉安",
+      "aliases": []
+    },
+    {
+      "originalName": "キャロル",
+      "primaryName": "卡萝尔",
+      "aliases": []
+    },
+    {
+      "originalName": "キャンセル",
+      "primaryName": "取消",
+      "aliases": [
+        {
+          "name": "キャンセルさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マスターキャンセラー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マスターキャンセル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "取消大师",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "取消小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "キュアーⅠ",
+      "primaryName": "治愈Ⅰ",
+      "aliases": [
+        {
+          "name": "キューイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "萩伊",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "キュアーⅡ",
+      "primaryName": "治愈Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "キュアーⅢ",
+      "primaryName": "治愈Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "キリヅマ",
+      "primaryName": "切妻",
+      "aliases": [
+        {
+          "name": "クロトア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库洛托娅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "キーラ",
+      "primaryName": "琪拉",
+      "aliases": [
+        {
+          "name": "キキーモラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "奇奇莫拉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "クイックムーブ",
+      "primaryName": "快速移动",
+      "aliases": []
+    },
+    {
+      "originalName": "クェイクⅠ",
+      "primaryName": "地震Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "クェイクⅡ",
+      "primaryName": "地震Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "クェイクⅢ",
+      "primaryName": "地震Ⅲ",
+      "aliases": [
+        {
+          "name": "加速",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "加速クェイク",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "加速奎克",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "加速地震",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "クトネ",
+      "primaryName": "库托涅",
+      "aliases": []
+    },
+    {
+      "originalName": "クリアクリーン",
+      "primaryName": "洁净明亮",
+      "aliases": []
+    },
+    {
+      "originalName": "クリスタ",
+      "primaryName": "克里斯塔",
+      "aliases": []
+    },
+    {
+      "originalName": "クルトン",
+      "primaryName": "库鲁顿",
+      "aliases": []
+    },
+    {
+      "originalName": "クレアス",
+      "primaryName": "克历亚斯",
+      "aliases": []
+    },
+    {
+      "originalName": "クロノッポイ",
+      "primaryName": "库洛诺博伊",
+      "aliases": []
+    },
+    {
+      "originalName": "クロースアーマー",
+      "primaryName": "布甲",
+      "aliases": []
+    },
+    {
+      "originalName": "クーファスト",
+      "primaryName": "库法斯特",
+      "aliases": []
+    },
+    {
+      "originalName": "グリーンサイ",
+      "primaryName": "格林塞",
+      "aliases": [
+        {
+          "name": "サイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "緑犀",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "塞",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "绿犀",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "格林赛",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "グレル",
+      "primaryName": "格雷尔",
+      "aliases": []
+    },
+    {
+      "originalName": "グレーゾーン",
+      "primaryName": "古雷佐恩",
+      "aliases": []
+    },
+    {
+      "originalName": "グロリア",
+      "primaryName": "格洛丽亚",
+      "aliases": []
+    },
+    {
+      "originalName": "ケッカン",
+      "primaryName": "吉坎",
+      "aliases": []
+    },
+    {
+      "originalName": "ケットシー",
+      "primaryName": "凯特西",
+      "aliases": []
+    },
+    {
+      "originalName": "ケルベロス",
+      "primaryName": "刻耳柏洛斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ケンタッキー",
+      "primaryName": "肯德基",
+      "aliases": []
+    },
+    {
+      "originalName": "ゲドック",
+      "primaryName": "解毒",
+      "aliases": []
+    },
+    {
+      "originalName": "ゲーフィー",
+      "primaryName": "盖菲",
+      "aliases": []
+    },
+    {
+      "originalName": "コウモリさん",
+      "primaryName": "蝙蝠先生",
+      "aliases": []
+    },
+    {
+      "originalName": "コカトリス",
+      "primaryName": "鸡蛇",
+      "aliases": []
+    },
+    {
+      "originalName": "コダワール",
+      "primaryName": "执着者",
+      "aliases": []
+    },
+    {
+      "originalName": "コトワール",
+      "primaryName": "科托瓦尔",
+      "aliases": []
+    },
+    {
+      "originalName": "コボルト",
+      "primaryName": "狗头人",
+      "aliases": []
+    },
+    {
+      "originalName": "コンフューズ",
+      "primaryName": "混乱",
+      "aliases": [
+        {
+          "name": "2003パニック",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "コンフュ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "2003恐慌",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "空福",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "コンラート",
+      "primaryName": "康拉德",
+      "aliases": []
+    },
+    {
+      "originalName": "コールドバリア",
+      "primaryName": "寒冰屏障",
+      "aliases": [
+        {
+          "name": "こばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "コバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "柯芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ゴスロリ兵",
+      "primaryName": "哥特萝莉兵",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴス子",
+      "primaryName": "哥丝子",
+      "aliases": [
+        {
+          "name": "レイラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "偽ダークネスIII",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伪暗黑III",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "蕾拉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ゴッドサンダー",
+      "primaryName": "神雷",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴブリン",
+      "primaryName": "哥布林",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴメス",
+      "primaryName": "戈麦斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴメス人形",
+      "primaryName": "戈麦斯人偶",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴメス博士",
+      "primaryName": "戈麦斯博士",
+      "aliases": [
+        {
+          "name": "エストゴメス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾斯特戈麦斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ゴースト",
+      "primaryName": "幽灵",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴーストバリア",
+      "primaryName": "幽灵屏障",
+      "aliases": [
+        {
+          "name": "ごばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ゴバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "戈芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ゴールドスケルトン",
+      "primaryName": "金骷髅",
+      "aliases": []
+    },
+    {
+      "originalName": "ゴールドメイ",
+      "primaryName": "黄金梅",
+      "aliases": [
+        {
+          "name": "メイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "梅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ゴーレム",
+      "primaryName": "哥雷姆",
+      "aliases": []
+    },
+    {
+      "originalName": "サイコアーティスト",
+      "primaryName": "精神艺术家",
+      "aliases": []
+    },
+    {
+      "originalName": "サイラス",
+      "primaryName": "赛拉斯",
+      "aliases": []
+    },
+    {
+      "originalName": "サイレンス",
+      "primaryName": "沉默",
+      "aliases": []
+    },
+    {
+      "originalName": "サウンドバリア",
+      "primaryName": "声音屏障",
+      "aliases": [
+        {
+          "name": "さばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "サバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "萨芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "サタナエル",
+      "primaryName": "萨麦尔",
+      "aliases": []
+    },
+    {
+      "originalName": "サボテン",
+      "primaryName": "仙人掌",
+      "aliases": []
+    },
+    {
+      "originalName": "サモン",
+      "primaryName": "萨蒙",
+      "aliases": [
+        {
+          "name": "ハーゲン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈根",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "サリア",
+      "primaryName": "萨莉亚",
+      "aliases": [
+        {
+          "name": "わかば",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "若叶",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "サンダーⅠ",
+      "primaryName": "雷Ⅰ",
+      "aliases": [
+        {
+          "name": "サンディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "桑迪",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "サンダーⅡ",
+      "primaryName": "雷Ⅱ",
+      "aliases": [
+        {
+          "name": "てゅんでりぃ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "新三田",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "啾得莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "サンダーⅢ",
+      "primaryName": "雷Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "サンライト",
+      "primaryName": "日光",
+      "aliases": []
+    },
+    {
+      "originalName": "サージェントハーピィ",
+      "primaryName": "哈比中士",
+      "aliases": []
+    },
+    {
+      "originalName": "サーモン",
+      "primaryName": "鲑鱼",
+      "aliases": []
+    },
+    {
+      "originalName": "ザック",
+      "primaryName": "扎克",
+      "aliases": [
+        {
+          "name": "アイザック・ローレンブルグ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾萨克·罗伦伯格",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ザリア",
+      "primaryName": "扎利亚",
+      "aliases": []
+    },
+    {
+      "originalName": "ザンニンニン",
+      "primaryName": "残忍忍",
+      "aliases": []
+    },
+    {
+      "originalName": "シアンライブラ",
+      "primaryName": "希安莱布拉",
+      "aliases": [
+        {
+          "name": "ライブラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "天秤",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "青蓝天秤",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "シェイドⅠ",
+      "primaryName": "影Ⅰ",
+      "aliases": [
+        {
+          "name": "シェイディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "シェイド",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "影",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "影迪",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "シェイドⅡ",
+      "primaryName": "影Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "シェイドⅢ",
+      "primaryName": "影Ⅲ",
+      "aliases": [
+        {
+          "name": "おでこ女",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "额头女",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "シピア",
+      "primaryName": "希皮娅",
+      "aliases": []
+    },
+    {
+      "originalName": "シャティ",
+      "primaryName": "夏蒂",
+      "aliases": []
+    },
+    {
+      "originalName": "ショウ",
+      "primaryName": "翔",
+      "aliases": []
+    },
+    {
+      "originalName": "シルシード",
+      "primaryName": "希尔茜德",
+      "aliases": []
+    },
+    {
+      "originalName": "シルフ",
+      "primaryName": "西尔芙",
+      "aliases": []
+    },
+    {
+      "originalName": "シルヴァークィーン",
+      "primaryName": "白银女王",
+      "aliases": [
+        {
+          "name": "クィーン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "シルヴァ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "女王",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "希尔瓦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "シロックス",
+      "primaryName": "希洛克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "シーザー西脇",
+      "primaryName": "凯撒西胁",
+      "aliases": []
+    },
+    {
+      "originalName": "シールドバリア",
+      "primaryName": "盾之屏障",
+      "aliases": [
+        {
+          "name": "しばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "シバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "希芭莉 (盾)",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ジェルート",
+      "primaryName": "杰鲁特",
+      "aliases": []
+    },
+    {
+      "originalName": "ジャガーノート",
+      "primaryName": "贾甘纳萨",
+      "aliases": []
+    },
+    {
+      "originalName": "ジャックオーラ",
+      "primaryName": "杰克南瓜灯",
+      "aliases": [
+        {
+          "name": "かぼちゃ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ジャックオーランタン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "南瓜",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "杰克南瓜灯笼",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ジャック・O",
+      "primaryName": "杰克·O",
+      "aliases": [
+        {
+          "name": "弱王",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ジャンヌ",
+      "primaryName": "珍妮",
+      "aliases": [
+        {
+          "name": "キリア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "徳明",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "基莉亚",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "德明",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スカルドラゴン",
+      "primaryName": "骷髅多拉贡",
+      "aliases": []
+    },
+    {
+      "originalName": "スキンバリア",
+      "primaryName": "皮肤屏障",
+      "aliases": [
+        {
+          "name": "すきり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "スキリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯琪莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スケルトン",
+      "primaryName": "骷髅兵",
+      "aliases": [
+        {
+          "name": "ホネボーン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "骨小子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "骷髅",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "スターフレア",
+      "primaryName": "星火",
+      "aliases": []
+    },
+    {
+      "originalName": "スターライトⅠ",
+      "primaryName": "星光Ⅰ",
+      "aliases": [
+        {
+          "name": "ヒカリちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ライチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "光酱",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "荔枝",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スターライトⅡ",
+      "primaryName": "星光Ⅱ",
+      "aliases": [
+        {
+          "name": "にぼし",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "煮干",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スターライトⅢ",
+      "primaryName": "星光Ⅲ",
+      "aliases": [
+        {
+          "name": "ライト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莱特",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ストーンⅠ",
+      "primaryName": "石Ⅰ",
+      "aliases": [
+        {
+          "name": "スイッチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ストニア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ストーンちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯托尼亚",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "斯维奇",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "石酱",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ストーンⅡ",
+      "primaryName": "石Ⅱ",
+      "aliases": [
+        {
+          "name": "ロック",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "洛克",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ストーンⅢ",
+      "primaryName": "石Ⅲ",
+      "aliases": [
+        {
+          "name": "メテオ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "陨石",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スパークⅠ",
+      "primaryName": "电光Ⅰ",
+      "aliases": [
+        {
+          "name": "スパイチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯帕奇",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スパークⅡ",
+      "primaryName": "电光Ⅱ",
+      "aliases": [
+        {
+          "name": "スパニー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯帕妮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スパークⅢ",
+      "primaryName": "电光Ⅲ",
+      "aliases": [
+        {
+          "name": "スパーク",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "モクバ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯帕克",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莫库巴",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "スピリットカース",
+      "primaryName": "精神诅咒",
+      "aliases": [
+        {
+          "name": "スピカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯皮卡",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "苏皮卡",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "スピリットブレス",
+      "primaryName": "精神祝福",
+      "aliases": [
+        {
+          "name": "スピブレ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "スピレ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "斯比蕾",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "斯皮布蕾",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "苏皮布蕾",
+          "language": "zh",
+          "source": "sub"
+        },
+        {
+          "name": "苏皮蕾",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "スプレンディド",
+      "primaryName": "斯普伦迪德",
+      "aliases": []
+    },
+    {
+      "originalName": "スライム",
+      "primaryName": "史莱姆",
+      "aliases": []
+    },
+    {
+      "originalName": "スリープ",
+      "primaryName": "睡眠",
+      "aliases": []
+    },
+    {
+      "originalName": "スレイプニル",
+      "primaryName": "斯雷普尼尔",
+      "aliases": []
+    },
+    {
+      "originalName": "スロームーブ",
+      "primaryName": "缓慢移动",
+      "aliases": []
+    },
+    {
+      "originalName": "セインサイアス",
+      "primaryName": "圣哉亚斯",
+      "aliases": []
+    },
+    {
+      "originalName": "セイントⅠ",
+      "primaryName": "圣Ⅰ",
+      "aliases": [
+        {
+          "name": "セイくん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "セイチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ハカセイント",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "聖一",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "聖剣士セイント",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "博士圣光",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "圣一",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "圣剑士圣光",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "圣君",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "セイントⅡ",
+      "primaryName": "圣Ⅱ",
+      "aliases": [
+        {
+          "name": "クロ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "シロ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "克罗",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "希罗",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "白",
+          "language": "zh",
+          "source": "sub"
+        },
+        {
+          "name": "黑",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "セイントⅢ",
+      "primaryName": "圣Ⅲ",
+      "aliases": [
+        {
+          "name": "ユニコーン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "独角兽",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "セイントミルク",
+      "primaryName": "圣妙可",
+      "aliases": [
+        {
+          "name": "ホワイトウルフ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リリィホワイト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "白狼",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莉莉白",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "セオドア",
+      "primaryName": "西奥多",
+      "aliases": []
+    },
+    {
+      "originalName": "セフィーナ",
+      "primaryName": "赛菲娜",
+      "aliases": []
+    },
+    {
+      "originalName": "セラフィム",
+      "primaryName": "炽天使",
+      "aliases": []
+    },
+    {
+      "originalName": "ゼリープリンセス",
+      "primaryName": "果冻公主",
+      "aliases": []
+    },
+    {
+      "originalName": "ソウルアブソーブ",
+      "primaryName": "灵魂吸收",
+      "aliases": [
+        {
+          "name": "チャック",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "查克",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ソフィア",
+      "primaryName": "索菲亚",
+      "aliases": [
+        {
+          "name": "ママックス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "妈妈克斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ソリッドライト",
+      "primaryName": "固化光",
+      "aliases": []
+    },
+    {
+      "originalName": "ソールドバリア",
+      "primaryName": "长剑屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "ゾンビ",
+      "primaryName": "僵尸",
+      "aliases": []
+    },
+    {
+      "originalName": "タキトン",
+      "primaryName": "塔基顿",
+      "aliases": []
+    },
+    {
+      "originalName": "ダストバリア",
+      "primaryName": "尘埃屏障",
+      "aliases": [
+        {
+          "name": "とばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "トバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "托芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダッツ",
+      "primaryName": "达兹",
+      "aliases": [
+        {
+          "name": "ダッチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达奇",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダンテ",
+      "primaryName": "但丁",
+      "aliases": []
+    },
+    {
+      "originalName": "ダーエロ",
+      "primaryName": "达艾罗",
+      "aliases": [
+        {
+          "name": "ダークエルフ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダーク・ドゥンケルハイト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レグルス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗黑·敦克尔海特",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗黑精灵",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "雷古鲁斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达埃罗",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ダーエロ姉",
+      "primaryName": "达艾罗姐",
+      "aliases": [
+        {
+          "name": "フィリアス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラヴィアン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "拉维安",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "菲利亚斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达埃罗姐",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークはーたん",
+      "primaryName": "暗黑哈炭",
+      "aliases": [
+        {
+          "name": "ダーたん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达炭",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークアシュリー",
+      "primaryName": "暗黑艾什莉",
+      "aliases": []
+    },
+    {
+      "originalName": "ダークアリサ",
+      "primaryName": "暗黑艾莉莎",
+      "aliases": [
+        {
+          "name": "ダリサ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达莉莎",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗黑阿丽莎",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークアーディス",
+      "primaryName": "暗黑阿迪斯",
+      "aliases": [
+        {
+          "name": "ダーディス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达迪斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークエンジェル",
+      "primaryName": "暗黑天使",
+      "aliases": [
+        {
+          "name": "クロエル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダマテン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库洛艾露",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达玛汀",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークエンリュウ",
+      "primaryName": "暗黑炎龙",
+      "aliases": [
+        {
+          "name": "ウリエン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダンリュウ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗龙",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "瓜炎",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークカナエール",
+      "primaryName": "暗黑卡娜艾尔",
+      "aliases": [
+        {
+          "name": "ダナエ様",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダナ様",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达娜大人",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达娜艾大人",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークゴメス",
+      "primaryName": "暗黑戈麦斯",
+      "aliases": [
+        {
+          "name": "ゴメスサタン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "戈麦斯撒旦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークサモン",
+      "primaryName": "暗黑萨蒙",
+      "aliases": [
+        {
+          "name": "サバト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダモン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗蒙",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "萨巴特",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークザック",
+      "primaryName": "暗黑扎克",
+      "aliases": [
+        {
+          "name": "ダック",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达克",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークジャンヌ",
+      "primaryName": "暗黑珍妮",
+      "aliases": [
+        {
+          "name": "だくじゃぬ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗珍",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークダッツ",
+      "primaryName": "暗黑达兹",
+      "aliases": [
+        {
+          "name": "ダダ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达达",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークデイジー",
+      "primaryName": "暗黑黛西",
+      "aliases": [
+        {
+          "name": "DD",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达迪",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークネスⅠ",
+      "primaryName": "暗黑Ⅰ",
+      "aliases": [
+        {
+          "name": "やみいち",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "やみっち",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ネス子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "妮斯子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "黑市",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークネスⅡ",
+      "primaryName": "暗黑Ⅱ",
+      "aliases": [
+        {
+          "name": "やみにー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "闇二",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗二",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗妮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークネスⅢ",
+      "primaryName": "暗黑Ⅲ",
+      "aliases": [
+        {
+          "name": "だくねすIII",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "だくねすさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达克妮斯小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークバリア",
+      "primaryName": "暗黑屏障",
+      "aliases": [
+        {
+          "name": "だくばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "だばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダクバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达库芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークファルコン",
+      "primaryName": "暗黑法尔科",
+      "aliases": [
+        {
+          "name": "クファル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダルコン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダーファル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库法尔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗法",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达尔科",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークブライアン",
+      "primaryName": "暗黑布莱恩",
+      "aliases": [
+        {
+          "name": "ダーブラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗布",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークミーア",
+      "primaryName": "暗黑米娅",
+      "aliases": []
+    },
+    {
+      "originalName": "ダークムシャ",
+      "primaryName": "暗黑穆沙",
+      "aliases": [
+        {
+          "name": "暗黑武者",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークラナ",
+      "primaryName": "暗黑拉娜",
+      "aliases": [
+        {
+          "name": "マナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "玛娜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダークレナックス",
+      "primaryName": "暗黑蕾娜克斯",
+      "aliases": [
+        {
+          "name": "クレナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库蕾娜",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达娜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダーク恍惚なる闇",
+      "primaryName": "暗黑恍惚的黑暗",
+      "aliases": [
+        {
+          "name": "ダーククレイス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダー恍",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダー惚",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "达恍",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗恍",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗惚",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗黑克雷斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダーク恍惚なる闇子",
+      "primaryName": "暗黑恍惚之暗子",
+      "aliases": [
+        {
+          "name": "ダーク闇子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗黑暗子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ダーク残酷なる闇",
+      "primaryName": "暗黑残酷的黑暗",
+      "aliases": [
+        {
+          "name": "クレス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダークザンエール",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ダー酷",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库雷斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗酷",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "达酷",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗黑残酷",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "チェルシー",
+      "primaryName": "切尔茜",
+      "aliases": [
+        {
+          "name": "エオレーヌ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "艾奥琳",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ツキヨミ",
+      "primaryName": "月读",
+      "aliases": []
+    },
+    {
+      "originalName": "ツムジ",
+      "primaryName": "旋风",
+      "aliases": []
+    },
+    {
+      "originalName": "テヌキ",
+      "primaryName": "缇努琪",
+      "aliases": []
+    },
+    {
+      "originalName": "テレーズ",
+      "primaryName": "特蕾茨",
+      "aliases": []
+    },
+    {
+      "originalName": "テロリータ",
+      "primaryName": "缇萝莉塔",
+      "aliases": []
+    },
+    {
+      "originalName": "ディオナ",
+      "primaryName": "迪奥娜",
+      "aliases": []
+    },
+    {
+      "originalName": "ディスペル",
+      "primaryName": "驱散",
+      "aliases": []
+    },
+    {
+      "originalName": "ディック",
+      "primaryName": "迪克",
+      "aliases": [
+        {
+          "name": "エルマー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラルフ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "埃尔默",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "拉尔夫",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ディナックス",
+      "primaryName": "迪娜克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ディーザス",
+      "primaryName": "蒂莎斯",
+      "aliases": [
+        {
+          "name": "おぱんつ大嫌い丸",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "最讨厌内裤丸",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "デイジー",
+      "primaryName": "黛西",
+      "aliases": []
+    },
+    {
+      "originalName": "デスシープ",
+      "primaryName": "死亡绵羊",
+      "aliases": [
+        {
+          "name": "デーモン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "恶魔",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "デタナロ君",
+      "primaryName": "出来太君",
+      "aliases": []
+    },
+    {
+      "originalName": "デュラハン",
+      "primaryName": "杜拉罕",
+      "aliases": [
+        {
+          "name": "ディラハン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ミネルバ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "密涅瓦",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "迪拉罕",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "デュリル",
+      "primaryName": "杜莉尔",
+      "aliases": [
+        {
+          "name": "デュリル・グリベイン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "杜莉尔·格里贝恩",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "トリッシュ",
+      "primaryName": "特丽休",
+      "aliases": []
+    },
+    {
+      "originalName": "トルネードⅠ",
+      "primaryName": "龙卷Ⅰ",
+      "aliases": [
+        {
+          "name": "クルマユ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "トルイチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库鲁马尤",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "托鲁伊奇",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "トルネードⅡ",
+      "primaryName": "龙卷Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "トルネードⅢ",
+      "primaryName": "龙卷Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "トロッコ",
+      "primaryName": "矿车",
+      "aliases": []
+    },
+    {
+      "originalName": "ドラゴなすーん",
+      "primaryName": "多拉格纳苏",
+      "aliases": [
+        {
+          "name": "ドラゴナスーン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マスクドN",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "假面N",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ドラゴナス子",
+      "primaryName": "多拉格纳斯子",
+      "aliases": [
+        {
+          "name": "ナス子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "纳斯子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ドラゴン",
+      "primaryName": "多拉贡",
+      "aliases": [
+        {
+          "name": "グリン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ドラゴソ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "多拉贡索",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "格林",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ドラゴンナイト",
+      "primaryName": "龙骑士",
+      "aliases": [
+        {
+          "name": "ドナ子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ドラナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "多娜子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "多拉娜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ドラゴンナス",
+      "primaryName": "多拉贡纳斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ドラ子",
+      "primaryName": "多拉子",
+      "aliases": []
+    },
+    {
+      "originalName": "ドリームバリア",
+      "primaryName": "梦境屏障",
+      "aliases": [
+        {
+          "name": "むばっち",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "むばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ムバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "姆芭奇",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "姆芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ドロシー",
+      "primaryName": "多萝西",
+      "aliases": []
+    },
+    {
+      "originalName": "ドワーフ",
+      "primaryName": "矮人",
+      "aliases": [
+        {
+          "name": "ドワ子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "多瓦子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ナイトスカイ",
+      "primaryName": "奈特斯凯",
+      "aliases": [
+        {
+          "name": "ナスカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "娜斯卡",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "夜空",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ナビュー",
+      "primaryName": "娜比优",
+      "aliases": []
+    },
+    {
+      "originalName": "ナヴィ",
+      "primaryName": "娜薇",
+      "aliases": []
+    },
+    {
+      "originalName": "ニャルラトホテップ",
+      "primaryName": "奈亚拉托提普",
+      "aliases": [
+        {
+          "name": "ニャル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ニャル市長",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "奈亚",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "奈亚市长",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ニュークリアⅠ",
+      "primaryName": "核Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "ニュークリアⅡ",
+      "primaryName": "核Ⅱ",
+      "aliases": [
+        {
+          "name": "核にゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "核喵",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ニュークリアⅢ",
+      "primaryName": "核Ⅲ",
+      "aliases": [
+        {
+          "name": "ぬくりあ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ぬくりあさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "クリア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "克莉娅",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "纽克莉娅",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "纽克莉娅小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ニンニン",
+      "primaryName": "忍忍",
+      "aliases": [
+        {
+          "name": "ニリニリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "バートン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "尼里尼里",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "巴顿",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ネガフィルム",
+      "primaryName": "负片",
+      "aliases": []
+    },
+    {
+      "originalName": "ネガーナル",
+      "primaryName": "否定永恒",
+      "aliases": []
+    },
+    {
+      "originalName": "ネクロ",
+      "primaryName": "涅克罗",
+      "aliases": [
+        {
+          "name": "ネクロさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ネクロマンサー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "死灵法师",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "涅克罗女士",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "涅库萝",
+          "language": "zh",
+          "source": "sub"
+        },
+        {
+          "name": "涅库萝女士",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ネコ青魔道士",
+      "primaryName": "猫青魔道士",
+      "aliases": []
+    },
+    {
+      "originalName": "ノックアウト",
+      "primaryName": "击倒",
+      "aliases": [
+        {
+          "name": "のっきゅん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "诺君",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ハナダマリン",
+      "primaryName": "花田海蓝",
+      "aliases": []
+    },
+    {
+      "originalName": "ハロルド",
+      "primaryName": "哈罗德",
+      "aliases": []
+    },
+    {
+      "originalName": "ハーたん",
+      "primaryName": "哈炭",
+      "aliases": [
+        {
+          "name": "ハーピィ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈比",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ハーなすーん",
+      "primaryName": "哈纳苏",
+      "aliases": [
+        {
+          "name": "ハーなすん",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ハーナス",
+      "primaryName": "哈娜丝",
+      "aliases": [
+        {
+          "name": "ハナちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈娜酱",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ハーミィ",
+      "primaryName": "哈咪",
+      "aliases": []
+    },
+    {
+      "originalName": "ハー兄",
+      "primaryName": "哈兄",
+      "aliases": []
+    },
+    {
+      "originalName": "ハー妹",
+      "primaryName": "哈妹",
+      "aliases": [
+        {
+          "name": "ニー妹",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ハネット",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ハート",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈妮特",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "哈特",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "尼妹",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ハー姉",
+      "primaryName": "哈姐",
+      "aliases": [
+        {
+          "name": "HAPI",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ハーネ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈妮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "バジル",
+      "primaryName": "巴吉尔",
+      "aliases": []
+    },
+    {
+      "originalName": "バハムート",
+      "primaryName": "巴哈姆特",
+      "aliases": []
+    },
+    {
+      "originalName": "バフォメット",
+      "primaryName": "巴风特",
+      "aliases": []
+    },
+    {
+      "originalName": "バン子",
+      "primaryName": "邦子",
+      "aliases": []
+    },
+    {
+      "originalName": "バーストⅠ",
+      "primaryName": "爆发Ⅰ",
+      "aliases": [
+        {
+          "name": "バースティ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "芭丝蒂",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "バーストⅡ",
+      "primaryName": "爆发Ⅱ",
+      "aliases": [
+        {
+          "name": "バーニィ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "芭妮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "バーストバリア",
+      "primaryName": "爆发屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "パッフェ",
+      "primaryName": "芭菲",
+      "aliases": []
+    },
+    {
+      "originalName": "パラライズ",
+      "primaryName": "麻痹",
+      "aliases": []
+    },
+    {
+      "originalName": "パラ子",
+      "primaryName": "麻痹子",
+      "aliases": [
+        {
+          "name": "パララ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "帕拉拉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "パワードラゴナス",
+      "primaryName": "强力多拉格纳斯",
+      "aliases": [
+        {
+          "name": "ドラゴナス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "翼青竜パワードラゴナス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "多拉格纳斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "翼青龙强力多拉格纳斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "パワーパンダ",
+      "primaryName": "力量熊猫",
+      "aliases": []
+    },
+    {
+      "originalName": "パープルヘイズ",
+      "primaryName": "帕普海兹",
+      "aliases": [
+        {
+          "name": "紫色烟雾",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ヒメディ",
+      "primaryName": "希梅迪",
+      "aliases": []
+    },
+    {
+      "originalName": "ヒルダ",
+      "primaryName": "希尔达",
+      "aliases": [
+        {
+          "name": "ヒルダ=バーンシュタイン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "希尔达·伯恩斯坦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ヒートバリア",
+      "primaryName": "热能屏障",
+      "aliases": [
+        {
+          "name": "ひばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヒバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "希芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ヒールⅠ",
+      "primaryName": "治疗Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "ヒールⅡ",
+      "primaryName": "治疗Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "ヒールⅢ",
+      "primaryName": "治疗Ⅲ",
+      "aliases": [
+        {
+          "name": "ヒルミ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヒル先生",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヒール先生",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "希尔医生",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "希尔米",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ビーストバリア",
+      "primaryName": "野兽屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "ピザオーク",
+      "primaryName": "披萨兽人",
+      "aliases": [
+        {
+          "name": "ウルトラオーク",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "オーク",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "兽人",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "究极兽人",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ピンクピーチ",
+      "primaryName": "粉红桃子",
+      "aliases": []
+    },
+    {
+      "originalName": "ファイアⅠ",
+      "primaryName": "火Ⅰ",
+      "aliases": [
+        {
+          "name": "スルトル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "フィレイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "苏尔特尔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "菲蕾",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ファイアⅡ",
+      "primaryName": "火Ⅱ",
+      "aliases": [
+        {
+          "name": "クオン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "燐火",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "库昂",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ファイアⅢ",
+      "primaryName": "火Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "ファルコン",
+      "primaryName": "法尔科",
+      "aliases": []
+    },
+    {
+      "originalName": "ファル子",
+      "primaryName": "法尔子",
+      "aliases": [
+        {
+          "name": "トレント",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ミネアン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "特伦特",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "米内安",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ファントムスケルトン",
+      "primaryName": "幻影骷髅",
+      "aliases": []
+    },
+    {
+      "originalName": "フィアーネ",
+      "primaryName": "菲娅涅",
+      "aliases": []
+    },
+    {
+      "originalName": "フィオナ",
+      "primaryName": "菲奥娜",
+      "aliases": []
+    },
+    {
+      "originalName": "フィリア",
+      "primaryName": "菲莉亚",
+      "aliases": []
+    },
+    {
+      "originalName": "フェイレン",
+      "primaryName": "菲伦",
+      "aliases": []
+    },
+    {
+      "originalName": "フェリックス",
+      "primaryName": "菲利克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "フェーニ",
+      "primaryName": "菲妮",
+      "aliases": []
+    },
+    {
+      "originalName": "フライパンアイアン",
+      "primaryName": "铁制平底锅",
+      "aliases": [
+        {
+          "name": "フライパンマン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "平底锅侠",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "フランシス",
+      "primaryName": "芙兰茜斯",
+      "aliases": []
+    },
+    {
+      "originalName": "フレアクローム",
+      "primaryName": "弗莱克罗姆",
+      "aliases": [
+        {
+          "name": "ジョアン2世",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ジョアンナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "乔安二世",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "乔安娜",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "闪光铬黄",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "フレイムⅠ",
+      "primaryName": "炎Ⅰ",
+      "aliases": [
+        {
+          "name": "ホムラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "焰",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "フレイムⅡ",
+      "primaryName": "炎Ⅱ",
+      "aliases": [
+        {
+          "name": "ヒツルギ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "火剑",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "フレイムⅢ",
+      "primaryName": "炎Ⅲ",
+      "aliases": [
+        {
+          "name": "フレイムさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "芙蕾姆小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "フレグランス・ティ",
+      "primaryName": "弗蕾格兰丝·蒂",
+      "aliases": []
+    },
+    {
+      "originalName": "ブライアン",
+      "primaryName": "布莱恩",
+      "aliases": [
+        {
+          "name": "ウザイアン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "チンチンブラブラブライアン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "丁丁晃晃布莱恩",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "烦莱恩",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブライアンパンマン",
+      "primaryName": "布莱安潘曼",
+      "aliases": [
+        {
+          "name": "アンパン様",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "馅包大人",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブライトネスⅠ",
+      "primaryName": "光明Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "ブラインド",
+      "primaryName": "致盲",
+      "aliases": []
+    },
+    {
+      "originalName": "ブラックサンダー",
+      "primaryName": "黑色雷霆",
+      "aliases": [
+        {
+          "name": "ブランディ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "布兰迪",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブラックハウス",
+      "primaryName": "黑屋",
+      "aliases": []
+    },
+    {
+      "originalName": "ブラックハウス・ネガ",
+      "primaryName": "黑屋·否定",
+      "aliases": []
+    },
+    {
+      "originalName": "ブラックバイソン",
+      "primaryName": "布莱克拜森",
+      "aliases": [
+        {
+          "name": "バイソン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ブラックバイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "布莱克拜",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "拜森",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブラックムーン",
+      "primaryName": "黑月",
+      "aliases": []
+    },
+    {
+      "originalName": "ブラックルトン",
+      "primaryName": "布莱库鲁顿",
+      "aliases": [
+        {
+          "name": "ブラッククルトン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "布莱克库鲁顿",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブラッドウォーター",
+      "primaryName": "血水",
+      "aliases": [
+        {
+          "name": "あかわてり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "血わてり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "血瓦特莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "赤瓦特莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブラッドスケルトン",
+      "primaryName": "血骷髅",
+      "aliases": []
+    },
+    {
+      "originalName": "ブリザルド",
+      "primaryName": "布里扎德",
+      "aliases": [
+        {
+          "name": "うんこぶりぶりブリザルド",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ブリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リザ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "大便噗哩噗哩布里扎德",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "布里",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莉莎",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブリザードⅠ",
+      "primaryName": "暴雪Ⅰ",
+      "aliases": [
+        {
+          "name": "ブリイチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ブリーチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "布里伊奇",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "布里奇",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブリザードⅡ",
+      "primaryName": "暴雪Ⅱ",
+      "aliases": [
+        {
+          "name": "ブリッツ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ブリニー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "冷夢",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "冷梦",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "布里妮",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "布里茨",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブリザードⅢ",
+      "primaryName": "暴雪Ⅲ",
+      "aliases": [
+        {
+          "name": "エータナルフォースブリザード",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "永恒力量暴雪",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "永恒之力暴雪",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ブレイクバリア",
+      "primaryName": "破坏屏障",
+      "aliases": [
+        {
+          "name": "ブレイバ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "破障",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブロウ",
+      "primaryName": "布鲁",
+      "aliases": [
+        {
+          "name": "まさお",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "バーンズ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "巴恩斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "正雄",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ブームくん",
+      "primaryName": "布姆君",
+      "aliases": []
+    },
+    {
+      "originalName": "ヘビーゴーレム",
+      "primaryName": "重型哥雷姆",
+      "aliases": [
+        {
+          "name": "ヘビゴ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ベビーゴーレム",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "宝宝哥雷姆",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "重哥",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ヘル",
+      "primaryName": "赫尔",
+      "aliases": [
+        {
+          "name": "ダークロード",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "暗黑领主",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ヘレン",
+      "primaryName": "海伦",
+      "aliases": []
+    },
+    {
+      "originalName": "ベラドンナ",
+      "primaryName": "贝拉多娜",
+      "aliases": [
+        {
+          "name": "ベラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "贝拉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ベレッタ",
+      "primaryName": "贝瑞塔",
+      "aliases": []
+    },
+    {
+      "originalName": "ホタテ元帥",
+      "primaryName": "扇贝元帅",
+      "aliases": []
+    },
+    {
+      "originalName": "ホタテ首領",
+      "primaryName": "扇贝首领",
+      "aliases": []
+    },
+    {
+      "originalName": "ホラーバリア",
+      "primaryName": "恐怖屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "ホワイトセイント",
+      "primaryName": "怀特赛恩",
+      "aliases": [
+        {
+          "name": "ホワセ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヴァイスルーチェ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "白色光辉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "霍赛",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "白色圣光",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ホワイトハウス",
+      "primaryName": "白城",
+      "aliases": [
+        {
+          "name": "シラコ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "シロコ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "城子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "白子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ホーリーバリア",
+      "primaryName": "神圣屏障",
+      "aliases": [
+        {
+          "name": "ほばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ほりばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ホバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ホリバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "霍芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "霍莉芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ボルテージスケルトン",
+      "primaryName": "电压骷髅",
+      "aliases": []
+    },
+    {
+      "originalName": "ポイズン",
+      "primaryName": "毒",
+      "aliases": [
+        {
+          "name": "どっくん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ドクオ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ポイソン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ヴィルエント",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "毒君",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "毒库欧",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "泊松",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "维鲁恩特",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ポショ子",
+      "primaryName": "波修子",
+      "aliases": [
+        {
+          "name": "ポーシャ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "波西亚",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "マインドバリア",
+      "primaryName": "精神屏障",
+      "aliases": [
+        {
+          "name": "まばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "玛芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "マオ",
+      "primaryName": "玛奥",
+      "aliases": []
+    },
+    {
+      "originalName": "マクドナルド",
+      "primaryName": "麦当劳",
+      "aliases": []
+    },
+    {
+      "originalName": "マジカル☆リリーナ",
+      "primaryName": "魔力☆莉莉娜",
+      "aliases": []
+    },
+    {
+      "originalName": "マスクドなすーん",
+      "primaryName": "蒙面纳苏",
+      "aliases": []
+    },
+    {
+      "originalName": "マッシュ",
+      "primaryName": "马修",
+      "aliases": []
+    },
+    {
+      "originalName": "マッドロック",
+      "primaryName": "玛德洛克",
+      "aliases": [
+        {
+          "name": "疯狂岩石",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "マリーゴールド",
+      "primaryName": "玛丽戈露朵",
+      "aliases": []
+    },
+    {
+      "originalName": "マンドラさん",
+      "primaryName": "曼德拉桑",
+      "aliases": []
+    },
+    {
+      "originalName": "マンドラゴラ",
+      "primaryName": "曼德拉草",
+      "aliases": []
+    },
+    {
+      "originalName": "マンドレイク",
+      "primaryName": "曼德蕾克",
+      "aliases": []
+    },
+    {
+      "originalName": "マーシャ",
+      "primaryName": "玛莎",
+      "aliases": []
+    },
+    {
+      "originalName": "マール",
+      "primaryName": "玛露",
+      "aliases": []
+    },
+    {
+      "originalName": "ミシェル",
+      "primaryName": "米歇尔",
+      "aliases": []
+    },
+    {
+      "originalName": "ミストラル",
+      "primaryName": "米斯特拉尔",
+      "aliases": [
+        {
+          "name": "ミスティ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米丝蒂",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ミナトン",
+      "primaryName": "凑",
+      "aliases": [
+        {
+          "name": "イリモヤ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伊莉茉娅",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "水门",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ミニドラ",
+      "primaryName": "迷你多拉",
+      "aliases": []
+    },
+    {
+      "originalName": "ミノタウロス",
+      "primaryName": "米诺陶洛斯",
+      "aliases": [
+        {
+          "name": "ミノさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ミノタウゴン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米诺先生",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "米诺陶贡",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ミミック",
+      "primaryName": "米米科",
+      "aliases": [
+        {
+          "name": "ミミ子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レイズIII",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "复活III",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "米米子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ミラッシェ",
+      "primaryName": "米菈谢",
+      "aliases": []
+    },
+    {
+      "originalName": "ミリィ",
+      "primaryName": "米莉",
+      "aliases": []
+    },
+    {
+      "originalName": "ミルミ",
+      "primaryName": "米尔米",
+      "aliases": []
+    },
+    {
+      "originalName": "ミーア",
+      "primaryName": "米娅",
+      "aliases": []
+    },
+    {
+      "originalName": "ムシャ",
+      "primaryName": "穆沙",
+      "aliases": [
+        {
+          "name": "武者",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ムスカデイジー",
+      "primaryName": "穆斯卡黛西",
+      "aliases": []
+    },
+    {
+      "originalName": "ムーンライトⅠ",
+      "primaryName": "月光Ⅰ",
+      "aliases": [
+        {
+          "name": "ムライチ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "黑荔枝",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "月荔",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ムーンライトⅡ",
+      "primaryName": "月光Ⅱ",
+      "aliases": [
+        {
+          "name": "アオ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "アカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ムラニオ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ムラニカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "姆拉尼卡",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "姆拉尼奥",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "苍",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "赤",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ムーンライトⅢ",
+      "primaryName": "月光Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "メカアレックス",
+      "primaryName": "机械亚历克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "メカゴーレム",
+      "primaryName": "机械哥雷姆",
+      "aliases": [
+        {
+          "name": "ブラックナイト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "メカゴ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "机械哥",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "黑骑士",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "メカミルミ",
+      "primaryName": "机械米尔米",
+      "aliases": []
+    },
+    {
+      "originalName": "メタナイト",
+      "primaryName": "梅塔奈特",
+      "aliases": []
+    },
+    {
+      "originalName": "メタリカーキー",
+      "primaryName": "梅塔莉卡其",
+      "aliases": [
+        {
+          "name": "金属莉卡其",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "メチャシコバリア",
+      "primaryName": "鹿的超爽屏障",
+      "aliases": [
+        {
+          "name": "めちこ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "メチコ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "梅奇柯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "メデューサ",
+      "primaryName": "美杜莎",
+      "aliases": [
+        {
+          "name": "メデュたん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "メデューさん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "美杜碳",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "美杜莎女士",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "メモリストリーム",
+      "primaryName": "内存流",
+      "aliases": [
+        {
+          "name": "メモスト",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "梅莫斯托",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "メモリーストーム",
+      "primaryName": "记忆风暴",
+      "aliases": []
+    },
+    {
+      "originalName": "メリッサ",
+      "primaryName": "梅丽莎",
+      "aliases": []
+    },
+    {
+      "originalName": "メリル",
+      "primaryName": "梅丽尔",
+      "aliases": []
+    },
+    {
+      "originalName": "メルチ",
+      "primaryName": "梅露琪",
+      "aliases": []
+    },
+    {
+      "originalName": "モルツ",
+      "primaryName": "莫尔茨",
+      "aliases": []
+    },
+    {
+      "originalName": "ヤンキークェイクⅠ",
+      "primaryName": "不良地震Ⅰ",
+      "aliases": []
+    },
+    {
+      "originalName": "ユキ",
+      "primaryName": "雪",
+      "aliases": []
+    },
+    {
+      "originalName": "ユーゴ",
+      "primaryName": "尤戈",
+      "aliases": [
+        {
+          "name": "フュージョンIII",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "融合III",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "雨果",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ユースティティア",
+      "primaryName": "尤斯提提娅",
+      "aliases": []
+    },
+    {
+      "originalName": "ライスパーク",
+      "primaryName": "莱丝帕克",
+      "aliases": [
+        {
+          "name": "ライス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ライスパ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米公園",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "米公园",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莱斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莱斯帕",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ライナ",
+      "primaryName": "莱娜",
+      "aliases": []
+    },
+    {
+      "originalName": "ライフアブソーブ",
+      "primaryName": "生命吸收",
+      "aliases": []
+    },
+    {
+      "originalName": "ライフバリア",
+      "primaryName": "生命屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "ラクシュミ",
+      "primaryName": "拉克希米",
+      "aliases": []
+    },
+    {
+      "originalName": "ラジエート",
+      "primaryName": "辐射",
+      "aliases": [
+        {
+          "name": "ラエ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラジエ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "拉吉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "拉艾",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ラジオバリア",
+      "primaryName": "辐射屏障",
+      "aliases": [
+        {
+          "name": "じばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "らじばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ジバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラジバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "吉芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "拉吉芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ラナ",
+      "primaryName": "拉娜",
+      "aliases": [
+        {
+          "name": "シンシア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "辛西娅",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ラブチャーム",
+      "primaryName": "拉芙查姆",
+      "aliases": [
+        {
+          "name": "爱情魔咒",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "ラプスバリア",
+      "primaryName": "时光屏障",
+      "aliases": [
+        {
+          "name": "ぷばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "らばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "らぷばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "プバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラプバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "拉普芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "拉芭莉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "普芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ラミア",
+      "primaryName": "拉米亚",
+      "aliases": []
+    },
+    {
+      "originalName": "ランダムマジックⅠ",
+      "primaryName": "随机魔法Ⅰ",
+      "aliases": [
+        {
+          "name": "ランマイ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "兰麦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ラヴェンダ",
+      "primaryName": "拉文达",
+      "aliases": []
+    },
+    {
+      "originalName": "リカバーⅠ",
+      "primaryName": "回复Ⅰ",
+      "aliases": [
+        {
+          "name": "キンリカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "コリカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リカちー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リカチー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "柯莉卡",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莉卡奇",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "金莉卡",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リカバーⅡ",
+      "primaryName": "回复Ⅱ",
+      "aliases": []
+    },
+    {
+      "originalName": "リカバーⅢ",
+      "primaryName": "回复Ⅲ",
+      "aliases": [
+        {
+          "name": "カバ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "卡巴",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リカ婆Ⅲ",
+      "primaryName": "回复婆Ⅲ",
+      "aliases": []
+    },
+    {
+      "originalName": "リコル",
+      "primaryName": "莉可尔",
+      "aliases": []
+    },
+    {
+      "originalName": "リスカ",
+      "primaryName": "莉丝卡",
+      "aliases": []
+    },
+    {
+      "originalName": "リチャード",
+      "primaryName": "理查德",
+      "aliases": [
+        {
+          "name": "ロレンス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "罗伦斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リナックス",
+      "primaryName": "莉娜克斯",
+      "aliases": [
+        {
+          "name": "リナクシール・ナズルカ・クルセイダー・スミス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莉娜克希尔·娜兹尔卡·克鲁塞德·斯密斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リバースヒール",
+      "primaryName": "反转治疗",
+      "aliases": []
+    },
+    {
+      "originalName": "リリア",
+      "primaryName": "莉莉娅",
+      "aliases": []
+    },
+    {
+      "originalName": "リリックス",
+      "primaryName": "莉莉克斯",
+      "aliases": [
+        {
+          "name": "リリー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莉莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リン",
+      "primaryName": "琳",
+      "aliases": []
+    },
+    {
+      "originalName": "リンカ",
+      "primaryName": "琳卡",
+      "aliases": []
+    },
+    {
+      "originalName": "リンファ",
+      "primaryName": "琳法",
+      "aliases": []
+    },
+    {
+      "originalName": "リーザス",
+      "primaryName": "莉莎斯",
+      "aliases": [
+        {
+          "name": "おぱんつ大好き丸",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ブラウニー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "布朗尼",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "最爱内裤丸",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "リーフバリア",
+      "primaryName": "叶之屏障",
+      "aliases": [
+        {
+          "name": "りばり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "リバリ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "莉芭莉",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ルキウス",
+      "primaryName": "鲁基乌斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ルナックス",
+      "primaryName": "露娜克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ルナブラン",
+      "primaryName": "月白",
+      "aliases": []
+    },
+    {
+      "originalName": "ルバート",
+      "primaryName": "鲁巴特",
+      "aliases": []
+    },
+    {
+      "originalName": "レイズⅠ",
+      "primaryName": "复活Ⅰ",
+      "aliases": [
+        {
+          "name": "怜治",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レイズⅡ",
+      "primaryName": "复活Ⅱ",
+      "aliases": [
+        {
+          "name": "霊ニャン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "灵喵",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レインボーシャワー",
+      "primaryName": "彩虹雨",
+      "aliases": [
+        {
+          "name": "レイシャワ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レインボ~さん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "彩虹~小姐",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "蕾莎瓦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レインボーロリポップ",
+      "primaryName": "彩虹棒棒糖",
+      "aliases": [
+        {
+          "name": "ポップ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ラリポップ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レイン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "拉莉波普",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "波普",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "玲音",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レオックス",
+      "primaryName": "莱奥克斯",
+      "aliases": [
+        {
+          "name": "パパックス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レオナルド・オルレオン・クルセイダー・スミス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "爸爸克斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "莱昂纳多·奥尔良·克鲁塞德·斯密斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レジェンド",
+      "primaryName": "传说",
+      "aliases": []
+    },
+    {
+      "originalName": "レスタック",
+      "primaryName": "莱斯塔克",
+      "aliases": []
+    },
+    {
+      "originalName": "レナックス",
+      "primaryName": "蕾娜克斯",
+      "aliases": [
+        {
+          "name": "アネックス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ゼダックス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "姐姐克斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "泽达克斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "レンックス",
+      "primaryName": "伦克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ロゴスバリア",
+      "primaryName": "逻辑屏障",
+      "aliases": []
+    },
+    {
+      "originalName": "ロリドラゴナス子",
+      "primaryName": "萝莉多拉格纳斯子",
+      "aliases": [
+        {
+          "name": "ロリゴナス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ロリナス子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "萝莉格纳斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "萝莉纳斯子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "ロレックス",
+      "primaryName": "罗雷克斯",
+      "aliases": []
+    },
+    {
+      "originalName": "ロングソード",
+      "primaryName": "长剑",
+      "aliases": []
+    },
+    {
+      "originalName": "万代ありさ",
+      "primaryName": "万代阿丽莎",
+      "aliases": []
+    },
+    {
+      "originalName": "下呂巻シェロバスタ",
+      "primaryName": "下呂卷谢罗巴斯塔",
+      "aliases": [
+        {
+          "name": "シェロバスタ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "谢罗巴斯塔",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "俺さん",
+      "primaryName": "我先生",
+      "aliases": []
+    },
+    {
+      "originalName": "偽ダーエロ",
+      "primaryName": "伪达艾罗",
+      "aliases": [
+        {
+          "name": "リュカ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "琉卡",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "伪达埃罗",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "偽ダーエロ妹",
+      "primaryName": "伪达艾罗妹",
+      "aliases": [
+        {
+          "name": "ユグドラ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "偽エロ妹",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伪艾罗妹",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "尤格多拉",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "伪埃罗妹",
+          "language": "zh",
+          "source": "sub"
+        },
+        {
+          "name": "伪达埃罗妹",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "偽ダークエルフ",
+      "primaryName": "伪暗黑精灵",
+      "aliases": [
+        {
+          "name": "クラウス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "偽エル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伪艾尔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "克劳斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "偽ニュークリア",
+      "primaryName": "伪核",
+      "aliases": [
+        {
+          "name": "メルティ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "偽ぬくりあ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伪纽克莉娅",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "梅露蒂",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "偽ムシャ",
+      "primaryName": "伪穆沙",
+      "aliases": [
+        {
+          "name": "平蔵",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "平藏",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "伪武者",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "偽幕田",
+      "primaryName": "伪幕田",
+      "aliases": []
+    },
+    {
+      "originalName": "偽恍惚なる闇",
+      "primaryName": "伪恍惚的黑暗",
+      "aliases": [
+        {
+          "name": "偽惚",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伪惚",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "偽恍惚なる闇子",
+      "primaryName": "伪恍惚之暗子",
+      "aliases": []
+    },
+    {
+      "originalName": "偽死神五世",
+      "primaryName": "伪死神五世",
+      "aliases": [
+        {
+          "name": "キリ・タヒネ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "琪莉·塔希奈",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "兵士",
+      "primaryName": "士兵",
+      "aliases": []
+    },
+    {
+      "originalName": "内藤ホライゾン",
+      "primaryName": "内藤地平线",
+      "aliases": [
+        {
+          "name": "ブーン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "噗嗯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "冷たいパスタ",
+      "primaryName": "冰冷意面",
+      "aliases": [
+        {
+          "name": "アブソリュート",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "パスタ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "意面",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "绝对零度",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "勇魚",
+      "primaryName": "勇鱼",
+      "aliases": []
+    },
+    {
+      "originalName": "反転ノックアウト",
+      "primaryName": "反转击倒",
+      "aliases": [
+        {
+          "name": "ハノ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "哈诺",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "味噌パン大好き丸",
+      "primaryName": "最爱味噌面包丸",
+      "aliases": []
+    },
+    {
+      "originalName": "塩沢",
+      "primaryName": "盐泽",
+      "aliases": []
+    },
+    {
+      "originalName": "塩沢妹",
+      "primaryName": "盐泽妹",
+      "aliases": [
+        {
+          "name": "ソーマ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ルミナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "索玛",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "露米娜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "塩沢弟",
+      "primaryName": "盐泽弟",
+      "aliases": []
+    },
+    {
+      "originalName": "大サソリ",
+      "primaryName": "大蝎子",
+      "aliases": []
+    },
+    {
+      "originalName": "大和魂",
+      "primaryName": "大和魂",
+      "aliases": []
+    },
+    {
+      "originalName": "天使",
+      "primaryName": "天使",
+      "aliases": [
+        {
+          "name": "RTP天使",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ワクワク天使",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "印度目多神",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "第一天使ガブリエル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "兴奋天使",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "印度眼多神",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "第一天使加百列",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "女体化カーバンクル",
+      "primaryName": "女体化卡班克尔",
+      "aliases": [
+        {
+          "name": "カー子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ガーネット",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "加奈特",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "卡子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "女兵士",
+      "primaryName": "女兵士",
+      "aliases": []
+    },
+    {
+      "originalName": "女王様",
+      "primaryName": "女王大人",
+      "aliases": [
+        {
+          "name": "一般3-2",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "王妃",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "妖精さん",
+      "primaryName": "妖精小姐",
+      "aliases": [
+        {
+          "name": "秋本宗一郎",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "姫様",
+      "primaryName": "公主",
+      "aliases": [
+        {
+          "name": "ポテチーナ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "薯片蒂娜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "娘様",
+      "primaryName": "大小姐",
+      "aliases": [
+        {
+          "name": "むーちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "クライン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "メビウス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "克莱因",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "小萌",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "梅比乌斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "嫁様",
+      "primaryName": "夫人",
+      "aliases": [
+        {
+          "name": "エヴァ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "フィーネ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "マヨメ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "梅沢トメ子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "魔神ぐり子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伊娃",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "梅泽多美子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "真嫁",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "菲涅",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "魔神格莉子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "子ぎつねヘレン",
+      "primaryName": "小狐狸海伦",
+      "aliases": []
+    },
+    {
+      "originalName": "安五郎",
+      "primaryName": "安五郎",
+      "aliases": []
+    },
+    {
+      "originalName": "寝た後さん",
+      "primaryName": "寝后桑",
+      "aliases": [
+        {
+          "name": "寝た後",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "寝后",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "寝る前さん",
+      "primaryName": "寝前桑",
+      "aliases": [
+        {
+          "name": "ネルマエ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "妖狐",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "寝る前",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "寝前",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "小暮",
+      "primaryName": "小暮",
+      "aliases": [
+        {
+          "name": "デーモン小暮",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "恶魔小暮",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "幕田賢治",
+      "primaryName": "幕田贤治",
+      "aliases": []
+    },
+    {
+      "originalName": "弟子五月",
+      "primaryName": "弟子五月",
+      "aliases": []
+    },
+    {
+      "originalName": "弟子五郎",
+      "primaryName": "弟子五郎",
+      "aliases": [
+        {
+          "name": "ライトムシャ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "轻装穆沙",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "光明武者",
+          "language": "zh",
+          "source": "sub"
+        }
+      ]
+    },
+    {
+      "originalName": "恍惚なる闇",
+      "primaryName": "恍惚的黑暗",
+      "aliases": [
+        {
+          "name": "クレイス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "克雷斯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "恍惚なる闇子",
+      "primaryName": "恍惚之暗子",
+      "aliases": [
+        {
+          "name": "どてちんこ",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "レイチェル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "闇子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "土手金子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "暗子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "蕾切尔",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "戦の神",
+      "primaryName": "战争之神",
+      "aliases": []
+    },
+    {
+      "originalName": "斜視子",
+      "primaryName": "斜视子",
+      "aliases": [
+        {
+          "name": "シャッシー",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "夏希",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "時の女神",
+      "primaryName": "时间女神",
+      "aliases": []
+    },
+    {
+      "originalName": "暗黒の戦士",
+      "primaryName": "暗黑战士",
+      "aliases": [
+        {
+          "name": "アーケン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "阿肯",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "森崎",
+      "primaryName": "森崎",
+      "aliases": []
+    },
+    {
+      "originalName": "武蔵漁船",
+      "primaryName": "武藏渔船",
+      "aliases": []
+    },
+    {
+      "originalName": "死の支配者",
+      "primaryName": "死之支配者",
+      "aliases": [
+        {
+          "name": "しぃちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "しーちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ティア",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "死酱",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "蒂亚",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "死神五世",
+      "primaryName": "死神五世",
+      "aliases": []
+    },
+    {
+      "originalName": "死神四世",
+      "primaryName": "死神四世",
+      "aliases": []
+    },
+    {
+      "originalName": "残酷なる闇",
+      "primaryName": "残酷的黑暗",
+      "aliases": [
+        {
+          "name": "イリス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "残子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "深遠なる闇",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "伊莉丝",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "深远的黑暗",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "海洋なる闇",
+      "primaryName": "海洋之黑暗",
+      "aliases": [
+        {
+          "name": "ポセイドン",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "波塞冬",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "漆黒なる闇",
+      "primaryName": "漆黑之黑暗",
+      "aliases": []
+    },
+    {
+      "originalName": "無限少女",
+      "primaryName": "无限少女",
+      "aliases": [
+        {
+          "name": "地獄少女",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "地狱少女",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "玉露兵",
+      "primaryName": "玉露兵",
+      "aliases": []
+    },
+    {
+      "originalName": "王子",
+      "primaryName": "王子",
+      "aliases": []
+    },
+    {
+      "originalName": "王様",
+      "primaryName": "国王",
+      "aliases": [
+        {
+          "name": "ポテチスキー3世",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "薯片斯基3世",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "白ウィンディ",
+      "primaryName": "白温蒂",
+      "aliases": []
+    },
+    {
+      "originalName": "知恵の神",
+      "primaryName": "智慧之神",
+      "aliases": [
+        {
+          "name": "知恵子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "智慧子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "神父",
+      "primaryName": "神父",
+      "aliases": [
+        {
+          "name": "慟哭なる闇",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "恸哭的黑暗",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "神龍",
+      "primaryName": "神龙",
+      "aliases": [
+        {
+          "name": "龍子",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "龙子",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "祟り神カーズ",
+      "primaryName": "祟神卡兹",
+      "aliases": []
+    },
+    {
+      "originalName": "私さん",
+      "primaryName": "我小姐",
+      "aliases": [
+        {
+          "name": "一般1-4",
+          "language": "ja",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "緑のたぬき",
+      "primaryName": "绿狸猫",
+      "aliases": [
+        {
+          "name": "みどり",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "翠",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "聖人",
+      "primaryName": "圣人",
+      "aliases": [
+        {
+          "name": "聖人さん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "圣人小姐",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "聖剣ちゃん",
+      "primaryName": "圣剑酱",
+      "aliases": []
+    },
+    {
+      "originalName": "藍子",
+      "primaryName": "蓝子",
+      "aliases": []
+    },
+    {
+      "originalName": "蠍娘",
+      "primaryName": "蝎女",
+      "aliases": []
+    },
+    {
+      "originalName": "論理信濃",
+      "primaryName": "论理信浓",
+      "aliases": []
+    },
+    {
+      "originalName": "赤いきつね",
+      "primaryName": "红狐狸",
+      "aliases": [
+        {
+          "name": "あかね",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "茜",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "超老婆",
+      "primaryName": "超老婆",
+      "aliases": [
+        {
+          "name": "超産婆",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "超产婆",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "通りすがりの船",
+      "primaryName": "路过的船",
+      "aliases": []
+    },
+    {
+      "originalName": "風雷爺",
+      "primaryName": "风雷爷",
+      "aliases": []
+    },
+    {
+      "originalName": "魔ーミン",
+      "primaryName": "魔敏",
+      "aliases": []
+    },
+    {
+      "originalName": "魔王様",
+      "primaryName": "魔王",
+      "aliases": [
+        {
+          "name": "セゼク=ヴァスキア=バナルパス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "大魔王オクトュム",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "第六天魔王",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "塞泽克=瓦斯基亚=巴纳尔帕斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "大魔王奥克图姆",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "魔皇女",
+      "primaryName": "魔皇女",
+      "aliases": [
+        {
+          "name": "まこちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "まーちゃん",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "真子",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "魔酱",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "魔神",
+      "primaryName": "魔神",
+      "aliases": [
+        {
+          "name": "あつし",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "クイトゥス",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "ドリスコル",
+          "language": "ja",
+          "source": "base"
+        },
+        {
+          "name": "奎图斯",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "德里斯科尔",
+          "language": "zh",
+          "source": "base"
+        },
+        {
+          "name": "敦",
+          "language": "zh",
+          "source": "base"
+        }
+      ]
+    },
+    {
+      "originalName": "魔術ロボ",
+      "primaryName": "魔术机器人",
+      "aliases": []
+    },
+    {
+      "originalName": "魔術研究員",
+      "primaryName": "魔术研究员",
+      "aliases": []
+    },
+    {
+      "originalName": "鳥人間",
+      "primaryName": "鸟人",
+      "aliases": []
+    },
+    {
+      "originalName": "黒ウィンディ",
+      "primaryName": "黑温蒂",
+      "aliases": []
+    }
+  ]
+}

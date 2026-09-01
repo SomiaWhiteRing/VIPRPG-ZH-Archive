@@ -391,7 +391,6 @@ CREATE TABLE IF NOT EXISTS work_relations (
   ),
   vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
   relation_order REAL NOT NULL DEFAULT 0,
-  notes TEXT,
   created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (from_work_id, to_work_id, relation_type, vice_versa),
@@ -533,6 +532,7 @@ CREATE TABLE IF NOT EXISTS catalogs (
   owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
+  cover_blob_sha256 TEXT REFERENCES blobs(sha256),
   status TEXT NOT NULL CHECK (status IN ('published', 'deleted')) DEFAULT 'published',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -540,6 +540,10 @@ CREATE TABLE IF NOT EXISTS catalogs (
 
 CREATE INDEX IF NOT EXISTS idx_catalogs_owner_status
   ON catalogs(owner_user_id, status, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_catalogs_cover_blob
+  ON catalogs(cover_blob_sha256)
+  WHERE cover_blob_sha256 IS NOT NULL AND status = 'published';
 
 CREATE TABLE IF NOT EXISTS catalog_items (
   catalog_id INTEGER NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE,
@@ -717,17 +721,100 @@ CREATE INDEX IF NOT EXISTS idx_archive_version_core_pack_refs_core_pack
 
 CREATE TABLE IF NOT EXISTS characters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  primary_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-  original_name TEXT,
+  primary_name TEXT NOT NULL COLLATE NOCASE,
+  primary_name_key TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  original_name_key TEXT NOT NULL UNIQUE,
+  portrait_blob_sha256 TEXT REFERENCES blobs(sha256),
   description TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_characters_primary_name_key
+  ON characters(primary_name_key);
+
+CREATE INDEX IF NOT EXISTS idx_characters_portrait_blob
+  ON characters(portrait_blob_sha256)
+  WHERE portrait_blob_sha256 IS NOT NULL;
+
+CREATE TRIGGER IF NOT EXISTS characters_portrait_require_active_blob_insert
+BEFORE INSERT ON characters
+WHEN NEW.portrait_blob_sha256 IS NOT NULL
+  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.portrait_blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'character portrait blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS characters_portrait_require_active_blob_update
+BEFORE UPDATE OF portrait_blob_sha256 ON characters
+WHEN NEW.portrait_blob_sha256 IS NOT NULL
+  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.portrait_blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'character portrait blob must be active');
+END;
+
+CREATE TABLE IF NOT EXISTS character_aliases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  language TEXT NOT NULL CHECK (language IN ('ja', 'zh')),
+  source TEXT NOT NULL CHECK (source IN ('base', 'sub', 'user', 'admin')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (character_id, name_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_aliases_name_key
+  ON character_aliases(name_key);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_character_aliases_unique_japanese_name_key
+  ON character_aliases(name_key)
+  WHERE language = 'ja';
+
+CREATE TRIGGER IF NOT EXISTS trg_characters_original_name_not_alias_insert
+BEFORE INSERT ON characters
+WHEN EXISTS (
+  SELECT 1 FROM character_aliases
+  WHERE language = 'ja' AND name_key = NEW.original_name_key
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character original name already belongs to an alias');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_characters_original_name_not_alias_update
+BEFORE UPDATE OF original_name_key ON characters
+WHEN EXISTS (
+  SELECT 1 FROM character_aliases
+  WHERE language = 'ja' AND name_key = NEW.original_name_key
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character original name already belongs to an alias');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_character_aliases_japanese_name_not_original_insert
+BEFORE INSERT ON character_aliases
+WHEN NEW.language = 'ja' AND EXISTS (
+  SELECT 1 FROM characters WHERE original_name_key = NEW.name_key
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character alias already belongs to an original name');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_character_aliases_japanese_name_not_original_update
+BEFORE UPDATE OF name_key, language ON character_aliases
+WHEN NEW.language = 'ja' AND EXISTS (
+  SELECT 1 FROM characters WHERE original_name_key = NEW.name_key
+)
+BEGIN
+  SELECT RAISE(ABORT, 'character alias already belongs to an original name');
+END;
+
 CREATE TABLE IF NOT EXISTS work_characters (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
   role_key TEXT NOT NULL CHECK (
     role_key IN ('main', 'supporting', 'cameo', 'mentioned', 'other')
   ) DEFAULT 'supporting',
@@ -835,6 +922,11 @@ WHEN NEW.status IN ('purging', 'purged')
     SELECT 1 FROM users
     WHERE avatar_blob_sha256 = OLD.sha256
   )
+  OR NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM characters
+    WHERE portrait_blob_sha256 = OLD.sha256
+  )
 BEGIN
   SELECT RAISE(ABORT, 'referenced blob cannot be purged');
 END;
@@ -878,6 +970,7 @@ CREATE TABLE IF NOT EXISTS import_jobs (
   excluded_file_count INTEGER NOT NULL DEFAULT 0,
   excluded_size_bytes INTEGER NOT NULL DEFAULT 0,
   file_policy_version TEXT,
+  source_manifest_sha256 TEXT,
   missing_blob_count INTEGER NOT NULL DEFAULT 0,
   missing_core_pack_count INTEGER NOT NULL DEFAULT 0,
   missing_blob_size_bytes INTEGER NOT NULL DEFAULT 0,

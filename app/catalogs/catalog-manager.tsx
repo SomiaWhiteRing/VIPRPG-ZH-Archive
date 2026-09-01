@@ -15,9 +15,13 @@ import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
-import type { CatalogSummary } from "@/lib/server/db/catalogs";
+import {
+  CoverPicker,
+  type CoverPickerCandidate,
+} from "@/app/upload/media-picker";
+import type { CatalogDetail, CatalogSummary } from "@/lib/server/db/catalogs";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Dialog } from "radix-ui";
 
 export function CatalogCreateForm() {
@@ -90,7 +94,7 @@ export function CatalogSummaryEditor({
   canEdit = true,
   canDelete = true,
 }: {
-  catalog: CatalogSummary;
+  catalog: CatalogDetail;
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
@@ -98,14 +102,28 @@ export function CatalogSummaryEditor({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(catalog.title);
   const [description, setDescription] = useState(catalog.description ?? "");
+  const [cover, setCover] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const coverCandidates = useMemo<CoverPickerCandidate[]>(
+    () => catalog.items.flatMap((item) =>
+      item.previewBlobSha256
+        ? [{
+            key: `catalog-work-${item.workId}`,
+            label: item.title,
+            src: `/api/media/blobs/${item.previewBlobSha256}`,
+          }]
+        : [],
+    ),
+    [catalog.items],
+  );
   function changeOpen(nextOpen: boolean) {
     if (busy) return;
     setOpen(nextOpen);
     if (nextOpen) {
       setTitle(catalog.title);
       setDescription(catalog.description ?? "");
+      setCover(null);
       setMessage(null);
     }
   }
@@ -113,11 +131,14 @@ export function CatalogSummaryEditor({
     setBusy(true);
     setMessage(null);
     try {
+      const form = new FormData();
+      form.set("title", title);
+      form.set("description", description);
+      if (cover) form.set("cover", cover);
       const response = await fetch(`/api/catalogs/${catalog.id}`, {
         method: "PATCH",
         credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, description }),
+        body: form,
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
@@ -165,9 +186,25 @@ export function CatalogSummaryEditor({
         >
           <Dialog.Title className="m-0 text-lg font-bold">编辑目录资料</Dialog.Title>
           <Dialog.Description className="sr-only" id="catalog-summary-edit-description">
-            修改目录标题和说明，或删除目录。
+            修改目录封面、标题和说明，或删除目录。
           </Dialog.Description>
           <div className="grid gap-4">
+            {canEdit ? (
+              <div className="w-full max-w-52">
+                <CoverPicker
+                  candidates={coverCandidates}
+                  currentImageSrc={catalog.coverBlobSha256
+                    ? `/api/media/blobs/${catalog.coverBlobSha256}`
+                    : null}
+                  disabled={busy}
+                  existingBlobSha256s={catalog.customCoverBlobSha256
+                    ? [catalog.customCoverBlobSha256]
+                    : undefined}
+                  file={cover}
+                  onChange={setCover}
+                />
+              </div>
+            ) : null}
             <FormField controlId="catalog-title" label="标题">
               <Input
                 id="catalog-title"

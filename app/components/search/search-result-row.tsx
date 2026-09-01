@@ -48,7 +48,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
               key={character.id}
             >
-              {character.primaryName}
+              {character.displayName}
             </span>
           ))}
           {work.tags.slice(0, 2).map((tag) => (

@@ -23,7 +23,6 @@ export async function POST(
         toWorkId: Number(body.targetWorkId),
         relationType: body.relationType as never,
         relationOrder: body.relationOrder,
-        notes: body.notes,
       },
       auth.user,
     );
@@ -39,17 +38,10 @@ async function readBody(
   targetWorkId?: number;
   relationType?: string;
   relationOrder?: number;
-  notes?: string | null;
 }> {
   const body = await readJsonObject(request, "Invalid relation body");
   if (body.targetWorkId !== undefined && typeof body.targetWorkId !== "number")
     throw new HttpError(400, "Target work id must be a number");
-  if (
-    body.notes !== undefined &&
-    body.notes !== null &&
-    typeof body.notes !== "string"
-  )
-    throw new HttpError(400, "Relation notes must be a string");
   if (body.relationType !== undefined && typeof body.relationType !== "string")
     throw new HttpError(400, "Relation type must be a string");
   if (
@@ -62,6 +54,5 @@ async function readBody(
     targetWorkId?: number;
     relationType?: string;
     relationOrder?: number;
-    notes?: string | null;
   };
 }

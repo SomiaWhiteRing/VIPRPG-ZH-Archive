@@ -1,5 +1,5 @@
 // 本地开发数据：只写入 --local D1/R2。
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash, webcrypto } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -10,6 +10,12 @@ const bucketName = process.env.LOCAL_R2_BUCKET || "viprpg-archive-prod";
 const tmpDir = join(".wrangler", "tmp");
 const seedSqlPath = join(tmpDir, "dev-seed.sql");
 const NOW = "2026-07-01 12:00:00";
+const characterDictionary = JSON.parse(
+  readFileSync(new URL("../data/character-dictionary.json", import.meta.url), "utf8"),
+);
+if (characterDictionary.schema !== "viprpg-character-dictionary.v1") {
+  throw new Error("角色词典格式不受支持");
+}
 if (process.argv.includes("--reset")) await import("./local-d1-reset.mjs");
 mkdirSync(tmpDir, { recursive: true });
 
@@ -206,6 +212,7 @@ insert("catalogs", [
     owner_user_id: 3,
     title: "夏日精选",
     description: "适合夏天游玩的游戏。",
+    cover_blob_sha256: images[3].sha256,
     status: "published",
     created_at: NOW,
     updated_at: NOW,
@@ -217,26 +224,55 @@ insert("catalog_items", [
   { catalog_id: 1, work_id: 4, sort_order: 2, note: "本站原创" },
 ]);
 
-insert("characters", [
-  {
-    id: 1,
-    primary_name: "モナー",
-    description: "猫耳角色。",
+const seededCharacters = characterDictionary.characters.map((character, index) => ({
+  id: index + 1,
+  primary_name: character.primaryName,
+  primary_name_key: nameKey(character.primaryName),
+  original_name: character.originalName,
+  original_name_key: nameKey(character.originalName),
+  created_at: NOW,
+  updated_at: NOW,
+}));
+for (const character of [
+  { originalName: "モナー", primaryName: "莫纳", description: "猫耳角色。" },
+  { originalName: "ギコ猫", primaryName: "吉可猫", description: "嘴硬的猫。" },
+]) {
+  seededCharacters.push({
+    id: seededCharacters.length + 1,
+    primary_name: character.primaryName,
+    primary_name_key: nameKey(character.primaryName),
+    original_name: character.originalName,
+    original_name_key: nameKey(character.originalName),
+    description: character.description,
     created_at: NOW,
     updated_at: NOW,
-  },
-  {
-    id: 2,
-    primary_name: "ギコ猫",
-    description: "嘴硬的猫。",
-    created_at: NOW,
-    updated_at: NOW,
-  },
-]);
+  });
+}
+insert("characters", seededCharacters);
+let characterAliasId = 1;
+insert(
+  "character_aliases",
+  characterDictionary.characters.flatMap((character, index) =>
+    character.aliases.map((alias) => ({
+      id: characterAliasId++,
+      character_id: index + 1,
+      name: alias.name,
+      name_key: nameKey(alias.name),
+      language: alias.language,
+      source: alias.source,
+      created_at: NOW,
+    })),
+  ),
+);
+const characterIds = new Map(
+  seededCharacters.map((character) => [character.original_name, character.id]),
+);
 insert("work_characters", [
-  { work_id: 1, character_id: 1, role_key: "main", sort_order: 1 },
-  { work_id: 3, character_id: 1, role_key: "main", sort_order: 1 },
-  { work_id: 5, character_id: 2, role_key: "main", sort_order: 1 },
+  { work_id: 1, character_id: characterIds.get("モナー"), display_name: "莫纳", role_key: "main", sort_order: 1 },
+  { work_id: 1, character_id: characterIds.get("アゼクラ"), display_name: "阿泽库拉", role_key: "supporting", sort_order: 2 },
+  { work_id: 3, character_id: characterIds.get("モナー"), display_name: "莫纳", role_key: "main", sort_order: 1 },
+  { work_id: 3, character_id: characterIds.get("アゼクラ"), display_name: "校仓", role_key: "supporting", sort_order: 2 },
+  { work_id: 5, character_id: characterIds.get("ギコ猫"), display_name: "吉可猫", role_key: "main", sort_order: 1 },
 ]);
 insert("creators", [
   {
@@ -530,6 +566,9 @@ function archive(id, work_id, language, files, size, current) {
 }
 function blobKey(sha) {
   return `blobs/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}`;
+}
+function nameKey(value) {
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
 }
 function corePackKey(sha) {
   return `core-packs/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}.zip`;

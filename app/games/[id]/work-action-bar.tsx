@@ -3,7 +3,7 @@ import { buttonVariants } from "@/app/components/ui/button";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import Link from "next/link";
 import { Download, ExternalLink, Play } from "lucide-react";
-import { formatNumber, formatBytes } from "@/lib/format";
+import { formatBytes } from "@/lib/format";
 
 type Props = {
   workId: number;
@@ -53,9 +53,6 @@ export function WorkActionBar({
               <span className="text-xs text-muted">{formatBytes(archive.totalSizeBytes)}</span>
             </Link>
           </div>
-          <p className="m-0 font-mono text-[11px] leading-[1.6] text-muted">
-            {formatNumber(archive.totalFiles)} 个文件 · 浏览器直接游玩（EasyRPG），存档保存在本机。
-          </p>
         </>
       ) : externalDownload ? (
         <a
@@ -69,7 +66,7 @@ export function WorkActionBar({
           前往下载页
         </a>
       ) : (
-        <span className="font-mono text-[11px] leading-[1.6] text-muted">该作品目前暂无可下载的当前快照。</span>
+        <span className="font-mono text-xs leading-[1.6] text-muted">该作品目前暂无可下载的当前快照。</span>
       )}
     </div>
   );

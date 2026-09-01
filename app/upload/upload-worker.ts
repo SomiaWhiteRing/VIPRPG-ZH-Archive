@@ -15,6 +15,7 @@ import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
   ArchiveManifestFile,
+  ArchiveSourceManifest,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
 import type {
@@ -33,7 +34,6 @@ import {
   deleteUploadDraft,
   draftKey,
   putUploadDraft,
-  sourceObjectReferences,
 } from "@/app/upload/upload-drafts";
 
 type IncludedFile = {
@@ -368,7 +368,16 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
   try {
     await markMetadataReady(importJobId);
     await waitForCancellation(runtime);
-    await uploadMetadataBlobs(runtime.metadataBlobs, importJobId);
+    const sourceBlobSha256s = new Set(
+      preparedSource.files.flatMap((file) =>
+        file.storage.kind === "blob" ? [file.storage.blobSha256] : [],
+      ),
+    );
+    await uploadMetadataBlobs(
+      runtime.metadataBlobs,
+      importJobId,
+      sourceBlobSha256s,
+    );
     await waitForCancellation(runtime);
     const manifestResult = await buildManifest(preparedSource, metadata);
     await waitForCancellation(runtime);
@@ -710,8 +719,9 @@ async function buildManifest(
   manifestJson: string;
   manifestSha256: string;
 }> {
+  const sourceManifest = buildSourceManifest(source);
   const manifest: ArchiveManifest = {
-    schema: "viprpg-archive.manifest.v1",
+    schema: sourceManifest.schema,
     game: {
       originalTitle: metadata.game.originalTitle,
       chineseTitle: metadata.game.chineseTitle,
@@ -723,6 +733,23 @@ async function buildManifest(
       sourceName: metadata.archiveVersion.sourceName,
       sourceUrl: metadata.archiveVersion.sourceUrl,
       createdAt: new Date().toISOString(),
+      ...sourceManifest.archiveVersion,
+    },
+    corePacks: sourceManifest.corePacks,
+    files: sourceManifest.files,
+  };
+  const manifestJson = JSON.stringify(manifest);
+
+  return {
+    manifestJson,
+    manifestSha256: await sha256Text(manifestJson),
+  };
+}
+
+function buildSourceManifest(source: PreparedArchiveSource): ArchiveSourceManifest {
+  return {
+    schema: "viprpg-archive.manifest.v1",
+    archiveVersion: {
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
       sourceType: source.sourceKind === "zip" ? "browser_zip" : "browser_folder",
@@ -745,12 +772,6 @@ async function buildManifest(
       },
     ],
     files: source.files,
-  };
-  const manifestJson = JSON.stringify(manifest);
-
-  return {
-    manifestJson,
-    manifestSha256: await sha256Text(manifestJson),
   };
 }
 
@@ -1013,10 +1034,9 @@ async function markSourceReady(
   source: PreparedArchiveSource,
 ): Promise<void> {
   if (!importJobId) throw new Error("上传任务缺少导入记录");
-  const references = sourceObjectReferences(source);
   await jsonFetch(`/api/imports/${importJobId}/source-ready`, {
     method: "POST",
-    body: JSON.stringify(references),
+    body: JSON.stringify(buildSourceManifest(source)),
   });
 }
 
@@ -1126,9 +1146,14 @@ async function uploadBlob(blob: BlobObject, importJobId: number): Promise<void> 
   });
 }
 
-async function uploadMetadataBlobs(blobs: MetadataBlobUpload[], importJobId: number | null): Promise<void> {
+async function uploadMetadataBlobs(
+  blobs: MetadataBlobUpload[],
+  importJobId: number | null,
+  sourceBlobSha256s: ReadonlySet<string>,
+): Promise<void> {
   if (!importJobId) throw new Error("上传任务缺少导入记录");
   for (const blob of blobs) {
+    if (sourceBlobSha256s.has(blob.sha256)) continue;
     await retry(async () => {
       const response = await fetch(uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId), {
         method: "PUT",

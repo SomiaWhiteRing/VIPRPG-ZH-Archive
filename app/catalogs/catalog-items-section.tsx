@@ -26,6 +26,10 @@ type Candidate = {
   id: number;
   originalTitle: string;
   chineseTitle: string | null;
+  originalReleaseDate: string | null;
+  engineFamily: string;
+  language: string;
+  previewBlobSha256: string | null;
 };
 
 export function CatalogItemsSection({
@@ -260,7 +264,7 @@ export function CatalogItemsSection({
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
           <Dialog.Content
             aria-describedby="catalog-add-game-description"
-            className="fixed left-1/2 top-1/2 z-50 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-surface"
+            className="fixed left-1/2 top-1/2 z-50 grid h-[min(85dvh,640px)] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-surface"
           >
             <Dialog.Title className="m-0 text-lg font-bold">添加游戏</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-add-game-description">
@@ -277,24 +281,42 @@ export function CatalogItemsSection({
                 {searching ? "正在查找…" : "查找"}
               </Button>
             </form>
-            {candidates.length ? (
-              <div aria-label="查找结果" className="flex flex-col gap-2">
-                {candidates.map((candidate) => (
-                  <Button
-                    className="h-auto justify-between whitespace-normal text-left"
-                    disabled={adding}
-                    key={candidate.id}
-                    onClick={() => void add(candidate)}
-                    type="button"
-                    variant="outline"
-                  >
-                    <span>{candidate.chineseTitle || candidate.originalTitle}</span>
-                    <span className="text-xs text-muted">添加</span>
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-            {addMessage ? <p className="m-0 text-sm text-muted" role="status">{addMessage}</p> : null}
+            <div className="min-h-0 overflow-y-auto">
+              {candidates.length ? (
+                <ol aria-label="查找结果" className="divide-y divide-border border-y border-border">
+                  {candidates.map((candidate, index) => (
+                    <CatalogGameListItem
+                      index={index}
+                      item={{
+                        workId: candidate.id,
+                        title: candidate.chineseTitle || candidate.originalTitle,
+                        originalTitle: candidate.originalTitle,
+                        chineseTitle: candidate.chineseTitle,
+                        originalReleaseDate: candidate.originalReleaseDate,
+                        engineFamily: candidate.engineFamily,
+                        language: candidate.language,
+                        previewBlobSha256: candidate.previewBlobSha256,
+                        sortOrder: 0,
+                        note: null,
+                      }}
+                      key={candidate.id}
+                      management={(
+                        <Button
+                          disabled={adding}
+                          onClick={() => void add(candidate)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          添加
+                        </Button>
+                      )}
+                    />
+                  ))}
+                </ol>
+              ) : null}
+              {addMessage ? <p className="m-0 text-sm text-muted" role="status">{addMessage}</p> : null}
+            </div>
             <div className="flex justify-end border-t border-border pt-4">
               <Dialog.Close asChild>
                 <Button disabled={adding} type="button" variant="outline">取消</Button>
@@ -332,7 +354,6 @@ export function CatalogItemsSection({
                 </FormField>
                 <FormField
                   controlId="catalog-item-sort-order"
-                  hint="0 或正整数；越小越靠前，同值按游戏 ID 倒序。"
                   label="排序值"
                 >
                   <Input
@@ -381,26 +402,26 @@ function CatalogItemActions({
 
   return (
     <>
-      <div className="hidden items-center gap-1 sm:flex">
+      <div className="hidden divide-x divide-border overflow-hidden rounded-full border border-border bg-card shadow-sm sm:inline-flex">
         <Button
           aria-label={`编辑条目：${item.title}`}
-          className="h-7 min-h-7 rounded-full px-2.5 text-xs shadow-none"
+          className="h-7 min-h-7 rounded-none px-2.5 text-xs shadow-none focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={onEdit}
           size="sm"
           type="button"
-          variant="outline"
+          variant="ghost"
         >
           编辑
         </Button>
         <Button
           aria-label={`从目录移除：${item.title}`}
-          className="h-7 min-h-7 rounded-full px-2.5 text-xs text-destructive shadow-none hover:border-destructive hover:text-destructive"
+          className="h-7 min-h-7 rounded-none px-2.5 text-xs text-destructive shadow-none hover:text-destructive focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={onRemove}
           size="sm"
           type="button"
-          variant="outline"
+          variant="ghost"
         >
           移除
         </Button>

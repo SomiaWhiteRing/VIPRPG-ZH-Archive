@@ -1,7 +1,12 @@
 import { requireAnyPermission } from "@/lib/server/auth/authorize";
-import { deleteCatalog, updateCatalog } from "@/lib/server/db/catalogs";
-import { json, jsonError } from "@/lib/server/http/json";
-import { parsePositiveId, readJsonObject } from "@/lib/server/http/request";
+import {
+  assertCatalogUpdateAllowed,
+  deleteCatalog,
+  updateCatalog,
+} from "@/lib/server/db/catalogs";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
+import { parsePositiveId } from "@/lib/server/http/request";
+import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -14,21 +19,37 @@ export async function PATCH(
   ]);
   if ("response" in auth) return auth.response;
   try {
-    const body = (await readJsonObject(request, "Invalid catalog body")) as {
-      title?: string;
-      description?: string | null;
-    };
+    const id = parsePositiveId((await context.params).id, "catalog id");
+    await assertCatalogUpdateAllowed(id, auth.user);
+    const form = await request.formData();
+    const coverEntry = form.get("cover");
+    const coverBlobSha256 = coverEntry === null
+      ? undefined
+      : (await storeWorkImages([readWorkImage(coverEntry, "目录封面")]))[0];
     return json({
       ok: true,
       catalog: await updateCatalog(
-        parsePositiveId((await context.params).id, "catalog id"),
-        body,
+        id,
+        {
+          title: optionalFormString(form.get("title"), "目录标题"),
+          description: optionalFormString(form.get("description"), "目录说明"),
+          coverBlobSha256,
+        },
         auth.user,
       ),
     });
   } catch (error) {
     return jsonError("Catalog update failed", error);
   }
+}
+
+function optionalFormString(
+  value: FormDataEntryValue | null,
+  field: string,
+): string | undefined {
+  if (value === null) return undefined;
+  if (typeof value !== "string") throw new HttpError(400, `${field}必须是字符串`);
+  return value;
 }
 export async function DELETE(
   request: Request,

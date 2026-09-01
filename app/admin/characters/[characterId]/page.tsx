@@ -1,5 +1,6 @@
 import { Input } from "@/app/components/ui/input";
 import { Button, buttonVariants } from "@/app/components/ui/button";
+import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Textarea } from "@/app/components/ui/textarea";
 import Link from "next/link";
@@ -62,6 +63,7 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
         action={`/api/admin/characters/${character.id}/update`}
         className="grid gap-4 grid gap-4"
         confirmField="merge_target_id"
+        encType="multipart/form-data"
         method="post"
         title="确认合并并删除角色"
         description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
@@ -73,10 +75,26 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
               <Input defaultValue={character.primaryName} name="primary_name" required />
             </FormField>
             <FormField label="原名">
-              <Input defaultValue={character.originalName ?? ""} name="original_name" />
+              <Input defaultValue={character.originalName} name="original_name" required />
             </FormField>
             <FormField label="简介" wide>
               <Textarea defaultValue={character.description ?? ""} name="description" rows={6} />
+            </FormField>
+            <FormField
+              hint="只接受精确 48×48、最多 256 KiB 的 PNG；不选择文件会保留当前头像。"
+              label="头像"
+              wide
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <CharacterPortrait
+                  className="size-20 text-xl"
+                  displayName={character.primaryName}
+                  portraitBlobSha256={character.portraitBlobSha256}
+                  size={80}
+                  toneKey={character.id}
+                />
+                <Input accept="image/png" name="portrait" type="file" />
+              </div>
             </FormField>
           </div>
         </Pane>
@@ -89,7 +107,10 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
                 { value: "", label: "不合并" },
                 ...candidates
                   .filter((candidate) => candidate.id !== character.id)
-                  .map((candidate) => ({ value: String(candidate.id), label: candidate.primaryName })),
+                  .map((candidate) => ({
+                    value: String(candidate.id),
+                    label: `${candidate.originalName} · ${candidate.primaryName}`,
+                  })),
               ]}
             />
           </FormField>

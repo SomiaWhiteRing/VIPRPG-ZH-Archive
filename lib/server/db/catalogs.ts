@@ -22,6 +22,7 @@ export type CatalogSummary = {
   description: string | null;
   itemCount: number;
   coverBlobSha256: string | null;
+  customCoverBlobSha256: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -32,6 +33,7 @@ export type CatalogDetail = CatalogSummary & {
 export type CatalogInput = {
   title?: string;
   description?: string | null;
+  coverBlobSha256?: string;
 };
 
 export async function listCatalogs(): Promise<CatalogSummary[]> {
@@ -130,17 +132,30 @@ export async function updateCatalog(
 ): Promise<CatalogDetail> {
   const row = await ownedCatalog(id, actor, "catalog.update_own");
   const title = requiredTitle(input.title ?? row.title);
+  const coverBlobSha256 = input.coverBlobSha256 === undefined
+    ? row.cover_blob_sha256
+    : await requiredCatalogCover(input.coverBlobSha256);
   await getD1()
     .prepare(
-      `UPDATE catalogs SET title=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE catalogs
+       SET title=?,description=?,cover_blob_sha256=?,updated_at=CURRENT_TIMESTAMP
+       WHERE id=?`,
     )
     .bind(
       title,
       input.description === undefined ? row.description : clean(input.description),
+      coverBlobSha256,
       id,
     )
     .run();
   return requiredCatalog(id);
+}
+
+export async function assertCatalogUpdateAllowed(
+  id: number,
+  actor: ArchiveUser,
+): Promise<void> {
+  await ownedCatalog(id, actor, "catalog.update_own");
 }
 
 export async function deleteCatalog(
@@ -307,10 +322,14 @@ async function ownedCatalog(
   owner_user_id: number;
   title: string;
   description: string | null;
+  cover_blob_sha256: string | null;
 }> {
   const row = await getD1()
     .prepare(
-      `SELECT id,owner_user_id,title,description FROM catalogs WHERE id=? AND status='published' LIMIT 1`,
+      `SELECT id,owner_user_id,title,description,cover_blob_sha256
+       FROM catalogs
+       WHERE id=? AND status='published'
+       LIMIT 1`,
     )
     .bind(id)
     .first<{
@@ -318,6 +337,7 @@ async function ownedCatalog(
       owner_user_id: number;
       title: string;
       description: string | null;
+      cover_blob_sha256: string | null;
     }>();
   if (!row) throw new HttpError(404, "目录不存在");
   if (actor.permissionKeys.includes("catalog.manage_any")) return row;
@@ -344,6 +364,7 @@ function mapSummary(row: Row): CatalogSummary {
     description: row.description,
     itemCount: row.item_count,
     coverBlobSha256: row.cover_blob_sha256,
+    customCoverBlobSha256: row.custom_cover_blob_sha256,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -354,6 +375,23 @@ function requiredTitle(value: string): string {
   const title = value.trim();
   if (!title) throw new HttpError(400, "目录标题不能为空");
   return title.slice(0, 200);
+}
+async function requiredCatalogCover(value: string): Promise<string> {
+  const sha256 = value.trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new HttpError(400, "目录封面哈希不合法");
+  }
+  const blob = await getD1()
+    .prepare(
+      `SELECT sha256
+       FROM blobs
+       WHERE sha256=? AND status='active' AND content_type_hint LIKE 'image/%'
+       LIMIT 1`,
+    )
+    .bind(sha256)
+    .first<{ sha256: string }>();
+  if (!blob) throw new HttpError(400, "目录封面不存在或不是可用图片");
+  return blob.sha256;
 }
 function clean(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
@@ -371,6 +409,7 @@ type Row = {
   description: string | null;
   item_count: number;
   cover_blob_sha256: string | null;
+  custom_cover_blob_sha256: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -400,7 +439,8 @@ const CATALOG_SUMMARY_SELECT = `
       JOIN works cw ON cw.id = ci.work_id
       WHERE ci.catalog_id = c.id AND cw.status = 'published'
     ) AS item_count,
-    (
+    c.cover_blob_sha256 AS custom_cover_blob_sha256,
+    COALESCE(c.cover_blob_sha256, (
       SELECT ma.blob_sha256
       FROM work_media_assets wma
       JOIN media_assets ma ON ma.id = wma.media_asset_id
@@ -415,7 +455,7 @@ const CATALOG_SUMMARY_SELECT = `
         AND ma.kind = 'preview'
       ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
       LIMIT 1
-    ) AS cover_blob_sha256,
+    )) AS cover_blob_sha256,
     c.created_at,
     c.updated_at
   FROM catalogs c

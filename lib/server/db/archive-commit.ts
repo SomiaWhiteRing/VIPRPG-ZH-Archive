@@ -2,6 +2,7 @@ import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
+  ArchiveSourceManifest,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
@@ -14,16 +15,22 @@ import {
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { normalizeSha256, sha256Hex } from "@/lib/server/crypto/sha256";
 import { chunkArray } from "@/lib/server/db/chunks";
+import {
+  parseCharacterSelection,
+  prepareWorkCharacterStatements,
+} from "@/lib/server/db/characters";
 import { getD1 } from "@/lib/server/db/d1";
 import type { ImportJobRow } from "@/lib/server/db/import-jobs";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { putManifest } from "@/lib/server/storage/archive-bucket";
 import {
+  validateCorePackMetadata,
   validateCorePackReferences,
   type CorePackMetadata,
 } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
+import { validateCharacterPortraitHashes } from "@/lib/server/storage/character-portraits";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
@@ -114,6 +121,15 @@ export async function commitArchiveImport(
     );
   }
 
+  const sourceManifest = sourceManifestFromArchive(manifest);
+  const sourceManifestSha256 = await archiveSourceManifestSha256(sourceManifest);
+  if (
+    !job.source_manifest_sha256 ||
+    job.source_manifest_sha256 !== sourceManifestSha256
+  ) {
+    throw new HttpError(409, "游戏文件尚未完成服务端校验，请重新上传");
+  }
+
   const blobHashes = unique(
     manifest.files
       .filter((file) => file.storage.kind === "blob")
@@ -144,7 +160,14 @@ export async function commitArchiveImport(
   }
 
   validateBlobReferences(manifest, objectLedger.blobs);
-  await validateCorePackReferences(manifest, objectLedger.corePacks);
+  await validateCharacterPortraitHashes(
+    (metadata.characters ?? []).flatMap((credit) =>
+      credit.selection.portraitBlobSha256
+        ? [credit.selection.portraitBlobSha256]
+        : [],
+    ),
+  );
+  validateCorePackMetadata(manifest, objectLedger.corePacks);
   const workId = await resolveTargetWork(
     metadata,
     input.user,
@@ -241,8 +264,87 @@ export async function commitArchiveImport(
   };
 }
 
-function validateBlobReferences(
+export async function verifyArchiveSourceManifest(
+  manifest: ArchiveSourceManifest,
+): Promise<string> {
+  validateArchiveSourceManifest(manifest);
+  const blobHashes = unique(
+    manifest.files.flatMap((file) =>
+      file.storage.kind === "blob"
+        ? [normalizeSha256(file.storage.blobSha256)]
+        : [],
+    ),
+  );
+  const corePackHashes = manifest.corePacks.map((corePack) =>
+    normalizeSha256(corePack.sha256),
+  );
+  const objectLedger = await loadArchiveObjectLedger(blobHashes, corePackHashes);
+  const missingBlobs = blobHashes.filter(
+    (sha256) => !objectLedger.blobs.has(sha256),
+  );
+  const missingCorePacks = corePackHashes.filter(
+    (sha256) => !objectLedger.corePacks.has(sha256),
+  );
+  if (missingBlobs.length > 0 || missingCorePacks.length > 0) {
+    throw new HttpError(
+      409,
+      `文件上传尚未完成：缺少 ${missingBlobs.length} 个文件对象和 ${missingCorePacks.length} 个公共文件包`,
+    );
+  }
+
+  validateBlobReferences(manifest, objectLedger.blobs);
+  await validateCorePackReferences(manifest, objectLedger.corePacks);
+  return archiveSourceManifestSha256(manifest);
+}
+
+function sourceManifestFromArchive(
   manifest: ArchiveManifest,
+): ArchiveSourceManifest {
+  return {
+    schema: manifest.schema,
+    archiveVersion: {
+      filePolicyVersion: manifest.archiveVersion.filePolicyVersion,
+      packerVersion: manifest.archiveVersion.packerVersion,
+      sourceType: manifest.archiveVersion.sourceType,
+      sourceFileCount: manifest.archiveVersion.sourceFileCount,
+      sourceSize: manifest.archiveVersion.sourceSize,
+      includedFileCount: manifest.archiveVersion.includedFileCount,
+      includedSize: manifest.archiveVersion.includedSize,
+      excludedFileCount: manifest.archiveVersion.excludedFileCount,
+      excludedSize: manifest.archiveVersion.excludedSize,
+    },
+    corePacks: manifest.corePacks,
+    files: manifest.files,
+  };
+}
+
+async function archiveSourceManifestSha256(
+  manifest: ArchiveSourceManifest,
+): Promise<string> {
+  return sha256Hex(
+    new TextEncoder().encode(stableJson(manifest)).buffer,
+  );
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) throw new Error("Source manifest is not JSON-safe");
+    return encoded;
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  const entries = Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`);
+  return `{${entries.join(",")}}`;
+}
+
+function validateBlobReferences(
+  manifest: Pick<ArchiveManifest, "files">,
   blobs: ReadonlyMap<string, BlobMetadata>,
 ): void {
   const expected = new Map<string, number>();
@@ -333,17 +435,7 @@ function validateManifest(
   manifest: ArchiveManifest,
   metadata: ArchiveCommitMetadata,
 ): void {
-  if (manifest.schema !== "viprpg-archive.manifest.v1") {
-    throw new Error("Unsupported manifest schema");
-  }
-
-  if (manifest.archiveVersion.filePolicyVersion !== FILE_POLICY_VERSION) {
-    throw new Error("Unsupported file policy version");
-  }
-
-  if (manifest.archiveVersion.packerVersion !== PACKER_VERSION) {
-    throw new Error("Unsupported packer version");
-  }
+  validateArchiveSourceManifest(sourceManifestFromArchive(manifest));
 
   if (manifest.game.originalTitle !== metadata.game.originalTitle) {
     throw new Error("Manifest game original title does not match metadata");
@@ -386,7 +478,18 @@ function validateManifest(
   if (!isSupportedLanguage(metadata.game.language)) {
     throw new Error("Unsupported game language");
   }
+}
 
+function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
+  if (manifest.schema !== "viprpg-archive.manifest.v1") {
+    throw new Error("Unsupported manifest schema");
+  }
+  if (manifest.archiveVersion.filePolicyVersion !== FILE_POLICY_VERSION) {
+    throw new Error("Unsupported file policy version");
+  }
+  if (manifest.archiveVersion.packerVersion !== PACKER_VERSION) {
+    throw new Error("Unsupported packer version");
+  }
   if (manifest.corePacks.length !== 1) {
     throw new Error("Exactly one core pack is required");
   }
@@ -432,23 +535,18 @@ function validateManifest(
   }
 
   const paths = new Set<string>();
-
   for (const file of manifest.files) {
     validateManifestPath(file.path);
     assertCanonicalSha256(file.sha256, `file hash: ${file.path}`);
     validateCrc32(file.crc32, file.path);
-
     if (paths.has(file.path)) {
       throw new Error(`Duplicate file path: ${file.path}`);
     }
-
     paths.add(file.path);
 
     if (file.storage.kind === "blob") {
-      const fileSha256 = file.sha256;
       assertCanonicalSha256(file.storage.blobSha256, `blob hash: ${file.path}`);
-      const blobSha256 = file.storage.blobSha256;
-      if (fileSha256 !== blobSha256) {
+      if (file.sha256 !== file.storage.blobSha256) {
         throw new Error(
           `Manifest blob hash does not match file hash: ${file.path}`,
         );
@@ -457,7 +555,6 @@ function validateManifest(
       if (file.storage.packId !== "core-main") {
         throw new Error("Unsupported core pack id");
       }
-
       validateManifestPath(file.storage.entry);
     }
   }
@@ -493,44 +590,21 @@ function sumManifestFileSizes(files: ArchiveManifest["files"]): number {
   return total;
 }
 
-function parseManifestJson(manifestJson: string): ArchiveManifest {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(manifestJson);
-  } catch {
-    throw new HttpError(400, "Manifest JSON is invalid");
-  }
-
+export function parseArchiveSourceManifest(value: unknown): ArchiveSourceManifest {
   if (
-    !isRecord(parsed) ||
-    !isRecord(parsed.game) ||
-    !isRecord(parsed.archiveVersion)
+    !isRecord(value) ||
+    !isRecord(value.archiveVersion) ||
+    !Array.isArray(value.corePacks) ||
+    !Array.isArray(value.files)
   ) {
-    throw new HttpError(400, "Manifest structure is invalid");
+    throw new HttpError(400, "Source manifest structure is invalid");
   }
-  if (!Array.isArray(parsed.corePacks) || !Array.isArray(parsed.files)) {
-    throw new HttpError(400, "Manifest object lists are invalid");
-  }
-
-  if (parsed.schema !== "viprpg-archive.manifest.v1") {
-    throw new HttpError(400, "Manifest schema is invalid");
+  if (value.schema !== "viprpg-archive.manifest.v1") {
+    throw new HttpError(400, "Source manifest schema is invalid");
   }
 
-  const game = parsed.game;
+  const archiveVersion = value.archiveVersion;
   if (
-    typeof game.originalTitle !== "string" ||
-    (game.chineseTitle !== null && typeof game.chineseTitle !== "string") ||
-    typeof game.language !== "string" ||
-    typeof game.isOriginal !== "boolean" ||
-    typeof game.isTranslation !== "boolean"
-  ) {
-    throw new HttpError(400, "Manifest game fields are invalid");
-  }
-  const archiveVersion = parsed.archiveVersion;
-  if (
-    !isNullableString(archiveVersion.sourceName) ||
-    !isNullableString(archiveVersion.sourceUrl) ||
-    typeof archiveVersion.createdAt !== "string" ||
     typeof archiveVersion.filePolicyVersion !== "string" ||
     typeof archiveVersion.packerVersion !== "string" ||
     !["browser_folder", "browser_zip", "preindexed_manifest"].includes(
@@ -543,9 +617,9 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
     !isNonNegativeInteger(archiveVersion.excludedFileCount) ||
     !isNonNegativeInteger(archiveVersion.excludedSize)
   ) {
-    throw new HttpError(400, "Manifest archive fields are invalid");
+    throw new HttpError(400, "Source manifest archive fields are invalid");
   }
-  for (const corePack of parsed.corePacks) {
+  for (const corePack of value.corePacks) {
     if (
       !isRecord(corePack) ||
       typeof corePack.id !== "string" ||
@@ -556,10 +630,10 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
       corePack.format !== "zip" ||
       corePack.compression !== "deflate-low"
     ) {
-      throw new HttpError(400, "Manifest core pack fields are invalid");
+      throw new HttpError(400, "Source manifest core pack fields are invalid");
     }
   }
-  for (const file of parsed.files) {
+  for (const file of value.files) {
     if (
       !isRecord(file) ||
       typeof file.path !== "string" ||
@@ -576,20 +650,55 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
         !isNullableString(file.pathBytesB64)) ||
       !isRecord(file.storage)
     ) {
-      throw new HttpError(400, "Manifest file fields are invalid");
+      throw new HttpError(400, "Source manifest file fields are invalid");
     }
     if (file.storage.kind === "blob") {
       if (typeof file.storage.blobSha256 !== "string")
-        throw new HttpError(400, "Manifest blob reference is invalid");
+        throw new HttpError(400, "Source manifest blob reference is invalid");
     } else if (file.storage.kind === "core_pack") {
       if (
         typeof file.storage.packId !== "string" ||
         typeof file.storage.entry !== "string"
       )
-        throw new HttpError(400, "Manifest core pack reference is invalid");
+        throw new HttpError(400, "Source manifest core pack reference is invalid");
     } else {
-      throw new HttpError(400, "Manifest storage kind is invalid");
+      throw new HttpError(400, "Source manifest storage kind is invalid");
     }
+  }
+
+  return value as unknown as ArchiveSourceManifest;
+}
+
+function parseManifestJson(manifestJson: string): ArchiveManifest {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(manifestJson);
+  } catch {
+    throw new HttpError(400, "Manifest JSON is invalid");
+  }
+
+  parseArchiveSourceManifest(parsed);
+  if (!isRecord(parsed) || !isRecord(parsed.game)) {
+    throw new HttpError(400, "Manifest structure is invalid");
+  }
+  const game = parsed.game;
+  if (
+    typeof game.originalTitle !== "string" ||
+    (game.chineseTitle !== null && typeof game.chineseTitle !== "string") ||
+    typeof game.language !== "string" ||
+    typeof game.isOriginal !== "boolean" ||
+    typeof game.isTranslation !== "boolean"
+  ) {
+    throw new HttpError(400, "Manifest game fields are invalid");
+  }
+  const fullArchiveVersion = parsed.archiveVersion;
+  if (
+    !isRecord(fullArchiveVersion) ||
+    !isNullableString(fullArchiveVersion.sourceName) ||
+    !isNullableString(fullArchiveVersion.sourceUrl) ||
+    typeof fullArchiveVersion.createdAt !== "string"
+  ) {
+    throw new HttpError(400, "Manifest archive fields are invalid");
   }
 
   return parsed as ArchiveManifest;
@@ -747,8 +856,6 @@ function normalizeMetadata(
     .map((character, index) => {
       if (
         !isRecord(character) ||
-        typeof character.name !== "string" ||
-        !isNullableString(character.originalName) ||
         !isEnum(character.roleKey, [
           "main",
           "supporting",
@@ -767,15 +874,13 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata character is invalid");
       }
       return {
-        name: normalizeEntityName(character.name),
-        originalName: character.originalName?.trim() || null,
+        selection: parseCharacterSelection(character.selection),
         roleKey: character.roleKey,
         spoilerLevel: character.spoilerLevel,
         sortOrder: character.sortOrder ?? index + 1,
         notes: character.notes?.trim() || null,
       };
-    })
-    .filter((character) => character.name);
+    });
 
   const creators = metadata.creators
     .map((creator) => {
@@ -919,7 +1024,14 @@ function normalizeNullableWorkText(value: string | null): string | null {
 
 function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
   return unique(
-    metadata.game.browsingImageBlobSha256s,
+    [
+      ...metadata.game.browsingImageBlobSha256s,
+      ...(metadata.characters ?? []).flatMap((credit) =>
+        credit.selection.portraitBlobSha256
+          ? [credit.selection.portraitBlobSha256]
+          : [],
+      ),
+    ],
   );
 }
 
@@ -1207,40 +1319,15 @@ async function finalizeArchiveCommit(input: {
     );
   }
 
-  for (const character of characters) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO characters (
-             primary_name, original_name, extra_json
-           ) VALUES (?, ?, '{}')`,
-        )
-        .bind(character.name, character.originalName),
-    );
-  }
   statements.push(
-    database
-      .prepare(`DELETE FROM work_characters WHERE work_id = ?`)
-      .bind(input.workId),
+    ...(await prepareWorkCharacterStatements({
+      database,
+      workId: input.workId,
+      credits: characters,
+      source: "user",
+      requirePortrait: true,
+    })),
   );
-  for (const character of characters) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR REPLACE INTO work_characters (
-             work_id, character_id, role_key, spoiler_level, sort_order, notes
-           ) SELECT ?, id, ?, ?, ?, ? FROM characters WHERE primary_name = ? COLLATE NOCASE`,
-        )
-        .bind(
-          input.workId,
-          character.roleKey,
-          character.spoilerLevel,
-          character.sortOrder,
-          character.notes,
-          character.name,
-        ),
-    );
-  }
 
   for (const tag of input.metadata.tags) {
     statements.push(

@@ -26,9 +26,58 @@ export type CorePackMetadata = {
  * the largest core file rather than materialising the whole archive.
  */
 export async function validateCorePackReferences(
-  manifest: ArchiveManifest,
+  manifest: Pick<ArchiveManifest, "files" | "corePacks">,
   metadataBySha256: ReadonlyMap<string, CorePackMetadata>,
 ): Promise<void> {
+  const expectedByPack = validateCorePackMetadataAndEntries(
+    manifest,
+    metadataBySha256,
+  );
+
+  for (const pack of manifest.corePacks) {
+    const corePackSha256 = normalizeSha256(pack.sha256);
+    const expected = expectedByPack.get(pack.id)!;
+    const object = await getCorePack(corePackSha256);
+    if (!object) {
+      throw new HttpError(409, `Core-pack object is missing: ${pack.sha256}`);
+    }
+    if (typeof object.size === "number" && object.size !== pack.size) {
+      throw new HttpError(
+        409,
+        `Core-pack object size does not match manifest: ${pack.id}`,
+      );
+    }
+
+    try {
+      if (object.body) {
+        await verifyZipStream(object.body, expected);
+      } else {
+        await verifyZipBytes(
+          new Uint8Array(await object.arrayBuffer()),
+          expected,
+        );
+      }
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(
+        400,
+        `Core-pack ZIP is invalid: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
+  }
+}
+
+export function validateCorePackMetadata(
+  manifest: Pick<ArchiveManifest, "files" | "corePacks">,
+  metadataBySha256: ReadonlyMap<string, CorePackMetadata>,
+): void {
+  validateCorePackMetadataAndEntries(manifest, metadataBySha256);
+}
+
+function validateCorePackMetadataAndEntries(
+  manifest: Pick<ArchiveManifest, "files" | "corePacks">,
+  metadataBySha256: ReadonlyMap<string, CorePackMetadata>,
+): Map<string, Map<string, ExpectedEntry>> {
   const expectedByPack = new Map<string, Map<string, ExpectedEntry>>();
 
   for (const file of manifest.files) {
@@ -54,6 +103,7 @@ export async function validateCorePackReferences(
     const corePackSha256 = normalizeSha256(pack.sha256);
     const expected =
       expectedByPack.get(pack.id) ?? new Map<string, ExpectedEntry>();
+    expectedByPack.set(pack.id, expected);
     if (expected.size !== pack.fileCount) {
       throw new HttpError(
         400,
@@ -86,35 +136,9 @@ export async function validateCorePackReferences(
         `Core-pack metadata does not match manifest: ${pack.id}`,
       );
     }
-
-    const object = await getCorePack(corePackSha256);
-    if (!object) {
-      throw new HttpError(409, `Core-pack object is missing: ${pack.sha256}`);
-    }
-    if (typeof object.size === "number" && object.size !== pack.size) {
-      throw new HttpError(
-        409,
-        `Core-pack object size does not match manifest: ${pack.id}`,
-      );
-    }
-
-    try {
-      if (object.body) {
-        await verifyZipStream(object.body, expected);
-      } else {
-        await verifyZipBytes(
-          new Uint8Array(await object.arrayBuffer()),
-          expected,
-        );
-      }
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      throw new HttpError(
-        400,
-        `Core-pack ZIP is invalid: ${error instanceof Error ? error.message : "unknown error"}`,
-      );
-    }
   }
+
+  return expectedByPack;
 }
 
 async function verifyZipStream(

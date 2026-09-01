@@ -10,8 +10,10 @@ type WorkLookupRow = {
   chinese_title: string | null;
   alias_titles: string | null;
   description: string | null;
+  original_release_date: string | null;
   engine_family: string;
   language: string;
+  preview_blob_sha256: string | null;
   is_original: number;
   is_translation: number;
   can_edit: number;
@@ -46,8 +48,17 @@ export async function GET(request: Request) {
               AND wt2.title_type = 'alias'
           ) AS alias_titles,
           w.description,
+          w.original_release_date,
           w.engine_family,
           w.language,
+          (
+            SELECT ma.blob_sha256
+            FROM work_media_assets wma
+            JOIN media_assets ma ON ma.id = wma.media_asset_id
+            WHERE wma.work_id = w.id AND ma.kind = 'preview'
+            ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+            LIMIT 1
+          ) AS preview_blob_sha256,
           w.is_original,
           w.is_translation,
           CASE
@@ -111,8 +122,10 @@ export async function GET(request: Request) {
         chineseTitle: work.chinese_title,
         aliases: splitAliases(work.alias_titles),
         description: work.description,
+        originalReleaseDate: work.original_release_date,
         engineFamily: work.engine_family,
         language: work.language,
+        previewBlobSha256: work.preview_blob_sha256,
         isOriginal: work.is_original === 1,
         isTranslation: work.is_translation === 1,
         canEdit: work.can_edit === 1,

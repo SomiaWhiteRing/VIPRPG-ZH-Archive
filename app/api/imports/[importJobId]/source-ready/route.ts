@@ -5,11 +5,11 @@ import {
   parseImportJobId,
   requiredOwnedImportJob,
 } from "@/lib/server/db/import-jobs";
-import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import {
-  findMissingImportObjectReferences,
-  parseImportObjectReferences,
-} from "@/lib/server/storage/import-object-references";
+  parseArchiveSourceManifest,
+  verifyArchiveSourceManifest,
+} from "@/lib/server/db/archive-commit";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -27,15 +27,9 @@ export async function POST(
     id = parseImportJobId(importJobId);
     await requiredOwnedImportJob(id, auth.user);
     authorized = true;
-    const body = await readBody(request);
-    const missing = await findMissingImportObjectReferences(body);
-    if (missing.blobs.length || missing.corePacks.length) {
-      throw new HttpError(
-        409,
-        `文件上传尚未完成：缺少 ${missing.blobs.length} 个文件对象和 ${missing.corePacks.length} 个公共文件包`,
-      );
-    }
-    await markImportJobSourceReady(id);
+    const sourceManifest = await readBody(request);
+    const sourceManifestSha256 = await verifyArchiveSourceManifest(sourceManifest);
+    await markImportJobSourceReady(id, sourceManifestSha256);
     return json({ ok: true, importJobId: id, status: "awaiting_metadata" });
   } catch (error) {
     if (id !== null && authorized) {
@@ -56,8 +50,5 @@ async function readBody(request: Request) {
   } catch {
     throw new HttpError(400, "请求内容不是有效 JSON");
   }
-  return parseImportObjectReferences(value, {
-    invalidList: "文件清单格式不合法",
-    invalidHash: "文件哈希格式不合法",
-  });
+  return parseArchiveSourceManifest(value);
 }
