@@ -3,7 +3,11 @@ import {
   isExternalEngineFamily,
   isLanguageCode,
 } from "@/lib/labels";
-import type { CharacterSelection } from "@/lib/character-names";
+import type {
+  CharacterCreditSelection,
+  CharacterPortrait,
+  CharacterPortraitChoice,
+} from "@/lib/character-names";
 import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
@@ -11,10 +15,16 @@ import {
 } from "@/lib/original-release-date";
 import { getD1 } from "@/lib/server/db/d1";
 import {
-  parseCharacterSelection,
+  parseCharacterCreditSelection,
   parseCharacterSelectionsJson,
   prepareWorkCharacterStatements,
 } from "@/lib/server/db/characters";
+import {
+  CHARACTER_PORTRAIT_COLUMNS,
+  mapCharacterPortrait,
+  WORK_CHARACTER_PORTRAIT_JOINS,
+  type CharacterPortraitRow,
+} from "@/lib/server/db/character-portrait-library";
 import { chunkArray } from "@/lib/server/db/chunks";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
 import { ensureCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
@@ -35,7 +45,8 @@ export type GameCharacter = {
   primaryName: string;
   originalName: string;
   displayName: string;
-  portraitBlobSha256: string | null;
+  portrait: CharacterPortrait | null;
+  portraitChoice: CharacterPortraitChoice | null;
   roleKey: string;
   spoilerLevel: number;
   sortOrder: number | null;
@@ -143,7 +154,7 @@ export type AdminWorkEdit = {
   aliases: string[];
   creators: GameCreatorCredit[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   characterCredits: GameCharacter[];
   media: GameMediaAsset[];
   outgoingRelations: GameWorkRelation[];
@@ -260,7 +271,7 @@ type WorkEditInput = {
   status: string;
   aliases: string[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   previewBlobSha256s: string[];
   outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
@@ -278,7 +289,7 @@ export type ExternalWorkInput = {
   language: string;
   aliases: string[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   creatorName: string | null;
   translatorName: string | null;
   previewBlobSha256s: string[];
@@ -343,7 +354,7 @@ export type UploaderWorkUpdateInput = {
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   authors: string[];
   translators: string[];
   previewBlobSha256s: string[];
@@ -623,7 +634,7 @@ export async function updateOwnedWork(
 
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
-  const characters = input.characters.map(parseCharacterSelection);
+  const characters = input.characters.map(parseCharacterCreditSelection);
   const authors = uniqueText(input.authors.map(normalizeCreatorName));
   const translators = input.isTranslation
     ? uniqueText(input.translators.map(normalizeCreatorName))
@@ -658,12 +669,12 @@ export async function updateOwnedWork(
   const existingCharacters = new Map(
     before.characterCredits.map((character) => [character.id, character]),
   );
-  const characterCredits = characters.map((selection, index) => {
-    const existing = selection.kind === "existing"
-      ? existingCharacters.get(selection.characterId)
+  const characterCredits = characters.map((credit, index) => {
+    const existing = credit.selection.kind === "existing"
+      ? existingCharacters.get(credit.selection.characterId)
       : undefined;
     return {
-      selection,
+      ...credit,
       roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
@@ -761,6 +772,7 @@ export async function updateOwnedWork(
       workId: input.workId,
       credits: characterCredits,
       source: "user",
+      actorUserId: input.user.id,
     })),
   );
   for (const author of authorCredits) {
@@ -854,18 +866,18 @@ export async function updateWorkForAdmin(
   await validatePreviewHashes(previewHashes);
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
-  const characters = input.characters.map(parseCharacterSelection);
+  const characters = input.characters.map(parseCharacterCreditSelection);
   const current = await getWorkForAdminEdit(input.workId);
   if (!current) throw new HttpError(404, "作品不存在");
   const existingCharacters = new Map(
     current.characterCredits.map((character) => [character.id, character]),
   );
-  const characterCredits = characters.map((selection, index) => {
-    const existing = selection.kind === "existing"
-      ? existingCharacters.get(selection.characterId)
+  const characterCredits = characters.map((credit, index) => {
+    const existing = credit.selection.kind === "existing"
+      ? existingCharacters.get(credit.selection.characterId)
       : undefined;
     return {
-      selection,
+      ...credit,
       roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
@@ -938,6 +950,7 @@ export async function updateWorkForAdmin(
       workId: input.workId,
       credits: characterCredits,
       source: "admin",
+      actorUserId: actor.id,
     })),
   );
   for (const [index, hash] of previewHashes.entries()) {
@@ -996,7 +1009,7 @@ export async function createExternalWork(
 
   const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
   const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
-  const characters = input.characters.map(parseCharacterSelection);
+  const characters = input.characters.map(parseCharacterCreditSelection);
   const creatorName = input.creatorName ? normalizeCreatorName(input.creatorName) || null : null;
   const translatorName = input.isTranslation && input.translatorName
     ? normalizeCreatorName(input.translatorName) || null
@@ -1061,14 +1074,15 @@ export async function createExternalWork(
     ...(await prepareWorkCharacterStatements({
       database,
       workId: workId as number,
-      credits: characters.map((selection, index) => ({
-        selection,
+      credits: characters.map((credit, index) => ({
+        ...credit,
         roleKey: "supporting",
         spoilerLevel: 0,
         sortOrder: index + 1,
         notes: null,
       })),
       source: "user",
+      actorUserId: input.user.id,
       requirePortrait: true,
     })),
     ...tags.flatMap((name) => [
@@ -1441,8 +1455,13 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
         kind: "character",
         statement: database
           .prepare(
-            `SELECT wc.work_id,c.id,c.primary_name,c.original_name,c.portrait_blob_sha256,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+            `SELECT wc.work_id,c.id,c.primary_name,c.original_name,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes,
+                    ${CHARACTER_PORTRAIT_COLUMNS},override_sheet.blob_sha256 AS override_blob_sha256,
+                    override_ref.cell_row AS override_cell_row,override_ref.cell_column AS override_cell_column
              FROM work_characters wc JOIN characters c ON c.id=wc.character_id
+             ${WORK_CHARACTER_PORTRAIT_JOINS}
+             LEFT JOIN character_portrait_refs override_ref ON override_ref.id=wc.portrait_ref_id
+             LEFT JOIN face_sheets override_sheet ON override_sheet.id=override_ref.face_sheet_id
              WHERE wc.work_id IN (${placeholders})
              ORDER BY wc.work_id,wc.sort_order,c.primary_name`,
           )
@@ -1463,12 +1482,14 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
   }
   const results = await database.batch(queries.map((query) => query.statement));
   const tagRows: Array<GameTag & { work_id: number }> = [];
-  const characterRows: Array<{
+  const characterRows: Array<CharacterPortraitRow & {
     work_id: number;
     id: number;
     primary_name: string;
     original_name: string;
-    portrait_blob_sha256: string | null;
+    override_blob_sha256: string | null;
+    override_cell_row: number | null;
+    override_cell_column: number | null;
     display_name: string;
     role_key: string;
     spoiler_level: number;
@@ -1505,7 +1526,8 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
       primaryName: character.primary_name,
       originalName: character.original_name,
       displayName: character.display_name,
-      portraitBlobSha256: character.portrait_blob_sha256,
+      portrait: mapCharacterPortrait(character),
+      portraitChoice: portraitChoiceFromRow(character),
       roleKey: character.role_key,
       spoilerLevel: character.spoiler_level,
       sortOrder: character.sort_order,
@@ -1609,8 +1631,13 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT c.id,c.primary_name,c.original_name,c.portrait_blob_sha256,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes
+        `SELECT c.id,c.primary_name,c.original_name,wc.display_name,wc.role_key,wc.spoiler_level,wc.sort_order,wc.notes,
+                ${CHARACTER_PORTRAIT_COLUMNS},override_sheet.blob_sha256 AS override_blob_sha256,
+                override_ref.cell_row AS override_cell_row,override_ref.cell_column AS override_cell_column
          FROM work_characters wc JOIN characters c ON c.id=wc.character_id
+         ${WORK_CHARACTER_PORTRAIT_JOINS}
+         LEFT JOIN character_portrait_refs override_ref ON override_ref.id=wc.portrait_ref_id
+         LEFT JOIN face_sheets override_sheet ON override_sheet.id=override_ref.face_sheet_id
          WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
       )
       .bind(workId),
@@ -1663,11 +1690,13 @@ async function loadWorkCollections(
       )
       .bind(workId),
   ]);
-  const characters = batchRows<{
+  const characters = batchRows<CharacterPortraitRow & {
     id: number;
     primary_name: string;
     original_name: string;
-    portrait_blob_sha256: string | null;
+    override_blob_sha256: string | null;
+    override_cell_row: number | null;
+    override_cell_column: number | null;
     display_name: string;
     role_key: string;
     spoiler_level: number;
@@ -1678,7 +1707,8 @@ async function loadWorkCollections(
     primaryName: row.primary_name,
     originalName: row.original_name,
     displayName: row.display_name,
-    portraitBlobSha256: row.portrait_blob_sha256,
+    portrait: mapCharacterPortrait(row),
+    portraitChoice: portraitChoiceFromRow(row),
     roleKey: row.role_key,
     spoilerLevel: row.spoiler_level,
     sortOrder: row.sort_order,
@@ -1901,13 +1931,34 @@ function entityNameKey(value: string): string {
 
 function characterSelectionFromGameCharacter(
   character: GameCharacter,
-): CharacterSelection {
+): CharacterCreditSelection {
   return {
-    kind: "existing",
-    characterId: character.id,
-    originalName: character.originalName,
-    displayName: character.displayName,
-    portraitBlobSha256: character.portraitBlobSha256,
+    selection: {
+      kind: "existing",
+      characterId: character.id,
+      originalName: character.originalName,
+      displayName: character.displayName,
+    },
+    portrait: character.portraitChoice,
+  };
+}
+
+function portraitChoiceFromRow(row: {
+  override_blob_sha256: string | null;
+  override_cell_row: number | null;
+  override_cell_column: number | null;
+}): CharacterPortraitChoice | null {
+  if (
+    !row.override_blob_sha256 ||
+    row.override_cell_row === null ||
+    row.override_cell_column === null
+  ) {
+    return null;
+  }
+  return {
+    blobSha256: row.override_blob_sha256,
+    row: row.override_cell_row,
+    column: row.override_cell_column,
   };
 }
 

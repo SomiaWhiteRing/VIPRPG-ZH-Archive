@@ -30,6 +30,47 @@ export async function storeCharacterPortraits(files: File[]): Promise<string[]> 
   return storeWorkImages(files);
 }
 
+export async function registerUserPortraitFaceSheets(
+  hashes: string[],
+  userId: number,
+): Promise<void> {
+  const values = [...new Set(hashes.map(normalizeSha256))];
+  if (!values.length) return;
+  const database = getD1();
+  await database.batch(
+    values.map((hash) =>
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO face_sheets(
+             blob_sha256,width_px,height_px,source_kind,library_status,created_by_user_id
+           ) VALUES(?,48,48,'user_upload','pending',?)`,
+        )
+        .bind(hash, userId),
+    ),
+  );
+}
+
+export async function ensureCharacterPortraitFaceSheets(
+  values: string[],
+  userId: number,
+): Promise<string[]> {
+  const hashes = [...new Set(values.map(normalizeSha256))];
+  if (!hashes.length) return [];
+  const rows = await getD1()
+    .prepare(
+      `SELECT blob_sha256
+       FROM face_sheets
+       WHERE blob_sha256 IN (${hashes.map(() => "?").join(",")})`,
+    )
+    .bind(...hashes)
+    .all<{ blob_sha256: string }>();
+  const registered = new Set((rows.results ?? []).map((row) => row.blob_sha256));
+  const uploadedPortraits = hashes.filter((hash) => !registered.has(hash));
+  await validateCharacterPortraitHashes(uploadedPortraits);
+  await registerUserPortraitFaceSheets(uploadedPortraits, userId);
+  return hashes;
+}
+
 export async function validateCharacterPortraitHashes(values: string[]): Promise<string[]> {
   const hashes = [...new Set(values.map(normalizeSha256))];
   if (!hashes.length) return [];

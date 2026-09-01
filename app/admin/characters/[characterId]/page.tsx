@@ -1,6 +1,6 @@
 import { Input } from "@/app/components/ui/input";
 import { Button, buttonVariants } from "@/app/components/ui/button";
-import { CharacterPortrait } from "@/app/components/ui/character-portrait";
+import { PortraitLibraryEditor } from "./portrait-library-editor";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Textarea } from "@/app/components/ui/textarea";
 import Link from "next/link";
@@ -14,9 +14,11 @@ import { SelectField } from "@/app/components/ui/select";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit, listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
+import { getCharacterPortraitLibraryForAdmin } from "@/lib/server/db/character-portrait-library";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
+const CHARACTER_EDIT_FORM_ID = "character-edit-form";
 
 type AdminCharacterEditPageProps = {
   params: Promise<{
@@ -28,10 +30,11 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
   const { characterId: rawCharacterId } = await params;
   const characterId = parseId(rawCharacterId);
   const adminUser = await requirePagePermission(`/admin/characters/${characterId}`, "character.update");
-  const [character, unreadInboxCount, candidates] = await Promise.all([
+  const [character, unreadInboxCount, candidates, portraitLibrary] = await Promise.all([
     getCharacterForAdminEdit(characterId),
     countUnreadInboxItemsForUser(adminUser),
-    listCharactersForAdmin(),
+    listCharactersForAdmin(2000),
+    getCharacterPortraitLibraryForAdmin(characterId),
   ]);
 
   if (!character) {
@@ -61,14 +64,33 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
 
       <ConfirmingForm
         action={`/api/admin/characters/${character.id}/update`}
-        className="grid gap-4 grid gap-4"
+        className="grid gap-4"
         confirmField="merge_target_id"
-        encType="multipart/form-data"
+        id={CHARACTER_EDIT_FORM_ID}
         method="post"
         title="确认合并并删除角色"
         description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
       >
         <input name="character_id" type="hidden" value={character.id} />
+        <div id="portrait-workbench">
+          <Pane compact heading="脸图工作台">
+            <PortraitLibraryEditor
+              allSheets={portraitLibrary.sheets}
+              characterId={character.id}
+              characterName={character.primaryName}
+              characterOriginalName={character.originalName}
+              defaultPortrait={portraitLibrary.defaultPortrait}
+              formId={CHARACTER_EDIT_FORM_ID}
+              initialBoundSheetIds={portraitLibrary.boundSheetIds}
+              reviewCharacters={candidates.map((candidate) => ({
+                id: candidate.id,
+                originalName: candidate.originalName,
+                primaryName: candidate.primaryName,
+              }))}
+            />
+          </Pane>
+        </div>
+
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="名称">
@@ -80,21 +102,19 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
             <FormField label="简介" wide>
               <Textarea defaultValue={character.description ?? ""} name="description" rows={6} />
             </FormField>
-            <FormField
-              hint="只接受精确 48×48、最多 256 KiB 的 PNG；不选择文件会保留当前头像。"
-              label="头像"
-              wide
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <CharacterPortrait
-                  className="size-20 text-xl"
-                  displayName={character.primaryName}
-                  portraitBlobSha256={character.portraitBlobSha256}
-                  size={80}
-                  toneKey={character.id}
-                />
-                <Input accept="image/png" name="portrait" type="file" />
-              </div>
+            <FormField hint="每行一个；可添加、修改或删除。" label="日文别名">
+              <Textarea
+                defaultValue={character.aliases.filter((alias) => alias.language === "ja").map((alias) => alias.name).join("\n")}
+                name="japanese_aliases"
+                rows={5}
+              />
+            </FormField>
+            <FormField hint="每行一个；角色名称本身不必重复填写。" label="中文别名">
+              <Textarea
+                defaultValue={character.aliases.filter((alias) => alias.language === "zh").map((alias) => alias.name).join("\n")}
+                name="chinese_aliases"
+                rows={5}
+              />
             </FormField>
           </div>
         </Pane>

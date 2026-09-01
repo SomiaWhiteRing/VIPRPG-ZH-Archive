@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createHash, webcrypto } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { runWrangler } from "./run-wrangler.mjs";
+import { seedCharacterFaceAssets } from "./seed-character-face-assets.mjs";
 
 const databaseName = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
 const bucketName = process.env.LOCAL_R2_BUCKET || "viprpg-archive-prod";
@@ -13,8 +14,14 @@ const NOW = "2026-07-01 12:00:00";
 const characterDictionary = JSON.parse(
   readFileSync(new URL("../data/character-dictionary.json", import.meta.url), "utf8"),
 );
+const characterFaceLibrary = JSON.parse(
+  readFileSync(new URL("../data/character-face-sheets/manifest.json", import.meta.url), "utf8"),
+);
 if (characterDictionary.schema !== "viprpg-character-dictionary.v1") {
   throw new Error("角色词典格式不受支持");
+}
+if (characterFaceLibrary.schema !== "viprpg-character-face-library.v1") {
+  throw new Error("角色脸图清单格式不受支持");
 }
 if (process.argv.includes("--reset")) await import("./local-d1-reset.mjs");
 mkdirSync(tmpDir, { recursive: true });
@@ -80,13 +87,22 @@ for (const [id, role] of [
 }
 insert(
   "blobs",
-  images.map((item) => ({
-    sha256: item.sha256,
-    size_bytes: item.sizeBytes,
-    content_type_hint: "image/png",
-    observed_ext: "png",
-    created_at: NOW,
-  })),
+  [...new Map([
+    ...images.map((item) => ({
+      sha256: item.sha256,
+      size_bytes: item.sizeBytes,
+      content_type_hint: "image/png",
+      observed_ext: "png",
+      created_at: NOW,
+    })),
+    ...characterFaceLibrary.sheets.map((sheet) => ({
+      sha256: sheet.sha256,
+      size_bytes: sheet.sizeBytes,
+      content_type_hint: sheet.contentType,
+      observed_ext: sheet.file.split(".").at(-1),
+      created_at: NOW,
+    })),
+  ].map((item) => [item.sha256, item])).values()],
 );
 insert(
   "media_assets",
@@ -267,6 +283,70 @@ insert(
 const characterIds = new Map(
   seededCharacters.map((character) => [character.original_name, character.id]),
 );
+const faceSheetIds = new Map(
+  characterFaceLibrary.sheets.map((sheet, index) => [sheet.sha256, index + 1]),
+);
+insert(
+  "face_sheets",
+  characterFaceLibrary.sheets.map((sheet, index) => {
+    const source = sheet.sources[0];
+    return {
+      id: index + 1,
+      blob_sha256: sheet.sha256,
+      width_px: sheet.width,
+      height_px: sheet.height,
+      source_kind: "atwiki",
+      source_page_url: source?.pageUrl ?? null,
+      source_image_url: source?.imageUrl ?? null,
+      source_page_title: source?.pageTitle ?? null,
+      source_section_title: source?.sectionTitle ?? null,
+      library_status: "approved",
+      created_by_user_id: 1,
+      created_at: NOW,
+      updated_at: NOW,
+    };
+  }),
+);
+let faceBindingSortOrder = 1;
+insert(
+  "character_face_sheet_bindings",
+  characterFaceLibrary.sheets.flatMap((sheet) =>
+    sheet.boundOriginalNames.map((originalName) => {
+      const characterId = characterIds.get(originalName);
+      if (!characterId) throw new Error(`脸图绑定引用了不存在的角色：${originalName}`);
+      return {
+        character_id: characterId,
+        face_sheet_id: faceSheetIds.get(sheet.sha256),
+        sort_order: faceBindingSortOrder++,
+      };
+    }),
+  ),
+);
+let portraitRefId = 1;
+const defaultPortraitRows = characterFaceLibrary.defaults.map((portrait) => {
+  const characterId = characterIds.get(portrait.originalName);
+  const faceSheetId = faceSheetIds.get(portrait.sha256);
+  if (!characterId || !faceSheetId) {
+    throw new Error(`默认头像引用不合法：${portrait.originalName}`);
+  }
+  return {
+    id: portraitRefId++,
+    character_id: characterId,
+    face_sheet_id: faceSheetId,
+    cell_row: portrait.row,
+    cell_column: portrait.column,
+    created_by_user_id: 1,
+    created_at: NOW,
+  };
+});
+insert("character_portrait_refs", defaultPortraitRows);
+insert(
+  "character_default_portraits",
+  defaultPortraitRows.map((portrait) => ({
+    character_id: portrait.character_id,
+    portrait_ref_id: portrait.id,
+  })),
+);
 insert("work_characters", [
   { work_id: 1, character_id: characterIds.get("モナー"), display_name: "莫纳", role_key: "main", sort_order: 1 },
   { work_id: 1, character_id: characterIds.get("アゼクラ"), display_name: "阿泽库拉", role_key: "supporting", sort_order: 2 },
@@ -405,6 +485,7 @@ await runWrangler([
   "--file",
   seedSqlPath,
 ]);
+await seedCharacterFaceAssets();
 for (const item of images) {
   const path = join(tmpDir, `dev-seed-${item.name}.png`);
   writeFileSync(path, item.png);

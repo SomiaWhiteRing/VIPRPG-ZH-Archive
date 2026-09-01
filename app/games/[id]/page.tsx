@@ -201,7 +201,7 @@ export default async function GameDetailPage({
                     <CharacterPortrait
                       className="w-full text-2xl transition-shadow duration-150 group-hover:shadow-[0_3px_10px_rgb(23_33_43/14%)]"
                       displayName={character.displayName}
-                      portraitBlobSha256={character.portraitBlobSha256}
+                      portrait={character.portrait}
                       size={116}
                       toneKey={index}
                     />

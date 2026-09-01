@@ -20,7 +20,7 @@ import { WorkbenchField } from "@/app/upload/workbench-field";
 import { updateTranslationPreference } from "@/app/upload/translation-preference";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import type {
-  CharacterSelection,
+  CharacterCreditSelection,
   CharacterSuggestion,
 } from "@/lib/character-names";
 import {
@@ -41,7 +41,7 @@ type EditableWork = {
   status: "published" | "hidden";
   aliases: string[];
   tags: string[];
-  characters: CharacterSelection[];
+  characters: CharacterCreditSelection[];
   authors: string[];
   translators: string[];
   distribution: "archive" | "external";

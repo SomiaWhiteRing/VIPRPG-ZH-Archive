@@ -1,6 +1,9 @@
 import type { ArchiveFileRole, ArchiveStorageKind } from "@/lib/archive/file-policy";
 
-import type { CharacterSelection } from "@/lib/character-names";
+import type {
+  CharacterPortraitChoice,
+  CharacterSelection,
+} from "@/lib/character-names";
 
 export type ArchiveManifest = {
   schema: "viprpg-archive.manifest.v1";
@@ -118,6 +121,7 @@ export type ArchiveCommitMetadata = {
   }>;
   characters?: Array<{
     selection: CharacterSelection;
+    portrait: CharacterPortraitChoice | null;
     roleKey: "main" | "supporting" | "cameo" | "mentioned" | "other";
     spoilerLevel: number;
     sortOrder: number | null;

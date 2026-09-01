@@ -1,4 +1,6 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
+import type { CharacterPortrait as CharacterPortraitValue } from "@/lib/character-names";
 import { cn } from "@/lib/ui/cn";
 
 const CHARACTER_TONES = [
@@ -11,21 +13,19 @@ const CHARACTER_TONES = [
 export function CharacterPortrait({
   className,
   displayName,
-  portraitBlobSha256,
+  portrait,
   previewSrc,
   size = 48,
   toneKey = displayName,
 }: {
   className?: string;
   displayName: string;
-  portraitBlobSha256?: string | null;
+  portrait?: CharacterPortraitValue | null;
   previewSrc?: string | null;
   size?: number;
   toneKey?: number | string;
 }) {
-  const imageSrc = previewSrc ??
-    (portraitBlobSha256 ? `/api/media/blobs/${portraitBlobSha256}` : null);
-  if (imageSrc) {
+  if (previewSrc) {
     return (
       <Image
         alt=""
@@ -35,10 +35,42 @@ export function CharacterPortrait({
           className,
         )}
         height={size}
-        src={imageSrc}
+        src={previewSrc}
         unoptimized
         width={size}
       />
+    );
+  }
+
+  if (portrait) {
+    const scale = size / 48;
+    const imageStyle: CSSProperties = {
+      height: portrait.height * scale,
+      left: -portrait.column * size,
+      maxWidth: "none",
+      top: -portrait.row * size,
+      width: portrait.width * scale,
+    };
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative block aspect-square shrink-0 overflow-hidden rounded-lg border border-foreground/15 [image-rendering:pixelated]",
+          className,
+        )}
+        style={{ height: size, width: size }}
+      >
+        <Image
+          alt=""
+          className="absolute select-none"
+          draggable={false}
+          height={portrait.height}
+          src={`/api/media/blobs/${portrait.blobSha256}`}
+          style={imageStyle}
+          unoptimized
+          width={portrait.width}
+        />
+      </span>
     );
   }
 

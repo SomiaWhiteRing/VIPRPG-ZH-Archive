@@ -17,6 +17,7 @@ type ConfirmingFormProps = {
   children: ReactNode;
   className?: string;
   encType?: "multipart/form-data";
+  id?: string;
   method?: "get" | "post";
   confirmField: string;
   title: string;
@@ -28,6 +29,7 @@ export function ConfirmingForm({
   children,
   className,
   encType,
+  id,
   method = "post",
   confirmField,
   title,
@@ -46,7 +48,7 @@ export function ConfirmingForm({
 
   return (
     <>
-      <form action={action} className={className} encType={encType} method={method} onSubmit={handleSubmit} ref={formRef}>
+      <form action={action} className={className} encType={encType} id={id} method={method} onSubmit={handleSubmit} ref={formRef}>
         {children}
       </form>
       <AlertDialog onOpenChange={setOpen} open={open}>
