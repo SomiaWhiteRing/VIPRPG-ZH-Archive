@@ -16,7 +16,11 @@ const outputPath = resolve(
 );
 const concurrency = Math.max(1, Math.min(24, Number(args.concurrency) || 12));
 const source = JSON.parse(readFileSync(sourcePath, "utf8"));
-if (source.schema !== "viprpg-atwiki-face-source.v1" || !Array.isArray(source.images)) {
+if (
+  source.schema !== "viprpg-atwiki-face-source.v2" ||
+  !Array.isArray(source.images) ||
+  source.images.some((image) => !Number.isSafeInteger(image.sourceOrder) || image.sourceOrder < 0)
+) {
   throw new Error("atwiki 脸图 URL 清单格式不合法");
 }
 mkdirSync(outputDirectory, { recursive: true });
@@ -56,7 +60,7 @@ const failures = results.filter((image) => image.downloadError);
 writeFileSync(
   outputPath,
   `${JSON.stringify({
-    schema: "viprpg-atwiki-face-source-downloaded.v1",
+    schema: "viprpg-atwiki-face-source-downloaded.v2",
     images: results,
   }, null, 2)}\n`,
 );
@@ -124,8 +128,11 @@ function inspectImage(bytes, image) {
       format = "bmp";
       width = Math.abs(bytes.readInt32LE(18));
       height = Math.abs(bytes.readInt32LE(22));
+    } else if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+      format = "jpg";
+      ({ width, height } = readJpegDimensions(bytes));
     } else {
-      throw new Error("响应不是支持的 PNG 或 BMP 图像");
+      throw new Error("响应不是支持的 PNG、BMP 或 JPEG 图像");
     }
   } else {
     format = "png";
@@ -142,9 +149,33 @@ function inspectImage(bytes, image) {
     width % 48 !== 0 ||
     height % 48 !== 0
   ) {
-    throw new Error(`PNG 尺寸不合法：${width}×${height}`);
+    throw new Error(`图片尺寸不合法：${width}×${height}`);
   }
   return { extension: format, width, height };
+}
+
+function readJpegDimensions(bytes) {
+  let offset = 2;
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1];
+    if (marker === 0xd8 || marker === 0xd9) {
+      offset += 2;
+      continue;
+    }
+    const length = bytes.readUInt16BE(offset + 2);
+    if (marker >= 0xc0 && marker <= 0xc3) {
+      return {
+        height: bytes.readUInt16BE(offset + 5),
+        width: bytes.readUInt16BE(offset + 7),
+      };
+    }
+    offset += 2 + length;
+  }
+  throw new Error("JPEG 缺少尺寸信息");
 }
 
 function reportProgress() {
