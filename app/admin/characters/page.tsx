@@ -3,8 +3,11 @@ import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { AdminListControls, AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { AdminListControls, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
+import { hasPermission } from "@/lib/authz/permissions";
 import { searchCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 
@@ -13,7 +16,7 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
 
 export default async function AdminCharactersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await requirePagePermission("/admin/characters", "character.read_private");
+  const adminUser = await requirePagePermission("/admin/characters", "character.read_private");
   const params = await searchParams;
   const query = searchParam(params.q);
   const sort = allowed(searchParam(params.sort), ["default", "name", "works"], "default");
@@ -26,7 +29,12 @@ export default async function AdminCharactersPage({ searchParams }: { searchPara
         compact
         title="登场角色维护"
         subtitle="维护角色名称、说明和作品关联。"
-        actions={<Link className={buttonVariants({ variant: "outline" })} href="/characters">查看公开列表</Link>}
+        actions={(
+          <>
+            {hasPermission(adminUser, "character.update") ? <CharacterCreateButton /> : null}
+            <Link className={buttonVariants({ variant: "outline" })} href="/characters">查看公开列表</Link>
+          </>
+        )}
       />
       <AdminListControls action="/admin/characters" noun="角色" query={query} sort={sort} sortOptions={[{ value: "default", label: "最近更新" }, { value: "name", label: "名称" }, { value: "works", label: "登场作品数" }]} total={result.total} />
       {result.items.length > 0 ? <TableWrap compact label="角色列表" minWidth={900}>
@@ -54,7 +62,7 @@ export default async function AdminCharactersPage({ searchParams }: { searchPara
           ))}
         </tbody>
       </TableWrap> : <EmptyState title="没有找到匹配的角色。" />}
-      <AdminPagination basePath="/admin/characters" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, sort: sort === "default" ? undefined : sort }} />
+      <PaginationLinks basePath="/admin/characters" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, sort: sort === "default" ? undefined : sort }} />
     </main>
   );
 }

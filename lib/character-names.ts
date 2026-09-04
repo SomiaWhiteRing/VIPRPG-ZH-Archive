@@ -57,6 +57,7 @@ export type CharacterSelection =
 export type CharacterCreditSelection = {
   selection: CharacterSelection;
   portrait: CharacterPortraitChoice | null;
+  faceSheetBlobSha256s: string[];
 };
 
 export function characterNameKey(value: string): string {

@@ -91,7 +91,11 @@ export type GameWorkRelation = {
   relationType: string;
   workId: number;
   title: string;
-  relationOrder: number;
+  originalTitle: string;
+  chineseTitle: string | null;
+  originalReleaseDate: string | null;
+  engineFamily: string;
+  language: string;
   viceVersa: boolean;
   createdByUserId: number | null;
   previewBlobSha256?: string | null;
@@ -101,8 +105,11 @@ export type GameTranslationRelation = {
   role: "original" | "translation";
   workId: number;
   title: string;
+  originalTitle: string;
+  chineseTitle: string | null;
+  originalReleaseDate: string | null;
+  engineFamily: string;
   language: string;
-  relationOrder: number;
   createdByUserId: number | null;
   previewBlobSha256?: string | null;
 };
@@ -336,13 +343,20 @@ export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
   sourceUrl: string | null;
-  archiveVersionCount: number;
   hasCurrentArchive: boolean;
+  currentArchive: {
+    id: number;
+    sourceName: string;
+    sourceFileCount: number;
+    sourceSizeBytes: number;
+    publishedAt: string | null;
+  } | null;
 };
 
 export type UploaderWorkUpdateInput = {
   user: ArchiveUser;
   workId: number;
+  distribution: "archive" | "external";
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
@@ -576,18 +590,26 @@ export async function getOwnedWorkForEdit(
   const owned = await getD1()
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM archive_versions av WHERE av.work_id=w.id) AS archive_version_count,
-         EXISTS(
-           SELECT 1 FROM archive_versions av
-           WHERE av.work_id=w.id AND av.status='published' AND av.is_current=1
-         ) AS has_current_archive
+         av.id AS current_archive_id,
+         av.source_name AS current_archive_source_name,
+         av.source_file_count AS current_archive_source_file_count,
+         av.source_size_bytes AS current_archive_source_size_bytes,
+         av.published_at AS current_archive_published_at
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
+       LEFT JOIN archive_versions av
+         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
        WHERE wu.work_id=? AND wu.user_id=? AND w.status<>'deleted'
        LIMIT 1`,
     )
     .bind(workId, user.id)
-    .first<{ archive_version_count: number; has_current_archive: number }>();
+    .first<{
+      current_archive_id: number | null;
+      current_archive_source_name: string | null;
+      current_archive_source_file_count: number | null;
+      current_archive_source_size_bytes: number | null;
+      current_archive_published_at: string | null;
+    }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(workId);
   if (!work || work.status === "processing" || work.status === "deleted") return null;
@@ -595,8 +617,9 @@ export async function getOwnedWorkForEdit(
     (link) => link.linkType === "download_page",
   );
   const sourceLink = work.externalLinks.find((link) => link.linkType === "source");
+  const hasCurrentArchive = owned.current_archive_id !== null;
   const distribution = deriveWorkDistribution({
-    hasCurrentArchive: owned.has_current_archive === 1,
+    hasCurrentArchive,
     downloadLinkCount: downloadLink ? 1 : 0,
   });
   if (distribution === "invalid") return null;
@@ -605,8 +628,16 @@ export async function getOwnedWorkForEdit(
     distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
     sourceUrl: sourceLink?.url ?? null,
-    archiveVersionCount: owned.archive_version_count,
-    hasCurrentArchive: owned.has_current_archive === 1,
+    hasCurrentArchive,
+    currentArchive: hasCurrentArchive
+      ? {
+          id: owned.current_archive_id!,
+          sourceName: owned.current_archive_source_name || "本站归档",
+          sourceFileCount: owned.current_archive_source_file_count ?? 0,
+          sourceSizeBytes: owned.current_archive_source_size_bytes ?? 0,
+          publishedAt: owned.current_archive_published_at,
+        }
+      : null,
   };
 }
 
@@ -624,11 +655,14 @@ export async function updateOwnedWork(
   if (!(["published", "hidden"] as const).includes(input.status)) {
     throw new HttpError(400, "作品状态不合法");
   }
-  if (before.distribution === "archive" && !isArchiveEngineFamily(input.engineFamily)) {
+  if (input.distribution === "archive" && !isArchiveEngineFamily(input.engineFamily)) {
     throw new HttpError(400, "本站归档作品必须使用 RPG Maker 2000/2003 系引擎");
   }
-  if (before.distribution === "external" && !isExternalEngineFamily(input.engineFamily)) {
+  if (input.distribution === "external" && !isExternalEngineFamily(input.engineFamily)) {
     throw new HttpError(400, "外链作品必须使用非 RPG Maker 2000/2003 系引擎");
+  }
+  if (input.distribution === "archive" && !before.hasCurrentArchive) {
+    throw new HttpError(400, "请先选择游戏文件");
   }
   await assertTranslationLanguageChangeAllowed(input.workId, input.language);
 
@@ -647,32 +681,27 @@ export async function updateOwnedWork(
   );
   await validatePreviewHashes(previewHashes);
   if (previewHashes.length === 0) throw new HttpError(400, "作品必须保留至少一张封面图");
-  const downloadUrl = before.distribution === "external"
+  const downloadUrl = input.distribution === "external"
     ? normalizeHttpUrl(input.downloadUrl, "外部下载地址")
     : null;
-  if (before.distribution === "external" && !downloadUrl) {
+  if (input.distribution === "external" && !downloadUrl) {
     throw new HttpError(400, "外部下载地址不能为空");
   }
-  const sourceUrl = before.distribution === "external"
+  const sourceUrl = input.distribution === "external"
     ? normalizeHttpUrl(input.sourceUrl, "来源链接")
     : null;
 
   assertStableDistribution({
     status: input.status,
     engineFamily: input.engineFamily,
-    hasCurrentArchive: before.hasCurrentArchive,
-    archiveVersionCount: before.archiveVersionCount,
+    hasCurrentArchive: input.distribution === "archive",
     downloadLinkCount: downloadUrl ? 1 : 0,
   });
 
   const database = getD1();
-  const existingCharacters = new Map(
-    before.characterCredits.map((character) => [character.id, character]),
-  );
+  const existingCharacters = groupCharactersByIdentity(before.characterCredits);
   const characterCredits = characters.map((credit, index) => {
-    const existing = credit.selection.kind === "existing"
-      ? existingCharacters.get(credit.selection.characterId)
-      : undefined;
+    const existing = takeExistingCharacter(existingCharacters, credit);
     return {
       ...credit,
       roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
@@ -743,11 +772,14 @@ export async function updateOwnedWork(
     database
       .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'`)
       .bind(input.workId),
+    database
+      .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='source'`)
+      .bind(input.workId),
   ];
-  if (before.distribution === "external") {
+  if (input.distribution === "external") {
     statements.push(
       database
-        .prepare(`DELETE FROM work_external_links WHERE work_id=? AND link_type='source'`)
+        .prepare(`UPDATE archive_versions SET is_current=0 WHERE work_id=?`)
         .bind(input.workId),
     );
   }
@@ -856,7 +888,6 @@ export async function updateWorkForAdmin(
     status: input.status,
     engineFamily: input.engineFamily,
     hasCurrentArchive: distributionState.hasCurrentArchive,
-    archiveVersionCount: distributionState.archiveVersionCount,
     downloadLinkCount: externalLinks.filter(
       (link) => link.linkType === "download_page",
     ).length,
@@ -869,13 +900,9 @@ export async function updateWorkForAdmin(
   const characters = input.characters.map(parseCharacterCreditSelection);
   const current = await getWorkForAdminEdit(input.workId);
   if (!current) throw new HttpError(404, "作品不存在");
-  const existingCharacters = new Map(
-    current.characterCredits.map((character) => [character.id, character]),
-  );
+  const existingCharacters = groupCharactersByIdentity(current.characterCredits);
   const characterCredits = characters.map((credit, index) => {
-    const existing = credit.selection.kind === "existing"
-      ? existingCharacters.get(credit.selection.characterId)
-      : undefined;
+    const existing = takeExistingCharacter(existingCharacters, credit);
     return {
       ...credit,
       roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
@@ -1463,7 +1490,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
              LEFT JOIN character_portrait_refs override_ref ON override_ref.id=wc.portrait_ref_id
              LEFT JOIN face_sheets override_sheet ON override_sheet.id=override_ref.face_sheet_id
              WHERE wc.work_id IN (${placeholders})
-             ORDER BY wc.work_id,wc.sort_order,c.primary_name`,
+             ORDER BY wc.work_id,wc.sort_order,wc.id`,
           )
           .bind(...chunk),
       },
@@ -1638,7 +1665,7 @@ async function loadWorkCollections(
          ${WORK_CHARACTER_PORTRAIT_JOINS}
          LEFT JOIN character_portrait_refs override_ref ON override_ref.id=wc.portrait_ref_id
          LEFT JOIN face_sheets override_sheet ON override_sheet.id=override_ref.face_sheet_id
-         WHERE wc.work_id=? ORDER BY wc.sort_order,c.primary_name`,
+          WHERE wc.work_id=? ORDER BY wc.sort_order,wc.id`,
       )
       .bind(workId),
     database
@@ -1671,22 +1698,25 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT wr.id,wr.relation_type,wr.relation_order,wr.vice_versa,
-                wr.created_by_user_id,w.id AS work_id,
-                COALESCE(w.chinese_title,w.original_title) AS title,${RELATED_PREVIEW_SQL}
-         FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
-         WHERE wr.from_work_id=? AND ${targetStatus}
-         ORDER BY wr.relation_order,wr.id`,
+        `SELECT wr.id,wr.relation_type,wr.vice_versa,
+                 wr.created_by_user_id,w.id AS work_id,
+                 COALESCE(w.chinese_title,w.original_title) AS title,
+                 w.original_title,w.chinese_title,w.original_release_date,
+                 w.engine_family,w.language,${RELATED_PREVIEW_SQL}
+          FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
+          WHERE wr.from_work_id=? AND ${targetStatus}
+          ORDER BY wr.relation_type,title,w.id,wr.id`,
       )
       .bind(workId),
     database
       .prepare(
-        `SELECT tr.id,tr.target_role AS role,tr.relation_order,tr.created_by_user_id,
-                w.id AS work_id,COALESCE(w.chinese_title,w.original_title) AS title,
-                w.language,${RELATED_PREVIEW_SQL}
-         FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
-         WHERE tr.source_work_id=? AND ${targetStatus}
-         ORDER BY tr.relation_order,tr.id`,
+        `SELECT tr.id,tr.target_role AS role,tr.created_by_user_id,
+                 w.id AS work_id,COALESCE(w.chinese_title,w.original_title) AS title,
+                 w.original_title,w.chinese_title,w.original_release_date,
+                 w.engine_family,w.language,${RELATED_PREVIEW_SQL}
+          FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
+          WHERE tr.source_work_id=? AND ${targetStatus}
+          ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
       )
       .bind(workId),
   ]);
@@ -1776,30 +1806,41 @@ async function loadWorkCollections(
     relations: batchRows<{
       id: number;
       relation_type: string;
-      relation_order: number;
       vice_versa: number;
       created_by_user_id: number | null;
       work_id: number;
       title: string;
+      original_title: string;
+      chinese_title: string | null;
+      original_release_date: string | null;
+      engine_family: string;
+      language: string;
       preview_blob_sha256: string | null;
     }>(results[7]).map((row) => ({
       id: row.id,
       direction: "from" as const,
       relationType: row.relation_type,
-      relationOrder: row.relation_order,
       viceVersa: row.vice_versa === 1,
       createdByUserId: row.created_by_user_id,
       workId: row.work_id,
       title: row.title,
+      originalTitle: row.original_title,
+      chineseTitle: row.chinese_title,
+      originalReleaseDate: row.original_release_date,
+      engineFamily: row.engine_family,
+      language: row.language,
       previewBlobSha256: row.preview_blob_sha256,
     })),
     translations: batchRows<{
       id: number;
       role: "original" | "translation";
-      relation_order: number;
       created_by_user_id: number | null;
       work_id: number;
       title: string;
+      original_title: string;
+      chinese_title: string | null;
+      original_release_date: string | null;
+      engine_family: string;
       language: string;
       preview_blob_sha256: string | null;
     }>(results[8]).map((row) => ({
@@ -1807,8 +1848,11 @@ async function loadWorkCollections(
       role: row.role,
       workId: row.work_id,
       title: row.title,
+      originalTitle: row.original_title,
+      chineseTitle: row.chinese_title,
+      originalReleaseDate: row.original_release_date,
+      engineFamily: row.engine_family,
       language: row.language,
-      relationOrder: row.relation_order,
       createdByUserId: row.created_by_user_id,
       previewBlobSha256: row.preview_blob_sha256,
     })),
@@ -1839,26 +1883,29 @@ async function listTranslations(
     .prepare(
       `SELECT tr.id,
           tr.target_role AS role,
-          tr.relation_order,
           tr.created_by_user_id,
           w.id AS work_id,
           COALESCE(w.chinese_title, w.original_title) AS title,
-          w.language,
+          w.original_title,w.chinese_title,w.original_release_date,
+          w.engine_family,w.language,
           ${RELATED_PREVIEW_SQL}
        FROM translation_relations tr
        JOIN works w ON w.id = tr.target_work_id
        WHERE tr.source_work_id = ?
          AND ${targetStatus}
-       ORDER BY tr.relation_order, tr.id`,
+       ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
     )
     .bind(id)
     .all<{
       id: number;
       role: "original" | "translation";
-      relation_order: number;
       created_by_user_id: number | null;
       work_id: number;
       title: string;
+      original_title: string;
+      chinese_title: string | null;
+      original_release_date: string | null;
+      engine_family: string;
       language: string;
       preview_blob_sha256: string | null;
     }>();
@@ -1867,8 +1914,11 @@ async function listTranslations(
     role: x.role,
     workId: x.work_id,
     title: x.title,
+    originalTitle: x.original_title,
+    chineseTitle: x.chinese_title,
+    originalReleaseDate: x.original_release_date,
+    engineFamily: x.engine_family,
     language: x.language,
-    relationOrder: x.relation_order,
     createdByUserId: x.created_by_user_id,
     previewBlobSha256: x.preview_blob_sha256,
   }));
@@ -1903,12 +1953,10 @@ function normalizeExternalLinks(
 
 async function getWorkDistributionState(workId: number): Promise<{
   hasCurrentArchive: boolean;
-  archiveVersionCount: number;
 }> {
   const row = await getD1()
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM archive_versions WHERE work_id=w.id) AS archive_version_count,
          EXISTS(
            SELECT 1 FROM archive_versions
            WHERE work_id=w.id AND status='published' AND is_current=1
@@ -1918,10 +1966,9 @@ async function getWorkDistributionState(workId: number): Promise<{
        LIMIT 1`,
     )
     .bind(workId)
-    .first<{ archive_version_count: number; has_current_archive: number }>();
+    .first<{ has_current_archive: number }>();
   if (!row) throw new HttpError(404, "作品不存在");
   return {
-    archiveVersionCount: row.archive_version_count,
     hasCurrentArchive: row.has_current_archive === 1,
   };
 }
@@ -1940,7 +1987,33 @@ function characterSelectionFromGameCharacter(
       displayName: character.displayName,
     },
     portrait: character.portraitChoice,
+    faceSheetBlobSha256s: [],
   };
+}
+
+function groupCharactersByIdentity(
+  characters: GameCharacter[],
+): Map<number, GameCharacter[]> {
+  const result = new Map<number, GameCharacter[]>();
+  for (const character of characters) {
+    const group = result.get(character.id) ?? [];
+    group.push(character);
+    result.set(character.id, group);
+  }
+  return result;
+}
+
+function takeExistingCharacter(
+  characters: Map<number, GameCharacter[]>,
+  credit: CharacterCreditSelection,
+): GameCharacter | undefined {
+  if (credit.selection.kind !== "existing") return undefined;
+  const group = characters.get(credit.selection.characterId);
+  if (!group?.length) return undefined;
+  const matchingIndex = group.findIndex(
+    (character) => character.displayName === credit.selection.displayName,
+  );
+  return group.splice(matchingIndex < 0 ? 0 : matchingIndex, 1)[0];
 }
 
 function portraitChoiceFromRow(row: {

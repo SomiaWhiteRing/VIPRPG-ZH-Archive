@@ -2,6 +2,7 @@ import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { getD1 } from "@/lib/server/db/d1";
 import { HttpError } from "@/lib/server/http/json";
+import { isArchiveEngineFamily } from "@/lib/labels";
 
 export type AdminArchiveVersion = {
   id: number;
@@ -202,6 +203,24 @@ export async function setCurrentArchiveVersion(
   const row = await identity(id);
   if (!row || row.status !== "published" || row.purged_at)
     throw new Error("只能把未清理的 published ArchiveVersion 设为当前版本");
+  const work = await getD1()
+    .prepare(
+      `SELECT w.engine_family,
+         EXISTS(
+           SELECT 1 FROM work_external_links wel
+           WHERE wel.work_id=w.id AND wel.link_type='download_page'
+         ) AS has_download_link
+       FROM works w WHERE w.id=? AND w.status<>'deleted' LIMIT 1`,
+    )
+    .bind(row.work_id)
+    .first<{ engine_family: string; has_download_link: number }>();
+  if (
+    !work ||
+    !isArchiveEngineFamily(work.engine_family) ||
+    work.has_download_link === 1
+  ) {
+    throw new Error("只有使用 RPG Maker 2000/2003 系引擎且没有外部下载的作品才能设置当前归档");
+  }
   await getD1().batch([
     getD1()
       .prepare(
@@ -219,6 +238,24 @@ export async function setCurrentArchiveVersion(
 export async function ensureCurrentArchiveVersion(
   workId: number,
 ): Promise<void> {
+  const work = await getD1()
+    .prepare(
+      `SELECT w.engine_family,
+         EXISTS(
+           SELECT 1 FROM work_external_links wel
+           WHERE wel.work_id=w.id AND wel.link_type='download_page'
+         ) AS has_download_link
+       FROM works w WHERE w.id=? AND w.status<>'deleted' LIMIT 1`,
+    )
+    .bind(workId)
+    .first<{ engine_family: string; has_download_link: number }>();
+  if (
+    !work ||
+    !isArchiveEngineFamily(work.engine_family) ||
+    work.has_download_link === 1
+  ) {
+    return;
+  }
   const current = await getD1()
     .prepare(
       `SELECT id FROM archive_versions WHERE work_id=? AND status='published' AND is_current=1 LIMIT 1`,

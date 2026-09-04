@@ -2,9 +2,9 @@
 
 import { EllipsisVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Dialog, DropdownMenu } from "radix-ui";
-import { CatalogGameListItem } from "@/app/catalogs/catalog-game-list-item";
+import { WorkListItem } from "@/app/components/work/work-list-item";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +42,10 @@ export function CatalogItemsSection({
   items: CatalogItem[];
 }) {
   const router = useRouter();
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const editReturnFocusRef = useRef<HTMLElement | null>(null);
+  const removeReturnFocusRef = useRef<HTMLElement | null>(null);
+  const removalCompletedRef = useRef(false);
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -123,7 +127,8 @@ export function CatalogItemsSection({
     }
   }
 
-  function openEditor(item: CatalogItem) {
+  function openEditor(item: CatalogItem, returnFocus: HTMLElement) {
+    editReturnFocusRef.current = returnFocus;
     setSelectedWorkId(item.workId);
     setNote(item.note ?? "");
     setSortOrder(String(item.sortOrder));
@@ -181,6 +186,7 @@ export function CatalogItemsSection({
         setListMessage(body.detail ?? "条目移除失败。");
         return;
       }
+      removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
       router.refresh();
     } catch {
@@ -198,23 +204,40 @@ export function CatalogItemsSection({
           <span className="font-mono text-xs text-muted">共 {formatNumber(items.length)} 个</span>
         </div>
         {canEdit ? (
-          <Button onClick={() => setAddOpen(true)} size="sm" type="button">添加游戏</Button>
+          <Button
+            aria-controls="catalog-add-game-dialog"
+            aria-expanded={addOpen}
+            aria-haspopup="dialog"
+            ref={addButtonRef}
+            onClick={() => setAddOpen(true)}
+            size="sm"
+            type="button"
+          >
+            添加游戏
+          </Button>
         ) : null}
       </header>
       {listMessage ? <p className="mb-0 mt-3 text-sm text-red-700" role="status">{listMessage}</p> : null}
       {items.length ? (
         <ol className="divide-y divide-border border-b border-border">
           {items.map((item, index) => (
-            <CatalogGameListItem
+            <WorkListItem
               index={index}
               item={item}
               key={item.workId}
+              note={item.note}
               management={canEdit ? (
                 <CatalogItemActions
                   disabled={removingWorkId !== null}
+                  editing={selectedWorkId === item.workId}
                   item={item}
-                  onEdit={() => openEditor(item)}
-                  onRemove={() => setPendingRemovalWorkId(item.workId)}
+                  onEdit={(returnFocus) => openEditor(item, returnFocus)}
+                  onRemove={(returnFocus) => {
+                    removeReturnFocusRef.current = returnFocus;
+                    removalCompletedRef.current = false;
+                    setPendingRemovalWorkId(item.workId);
+                  }}
+                  removing={pendingRemovalWorkId === item.workId}
                 />
               ) : null}
             />
@@ -232,7 +255,17 @@ export function CatalogItemsSection({
           if (!open && removingWorkId === null) setPendingRemovalWorkId(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          id="catalog-remove-item-dialog"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const returnFocus = removalCompletedRef.current
+              ? addButtonRef.current
+              : removeReturnFocusRef.current;
+            if (returnFocus?.isConnected) returnFocus.focus();
+            removalCompletedRef.current = false;
+          }}
+        >
           <AlertDialogTitle className="m-0 text-lg font-bold">
             移除“{pendingRemovalItem?.title}”？
           </AlertDialogTitle>
@@ -265,6 +298,11 @@ export function CatalogItemsSection({
           <Dialog.Content
             aria-describedby="catalog-add-game-description"
             className="fixed left-1/2 top-1/2 z-50 grid h-[min(85dvh,640px)] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-surface"
+            id="catalog-add-game-dialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              addButtonRef.current?.focus();
+            }}
           >
             <Dialog.Title className="m-0 text-lg font-bold">添加游戏</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-add-game-description">
@@ -285,7 +323,7 @@ export function CatalogItemsSection({
               {candidates.length ? (
                 <ol aria-label="查找结果" className="divide-y divide-border border-y border-border">
                   {candidates.map((candidate, index) => (
-                    <CatalogGameListItem
+                    <WorkListItem
                       index={index}
                       item={{
                         workId: candidate.id,
@@ -296,8 +334,6 @@ export function CatalogItemsSection({
                         engineFamily: candidate.engineFamily,
                         language: candidate.language,
                         previewBlobSha256: candidate.previewBlobSha256,
-                        sortOrder: 0,
-                        note: null,
                       }}
                       key={candidate.id}
                       management={(
@@ -335,6 +371,11 @@ export function CatalogItemsSection({
           <Dialog.Content
             aria-describedby="catalog-item-edit-description"
             className="fixed left-1/2 top-1/2 z-50 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-surface"
+            id="catalog-edit-item-dialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (editReturnFocusRef.current?.isConnected) editReturnFocusRef.current.focus();
+            }}
           >
             <Dialog.Title className="m-0 text-lg font-bold">编辑条目</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-item-edit-description">
@@ -388,15 +429,20 @@ export function CatalogItemsSection({
 
 function CatalogItemActions({
   disabled,
+  editing,
   item,
   onEdit,
   onRemove,
+  removing,
 }: {
   disabled: boolean;
+  editing: boolean;
   item: CatalogItem;
-  onEdit: () => void;
-  onRemove: () => void;
+  onEdit: (returnFocus: HTMLElement) => void;
+  onRemove: (returnFocus: HTMLElement) => void;
+  removing: boolean;
 }) {
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuItemClass =
     "flex min-h-9 w-full cursor-default items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
@@ -404,10 +450,13 @@ function CatalogItemActions({
     <>
       <div className="hidden divide-x divide-border overflow-hidden rounded-full border border-border bg-card shadow-sm sm:inline-flex">
         <Button
+          aria-controls="catalog-edit-item-dialog"
+          aria-expanded={editing}
+          aria-haspopup="dialog"
           aria-label={`编辑条目：${item.title}`}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs shadow-none focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
-          onClick={onEdit}
+          onClick={(event) => onEdit(event.currentTarget)}
           size="sm"
           type="button"
           variant="ghost"
@@ -415,10 +464,13 @@ function CatalogItemActions({
           编辑
         </Button>
         <Button
+          aria-controls="catalog-remove-item-dialog"
+          aria-expanded={removing}
+          aria-haspopup="dialog"
           aria-label={`从目录移除：${item.title}`}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs text-destructive shadow-none hover:text-destructive focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
-          onClick={onRemove}
+          onClick={(event) => onRemove(event.currentTarget)}
           size="sm"
           type="button"
           variant="ghost"
@@ -429,6 +481,7 @@ function CatalogItemActions({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
+            ref={menuTriggerRef}
             aria-label={`管理条目：${item.title}`}
             className="size-8 rounded-full sm:hidden"
             disabled={disabled}
@@ -445,13 +498,24 @@ function CatalogItemActions({
             className="z-50 min-w-36 rounded-md border border-border bg-card p-1 text-foreground shadow-surface"
             sideOffset={6}
           >
-            <DropdownMenu.Item className={menuItemClass} onSelect={onEdit}>
+            <DropdownMenu.Item
+              aria-controls="catalog-edit-item-dialog"
+              aria-haspopup="dialog"
+              className={menuItemClass}
+              onSelect={() => {
+                if (menuTriggerRef.current) onEdit(menuTriggerRef.current);
+              }}
+            >
               编辑条目
             </DropdownMenu.Item>
             <DropdownMenu.Item
+              aria-controls="catalog-remove-item-dialog"
+              aria-haspopup="dialog"
               className={`${menuItemClass} text-destructive focus:text-destructive`}
               disabled={disabled}
-              onSelect={onRemove}
+              onSelect={() => {
+                if (menuTriggerRef.current) onRemove(menuTriggerRef.current);
+              }}
             >
               移除
             </DropdownMenu.Item>

@@ -13,14 +13,16 @@ export function FaceSheetCanvas({
   onSelectCell,
   scale = 2,
   selectedCell,
+  src,
   width,
 }: {
-  blobSha256: string;
+  blobSha256?: string;
   height: number;
   label: string;
   onSelectCell: (row: number, column: number) => void;
   scale?: number;
   selectedCell?: { row: number; column: number } | null;
+  src?: string;
   width: number;
 }) {
   const rows = height / 48;
@@ -38,7 +40,7 @@ export function FaceSheetCanvas({
         className="block h-full w-full select-none"
         draggable={false}
         height={height}
-        src={`/api/media/blobs/${blobSha256}`}
+        src={src ?? `/api/media/blobs/${blobSha256}`}
         unoptimized
         width={width}
       />

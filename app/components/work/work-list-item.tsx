@@ -2,16 +2,28 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { engineLabel, languageLabel } from "@/lib/labels";
-import type { CatalogItem } from "@/lib/server/db/catalogs";
 
-export function CatalogGameListItem({
+export type WorkListItemData = {
+  workId: number;
+  title: string;
+  originalTitle: string;
+  chineseTitle: string | null;
+  originalReleaseDate: string | null;
+  engineFamily: string;
+  language: string;
+  previewBlobSha256?: string | null;
+};
+
+export function WorkListItem({
   index,
   item,
   management,
+  note,
 }: {
   index: number;
-  item: CatalogItem;
+  item: WorkListItemData;
   management?: ReactNode;
+  note?: string | null;
 }) {
   const href = `/games/${item.workId}`;
   const metadata = [
@@ -59,9 +71,9 @@ export function CatalogGameListItem({
           <p className="mt-0.5 text-[12.5px] text-muted">{item.originalTitle}</p>
         ) : null}
         <p className="mt-1 font-mono text-xs text-muted">{metadata.join(" / ")}</p>
-        {item.note ? (
+        {note ? (
           <p className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-muted/5 px-3 py-2 text-[13px] leading-[1.6]">
-            {item.note}
+            {note}
           </p>
         ) : null}
       </div>

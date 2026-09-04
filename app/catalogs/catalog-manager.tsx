@@ -21,11 +21,12 @@ import {
 } from "@/app/upload/media-picker";
 import type { CatalogDetail, CatalogSummary } from "@/lib/server/db/catalogs";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Dialog } from "radix-ui";
 
 export function CatalogCreateForm() {
   const router = useRouter();
+  const createButtonRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -60,12 +61,30 @@ export function CatalogCreateForm() {
   }
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!busy) setOpen(nextOpen); }}>
-      <div><Rm2kButton onClick={() => setOpen(true)} type="button">创建目录</Rm2kButton></div>
+      <div>
+        <Rm2kButton
+          aria-controls="catalog-create-dialog"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={(event) => {
+            createButtonRef.current = event.currentTarget;
+            setOpen(true);
+          }}
+          type="button"
+        >
+          创建目录
+        </Rm2kButton>
+      </div>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
         <Dialog.Content
           aria-describedby="catalog-create-description"
           className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 shadow-surface"
+          id="catalog-create-dialog"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (createButtonRef.current?.isConnected) createButtonRef.current.focus();
+          }}
         >
           <Dialog.Title className="m-0 text-lg font-bold">创建目录</Dialog.Title>
           <Dialog.Description className="sr-only" id="catalog-create-description">

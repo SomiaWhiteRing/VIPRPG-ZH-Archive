@@ -122,6 +122,7 @@ export type ArchiveCommitMetadata = {
   characters?: Array<{
     selection: CharacterSelection;
     portrait: CharacterPortraitChoice | null;
+    faceSheetBlobSha256s: string[];
     roleKey: "main" | "supporting" | "cameo" | "mentioned" | "other";
     spoilerLevel: number;
     sortOrder: number | null;

@@ -49,6 +49,7 @@ export function LanguageField({
       </RadioGroup>
       {primary === "other" ? (
         <SelectField
+          aria-label="其他语言"
           onValueChange={onValueChange}
           options={otherOptions.map((option) => ({
             value: option.value,

@@ -20,13 +20,8 @@ export function assertStableDistribution(input: {
   status: string;
   engineFamily: string;
   hasCurrentArchive: boolean;
-  archiveVersionCount?: number;
   downloadLinkCount: number;
 }): WorkDistribution {
-  if (input.archiveVersionCount && !isArchiveEngineFamily(input.engineFamily)) {
-    throw new HttpError(400, "非 RPG Maker 2000/2003 系游戏不能拥有本站归档");
-  }
-
   if (input.status === "processing" || input.status === "deleted") {
     return deriveWorkDistribution(input);
   }

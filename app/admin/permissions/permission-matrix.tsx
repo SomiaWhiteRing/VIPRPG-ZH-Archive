@@ -157,6 +157,7 @@ export function PermissionMatrix({
                 <Label className="grid gap-2">
                   状态
                   <SelectField
+                    aria-label={`${role.name}状态`}
                     onValueChange={(value) =>
                       updateRole(role.id, {
                         status: value as RoleSummary["status"],

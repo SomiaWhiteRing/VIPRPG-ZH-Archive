@@ -25,23 +25,6 @@ export function CharacterPortrait({
   size?: number;
   toneKey?: number | string;
 }) {
-  if (previewSrc) {
-    return (
-      <Image
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          "aspect-square shrink-0 rounded-lg border border-foreground/15 object-cover [image-rendering:pixelated]",
-          className,
-        )}
-        height={size}
-        src={previewSrc}
-        unoptimized
-        width={size}
-      />
-    );
-  }
-
   if (portrait) {
     const scale = size / 48;
     const imageStyle: CSSProperties = {
@@ -65,12 +48,29 @@ export function CharacterPortrait({
           className="absolute select-none"
           draggable={false}
           height={portrait.height}
-          src={`/api/media/blobs/${portrait.blobSha256}`}
+          src={previewSrc ?? `/api/media/blobs/${portrait.blobSha256}`}
           style={imageStyle}
           unoptimized
           width={portrait.width}
         />
       </span>
+    );
+  }
+
+  if (previewSrc) {
+    return (
+      <Image
+        alt=""
+        aria-hidden="true"
+        className={cn(
+          "aspect-square shrink-0 rounded-lg border border-foreground/15 object-cover [image-rendering:pixelated]",
+          className,
+        )}
+        height={size}
+        src={previewSrc}
+        unoptimized
+        width={size}
+      />
     );
   }
 

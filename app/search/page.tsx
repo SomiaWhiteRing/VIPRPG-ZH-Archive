@@ -88,8 +88,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <PaginationLinks
             basePath="/search"
             page={page}
-            hasNext={page < result.totalPages}
+            pageSize={result.pageSize}
             params={{ q: query, scope }}
+            total={result.total}
           />
         </>
       ) : (
@@ -118,8 +119,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             <PaginationLinks
               basePath="/search"
               page={page}
-              hasNext={page < directory.totalPages}
+              pageSize={directory.pageSize}
               params={{ q: query, scope }}
+              total={directory.total}
             />
           ) : null}
         </>
@@ -162,8 +164,8 @@ async function listDirectory(scope: string, query: string, page: number) {
   else items = [];
   return {
     items: items.slice((page - 1) * pageSize, page * pageSize),
+    pageSize,
     total: items.length,
-    totalPages: Math.max(1, Math.ceil(items.length / pageSize)),
   };
 }
 

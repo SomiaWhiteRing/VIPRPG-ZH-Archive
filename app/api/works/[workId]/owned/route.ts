@@ -5,6 +5,11 @@ import {
 } from "@/lib/server/db/game-library";
 import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
+import {
+  ensureCharacterFaceSheets,
+  readCharacterFaceSheet,
+  storeCharacterFaceSheets,
+} from "@/lib/server/storage/character-portraits";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,10 @@ export async function POST(
     if (!current) throw new HttpError(404, "作品不存在或不属于当前上传者");
     const form = await request.formData();
     const metadata = parseMetadata(form);
+    const characterFaceSheets = form
+      .getAll("character_face_sheets[]")
+      .filter((value): value is File => value instanceof File && value.size > 0)
+      .map((value) => readCharacterFaceSheet(value));
     const imageEntries = form
       .getAll("images[]")
       .filter((value): value is File => value instanceof File && value.size > 0);
@@ -34,6 +43,14 @@ export async function POST(
           .filter((media) => media.kind === "preview")
           .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
           .map((media) => media.blobSha256);
+    await storeCharacterFaceSheets(characterFaceSheets);
+    await ensureCharacterFaceSheets(
+      metadata.characters.flatMap((credit) => [
+        ...credit.faceSheetBlobSha256s,
+        ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+      ]),
+      auth.user.id,
+    );
     await updateOwnedWork({
       user: auth.user,
       workId,
@@ -51,7 +68,12 @@ function parseMetadata(form: FormData) {
   if (status !== "published" && status !== "hidden") {
     throw new HttpError(400, "status 不合法");
   }
+  const distribution = readRequiredString(form.get("distribution"), "distribution");
+  if (distribution !== "archive" && distribution !== "external") {
+    throw new HttpError(400, "distribution 不合法");
+  }
   return {
+    distribution: distribution as "archive" | "external",
     originalTitle: readRequiredString(form.get("original_title"), "original_title"),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),

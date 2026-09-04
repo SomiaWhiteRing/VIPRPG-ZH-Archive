@@ -102,6 +102,7 @@ export function CatalogAddDialog({
             <>
               <FormField label="目录">
                 <SelectField
+                  aria-label="目录"
                   disabled={busy}
                   onValueChange={setCatalogId}
                   options={catalogs.map((catalog) => ({

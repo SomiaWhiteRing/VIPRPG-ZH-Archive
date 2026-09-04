@@ -2,21 +2,29 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState, useSyncExternalStore } from "react";
-import { Badge } from "@/app/components/ui/badge";
+import {
+  type ChangeEvent,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/app/components/ui/button";
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
 import type { CharacterPortrait as CharacterPortraitValue } from "@/lib/character-names";
 import type { AdminFaceSheet } from "@/lib/server/db/character-portrait-library";
+import {
+  requestJson,
+  type ApiResponsePayload,
+} from "@/lib/ui/api-response";
+import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 
 const RESULT_PAGE_SIZE = 48;
-const REVIEW_STORAGE_KEY = "viprpg-character-portrait-review.local.v1";
 
-type ReviewStatus = "confirmed" | "skipped";
-type ReviewCharacter = { id: number; originalName: string; primaryName: string };
-type ReviewProgress = Record<string, ReviewStatus>;
+type CharacterNavigationItem = { id: number; originalName: string; primaryName: string };
+type FaceSheetUploadResponse = ApiResponsePayload & { sheet?: AdminFaceSheet };
 
 export function PortraitLibraryEditor({
   allSheets,
@@ -24,22 +32,20 @@ export function PortraitLibraryEditor({
   characterName,
   characterOriginalName,
   defaultPortrait: initialDefaultPortrait,
-  formId,
   initialBoundSheetIds,
-  reviewCharacters,
+  allCharacters,
 }: {
   allSheets: AdminFaceSheet[];
   characterId: number;
   characterName: string;
   characterOriginalName: string;
   defaultPortrait: CharacterPortraitValue | null;
-  formId: string;
   initialBoundSheetIds: number[];
-  reviewCharacters: ReviewCharacter[];
+  allCharacters: CharacterNavigationItem[];
 }) {
   const characters = useMemo(
-    () => [...reviewCharacters].sort((left, right) => left.id - right.id),
-    [reviewCharacters],
+    () => [...allCharacters].sort((left, right) => left.id - right.id),
+    [allCharacters],
   );
   const currentCharacterIndex = characters.findIndex((character) => character.id === characterId);
   const initialActiveSheetId = initialDefaultPortrait?.faceSheetId
@@ -47,6 +53,7 @@ export function PortraitLibraryEditor({
     ?? bestInitialSheet(allSheets, characterOriginalName)?.id
     ?? allSheets[0]?.id
     ?? null;
+  const [sheets, setSheets] = useState(allSheets);
   const [boundSheetIds, setBoundSheetIds] = useState(initialBoundSheetIds);
   const [defaultPortrait, setDefaultPortrait] = useState(initialDefaultPortrait);
   const [activeSheetId, setActiveSheetId] = useState<number | null>(initialActiveSheetId);
@@ -56,37 +63,33 @@ export function PortraitLibraryEditor({
       : null,
   );
   const [query, setQuery] = useState(characterOriginalName);
+  const [boundOnly, setBoundOnly] = useState(false);
   const [resultLimit, setResultLimit] = useState(RESULT_PAGE_SIZE);
   const [characterQuery, setCharacterQuery] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const deferredQuery = useDeferredValue(query);
   const deferredCharacterQuery = useDeferredValue(characterQuery);
-  const reviewProgressSnapshot = useSyncExternalStore(
-    subscribeReviewProgress,
-    readReviewProgressSnapshot,
-    emptyReviewProgressSnapshot,
-  );
-  const reviewProgress = useMemo(
-    () => parseReviewProgress(reviewProgressSnapshot),
-    [reviewProgressSnapshot],
-  );
 
   const sheetsById = useMemo(
-    () => new Map(allSheets.map((sheet) => [sheet.id, sheet])),
-    [allSheets],
+    () => new Map(sheets.map((sheet) => [sheet.id, sheet])),
+    [sheets],
   );
   const indexedSheets = useMemo(
-    () => allSheets.map((sheet) => ({ sheet, searchText: sheetSearchText(sheet) })),
-    [allSheets],
+    () => sheets.map((sheet) => ({ sheet, searchText: sheetSearchText(sheet) })),
+    [sheets],
   );
   const boundSheetIdSet = useMemo(() => new Set(boundSheetIds), [boundSheetIds]);
   const matchingSheets = useMemo(() => {
     const terms = normalizeSearch(deferredQuery).split(" ").filter(Boolean);
     return indexedSheets
-      .filter(({ searchText }) => terms.every((term) => searchText.includes(term)))
+      .filter(({ sheet, searchText }) =>
+        (!boundOnly || boundSheetIdSet.has(sheet.id)) &&
+        terms.every((term) => searchText.includes(term))
+      )
       .map(({ sheet }) => sheet);
-  }, [deferredQuery, indexedSheets]);
+  }, [boundOnly, boundSheetIdSet, deferredQuery, indexedSheets]);
   const visibleSheets = matchingSheets.slice(0, resultLimit);
   const visibleGroups = useMemo(() => groupSheetsByPage(visibleSheets), [visibleSheets]);
   const activeSheet = activeSheetId === null ? null : sheetsById.get(activeSheetId) ?? null;
@@ -96,16 +99,6 @@ export function PortraitLibraryEditor({
       ? { row: defaultPortrait.row, column: defaultPortrait.column }
       : null
   );
-  const portraitForReview = activeSheet && selectedCell
-    ? {
-        faceSheetId: activeSheet.id,
-        blobSha256: activeSheet.blobSha256,
-        width: activeSheet.width,
-        height: activeSheet.height,
-        row: selectedCell.row,
-        column: selectedCell.column,
-      }
-    : defaultPortrait;
   const characterMatches = useMemo(() => {
     const terms = normalizeSearch(deferredCharacterQuery).split(" ").filter(Boolean);
     if (!terms.length) return [];
@@ -113,20 +106,10 @@ export function PortraitLibraryEditor({
       .filter((character) => terms.every((term) => characterSearchText(character).includes(term)))
       .slice(0, 8);
   }, [characters, deferredCharacterQuery]);
-  const confirmedCount = characters.filter((character) => reviewProgress[character.id] === "confirmed").length;
-  const skippedCount = characters.filter((character) => reviewProgress[character.id] === "skipped").length;
-  const reviewedCount = confirmedCount + skippedCount;
-  const unreviewedCount = Math.max(0, characters.length - reviewedCount);
-  const currentReviewStatus = reviewProgress[characterId] ?? null;
   const previousCharacter = currentCharacterIndex > 0 ? characters[currentCharacterIndex - 1] : null;
   const nextCharacter = currentCharacterIndex >= 0 && currentCharacterIndex + 1 < characters.length
     ? characters[currentCharacterIndex + 1]
     : null;
-  const nextUnreviewedCharacter = findNextUnreviewed(
-    characters,
-    currentCharacterIndex,
-    reviewProgress,
-  );
 
   function selectSheet(sheet: AdminFaceSheet) {
     setActiveSheetId(sheet.id);
@@ -143,9 +126,25 @@ export function PortraitLibraryEditor({
       setBoundSheetIds((current) => current.filter((id) => id !== activeSheet.id));
       if (defaultPortrait?.faceSheetId === activeSheet.id) setDefaultPortrait(null);
       setPendingCell(null);
+      if (boundOnly) setActiveSheetId(null);
       return;
     }
     setBoundSheetIds((current) => [...current, activeSheet.id]);
+  }
+
+  function unbindSource(groupKey: string) {
+    const ids = new Set(
+      sheets
+        .filter((sheet) => boundSheetIdSet.has(sheet.id) && sheetPageKey(sheet) === groupKey)
+        .map((sheet) => sheet.id),
+    );
+    if (!ids.size) return;
+    setBoundSheetIds((current) => current.filter((id) => !ids.has(id)));
+    if (defaultPortrait && ids.has(defaultPortrait.faceSheetId)) setDefaultPortrait(null);
+    if (activeSheet && ids.has(activeSheet.id)) {
+      setActiveSheetId(null);
+      setPendingCell(null);
+    }
   }
 
   function selectDefaultPortrait() {
@@ -167,57 +166,40 @@ export function PortraitLibraryEditor({
     setDefaultPortrait(null);
   }
 
-  async function saveReview(status: ReviewStatus) {
-    if (status === "confirmed" && !portraitForReview) return;
-    const form = document.getElementById(formId);
-    if (!(form instanceof HTMLFormElement)) {
-      setSaveError("找不到角色编辑表单，请刷新页面后重试。");
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
+  async function uploadFaceSheet(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+
+    setUploadError(null);
+    setUploading(true);
     try {
-      const formData = new FormData(form);
-      const nextBoundSheetIds = status === "confirmed" && portraitForReview
-        ? [...new Set([...boundSheetIds, portraitForReview.faceSheetId])]
-        : boundSheetIds;
-      formData.set("face_sheet_ids", JSON.stringify(nextBoundSheetIds));
-      formData.set(
-        "default_portrait",
-        status === "confirmed" && portraitForReview
-          ? JSON.stringify({
-              blobSha256: portraitForReview.blobSha256,
-              row: portraitForReview.row,
-              column: portraitForReview.column,
-            })
-          : "",
+      await inspectCharacterFaceSheetFile(file);
+      const formData = new FormData();
+      formData.set("face_sheet", file);
+      const payload = await requestJson<FaceSheetUploadResponse>(
+        `/api/admin/characters/${characterId}/face-sheets`,
+        {
+          body: formData,
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          method: "POST",
+        },
+        "脸图素材表上传失败",
       );
-      formData.set("merge_target_id", "");
-      const response = await fetch(form.action, {
-        body: formData,
-        headers: { Accept: "application/json" },
-        method: "POST",
-      });
-      const payload = await response.json() as { detail?: string; error?: string; ok?: boolean };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.detail || payload.error || "角色资料保存失败");
-      }
-      const nextProgress = { ...reviewProgress, [characterId]: status };
-      try {
-        writeReviewProgress(nextProgress);
-      } catch {
-        throw new Error("角色资料已保存，但无法写入本机审核进度。请允许此站点保存数据后重试。");
-      }
-      const nextTarget = findNextUnreviewed(characters, currentCharacterIndex, nextProgress)
-        ?? nextCharacter;
-      if (nextTarget) {
-        window.location.assign(characterHref(nextTarget.id));
-      } else {
-        window.location.reload();
-      }
+      if (!payload.sheet) throw new Error("脸图素材表已上传，但服务器没有返回素材表资料。");
+
+      const sheet = payload.sheet;
+      setSheets((current) => [sheet, ...current.filter((item) => item.id !== sheet.id)]);
+      setBoundSheetIds((current) => [...new Set([...current, sheet.id])]);
+      setActiveSheetId(sheet.id);
+      setPendingCell({ row: 0, column: 0 });
+      setQuery(`#${sheet.id}`);
+      setResultLimit(RESULT_PAGE_SIZE);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "角色资料保存失败");
-      setSaving(false);
+      setUploadError(error instanceof Error ? error.message : "脸图素材表上传失败");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -235,10 +217,10 @@ export function PortraitLibraryEditor({
         }) : ""}
       />
 
-      <nav className="grid gap-2 border border-border bg-card p-3" aria-label="角色审核导航">
+      <nav className="grid gap-2 border border-border bg-card p-3" aria-label="角色导航">
         <div className="flex items-center gap-2">
           <Button
-            disabled={!previousCharacter || saving}
+            disabled={!previousCharacter}
             onClick={() => previousCharacter && goToCharacter(previousCharacter.id)}
             size="sm"
             type="button"
@@ -274,7 +256,7 @@ export function PortraitLibraryEditor({
             ) : null}
           </div>
           <Button
-            disabled={!nextCharacter || saving}
+            disabled={!nextCharacter}
             onClick={() => nextCharacter && goToCharacter(nextCharacter.id)}
             size="sm"
             type="button"
@@ -282,34 +264,50 @@ export function PortraitLibraryEditor({
           >
             下一个
           </Button>
-          <Button
-            disabled={!nextUnreviewedCharacter || saving}
-            onClick={() => nextUnreviewedCharacter && goToCharacter(nextUnreviewedCharacter.id)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            下个未处理
-          </Button>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <strong className="mr-auto truncate text-sm">
-            {currentCharacterIndex + 1} / {characters.length} · {characterOriginalName} · {characterName}
-          </strong>
-          <ReviewStatusBadge status={currentReviewStatus} />
-          <span className="text-muted">已处理 {reviewedCount}</span>
-          <span className="text-emerald-700">已确认 {confirmedCount}</span>
-          <span className="text-amber-700">暂不设置 {skippedCount}</span>
-          <span className="text-muted">未处理 {unreviewedCount}</span>
-        </div>
+        <strong className="truncate text-sm">
+          {currentCharacterIndex + 1} / {characters.length} · {characterOriginalName} · {characterName}
+        </strong>
       </nav>
 
       <div className="grid h-[min(680px,calc(100vh-180px))] min-h-[520px] grid-cols-[minmax(440px,1.1fr)_minmax(380px,0.9fr)] overflow-hidden border border-border bg-card">
         <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-r border-border" aria-label="脸图素材表">
           <header className="grid gap-2 border-b border-border p-3">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <strong className="text-sm">素材表</strong>
-              <span className="text-xs text-muted">显示 {visibleSheets.length} / {matchingSheets.length}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">显示 {visibleSheets.length} / {matchingSheets.length}</span>
+                <Button
+                  aria-pressed={boundOnly}
+                  onClick={() => {
+                    const nextBoundOnly = !boundOnly;
+                    setBoundOnly(nextBoundOnly);
+                    if (nextBoundOnly) setQuery("");
+                    setResultLimit(RESULT_PAGE_SIZE);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant={boundOnly ? "secondary" : "outline"}
+                >
+                  只看已绑定（{boundSheetIds.length}）
+                </Button>
+                <Button
+                  disabled={uploading}
+                  onClick={() => uploadInputRef.current?.click()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {uploading ? "上传中…" : "上传素材表"}
+                </Button>
+                <input
+                  accept="image/png"
+                  className="sr-only"
+                  onChange={(event) => void uploadFaceSheet(event)}
+                  ref={uploadInputRef}
+                  type="file"
+                />
+              </div>
             </div>
             <Input
               aria-label="搜索素材表"
@@ -322,19 +320,35 @@ export function PortraitLibraryEditor({
               type="search"
               value={query}
             />
+            {uploadError ? (
+              <span className="text-xs font-semibold text-red-700" role="alert">{uploadError}</span>
+            ) : null}
           </header>
 
           <div className="min-h-0 overflow-y-auto p-3">
             {visibleGroups.length ? (
               <div className="grid gap-4">
-                {visibleGroups.map(([pageTitle, sheets]) => (
-                  <section className="grid gap-2" key={pageTitle}>
+                {visibleGroups.map(({ key, label, sheets: groupSheets }) => (
+                  <section className="grid gap-2" key={key}>
                     <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1">
-                      <strong className="truncate text-sm" title={pageTitle}>{pageTitle}</strong>
-                      <span className="shrink-0 text-xs text-muted">{sheets.length} 张</span>
+                      <strong className="truncate text-sm" title={label}>{label}</strong>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted">{groupSheets.length} 张</span>
+                        {boundOnly ? (
+                          <Button
+                            aria-label={`解除“${label}”来源的全部绑定`}
+                            onClick={() => unbindSource(key)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            解绑来源
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
-                      {sheets.map((sheet) => {
+                      {groupSheets.map((sheet) => {
                         const active = sheet.id === activeSheetId;
                         const bound = boundSheetIdSet.has(sheet.id);
                         const filename = sheetFilename(sheet);
@@ -443,77 +457,8 @@ export function PortraitLibraryEditor({
         </section>
       </div>
 
-      <div className="flex min-h-12 items-center gap-2 border border-border bg-background p-2">
-        <span className="min-w-0 flex-1 truncate text-xs text-muted">
-          已绑定 {boundSheetIds.length} 张 · {defaultPortrait ? `默认 #${defaultPortrait.faceSheetId} ${defaultPortrait.row + 1}-${defaultPortrait.column + 1}` : "无默认头像"}
-        </span>
-        {saveError ? <span className="text-xs font-semibold text-red-700" role="alert">{saveError}</span> : null}
-        <Button
-          disabled={saving}
-          onClick={() => void saveReview("skipped")}
-          type="button"
-          variant="outline"
-        >
-          {saving ? "保存中…" : "暂不设置并下一个"}
-        </Button>
-        <Button disabled={saving || !portraitForReview} onClick={() => void saveReview("confirmed")} type="button">
-          {saving ? "保存中…" : "确认并下一个"}
-        </Button>
-      </div>
     </div>
   );
-}
-
-function ReviewStatusBadge({ status }: { status: ReviewStatus | null }) {
-  if (status === "confirmed") return <Badge variant="positive">已确认</Badge>;
-  if (status === "skipped") return <Badge variant="pending">暂不设置</Badge>;
-  return <Badge variant="secondary">未处理</Badge>;
-}
-
-function subscribeReviewProgress(onStoreChange: () => void): () => void {
-  window.addEventListener("storage", onStoreChange);
-  return () => window.removeEventListener("storage", onStoreChange);
-}
-
-function readReviewProgressSnapshot(): string {
-  try {
-    return localStorage.getItem(REVIEW_STORAGE_KEY) ?? "{}";
-  } catch {
-    return "{}";
-  }
-}
-
-function emptyReviewProgressSnapshot(): string {
-  return "{}";
-}
-
-function parseReviewProgress(snapshot: string): ReviewProgress {
-  try {
-    const value = JSON.parse(snapshot);
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(
-      Object.entries(value).filter(([, status]) => status === "confirmed" || status === "skipped"),
-    ) as ReviewProgress;
-  } catch {
-    return {};
-  }
-}
-
-function writeReviewProgress(progress: ReviewProgress) {
-  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(progress));
-}
-
-function findNextUnreviewed(
-  characters: ReviewCharacter[],
-  currentIndex: number,
-  progress: ReviewProgress,
-): ReviewCharacter | null {
-  if (!characters.length) return null;
-  for (let offset = 1; offset <= characters.length; offset += 1) {
-    const character = characters[(Math.max(currentIndex, 0) + offset) % characters.length];
-    if (!progress[character.id]) return character;
-  }
-  return null;
 }
 
 function characterHref(characterId: number): string {
@@ -524,7 +469,7 @@ function goToCharacter(characterId: number) {
   window.location.assign(characterHref(characterId));
 }
 
-function characterSearchText(character: ReviewCharacter): string {
+function characterSearchText(character: CharacterNavigationItem): string {
   return normalizeSearch([character.id, `#${character.id}`, character.originalName, character.primaryName].join(" "));
 }
 
@@ -533,15 +478,22 @@ function bestInitialSheet(sheets: AdminFaceSheet[], originalName: string): Admin
   return sheets.find((sheet) => sheetSearchText(sheet).includes(query)) ?? null;
 }
 
-function groupSheetsByPage(sheets: AdminFaceSheet[]): Array<[string, AdminFaceSheet[]]> {
-  const groups = new Map<string, AdminFaceSheet[]>();
+function groupSheetsByPage(
+  sheets: AdminFaceSheet[],
+): Array<{ key: string; label: string; sheets: AdminFaceSheet[] }> {
+  const groups = new Map<string, { label: string; sheets: AdminFaceSheet[] }>();
   for (const sheet of sheets) {
+    const key = sheetPageKey(sheet);
     const label = sheetPageLabel(sheet);
-    const group = groups.get(label) ?? [];
-    group.push(sheet);
-    groups.set(label, group);
+    const group = groups.get(key) ?? { label, sheets: [] };
+    group.sheets.push(sheet);
+    groups.set(key, group);
   }
-  return [...groups.entries()];
+  return [...groups].map(([key, group]) => ({ key, ...group }));
+}
+
+function sheetPageKey(sheet: AdminFaceSheet): string {
+  return sheet.sourcePageUrl ?? `title:${sheetPageLabel(sheet)}`;
 }
 
 function sheetPageLabel(sheet: AdminFaceSheet): string {
@@ -554,7 +506,7 @@ function sheetImageLabel(sheet: AdminFaceSheet): string {
 }
 
 function sheetFilename(sheet: AdminFaceSheet): string {
-  if (!sheet.sourceImageUrl) return "";
+  if (!sheet.sourceImageUrl) return sheet.sourceSectionTitle ?? "";
   try {
     return decodeURIComponent(new URL(sheet.sourceImageUrl).pathname.split("/").at(-1) ?? "");
   } catch {

@@ -22,11 +22,10 @@ export async function POST(
     const body = await readBody(request);
     const result = await createTranslationRelation(
       {
-        sourceWorkId,
-        targetRole: body.targetRole as never,
-        targetWorkId: Number(body.targetWorkId),
-        relationOrder: body.relationOrder,
-      },
+          sourceWorkId,
+          targetRole: body.targetRole as never,
+          targetWorkId: Number(body.targetWorkId),
+        },
       auth.user,
     );
     return json({ ok: true, ...result }, { status: 201 });
@@ -40,7 +39,6 @@ async function readBody(
 ): Promise<{
   targetRole?: "original" | "translation";
   targetWorkId?: number;
-  relationOrder?: number;
 }> {
   const body = await readJsonObject(
     request,
@@ -50,15 +48,8 @@ async function readBody(
     throw new HttpError(400, "Translation role must be a string");
   if (body.targetWorkId !== undefined && typeof body.targetWorkId !== "number")
     throw new HttpError(400, "Target work id must be a number");
-  if (
-    body.relationOrder !== undefined &&
-    (typeof body.relationOrder !== "number" ||
-      !Number.isFinite(body.relationOrder))
-  )
-    throw new HttpError(400, "Relation order must be a finite number");
   return body as {
     targetRole?: "original" | "translation";
     targetWorkId?: number;
-    relationOrder?: number;
   };
 }

@@ -3,7 +3,8 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { AdminListControls, AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { AdminListControls, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { searchUsersForAdmin } from "@/lib/server/db/users";
 import { listAssignableRoles } from "@/lib/server/db/permissions";
@@ -86,7 +87,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           ))}
         </tbody>
       </TableWrap> : <EmptyState title="没有找到匹配的用户。" />}
-      <AdminPagination basePath="/admin/users" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort }} />
+      <PaginationLinks basePath="/admin/users" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort }} />
     </main>
   );
 }

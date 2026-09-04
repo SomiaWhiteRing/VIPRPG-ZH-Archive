@@ -9,8 +9,8 @@ export default async function AccountLayout({ children }: { children: ReactNode 
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-      <div className="md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
-        <div className="sticky top-20 hidden self-start md:block">
+      <div className="account-layout md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
+        <div className="account-navigation-slot sticky top-20 hidden self-start md:block">
           {user ? (
             <div className="mb-5 flex min-w-0 items-center gap-3 px-2">
               <UserAvatar avatarBlobSha256={user.avatarBlobSha256} displayName={user.displayName} />
@@ -22,7 +22,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
           ) : null}
           <AccountNavigation canUpload={Boolean(user && canUpload(user))} />
         </div>
-        <div className="md:hidden">
+        <div className="account-navigation-slot md:hidden">
           <AccountNavigation canUpload={Boolean(user && canUpload(user))} />
         </div>
         <div className="min-w-0 pt-5 md:pt-0">{children}</div>

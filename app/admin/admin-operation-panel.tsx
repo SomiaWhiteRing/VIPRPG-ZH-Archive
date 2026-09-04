@@ -14,7 +14,7 @@ import { Label } from "@/app/components/ui/label";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import { gcDefaultGraceDays, gcDefaultSweepLimitPerType, gcManualSweepGraceDays } from "@/lib/archive/gc-policy";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type OperationKind = "consistency" | "gc" | "sweep";
 
@@ -33,6 +33,7 @@ type ApiPayload = {
 };
 
 export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup: boolean }) {
+  const sweepButtonRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<OperationState>({
     kind: null,
     loading: false,
@@ -128,6 +129,10 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
             placeholder="SWEEP"
           />
           <Button
+            aria-controls="admin-sweep-confirm-dialog"
+            aria-expanded={sweepDialogOpen}
+            aria-haspopup="dialog"
+            ref={sweepButtonRef}
             variant="outline"
             disabled={state.loading || sweepConfirm !== "SWEEP"}
             onClick={() => setSweepDialogOpen(true)}
@@ -136,7 +141,13 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
             执行最终清理
           </Button>
           <AlertDialog onOpenChange={setSweepDialogOpen} open={sweepDialogOpen}>
-            <AlertDialogContent>
+            <AlertDialogContent
+              id="admin-sweep-confirm-dialog"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                sweepButtonRef.current?.focus();
+              }}
+            >
               <AlertDialogTitle>确认执行最终清理</AlertDialogTitle>
               <AlertDialogDescription>
                 此操作会永久删除回收站版本的文件引用和零引用 R2 对象，不能恢复。只有在确认清理范围正确后继续。

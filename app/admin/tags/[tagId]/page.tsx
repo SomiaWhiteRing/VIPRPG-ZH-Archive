@@ -21,10 +21,15 @@ type AdminTagEditPageProps = {
   params: Promise<{
     tagId: string;
   }>;
+  searchParams: Promise<{
+    error?: string | string[];
+  }>;
 };
 
-export default async function AdminTagEditPage({ params }: AdminTagEditPageProps) {
+export default async function AdminTagEditPage({ params, searchParams }: AdminTagEditPageProps) {
   const { tagId: rawTagId } = await params;
+  const query = await searchParams;
+  const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const tagId = parseId(rawTagId);
   const adminUser = await requirePagePermission(`/admin/tags/${tagId}`, "tag.update");
   const [tag, unreadInboxCount, candidates] = await Promise.all([
@@ -58,10 +63,17 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
         }
       />
 
+      {formError ? (
+        <p className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+          {formError}
+        </p>
+      ) : null}
+
       <ConfirmingForm
         action={`/api/admin/tags/${tag.id}/update`}
         className="grid gap-4 grid gap-4"
         confirmField="merge_target_id"
+        errorTitle="标签资料保存失败"
         method="post"
         title="确认合并并删除标签"
         description="目标标签会接收现有关联，当前标签将被删除。此操作不可逆，请确认目标名称正确。"
@@ -74,6 +86,7 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
             </FormField>
             <FormField label="命名空间">
               <SelectField
+                aria-label="命名空间"
                 defaultValue={tag.namespace}
                 name="namespace"
                 options={[
@@ -93,8 +106,10 @@ export default async function AdminTagEditPage({ params }: AdminTagEditPageProps
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" label="目标标签">
+          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" hintId="tag-merge-target-hint" label="目标标签">
             <SelectField
+              aria-describedby="tag-merge-target-hint"
+              aria-label="目标标签"
               name="merge_target_id"
               options={[
                 { value: "", label: "不合并" },

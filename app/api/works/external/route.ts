@@ -4,9 +4,9 @@ import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
 import { createExternalWork } from "@/lib/server/db/game-library";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 import {
-  ensureCharacterPortraitFaceSheets,
-  readCharacterPortrait,
-  storeCharacterPortraits,
+  ensureCharacterFaceSheets,
+  readCharacterFaceSheet,
+  storeCharacterFaceSheets,
 } from "@/lib/server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 
@@ -24,17 +24,18 @@ export async function POST(request: Request) {
     const browsingImages = form
       .getAll("browsing_images[]")
       .map((value) => readWorkImage(value, "browsing_images[]"));
-    const characterPortraits = form
-      .getAll("character_portraits[]")
+    const characterFaceSheets = form
+      .getAll("character_face_sheets[]")
       .filter((value): value is File => value instanceof File && value.size > 0)
-      .map((value) => readCharacterPortrait(value));
+      .map((value) => readCharacterFaceSheet(value));
     const imageFiles = [cover, ...browsingImages];
     const previewBlobSha256s = await storeWorkImages(imageFiles);
-    await storeCharacterPortraits(characterPortraits);
-    await ensureCharacterPortraitFaceSheets(
-      metadata.characters.flatMap((credit) =>
-        credit.portrait ? [credit.portrait.blobSha256] : [],
-      ),
+    await storeCharacterFaceSheets(characterFaceSheets);
+    await ensureCharacterFaceSheets(
+      metadata.characters.flatMap((credit) => [
+        ...credit.faceSheetBlobSha256s,
+        ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+      ]),
       auth.user.id,
     );
     const result = await createExternalWork({

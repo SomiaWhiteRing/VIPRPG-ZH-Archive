@@ -384,7 +384,6 @@ export function CoverPicker({
                   <Label className="col-span-2 row-start-2 grid min-w-0 grid-cols-[auto_minmax(50px,1fr)_auto] items-center gap-2 text-xs sm:col-span-1 sm:row-start-auto">
                     <span className="text-muted">缩放</span>
                     <Slider.Root
-                      aria-label="缩放封面"
                       className="relative flex h-5 min-w-0 touch-none select-none items-center"
                       disabled={!activeCandidate || busy}
                       max={MAX_ZOOM}
@@ -396,7 +395,7 @@ export function CoverPicker({
                       <Slider.Track className="relative h-1 grow rounded-full bg-muted/30">
                         <Slider.Range className="absolute h-full rounded-full bg-primary" />
                       </Slider.Track>
-                      <Slider.Thumb className="block size-4 rounded-full border border-primary bg-card shadow-sm" />
+                      <Slider.Thumb aria-label="缩放封面" className="block size-4 rounded-full border border-primary bg-card shadow-sm" />
                     </Slider.Root>
                     <span className="w-9 text-right text-muted">
                       {Math.round(zoom * 100)}%

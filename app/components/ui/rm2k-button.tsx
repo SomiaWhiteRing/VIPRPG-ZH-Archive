@@ -12,6 +12,9 @@ type Rm2kButtonProps = {
   disabled?: boolean;
   onClick?: MouseEventHandler<HTMLElement>;
   role?: string;
+  "aria-controls"?: string;
+  "aria-expanded"?: boolean;
+  "aria-haspopup"?: "dialog";
   "aria-selected"?: boolean;
   iconPosition?: "start" | "end";
   size?: "default" | "large";
@@ -26,6 +29,9 @@ export function Rm2kButton({
   disabled = false,
   onClick,
   role,
+  "aria-controls": ariaControls,
+  "aria-expanded": ariaExpanded,
+  "aria-haspopup": ariaHasPopup,
   "aria-selected": ariaSelected,
   iconPosition = "start",
   size = "default",
@@ -45,6 +51,9 @@ export function Rm2kButton({
     return (
       <Button asChild aria-disabled={disabled || undefined} className={buttonClassName} variant="rm2k">
         <Link
+          aria-controls={ariaControls}
+          aria-expanded={ariaExpanded}
+          aria-haspopup={ariaHasPopup}
           aria-selected={ariaSelected}
           href={href}
           onClick={
@@ -65,6 +74,9 @@ export function Rm2kButton({
   }
   return (
     <Button
+      aria-controls={ariaControls}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHasPopup}
       className={buttonClassName}
       disabled={disabled}
       onClick={onClick as MouseEventHandler<HTMLButtonElement>}
