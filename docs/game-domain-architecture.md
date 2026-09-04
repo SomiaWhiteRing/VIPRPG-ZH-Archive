@@ -96,7 +96,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 
 - Creator 表示作者或制作人员身份；`work_staff` 保存其在具体 Work 中的职责。
 - Character 表示角色身份，保存规范日语名和中文主名；`character_aliases` 保存可搜索的日语、中文别名及来源。
-- `work_characters` 保存出演角色、该作品选用的中文展示名、剧透级别、顺序和备注；筛选始终使用 Character ID，不使用展示名反查身份。
+- `work_characters` 的每一行表示一次角色登场，保存该作品选用的中文展示名、头像、剧透级别、顺序和备注；同一 Character 可在一个 Work 中以不同形态重复登场，筛选仍使用 Character ID，不使用展示名反查身份。
 - Tag 是规范化分类；`work_tags` 保存来源。
 - Creator name、Character original name、Character alias 和 Tag name 的唯一性及大小写规则以 migration 为准；不同角色可以共享中文译名。
 - 上传表单提交已有角色 ID 和本作品展示名；新增名称同时提交日语名和中文名，由服务端在游戏提交事务中复用角色、新增别名或创建角色。
@@ -144,6 +144,10 @@ target.mode=update
   -> 按提交规则合并允许更新的资料
   -> 创建新的 ArchiveVersion
 ```
+
+已有作品统一从 `/me/uploads/[workId]` 维护，并复用 `/upload` 的上传工作台。2k 系引擎显示“游戏文件”：现有当前归档先作为已就绪信息展示，移除后才显示上传选择器；非 2k 系引擎显示外部下载。只有表单当前仍有游戏文件或外部下载时才锁定另一类引擎，非当前历史 ArchiveVersion 不参与切换判定。
+
+没有选择新游戏文件时，保存只更新 Work 资料并保留当前 ArchiveVersion；选择新游戏文件时，同一次保存通过 `target.mode=update` 更新资料并创建新的 ArchiveVersion。转为外链时，同一 D1 批次取消当前归档并写入外部下载；转回本站归档时，archive commit 在同一批次删除旧外链并设置新当前版本。历史 ArchiveVersion 保留为不可变快照，但不会自动恢复为外链作品的当前版本。
 
 Work 更新与 ArchiveVersion 创建必须在同一 commit 边界完成。不能先发布资料、后补文件引用，也不能因为同名作品自动合并；客户端必须提交明确 `workId`。
 

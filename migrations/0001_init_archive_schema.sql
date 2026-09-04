@@ -59,15 +59,15 @@ VALUES
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'user';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.update_own","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","work_comment.manage_any","custom_emoji.manage","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","work_comment.manage_any","custom_emoji.manage","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -390,7 +390,6 @@ CREATE TABLE IF NOT EXISTS work_relations (
     )
   ),
   vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
-  relation_order REAL NOT NULL DEFAULT 0,
   created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (from_work_id, to_work_id, relation_type, vice_versa),
@@ -422,7 +421,6 @@ CREATE TABLE IF NOT EXISTS translation_relations (
   target_role TEXT NOT NULL CHECK (target_role IN ('original', 'translation')),
   target_work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   vice_versa INTEGER NOT NULL DEFAULT 0 CHECK (vice_versa IN (0, 1)),
-  relation_order REAL NOT NULL DEFAULT 0,
   created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (source_work_id, target_work_id, vice_versa),
@@ -430,7 +428,7 @@ CREATE TABLE IF NOT EXISTS translation_relations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_translation_relations_source
-  ON translation_relations(source_work_id, target_role, relation_order);
+  ON translation_relations(source_work_id, target_role);
 
 CREATE INDEX IF NOT EXISTS idx_translation_relations_target
   ON translation_relations(target_work_id, target_role);
@@ -802,6 +800,11 @@ CREATE TABLE IF NOT EXISTS face_sheets (
   source_image_url TEXT,
   source_page_title TEXT,
   source_section_title TEXT,
+  source_order INTEGER CHECK (
+    source_order IS NULL OR (
+      typeof(source_order) = 'integer' AND source_order BETWEEN 0 AND 9007199254740991
+    )
+  ),
   library_status TEXT NOT NULL CHECK (
     library_status IN ('pending', 'approved', 'rejected')
   ) DEFAULT 'pending',
@@ -811,7 +814,7 @@ CREATE TABLE IF NOT EXISTS face_sheets (
 );
 
 CREATE INDEX IF NOT EXISTS idx_face_sheets_library
-  ON face_sheets(library_status, id);
+  ON face_sheets(library_status, source_order, id);
 
 CREATE TRIGGER IF NOT EXISTS face_sheets_require_active_blob_insert
 BEFORE INSERT ON face_sheets
@@ -900,6 +903,7 @@ BEGIN
 END;
 
 CREATE TABLE IF NOT EXISTS work_characters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
   portrait_ref_id INTEGER REFERENCES character_portrait_refs(id) ON DELETE SET NULL,
@@ -909,9 +913,14 @@ CREATE TABLE IF NOT EXISTS work_characters (
   ) DEFAULT 'supporting',
   spoiler_level INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER,
-  notes TEXT,
-  PRIMARY KEY (work_id, character_id)
+  notes TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_work_characters_work
+  ON work_characters(work_id, sort_order, id);
+
+CREATE INDEX IF NOT EXISTS idx_work_characters_character
+  ON work_characters(character_id, work_id);
 
 CREATE TRIGGER IF NOT EXISTS work_characters_require_matching_portrait_insert
 BEFORE INSERT ON work_characters

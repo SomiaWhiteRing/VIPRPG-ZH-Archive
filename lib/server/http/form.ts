@@ -1,3 +1,5 @@
+import { jsonError, publicErrorDetail } from "@/lib/server/http/json";
+
 export function readRequiredFormString(
   formData: FormData,
   name: string,
@@ -30,6 +32,22 @@ export function redirectResponse(url: URL | string, status = 303): Response {
       Location: url.toString(),
     },
   });
+}
+
+export function formOrJsonError(
+  request: Request,
+  fallbackPath: string,
+  message: string,
+  error: unknown,
+): Response {
+  if (requestWantsJson(request)) return jsonError(message, error);
+  return redirectWithParams(request, fallbackPath, {
+    error: publicErrorDetail(error),
+  });
+}
+
+export function requestWantsJson(request: Request): boolean {
+  return request.headers.get("accept")?.toLowerCase().includes("application/json") ?? false;
 }
 
 export function applySearchParams(

@@ -13,6 +13,7 @@ import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import { formatNumber } from "@/lib/format";
 import {
+  WORK_RELATION_TYPES,
   languageLabel,
   relationLabel,
 } from "@/lib/labels";
@@ -21,6 +22,7 @@ import { listCatalogs, listCatalogsContainingWork } from "@/lib/server/db/catalo
 import {
   getGameWorkDetail,
   type GameTranslationRelation,
+  type GameWorkRelation,
 } from "@/lib/server/db/game-library";
 import {
   getWorkCommunitySummary,
@@ -33,7 +35,6 @@ import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { RelationCreateDialog, RelationEditor } from "./relation-editor";
 import { WorkActionBar } from "./work-action-bar";
 import { WorkCommunityPanel } from "./work-community-panel";
 import {
@@ -89,7 +90,12 @@ export default async function GameDetailPage({
   const relatedTranslations = dedupeTranslations([
     ...work.translations,
     ...work.parallelTranslations,
-  ]);
+  ]).sort(compareTranslations);
+  const orderedRelations = WORK_RELATION_TYPES.flatMap((type) =>
+    work.relations
+      .filter((relation) => relation.relationType === type)
+      .sort(compareRelatedWorks),
+  );
   const relationCards = [
     ...relatedTranslations.map((item) => ({
       key: `translation-${item.workId}`,
@@ -98,7 +104,7 @@ export default async function GameDetailPage({
       title: item.title,
       previewBlobSha256: item.previewBlobSha256 ?? null,
     })),
-    ...work.relations.map((item) => ({
+    ...orderedRelations.map((item) => ({
       key: `relation-${item.id}`,
       href: `/games/${item.workId}`,
       type: relationLabel(item.relationType),
@@ -106,12 +112,10 @@ export default async function GameDetailPage({
       previewBlobSha256: item.previewBlobSha256 ?? null,
     })),
   ];
-  const showRelationCreator =
+  const showRelationEditor =
     relationCapabilities.canCreateRelation ||
-    relationCapabilities.canCreateTranslation;
-  const showRelationManager =
+    relationCapabilities.canCreateTranslation ||
     relationCapabilities.canUpdate ||
-    relationCapabilities.canUpdateTranslation ||
     relationCapabilities.canDeleteRelation ||
     relationCapabilities.canDeleteTranslation;
   const externalLinks = work.externalLinks.filter(
@@ -133,7 +137,7 @@ export default async function GameDetailPage({
           ...(media.length ? [{ href: "#sec-gallery", label: "截图", count: media.length }] : []),
           ...(work.characters.length ? [{ href: "#sec-cast", label: "角色", count: work.characters.length }] : []),
           ...(relationCards.length ? [{ href: "#sec-relations", label: "关联", count: relationCards.length }] : []),
-          { href: "#comments", label: "评论", count: community.commentCount },
+          { href: "#sec-comments", label: "评论", count: community.commentCount },
         ]}
       />
 
@@ -189,14 +193,14 @@ export default async function GameDetailPage({
             <section aria-labelledby="cast-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-cast">
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
                 <h2 className="m-0 text-base font-bold" id="cast-title">登场角色</h2>
-                <span className="font-mono text-xs text-muted max-[560px]:text-left">{work.characters.length} 名</span>
+                <span className="font-mono text-xs text-muted max-[560px]:text-left">{work.characters.length} 项</span>
               </div>
               <div aria-label="角色列表" className="flex gap-2.5 overflow-x-auto pb-1.5 [scroll-snap-type:x_proximity] scrollbar-thin">
                 {work.characters.map((character, index) => (
                   <Link
                     className="group grid basis-29 shrink-0 content-start gap-1 text-foreground max-[560px]:basis-27"
                     href={`/games?character=${character.id}`}
-                    key={character.id}
+                    key={`${character.id}:${index}`}
                   >
                     <CharacterPortrait
                       className="w-full text-2xl transition-shadow duration-150 group-hover:shadow-[0_3px_10px_rgb(23_33_43/14%)]"
@@ -215,7 +219,7 @@ export default async function GameDetailPage({
             </section>
           ) : null}
 
-          {relationCards.length || showRelationManager ? (
+          {relationCards.length ? (
             <section aria-labelledby="relations-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-relations">
               <span aria-hidden="true" className="sr-only" id="relations" />
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
@@ -252,36 +256,26 @@ export default async function GameDetailPage({
               ) : (
                 <p className="text-sm text-muted">暂无公开关联作品。</p>
               )}
-              {showRelationManager ? (
-                <div className="mt-4 pt-4">
-                  <RelationEditor
-                    {...relationCapabilities}
-                    currentUserId={currentUser?.id ?? null}
-                    language={work.language}
-                    parallelTranslations={work.parallelTranslations}
-                    relations={work.relations}
-                    translations={work.translations}
-                    workId={work.id}
-                    mode="manage"
-                  />
-                </div>
-              ) : null}
             </section>
           ) : null}
+
+          <section aria-labelledby="comments-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-comments">
+            <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+              <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
+              <span className="font-mono text-xs text-muted max-[560px]:text-left">按发帖时间排序</span>
+            </div>
+            <WorkCommunityPanel
+              currentUserId={currentUser?.id ?? null}
+              emojis={emojis}
+              initialComments={comments.items}
+              initialNextCursor={comments.nextCursor}
+              workId={work.id}
+            />
+          </section>
           </>
         }
         sidebar={
           <WorkSidebar
-            comments={
-              <WorkCommunityPanel
-                currentUserId={currentUser?.id ?? null}
-                emojis={emojis}
-                initialComments={comments.items}
-                initialNextCursor={comments.nextCursor}
-                workId={work.id}
-              />
-            }
-            commentCount={community.commentCount}
             engagement={
               <WorkEngagementActions
                 currentUserId={currentUser?.id ?? null}
@@ -293,16 +287,13 @@ export default async function GameDetailPage({
               <>
                 {currentUser ? (
                   <div aria-label="条目补充操作" className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full">
-                    {showRelationCreator ? (
-                      <RelationCreateDialog
-                        {...relationCapabilities}
-                        currentUserId={currentUser.id}
-                        language={work.language}
-                        parallelTranslations={work.parallelTranslations}
-                        relations={work.relations}
-                        translations={work.translations}
-                        workId={work.id}
-                      />
+                    {showRelationEditor ? (
+                      <Link
+                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-[#1f6f67] hover:underline"
+                        href={`/games/${work.id}/relations`}
+                      >
+                        编辑关联
+                      </Link>
                     ) : null}
                     <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
                   </div>
@@ -389,4 +380,16 @@ function dedupeTranslations(items: GameTranslationRelation[]): GameTranslationRe
     seen.add(item.workId);
     return true;
   });
+}
+
+function compareRelatedWorks(left: GameWorkRelation, right: GameWorkRelation): number {
+  return left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
+}
+
+function compareTranslations(
+  left: GameTranslationRelation,
+  right: GameTranslationRelation,
+): number {
+  const roleOrder = Number(left.role === "translation") - Number(right.role === "translation");
+  return roleOrder || left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
 }

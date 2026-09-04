@@ -7,8 +7,7 @@
 本契约适用于：
 
 - `/upload` 新建归档作品与外链作品。
-- `/upload/[workId]` 为已有归档作品编辑资料或提交新文件。
-- `/me/uploads/[workId]` 的作品资料维护；该入口必须与上传工作台使用相同的声明和译者规则。
+- `/me/uploads/[workId]` 复用上传工作台维护已有作品资料，并按当前引擎提供游戏文件或外部下载来源。
 - 上传草稿的保存与恢复。
 
 本契约要求以下结果：
@@ -228,7 +227,7 @@ CHECK (NOT (is_original = 1 AND is_translation = 1))
 - `isTranslation`。
 - `role_key = "translator"` 的译者列表。
 
-`/upload` 和 `/upload/[workId]` 还需把当前用户 `displayName` 传给客户端，用于新建上传的译者默认值。
+`/upload` 还需把当前用户 `displayName` 传给客户端，用于新建上传的译者默认值；已有作品编辑以服务端资料为准。
 
 ## 9. 验收场景
 
@@ -257,7 +256,7 @@ CHECK (NOT (is_original = 1 AND is_translation = 1))
 - `lib/server/db/archive-commit.ts`：元数据校验、Work 写入和作者/译者职责替换。
 - `lib/server/db/game-library.ts`：Work 读写 DTO、作品资料更新和 Creator 关系读取。
 - `app/upload/upload-client.tsx`：发布声明、译者动态字段、客户端校验与偏好恢复。
-- `app/upload/page.tsx`、`app/upload/[workId]/page.tsx`：传入显示名和已有翻译资料。
+- `app/upload/page.tsx`：为新建上传传入当前用户显示名。
 - `app/api/works/external/route.ts`：外链作品创建参数与服务端校验。
-- `app/me/uploads/[workId]`：作品资料编辑时的同一套声明与译者规则。
+- `app/me/uploads/[workId]`：复用上传工作台完成资料编辑、来源切换和单一保存入口。
 - `app/upload/upload-worker.ts` 与上传草稿：manifest 生成、保存和恢复。

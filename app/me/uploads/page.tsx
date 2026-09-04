@@ -52,7 +52,7 @@ export default async function UploadsPage({
               <div className="flex flex-wrap gap-2">
                 <Rm2kButton
                   className="min-h-9 px-3 text-xs"
-                  href={work.distribution === "archive" ? `/upload/${work.id}` : `/me/uploads/${work.id}`}
+                  href={`/me/uploads/${work.id}`}
                 >
                   编辑信息
                 </Rm2kButton>
@@ -61,7 +61,7 @@ export default async function UploadsPage({
           ))}
         </ul>
       ) : <AccountEmpty>还没有上传作品。</AccountEmpty>}
-      <PaginationLinks basePath="/me/uploads" page={page} hasNext={page * 20 < result.total} />
+      <PaginationLinks basePath="/me/uploads" page={page} pageSize={result.pageSize} total={result.total} />
     </div>
   );
 }

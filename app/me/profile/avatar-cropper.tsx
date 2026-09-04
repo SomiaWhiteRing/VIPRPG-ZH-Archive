@@ -13,6 +13,7 @@ const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha256: string | null; displayName: string }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const [source, setSource] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -70,13 +71,32 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
       <UserAvatar avatarBlobSha256={avatarBlobSha256} className="size-20" displayName={displayName} size={80} />
       <div className="grid gap-2">
         <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => choose(event.target.files?.[0])} ref={fileInputRef} type="file" />
-        <Button onClick={() => fileInputRef.current?.click()} size="sm" type="button" variant="outline">修改头像</Button>
+        <Button
+          aria-controls="avatar-crop-dialog"
+          aria-expanded={Boolean(source)}
+          aria-haspopup="dialog"
+          ref={editButtonRef}
+          onClick={() => fileInputRef.current?.click()}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          修改头像
+        </Button>
         {message ? <p className="m-0 max-w-sm text-sm text-red-700" role="status">{message}</p> : null}
       </div>
       <Dialog.Root open={Boolean(source)} onOpenChange={(open) => { if (!open && !busy) setSource(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
-          <Dialog.Content aria-describedby="avatar-crop-description" className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-4 shadow-surface">
+          <Dialog.Content
+            aria-describedby="avatar-crop-description"
+            className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-4 shadow-surface"
+            id="avatar-crop-dialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              editButtonRef.current?.focus();
+            }}
+          >
             <Dialog.Title className="m-0 text-lg font-bold">裁剪头像</Dialog.Title>
             <Dialog.Description className="m-0 text-sm text-muted" id="avatar-crop-description">拖动图片并缩放，圆形区域是最终显示范围。</Dialog.Description>
             <div className="relative h-[min(55vh,380px)] overflow-hidden rounded-md bg-black">
@@ -84,9 +104,9 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm">缩放</span>
-              <Slider.Root aria-label="缩放头像" className="relative flex h-5 flex-1 touch-none select-none items-center" max={3} min={1} onValueChange={([value]) => setZoom(value)} step={0.01} value={[zoom]}>
+              <Slider.Root className="relative flex h-5 flex-1 touch-none select-none items-center" max={3} min={1} onValueChange={([value]) => setZoom(value)} step={0.01} value={[zoom]}>
                 <Slider.Track className="relative h-1 grow rounded-full bg-muted/30"><Slider.Range className="absolute h-full rounded-full bg-primary" /></Slider.Track>
-                <Slider.Thumb className="block size-4 rounded-full border border-primary bg-card shadow-sm" />
+                <Slider.Thumb aria-label="缩放头像" className="block size-4 rounded-full border border-primary bg-card shadow-sm" />
               </Slider.Root>
             </div>
             {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}

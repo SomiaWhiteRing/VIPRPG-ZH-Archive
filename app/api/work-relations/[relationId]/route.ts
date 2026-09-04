@@ -1,7 +1,6 @@
 import { requireAnyPermission } from "@/lib/server/auth/authorize";
 import {
   deleteWorkRelation,
-  moveWorkRelation,
   updateWorkRelation,
 } from "@/lib/server/db/relations";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
@@ -44,17 +43,11 @@ export async function PATCH(
       (await context.params).relationId,
       "relation id",
     );
-    if (body.direction !== undefined)
-      await moveWorkRelation(relationId, body.direction, auth.user);
-    else
-      await updateWorkRelation(
-        relationId,
-        {
-          relationType: body.relationType as never,
-          relationOrder: body.relationOrder,
-        },
-        auth.user,
-      );
+    await updateWorkRelation(
+      relationId,
+      { relationType: body.relationType as never },
+      auth.user,
+    );
     return json({ ok: true });
   } catch (error) {
     return jsonError("Relation update failed", error);
@@ -63,29 +56,9 @@ export async function PATCH(
 
 async function readBody(
   request: Request,
-): Promise<{
-  relationType?: string;
-  relationOrder?: number;
-  direction?: number;
-}> {
+): Promise<{ relationType: string }> {
   const body = await readJsonObject(request, "Invalid relation body");
-  if (body.relationType !== undefined && typeof body.relationType !== "string")
+  if (typeof body.relationType !== "string")
     throw new HttpError(400, "Relation type must be a string");
-  if (
-    body.relationOrder !== undefined &&
-    typeof body.relationOrder !== "number"
-  )
-    throw new HttpError(400, "Relation order must be a number");
-  if (
-    body.direction !== undefined &&
-    (typeof body.direction !== "number" ||
-      !Number.isSafeInteger(body.direction) ||
-      (body.direction !== -1 && body.direction !== 1))
-  )
-    throw new HttpError(400, "Relation direction must be -1 or 1");
-  return body as {
-    relationType?: string;
-    relationOrder?: number;
-    direction?: number;
-  };
+  return { relationType: body.relationType };
 }

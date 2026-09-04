@@ -12,11 +12,28 @@ export type AdminFaceSheet = CharacterFaceSheet & {
   libraryStatus: "pending" | "approved" | "rejected";
 };
 
+type AdminFaceSheetRow = {
+  id: number;
+  blob_sha256: string;
+  width_px: number;
+  height_px: number;
+  source_page_url: string | null;
+  source_image_url: string | null;
+  source_page_title: string | null;
+  source_section_title: string | null;
+  library_status: AdminFaceSheet["libraryStatus"];
+};
+
 export type AdminCharacterPortraitLibrary = {
   sheets: AdminFaceSheet[];
   boundSheetIds: number[];
   defaultPortrait: CharacterPortrait | null;
 };
+
+export type CharacterPortraitConfiguration = Pick<
+  AdminCharacterPortraitLibrary,
+  "boundSheetIds" | "defaultPortrait"
+>;
 
 export type CharacterPortraitRow = {
   portrait_face_sheet_id: number | null;
@@ -67,22 +84,16 @@ export function mapCharacterPortrait(row: CharacterPortraitRow): CharacterPortra
   };
 }
 
-export async function getCharacterPortraitLibraryForAdmin(
+export async function getCharacterPortraitConfigurationForAdmin(
   characterId: number,
-): Promise<AdminCharacterPortraitLibrary> {
+): Promise<CharacterPortraitConfiguration> {
   const database = getD1();
-  const [sheetsResult, bindingsResult, defaultResult] = await database.batch([
+  const [bindingsResult, defaultResult] = await database.batch([
     database.prepare(
-      `SELECT id,blob_sha256,width_px,height_px,source_page_url,source_image_url,
-              source_page_title,source_section_title,library_status
-       FROM face_sheets
-       WHERE library_status!='rejected'
-       ORDER BY CASE library_status WHEN 'approved' THEN 0 ELSE 1 END,
-                source_page_title,id`,
-    ),
-    database.prepare(
-      `SELECT face_sheet_id FROM character_face_sheet_bindings
-       WHERE character_id=? ORDER BY face_sheet_id`,
+      `SELECT face_sheet_id
+       FROM character_face_sheet_bindings
+       WHERE character_id=?
+       ORDER BY sort_order IS NULL,sort_order,face_sheet_id`,
     ).bind(characterId),
     database.prepare(
       `SELECT fs.id AS portrait_face_sheet_id,fs.blob_sha256 AS portrait_blob_sha256,
@@ -96,35 +107,109 @@ export async function getCharacterPortraitLibraryForAdmin(
   ]);
   const defaultRow = (defaultResult.results?.[0] ?? null) as CharacterPortraitRow | null;
   return {
-    sheets: (sheetsResult.results ?? []).map((row) => {
-      const value = row as {
-        id: number;
-        blob_sha256: string;
-        width_px: number;
-        height_px: number;
-        source_page_url: string | null;
-        source_image_url: string | null;
-        source_page_title: string | null;
-        source_section_title: string | null;
-        library_status: AdminFaceSheet["libraryStatus"];
-      };
-      return {
-        id: value.id,
-        blobSha256: value.blob_sha256,
-        width: value.width_px,
-        height: value.height_px,
-        sourcePageUrl: value.source_page_url,
-        sourceImageUrl: value.source_image_url,
-        sourcePageTitle: value.source_page_title,
-        sourceSectionTitle: value.source_section_title,
-        libraryStatus: value.library_status,
-      };
-    }),
     boundSheetIds: (bindingsResult.results ?? []).map(
       (row) => Number((row as { face_sheet_id: number }).face_sheet_id),
     ),
     defaultPortrait: defaultRow ? mapCharacterPortrait(defaultRow) : null,
   };
+}
+
+export async function getCharacterPortraitLibraryForAdmin(
+  characterId: number,
+): Promise<AdminCharacterPortraitLibrary> {
+  const database = getD1();
+  const [sheetsResult, bindingsResult, defaultResult] = await database.batch([
+    database.prepare(
+      `SELECT id,blob_sha256,width_px,height_px,source_page_url,source_image_url,
+              source_page_title,source_section_title,library_status
+       FROM face_sheets
+       WHERE library_status!='rejected'
+       ORDER BY CASE library_status WHEN 'approved' THEN 0 ELSE 1 END,
+                source_order IS NULL,source_order,id`,
+    ),
+    database.prepare(
+      `SELECT binding.face_sheet_id
+       FROM character_face_sheet_bindings binding
+       JOIN face_sheets fs ON fs.id=binding.face_sheet_id
+       WHERE binding.character_id=?
+       ORDER BY fs.source_order IS NULL,fs.source_order,binding.face_sheet_id`,
+    ).bind(characterId),
+    database.prepare(
+      `SELECT fs.id AS portrait_face_sheet_id,fs.blob_sha256 AS portrait_blob_sha256,
+              fs.width_px AS portrait_width_px,fs.height_px AS portrait_height_px,
+              cpr.cell_row AS portrait_cell_row,cpr.cell_column AS portrait_cell_column
+       FROM character_default_portraits cdp
+       JOIN character_portrait_refs cpr ON cpr.id=cdp.portrait_ref_id
+       JOIN face_sheets fs ON fs.id=cpr.face_sheet_id
+       WHERE cdp.character_id=? LIMIT 1`,
+    ).bind(characterId),
+  ]);
+  const defaultRow = (defaultResult.results?.[0] ?? null) as CharacterPortraitRow | null;
+  return {
+    sheets: (sheetsResult.results ?? []).map((row) => mapAdminFaceSheet(row as AdminFaceSheetRow)),
+    boundSheetIds: (bindingsResult.results ?? []).map(
+      (row) => Number((row as { face_sheet_id: number }).face_sheet_id),
+    ),
+    defaultPortrait: defaultRow ? mapCharacterPortrait(defaultRow) : null,
+  };
+}
+
+export async function registerAdminFaceSheetForCharacter(input: {
+  characterId: number;
+  sha256: string;
+  width: number;
+  height: number;
+  fileName: string;
+  actorUserId: number;
+}): Promise<AdminFaceSheet> {
+  const database = getD1();
+  const character = await database
+    .prepare("SELECT id FROM characters WHERE id=? LIMIT 1")
+    .bind(input.characterId)
+    .first<{ id: number }>();
+  if (!character) throw new HttpError(404, "角色不存在，请返回角色维护页重新进入。");
+
+  const fileName = input.fileName.trim().slice(0, 255) || "上传的素材表";
+  await database.batch([
+    database
+      .prepare(
+        `INSERT INTO face_sheets(
+           blob_sha256,width_px,height_px,source_kind,source_page_title,
+           source_section_title,library_status,created_by_user_id
+         ) VALUES(?,?,?,'admin_upload','管理员上传',?,'approved',?)
+         ON CONFLICT(blob_sha256) DO UPDATE SET
+           library_status='approved',
+           updated_at=CURRENT_TIMESTAMP`,
+      )
+      .bind(
+        input.sha256,
+        input.width,
+        input.height,
+        fileName,
+        input.actorUserId,
+      ),
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO character_face_sheet_bindings(character_id,face_sheet_id)
+         SELECT ?,id FROM face_sheets WHERE blob_sha256=?`,
+      )
+      .bind(input.characterId, input.sha256),
+  ]);
+
+  const row = await database
+    .prepare(
+      `SELECT fs.id,fs.blob_sha256,fs.width_px,fs.height_px,fs.source_page_url,
+              fs.source_image_url,fs.source_page_title,fs.source_section_title,
+              fs.library_status
+       FROM face_sheets fs
+       JOIN character_face_sheet_bindings binding ON binding.face_sheet_id=fs.id
+       WHERE binding.character_id=? AND fs.blob_sha256=?
+       LIMIT 1`,
+    )
+    .bind(input.characterId, input.sha256)
+    .first<AdminFaceSheetRow>();
+  if (!row) throw new HttpError(500, "脸图素材表已上传，但未能绑定到当前角色。");
+  return mapAdminFaceSheet(row);
 }
 
 export async function updateCharacterPortraitLibraryForAdmin(input: {
@@ -249,4 +334,18 @@ export function parseCharacterPortraitLibraryForm(form: FormData): {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mapAdminFaceSheet(value: AdminFaceSheetRow): AdminFaceSheet {
+  return {
+    id: value.id,
+    blobSha256: value.blob_sha256,
+    width: value.width_px,
+    height: value.height_px,
+    sourcePageUrl: value.source_page_url,
+    sourceImageUrl: value.source_image_url,
+    sourcePageTitle: value.source_page_title,
+    sourceSectionTitle: value.source_section_title,
+    libraryStatus: value.library_status,
+  };
 }

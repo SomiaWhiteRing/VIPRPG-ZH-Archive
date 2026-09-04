@@ -32,13 +32,13 @@ export function AdminListControls(props: {
         {props.statusOptions ? (
           <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
             状态
-            <SelectField defaultValue={props.status ?? "all"} name="status" options={props.statusOptions} />
+            <SelectField aria-label="状态" defaultValue={props.status ?? "all"} name="status" options={props.statusOptions} />
           </Label>
         ) : null}
         {props.sortOptions ? (
           <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
             排序
-            <SelectField defaultValue={props.sort ?? "default"} name="sort" options={props.sortOptions} />
+            <SelectField aria-label="排序" defaultValue={props.sort ?? "default"} name="sort" options={props.sortOptions} />
           </Label>
         ) : null}
         <Button type="submit">应用</Button>
@@ -49,37 +49,8 @@ export function AdminListControls(props: {
   );
 }
 
-export function AdminPagination(props: {
-  basePath: string;
-  page: number;
-  pageSize: number;
-  total: number;
-  params?: Record<string, string | undefined>;
-}) {
-  const pages = Math.max(1, Math.ceil(props.total / props.pageSize));
-  if (pages <= 1) return null;
-  return (
-    <nav aria-label="分页" className="flex items-center justify-between gap-3 border-t border-border pt-3">
-      <Link aria-disabled={props.page <= 1} className={props.page <= 1 ? disabledLink : paginationLink} href={props.page <= 1 ? "#" : pageHref(props.basePath, props.page - 1, props.params)}>上一页</Link>
-      <span className="font-mono text-xs text-muted">第 {props.page} / {pages} 页</span>
-      <Link aria-disabled={props.page >= pages} className={props.page >= pages ? disabledLink : paginationLink} href={props.page >= pages ? "#" : pageHref(props.basePath, props.page + 1, props.params)}>下一页</Link>
-    </nav>
-  );
-}
-
 export function StickySaveBar({ children }: { children: ReactNode }) {
   return <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-[0_-8px_20px_rgb(23_33_43/8%)] backdrop-blur">{children}</div>;
-}
-
-const paginationLink = "inline-flex min-h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold hover:border-primary/50";
-const disabledLink = paginationLink + " pointer-events-none opacity-45";
-
-function pageHref(basePath: string, page: number, params?: Record<string, string | undefined>) {
-  const query = new URLSearchParams();
-  Object.entries(params ?? {}).forEach(([key, value]) => { if (value) query.set(key, value); });
-  if (page > 1) query.set("page", String(page));
-  const value = query.toString();
-  return value ? basePath + "?" + value : basePath;
 }
 
 export function parseAdminPage(value: string | string[] | undefined): number {

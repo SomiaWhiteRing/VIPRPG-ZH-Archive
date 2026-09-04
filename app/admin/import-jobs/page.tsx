@@ -41,6 +41,7 @@ export default async function AdminImportJobsPage({
       />
       <form className="flex items-end gap-3" method="get">
         <SelectField
+          aria-label="任务状态"
           defaultValue={status}
           name="status"
           options={[...STATUS_OPTIONS]}
@@ -69,8 +70,9 @@ export default async function AdminImportJobsPage({
       <PaginationLinks
         basePath="/admin/import-jobs"
         page={page}
-        hasNext={page * result.pageSize < result.total}
+        pageSize={result.pageSize}
         params={{ status: status === "all" ? undefined : status }}
+        total={result.total}
       />
     </main>
   );

@@ -15,7 +15,6 @@ export const PERMISSIONS = {
   "relation.delete_own": { category: "relation", label: "删除自己创建的作品关联" },
   "relation.manage_any": { category: "relation", label: "管理任意作品关联" },
   "translation_relation.create": { category: "relation", label: "创建翻译关联" },
-  "translation_relation.update_own": { category: "relation", label: "排序自己创建的翻译关联" },
   "translation_relation.delete_own": { category: "relation", label: "删除自己创建的翻译关联" },
   "translation_relation.manage_any": { category: "relation", label: "管理任意翻译关联" },
   "catalog.create": { category: "catalog", label: "创建目录" },
@@ -86,7 +85,6 @@ export type RelationEditorCapabilities = {
   canCreateRelation: boolean;
   canCreateTranslation: boolean;
   canUpdate: boolean;
-  canUpdateTranslation: boolean;
   canDeleteRelation: boolean;
   canDeleteTranslation: boolean;
   canManageRelationsAny: boolean;
@@ -106,8 +104,6 @@ export function getRelationEditorCapabilities(
     canCreateTranslation:
       hasPermission(user, "translation_relation.create") || translationAny,
     canUpdate: hasPermission(user, "relation.update_own") || relationAny,
-    canUpdateTranslation:
-      hasPermission(user, "translation_relation.update_own") || translationAny,
     canDeleteRelation:
       hasPermission(user, "relation.delete_own") || relationAny,
     canDeleteTranslation:
@@ -120,21 +116,21 @@ export function getRelationEditorCapabilities(
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
     "work.lookup_non_deleted", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
+    "translation_relation.create", "translation_relation.delete_own",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   uploader: [
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
+    "translation_relation.create", "translation_relation.delete_own",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   admin: [
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
+    "translation_relation.create", "translation_relation.delete_own",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
     "character.read_private", "character.update", "tag.read_private", "tag.update",
@@ -149,7 +145,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
     "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.update_own", "translation_relation.delete_own",
+    "translation_relation.create", "translation_relation.delete_own",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
     "character.read_private", "character.update", "tag.read_private", "tag.update",

@@ -51,7 +51,6 @@ type LockableScreenOrientation = ScreenOrientation & {
 
 type WebPlayClientProps = {
   comments: ReactNode;
-  commentCount: number;
   engagement: ReactNode;
   isAuthenticated: boolean;
   metadata: WebPlayMetadata;
@@ -68,7 +67,6 @@ declare global {
 
 export function WebPlayClient({
   comments,
-  commentCount,
   engagement,
   isAuthenticated,
   metadata,
@@ -83,6 +81,7 @@ export function WebPlayClient({
   const [playerStarting, setPlayerStarting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
   const [nativeFullscreen, setNativeFullscreen] = useState(false);
   const [fallbackImmersive, setFallbackImmersive] = useState(false);
@@ -477,19 +476,20 @@ export function WebPlayClient({
     >
       <WorkPageLayout
         main={
-          <section aria-labelledby="player-title" className="py-4.5">
-            <div className="mb-3.5 flex items-baseline justify-between gap-4">
-              <h2 className="m-0 text-base font-bold" id="player-title">游戏画面</h2>
-              <span className="font-mono text-xs text-muted">
-                {running ? "运行中" : playerStarting ? "启动中" : "待机"}
-              </span>
-            </div>
-            <div
-              className={immersive
-                ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
-                : "relative aspect-4/3 w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"}
-              id="web-player-frame"
-            >
+          <>
+            <section aria-labelledby="player-title" className="py-4.5">
+              <div className="mb-3.5 flex items-baseline justify-between gap-4">
+                <h2 className="m-0 text-base font-bold" id="player-title">游戏画面</h2>
+                <span className="font-mono text-xs text-muted">
+                  {running ? "运行中" : playerStarting ? "启动中" : "待机"}
+                </span>
+              </div>
+              <div
+                className={immersive
+                  ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
+                  : "relative aspect-4/3 w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"}
+                id="web-player-frame"
+              >
               <div
                 className={`${playerSurfaceClass} grid place-items-center [container-type:size]`}
                 id="web-player-surface"
@@ -555,17 +555,24 @@ export function WebPlayClient({
                   {displayMessage}
                 </div>
               ) : null}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-              <span id="status">{running ? "EasyRPG 正在运行" : "未启动"}</span>
-              {!immersive && displayMessage ? <span role="status">{displayMessage}</span> : null}
-            </div>
-          </section>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+                <span id="status">{running ? "EasyRPG 正在运行" : "未启动"}</span>
+                {!immersive && displayMessage ? <span role="status">{displayMessage}</span> : null}
+              </div>
+            </section>
+
+            <section aria-labelledby="comments-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-comments">
+              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
+                <span className="font-mono text-xs text-muted max-[560px]:text-left">按发帖时间排序</span>
+              </div>
+              {comments}
+            </section>
+          </>
         }
         sidebar={
           <WorkSidebar
-            comments={comments}
-            commentCount={commentCount}
             engagement={engagement}
             mobilePrimaryFirst
             notice={notice}
@@ -671,7 +678,17 @@ export function WebPlayClient({
                         </Button>
                       ) : null}
                       {installation ? (
-                        <Button disabled={playerBusy} onClick={() => setDeleteDialogOpen(true)} size="sm" type="button" variant="outline">
+                        <Button
+                          aria-controls="delete-local-cache-dialog"
+                          aria-expanded={deleteDialogOpen}
+                          aria-haspopup="dialog"
+                          ref={deleteButtonRef}
+                          disabled={playerBusy}
+                          onClick={() => setDeleteDialogOpen(true)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
                           删除本地缓存
                         </Button>
                       ) : null}
@@ -699,7 +716,13 @@ export function WebPlayClient({
                 </details>
 
                 <AlertDialog onOpenChange={setDeleteDialogOpen} open={deleteDialogOpen}>
-                  <AlertDialogContent>
+                  <AlertDialogContent
+                    id="delete-local-cache-dialog"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                      deleteButtonRef.current?.focus();
+                    }}
+                  >
                     <AlertDialogTitle>删除本地游戏缓存？</AlertDialogTitle>
                     <AlertDialogDescription>
                       已下载的本地游戏文件将被删除，浏览器存档不会受到影响。之后需要重新安装才能在线游玩。

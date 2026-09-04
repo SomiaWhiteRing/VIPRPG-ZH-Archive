@@ -96,7 +96,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             src="/icon/windI.png"
             width={32}
           />
-          <span>{inAdmin ? "VIPRPG 控制台" : "VIPRPG.org"}</span>
+          <span>{inAdmin ? "VIPRPG.org 控制台" : "VIPRPG.org"}</span>
         </Link>
         
         <HeaderNavigation

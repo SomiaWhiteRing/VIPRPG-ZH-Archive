@@ -4,12 +4,19 @@ import { HttpError } from "@/lib/server/http/json";
 import { getBlob } from "@/lib/server/storage/archive-bucket";
 import { storeWorkImages } from "@/lib/server/storage/work-images";
 
-const MAX_CHARACTER_PORTRAIT_BYTES = 256 * 1024;
-const CHARACTER_PORTRAIT_SIZE = 48;
+const MAX_CHARACTER_FACE_SHEET_BYTES = 256 * 1024;
+const CHARACTER_PORTRAIT_CELL_SIZE = 48;
+const MAX_CHARACTER_FACE_SHEET_SIZE = 192;
 
-export function readCharacterPortrait(
+export type CharacterFaceSheetObject = {
+  sha256: string;
+  width: number;
+  height: number;
+};
+
+export function readCharacterFaceSheet(
   value: FormDataEntryValue | null,
-  field = "角色头像",
+  field = "脸图素材表",
 ): File {
   if (!(value instanceof File) || value.size <= 0) {
     throw new HttpError(400, `${field}必须是 PNG 文件`);
@@ -17,40 +24,58 @@ export function readCharacterPortrait(
   if (value.type.toLowerCase() !== "image/png") {
     throw new HttpError(415, `${field}只支持 PNG 文件`);
   }
-  if (value.size > MAX_CHARACTER_PORTRAIT_BYTES) {
+  if (value.size > MAX_CHARACTER_FACE_SHEET_BYTES) {
     throw new HttpError(413, `${field}不能超过 256 KiB`);
   }
   return value;
 }
 
-export async function storeCharacterPortraits(files: File[]): Promise<string[]> {
+export async function storeCharacterFaceSheets(
+  files: File[],
+): Promise<CharacterFaceSheetObject[]> {
+  const dimensions: Array<{ width: number; height: number }> = [];
   for (const file of files) {
-    assertCharacterPortraitPng(await file.arrayBuffer(), file.name || "角色头像");
+    dimensions.push(
+      assertCharacterFaceSheetPng(
+        await file.arrayBuffer(),
+        file.name || "脸图素材表",
+      ),
+    );
   }
-  return storeWorkImages(files);
+  const hashes = await storeWorkImages(files);
+  return hashes.map((sha256, index) => ({
+    sha256,
+    width: dimensions[index].width,
+    height: dimensions[index].height,
+  }));
 }
 
-export async function registerUserPortraitFaceSheets(
-  hashes: string[],
+export async function registerUserCharacterFaceSheets(
+  sheets: CharacterFaceSheetObject[],
   userId: number,
 ): Promise<void> {
-  const values = [...new Set(hashes.map(normalizeSha256))];
+  const values = [...new Map(
+    sheets.map((sheet) => [
+      normalizeSha256(sheet.sha256),
+      { ...sheet, sha256: normalizeSha256(sheet.sha256) },
+    ]),
+  ).values()];
   if (!values.length) return;
   const database = getD1();
   await database.batch(
-    values.map((hash) =>
+    values.map((sheet) =>
       database
         .prepare(
           `INSERT OR IGNORE INTO face_sheets(
              blob_sha256,width_px,height_px,source_kind,library_status,created_by_user_id
-           ) VALUES(?,48,48,'user_upload','pending',?)`,
+           ) VALUES(?,?,?,'user_upload','pending',?)`,
         )
-        .bind(hash, userId),
+        .bind(sheet.sha256, sheet.width, sheet.height, userId),
     ),
   );
 }
 
-export async function ensureCharacterPortraitFaceSheets(
+export async function ensureCharacterFaceSheets(
   values: string[],
   userId: number,
 ): Promise<string[]> {
@@ -66,14 +91,17 @@ export async function ensureCharacterPortraitFaceSheets(
     .all<{ blob_sha256: string }>();
   const registered = new Set((rows.results ?? []).map((row) => row.blob_sha256));
   const uploadedPortraits = hashes.filter((hash) => !registered.has(hash));
-  await validateCharacterPortraitHashes(uploadedPortraits);
-  await registerUserPortraitFaceSheets(uploadedPortraits, userId);
+  const sheets = await validateCharacterFaceSheetHashes(uploadedPortraits);
+  await registerUserCharacterFaceSheets(sheets, userId);
   return hashes;
 }
 
-export async function validateCharacterPortraitHashes(values: string[]): Promise<string[]> {
+export async function validateCharacterFaceSheetHashes(
+  values: string[],
+): Promise<CharacterFaceSheetObject[]> {
   const hashes = [...new Set(values.map(normalizeSha256))];
   if (!hashes.length) return [];
+  const results: CharacterFaceSheetObject[] = [];
   const rows = await getD1()
     .prepare(
       `SELECT sha256,size_bytes,content_type_hint
@@ -93,22 +121,29 @@ export async function validateCharacterPortraitHashes(values: string[]): Promise
       !row ||
       row.content_type_hint?.toLowerCase() !== "image/png" ||
       row.size_bytes <= 0 ||
-      row.size_bytes > MAX_CHARACTER_PORTRAIT_BYTES
+      row.size_bytes > MAX_CHARACTER_FACE_SHEET_BYTES
     ) {
-      throw new HttpError(400, "角色头像必须是有效的 48×48 PNG 文件");
+      throw new HttpError(
+        400,
+        "脸图素材表必须是 48×48 至 192×192、宽高均为 48 倍数的 PNG 文件",
+      );
     }
     const object = await getBlob(hash);
-    if (!object) throw new HttpError(409, "角色头像文件缺失，请重新上传");
-    assertCharacterPortraitPng(await object.arrayBuffer(), "角色头像");
+    if (!object) throw new HttpError(409, "脸图素材表文件缺失，请重新上传");
+    const dimensions = assertCharacterFaceSheetPng(
+      await object.arrayBuffer(),
+      "脸图素材表",
+    );
+    results.push({ sha256: hash, ...dimensions });
   }
-  return hashes;
+  return results;
 }
 
-export function assertCharacterPortraitPng(
+export function assertCharacterFaceSheetPng(
   buffer: ArrayBuffer,
-  field = "角色头像",
-): void {
-  if (buffer.byteLength > MAX_CHARACTER_PORTRAIT_BYTES) {
+  field = "脸图素材表",
+): { width: number; height: number } {
+  if (buffer.byteLength > MAX_CHARACTER_FACE_SHEET_BYTES) {
     throw new HttpError(413, `${field}不能超过 256 KiB`);
   }
   if (buffer.byteLength < 24) throw new HttpError(400, `${field}文件不完整`);
@@ -121,10 +156,20 @@ export function assertCharacterPortraitPng(
     throw new HttpError(400, `${field}缺少 PNG 尺寸信息`);
   }
   const view = new DataView(buffer);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
   if (
-    view.getUint32(16) !== CHARACTER_PORTRAIT_SIZE ||
-    view.getUint32(20) !== CHARACTER_PORTRAIT_SIZE
+    width < CHARACTER_PORTRAIT_CELL_SIZE ||
+    height < CHARACTER_PORTRAIT_CELL_SIZE ||
+    width > MAX_CHARACTER_FACE_SHEET_SIZE ||
+    height > MAX_CHARACTER_FACE_SHEET_SIZE ||
+    width % CHARACTER_PORTRAIT_CELL_SIZE !== 0 ||
+    height % CHARACTER_PORTRAIT_CELL_SIZE !== 0
   ) {
-    throw new HttpError(400, `${field}尺寸必须精确为 48×48`);
+    throw new HttpError(
+      400,
+      `${field}尺寸必须在 48×48 至 192×192 之间，且宽高均为 48 的倍数`,
+    );
   }
+  return { width, height };
 }

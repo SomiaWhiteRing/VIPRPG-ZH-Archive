@@ -8,7 +8,8 @@ import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { listAdminRoleEvents, searchAdminAuditLogs } from "@/lib/server/db/admin-audit";
-import { AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -125,7 +126,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
           <EmptyState title="暂无系统审计日志。" />
         )}
       </Pane>
-      <AdminPagination basePath="/admin/audit" page={page} pageSize={PAGE_SIZE} total={auditResult.total} params={{ q: query || undefined, action: eventType || undefined }} />
+      <PaginationLinks basePath="/admin/audit" page={page} pageSize={PAGE_SIZE} total={auditResult.total} params={{ q: query || undefined, action: eventType || undefined }} />
     </main>
   );
 }

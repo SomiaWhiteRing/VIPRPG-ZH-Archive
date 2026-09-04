@@ -31,7 +31,7 @@ import {
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
 import {
-  ensureCharacterPortraitFaceSheets,
+  ensureCharacterFaceSheets,
 } from "@/lib/server/storage/character-portraits";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
@@ -162,10 +162,11 @@ export async function commitArchiveImport(
   }
 
   validateBlobReferences(manifest, objectLedger.blobs);
-  const portraitHashes = (metadata.characters ?? []).flatMap((credit) =>
-    credit.portrait ? [credit.portrait.blobSha256] : [],
-  );
-  await ensureCharacterPortraitFaceSheets(portraitHashes, input.user.id);
+  const faceSheetHashes = (metadata.characters ?? []).flatMap((credit) => [
+    ...credit.faceSheetBlobSha256s,
+    ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+  ]);
+  await ensureCharacterFaceSheets(faceSheetHashes, input.user.id);
   validateCorePackMetadata(manifest, objectLedger.corePacks);
   const workId = await resolveTargetWork(
     metadata,
@@ -877,6 +878,7 @@ function normalizeMetadata(
         ...parseCharacterCreditSelection({
           selection: character.selection,
           portrait: character.portrait,
+          faceSheetBlobSha256s: character.faceSheetBlobSha256s,
         }),
         roleKey: character.roleKey,
         spoilerLevel: character.spoilerLevel,
@@ -1030,9 +1032,10 @@ function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
     [
       ...metadata.game.browsingImageBlobSha256s,
       ...(metadata.characters ?? []).flatMap((credit) =>
-        credit.portrait
-          ? [credit.portrait.blobSha256]
-          : [],
+        [
+          ...credit.faceSheetBlobSha256s,
+          ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+        ],
       ),
     ],
   );
@@ -1362,6 +1365,16 @@ async function finalizeArchiveCommit(input: {
   }
 
   const links = input.metadata.externalLinks.work;
+  if (input.metadata.target.mode === "update") {
+    statements.push(
+      database
+        .prepare(
+          `DELETE FROM work_external_links
+           WHERE work_id = ? AND link_type IN ('download_page', 'source')`,
+        )
+        .bind(input.workId),
+    );
+  }
   if (links.length > 0) {
     for (const link of links) {
       statements.push(

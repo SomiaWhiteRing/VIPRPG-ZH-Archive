@@ -77,6 +77,7 @@ export default async function AdminWorkEditPage({
             </FormField>
             <FormField label="日期精度">
               <SelectField
+                aria-label="日期精度"
                 defaultValue={work.originalReleasePrecision}
                 name="original_release_precision"
                 options={[
@@ -95,6 +96,7 @@ export default async function AdminWorkEditPage({
             />
             <FormField label="引擎">
               <SelectField
+                aria-label="引擎"
                 defaultValue={work.engineFamily}
                 name="engine_family"
                 options={[
@@ -113,6 +115,7 @@ export default async function AdminWorkEditPage({
             </FormField>
             <FormField label="状态">
               <SelectField
+                aria-label="状态"
                 defaultValue={work.status}
                 name="status"
                 options={[

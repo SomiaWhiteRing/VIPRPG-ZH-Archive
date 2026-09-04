@@ -1,6 +1,7 @@
 import { Input } from "@/app/components/ui/input";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { PortraitLibraryEditor } from "./portrait-library-editor";
+import { CharacterMergeTargetField } from "./character-merge-target-field";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Textarea } from "@/app/components/ui/textarea";
 import Link from "next/link";
@@ -10,7 +11,6 @@ import { FormField } from "@/app/components/ui/form-field";
 import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { SelectField } from "@/app/components/ui/select";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getCharacterForAdminEdit, listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
@@ -24,10 +24,15 @@ type AdminCharacterEditPageProps = {
   params: Promise<{
     characterId: string;
   }>;
+  searchParams: Promise<{
+    error?: string | string[];
+  }>;
 };
 
-export default async function AdminCharacterEditPage({ params }: AdminCharacterEditPageProps) {
+export default async function AdminCharacterEditPage({ params, searchParams }: AdminCharacterEditPageProps) {
   const { characterId: rawCharacterId } = await params;
+  const query = await searchParams;
+  const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const characterId = parseId(rawCharacterId);
   const adminUser = await requirePagePermission(`/admin/characters/${characterId}`, "character.update");
   const [character, unreadInboxCount, candidates, portraitLibrary] = await Promise.all([
@@ -62,10 +67,17 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
         }
       />
 
+      {formError ? (
+        <p className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+          {formError}
+        </p>
+      ) : null}
+
       <ConfirmingForm
         action={`/api/admin/characters/${character.id}/update`}
         className="grid gap-4"
         confirmField="merge_target_id"
+        errorTitle="角色资料保存失败"
         id={CHARACTER_EDIT_FORM_ID}
         method="post"
         title="确认合并并删除角色"
@@ -75,18 +87,17 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
         <div id="portrait-workbench">
           <Pane compact heading="脸图工作台">
             <PortraitLibraryEditor
+              allCharacters={candidates.map((candidate) => ({
+                id: candidate.id,
+                originalName: candidate.originalName,
+                primaryName: candidate.primaryName,
+              }))}
               allSheets={portraitLibrary.sheets}
               characterId={character.id}
               characterName={character.primaryName}
               characterOriginalName={character.originalName}
               defaultPortrait={portraitLibrary.defaultPortrait}
-              formId={CHARACTER_EDIT_FORM_ID}
               initialBoundSheetIds={portraitLibrary.boundSheetIds}
-              reviewCharacters={candidates.map((candidate) => ({
-                id: candidate.id,
-                originalName: candidate.originalName,
-                primaryName: candidate.primaryName,
-              }))}
             />
           </Pane>
         </div>
@@ -120,18 +131,18 @@ export default async function AdminCharacterEditPage({ params }: AdminCharacterE
         </Pane>
 
         <Pane heading="合并重复角色" tone="danger">
-          <FormField hint="提交后，登场关系会移至目标角色，当前角色会被删除。" label="目标角色">
-            <SelectField
+          <FormField hint="提交后，登场关系会移至目标角色，当前角色会被删除。" hintId="character-merge-target-hint" label="目标角色">
+            <CharacterMergeTargetField
+              candidates={candidates
+                .filter((candidate) => candidate.id !== character.id)
+                .map((candidate) => ({
+                  id: candidate.id,
+                  originalName: candidate.originalName,
+                  primaryName: candidate.primaryName,
+                  workCount: candidate.workCount,
+                }))}
+              descriptionId="character-merge-target-hint"
               name="merge_target_id"
-              options={[
-                { value: "", label: "不合并" },
-                ...candidates
-                  .filter((candidate) => candidate.id !== character.id)
-                  .map((candidate) => ({
-                    value: String(candidate.id),
-                    label: `${candidate.originalName} · ${candidate.primaryName}`,
-                  })),
-              ]}
             />
           </FormField>
         </Pane>

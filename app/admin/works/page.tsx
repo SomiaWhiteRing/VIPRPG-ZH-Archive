@@ -5,9 +5,9 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import {
   AdminListControls,
-  AdminPagination,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
@@ -109,7 +109,7 @@ export default async function AdminWorksPage({
           ))}
         </tbody>
       </TableWrap> : <EmptyState title="没有找到匹配的作品。" />}
-      <AdminPagination
+      <PaginationLinks
         basePath="/admin/works"
         page={page}
         pageSize={PAGE_SIZE}

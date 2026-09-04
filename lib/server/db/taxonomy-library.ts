@@ -5,6 +5,7 @@ import type {
 } from "@/lib/character-names";
 import { characterNameKey } from "@/lib/character-names";
 import { normalizeEntityName } from "@/lib/entity-name";
+import { HttpError } from "@/lib/server/http/json";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   DEFAULT_CHARACTER_PORTRAIT_JOINS,
@@ -25,6 +26,25 @@ export type AdminCharacterEdit = PublicCharacterSummary & {
   aliases: CharacterAliasSuggestion[];
   extra: Record<string, unknown>;
 };
+export type CharacterAliasMergeCandidate = {
+  id: number;
+  primaryName: string;
+  originalName: string;
+};
+export class CharacterAliasMergeConflictError extends HttpError {
+  constructor(
+    public readonly aliases: string[],
+    public readonly currentCharacterId: number,
+    public readonly candidate: CharacterAliasMergeCandidate,
+  ) {
+    super(
+      409,
+      `日文别名${formatQuotedNames(aliases)}已归属于角色 #${candidate.id}“${candidate.originalName} · ${candidate.primaryName}”。可以修改别名，或确认将该角色合并到当前角色。`,
+      "character_alias_merge_available",
+    );
+    this.name = "CharacterAliasMergeConflictError";
+  }
+}
 export type PublicTagSummary = {
   id: number;
   name: string;
@@ -106,7 +126,7 @@ export async function listCharacterSuggestions(): Promise<CharacterSuggestion[]>
        FROM character_face_sheet_bindings cfsb
        JOIN face_sheets fs ON fs.id=cfsb.face_sheet_id
        WHERE fs.library_status='approved'
-       ORDER BY cfsb.character_id,fs.id`,
+       ORDER BY cfsb.character_id,fs.source_order IS NULL,fs.source_order,fs.id`,
     ),
   ]);
   const rows = (namesResult.results ?? []) as Array<CharacterRow & {
@@ -209,6 +229,74 @@ export async function getCharacterForAdminEdit(
       }
     : null;
 }
+export async function createCharacterForAdmin(input: {
+  primaryName: string;
+  originalName: string;
+}): Promise<{ character: AdminCharacterEdit; created: boolean }> {
+  const primaryName = normalizeEntityName(input.primaryName);
+  if (!primaryName) throw new HttpError(400, "角色中文名不能为空。", "character_name_required");
+  const originalName = normalizeEntityName(input.originalName);
+  if (!originalName) throw new HttpError(400, "角色日语名不能为空。", "character_original_name_required");
+
+  const database = getD1();
+  const originalKey = characterNameKey(originalName);
+  const primaryKey = characterNameKey(primaryName);
+  const existingRows = await database.prepare(
+    `SELECT DISTINCT c.id
+     FROM characters c
+     WHERE c.original_name_key=?
+        OR EXISTS(
+          SELECT 1 FROM character_aliases ca
+          WHERE ca.character_id=c.id AND ca.language='ja' AND ca.name_key=?
+        )
+     ORDER BY c.id`,
+  ).bind(originalKey, originalKey).all<{ id: number }>();
+  const existingIds = (existingRows.results ?? []).map((row) => row.id);
+  if (existingIds.length > 1) {
+    throw new HttpError(
+      409,
+      `日语名“${originalName}”对应多个角色，请先在角色维护页合并重复记录。`,
+      "character_name_multiple_matches",
+    );
+  }
+
+  const existingId = existingIds[0] ?? null;
+  if (existingId !== null) {
+    await database.prepare(
+      `INSERT OR IGNORE INTO character_aliases(character_id,name,name_key,language,source)
+       SELECT id,?,?,'zh','admin' FROM characters
+       WHERE id=? AND primary_name_key<>?`,
+    ).bind(primaryName, primaryKey, existingId, primaryKey).run();
+    const character = await getCharacterForAdminEdit(existingId);
+    if (!character) throw new Error("已有角色更新后不可读取");
+    return { character, created: false };
+  }
+
+  try {
+    await database.prepare(
+      `INSERT INTO characters(
+         primary_name,primary_name_key,original_name,original_name_key,extra_json
+       ) VALUES(?,?,?,?,'{}')`,
+    ).bind(primaryName, primaryKey, originalName, originalKey).run();
+  } catch (error) {
+    if (isCharacterIdentityConstraintError(error)) {
+      throw new HttpError(
+        409,
+        `日语名“${originalName}”刚刚被其他操作占用，请重新提交以打开已有角色。`,
+        "character_name_conflict",
+      );
+    }
+    throw error;
+  }
+
+  const created = await database.prepare(
+    `SELECT id FROM characters WHERE original_name_key=? LIMIT 1`,
+  ).bind(originalKey).first<{ id: number }>();
+  if (!created) throw new Error("角色创建后不可读取");
+  const character = await getCharacterForAdminEdit(created.id);
+  if (!character) throw new Error("角色创建后不可读取");
+  return { character, created: true };
+}
 export async function updateCharacterForAdmin(input: {
   characterId: number;
   primaryName: string;
@@ -217,48 +305,82 @@ export async function updateCharacterForAdmin(input: {
   japaneseAliases: string[];
   chineseAliases: string[];
   mergeTargetId: number | null;
+  mergeSourceId: number | null;
 }): Promise<AdminCharacterEdit> {
   const primaryName = normalizeEntityName(input.primaryName);
-  if (!primaryName) throw new Error("角色名不能为空");
+  if (!primaryName) throw new HttpError(400, "角色名称不能为空。", "character_name_required");
   const originalName = normalizeEntityName(input.originalName);
-  if (!originalName) throw new Error("角色日语名不能为空");
+  if (!originalName) throw new HttpError(400, "角色原名不能为空。", "character_original_name_required");
+  if (input.mergeTargetId && input.mergeSourceId) {
+    throw new HttpError(
+      400,
+      "一次只能选择一个合并方向，请取消其中一个合并操作后重试。",
+      "character_merge_direction_conflict",
+    );
+  }
   if (input.mergeTargetId) {
     await mergeCharacter(input.characterId, input.mergeTargetId);
     const target = await getCharacterById(input.mergeTargetId, true);
-    if (!target) throw new Error("合并目标不存在");
+    if (!target) throw new HttpError(404, "合并目标不存在，请刷新页面后重新选择。", "character_merge_target_missing");
     return target;
   }
   const aliases = [
     ...normalizeCharacterAliases(input.japaneseAliases, "ja", originalName),
     ...normalizeCharacterAliases(input.chineseAliases, "zh", primaryName),
   ];
+  assertAliasLanguagesDoNotOverlap(aliases);
   const database = getD1();
-  await database.batch([
-    database.prepare(`DELETE FROM character_aliases WHERE character_id=?`).bind(input.characterId),
-    database.prepare(
-      `UPDATE characters
-       SET primary_name=?,primary_name_key=?,original_name=?,original_name_key=?,description=?,
-             updated_at=CURRENT_TIMESTAMP
-       WHERE id=?`,
-    )
-    .bind(
+  const identityConflicts = await findCharacterIdentityConflicts(
+    database,
+    input.characterId,
+    originalName,
+    aliases.filter((alias) => alias.language === "ja"),
+  );
+  let aliasesToSave = aliases;
+  let mergeStatements: D1PreparedStatement[] = [];
+  if (input.mergeSourceId) {
+    assertConfirmedAliasMerge(
+      identityConflicts,
+      input.characterId,
+      input.mergeSourceId,
+    );
+    const preparedMerge = await prepareCharacterMerge(
+      database,
+      input.mergeSourceId,
+      input.characterId,
+    );
+    aliasesToSave = mergeCharacterAliases(
+      aliases,
+      preparedMerge.sourceAliases,
+      preparedMerge.source,
       primaryName,
-      characterNameKey(primaryName),
       originalName,
-      characterNameKey(originalName),
-      input.description,
-      input.characterId,
-    ),
-    ...aliases.map((alias) => database.prepare(
-      `INSERT INTO character_aliases(character_id,name,name_key,language,source)
-       VALUES(?,?,?,?,'admin')`,
-    ).bind(
-      input.characterId,
-      alias.name,
-      characterNameKey(alias.name),
-      alias.language,
-    )),
-  ]);
+    );
+    mergeStatements = preparedMerge.statements;
+  } else {
+    assertCharacterIdentityAvailable(identityConflicts, input.characterId);
+  }
+  try {
+    await database.batch([
+      ...mergeStatements,
+      ...characterUpdateStatements(database, {
+        characterId: input.characterId,
+        primaryName,
+        originalName,
+        description: input.description,
+        aliases: aliasesToSave,
+      }),
+    ]);
+  } catch (error) {
+    if (isCharacterIdentityConstraintError(error)) {
+      throw new HttpError(
+        409,
+        "角色原名或日文别名刚刚被其他角色占用。请刷新页面后重试；如果两条记录是同一角色，请使用“合并重复角色”。",
+        "character_name_conflict",
+      );
+    }
+    throw error;
+  }
   const updated = await getCharacterForAdminEdit(input.characterId);
   if (!updated) throw new Error("角色更新后不可读取");
   return updated;
@@ -275,6 +397,7 @@ export function parseCharacterEditForm(
     japaneseAliases: lines(form.get("japanese_aliases")),
     chineseAliases: lines(form.get("chinese_aliases")),
     mergeTargetId: nullablePositive(form.get("merge_target_id")),
+    mergeSourceId: nullablePositive(form.get("merge_source_id")),
   };
 }
 
@@ -359,17 +482,17 @@ export async function updateTagForAdmin(input: {
   mergeTargetId: number | null;
 }): Promise<AdminTagEdit> {
   const name = normalizeEntityName(input.name);
-  if (!name) throw new Error("标签名不能为空");
+  if (!name) throw new HttpError(400, "标签名称不能为空。", "tag_name_required");
   if (
     !["genre", "theme", "character", "technical", "content", "other"].includes(
       input.namespace,
     )
   )
-    throw new Error("标签命名空间不合法");
+    throw new HttpError(400, "标签命名空间不合法，请重新选择。", "tag_namespace_invalid");
   if (input.mergeTargetId) {
     await mergeTag(input.tagId, input.mergeTargetId);
     const target = await getTagById(input.mergeTargetId, true);
-    if (!target) throw new Error("合并目标不存在");
+    if (!target) throw new HttpError(404, "合并目标不存在，请刷新页面后重新选择。", "tag_merge_target_missing");
     return target;
   }
   await getD1()
@@ -425,32 +548,46 @@ async function getTagById(
   if (!row || (!includeNonPublic && row.work_count === 0)) return null;
   return mapTag(row);
 }
+type CharacterMergeRow = {
+  id: number;
+  primary_name: string;
+  primary_name_key: string;
+  original_name: string;
+  original_name_key: string;
+};
+
 async function mergeCharacter(id: number, targetId: number): Promise<void> {
   const database = getD1();
-  const [source, target] = await database.batch([
+  const prepared = await prepareCharacterMerge(database, id, targetId);
+  await database.batch(prepared.statements);
+}
+
+async function prepareCharacterMerge(
+  database: D1Database,
+  id: number,
+  targetId: number,
+): Promise<{
+  source: CharacterMergeRow;
+  sourceAliases: CharacterAliasSuggestion[];
+  statements: D1PreparedStatement[];
+}> {
+  const [source, target, sourceAliasesResult] = await database.batch([
     database
       .prepare(`SELECT id,primary_name,primary_name_key,original_name,original_name_key FROM characters WHERE id=? LIMIT 1`)
       .bind(id),
     database
-      .prepare(`SELECT id,primary_name_key,original_name_key FROM characters WHERE id=? LIMIT 1`)
+      .prepare(`SELECT id,primary_name,primary_name_key,original_name,original_name_key FROM characters WHERE id=? LIMIT 1`)
       .bind(targetId),
+    database
+      .prepare(`SELECT name,language FROM character_aliases WHERE character_id=? ORDER BY id`)
+      .bind(id),
   ]);
-  const sourceRow = source.results?.[0] as {
-    id: number;
-    primary_name: string;
-    primary_name_key: string;
-    original_name: string;
-    original_name_key: string;
-  } | undefined;
-  const targetRow = target.results?.[0] as {
-    id: number;
-    primary_name_key: string;
-    original_name_key: string;
-  } | undefined;
+  const sourceRow = source.results?.[0] as CharacterMergeRow | undefined;
+  const targetRow = target.results?.[0] as CharacterMergeRow | undefined;
   if (!sourceRow || !targetRow || targetRow.id === sourceRow.id) {
-    throw new Error("角色合并目标不合法");
+    throw new HttpError(400, "角色合并目标不合法，请重新选择。", "character_merge_target_invalid");
   }
-  await database.batch([
+  const statements = [
     database
       .prepare(
         `INSERT OR IGNORE INTO character_face_sheet_bindings(character_id,face_sheet_id,sort_order)
@@ -549,14 +686,24 @@ async function mergeCharacter(id: number, targetId: number): Promise<void> {
         targetRow.id,
         sourceRow.primary_name_key,
       ),
-  ]);
+  ];
+  return {
+    source: sourceRow,
+    sourceAliases: (sourceAliasesResult.results ?? []).map((row) => ({
+      name: String((row as { name: string }).name),
+      language: (row as { language: "ja" | "zh" }).language,
+    })),
+    statements,
+  };
 }
 async function mergeTag(id: number, targetId: number): Promise<void> {
   const target = await getD1()
     .prepare(`SELECT id FROM tags WHERE id=? LIMIT 1`)
     .bind(targetId)
     .first<{ id: number }>();
-  if (!target || target.id === id) throw new Error("标签合并目标不合法");
+  if (!target || target.id === id) {
+    throw new HttpError(400, "标签合并目标不合法，请重新选择。", "tag_merge_target_invalid");
+  }
   const database = getD1();
   await database.batch([
     database
@@ -603,6 +750,218 @@ function normalizeCharacterAliases(
   }
   return result;
 }
+
+function assertAliasLanguagesDoNotOverlap(aliases: CharacterAliasSuggestion[]): void {
+  const languageByKey = new Map<string, CharacterAliasSuggestion>();
+  for (const alias of aliases) {
+    const key = characterNameKey(alias.name);
+    const existing = languageByKey.get(key);
+    if (existing && existing.language !== alias.language) {
+      throw new HttpError(
+        400,
+        `别名“${alias.name}”同时填写在日文别名和中文别名中。请只保留在正确的语言栏。`,
+        "character_alias_language_conflict",
+      );
+    }
+    languageByKey.set(key, alias);
+  }
+}
+
+type CharacterIdentityConflict = {
+  characterId: number;
+  primaryName: string;
+  originalName: string;
+  occupiedName: string;
+  occupiedAs: "original" | "alias";
+  inputKind: "original" | "alias";
+  inputName: string;
+};
+
+async function findCharacterIdentityConflicts(
+  database: D1Database,
+  characterId: number,
+  originalName: string,
+  japaneseAliases: CharacterAliasSuggestion[],
+): Promise<CharacterIdentityConflict[]> {
+  const originalKey = characterNameKey(originalName);
+  const submitted = new Map<string, { kind: "original" | "alias"; name: string }>([
+    [originalKey, { kind: "original", name: originalName }],
+  ]);
+  for (const alias of japaneseAliases) {
+    submitted.set(characterNameKey(alias.name), { kind: "alias", name: alias.name });
+  }
+
+  const rows = await database.prepare(
+    `WITH submitted(name_key) AS (
+       SELECT value FROM json_each(?)
+     )
+     SELECT c.id,c.primary_name,c.original_name,c.original_name_key AS name_key,
+            c.original_name AS occupied_name,'original' AS occupied_as
+     FROM characters c
+     JOIN submitted s ON s.name_key=c.original_name_key
+     WHERE c.id<>?
+     UNION ALL
+     SELECT c.id,c.primary_name,c.original_name,ca.name_key,
+            ca.name AS occupied_name,'alias' AS occupied_as
+     FROM character_aliases ca
+     JOIN characters c ON c.id=ca.character_id
+     JOIN submitted s ON s.name_key=ca.name_key
+     WHERE ca.language='ja' AND c.id<>?
+     ORDER BY id,name_key,occupied_as`,
+  ).bind(JSON.stringify([...submitted.keys()]), characterId, characterId).all<{
+    id: number;
+    primary_name: string;
+    original_name: string;
+    name_key: string;
+    occupied_name: string;
+    occupied_as: "original" | "alias";
+  }>();
+  return (rows.results ?? []).flatMap((row) => {
+    const input = submitted.get(row.name_key);
+    return input
+      ? [{
+          characterId: row.id,
+          primaryName: row.primary_name,
+          originalName: row.original_name,
+          occupiedName: row.occupied_name,
+          occupiedAs: row.occupied_as,
+          inputKind: input.kind,
+          inputName: input.name,
+        }]
+      : [];
+  });
+}
+
+function assertCharacterIdentityAvailable(
+  conflicts: CharacterIdentityConflict[],
+  currentCharacterId: number,
+): void {
+  if (!conflicts.length) return;
+  const originalConflict = conflicts.find((conflict) => conflict.inputKind === "original");
+  if (originalConflict) {
+    const occupiedAs = originalConflict.occupiedAs === "original"
+      ? "原名"
+      : `日文别名“${originalConflict.occupiedName}”`;
+    throw new HttpError(
+      409,
+      `角色原名“${originalConflict.inputName}”已被角色 #${originalConflict.characterId}“${originalConflict.originalName} · ${originalConflict.primaryName}”用作${occupiedAs}。请修改角色原名；如果两条记录是同一角色，请使用页面下方的“合并重复角色”。`,
+      "character_name_conflict",
+    );
+  }
+
+  const ownerIds = new Set(conflicts.map((conflict) => conflict.characterId));
+  if (ownerIds.size === 1) {
+    const first = conflicts[0];
+    throw new CharacterAliasMergeConflictError(
+      [...new Set(conflicts.map((conflict) => conflict.inputName))],
+      currentCharacterId,
+      {
+        id: first.characterId,
+        primaryName: first.primaryName,
+        originalName: first.originalName,
+      },
+    );
+  }
+
+  throw new HttpError(
+    409,
+    `日文别名${formatQuotedNames([...new Set(conflicts.map((conflict) => conflict.inputName))])}分别归属于多个角色，不能一次合并。请每次只保留属于同一角色的冲突别名，逐个处理。`,
+    "character_alias_multiple_conflicts",
+  );
+}
+
+function assertConfirmedAliasMerge(
+  conflicts: CharacterIdentityConflict[],
+  currentCharacterId: number,
+  mergeSourceId: number,
+): void {
+  if (
+    mergeSourceId === currentCharacterId ||
+    !conflicts.length ||
+    conflicts.some((conflict) =>
+      conflict.inputKind !== "alias" || conflict.characterId !== mergeSourceId
+    )
+  ) {
+    throw new HttpError(
+      409,
+      "别名占用关系已经变化，未执行合并。请重新保存并确认最新提示。",
+      "character_alias_merge_stale",
+    );
+  }
+}
+
+function mergeCharacterAliases(
+  submittedAliases: CharacterAliasSuggestion[],
+  sourceAliases: CharacterAliasSuggestion[],
+  source: CharacterMergeRow,
+  targetPrimaryName: string,
+  targetOriginalName: string,
+): CharacterAliasSuggestion[] {
+  const aliases = new Map<string, CharacterAliasSuggestion>();
+  const targetNameKeys = new Set([
+    characterNameKey(targetPrimaryName),
+    characterNameKey(targetOriginalName),
+  ]);
+  const addSourceAlias = (alias: CharacterAliasSuggestion) => {
+    const key = characterNameKey(alias.name);
+    if (!key || targetNameKeys.has(key) || aliases.has(key)) return;
+    aliases.set(key, alias);
+  };
+  for (const alias of sourceAliases) addSourceAlias(alias);
+  addSourceAlias({ name: source.original_name, language: "ja" });
+  addSourceAlias({ name: source.primary_name, language: "zh" });
+  for (const alias of submittedAliases) {
+    aliases.set(characterNameKey(alias.name), alias);
+  }
+  return [...aliases.values()];
+}
+
+function characterUpdateStatements(
+  database: D1Database,
+  input: {
+    characterId: number;
+    primaryName: string;
+    originalName: string;
+    description: string | null;
+    aliases: CharacterAliasSuggestion[];
+  },
+): D1PreparedStatement[] {
+  return [
+    database.prepare(`DELETE FROM character_aliases WHERE character_id=?`).bind(input.characterId),
+    database.prepare(
+      `UPDATE characters
+       SET primary_name=?,primary_name_key=?,original_name=?,original_name_key=?,description=?,
+             updated_at=CURRENT_TIMESTAMP
+       WHERE id=?`,
+    ).bind(
+      input.primaryName,
+      characterNameKey(input.primaryName),
+      input.originalName,
+      characterNameKey(input.originalName),
+      input.description,
+      input.characterId,
+    ),
+    ...input.aliases.map((alias) => database.prepare(
+      `INSERT INTO character_aliases(character_id,name,name_key,language,source)
+       VALUES(?,?,?,?,'admin')`,
+    ).bind(
+      input.characterId,
+      alias.name,
+      characterNameKey(alias.name),
+      alias.language,
+    )),
+  ];
+}
+
+function formatQuotedNames(values: string[]): string {
+  return values.map((value) => `“${value}”`).join("、");
+}
+
+function isCharacterIdentityConstraintError(error: unknown): boolean {
+  return /character original name already belongs to an alias|character alias already belongs to an original name|unique constraint failed: characters\.original_name_key|unique constraint failed: character_aliases\.(?:name_key|character_id, character_aliases\.name_key)/i.test(
+    error instanceof Error ? error.message : String(error),
+  );
+}
 function mapTag(row: TagRow): PublicTagSummary {
   return {
     id: row.id,
@@ -633,7 +992,9 @@ function lines(value: FormDataEntryValue | null): string[] {
 }
 function positive(value: FormDataEntryValue | null): number {
   const id = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid id");
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new HttpError(400, "提交的记录 ID 不合法，请刷新页面后重试。", "record_id_invalid");
+  }
   return id;
 }
 function nullablePositive(value: FormDataEntryValue | null): number | null {

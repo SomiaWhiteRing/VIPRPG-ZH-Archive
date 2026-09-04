@@ -2,9 +2,9 @@ import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { ArchiveVersionTable } from "@/app/admin/archive-versions/archive-version-table";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import {
   AdminListControls,
-  AdminPagination,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
@@ -60,7 +60,7 @@ export default async function AdminArchiveVersionsPage({
         total={result.total}
       />
       <ArchiveVersionTable actor={adminUser} archiveVersions={result.items} mode="active" />
-      <AdminPagination
+      <PaginationLinks
         basePath="/admin/archive-versions"
         page={page}
         pageSize={PAGE_SIZE}

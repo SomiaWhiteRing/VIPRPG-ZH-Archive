@@ -3,7 +3,8 @@ import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { AdminListControls, AdminPagination, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { AdminListControls, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { searchTagsForAdmin } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
@@ -57,7 +58,7 @@ export default async function AdminTagsPage({ searchParams }: { searchParams: Pr
           ))}
         </tbody>
       </TableWrap> : <EmptyState title="没有找到匹配的标签。" />}
-      <AdminPagination basePath="/admin/tags" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, status: namespace === "all" ? undefined : namespace, sort: sort === "default" ? undefined : sort }} />
+      <PaginationLinks basePath="/admin/tags" page={page} pageSize={PAGE_SIZE} total={result.total} params={{ q: query || undefined, status: namespace === "all" ? undefined : namespace, sort: sort === "default" ? undefined : sort }} />
     </main>
   );
 }

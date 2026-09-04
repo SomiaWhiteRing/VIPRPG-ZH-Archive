@@ -125,7 +125,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
               {works.map((work) => <WorkCard key={work.id} work={work} />)}
             </section>
           ) : <EmptyState title="没有找到匹配的作品。" />}
-          <PaginationLinks basePath="/games" page={page} hasNext={page * PAGE_SIZE < total} params={activeParams} />
+          <PaginationLinks basePath="/games" page={page} pageSize={PAGE_SIZE} params={activeParams} total={total} />
         </div>
         <aside className="mt-5 rounded-lg border border-border bg-muted/5 p-3 min-[981px]:sticky min-[981px]:top-18.5 min-[981px]:mt-1 min-[981px]:self-start min-[981px]:border-0 min-[981px]:bg-transparent min-[981px]:p-0" aria-label="游戏筛选">
           <FilterSection label="来源">

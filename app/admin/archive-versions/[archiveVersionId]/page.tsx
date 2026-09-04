@@ -75,6 +75,7 @@ export default async function AdminArchiveVersionEditPage({
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="状态">
               <SelectField
+                aria-label="状态"
                 defaultValue={archiveVersion.status}
                 name="status"
                 options={[

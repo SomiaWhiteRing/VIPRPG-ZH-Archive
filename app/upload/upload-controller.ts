@@ -291,7 +291,10 @@ export function useUploadController(accountId: number) {
     } satisfies UploadWorkerInput);
   }
 
-  async function restoreDraft(draft: UploadRecoveryDraft): Promise<boolean> {
+  async function restoreDraft(
+    draft: UploadRecoveryDraft,
+    options: { clearMetadata?: boolean } = {},
+  ): Promise<boolean> {
     if (active || workerRef.current) return false;
     setControllerError(null);
     if (committingDraftIds.includes(draft.serverImportJobId)) {
@@ -325,8 +328,16 @@ export function useUploadController(accountId: number) {
       return false;
     }
 
+    const restoredDraft = options.clearMetadata
+      ? {
+          ...result.draft,
+          metadata: null,
+          metadataBlobs: [],
+          metadataConfirmed: false,
+        }
+      : result.draft;
     try {
-      await putUploadDraft(result.draft);
+      await putUploadDraft(restoredDraft);
     } catch {
       await draftLock.release();
       setControllerError("无法更新本地上传草稿，请刷新页面后重试。");
@@ -337,14 +348,14 @@ export function useUploadController(accountId: number) {
       return false;
     }
 
-    setDrafts((current) => upsertDraft(current, result.draft));
+    setDrafts((current) => upsertDraft(current, restoredDraft));
     setCommittingDraftIds((current) => current.filter((id) => id !== draft.serverImportJobId));
     draftLockRef.current = { jobId: draft.serverImportJobId, lock: draftLock };
-    pendingMetadataRef.current = result.draft.metadata
-      ? { metadata: result.draft.metadata, metadataBlobs: result.draft.metadataBlobs }
+    pendingMetadataRef.current = restoredDraft.metadata
+      ? { metadata: restoredDraft.metadata, metadataBlobs: restoredDraft.metadataBlobs }
       : null;
-    setPendingMetadataConfirmed(result.draft.metadataConfirmed);
-    createTaskWorker().postMessage({ type: "restore", draft: result.draft } satisfies UploadWorkerInput);
+    setPendingMetadataConfirmed(restoredDraft.metadataConfirmed);
+    createTaskWorker().postMessage({ type: "restore", draft: restoredDraft } satisfies UploadWorkerInput);
     return true;
   }
 

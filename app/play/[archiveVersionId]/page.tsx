@@ -108,7 +108,7 @@ export default async function WebPlayPage({ params }: PageProps) {
         tabs={[
           { href: `/games/${work.id}`, label: "详情" },
           { href: `/play/${record.id}`, label: "在线游玩", active: true },
-          { href: "#comments", label: "评论", count: community.commentCount },
+          { href: "#sec-comments", label: "评论", count: community.commentCount },
         ]}
       />
       <WebPlayClient
@@ -121,7 +121,6 @@ export default async function WebPlayPage({ params }: PageProps) {
             workId={work.id}
           />
         }
-        commentCount={community.commentCount}
         engagement={
           <WorkFavoriteButton
             currentUserId={currentUser?.id ?? null}

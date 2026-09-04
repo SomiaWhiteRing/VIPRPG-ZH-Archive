@@ -57,6 +57,7 @@ export function parseCharacterCreditSelection(value: unknown): CharacterCreditSe
   return {
     selection: parseCharacterSelection(value.selection),
     portrait: parsePortraitChoice(value.portrait),
+    faceSheetBlobSha256s: parseFaceSheetHashes(value.faceSheetBlobSha256s),
   };
 }
 
@@ -100,11 +101,13 @@ export async function prepareWorkCharacterStatements(input: {
 
   const existingRows = await resolveExistingCharacters(input.database, existingCredits);
   const resolvedNewRows = await resolveNewCharacters(input.database, newCredits);
-  assertUniqueCharacters(existingRows, resolvedNewRows, newCredits);
 
   const sheets = await loadFaceSheetChoices(
     input.database,
-    credits.flatMap((credit) => (credit.portrait ? [credit.portrait.blobSha256] : [])),
+    credits.flatMap((credit) => [
+      ...credit.faceSheetBlobSha256s,
+      ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+    ]),
   );
   const setupStatements: D1PreparedStatement[] = [];
   const relationStatements: D1PreparedStatement[] = [];
@@ -112,6 +115,7 @@ export async function prepareWorkCharacterStatements(input: {
   existingCredits.forEach((credit, index) => {
     const character = existingRows[index];
     const sheet = validatePortraitChoice(credit, character, sheets, input);
+    validateFaceSheetBindings(credit, character, sheets, input);
     if (input.requirePortrait && !credit.portrait && character.has_default_portrait !== 1) {
       throw new HttpError(400, `角色“${credit.selection.originalName}”需要选择头像`);
     }
@@ -125,6 +129,12 @@ export async function prepareWorkCharacterStatements(input: {
         input.actorUserId,
       );
     }
+    addFaceSheetBindingStatements(
+      setupStatements,
+      input.database,
+      character.id,
+      credit.faceSheetBlobSha256s,
+    );
     relationStatements.push(
       insertKnownCharacterRelation(
         input.database,
@@ -142,6 +152,7 @@ export async function prepareWorkCharacterStatements(input: {
     const originalKey = characterNameKey(selection.originalName);
     const displayKey = characterNameKey(selection.displayName);
     const sheet = validatePortraitChoice(credit, existing, sheets, input);
+    validateFaceSheetBindings(credit, existing, sheets, input);
     if (input.requirePortrait && !credit.portrait && existing?.has_default_portrait !== 1) {
       throw new HttpError(400, `角色“${selection.originalName}”需要选择头像`);
     }
@@ -167,6 +178,12 @@ export async function prepareWorkCharacterStatements(input: {
           input.actorUserId,
         );
       }
+      addFaceSheetBindingStatements(
+        setupStatements,
+        input.database,
+        existing.id,
+        credit.faceSheetBlobSha256s,
+      );
       relationStatements.push(
         insertKnownCharacterRelation(
           input.database,
@@ -212,6 +229,12 @@ export async function prepareWorkCharacterStatements(input: {
         input.actorUserId,
       );
     }
+    addNewCharacterFaceSheetBindingStatements(
+      setupStatements,
+      input.database,
+      originalKey,
+      credit.faceSheetBlobSha256s,
+    );
     relationStatements.push(
       insertNewCharacterRelation(
         input.database,
@@ -311,28 +334,6 @@ async function resolveNewCharacters(
   });
 }
 
-function assertUniqueCharacters(
-  existingRows: ResolvedCharacter[],
-  resolvedNewRows: Array<ResolvedCharacter | null>,
-  newCredits: Array<WorkCharacterCreditInput & {
-    selection: Extract<CharacterSelection, { kind: "new" }>;
-  }>,
-): void {
-  const identityKeys = new Set<string>();
-  for (const row of existingRows) {
-    const key = `id:${row.id}`;
-    if (identityKeys.has(key)) throw new HttpError(400, "同一角色不能重复添加");
-    identityKeys.add(key);
-  }
-  resolvedNewRows.forEach((row, index) => {
-    const key = row
-      ? `id:${row.id}`
-      : `new:${characterNameKey(newCredits[index].selection.originalName)}`;
-    if (identityKeys.has(key)) throw new HttpError(400, "同一角色不能重复添加");
-    identityKeys.add(key);
-  });
-}
-
 async function loadFaceSheetChoices(
   database: D1Database,
   rawHashes: string[],
@@ -398,6 +399,28 @@ function validatePortraitChoice(
   return sheet;
 }
 
+function validateFaceSheetBindings(
+  credit: WorkCharacterCreditInput,
+  character: ResolvedCharacter | null,
+  sheets: Map<string, FaceSheetChoice>,
+  input: { source: "user" | "admin"; actorUserId: number },
+): void {
+  for (const hash of credit.faceSheetBlobSha256s) {
+    const sheet = sheets.get(hash);
+    if (!sheet) throw new HttpError(409, "角色素材表尚未登记，请重新上传");
+    if (sheet.library_status === "rejected") {
+      throw new HttpError(409, "这张角色素材表已被拒绝使用，请重新选择");
+    }
+    if (character && sheet.characterIds.has(character.id)) continue;
+    if (
+      input.source !== "admin" &&
+      !(sheet.library_status === "pending" && sheet.created_by_user_id === input.actorUserId)
+    ) {
+      throw new HttpError(409, "这张素材表不能绑定到所选角色");
+    }
+  }
+}
+
 function addPortraitReferenceStatements(
   statements: D1PreparedStatement[],
   database: D1Database,
@@ -446,6 +469,44 @@ function addNewCharacterPortraitStatements(
       )
       .bind(sheet.id, portrait.row, portrait.column, actorUserId, originalKey),
   );
+}
+
+function addFaceSheetBindingStatements(
+  statements: D1PreparedStatement[],
+  database: D1Database,
+  characterId: number,
+  hashes: string[],
+): void {
+  for (const hash of hashes) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO character_face_sheet_bindings(character_id,face_sheet_id)
+           SELECT ?,id FROM face_sheets WHERE blob_sha256=?`,
+        )
+        .bind(characterId, hash),
+    );
+  }
+}
+
+function addNewCharacterFaceSheetBindingStatements(
+  statements: D1PreparedStatement[],
+  database: D1Database,
+  originalKey: string,
+  hashes: string[],
+): void {
+  for (const hash of hashes) {
+    statements.push(
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO character_face_sheet_bindings(character_id,face_sheet_id)
+           SELECT c.id,fs.id FROM characters c
+           JOIN face_sheets fs ON fs.blob_sha256=?
+           WHERE c.original_name_key=?`,
+        )
+        .bind(hash, originalKey),
+    );
+  }
 }
 
 function insertKnownCharacterRelation(
@@ -570,6 +631,15 @@ function parsePortraitChoice(value: unknown): CharacterPortraitChoice | null {
     throw new HttpError(400, "角色头像坐标不合法");
   }
   return { blobSha256, row, column };
+}
+
+function parseFaceSheetHashes(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new HttpError(400, "角色素材表列表格式不合法");
+  try {
+    return [...new Set(value.map((hash) => normalizeSha256(String(hash))))];
+  } catch {
+    throw new HttpError(400, "角色素材表哈希格式不合法");
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

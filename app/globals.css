@@ -23,3 +23,11 @@
   --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
   --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
 }
+
+.account-layout:has([data-account-full-width]) {
+  display: block;
+}
+
+.account-layout:has([data-account-full-width]) > .account-navigation-slot {
+  display: none;
+}

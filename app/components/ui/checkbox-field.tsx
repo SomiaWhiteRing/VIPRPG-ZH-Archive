@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 
@@ -19,14 +16,18 @@ export function CheckboxField({
   disabled = false,
   value = "1",
 }: CheckboxFieldProps) {
-  const [checked, setChecked] = useState(defaultChecked);
   const id = `checkbox-${name.replace(/[^a-z0-9_-]/gi, "-")}`;
 
   return (
     <div className="flex min-h-10 items-center gap-2">
-      <Checkbox checked={checked} disabled={disabled} id={id} onCheckedChange={(next) => setChecked(next === true)} />
+      <Checkbox
+        defaultChecked={defaultChecked}
+        disabled={disabled}
+        id={id}
+        name={name}
+        value={value}
+      />
       <Label htmlFor={id}>{label}</Label>
-      {checked ? <input name={name} type="hidden" value={value} /> : null}
     </div>
   );
 }

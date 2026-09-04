@@ -82,6 +82,7 @@ export function RoleAssignmentControl({
       {available.length > 0 ? (
         <div className="flex items-center gap-2">
           <SelectField
+            aria-label="要分配的角色"
             className="min-w-0 flex-1"
             onValueChange={(value) => setSelectedRoleId(Number(value))}
             options={available.map((role) => ({

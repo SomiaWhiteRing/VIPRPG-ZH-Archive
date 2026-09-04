@@ -1,8 +1,8 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import { parseTagEditForm, updateTagForAdmin } from "@/lib/server/db/taxonomy-library";
-import { redirectResponse } from "@/lib/server/http/form";
-import { json, jsonError } from "@/lib/server/http/json";
+import { formOrJsonError, redirectResponse, requestWantsJson } from "@/lib/server/http/form";
+import { HttpError, json } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +19,17 @@ export async function POST(request: Request, context: RouteContext) {
     return auth.response;
   }
 
+  const { tagId: rawTagId } = await context.params;
+  const fallbackPath = /^[1-9]\d*$/.test(rawTagId)
+    ? `/admin/tags/${rawTagId}`
+    : "/admin/tags";
   try {
-    const { tagId: rawTagId } = await context.params;
     const tagId = parseId(rawTagId);
     const formData = await request.formData();
     const input = parseTagEditForm(formData);
 
     if (input.tagId !== tagId) {
-      throw new Error("Tag id mismatch");
+      throw new HttpError(400, "标签 ID 与当前页面不一致，请刷新页面后重试。", "tag_id_mismatch");
     }
 
     const tag = await updateTagForAdmin(input);
@@ -42,13 +45,14 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
-    if (request.headers.get("accept")?.includes("application/json")) {
-      return json({ ok: true, tag });
+    const redirectTo = `/admin/tags/${tag.id}`;
+    if (requestWantsJson(request)) {
+      return json({ ok: true, redirectTo, tag });
     }
 
-    return redirectResponse(new URL(`/admin/tags/${tag.id}`, request.url));
+    return redirectResponse(new URL(redirectTo, request.url));
   } catch (error) {
-    return jsonError("Tag update failed", error);
+    return formOrJsonError(request, fallbackPath, "Tag update failed", error);
   }
 }
 
@@ -56,7 +60,7 @@ function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
 
   if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error("Invalid tag id");
+    throw new HttpError(400, "标签 ID 不合法，请返回标签维护页重新进入。", "tag_id_invalid");
   }
 
   return id;
