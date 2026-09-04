@@ -9,7 +9,7 @@ export async function seedCharacterFaceAssets({
   const absoluteManifestPath = resolve(manifestPath);
   const manifestDirectory = dirname(absoluteManifestPath);
   const manifest = JSON.parse(readFileSync(absoluteManifestPath, "utf8"));
-  if (manifest.schema !== "viprpg-character-face-library.v1") {
+  if (manifest.schema !== "viprpg-character-face-library.v2") {
     throw new Error("角色脸图清单格式不受支持");
   }
   const platform = await getPlatformProxy({

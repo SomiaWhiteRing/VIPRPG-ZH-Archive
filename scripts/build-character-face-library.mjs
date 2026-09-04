@@ -10,7 +10,9 @@ import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
-const sourcePath = resolve(args.source || ".wrangler/tmp/atwiki-face-source.json");
+const sourcePath = resolve(
+  args.source || ".wrangler/tmp/atwiki-face-source-downloaded.json",
+);
 const dictionaryPath = resolve(args.dictionary || "data/character-dictionary.json");
 const outputDirectory = resolve(args.output || "data/character-face-sheets");
 const assetDirectory = join(outputDirectory, "assets");
@@ -21,7 +23,13 @@ const dictionary = JSON.parse(readFileSync(dictionaryPath, "utf8"));
 if (dictionary.schema !== "viprpg-character-dictionary.v1") {
   throw new Error("角色词典格式不受支持");
 }
-if (!Array.isArray(source.images)) throw new Error("atwiki 脸图来源清单格式不合法");
+if (
+  source.schema !== "viprpg-atwiki-face-source-downloaded.v2" ||
+  !Array.isArray(source.images) ||
+  source.images.some((image) => !Number.isSafeInteger(image.sourceOrder) || image.sourceOrder < 0)
+) {
+  throw new Error("atwiki 脸图来源清单格式不合法");
+}
 
 mkdirSync(assetDirectory, { recursive: true });
 const characters = dictionary.characters.map((character, index) => ({
@@ -70,6 +78,7 @@ for (const image of source.images) {
   const existing = bySha.get(sha256);
   if (existing) {
     existing.sources.push(sourceRecord(image));
+    existing.sourceOrder = Math.min(existing.sourceOrder, image.sourceOrder);
     for (const { originalName, priority } of matches) {
       existing.bindingPriorities[originalName] = Math.min(
         existing.bindingPriorities[originalName] ?? 99,
@@ -86,6 +95,7 @@ for (const image of source.images) {
     sizeBytes: statSync(localPath).size,
     width: dimensions.width,
     height: dimensions.height,
+    sourceOrder: image.sourceOrder,
     sources: [sourceRecord(image)],
     boundOriginalNames: matchedCharacters,
     bindingPriorities: Object.fromEntries(
@@ -95,9 +105,9 @@ for (const image of source.images) {
 }
 
 const sheets = [...bySha.values()].sort((left, right) =>
-  left.sources[0].pageUrl.localeCompare(right.sources[0].pageUrl) ||
-  left.sha256.localeCompare(right.sha256),
+  left.sourceOrder - right.sourceOrder || left.sha256.localeCompare(right.sha256),
 );
+for (const [index, sheet] of sheets.entries()) sheet.sourceOrder = index;
 const defaultByCharacter = new Map();
 for (const sheet of sheets.slice().sort((left, right) =>
   Math.min(...Object.values(left.bindingPriorities), 99) -
@@ -121,7 +131,7 @@ for (const sheet of sheets.slice().sort((left, right) =>
   }
 }
 const manifest = {
-  schema: "viprpg-character-face-library.v1",
+  schema: "viprpg-character-face-library.v2",
   sourceSite: "https://w.atwiki.jp/viprpg_sozai/",
   cellSize: 48,
   generatedAt: new Date().toISOString(),

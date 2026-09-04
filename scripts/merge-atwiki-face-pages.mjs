@@ -13,9 +13,14 @@ const outputPath = resolve(
 const sourceData = JSON.parse(readFileSync(sourcePath, "utf8"));
 const sourceByPageId = new Map(sourceData.pages.map((page) => [page.pageId, page]));
 const images = [];
+let sourceOrder = 0;
 
-for (const name of readdirSync(browserDirectory).filter((value) => value.endsWith(".json"))) {
-  const page = JSON.parse(readFileSync(resolve(browserDirectory, name), "utf8"));
+const pages = readdirSync(browserDirectory)
+  .filter((value) => value.endsWith(".json"))
+  .map((name) => JSON.parse(readFileSync(resolve(browserDirectory, name), "utf8")))
+  .sort((left, right) => left.pageId - right.pageId);
+
+for (const page of pages) {
   if (page.error) throw new Error(`脸图页面抓取失败：${page.pageId} ${page.error}`);
   const sourcePage = sourceByPageId.get(page.pageId);
   const labelsByFilename = new Map();
@@ -34,7 +39,9 @@ for (const name of readdirSync(browserDirectory).filter((value) => value.endsWit
       pageUrl: page.pageUrl,
       pageTitle: page.pageTitle,
       labels: labelsByFilename.get(filename) ?? [],
+      sourceOrder,
     });
+    sourceOrder += 1;
   }
 }
 
@@ -43,17 +50,18 @@ for (const image of images) {
   const existing = byUrl.get(image.src);
   if (existing) {
     existing.labels = [...new Set([...existing.labels, ...image.labels])];
+    existing.sourceOrder = Math.min(existing.sourceOrder, image.sourceOrder);
   } else {
     byUrl.set(image.src, image);
   }
 }
 const uniqueImages = [...byUrl.values()].sort((left, right) =>
-  left.pageId - right.pageId || left.src.localeCompare(right.src),
+  left.sourceOrder - right.sourceOrder || left.src.localeCompare(right.src),
 );
 writeFileSync(
   outputPath,
   `${JSON.stringify({
-    schema: "viprpg-atwiki-face-source.v1",
+    schema: "viprpg-atwiki-face-source.v2",
     images: uniqueImages,
   }, null, 2)}\n`,
 );

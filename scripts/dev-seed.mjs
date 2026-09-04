@@ -20,7 +20,7 @@ const characterFaceLibrary = JSON.parse(
 if (characterDictionary.schema !== "viprpg-character-dictionary.v1") {
   throw new Error("角色词典格式不受支持");
 }
-if (characterFaceLibrary.schema !== "viprpg-character-face-library.v1") {
+if (characterFaceLibrary.schema !== "viprpg-character-face-library.v2") {
   throw new Error("角色脸图清单格式不受支持");
 }
 if (process.argv.includes("--reset")) await import("./local-d1-reset.mjs");
@@ -188,7 +188,6 @@ insert("work_relations", [
     to_work_id: 1,
     relation_type: "same_setting",
     vice_versa: 0,
-    relation_order: 0,
     created_by_user_id: 3,
     created_at: NOW,
   },
@@ -197,7 +196,6 @@ insert("work_relations", [
     to_work_id: 3,
     relation_type: "same_setting",
     vice_versa: 1,
-    relation_order: 0,
     created_by_user_id: 3,
     created_at: NOW,
   },
@@ -208,7 +206,6 @@ insert("translation_relations", [
     target_role: "original",
     target_work_id: 1,
     vice_versa: 0,
-    relation_order: 0,
     created_by_user_id: 3,
     created_at: NOW,
   },
@@ -217,7 +214,6 @@ insert("translation_relations", [
     target_role: "translation",
     target_work_id: 2,
     vice_versa: 1,
-    relation_order: 0,
     created_by_user_id: 3,
     created_at: NOW,
   },
@@ -246,24 +242,11 @@ const seededCharacters = characterDictionary.characters.map((character, index) =
   primary_name_key: nameKey(character.primaryName),
   original_name: character.originalName,
   original_name_key: nameKey(character.originalName),
+  description: character.description ?? null,
+  extra_json: JSON.stringify(character.extra ?? {}),
   created_at: NOW,
   updated_at: NOW,
 }));
-for (const character of [
-  { originalName: "モナー", primaryName: "莫纳", description: "猫耳角色。" },
-  { originalName: "ギコ猫", primaryName: "吉可猫", description: "嘴硬的猫。" },
-]) {
-  seededCharacters.push({
-    id: seededCharacters.length + 1,
-    primary_name: character.primaryName,
-    primary_name_key: nameKey(character.primaryName),
-    original_name: character.originalName,
-    original_name_key: nameKey(character.originalName),
-    description: character.description,
-    created_at: NOW,
-    updated_at: NOW,
-  });
-}
 insert("characters", seededCharacters);
 let characterAliasId = 1;
 insert(
@@ -295,11 +278,12 @@ insert(
       blob_sha256: sheet.sha256,
       width_px: sheet.width,
       height_px: sheet.height,
-      source_kind: "atwiki",
+      source_kind: sheet.sourceKind ?? "atwiki",
       source_page_url: source?.pageUrl ?? null,
       source_image_url: source?.imageUrl ?? null,
       source_page_title: source?.pageTitle ?? null,
       source_section_title: source?.sectionTitle ?? null,
+      source_order: sheet.sourceOrder,
       library_status: "approved",
       created_by_user_id: 1,
       created_at: NOW,
@@ -348,11 +332,8 @@ insert(
   })),
 );
 insert("work_characters", [
-  { work_id: 1, character_id: characterIds.get("モナー"), display_name: "莫纳", role_key: "main", sort_order: 1 },
   { work_id: 1, character_id: characterIds.get("アゼクラ"), display_name: "阿泽库拉", role_key: "supporting", sort_order: 2 },
-  { work_id: 3, character_id: characterIds.get("モナー"), display_name: "莫纳", role_key: "main", sort_order: 1 },
   { work_id: 3, character_id: characterIds.get("アゼクラ"), display_name: "校仓", role_key: "supporting", sort_order: 2 },
-  { work_id: 5, character_id: characterIds.get("ギコ猫"), display_name: "吉可猫", role_key: "main", sort_order: 1 },
 ]);
 insert("creators", [
   {
