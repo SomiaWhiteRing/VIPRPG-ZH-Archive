@@ -1,9 +1,10 @@
-import type { ArchiveFileRole, ArchiveStorageKind } from "@/lib/archive/file-policy";
+import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 
 import type {
   CharacterPortraitChoice,
   CharacterSelection,
 } from "@/lib/character-names";
+import type { CreatorSelection } from "@/lib/creator-names";
 
 export type ArchiveManifest = {
   schema: "viprpg-archive.manifest.v1";
@@ -128,15 +129,9 @@ export type ArchiveCommitMetadata = {
     sortOrder: number | null;
     notes: string | null;
   }>;
-  creators: Array<{
-    name: string;
-    originalName: string | null;
-    websiteUrl: string | null;
-    extra: Record<string, unknown>;
-  }>;
   workStaff: Array<{
-    creatorName: string;
-    roleKey: "author" | "scenario" | "graphics" | "music" | "translator" | "editor" | "publisher" | "proofreader" | "image_editor" | "other";
+    selection: CreatorSelection;
+    roleKey: "author" | "scenario" | "graphics" | "music" | "planning" | "programming" | "translator" | "other";
     roleLabel: string | null;
     notes: string | null;
   }>;
@@ -148,13 +143,6 @@ export type ArchiveCommitMetadata = {
       linkType: "official" | "wiki" | "source" | "video" | "download_page" | "other";
     }>;
   };
-};
-
-export type ArchiveCommitFile = ArchiveManifestFile & {
-  storageKind: ArchiveStorageKind;
-  blobSha256: string | null;
-  corePackSha256: string | null;
-  packEntryPath: string | null;
 };
 
 export type ExcludedFileTypeSummary = {

@@ -1,5 +1,6 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { getD1 } from "@/lib/server/db/d1";
+import { getWorkTranslators } from "@/lib/server/db/creators";
 import {
   parseImportJobId,
   requiredOwnedImportJob,
@@ -70,6 +71,7 @@ async function completedResult(workId: number, archiveVersionId: number) {
         fileCount: row.total_files,
         uniqueBlobCount: row.unique_blob_count,
         corePackCount: row.core_pack_count,
+        translators: await getWorkTranslators(workId),
       }
     : null;
 }

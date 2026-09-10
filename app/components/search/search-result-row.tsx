@@ -35,12 +35,12 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
           <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
             {engineLabel(work.engineFamily)}
           </span>
-          {work.creators.slice(0, 1).map((creator) => (
+          {work.creators.filter((creator) => creator.roleKey === "author").slice(0, 1).map((creator) => (
             <span
               className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
               key={creator.id}
             >
-              {creator.name}
+              {creator.displayName}
             </span>
           ))}
           {work.characters.slice(0, 1).map((character) => (

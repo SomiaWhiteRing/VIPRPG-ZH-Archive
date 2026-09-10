@@ -261,6 +261,9 @@ async function listEligibleGcRows(db, type, graceDays, limit) {
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
@@ -513,6 +516,9 @@ async function markCandidatePurging(db, type, id, graceDays) {
           )
           AND NOT EXISTS (
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = blobs.sha256

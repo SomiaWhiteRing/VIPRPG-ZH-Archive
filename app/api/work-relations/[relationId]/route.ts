@@ -13,7 +13,6 @@ export async function DELETE(
   context: { params: Promise<{ relationId: string }> },
 ) {
   const auth = await requireAnyPermission(request, [
-    "relation.delete_own",
     "relation.manage_any",
   ]);
   if ("response" in auth) return auth.response;
@@ -33,7 +32,6 @@ export async function PATCH(
   context: { params: Promise<{ relationId: string }> },
 ) {
   const auth = await requireAnyPermission(request, [
-    "relation.update_own",
     "relation.manage_any",
   ]);
   if ("response" in auth) return auth.response;

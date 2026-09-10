@@ -34,6 +34,24 @@ export function redirectResponse(url: URL | string, status = 303): Response {
   });
 }
 
+export function redirectBack(request: Request, fallbackPath: string): Response {
+  const requestUrl = new URL(request.url);
+  const referer = request.headers.get("referer");
+
+  if (referer) {
+    try {
+      const refererUrl = new URL(referer);
+
+      if (refererUrl.origin === requestUrl.origin) {
+        return redirectResponse(refererUrl);
+      }
+    } catch {
+    }
+  }
+
+  return redirectResponse(new URL(fallbackPath, requestUrl));
+}
+
 export function formOrJsonError(
   request: Request,
   fallbackPath: string,

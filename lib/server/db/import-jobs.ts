@@ -180,23 +180,8 @@ export async function requiredOwnedImportJob(
   user: ArchiveUser,
 ): Promise<ImportJobRow> {
   const job = await findImportJob(id);
-  if (!job || job.uploader_id !== user.id) {
+  if (!job || job.uploader_id !== user.id || (job.work_id && await getD1().prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`).bind(job.work_id).first())) {
     throw new HttpError(404, "Import job not found");
-  }
-  return job;
-}
-
-export async function requiredObjectUploadOwnedImportJob(
-  id: number,
-  user: ArchiveUser,
-): Promise<ImportJobRow> {
-  const job = await requiredOwnedImportJob(id, user);
-  if (
-    !["preflighted", "uploading_source", "uploading_metadata"].includes(
-      job.status,
-    )
-  ) {
-    throw new HttpError(409, "Import job does not accept object uploads");
   }
   return job;
 }
@@ -247,16 +232,6 @@ export async function markImportJobPreflighted(input: {
     )
     .run();
   assertChanged(result, "Import job is no longer ready for preflight");
-}
-
-export async function recordImportObjectUpload(input: {
-  id: number;
-  objectKind: "blob" | "core_pack";
-  sizeBytes: number;
-  durationMs: number;
-}): Promise<void> {
-  const result = await recordImportObjectUploadStatement(getD1(), input).run();
-  assertChanged(result, "Import job does not accept object uploads");
 }
 
 export function recordImportObjectUploadStatement(

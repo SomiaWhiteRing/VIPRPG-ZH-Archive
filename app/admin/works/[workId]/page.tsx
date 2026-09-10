@@ -19,6 +19,8 @@ import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import { AdminLanguageField } from "../language-field";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { StructuredWorkFields } from "../structured-work-fields";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
+import { listWorkMaintainers } from "@/lib/server/db/catalog-maintenance";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,8 @@ export default async function AdminWorkEditPage({
     listCharacterSuggestions(),
   ]);
   if (!work) notFound();
-  const relationCapabilities = getRelationEditorCapabilities(adminUser);
+  const maintainers = await listWorkMaintainers(workId);
+  const relationCapabilities = getRelationEditorCapabilities(adminUser, true);
   return (
     <main>
       <PageHeader
@@ -121,6 +124,7 @@ export default async function AdminWorkEditPage({
                 options={[
                   { value: "published", label: "已发布" },
                   { value: "hidden", label: "隐藏" },
+                  { value: "deleted", label: "已删除（仅后台可见）" },
                 ]}
               />
             </FormField>
@@ -171,6 +175,30 @@ export default async function AdminWorkEditPage({
           </Link>
         </StickySaveBar>
       </form>
+      <Pane heading="作品维护者">
+        <ul className="grid gap-2">
+          {maintainers.map((person) => <li key={person.id} className="flex items-center justify-between gap-3">
+            <span>{person.name} · {person.email}</span>
+            <ConfirmingForm action={`/api/admin/works/${workId}/maintainers`} confirmField="remove"
+              title="移除维护者？" description="移除后，该用户将无法从“我的上传”维护这部作品。">
+              <input name="email" type="hidden" value={person.email ?? ""} /><input name="remove" type="hidden" value="1" />
+              <Button type="submit" size="sm" variant="outline">移除</Button>
+            </ConfirmingForm>
+          </li>)}
+        </ul>
+        <ConfirmingForm action={`/api/admin/works/${workId}/maintainers`} className="mt-4 flex items-end gap-3" confirmField="confirm"
+          title="添加维护者" description="该账户将获得此作品的维护权限。">
+          <FormField label="维护者邮箱" hint="账户需已有上传权限。"><Input name="email" type="email" required /></FormField>
+          <Button type="submit">添加</Button>
+        </ConfirmingForm>
+      </Pane>
+      <Pane heading="合并重复作品" tone="danger">
+        <ConfirmingForm action={`/api/admin/works/${workId}/merge`} confirmField="target_id" title="确认合并作品？"
+          description="保留目标作品资料和下载入口，将归档、评论、收藏与关联转移至目标，当前作品设为已删除。此操作无法撤销；浏览器存档仍按原 Work ID 保存，不会自动转移。">
+          <FormField label="目标作品 ID"><Input name="target_id" type="number" min={1} required /></FormField>
+          <Button className="mt-3" type="submit" variant="destructive">合并到目标作品</Button>
+        </ConfirmingForm>
+      </Pane>
       <Pane heading="关系资料">
         <p className="text-sm text-muted">
           普通关联、原版/译版关联和目录成员在上传完成后单独维护，不与游戏资料保存混在一起。

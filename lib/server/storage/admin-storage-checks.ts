@@ -781,6 +781,9 @@ function eligibleGcSummaryStatement(
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
@@ -834,6 +837,9 @@ async function listEligibleGcRows(
           )
           AND NOT EXISTS (
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
@@ -952,6 +958,9 @@ async function markGcCandidatePurging(
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
@@ -1043,6 +1052,9 @@ function deletedOnlyGcSummaryStatement(
               SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
+              SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
               SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
@@ -1098,6 +1110,9 @@ function gcCandidateRowsStatement(
           )
           AND NOT EXISTS (
             SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256

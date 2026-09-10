@@ -37,11 +37,6 @@ export async function revokeSessionFromCookieHeader(cookieHeader: string | null)
     .bind(await hashSessionToken(token)).run();
 }
 
-export async function revokeAllUserSessions(userId: number): Promise<void> {
-  await getD1().prepare(`UPDATE user_sessions SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP) WHERE user_id = ? AND revoked_at IS NULL`)
-    .bind(userId).run();
-}
-
 export async function hashSessionToken(token: string): Promise<string> {
   return sha256Hex(toArrayBuffer(utf8Encode(token)));
 }

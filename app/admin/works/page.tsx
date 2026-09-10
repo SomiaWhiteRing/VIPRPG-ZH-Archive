@@ -27,7 +27,7 @@ export default async function AdminWorksPage({
   await requirePagePermission("/admin/works", "work.read_private");
   const params = await searchParams;
   const query = searchParam(params.q);
-  const status = allowed(searchParam(params.status), ["all", "published", "processing", "hidden"], "all");
+  const status = allowed(searchParam(params.status), ["all", "published", "processing", "hidden", "deleted"], "all");
   const sort = allowed(searchParam(params.sort), ["default", "title", "release"], "default");
   const page = parseAdminPage(params.page);
   const result = await searchEditableWorksForAdmin({
@@ -60,7 +60,7 @@ export default async function AdminWorksPage({
           { value: "all", label: "全部状态" },
           { value: "published", label: "已发布" },
           { value: "processing", label: "处理中" },
-          { value: "hidden", label: "隐藏" },
+          { value: "hidden", label: "隐藏" }, { value: "deleted", label: "已删除" },
         ]}
         total={result.total}
       />

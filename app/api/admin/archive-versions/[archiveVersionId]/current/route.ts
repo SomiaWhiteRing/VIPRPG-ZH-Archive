@@ -1,7 +1,8 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import { setCurrentArchiveVersion } from "@/lib/server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
-import { redirectResponse } from "@/lib/server/http/form";
+import { redirectBack } from "@/lib/server/http/form";
+import { parsePositiveId } from "@/lib/server/http/request";
 import { json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
-    const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
+    const archiveVersionId = parsePositiveId(rawArchiveVersionId, "archive version id");
     const archiveVersion = await setCurrentArchiveVersion(archiveVersionId);
 
     await writeAuthAuditLog({
@@ -45,33 +46,4 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     return jsonError("ArchiveVersion current update failed", error);
   }
-}
-
-function parseArchiveVersionId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error("Invalid archive version id");
-  }
-
-  return id;
-}
-
-function redirectBack(request: Request, fallbackPath: string): Response {
-  const requestUrl = new URL(request.url);
-  const referer = request.headers.get("referer");
-
-  if (referer) {
-    try {
-      const refererUrl = new URL(referer);
-
-      if (refererUrl.origin === requestUrl.origin) {
-        return redirectResponse(refererUrl);
-      }
-    } catch {
-      // Ignore malformed referer values and use the stable fallback.
-    }
-  }
-
-  return redirectResponse(new URL(fallbackPath, requestUrl));
 }

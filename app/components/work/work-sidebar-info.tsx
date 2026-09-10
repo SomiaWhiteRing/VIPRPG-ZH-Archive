@@ -48,11 +48,12 @@ export function WorkSidebarInfo({
 
       <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">制作名单</p>
       <dl className="m-0">
-        {work.creators.length ? work.creators.map((creator) => (
+        {work.creators.map((creator) => (
           <InfoRow key={`${creator.id}-${creator.roleKey}`} label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}>
-            <Link className="font-medium text-[#1f6f67] hover:underline" href={`/creators/${creator.id}`}>{creator.name}</Link>
+            <Link className="font-medium text-[#1f6f67] hover:underline" href={`/creators/${creator.id}`}>{creator.displayName}</Link>
           </InfoRow>
-        )) : <InfoRow label="记录">暂无</InfoRow>}
+        ))}
+        {!work.creators.length ? <InfoRow label="记录">暂无</InfoRow> : null}
       </dl>
     </div>
   );

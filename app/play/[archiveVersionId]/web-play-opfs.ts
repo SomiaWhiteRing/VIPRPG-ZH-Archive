@@ -1,23 +1,6 @@
 const APP_ROOT = "viprpg-archive";
 const GAMES_ROOT = "games";
 
-export type GameOpfsWriteContext = {
-  playKey: string;
-  filesRoot: FileSystemDirectoryHandle;
-  directoryCache: Map<string, Promise<FileSystemDirectoryHandle>>;
-};
-
-type FileSystemSyncAccessHandleLike = {
-  write: (buffer: BufferSource, options?: { at?: number }) => number;
-  flush?: () => void;
-  truncate?: (size: number) => void;
-  close: () => void;
-};
-
-type SyncAccessFileHandle = FileSystemFileHandle & {
-  createSyncAccessHandle?: () => Promise<FileSystemSyncAccessHandleLike>;
-};
-
 export async function ensureOpfsSupported(): Promise<void> {
   const storage = navigator.storage as StorageManager & {
     getDirectory?: () => Promise<FileSystemDirectoryHandle>;
@@ -41,49 +24,6 @@ export async function resetGameOpfsDirectory(playKey: string): Promise<void> {
     });
 }
 
-export async function createGameOpfsWriteContext(
-  playKey: string,
-): Promise<GameOpfsWriteContext> {
-  const filesRoot = await getFilesDirectory(playKey, true);
-  const directoryCache = new Map<string, Promise<FileSystemDirectoryHandle>>();
-
-  directoryCache.set("", Promise.resolve(filesRoot));
-
-  return {
-    playKey,
-    filesRoot,
-    directoryCache,
-  };
-}
-
-export async function writeGameFileWithContext(
-  context: GameOpfsWriteContext,
-  relativePath: string,
-  bytes: Uint8Array,
-): Promise<void> {
-  const file = await getGameFileHandle(context, relativePath);
-  const syncFile = file as SyncAccessFileHandle;
-  const writeBuffer = toWriteBuffer(bytes);
-
-  if (typeof syncFile.createSyncAccessHandle === "function") {
-    const accessHandle = await syncFile.createSyncAccessHandle();
-
-    try {
-      accessHandle.truncate?.(0);
-      accessHandle.write(writeBuffer);
-      accessHandle.flush?.();
-    } finally {
-      accessHandle.close();
-    }
-    return;
-  }
-
-  const writable = await file.createWritable();
-
-  await writable.write(writeBuffer);
-  await writable.close();
-}
-
 export async function createGamePackWritable(
   playKey: string,
   packName: string,
@@ -95,23 +35,6 @@ export async function createGamePackWritable(
   });
 
   return file.createWritable();
-}
-
-async function getGameFileHandle(
-  context: GameOpfsWriteContext,
-  relativePath: string,
-): Promise<FileSystemFileHandle> {
-  const normalizedPath = normalizeGameRelativePath(relativePath);
-  const parts = normalizedPath.split("/");
-  const fileName = parts.pop();
-
-  if (!fileName) {
-    throw new Error(`非法文件路径：${relativePath}`);
-  }
-
-  const directory = await getCachedDirectory(context, parts);
-
-  return directory.getFileHandle(fileName, { create: true });
 }
 
 export async function writeGameIndexJson(
@@ -160,82 +83,10 @@ async function getGameRootDirectory(
   return gamesRoot.getDirectoryHandle(playKey, { create });
 }
 
-async function getFilesDirectory(
-  playKey: string,
-  create: boolean,
-): Promise<FileSystemDirectoryHandle> {
-  const gameRoot = await getGameRootDirectory(playKey, create);
-
-  return gameRoot.getDirectoryHandle("files", { create });
-}
-
-function normalizeGameRelativePath(path: string): string {
-  const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "");
-
-  if (
-    !normalized ||
-    normalized.includes("\0") ||
-    normalized.startsWith("../") ||
-    normalized.includes("/../") ||
-    normalized.endsWith("/..") ||
-    normalized === ".." ||
-    /^[a-z]+:/i.test(normalized)
-  ) {
-    throw new Error(`非法文件路径：${path}`);
-  }
-
-  return normalized
-    .split("/")
-    .filter(Boolean)
-    .join("/");
-}
-
 function normalizePackName(name: string): string {
   if (!/^[a-z0-9][a-z0-9._-]*\.pack$/.test(name)) {
     throw new Error(`非法 pack 文件名：${name}`);
   }
 
   return name;
-}
-
-function getCachedDirectory(
-  context: GameOpfsWriteContext,
-  parts: string[],
-): Promise<FileSystemDirectoryHandle> {
-  let parentPromise = context.directoryCache.get("");
-  let currentPath = "";
-
-  if (!parentPromise) {
-    parentPromise = Promise.resolve(context.filesRoot);
-    context.directoryCache.set("", parentPromise);
-  }
-
-  for (const part of parts) {
-    currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-    let directoryPromise = context.directoryCache.get(currentPath);
-
-    if (!directoryPromise) {
-      directoryPromise = parentPromise.then((parent) =>
-        parent.getDirectoryHandle(part, { create: true }),
-      );
-      context.directoryCache.set(currentPath, directoryPromise);
-    }
-
-    parentPromise = directoryPromise;
-  }
-
-  return parentPromise;
-}
-
-function toWriteBuffer(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (bytes.buffer instanceof ArrayBuffer) {
-    return bytes as Uint8Array<ArrayBuffer>;
-  }
-
-  const copy = new Uint8Array(bytes.byteLength);
-
-  copy.set(bytes);
-
-  return copy;
 }

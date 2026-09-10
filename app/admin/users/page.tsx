@@ -22,7 +22,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const canUpdateStatus = hasPermission(adminUser, "user.status.update");
   const params = await searchParams;
   const query = searchParam(params.q);
-  const status = allowed(searchParam(params.status), ["all", "active", "disabled"], "all");
+  const status = allowed(searchParam(params.status), ["all", "active", "disabled", "deleted"], "all");
   const sort = allowed(searchParam(params.sort), ["default", "name"], "default");
   const page = parseAdminPage(params.page);
   const [result, roles] = await Promise.all([
@@ -73,7 +73,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                   {canAssignRoles ? (
                     <RoleAssignmentControl initialRoleIds={user.roleIds} roles={roles} userId={user.id} />
                   ) : null}
-                  {canUpdateStatus ? (
+                  {canUpdateStatus && user.status !== "deleted" ? (
                     <form action={`/api/admin/users/${user.id}/status`} method="post" className="inline-flex">
                       <input name="status" type="hidden" value={user.status === "active" ? "disabled" : "active"} />
                       <Button variant="outline" type="submit">

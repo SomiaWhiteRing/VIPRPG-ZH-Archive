@@ -137,7 +137,7 @@ async function listDirectory(scope: string, query: string, page: number) {
     items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
       href: `/creators/${item.id}`,
       title: item.name,
-      subtitle: item.originalName,
+      subtitle: null,
       meta: `${item.workCreditCount} 个作品`,
     }));
   else if (scope === "characters")

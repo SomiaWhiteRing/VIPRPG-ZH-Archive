@@ -1,0 +1,23 @@
+import { requirePermission } from "@/lib/server/auth/authorize";
+import { getOwnedWorkForEdit } from "@/lib/server/db/game-library";
+import { getD1 } from "@/lib/server/db/d1";
+import { parsePositiveId } from "@/lib/server/http/request";
+import { HttpError, json, jsonError } from "@/lib/server/http/json";
+
+export async function POST(request: Request, context: { params: Promise<{ workId: string }> }) {
+  const auth = await requirePermission(request, "work.update_own");
+  if ("response" in auth) return auth.response;
+  try {
+    const id = parsePositiveId((await context.params).workId, "work id");
+    const form = await request.formData();
+    if (form.get("confirm") !== "delete") throw new HttpError(400, "请确认删除作品");
+    if (!await getOwnedWorkForEdit(id, auth.user)) throw new HttpError(404, "作品不存在或不可维护");
+    const db = getD1();
+    await db.batch([
+      db.prepare(`UPDATE works SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status<>'deleted'`).bind(id),
+      db.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,'work_deleted',?)`)
+        .bind(auth.user.id, auth.user.email, JSON.stringify({ workId: id })),
+    ]);
+    return json({ ok: true, redirectTo: "/me/uploads" });
+  } catch (error) { return jsonError("删除作品失败", error); }
+}

@@ -50,6 +50,16 @@ export async function GET(_request: Request, context: RouteContext) {
             )
             OR EXISTS (
               SELECT 1
+              FROM creators c
+              WHERE c.avatar_blob_sha256 = b.sha256
+                AND EXISTS (
+                  SELECT 1 FROM work_staff ws
+                  JOIN works w ON w.id=ws.work_id
+                  WHERE ws.creator_id=c.id AND w.status='published'
+                )
+            )
+            OR EXISTS (
+              SELECT 1
               FROM catalogs c
               WHERE c.cover_blob_sha256 = b.sha256
                 AND c.status = 'published'

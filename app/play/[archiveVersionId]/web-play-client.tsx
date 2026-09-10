@@ -14,7 +14,8 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
-import { WorkPageLayout, WorkSidebar } from "@/app/components/work/work-page-layout";
+import { WorkSidebar } from "@/app/components/work/work-page-layout";
+import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
 import {
   deleteWebPlayInstallation,
   getWebPlayInstallation,
@@ -327,6 +328,7 @@ export function WebPlayClient({
       addLog("info", "游戏运行组件已加载，正在启动游戏。");
       const playerModule = await window.createEasyRpgPlayer({
         game: metadata.playKey,
+        workId: metadata.workId,
         locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
       });
 
@@ -474,7 +476,8 @@ export function WebPlayClient({
     <div
       data-web-play-status={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
     >
-      <WorkPageLayout
+      <DetailPageLayout
+        sidebarLabel="作品操作与资料"
         main={
           <>
             <section aria-labelledby="player-title" className="py-4.5">

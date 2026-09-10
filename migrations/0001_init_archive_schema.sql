@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   profile_show_history INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_history IN (0, 1)),
   profile_show_catalogs INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_catalogs IN (0, 1)),
   profile_show_comments INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_comments IN (0, 1)),
-  status TEXT NOT NULL CHECK (status IN ('active', 'disabled')) DEFAULT 'active',
+  status TEXT NOT NULL CHECK (status IN ('active', 'disabled', 'deleted')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
   failed_login_count INTEGER NOT NULL DEFAULT 0,
@@ -59,15 +59,15 @@ VALUES
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'user';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","relation.update_own","relation.delete_own","translation_relation.create","translation_relation.delete_own","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","work_comment.manage_any","custom_emoji.manage","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.update","relation.manage_any","translation_relation.manage_any","catalog.manage_any","comment.manage_any","custom_emoji.manage","creator.read_private","creator.update","character.read_private","character.update","tag.read_private","tag.update","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -305,12 +305,13 @@ CREATE INDEX IF NOT EXISTS idx_user_work_entries_favorites
   ON user_work_entries(user_id, favorited_at DESC, work_id)
   WHERE favorited_at IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS work_comments (
+CREATE TABLE IF NOT EXISTS comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+  work_id INTEGER REFERENCES works(id) ON DELETE CASCADE,
+  creator_id INTEGER REFERENCES creators(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  root_comment_id INTEGER REFERENCES work_comments(id) ON DELETE CASCADE,
-  reply_to_comment_id INTEGER REFERENCES work_comments(id) ON DELETE SET NULL,
+  root_comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+  reply_to_comment_id INTEGER REFERENCES comments(id) ON DELETE SET NULL,
   body TEXT,
   status TEXT NOT NULL CHECK (status IN ('published', 'hidden', 'deleted')) DEFAULT 'published',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -321,27 +322,60 @@ CREATE TABLE IF NOT EXISTS work_comments (
     (status = 'deleted' AND body IS NULL)
     OR (status <> 'deleted' AND body IS NOT NULL AND length(trim(body)) > 0)
   ),
+  CHECK ((work_id IS NOT NULL) <> (creator_id IS NOT NULL)),
   CHECK (root_comment_id IS NULL OR root_comment_id <> id),
   CHECK (reply_to_comment_id IS NULL OR reply_to_comment_id <> id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_work_comments_public_roots
-  ON work_comments(work_id, created_at, id)
-  WHERE root_comment_id IS NULL AND status = 'published';
+CREATE INDEX IF NOT EXISTS idx_comments_work_public_roots
+  ON comments(work_id, created_at, id)
+  WHERE work_id IS NOT NULL AND root_comment_id IS NULL AND status = 'published';
 
-CREATE INDEX IF NOT EXISTS idx_work_comments_root_replies
-  ON work_comments(root_comment_id, created_at, id)
+CREATE INDEX IF NOT EXISTS idx_comments_creator_public_roots
+  ON comments(creator_id, created_at, id)
+  WHERE creator_id IS NOT NULL AND root_comment_id IS NULL AND status = 'published';
+
+CREATE INDEX IF NOT EXISTS idx_comments_replies
+  ON comments(root_comment_id, created_at, id)
   WHERE root_comment_id IS NOT NULL AND status = 'published';
 
-CREATE INDEX IF NOT EXISTS idx_work_comments_author
-  ON work_comments(user_id, updated_at DESC, id);
+CREATE INDEX IF NOT EXISTS idx_comments_author
+  ON comments(user_id, updated_at DESC, id);
 
-CREATE TABLE IF NOT EXISTS work_comment_likes (
-  comment_id INTEGER NOT NULL REFERENCES work_comments(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS comment_likes (
+  comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (comment_id, user_id)
 );
+
+CREATE TRIGGER IF NOT EXISTS comments_require_matching_root_insert
+BEFORE INSERT ON comments
+WHEN NEW.root_comment_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM comments root
+    WHERE root.id = NEW.root_comment_id
+      AND root.root_comment_id IS NULL
+      AND root.work_id IS NEW.work_id
+      AND root.creator_id IS NEW.creator_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'comment root must use the same target');
+END;
+
+CREATE TRIGGER IF NOT EXISTS comments_require_matching_reply_insert
+BEFORE INSERT ON comments
+WHEN NEW.reply_to_comment_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM comments target
+    WHERE target.id = NEW.reply_to_comment_id
+      AND target.work_id IS NEW.work_id
+      AND target.creator_id IS NEW.creator_id
+      AND COALESCE(target.root_comment_id, target.id) = NEW.root_comment_id
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'comment reply must use the same root and target');
+END;
 
 CREATE TABLE IF NOT EXISTS work_uploaders (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
@@ -942,19 +976,54 @@ END;
 
 CREATE TABLE IF NOT EXISTS creators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-  original_name TEXT,
+  name TEXT NOT NULL COLLATE NOCASE,
+  name_key TEXT NOT NULL,
+  disambiguation TEXT NOT NULL DEFAULT '',
+  avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
   website_url TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(name_key, disambiguation)
 );
+
+CREATE TABLE IF NOT EXISTS creator_aliases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('user', 'admin')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (creator_id, name_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_creator_aliases_creator
+  ON creator_aliases(creator_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_creator_aliases_name_key ON creator_aliases(name_key);
+
+CREATE TRIGGER IF NOT EXISTS creators_avatar_require_active_blob
+BEFORE UPDATE OF avatar_blob_sha256 ON creators
+WHEN NEW.avatar_blob_sha256 IS NOT NULL
+  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.avatar_blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'creator avatar blob must be active');
+END;
+
+CREATE TRIGGER IF NOT EXISTS creators_avatar_require_active_blob_insert
+BEFORE INSERT ON creators
+WHEN NEW.avatar_blob_sha256 IS NOT NULL
+  AND COALESCE((SELECT status FROM blobs WHERE sha256=NEW.avatar_blob_sha256), '') <> 'active'
+BEGIN
+  SELECT RAISE(ABORT, 'creator avatar blob must be active');
+END;
 
 CREATE TABLE IF NOT EXISTS work_staff (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
   role_key TEXT NOT NULL CHECK (
-    role_key IN ('author', 'scenario', 'graphics', 'music', 'translator', 'editor', 'publisher', 'proofreader', 'image_editor', 'other')
+    role_key IN ('author', 'scenario', 'graphics', 'music', 'planning', 'programming', 'translator', 'other')
   ),
   role_label TEXT,
   notes TEXT,
@@ -1036,6 +1105,11 @@ WHEN NEW.status IN ('purging', 'purged')
   OR NEW.status IN ('purging', 'purged')
   AND EXISTS (
     SELECT 1 FROM users
+    WHERE avatar_blob_sha256 = OLD.sha256
+  )
+  OR NEW.status IN ('purging', 'purged')
+  AND EXISTS (
+    SELECT 1 FROM creators
     WHERE avatar_blob_sha256 = OLD.sha256
   )
   OR NEW.status IN ('purging', 'purged')

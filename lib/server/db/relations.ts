@@ -126,7 +126,7 @@ export async function updateWorkRelation(
     throw new HttpError(400, "关联 ID 不合法");
   const row = await relationById(id);
   if (!row) throw new HttpError(404, "关联不存在");
-  await assertCanModifyRelation(row, actor, "relation.update_own");
+  assertCanModifyRelation(actor);
   assertRelationType(input.relationType);
   if (input.relationType === row.relation_type && row.vice_versa === 0) return;
 
@@ -205,7 +205,7 @@ export async function deleteWorkRelation(
     throw new HttpError(400, "关联 ID 不合法");
   const row = await relationById(id);
   if (!row) throw new HttpError(404, "关联不存在");
-  await assertCanModifyRelation(row, actor, "relation.delete_own");
+  assertCanModifyRelation(actor);
   const database = getD1();
   const statements = [
     database.prepare(`DELETE FROM work_relations WHERE id=?`).bind(id),
@@ -380,9 +380,7 @@ export async function deleteTranslationRelation(
     }>();
   if (!row) throw new HttpError(404, "翻译关联不存在");
   if (
-    !actor.permissionKeys.includes("translation_relation.manage_any") &&
-    (!actor.permissionKeys.includes("translation_relation.delete_own") ||
-      row.created_by_user_id !== actor.id)
+    actor.status !== "active" || !actor.permissionKeys.includes("translation_relation.manage_any")
   )
     throw new HttpError(403, "无权删除此关联");
   await getD1().batch([
@@ -519,17 +517,9 @@ function assertCanCreateTranslationRelation(actor: ArchiveUser): void {
   )
     throw new HttpError(403, "无权创建翻译关联");
 }
-async function assertCanModifyRelation(
-  row: RelationRow,
-  actor: ArchiveUser,
-  permission: "relation.update_own" | "relation.delete_own",
-): Promise<void> {
-  if (actor.permissionKeys.includes("relation.manage_any")) return;
-  if (
-    !actor.permissionKeys.includes(permission) ||
-    row.created_by_user_id !== actor.id
-  )
-    throw new HttpError(403, "无权修改此关联");
+function assertCanModifyRelation(actor: ArchiveUser): void {
+  if (actor.status !== "active" || !actor.permissionKeys.includes("relation.manage_any"))
+    throw new HttpError(403, "只有管理员可以修改已有关联");
 }
 function assertRelationType(value: string): asserts value is RelationType {
   if (

@@ -1,3 +1,4 @@
+import type { StaffCredit } from "@/lib/staff-credits";
 import {
   isArchiveEngineFamily,
   isExternalEngineFamily,
@@ -8,7 +9,9 @@ import type {
   CharacterPortrait,
   CharacterPortraitChoice,
 } from "@/lib/character-names";
-import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
+import type { CreatorSelection } from "@/lib/creator-names";
+import { creatorSelectionKey } from "@/lib/creator-names";
+import { normalizeEntityName } from "@/lib/entity-name";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
   parseOriginalReleaseDate,
@@ -19,6 +22,7 @@ import {
   parseCharacterSelectionsJson,
   prepareWorkCharacterStatements,
 } from "@/lib/server/db/characters";
+import { prepareWorkStaffStatements } from "@/lib/server/db/creators";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   mapCharacterPortrait,
@@ -55,7 +59,7 @@ export type GameCharacter = {
 export type GameCreatorCredit = {
   id: number;
   name: string;
-  originalName: string | null;
+  displayName: string;
   websiteUrl: string | null;
   roleKey: string;
   roleLabel: string | null;
@@ -203,6 +207,7 @@ type Filters = {
   isOriginal?: boolean;
   language?: string;
   includeNonPublic?: boolean;
+  includeDeleted?: boolean;
 };
 type ListInput = Filters & {
   sort?: "id" | "title" | "release" | "relevance";
@@ -297,8 +302,9 @@ export type ExternalWorkInput = {
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];
-  creatorName: string | null;
-  translatorName: string | null;
+  authors: CreatorSelection[];
+  extraStaff?: StaffCredit[];
+  translators: CreatorSelection[];
   previewBlobSha256s: string[];
   downloadUrl: string;
   sourceUrl: string | null;
@@ -369,8 +375,9 @@ export type UploaderWorkUpdateInput = {
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];
-  authors: string[];
-  translators: string[];
+  authors: CreatorSelection[];
+  extraStaff?: StaffCredit[];
+  translators: CreatorSelection[];
   previewBlobSha256s: string[];
   downloadUrl: string | null;
   sourceUrl: string | null;
@@ -504,11 +511,6 @@ export async function getGameWorkDetail(
     parallelTranslations: originalId ? await listTranslations(originalId) : [],
   };
 }
-export async function listEditableWorksForAdmin(
-  limit = 200,
-): Promise<GameWorkSummary[]> {
-  return listGameWorks({ includeNonPublic: true, limit });
-}
 export async function searchEditableWorksForAdmin(input: {
   query?: string;
   status?: string;
@@ -522,6 +524,7 @@ export async function searchEditableWorksForAdmin(input: {
     query: input.query,
     status: input.status,
     includeNonPublic: true,
+    includeDeleted: true,
   };
   const database = getD1();
   const [countResult, rowsResult] = await database.batch([
@@ -669,13 +672,15 @@ export async function updateOwnedWork(
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
   const characters = input.characters.map(parseCharacterCreditSelection);
-  const authors = uniqueText(input.authors.map(normalizeCreatorName));
-  const translators = input.isTranslation
-    ? uniqueText(input.translators.map(normalizeCreatorName))
-    : [];
-  if (input.isTranslation && translators.length === 0) {
-    throw new HttpError(400, "翻译作品必须填写译者");
-  }
+  const authors = uniqueCreatorSelections(input.authors);
+  const existingTranslators = new Map(before.creators
+    .filter((creator) => creator.roleKey === "translator")
+    .map((creator) => [creatorSelectionKey(selectionFromCreator(creator)), creator]));
+  const translatorCredits: StaffCredit[] = input.translators.map((selection) => {
+    const existing = existingTranslators.get(creatorSelectionKey(selection));
+    return { selection, roleKey: "translator", roleLabel: existing?.roleLabel ?? null, notes: existing?.notes ?? null };
+  });
+  if (input.isTranslation !== (translatorCredits.length > 0)) throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   const previewHashes = uniqueText(
     input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
   );
@@ -713,26 +718,14 @@ export async function updateOwnedWork(
   const existingAuthors = new Map(
     before.creators
       .filter((creator) => creator.roleKey === "author")
-      .map((creator) => [entityNameKey(creator.name), creator]),
+      .map((creator) => [creatorSelectionKey(selectionFromCreator(creator)), creator]),
   );
-  const authorCredits = authors.map((name) => {
-    const existing = existingAuthors.get(entityNameKey(name));
+  const authorCredits = authors.map((selection) => {
+    const existing = existingAuthors.get(creatorSelectionKey(selection));
     return {
-      name,
+      selection,
+      roleKey: "author" as const,
       roleLabel: existing?.roleLabel ?? "作者",
-      notes: existing?.notes ?? null,
-    };
-  });
-  const existingTranslators = new Map(
-    before.creators
-      .filter((creator) => creator.roleKey === "translator")
-      .map((creator) => [entityNameKey(creator.name), creator]),
-  );
-  const translatorCredits = translators.map((name) => {
-    const existing = existingTranslators.get(entityNameKey(name));
-    return {
-      name,
-      roleLabel: existing?.roleLabel ?? "译者",
       notes: existing?.notes ?? null,
     };
   });
@@ -762,7 +755,7 @@ export async function updateOwnedWork(
       ),
     database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_tags WHERE work_id=? AND source='uploader'`).bind(input.workId),
-    database.prepare(`DELETE FROM work_staff WHERE work_id=? AND role_key IN ('author','translator')`).bind(input.workId),
+    database.prepare(`DELETE FROM work_staff WHERE work_id=?`).bind(input.workId),
     database
       .prepare(
         `DELETE FROM work_media_assets
@@ -807,18 +800,15 @@ export async function updateOwnedWork(
       actorUserId: input.user.id,
     })),
   );
-  for (const author of authorCredits) {
-    statements.push(
-      database.prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?,'{}')`).bind(author.name),
-      database.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label,notes) SELECT ?,id,'author',?,? FROM creators WHERE name=? COLLATE NOCASE`).bind(input.workId, author.roleLabel, author.notes, author.name),
-    );
-  }
-  for (const translator of translatorCredits) {
-    statements.push(
-      database.prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?,'{}')`).bind(translator.name),
-      database.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label,notes) SELECT ?,id,'translator',?,? FROM creators WHERE name=? COLLATE NOCASE`).bind(input.workId, translator.roleLabel, translator.notes, translator.name),
-    );
-  }
+  statements.push(
+    ...(await prepareWorkStaffStatements({
+      database,
+      workId: input.workId,
+      credits: [...authorCredits, ...translatorCredits, ...(input.extraStaff ?? before.creators
+        .filter((creator) => creator.roleKey !== "author" && creator.roleKey !== "translator")
+        .map((creator) => ({ selection: selectionFromCreator(creator), roleKey: creator.roleKey as StaffCredit["roleKey"], roleLabel: creator.roleLabel, notes: creator.notes })))],
+    })),
+  );
   for (const [index, hash] of previewHashes.entries()) {
     statements.push(
       database.prepare(`INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`).bind(hash),
@@ -877,7 +867,7 @@ export async function updateWorkForAdmin(
     ],
     "引擎",
   );
-  assertEnum(input.status, ["processing", "published", "hidden"], "状态");
+  assertEnum(input.status, ["processing", "published", "hidden", "deleted"], "状态");
   if (input.status === "processing") {
     throw new HttpError(400, "processing 只能由上传提交流程创建");
   }
@@ -1037,21 +1027,17 @@ export async function createExternalWork(
   const aliases = [...new Set(input.aliases.map((value) => value.trim()).filter(Boolean))];
   const tags = [...new Set(input.tags.map(normalizeEntityName).filter(Boolean))];
   const characters = input.characters.map(parseCharacterCreditSelection);
-  const creatorName = input.creatorName ? normalizeCreatorName(input.creatorName) || null : null;
-  const translatorName = input.isTranslation && input.translatorName
-    ? normalizeCreatorName(input.translatorName) || null
-    : null;
-  if (input.isTranslation && !translatorName) {
-    throw new HttpError(400, "翻译作品必须填写译者");
-  }
+  const authors = input.authors;
+  const translatorCredits: StaffCredit[] = input.translators.map((selection) => ({
+    selection, roleKey: "translator", roleLabel: null, notes: null,
+  }));
+  if (input.isTranslation !== (translatorCredits.length > 0)) throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   const sourceUrl = normalizeHttpUrl(input.sourceUrl, "来源链接");
-  const staffCredits: Array<{
-    name: string;
-    roleKey: "author" | "translator";
-    roleLabel: "作者" | "译者";
-  }> = [];
-  if (creatorName) staffCredits.push({ name: creatorName, roleKey: "author", roleLabel: "作者" });
-  if (translatorName) staffCredits.push({ name: translatorName, roleKey: "translator", roleLabel: "译者" });
+  const staffCredits = [
+    ...translatorCredits,
+    ...(input.extraStaff ?? []),
+    ...authors.map((selection) => ({ selection, roleKey: "author" as const, roleLabel: "作者", notes: null })),
+  ];
   const database = getD1();
   const result = await database
     .prepare(
@@ -1077,79 +1063,79 @@ export async function createExternalWork(
   const workId = result.meta.last_row_id;
   if (!Number.isSafeInteger(workId)) throw new Error("外链作品创建失败");
 
-  const statements = [
-    database
-      .prepare(`INSERT INTO work_uploaders(work_id,user_id) VALUES(?,?)`)
-      .bind(workId, input.user.id),
-    ...aliases.map((title) =>
+  try {
+    const statements = [
       database
-        .prepare(
-          `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?, 'alias')`,
-        )
-        .bind(workId, title),
-    ),
-    ...staffCredits.flatMap((credit) => [
-      database
-        .prepare(`INSERT OR IGNORE INTO creators(name,extra_json) VALUES(?, '{}')`)
-        .bind(credit.name),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_staff(work_id,creator_id,role_key,role_label) SELECT ?,id,?,? FROM creators WHERE name=? COLLATE NOCASE`,
-        )
-        .bind(workId, credit.roleKey, credit.roleLabel, credit.name),
-    ]),
-    ...(await prepareWorkCharacterStatements({
-      database,
-      workId: workId as number,
-      credits: characters.map((credit, index) => ({
-        ...credit,
-        roleKey: "supporting",
-        spoilerLevel: 0,
-        sortOrder: index + 1,
-        notes: null,
+        .prepare(`INSERT INTO work_uploaders(work_id,user_id) VALUES(?,?)`)
+        .bind(workId, input.user.id),
+      ...aliases.map((title) =>
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?, 'alias')`,
+          )
+          .bind(workId, title),
+      ),
+      ...(await prepareWorkStaffStatements({
+        database,
+        workId: workId as number,
+        credits: staffCredits,
       })),
-      source: "user",
-      actorUserId: input.user.id,
-      requirePortrait: true,
-    })),
-    ...tags.flatMap((name) => [
-      database
-        .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`)
-        .bind(name),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`,
-        )
-        .bind(workId, name),
-    ]),
-    database
-      .prepare(
-        `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
-      )
-      .bind(workId, downloadUrl),
-    ...(sourceUrl
-      ? [
-          database
-            .prepare(
-              `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '来源链接', ?, 'source')`,
-            )
-            .bind(workId, sourceUrl),
-        ]
-      : []),
-    ...previewBlobSha256s.flatMap((sha256, index) => [
+      ...(await prepareWorkCharacterStatements({
+        database,
+        workId: workId as number,
+        credits: characters.map((credit, index) => ({
+          ...credit,
+          roleKey: "supporting",
+          spoilerLevel: 0,
+          sortOrder: index + 1,
+          notes: null,
+        })),
+        source: "user",
+        actorUserId: input.user.id,
+        requirePortrait: true,
+      })),
+      ...tags.flatMap((name) => [
+        database
+          .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`)
+          .bind(name),
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`,
+          )
+          .bind(workId, name),
+      ]),
       database
         .prepare(
-          `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?, 'preview')`,
+          `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
         )
-        .bind(sha256),
-      database
-        .prepare(
-          `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
-        )
-        .bind(workId, index + 1, index === 0 ? 1 : 0, sha256),
-    ]),
-  ];
-  await database.batch(statements);
+        .bind(workId, downloadUrl),
+      ...(sourceUrl
+        ? [
+            database
+              .prepare(
+                `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '来源链接', ?, 'source')`,
+              )
+              .bind(workId, sourceUrl),
+          ]
+        : []),
+      ...previewBlobSha256s.flatMap((sha256, index) => [
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?, 'preview')`,
+          )
+          .bind(sha256),
+        database
+          .prepare(
+            `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
+          )
+          .bind(workId, index + 1, index === 0 ? 1 : 0, sha256),
+      ]),
+    ];
+    await database.batch(statements);
+  } catch (error) {
+    await database.prepare("DELETE FROM works WHERE id=?").bind(workId).run();
+    throw error;
+  }
   await writeAuthAuditLog({
     userId: input.user.id,
     email: input.user.email,
@@ -1408,7 +1394,7 @@ function buildWhere(input: Filters): {
 } {
   const clauses = [
       input.includeNonPublic
-        ? "w.status <> 'deleted'"
+        ? (input.includeDeleted ? "1=1" : "w.status <> 'deleted'")
         : `w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`,
     ],
     binds: Array<string | number> = [];
@@ -1498,7 +1484,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
         kind: "creator",
         statement: database
           .prepare(
-            `SELECT ws.work_id,c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+            `SELECT ws.work_id,c.id,c.name,ws.display_name,c.website_url,ws.role_key,ws.role_label,ws.notes
              FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
              WHERE ws.work_id IN (${placeholders})
              ORDER BY ws.work_id,c.name`,
@@ -1527,7 +1513,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
     work_id: number;
     id: number;
     name: string;
-    original_name: string | null;
+    display_name: string;
     website_url: string | null;
     role_key: string;
     role_label: string | null;
@@ -1566,7 +1552,7 @@ async function hydrate(rows: SummaryRow[]): Promise<GameWorkSummary[]> {
     (creator) => ({
       id: creator.id,
       name: creator.name,
-      originalName: creator.original_name,
+      displayName: creator.display_name,
       websiteUrl: isHttpUrl(creator.website_url) ? creator.website_url : null,
       roleKey: creator.role_key,
       roleLabel: creator.role_label,
@@ -1670,7 +1656,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT c.id,c.name,c.original_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+        `SELECT c.id,c.name,ws.display_name,c.website_url,ws.role_key,ws.role_label,ws.notes
          FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
          WHERE ws.work_id=? ORDER BY c.name`,
       )
@@ -1747,7 +1733,7 @@ async function loadWorkCollections(
   const creators = batchRows<{
     id: number;
     name: string;
-    original_name: string | null;
+    display_name: string;
     website_url: string | null;
     role_key: string;
     role_label: string | null;
@@ -1755,7 +1741,7 @@ async function loadWorkCollections(
   }>(results[3]).map((row) => ({
     id: row.id,
     name: row.name,
-    originalName: row.original_name,
+    displayName: row.display_name,
     websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
     roleKey: row.role_key,
     roleLabel: row.role_label,
@@ -1962,7 +1948,7 @@ async function getWorkDistributionState(workId: number): Promise<{
            WHERE work_id=w.id AND status='published' AND is_current=1
          ) AS has_current_archive
        FROM works w
-       WHERE w.id=? AND w.status<>'deleted'
+       WHERE w.id=?
        LIMIT 1`,
     )
     .bind(workId)
@@ -1972,8 +1958,22 @@ async function getWorkDistributionState(workId: number): Promise<{
     hasCurrentArchive: row.has_current_archive === 1,
   };
 }
-function entityNameKey(value: string): string {
-  return value.toLowerCase();
+function uniqueCreatorSelections(values: CreatorSelection[]): CreatorSelection[] {
+  const selections = new Map<string, CreatorSelection>();
+  for (const value of values) {
+    const key = creatorSelectionKey(value);
+    if (!selections.has(key)) selections.set(key, value);
+  }
+  return [...selections.values()];
+}
+
+function selectionFromCreator(creator: GameCreatorCredit): CreatorSelection {
+  return {
+    kind: "existing",
+    creatorId: creator.id,
+    name: creator.name,
+    displayName: creator.displayName,
+  };
 }
 
 function characterSelectionFromGameCharacter(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { rememberPublishedTranslators } from "@/app/upload/translation-preference";
 import {
   acquireDraftLock,
   deleteUploadDraft,
@@ -12,6 +13,7 @@ import {
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import type {
   BrowserUploadTaskSnapshot,
+  UploadTaskCommitResult,
   MetadataBlobUpload,
   UploadRecoveryDraft,
   UploadSourceFile,
@@ -75,6 +77,9 @@ export function useUploadController(accountId: number) {
         setStarting(false);
         pendingLocalTaskIdRef.current = message.task.localTaskId;
         updateTask(message.task);
+        if (message.task.status === "completed" && message.task.result) {
+          rememberPublishedTranslators(accountId, message.task.result.translators);
+        }
         const pendingMetadata = pendingMetadataRef.current;
         if (
           pendingMetadata &&
@@ -150,6 +155,9 @@ export function useUploadController(accountId: number) {
     worker.terminate();
     setStarting(false);
     updateTask(message.task);
+    if (message.task.status === "completed" && message.task.result) {
+      rememberPublishedTranslators(accountId, message.task.result.translators);
+    }
     const jobId = message.task.serverImportJobId;
     if (jobId) {
       setDrafts((current) => current.filter((draft) => draft.serverImportJobId !== jobId));
@@ -187,7 +195,7 @@ export function useUploadController(accountId: number) {
       const visible: UploadRecoveryDraft[] = [];
       const committing: number[] = [];
       for (const draft of stored) {
-        const state = await inspectDraftServerState(draft.serverImportJobId);
+        const state = await inspectDraftServerState(draft.serverImportJobId, draft.accountId);
         if (state.kind === "invalid") {
           await deleteUploadDraft(draft.accountId, draft.serverImportJobId).catch(() => undefined);
           continue;
@@ -439,7 +447,7 @@ export function useUploadController(accountId: number) {
   };
 }
 
-async function inspectDraftServerState(importJobId: number): Promise<DraftServerState> {
+async function inspectDraftServerState(importJobId: number, accountId?: number): Promise<DraftServerState> {
   const response = await fetch(`/api/imports/${importJobId}`, {
     credentials: "same-origin",
   }).catch(() => null);
@@ -447,9 +455,12 @@ async function inspectDraftServerState(importJobId: number): Promise<DraftServer
   if ([400, 403, 404].includes(response.status)) return { kind: "invalid" };
   if (!response.ok) return { kind: "unknown" };
   const payload = (await response.json().catch(() => null)) as
-    | { ok: true; importJob: { status: string } }
+    | { ok: true; importJob: { status: string; result: UploadTaskCommitResult | null } }
     | null;
   const status = payload?.ok ? payload.importJob.status : null;
+  if (status === "completed" && payload?.importJob.result && accountId !== undefined) {
+    rememberPublishedTranslators(accountId, payload.importJob.result.translators);
+  }
   if (status === "awaiting_metadata" || status === "uploading_metadata") {
     return { kind: "recoverable" };
   }
@@ -490,7 +501,7 @@ async function resumeDraftOnServer(draft: UploadRecoveryDraft): Promise<ResumeDr
   );
   if ([400, 403, 404].includes(response.status)) return { kind: "invalid", message };
   if (response.status !== 409) return { kind: "unknown", message };
-  const state = await inspectDraftServerState(draft.serverImportJobId);
+  const state = await inspectDraftServerState(draft.serverImportJobId, draft.accountId);
   if (state.kind === "committing") {
     return { kind: "committing", message: "这个上传任务正在提交，暂时不能继续编辑。" };
   }

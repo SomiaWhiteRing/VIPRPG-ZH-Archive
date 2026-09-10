@@ -2,11 +2,8 @@ import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
-import {
-  WorkPageLayout,
-  WorkPageShell,
-  WorkSidebar,
-} from "@/app/components/work/work-page-layout";
+import { WorkSidebar } from "@/app/components/work/work-page-layout";
+import { DetailPageLayout, DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
@@ -36,7 +33,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WorkActionBar } from "./work-action-bar";
-import { WorkCommunityPanel } from "./work-community-panel";
+import { CommentPanel } from "./work-community-panel";
 import {
   CatalogAddDialog,
   WorkEngagementActions,
@@ -79,7 +76,7 @@ export default async function GameDetailPage({
 
   const [community, comments, emojis, catalogs, containingCatalogs] = await Promise.all([
     getWorkCommunitySummary(work.id, currentUser?.id ?? null),
-    listRootComments(work.id, currentUser?.id ?? null, null),
+    listRootComments({ kind: "work", id: work.id }, currentUser?.id ?? null, null),
     listPickerEmojis(),
     currentUser ? listCatalogs() : Promise.resolve([]),
     listCatalogsContainingWork(work.id),
@@ -123,7 +120,7 @@ export default async function GameDetailPage({
   );
 
   return (
-    <WorkPageShell>
+    <DetailPageShell>
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         aliases={work.aliases}
@@ -141,7 +138,8 @@ export default async function GameDetailPage({
         ]}
       />
 
-      <WorkPageLayout
+      <DetailPageLayout
+        sidebarLabel="作品操作与资料"
         main={
           <>
           <section aria-labelledby="intro-title" className="scroll-mt-20 py-4.5" id="sec-intro">
@@ -264,12 +262,12 @@ export default async function GameDetailPage({
               <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
               <span className="font-mono text-xs text-muted max-[560px]:text-left">按发帖时间排序</span>
             </div>
-            <WorkCommunityPanel
+            <CommentPanel
               currentUserId={currentUser?.id ?? null}
               emojis={emojis}
               initialComments={comments.items}
               initialNextCursor={comments.nextCursor}
-              workId={work.id}
+              target={{ kind: "work", id: work.id }}
             />
           </section>
           </>
@@ -369,7 +367,7 @@ export default async function GameDetailPage({
           />
         }
       />
-    </WorkPageShell>
+    </DetailPageShell>
   );
 }
 

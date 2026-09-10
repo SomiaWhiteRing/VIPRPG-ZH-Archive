@@ -44,7 +44,7 @@ export default async function WorkRelationsPage({
           </>
         }
         subtitle={title}
-        title="编辑关联"
+        title="作品关联"
       />
       <RelationManager
         {...capabilities}

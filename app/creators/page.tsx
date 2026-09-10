@@ -31,7 +31,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
       >
         <Label>
           <span>搜索</span>
-          <Input defaultValue={query} name="q" placeholder="作者名、原名" type="search" />
+          <Input defaultValue={query} name="q" placeholder="作者名或别名" type="search" />
         </Label>
         <Button type="submit">筛选</Button>
         {query ? (
@@ -64,9 +64,8 @@ function CreatorCard({ creator }: { creator: PublicCreatorSummary }) {
     <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div>
         <Link className="text-lg font-bold text-primary hover:text-accent" href={`/creators/${creator.id}`}>
-          {creator.name}
+          {creator.name}{creator.disambiguation ? `（${creator.disambiguation}）` : ""}
         </Link>
-        {creator.originalName ? <span className="text-sm text-muted">{creator.originalName}</span> : null}
       </div>
       {creator.bio ? <p>{creator.bio}</p> : null}
       <StatList

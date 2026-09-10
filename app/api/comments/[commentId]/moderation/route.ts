@@ -9,7 +9,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ commentId: string }> },
 ) {
-  const auth = await requirePermission(request, "work_comment.manage_any");
+  const auth = await requirePermission(request, "comment.manage_any");
   if ("response" in auth) return auth.response;
   try {
     const body = await readJsonObject(request, "Invalid moderation body");

@@ -15,7 +15,7 @@ export async function GET(
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get("limit") ?? 20);
     const user = await getCurrentUserFromRequest(request);
-    const page = await listRootComments(workId, user?.id ?? null, url.searchParams.get("cursor"), limit);
+    const page = await listRootComments({ kind: "work", id: workId }, user?.id ?? null, url.searchParams.get("cursor"), limit);
     return json({ ok: true, ...page });
   } catch (error) {
     return jsonError("Comments could not be loaded", error);
@@ -35,7 +35,7 @@ export async function POST(
       return json({ ok: false, error: "replyToCommentId is invalid" }, { status: 400 });
     }
     const comment = await createComment(
-      parsePositiveId((await context.params).workId, "work id"),
+      { kind: "work", id: parsePositiveId((await context.params).workId, "work id") },
       auth.user.id,
       body.body,
       replyTo,

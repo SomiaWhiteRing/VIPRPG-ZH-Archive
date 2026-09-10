@@ -19,6 +19,8 @@ export type AdminArchiveVersion = {
   deletedAt: string | null;
   purgedAt: string | null;
   uploaderId: number | null;
+  maintainerIds: number[];
+  workDeleted: boolean;
   uploaderName: string | null;
 };
 type Row = {
@@ -37,6 +39,8 @@ type Row = {
   purged_at: string | null;
   uploader_id: number | null;
   uploader_name: string | null;
+  maintainer_ids: string | null;
+  work_status: string;
 };
 type IdentityRow = {
   id: number;
@@ -129,7 +133,7 @@ function archiveClauses(actor: ArchiveUser, filter: Filter, query?: string, stat
     hasPermission(actor, "archive_version.restore") ||
     hasPermission(actor, "archive_version.set_current");
   if (!canReadAny) {
-    clauses.push("av.uploader_id=?");
+    clauses.push("w.status<>'deleted' AND EXISTS(SELECT 1 FROM work_uploaders wu WHERE wu.work_id=av.work_id AND wu.user_id=?)");
     binds.push(actor.id);
   }
   return { clauses, binds };
@@ -138,6 +142,8 @@ function archiveClauses(actor: ArchiveUser, filter: Filter, query?: string, stat
 function archiveSelect(): string {
   return `SELECT av.id,
       av.work_id,
+      w.status AS work_status,
+      (SELECT GROUP_CONCAT(user_id) FROM work_uploaders WHERE work_id=av.work_id) AS maintainer_ids,
       COALESCE(w.chinese_title, w.original_title) AS work_title,
       w.language,
       av.status,
@@ -157,12 +163,12 @@ function archiveSelect(): string {
 }
 export function canDeleteArchiveVersion(
   actor: ArchiveUser,
-  uploaderId: number | null,
+  maintainerId: number | null,
 ): boolean {
   return (
     hasPermission(actor, "archive_version.delete_any") ||
     (hasPermission(actor, "archive_version.delete_own") &&
-      uploaderId === actor.id)
+      maintainerId === actor.id)
   );
 }
 export async function moveArchiveVersionToTrash(
@@ -171,8 +177,11 @@ export async function moveArchiveVersionToTrash(
 ): Promise<AdminArchiveVersion> {
   const row = await identity(id);
   if (!row) throw new HttpError(404, "ArchiveVersion 不存在");
-  if (actor && !canDeleteArchiveVersion(actor, row.uploader_id))
-    throw new HttpError(404, "ArchiveVersion 不存在");
+  if (actor) {
+    const archive = await required(id);
+    const maintainerId = archive.workDeleted ? null : archive.maintainerIds.find((id) => id === actor.id) ?? null;
+    if (!canDeleteArchiveVersion(actor, maintainerId)) throw new HttpError(404, "ArchiveVersion 不存在");
+  }
   await getD1()
     .prepare(
       `UPDATE archive_versions SET status='deleted',is_current=0,deleted_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -285,6 +294,8 @@ async function required(id: number): Promise<AdminArchiveVersion> {
     .prepare(
       `SELECT av.id,
           av.work_id,
+      w.status AS work_status,
+      (SELECT GROUP_CONCAT(user_id) FROM work_uploaders WHERE work_id=av.work_id) AS maintainer_ids,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.language,
           av.status,
@@ -325,6 +336,8 @@ function mapRow(row: Row): AdminArchiveVersion {
     deletedAt: row.deleted_at,
     purgedAt: row.purged_at,
     uploaderId: row.uploader_id,
+    maintainerIds: (row.maintainer_ids ?? "").split(",").filter(Boolean).map(Number),
+    workDeleted: row.work_status === "deleted",
     uploaderName: row.uploader_name,
   };
 }

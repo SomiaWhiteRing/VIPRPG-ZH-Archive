@@ -1,13 +1,11 @@
 const CREATOR_ROLE_LABELS: Record<string, string> = {
   author: "作者",
   scenario: "剧本",
-  graphics: "图像",
+  graphics: "美术",
+  planning: "策划",
+  programming: "程序",
+  translator: "译者",
   music: "音乐",
-  translator: "翻译",
-  proofreader: "校对",
-  image_editor: "修图",
-  publisher: "发布",
-  editor: "编辑",
   other: "其他",
 };
 
@@ -243,5 +241,5 @@ export function installStatusLabel(value: string): string {
 
 
 export function userStatusLabel(value: string): string {
-  return value === "active" ? "启用" : "禁用";
+  return value === "deleted" ? "已注销" : value === "active" ? "启用" : "禁用";
 }

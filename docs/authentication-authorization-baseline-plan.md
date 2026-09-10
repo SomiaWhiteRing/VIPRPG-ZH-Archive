@@ -69,7 +69,7 @@
 | 上传 | import 与 storage permission | import job 属于当前上传者且状态允许操作 |
 | 作品资料 | read/update permission | own/any、目标状态及关联一致性 |
 | 作品关系与目录 | create/update/delete permission | 创建者、owner、反向关系和成员约束 |
-| 作品评论与点赞 | `work_comment.manage_any`（管理员）或作者 own-scope | published Work、活跃用户、主楼/回复关系和评论状态 |
+| 评论与点赞 | `comment.manage_any`（管理员）或评论作者 own-scope | published Work 或公开作者、活跃用户、主楼/回复关系和评论状态 |
 | 自定义表情 | `custom_emoji.manage` | 管理员上传、图片 blob 状态、shortcode 不可改名、只能退休或恢复 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |
 | 用户与角色 | user/role permission 或 bootstrap 身份 | 双方 priority、角色 kind/status、自操作禁令 |
@@ -88,7 +88,7 @@
 - `npm run test:flow`：仅在预生产或明确要求时验证权限刷新、真实上传与恢复、归档生命周期、原生下载/GC 和浏览器安装。
 - `npm run verify:preprod`：预生产完整验收；包含静态检查、关键流程和生产构建。
 - `npm run smoke:staging`：部署后只验证 staging 的健康入口。
-- 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认 Work、主楼和作者均处于可公开状态。
+- 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认目标 Work 或作者、主楼和评论用户均处于可公开状态。
 
 有状态 D1、API、Worker 和浏览器检查只通过上述测试入口串行运行。测试自行迁移和 seed 临时状态，不依赖也不重置开发环境的 `.wrangler/state`。
 
@@ -104,3 +104,7 @@
 4. 只有新增持久权限不变量时才扩展 `npm run check` 或 `npm test`；不为每个端点新增测试，也不把文案、页面结构或操作顺序写入断言。
 5. 敏捷阶段只运行与改动相关的最小检查；进入预生产后运行 `npm run verify:preprod`。
 6. 只有稳定边界发生变化时更新本文；具体 key、角色 grant 和路由清单始终从代码读取。
+
+## 账户注销
+
+本人输入当前密码并二次确认后可注销。保留用户 ID 和公共贡献，状态变为 deleted，名称改为“账户已注销”，头像恢复默认、简介清空、所有个人主页可见性关闭。撤销全部会话与附加角色，仅保留不可移除的基础角色；非活跃账号不获得任何权限。登录显示“账号不存在”；后台不能重新启用，注册与找回密码不能复活原身份。作品、评论、目录及其关联保留，评论仍可在原目标下阅读。根账户须先通过既有运维流程轮换后注销。

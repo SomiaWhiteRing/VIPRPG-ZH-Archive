@@ -31,10 +31,6 @@ export function formatDate(value: string | null, options?: { time?: boolean }): 
   }).format(date);
 }
 
-export function formatDateOnly(value: string): string {
-  return formatDate(value, { time: false });
-}
-
 export function formatUnreadCount(count: number): string {
   return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }

@@ -276,7 +276,7 @@ public/play/runtime/easyrpg/{version}/index.wasm
 
 游戏存档不放入 OPFS 游戏目录。
 
-- EasyRPG 存档沿用 Emscripten IDBFS。
+- EasyRPG 存档沿用 Emscripten IDBFS，固定挂载于 `/work-saves/<workId>`。安装键不参与存档身份；归档、播放器、安装器升级沿用同一 Work 的存档。不同 Work（包括其他译版）互不共用，同一浏览器内也不按账号区分。
 - 游戏资源安装和存档生命周期分开。
 - 删除本地游戏缓存时不删除存档。
 - 当前不提供单独清除存档、导出、导入或云同步界面。

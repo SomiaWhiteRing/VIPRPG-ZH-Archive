@@ -20,9 +20,13 @@ export type CustomEmojiDto = {
   status: "active" | "retired";
 };
 
+export type CommentTarget =
+  | { kind: "work"; id: number }
+  | { kind: "creator"; id: number };
+
 export type CommentDto = {
   id: number;
-  workId: number;
+  target: CommentTarget;
   rootCommentId: number | null;
   replyTo: { commentId: number; displayName: string | null } | null;
   author: { id: number; displayName: string; avatarBlobSha256: string | null } | null;
@@ -45,8 +49,8 @@ export type CommentPage = {
 
 export type UserCommentSummary = {
   id: number;
-  workId: number;
-  workTitle: string;
+  target: CommentTarget;
+  targetTitle: string;
   body: string;
   status: "published" | "hidden" | "deleted";
   likeCount: number;
@@ -65,7 +69,8 @@ type EmojiRow = {
 
 type CommentRow = {
   id: number;
-  work_id: number;
+  work_id: number | null;
+  creator_id: number | null;
   root_comment_id: number | null;
   reply_to_comment_id: number | null;
   reply_to_display_name: string | null;
@@ -152,9 +157,9 @@ export async function getWorkCommunitySummary(workId: number, userId: number | n
       `SELECT
          COALESCE((SELECT view_count FROM work_engagement_stats WHERE work_id = w.id), 0) AS view_count,
          (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS player_count,
-         (SELECT COUNT(*) FROM work_comments c JOIN users cu ON cu.id = c.user_id
-          LEFT JOIN work_comments root ON root.id = COALESCE(c.root_comment_id, c.id)
-          WHERE c.work_id = w.id AND c.status = 'published' AND cu.status = 'active' AND root.status = 'published') AS comment_count,
+         (SELECT COUNT(*) FROM comments c JOIN users cu ON cu.id = c.user_id
+          LEFT JOIN comments root ON root.id = COALESCE(c.root_comment_id, c.id)
+          WHERE c.work_id = w.id AND c.status = 'published' AND cu.status IN ('active','deleted') AND root.status = 'published') AS comment_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
           WHERE ue.work_id = w.id AND ue.user_id = ? AND ue.favorited_at IS NOT NULL) AS favorited_by_me
        FROM works w WHERE w.id = ? AND w.status = 'published' LIMIT 1`,
@@ -260,35 +265,36 @@ export async function updateCustomEmoji(
 }
 
 export async function listRootComments(
-  workId: number,
+  target: CommentTarget,
   currentUserId: number | null,
   cursor: string | null,
   limit = 20,
 ): Promise<CommentPage> {
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
-  const clauses = ["c.work_id = ?", "c.root_comment_id IS NULL", "c.status = 'published'", "u.status = 'active'"];
-  const binds: Array<string | number> = [workId];
+  const targetColumn = target.kind === "work" ? "work_id" : "creator_id";
+  const clauses = [`c.${targetColumn} = ?`, "c.root_comment_id IS NULL", "c.status = 'published'", "u.status IN ('active','deleted')"];
+  const binds: Array<string | number> = [target.id];
   if (parsed) {
     clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
   }
   const database = getD1();
-  const [workResult, rowsResult] = await database.batch([
-    database.prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`).bind(workId),
+  const [targetResult, rowsResult] = await database.batch([
+    publicTargetStatement(database, target),
     database.prepare(
-      `SELECT c.id,c.work_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.work_id,c.creator_id,c.root_comment_id,c.reply_to_comment_id,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
-          (SELECT COUNT(*) FROM work_comments r WHERE r.root_comment_id=c.id AND r.status <> 'hidden') AS reply_count,
-          (SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count,
-          ${currentUserId ? "EXISTS(SELECT 1 FROM work_comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
-       FROM work_comments c JOIN users u ON u.id=c.user_id
+          (SELECT COUNT(*) FROM comments r WHERE r.root_comment_id=c.id AND r.status <> 'hidden') AS reply_count,
+          (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
+          ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
+       FROM comments c JOIN users u ON u.id=c.user_id
        WHERE ${clauses.join(" AND ")}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
     ).bind(...(currentUserId ? [currentUserId, ...binds, size + 1] : [...binds, size + 1])),
   ]);
-  if (!workResult.results?.length) throw new HttpError(404, "作品不存在");
+  if (!targetResult.results?.length) throw new HttpError(404, target.kind === "work" ? "作品不存在" : "作者不存在");
   return pageFromRows((rowsResult.results ?? []) as CommentRow[], size, currentUserId);
 }
 
@@ -300,7 +306,11 @@ export async function listReplies(
 ): Promise<CommentPage> {
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
-  const clauses = ["c.root_comment_id = ?", "c.status IN ('published','deleted')"];
+  const clauses = [
+    "c.root_comment_id = ?",
+    "c.status IN ('published','deleted')",
+    "(c.status='deleted' OR u.status IN ('active','deleted'))",
+  ];
   const binds: Array<string | number> = [rootCommentId];
   if (parsed) {
     clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
@@ -311,22 +321,23 @@ export async function listReplies(
     database
       .prepare(
         `SELECT c.id
-         FROM work_comments c JOIN works w ON w.id=c.work_id
+         FROM comments c
          WHERE c.id=? AND c.root_comment_id IS NULL
-           AND c.status='published' AND w.status='published'
+           AND c.status='published' AND ${publicCommentTargetSql("c")}
+           AND EXISTS (SELECT 1 FROM users root_user WHERE root_user.id=c.user_id AND root_user.status IN ('active','deleted'))
          LIMIT 1`,
       )
       .bind(rootCommentId),
     database.prepare(
-      `SELECT c.id,c.work_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.work_id,c.creator_id,c.root_comment_id,c.reply_to_comment_id,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           0 AS reply_count,
-          (SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count,
-          ${currentUserId ? "EXISTS(SELECT 1 FROM work_comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
-       FROM work_comments c
-       LEFT JOIN users u ON u.id=c.user_id AND u.status='active'
-       LEFT JOIN work_comments target_comment ON target_comment.id=c.reply_to_comment_id
+          (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
+          ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
+       FROM comments c
+       LEFT JOIN users u ON u.id=c.user_id AND u.status IN ('active','deleted')
+       LEFT JOIN comments target_comment ON target_comment.id=c.reply_to_comment_id
        LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE ${clauses.join(" AND ")}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
@@ -345,19 +356,19 @@ export async function searchUserComments(input: {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const publicClause = input.publicOnly
-    ? "AND c.status='published' AND root.status='published' AND u.status='active'"
+    ? "AND c.status='published' AND root.status='published' AND u.status IN ('active','deleted')"
     : "";
-  const from = `FROM work_comments c JOIN works w ON w.id=c.work_id JOIN users u ON u.id=c.user_id LEFT JOIN work_comments root ON root.id=COALESCE(c.root_comment_id,c.id) WHERE c.user_id=? AND w.status='published' ${publicClause}`;
+  const from = `FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id) LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id WHERE c.user_id=? AND ${publicCommentTargetSql("c")} ${publicClause}`;
   const database = getD1();
   const [countResult, rowsResult] = await database.batch([
     database.prepare(`SELECT COUNT(*) AS count ${from}`).bind(input.userId),
     database
-      .prepare(`SELECT c.id,c.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
+      .prepare(`SELECT c.id,c.work_id,c.creator_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) ELSE cr.name END AS target_title,COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`)
       .bind(input.userId, pageSize, (page - 1) * pageSize),
   ]);
-  const rows = (rowsResult.results ?? []) as Array<{ id: number; work_id: number; work_title: string; body: string; status: "published" | "hidden" | "deleted"; updated_at: string; like_count: number }>;
+  const rows = (rowsResult.results ?? []) as Array<{ id: number; work_id: number | null; creator_id: number | null; target_title: string; body: string; status: "published" | "hidden" | "deleted"; updated_at: string; like_count: number }>;
   return {
-    items: rows.map((row) => ({ id: row.id, workId: row.work_id, workTitle: row.work_title, body: row.body, status: row.status, likeCount: row.like_count, updatedAt: row.updated_at })),
+    items: rows.map((row) => ({ id: row.id, target: commentTarget(row), targetTitle: row.target_title, body: row.body, status: row.status, likeCount: row.like_count, updatedAt: row.updated_at })),
     total: Number((countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0),
     page,
     pageSize,
@@ -365,31 +376,41 @@ export async function searchUserComments(input: {
 }
 
 export async function createComment(
-  workId: number,
+  target: CommentTarget,
   userId: number,
   bodyInput: unknown,
   replyToCommentId?: number,
 ): Promise<CommentDto> {
-  await assertPublishedWork(workId);
+  await assertPublicCommentTarget(target);
   const body = normalizeCommentBody(bodyInput);
   let rootCommentId: number | null = null;
   let replyToId: number | null = null;
   if (replyToCommentId !== undefined) {
-    const target = await getD1()
-      .prepare(`SELECT id,work_id,root_comment_id,status FROM work_comments WHERE id=? LIMIT 1`)
+    const replyTarget = await getD1()
+      .prepare(`SELECT c.id,c.work_id,c.creator_id,c.root_comment_id,c.status,
+        COALESCE(root.status,c.status) AS root_status
+        FROM comments c LEFT JOIN comments root ON root.id=c.root_comment_id
+        WHERE c.id=? LIMIT 1`)
       .bind(replyToCommentId)
-      .first<{ id: number; work_id: number; root_comment_id: number | null; status: string }>();
-    if (!target || target.work_id !== workId || target.status !== "published")
+      .first<{ id: number; work_id: number | null; creator_id: number | null; root_comment_id: number | null; status: string; root_status: string }>();
+    if (!replyTarget || !targetMatchesRow(target, replyTarget) || replyTarget.status !== "published" || replyTarget.root_status !== "published")
       throw new HttpError(409, "回复目标不可用");
-    rootCommentId = target.root_comment_id ?? target.id;
-    replyToId = target.root_comment_id === null ? null : target.id;
+    rootCommentId = replyTarget.root_comment_id ?? replyTarget.id;
+    replyToId = replyTarget.root_comment_id === null ? null : replyTarget.id;
   }
   const result = await getD1()
     .prepare(
-      `INSERT INTO work_comments(work_id,user_id,root_comment_id,reply_to_comment_id,body,status)
-       VALUES(?,?,?,?,?,'published')`,
+      `INSERT INTO comments(work_id,creator_id,user_id,root_comment_id,reply_to_comment_id,body,status)
+       VALUES(?,?,?,?,?,?,'published')`,
     )
-    .bind(workId, userId, rootCommentId, replyToId, body)
+    .bind(
+      target.kind === "work" ? target.id : null,
+      target.kind === "creator" ? target.id : null,
+      userId,
+      rootCommentId,
+      replyToId,
+      body,
+    )
     .run();
   const id = Number(result.meta.last_row_id);
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("评论创建失败");
@@ -400,7 +421,7 @@ export async function updateComment(id: number, userId: number, bodyInput: unkno
   const body = normalizeCommentBody(bodyInput);
   const result = await getD1()
     .prepare(
-      `UPDATE work_comments SET body=?,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
+      `UPDATE comments SET body=?,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
        WHERE id=? AND user_id=? AND status IN ('published','hidden')`,
     )
     .bind(body, id, userId)
@@ -412,7 +433,7 @@ export async function updateComment(id: number, userId: number, bodyInput: unkno
 export async function deleteComment(id: number, userId: number): Promise<void> {
   const result = await getD1()
     .prepare(
-      `UPDATE work_comments SET body=NULL,status='deleted',deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+      `UPDATE comments SET body=NULL,status='deleted',deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
        WHERE id=? AND user_id=? AND status <> 'deleted'`,
     )
     .bind(id, userId)
@@ -426,21 +447,21 @@ export async function moderateComment(
   status: "published" | "hidden",
 ): Promise<CommentDto> {
   const current = await getD1()
-    .prepare(`SELECT id,user_id,status FROM work_comments WHERE id=? LIMIT 1`)
+    .prepare(`SELECT id,user_id,status FROM comments WHERE id=? LIMIT 1`)
     .bind(id)
     .first<{ id: number; user_id: number; status: string }>();
   if (!current || current.status === "deleted") throw new HttpError(404, "评论不存在或不可恢复");
   const database = getD1();
   await database.batch([
     database
-      .prepare(`UPDATE work_comments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden')`)
+      .prepare(`UPDATE comments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden')`)
       .bind(status, id),
     database
       .prepare(
          `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
          VALUES(?,?,?,?)`,
       )
-      .bind(actor.id, actor.email, "work_comment_moderation", JSON.stringify({ commentId: id, from: current.status, to: status })),
+      .bind(actor.id, actor.email, "comment_moderation", JSON.stringify({ commentId: id, from: current.status, to: status })),
   ]);
   return requiredComment(id, actor.id);
 }
@@ -448,22 +469,22 @@ export async function moderateComment(
 export async function likeComment(id: number, userId: number): Promise<void> {
   const comment = await publicCommentIdentity(id);
   await getD1()
-    .prepare(`INSERT OR IGNORE INTO work_comment_likes(comment_id,user_id) VALUES(?,?)`)
+    .prepare(`INSERT OR IGNORE INTO comment_likes(comment_id,user_id) VALUES(?,?)`)
     .bind(comment.id, userId)
     .run();
 }
 
 export async function unlikeComment(id: number, userId: number): Promise<void> {
-  await getD1().prepare(`DELETE FROM work_comment_likes WHERE comment_id=? AND user_id=?`).bind(id, userId).run();
+  await getD1().prepare(`DELETE FROM comment_likes WHERE comment_id=? AND user_id=?`).bind(id, userId).run();
 }
 
 async function publicCommentIdentity(id: number): Promise<{ id: number }> {
   const row = await getD1()
     .prepare(
-      `SELECT c.id FROM work_comments c JOIN works w ON w.id=c.work_id
-       JOIN users u ON u.id=c.user_id
-       LEFT JOIN work_comments root ON root.id=COALESCE(c.root_comment_id,c.id)
-       WHERE c.id=? AND c.status='published' AND w.status='published' AND u.status='active' AND root.status='published' LIMIT 1`,
+      `SELECT c.id FROM comments c JOIN users u ON u.id=c.user_id
+       LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
+       WHERE c.id=? AND c.status='published' AND ${publicCommentTargetSql("c")}
+         AND u.status IN ('active','deleted') AND root.status='published' LIMIT 1`,
     )
     .bind(id)
     .first<{ id: number }>();
@@ -474,14 +495,14 @@ async function publicCommentIdentity(id: number): Promise<{ id: number }> {
 async function requiredComment(id: number, viewerId: number | null): Promise<CommentDto> {
   const row = await getD1()
     .prepare(
-      `SELECT c.id,c.work_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.work_id,c.creator_id,c.root_comment_id,c.reply_to_comment_id,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
-          (SELECT COUNT(*) FROM work_comment_likes l WHERE l.comment_id=c.id) AS like_count,
-          ${viewerId ? "EXISTS(SELECT 1 FROM work_comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
-       FROM work_comments c
+          (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
+          ${viewerId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
+       FROM comments c
        LEFT JOIN users u ON u.id=c.user_id
-       LEFT JOIN work_comments target_comment ON target_comment.id=c.reply_to_comment_id
+       LEFT JOIN comments target_comment ON target_comment.id=c.reply_to_comment_id
        LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE c.id=? LIMIT 1`,
     )
@@ -491,9 +512,49 @@ async function requiredComment(id: number, viewerId: number | null): Promise<Com
   return mapComment(row, viewerId, await emojiMap());
 }
 
-async function assertPublishedWork(workId: number): Promise<void> {
-  const row = await getD1().prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`).bind(workId).first<{ id: number }>();
-  if (!row) throw new HttpError(404, "作品不存在");
+async function assertPublicCommentTarget(target: CommentTarget): Promise<void> {
+  const row = await publicTargetStatement(getD1(), target).first<{ id: number }>();
+  if (!row) throw new HttpError(404, target.kind === "work" ? "作品不存在" : "作者不存在");
+}
+
+function publicTargetStatement(database: D1Database, target: CommentTarget): D1PreparedStatement {
+  return target.kind === "work"
+    ? database.prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`).bind(target.id)
+    : database
+        .prepare(
+          `SELECT c.id FROM creators c
+           WHERE c.id=? AND EXISTS (
+             SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
+             WHERE ws.creator_id=c.id AND w.status='published'
+           ) LIMIT 1`,
+        )
+        .bind(target.id);
+}
+
+function publicCommentTargetSql(alias: string): string {
+  return `(
+    EXISTS (SELECT 1 FROM works public_work WHERE public_work.id=${alias}.work_id AND public_work.status='published')
+    OR EXISTS (
+      SELECT 1 FROM work_staff public_staff
+      JOIN works public_creator_work ON public_creator_work.id=public_staff.work_id
+      WHERE public_staff.creator_id=${alias}.creator_id AND public_creator_work.status='published'
+    )
+  )`;
+}
+
+function targetMatchesRow(
+  target: CommentTarget,
+  row: { work_id: number | null; creator_id: number | null },
+): boolean {
+  return target.kind === "work"
+    ? row.work_id === target.id && row.creator_id === null
+    : row.creator_id === target.id && row.work_id === null;
+}
+
+function commentTarget(row: { work_id: number | null; creator_id: number | null }): CommentTarget {
+  if (row.work_id !== null && row.creator_id === null) return { kind: "work", id: row.work_id };
+  if (row.creator_id !== null && row.work_id === null) return { kind: "creator", id: row.creator_id };
+  throw new Error("评论目标不合法");
 }
 
 async function emojiMap(): Promise<Map<string, EmojiRow>> {
@@ -517,7 +578,7 @@ function mapComment(row: CommentRow, viewerId: number | null, emojis: Map<string
   const deleted = row.status === "deleted";
   return {
     id: row.id,
-    workId: row.work_id,
+    target: commentTarget(row),
     rootCommentId: row.root_comment_id,
     replyTo: row.reply_to_comment_id
       ? { commentId: row.reply_to_comment_id, displayName: row.reply_to_display_name }

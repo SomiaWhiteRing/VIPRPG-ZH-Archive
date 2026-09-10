@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/server/auth/authorize";
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
+import { getWorkTranslators, parseTranslatorSelectionsJson, parseExtraStaffJson } from "@/lib/server/db/creators";
 import { createExternalWork } from "@/lib/server/db/game-library";
 import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
 import {
@@ -9,6 +10,7 @@ import {
   storeCharacterFaceSheets,
 } from "@/lib/server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
+import type { CreatorSelection } from "@/lib/creator-names";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
       previewBlobSha256s,
       downloadUrl,
     });
-    return json({ ok: true, workId: result.workId }, { status: 201 });
+    return json({ ok: true, workId: result.workId, translators: await getWorkTranslators(result.workId) }, { status: 201 });
   } catch (error) {
     return jsonError("外链作品创建失败", error);
   }
@@ -62,8 +64,9 @@ function parseMetadata(form: FormData): {
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];
-  creatorName: string | null;
-  translatorName: string | null;
+  authors: CreatorSelection[];
+  extraStaff: ReturnType<typeof parseExtraStaffJson>;
+  translators: CreatorSelection[];
   sourceUrl: string | null;
 } {
   return {
@@ -78,8 +81,9 @@ function parseMetadata(form: FormData): {
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),
-    creatorName: readNullableString(form.get("creator_name")),
-    translatorName: readNullableString(form.get("translator")),
+    authors: parseTranslatorSelectionsJson(form.get("authors")),
+    extraStaff: parseExtraStaffJson(form.get("extra_staff")),
+    translators: parseTranslatorSelectionsJson(form.get("translators")),
     sourceUrl: readNullableString(form.get("source_url")),
   };
 }

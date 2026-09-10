@@ -11,18 +11,15 @@ export const PERMISSIONS = {
   "work.update_own": { category: "work", label: "编辑自己上传的游戏" },
   "work.external_create": { category: "work", label: "发布外链作品" },
   "relation.create": { category: "relation", label: "创建作品关联" },
-  "relation.update_own": { category: "relation", label: "编辑自己创建的作品关联" },
-  "relation.delete_own": { category: "relation", label: "删除自己创建的作品关联" },
   "relation.manage_any": { category: "relation", label: "管理任意作品关联" },
   "translation_relation.create": { category: "relation", label: "创建翻译关联" },
-  "translation_relation.delete_own": { category: "relation", label: "删除自己创建的翻译关联" },
   "translation_relation.manage_any": { category: "relation", label: "管理任意翻译关联" },
   "catalog.create": { category: "catalog", label: "创建目录" },
   "catalog.update_own": { category: "catalog", label: "编辑自己的目录" },
   "catalog.delete_own": { category: "catalog", label: "删除自己的目录" },
   "catalog.reorder_own": { category: "catalog", label: "排序自己的目录" },
   "catalog.manage_any": { category: "catalog", label: "管理任意目录" },
-  "work_comment.manage_any": { category: "comment", label: "管理任意评论" },
+  "comment.manage_any": { category: "comment", label: "管理任意评论" },
   "custom_emoji.manage": { category: "comment", label: "管理站点自定义表情" },
   "archive_version.read_private": { category: "archive", label: "查看非公开归档" },
   "archive_version.update": { category: "archive", label: "编辑归档" },
@@ -68,7 +65,7 @@ export function parsePermissionKeys(values: readonly unknown[]): PermissionKey[]
 }
 
 export function hasPermission(
-  user: { status: "active" | "disabled"; permissionKeys: readonly PermissionKey[] } | null,
+  user: { status: "active" | "disabled" | "deleted"; permissionKeys: readonly PermissionKey[] } | null,
   permission: PermissionKey,
 ): boolean {
   return user?.status === "active" && user.permissionKeys.includes(permission);
@@ -93,9 +90,10 @@ export type RelationEditorCapabilities = {
 
 export function getRelationEditorCapabilities(
   user: {
-    status: "active" | "disabled";
+    status: "active" | "disabled" | "deleted";
     permissionKeys: readonly PermissionKey[];
   } | null,
+  admin = false
 ): RelationEditorCapabilities {
   const relationAny = hasPermission(user, "relation.manage_any");
   const translationAny = hasPermission(user, "translation_relation.manage_any");
@@ -103,11 +101,11 @@ export function getRelationEditorCapabilities(
     canCreateRelation: hasPermission(user, "relation.create") || relationAny,
     canCreateTranslation:
       hasPermission(user, "translation_relation.create") || translationAny,
-    canUpdate: hasPermission(user, "relation.update_own") || relationAny,
+    canUpdate: admin && relationAny,
     canDeleteRelation:
-      hasPermission(user, "relation.delete_own") || relationAny,
+      admin && relationAny,
     canDeleteTranslation:
-      hasPermission(user, "translation_relation.delete_own") || translationAny,
+      admin && translationAny,
     canManageRelationsAny: relationAny,
     canManageTranslationsAny: translationAny,
   };
@@ -115,27 +113,27 @@ export function getRelationEditorCapabilities(
 
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
-    "work.lookup_non_deleted", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.delete_own",
+    "work.lookup_non_deleted", "relation.create",
+    "translation_relation.create",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   uploader: [
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
-    "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.delete_own",
+    "storage_object.upload", "archive_version.delete_own", "relation.create",
+    "translation_relation.create",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
   ] as const,
   admin: [
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
-    "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.delete_own",
+    "storage_object.upload", "archive_version.delete_own", "relation.create",
+    "translation_relation.create",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
     "character.read_private", "character.update", "tag.read_private", "tag.update",
     "relation.manage_any", "translation_relation.manage_any", "catalog.manage_any",
-    "work_comment.manage_any", "custom_emoji.manage",
+    "comment.manage_any", "custom_emoji.manage",
     "archive_version.read_private", "archive_version.update", "archive_version.delete_any",
     "archive_version.restore", "archive_version.set_current", "user.read",
     "user.status.update", "user.role.assign", "inbox.role_request.resolve",
@@ -144,13 +142,13 @@ export const SYSTEM_ROLE_PERMISSIONS = {
   super_admin: [
     "work.lookup_non_deleted", "work.update_own", "work.external_create", "import_job.create",
     "import_job.cancel_own", "import_job.preflight_own", "import_job.commit_own",
-    "storage_object.upload", "archive_version.delete_own", "relation.create", "relation.update_own", "relation.delete_own",
-    "translation_relation.create", "translation_relation.delete_own",
+    "storage_object.upload", "archive_version.delete_own", "relation.create",
+    "translation_relation.create",
     "catalog.create", "catalog.update_own", "catalog.delete_own", "catalog.reorder_own",
     "work.read_private", "work.update", "creator.read_private", "creator.update",
     "character.read_private", "character.update", "tag.read_private", "tag.update",
     "relation.manage_any", "translation_relation.manage_any", "catalog.manage_any",
-    "work_comment.manage_any", "custom_emoji.manage",
+    "comment.manage_any", "custom_emoji.manage",
     "archive_version.read_private", "archive_version.update", "archive_version.delete_any",
     "archive_version.restore", "archive_version.set_current", "user.read",
     "user.status.update", "user.role.assign", "inbox.role_request.resolve",
