@@ -19,17 +19,28 @@ export async function seedCharacterFaceAssets({
   });
   try {
     const bucket = platform.env.ARCHIVE_BUCKET;
-    if (!bucket || typeof bucket.put !== "function") {
+    if (
+      !bucket ||
+      typeof bucket.put !== "function" ||
+      typeof bucket.list !== "function"
+    ) {
       throw new Error("本地 ARCHIVE_BUCKET 绑定不可用");
     }
+    const existingKeys = await listExistingKeys(bucket, "blobs/sha256/");
+    const pendingSheets = manifest.sheets.filter(
+      (sheet) => !existingKeys.has(blobKey(sheet.sha256)),
+    );
     let cursor = 0;
     let completed = 0;
     const startedAt = Date.now();
-    const timer = setInterval(() => report(completed, manifest.sheets.length, startedAt), 15_000);
+    const timer = setInterval(
+      () => report(completed, pendingSheets.length, manifest.sheets.length, startedAt),
+      15_000,
+    );
     await Promise.all(
       Array.from({ length: Math.max(1, Math.min(64, concurrency)) }, async () => {
-        while (cursor < manifest.sheets.length) {
-          const sheet = manifest.sheets[cursor++];
+        while (cursor < pendingSheets.length) {
+          const sheet = pendingSheets[cursor++];
           const bytes = readFileSync(resolve(manifestDirectory, sheet.file));
           await bucket.put(blobKey(sheet.sha256), bytes, {
             httpMetadata: { contentType: sheet.contentType },
@@ -43,15 +54,26 @@ export async function seedCharacterFaceAssets({
       }),
     );
     clearInterval(timer);
-    report(completed, manifest.sheets.length, startedAt);
+    report(completed, pendingSheets.length, manifest.sheets.length, startedAt);
   } finally {
     await platform.dispose();
   }
 }
 
-function report(completed, total, startedAt) {
+async function listExistingKeys(bucket, prefix) {
+  const keys = new Set();
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix, cursor, limit: 1000 });
+    for (const object of page.objects) keys.add(object.key);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return keys;
+}
+
+function report(completed, pending, total, startedAt) {
   console.log(
-    `本地脸图对象：${completed}/${total}，耗时 ${Math.round((Date.now() - startedAt) / 1000)} 秒`,
+    `本地脸图对象：已存在 ${total - pending}/${total}，补传 ${completed}/${pending}，耗时 ${Math.round((Date.now() - startedAt) / 1000)} 秒`,
   );
 }
 
