@@ -6,7 +6,8 @@ import type {
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
-import { normalizeCreatorName, normalizeEntityName } from "@/lib/entity-name";
+import { normalizeEntityName } from "@/lib/entity-name";
+import { creatorSelectionKey } from "@/lib/creator-names";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
@@ -19,6 +20,11 @@ import {
   parseCharacterCreditSelection,
   prepareWorkCharacterStatements,
 } from "@/lib/server/db/characters";
+import {
+  getWorkTranslators,
+  parseCreatorSelection,
+  prepareWorkStaffStatements,
+} from "@/lib/server/db/creators";
 import { getD1 } from "@/lib/server/db/d1";
 import type { ImportJobRow } from "@/lib/server/db/import-jobs";
 import type { ArchiveUser } from "@/lib/server/db/users";
@@ -45,6 +51,7 @@ export type CommitArchiveImportInput = {
 };
 
 export type CommitArchiveImportResult = {
+  translators: import("@/lib/creator-names").ConfirmedCreatorSelection[];
   workId: number;
   archiveVersionId: number;
   manifestSha256: string;
@@ -200,12 +207,14 @@ export async function commitArchiveImport(
     manifest.game.originalTitle !== metadata.game.originalTitle ||
     manifest.game.chineseTitle !== metadata.game.chineseTitle ||
     manifest.game.language !== metadata.game.language ||
-    manifest.game.isOriginal !== metadata.game.isOriginal
+    manifest.game.isOriginal !== metadata.game.isOriginal ||
+    manifest.game.isTranslation !== metadata.game.isTranslation
   ) {
     manifest.game.originalTitle = metadata.game.originalTitle;
     manifest.game.chineseTitle = metadata.game.chineseTitle;
     manifest.game.language = metadata.game.language;
     manifest.game.isOriginal = metadata.game.isOriginal;
+    manifest.game.isTranslation = metadata.game.isTranslation;
     manifestJson = JSON.stringify(manifest);
     manifestSha256 = await sha256Hex(
       new TextEncoder().encode(manifestJson).buffer,
@@ -262,6 +271,7 @@ export async function commitArchiveImport(
     fileCount: manifest.files.length,
     uniqueBlobCount: blobHashes.length,
     corePackCount: corePackHashes.length,
+    translators: await getWorkTranslators(workId),
   };
 }
 
@@ -457,6 +467,7 @@ function validateManifest(
   if (manifest.game.isTranslation !== metadata.game.isTranslation) {
     throw new Error("Manifest game translation declaration does not match metadata");
   }
+
 
   const snapshotFields: Array<[unknown, unknown, string]> = [
     [
@@ -807,7 +818,6 @@ function normalizeMetadata(
   if (
     !Array.isArray(metadata.tags) ||
     !Array.isArray(metadata.workTitles) ||
-    !Array.isArray(metadata.creators) ||
     !Array.isArray(metadata.workStaff) ||
     !Array.isArray(externalLinks.work)
   ) {
@@ -887,41 +897,18 @@ function normalizeMetadata(
       };
     });
 
-  const creators = metadata.creators
-    .map((creator) => {
-      if (
-        !isRecord(creator) ||
-        typeof creator.name !== "string" ||
-        !isNullableString(creator.originalName) ||
-        !isNullableString(creator.websiteUrl) ||
-        !isRecord(creator.extra)
-      ) {
-        throw new HttpError(400, "Upload metadata creator is invalid");
-      }
-      return {
-        name: normalizeCreatorName(creator.name),
-        originalName: creator.originalName?.trim() || null,
-        websiteUrl: normalizeHttpUrl(creator.websiteUrl, "作者网站"),
-        extra: creator.extra,
-      };
-    })
-    .filter((creator) => creator.name);
-
   const workStaff = metadata.workStaff
     .map((staff) => {
       if (
         !isRecord(staff) ||
-        typeof staff.creatorName !== "string" ||
         !isEnum(staff.roleKey, [
           "author",
           "scenario",
           "graphics",
           "music",
+          "planning",
+          "programming",
           "translator",
-          "editor",
-          "publisher",
-          "proofreader",
-          "image_editor",
           "other",
         ] as const) ||
         !isNullableString(staff.roleLabel) ||
@@ -930,37 +917,15 @@ function normalizeMetadata(
         throw new HttpError(400, "Upload metadata staff entry is invalid");
       }
       return {
-        creatorName: normalizeCreatorName(staff.creatorName),
+        selection: parseCreatorSelection(staff.selection),
         roleKey: staff.roleKey,
         roleLabel: staff.roleLabel?.trim() || null,
         notes: staff.notes?.trim() || null,
       };
     })
-    .filter((staff) => staff.creatorName)
-    .filter((staff) => game.isTranslation || staff.roleKey !== "translator")
     .filter(uniqueStaffEntry());
-
-  if (
-    game.isTranslation &&
-    !workStaff.some((staff) => staff.roleKey === "translator")
-  ) {
-    throw new HttpError(400, "翻译作品必须填写译者");
-  }
-
-  const referencedCreatorNames = new Set(
-    workStaff.map((staff) => creatorNameKey(staff.creatorName)),
-  );
-  const seenCreatorNames = new Set<string>();
-  const effectiveCreators = creators.filter((creator) => {
-    const key = creatorNameKey(creator.name);
-    if (!referencedCreatorNames.has(key) || seenCreatorNames.has(key)) return false;
-    seenCreatorNames.add(key);
-    return true;
-  });
-  if (
-    [...referencedCreatorNames].some((name) => !seenCreatorNames.has(name))
-  ) {
-    throw new HttpError(400, "作品职员缺少对应的 Creator");
+  if (game.isTranslation !== workStaff.some((staff) => staff.roleKey === "translator")) {
+    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   }
 
   const workLinks = externalLinks.work
@@ -1016,7 +981,6 @@ function normalizeMetadata(
     },
     workTitles,
     characters,
-    creators: effectiveCreators,
     workStaff,
     tags,
     externalLinks: { work: workLinks },
@@ -1287,44 +1251,18 @@ async function finalizeArchiveCommit(input: {
     );
   }
 
-  for (const creator of input.metadata.creators) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO creators (
-             name, original_name, website_url, extra_json
-           ) VALUES (?, ?, ?, ?)`,
-        )
-        .bind(
-          creator.name,
-          creator.originalName,
-          creator.websiteUrl,
-          jsonText(creator.extra),
-        ),
-    );
-  }
   statements.push(
     database
-      .prepare(`DELETE FROM work_staff WHERE work_id = ? AND role_key IN ('author', 'translator')`)
+      .prepare(`DELETE FROM work_staff WHERE work_id = ?`)
       .bind(input.workId),
   );
-  for (const staff of input.metadata.workStaff) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_staff (
-             work_id, creator_id, role_key, role_label, notes
-           ) SELECT ?, id, ?, ?, ? FROM creators WHERE name = ? COLLATE NOCASE`,
-        )
-        .bind(
-          input.workId,
-          staff.roleKey,
-          staff.roleLabel,
-          staff.notes,
-          staff.creatorName,
-        ),
-    );
-  }
+  statements.push(
+    ...(await prepareWorkStaffStatements({
+      database,
+      workId: input.workId,
+      credits: input.metadata.workStaff,
+    })),
+  );
 
   statements.push(
     ...(await prepareWorkCharacterStatements({
@@ -1725,17 +1663,13 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function creatorNameKey(value: string): string {
-  return value.toLocaleLowerCase();
-}
-
 function uniqueStaffEntry(): (
   staff: ArchiveCommitMetadata["workStaff"][number],
 ) => boolean {
   const seen = new Set<string>();
   return (staff) => {
-    const key = `${staff.roleKey}\u0000${creatorNameKey(staff.creatorName)}`;
-    if (seen.has(key)) return false;
+    const key = `${staff.roleKey}\u0000${creatorSelectionKey(staff.selection)}`;
+    if (seen.has(key)) throw new HttpError(400, "已有这条署名，请移除重复项。");
     seen.add(key);
     return true;
   };

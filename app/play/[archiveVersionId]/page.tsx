@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
 import { WorkPageHeader, WorkPageNotice } from "@/app/components/work/work-page-header";
-import { WorkPageShell } from "@/app/components/work/work-page-layout";
+import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { WorkCommunityPanel } from "@/app/games/[id]/work-community-panel";
+import { CommentPanel } from "@/app/games/[id]/work-community-panel";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
   buildArchiveDownloadUrl,
@@ -66,7 +66,7 @@ export default async function WebPlayPage({ params }: PageProps) {
 
   const [community, comments, emojis] = await Promise.all([
     getWorkCommunitySummary(work.id, currentUser?.id ?? null),
-    listRootComments(work.id, currentUser?.id ?? null, null),
+    listRootComments({ kind: "work", id: work.id }, currentUser?.id ?? null, null),
     listPickerEmojis(),
   ]);
   const current = work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
@@ -97,7 +97,7 @@ export default async function WebPlayPage({ params }: PageProps) {
   };
 
   return (
-    <WorkPageShell>
+    <DetailPageShell>
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         aliases={work.aliases}
@@ -113,12 +113,12 @@ export default async function WebPlayPage({ params }: PageProps) {
       />
       <WebPlayClient
         comments={
-          <WorkCommunityPanel
+          <CommentPanel
             currentUserId={currentUser?.id ?? null}
             emojis={emojis}
             initialComments={comments.items}
             initialNextCursor={comments.nextCursor}
-            workId={work.id}
+            target={{ kind: "work", id: work.id }}
           />
         }
         engagement={
@@ -145,6 +145,6 @@ export default async function WebPlayPage({ params }: PageProps) {
           />
         }
       />
-    </WorkPageShell>
+    </DetailPageShell>
   );
 }

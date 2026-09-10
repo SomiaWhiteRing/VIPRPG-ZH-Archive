@@ -50,7 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
         creator: {
           id: creator.id,
           name: creator.name,
-          originalName: creator.originalName,
+          avatarBlobSha256: creator.avatarBlobSha256,
           websiteUrl: creator.websiteUrl,
           bio: creator.bio,
         },

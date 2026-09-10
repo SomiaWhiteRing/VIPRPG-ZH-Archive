@@ -26,12 +26,14 @@ if (characterFaceLibrary.schema !== "viprpg-character-face-library.v2") {
 if (process.argv.includes("--reset")) await import("./local-d1-reset.mjs");
 mkdirSync(tmpDir, { recursive: true });
 
-const images = [
+const previewImages = [
   image("cover-a", 0x2c593b),
   image("cover-b", 0x052367),
   image("cover-c", 0x7c2d12),
   image("cover-d", 0x3b0764),
 ];
+const creatorAvatar = image("creator-avatar", 0x6f4e37, 192, 192);
+const images = [...previewImages, creatorAvatar];
 const emptyCorePack = Buffer.from("UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==", "base64");
 const emptyCorePackSha256 = createHash("sha256")
   .update(emptyCorePack)
@@ -106,7 +108,7 @@ insert(
 );
 insert(
   "media_assets",
-  images.map((item, index) => ({
+  previewImages.map((item, index) => ({
     id: index + 1,
     blob_sha256: item.sha256,
     kind: "preview",
@@ -278,7 +280,7 @@ insert(
       blob_sha256: sheet.sha256,
       width_px: sheet.width,
       height_px: sheet.height,
-      source_kind: sheet.sourceKind ?? "atwiki",
+      source_kind: sheet.sourceKind,
       source_page_url: source?.pageUrl ?? null,
       source_image_url: source?.imageUrl ?? null,
       source_page_title: source?.pageTitle ?? null,
@@ -336,30 +338,70 @@ insert("work_characters", [
   { work_id: 3, character_id: characterIds.get("アゼクラ"), display_name: "校仓", role_key: "supporting", sort_order: 2 },
 ]);
 insert("creators", [
+  { id: 3, name: "本地测试译者", name_key: nameKey("本地测试译者"), created_at: NOW, updated_at: NOW },
   {
     id: 1,
     name: "名無し的制作人",
+    name_key: nameKey("名無し的制作人"),
+    avatar_blob_sha256: creatorAvatar.sha256,
     created_at: NOW,
     updated_at: NOW,
   },
   {
     id: 2,
     name: "本站原创作者",
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  {
-    id: 3,
-    name: "本地测试译者",
+    name_key: nameKey("本站原创作者"),
     created_at: NOW,
     updated_at: NOW,
   },
 ]);
+insert("creator_aliases", [
+  {
+    id: 1,
+    creator_id: 1,
+    name: "名無しのツクラー",
+    name_key: nameKey("名無しのツクラー"),
+    source: "admin",
+    created_at: NOW,
+  },
+  {
+    id: 2,
+    creator_id: 1,
+    name: "无名制作人",
+    name_key: nameKey("无名制作人"),
+    source: "admin",
+    created_at: NOW,
+  },
+]);
 insert("work_staff", [
-  { work_id: 1, creator_id: 1, role_key: "author" },
-  { work_id: 2, creator_id: 3, role_key: "translator", role_label: "译者" },
-  { work_id: 3, creator_id: 1, role_key: "author" },
-  { work_id: 4, creator_id: 2, role_key: "author" },
+  { work_id: 2, creator_id: 3, display_name: "本地测试译者", role_key: "translator" },
+  { work_id: 1, creator_id: 1, display_name: "名無し的制作人", role_key: "author" },
+  { work_id: 3, creator_id: 1, display_name: "无名制作人", role_key: "author" },
+  { work_id: 4, creator_id: 2, display_name: "本站原创作者", role_key: "author" },
+]);
+insert("comments", [
+  {
+    id: 1,
+    creator_id: 1,
+    user_id: 4,
+    body: "很喜欢这位作者在短篇作品里的节奏。",
+    status: "published",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  {
+    id: 2,
+    creator_id: 1,
+    user_id: 3,
+    root_comment_id: 1,
+    body: "同感，作品中的角色互动也很有辨识度。",
+    status: "published",
+    created_at: NOW,
+    updated_at: NOW,
+  },
+]);
+insert("comment_likes", [
+  { comment_id: 1, user_id: 3, created_at: NOW },
 ]);
 insert("tags", [
   {
@@ -638,10 +680,8 @@ function corePackKey(sha) {
 function manifestKey(sha) {
   return `manifests/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}.json`;
 }
-function image(name, color) {
-  const width = 320,
-    height = 240,
-    raw = Buffer.alloc(height * (1 + width * 3));
+function image(name, color, width = 320, height = 240) {
+  const raw = Buffer.alloc(height * (1 + width * 3));
   for (let y = 0; y < height; y++) {
     const off = y * (1 + width * 3);
     raw[off] = 0;

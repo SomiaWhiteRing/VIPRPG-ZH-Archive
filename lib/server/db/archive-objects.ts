@@ -107,14 +107,6 @@ export async function insertBlobRecord(input: BlobRecordInput): Promise<void> {
   );
 }
 
-export async function insertCorePackRecord(input: CorePackRecordInput): Promise<void> {
-  const database = getD1();
-  assertObjectRecordChanged(
-    await corePackRecordStatement(database, input).run(),
-    "core_pack",
-  );
-}
-
 export async function insertBlobRecords(inputs: BlobRecordInput[]): Promise<void> {
   if (inputs.length === 0) return;
   const database = getD1();

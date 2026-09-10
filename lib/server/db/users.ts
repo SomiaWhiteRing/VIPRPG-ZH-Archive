@@ -8,7 +8,7 @@ import { canManageUser } from "@/lib/server/db/permissions";
 import { HttpError } from "@/lib/server/http/json";
 import type { ProfileVisibility } from "@/lib/user-profile";
 
-export type UserStatus = "active" | "disabled";
+export type UserStatus = "active" | "disabled" | "deleted";
 
 export type ArchiveUser = {
   id: number;
@@ -229,7 +229,7 @@ export const findPublicUserById = cache(async (id: number): Promise<PublicUserPr
               profile_show_bio,profile_show_favorites,profile_show_history,
               profile_show_catalogs,profile_show_comments,created_at
        FROM users
-       WHERE id=? AND status='active'
+       WHERE id=? AND status IN ('active','deleted')
        LIMIT 1`,
     )
     .bind(id)
@@ -254,6 +254,7 @@ export async function createOrActivateVerifiedUser(input: {
   const externalAuthId = emailToExternalAuthId(email);
   const existing = await findUserRowByEmail(email);
 
+  if (existing?.status === "deleted") throw new Error("账号不存在");
   if (existing?.status === "disabled") {
     throw new Error("账户已被禁用");
   }
@@ -321,7 +322,11 @@ export async function authenticateUser(input: {
   const email = normalizeEmail(input.email);
   const row = await findUserAuthRowByEmail(email);
 
-  if (!row || row.status === "disabled") {
+  if (!row || row.status === "deleted") {
+    await verifyPassword(input.password, null);
+    throw new Error("账号不存在");
+  }
+  if (row.status === "disabled") {
     await verifyPassword(input.password, null);
     throw new Error("邮箱或密码不正确");
   }
@@ -372,7 +377,7 @@ export async function setUserPasswordByEmail(input: {
   const email = normalizeEmail(input.email);
   const existing = await findUserRowByEmail(email);
 
-  if (!existing || existing.status === "disabled") {
+  if (!existing || existing.status !== "active") {
     throw new Error("账户不存在或不可用");
   }
 
@@ -581,6 +586,7 @@ export async function setUserStatusForAdmin(input: {
     throw new HttpError(403, "只能管理自己权限范围内的用户");
   }
 
+  if (target.status === "deleted" || input.status === "deleted") throw new HttpError(400, "已注销账户不能启用，注销须由本人操作");
   if (target.status === input.status) {
     return target;
   }
@@ -790,4 +796,18 @@ function externalAuthIdToEmail(externalAuthId: string): string {
   return externalAuthId.startsWith("email:")
     ? externalAuthId.slice("email:".length)
     : externalAuthId;
+}
+
+export async function deleteOwnAccount(user: ArchiveUser, password: string): Promise<void> {
+  if (user.isBootstrapAdmin) throw new HttpError(400, "请先轮换根账户，再注销此账户");
+  await verifyOwnPassword(user.id, password);
+  const db = getD1();
+  await db.batch([
+    db.prepare(`UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
+      bio='',password_hash=NULL,profile_show_bio=0,profile_show_favorites=0,profile_show_history=0,
+      profile_show_catalogs=0,profile_show_comments=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`).bind(user.id),
+    db.prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=?`).bind(user.id),
+    db.prepare(`DELETE FROM user_roles WHERE user_id=? AND role_id NOT IN (SELECT id FROM roles WHERE key='user')`).bind(user.id),
+    db.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'account_deleted')`).bind(user.id,user.email),
+  ]);
 }

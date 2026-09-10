@@ -5,6 +5,7 @@ import {
   updateArchiveVersionForAdmin,
 } from "@/lib/server/db/game-library";
 import { redirectResponse } from "@/lib/server/http/form";
+import { parsePositiveId } from "@/lib/server/http/request";
 import { json, jsonError } from "@/lib/server/http/json";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
-    const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
+    const archiveVersionId = parsePositiveId(rawArchiveVersionId, "archive version id");
     const formData = await request.formData();
     const input = parseArchiveVersionEditForm(formData);
 
@@ -58,14 +59,4 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     return jsonError("ArchiveVersion update failed", error);
   }
-}
-
-function parseArchiveVersionId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error("Invalid archive version id");
-  }
-
-  return id;
 }

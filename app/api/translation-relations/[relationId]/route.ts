@@ -10,7 +10,6 @@ export async function DELETE(
   context: { params: Promise<{ relationId: string }> },
 ) {
   const auth = await requireAnyPermission(request, [
-    "translation_relation.delete_own",
     "translation_relation.manage_any",
   ]);
   if ("response" in auth) return auth.response;

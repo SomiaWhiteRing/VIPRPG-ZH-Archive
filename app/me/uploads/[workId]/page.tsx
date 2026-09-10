@@ -1,4 +1,7 @@
+import { isExtraStaffRole } from "@/lib/staff-credits";
 import { notFound } from "next/navigation";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
+import { Button } from "@/app/components/ui/button";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { requireAccountUser } from "@/lib/server/auth/account-user";
@@ -66,6 +69,11 @@ export default async function UploadedWorkPage({
             notes: character.notes,
           })),
           authors: staffCredits(work, "author"),
+          extraStaff: work.creators.filter((creator) => isExtraStaffRole(creator.roleKey)).map((creator) => ({
+            selection: { kind: "existing" as const, creatorId: creator.id, name: creator.name, displayName: creator.displayName },
+            roleKey: creator.roleKey as UploadInitialWork["authors"][number]["roleKey"],
+            roleLabel: creator.roleLabel, notes: creator.notes,
+          })),
           translators: staffCredits(work, "translator"),
           externalDownloadUrl: work.externalDownloadUrl,
           sourceUrl: work.sourceUrl,
@@ -83,6 +91,11 @@ export default async function UploadedWorkPage({
         }}
         suggestions={suggestions}
       />
+      <ConfirmingForm action={`/api/works/${work.id}/delete`} className="mt-8" confirmField="confirm"
+        title="确认删除作品？" description="删除后，作品将从公开页面和“我的上传”中移除，你将无法查看或修改。文件和资料会保留，只有管理员可以恢复。">
+        <input name="confirm" type="hidden" value="delete" />
+        <Button type="submit" variant="destructive">删除作品</Button>
+      </ConfirmingForm>
     </div>
   );
 }
@@ -94,18 +107,15 @@ function staffCredits(
   return work.creators
     .filter((creator) => creator.roleKey === roleKey)
     .map((creator) => ({
-      creator: {
+      selection: {
+        kind: "existing" as const,
+        creatorId: creator.id,
         name: creator.name,
-        originalName: creator.originalName,
-        websiteUrl: creator.websiteUrl,
-        extra: {},
+        displayName: creator.displayName,
       },
-      staff: {
-        creatorName: creator.name,
-        roleKey,
-        roleLabel: creator.roleLabel,
-        notes: creator.notes,
-      },
+      roleKey,
+      roleLabel: creator.roleLabel,
+      notes: creator.notes,
     }));
 }
 

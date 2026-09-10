@@ -1,12 +1,6 @@
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
-
 export function utf8Encode(value: string): Uint8Array {
   return textEncoder.encode(value);
-}
-
-export function utf8Decode(value: Uint8Array): string {
-  return textDecoder.decode(value);
 }
 
 export function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -37,12 +31,4 @@ export function base64UrlDecodeBytes(value: string): Uint8Array {
   }
 
   return bytes;
-}
-
-export function base64UrlEncodeString(value: string): string {
-  return base64UrlEncodeBytes(utf8Encode(value));
-}
-
-export function base64UrlDecodeString(value: string): string {
-  return utf8Decode(base64UrlDecodeBytes(value));
 }

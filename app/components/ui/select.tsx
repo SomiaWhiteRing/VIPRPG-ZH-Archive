@@ -12,7 +12,6 @@ import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 
 export const Select = SelectPrimitive.Root;
-export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 export const SelectTrigger = forwardRef<
   ComponentRef<typeof SelectPrimitive.Trigger>,

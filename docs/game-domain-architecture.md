@@ -51,7 +51,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 ### 标题与上传者
 
 - `work_titles` 保存可搜索别名；原名与中文名仍在 Work 稳定字段中。
-- `work_uploaders` 表示可以对该 Work 执行 own-scope 维护的用户，不等同于 ArchiveVersion 的单次 `uploader_id`。
+- `work_uploaders` 表示可以对该 Work 执行 own-scope 维护的用户，不等同于 ArchiveVersion 的单次 `uploader_id`。创建作品时登记上传者；此后仅管理员可增删维护者。维护者须有上传权限，在“我的上传”、新版本上传及归档 own-scope 操作中与原上传者相同。
 - 创建新 Work 的上传者在 commit 中同时成为共同上传者；复用 Work 时必须经过 ownership 或 any-scope 授权。
 
 ### 普通作品关系
@@ -62,7 +62,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 - 有明确反向语义的关系由服务层创建一条系统反向记录；反向记录只能独立排序，不能脱离正向记录改语义。
 - 同一逻辑关系只能存在一次；数据库索引与 `lib/server/db/relations.ts` 共同防止正反重复。
 - collaboration 没有自动反向语义时按显式记录处理。
-- `created_by_user_id` 决定 own-scope 更新和删除权限。
+- `created_by_user_id` 记录创建者；公共入口保留添加，已有关系只允许管理员修改和删除。
 
 关系类型与反向映射的唯一实现位于 `lib/server/db/relations.ts` 和 `lib/labels.ts`。
 
@@ -88,22 +88,22 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 ### 互动与评论
 
 - `work_engagement_stats` 保存近似浏览数；`user_work_entries` 保存登录用户最近游玩时间和收藏时间。下载与在线游玩在用户记录中统一为一次游玩。
-- `work_comments` 使用主楼加同主楼平铺回复：回复回复仍绑定原主楼，`reply_to_comment_id` 只用于展示回复对象，不形成第三层层级。
+- `comments` 必须且只能指向一个 published Work 或公开作者，并使用主楼加同主楼平铺回复：回复回复仍绑定原主楼，`reply_to_comment_id` 只用于展示回复对象，不形成第三层层级。
 - 评论正文是纯文本和站点表情短代码；评论可编辑、软删除、隐藏和点赞。删除主楼会让整楼退出公开查询，作者自己的记录仍可见。
 - `custom_emojis` 由管理员维护，图片通过 blob 引用；退休表情仍可渲染，未知短代码原样显示。评分及评分快照不属于当前模型。
 
 ### 作者、角色与标签
 
-- Creator 表示作者或制作人员身份；`work_staff` 保存其在具体 Work 中的职责。
+- Creator 表示作者或制作人员身份，保存唯一当前头像；`creator_aliases` 保存可搜索的历史署名和其他别名，`work_staff` 保存其在具体 Work 中的职责与本作署名。作者关联始终使用 Creator ID，作品页面显示本作署名，头像只在作者详情页展示。译者同样关联 Creator，以 `work_staff.role_key = "translator"` 保存本作署名并进入人物作品索引。默认制作职务为作者、策划、程序、剧本、美术、音乐和其他，仅收录直接参与本作创作的人；通用素材提供者不自动列入制作人员。
 - Character 表示角色身份，保存规范日语名和中文主名；`character_aliases` 保存可搜索的日语、中文别名及来源。
 - `work_characters` 的每一行表示一次角色登场，保存该作品选用的中文展示名、头像、剧透级别、顺序和备注；同一 Character 可在一个 Work 中以不同形态重复登场，筛选仍使用 Character ID，不使用展示名反查身份。
 - Tag 是规范化分类；`work_tags` 保存来源。
-- Creator name、Character original name、Character alias 和 Tag name 的唯一性及大小写规则以 migration 为准；不同角色可以共享中文译名。
+- Creator 以 ID 区分身份，规范名与别名允许跨人物重名；规范名加同名区分说明唯一，搜索展示区分说明。Character original name、Character alias 和 Tag name 的唯一性及大小写规则以 migration 为准；不同角色可以共享中文译名。
 - 上传表单提交已有角色 ID 和本作品展示名；新增名称同时提交日语名和中文名，由服务端在游戏提交事务中复用角色、新增别名或创建角色。
 
 ### 媒体与外链
 
-- Work 的封面和浏览图通过 `media_assets` 与 `work_media_assets` 关联。
+- Work 的封面和浏览图通过 `media_assets` 与 `work_media_assets` 关联；作者头像直接引用单个 active blob。
 - 媒体 blob 必须处于 active 状态，公开读取还要求存在 published Work 引用。
 - `work_external_links` 保存作品上下文中的官方、wiki、来源、视频、下载页或其他链接。published Work 必须在当前 ArchiveVersion 与唯一 `download_page` 外链之间二选一。
 - URL 校验集中在服务端安全 URL helper，不信任表单字符串。
@@ -116,7 +116,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 | 别名、作者、角色、标签、媒体、外链 | Work | Work 更新事务同步维护 |
 | 普通与翻译关系 | 独立关系记录 | 关系服务按创建者或 any-scope 管理 |
 | 目录及成员顺序 | Catalog owner | 目录服务 |
-| 浏览、游玩、收藏和评论 | 当前用户或 Work | 社区服务；公开查询再次检查 Work 与作者状态 |
+| 浏览、游玩、收藏和评论 | 当前用户及其目标 Work 或 Creator | 社区服务；公开查询再次检查目标与评论用户状态 |
 | 站点自定义表情 | 管理员 | 社区服务与 blob 生命周期 |
 | 文件与来源 | ArchiveVersion | 归档服务；文件变化创建新版本 |
 | 文件路径与 storage mapping | Manifest | commit 时冻结，不在 D1 逐文件编辑 |
@@ -160,7 +160,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 - `processing`：归档提交中的临时状态，不进入公开发现；超过 24 小时没有更新会由定时维护清理。
 - `published`：可以进入公开列表；下载或游玩仍要求目标 ArchiveVersion 同时 published。
 - `hidden`：保留完整资料和下载来源，但不公开。
-- `deleted`：从普通管理和公共入口退出，等待明确维护操作。
+- `deleted`：仅在管理后台可见和调整，不删除资料或归档文件。维护者经警告弹窗确认后可以删除作品，但删除后无法查看或恢复；只有管理员可恢复。
 
 ### ArchiveVersion
 
@@ -185,7 +185,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 ### 管理读取
 
 - private read permission 决定是否进入管理列表。
-- own-scope 只返回当前用户作为 Work uploader、ArchiveVersion uploader、关系创建者或目录 owner 的对象。
+- 作品与归档 own-scope 按 `work_uploaders` 判断；已删除作品不向维护者开放。目录 own-scope 按 owner 判断。
 - 删除、restore、current 和 any-scope 操作仍由领域服务检查目标状态。
 
 查询实现集中在 `lib/server/db/game-library.ts`、`creator-library.ts`、`taxonomy-library.ts`、`relations.ts` 和 `catalogs.ts`。
@@ -230,3 +230,13 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 预生产或发布前统一运行 `npm run verify:preprod`；流程测试和生产构建不作为每次领域编辑的固定门槛。
 
 涉及已有数据或外部 API 契约时必须单独设计迁移；当前无生产数据时直接推进唯一当前模型。
+
+## 身份纠错与合并
+
+合并仅在后台执行。人物合并保留目标资料，转移别名、署名和评论；作品合并保留目标资料与下载入口，转移归档、维护者、评论、收藏、目录成员及关联，将来源作品设为 deleted。同文件归档保留目标归档 ID；冲突的署名、目录备注或翻译关系拒绝合并，事务全部撤销。不同语言或引擎的作品不合并。浏览器存档仍按原 Work ID 保存，不随后台合并自动转移。
+
+本站只收录有下载来源的作品，不引入仅资料条目。人物同名区分说明不改变本作署名；作者表单完整保留多位作者。
+
+同文件归档仅在发布状态和清理阶段一致时自动去重，否则报告冲突的归档 ID，要求管理员先统一状态。最终事务再次限制删除条件，状态变化时整次合并回滚，不自动恢复归档或切换当前版本。合并游玩记录时，两边均未游玩仍保留 NULL；只有一边有时间则保留该值，两边都有时间则取较晚值，不把收藏计为游玩。
+
+作品合并要求来源和目标的翻译声明、原创声明分别一致。冲突时提示先统一声明；最终事务在转移任何关联前再次检查，冲突则整批回滚，不自动修改目标声明。

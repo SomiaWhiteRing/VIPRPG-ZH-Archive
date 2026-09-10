@@ -110,6 +110,7 @@ export type UploadTaskStats = {
 };
 
 export type UploadTaskCommitResult = {
+  translators: import("@/lib/creator-names").ConfirmedCreatorSelection[];
   workId: number;
   archiveVersionId: number;
   manifestSha256: string;

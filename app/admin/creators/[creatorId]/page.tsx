@@ -14,6 +14,8 @@ import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
+import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +54,17 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
         }
       />
 
-      <form action={`/api/admin/creators/${creator.id}/update`} className="grid gap-4 grid gap-4" method="post">
+      <Pane heading="头像">
+        <AvatarCropper
+          allowDelete
+          avatarBlobSha256={creator.avatarBlobSha256}
+          displayName={creator.name}
+          endpoint={`/api/admin/creators/${creator.id}/avatar`}
+          shape="square"
+        />
+      </Pane>
+
+      <form action={`/api/admin/creators/${creator.id}/update`} className="grid gap-4" method="post">
         <input name="creator_id" type="hidden" value={creator.id} />
 
         <Pane heading="基础信息">
@@ -60,8 +72,9 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
             <FormField label="名称">
               <Input defaultValue={creator.name} name="name" required type="text" />
             </FormField>
-            <FormField label="原名">
-              <Input defaultValue={creator.originalName ?? ""} name="original_name" type="text" />
+            <FormField label="同名区分说明"><Input defaultValue={creator.disambiguation} name="disambiguation" placeholder="例如：所属团队或代表作" /></FormField>
+            <FormField hint="每行一个；规范名称不必重复填写。" label="别名" wide>
+              <Textarea defaultValue={creator.aliases.join("\n")} name="aliases" rows={5} />
             </FormField>
             <FormField label="个人链接">
               <Input defaultValue={creator.websiteUrl ?? ""} name="website_url" type="url" />
@@ -76,6 +89,13 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
           <Button type="submit">保存作者资料</Button>
         </StickySaveBar>
       </form>
+      <Pane heading="合并重复人物" tone="danger">
+        <ConfirmingForm action={`/api/admin/creators/${creator.id}/merge`} confirmField="target_id" title="确认合并人物？"
+          description="保留目标人物资料，将署名、别名和评论转移至目标，删除当前人物条目。此操作无法撤销。">
+          <FormField label="目标人物 ID"><Input name="target_id" type="number" min={1} required /></FormField>
+          <Button className="mt-3" type="submit" variant="destructive">合并到目标人物</Button>
+        </ConfirmingForm>
+      </Pane>
 
       <section className="grid gap-3 md:grid-cols-3 grid gap-4 lg:grid-cols-2" aria-label="作者关联">
         <Pane heading="作品层职务">

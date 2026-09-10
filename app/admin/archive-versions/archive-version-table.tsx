@@ -104,7 +104,8 @@ function ArchiveActions({
     );
   }
 
-  const canDelete = mode === "active" && canDeleteArchiveVersion(actor, archiveVersion.uploaderId);
+  const maintainerId = archiveVersion.workDeleted ? null : archiveVersion.maintainerIds.find((id) => id === actor.id) ?? null;
+  const canDelete = mode === "active" && canDeleteArchiveVersion(actor, maintainerId);
 
   return (
     <div className="flex flex-wrap items-center gap-3">

@@ -1,31 +1,29 @@
-export type UploadTranslationPreferenceV1 = {
-  version: 1;
+import type { ConfirmedCreatorSelection } from "@/lib/creator-names";
+export type UploadTranslationPreferenceV2 = {
+  version: 2;
   isTranslation: boolean;
-  translatorText: string | null;
+  translators: ConfirmedCreatorSelection[] | null;
 };
 
 export function readTranslationPreference(
   userId: number,
-): UploadTranslationPreferenceV1 | null {
+): UploadTranslationPreferenceV2 | null {
   try {
     const raw = localStorage.getItem(preferenceKey(userId));
     if (!raw) return null;
     const value = JSON.parse(raw) as unknown;
     if (
       !isRecord(value) ||
-      value.version !== 1 ||
+      value.version !== 2 ||
       typeof value.isTranslation !== "boolean" ||
-      !(
-        value.translatorText === null ||
-        typeof value.translatorText === "string"
-      )
+      !(value.translators === null || (Array.isArray(value.translators) && value.translators.every(isSelection)))
     ) {
       return null;
     }
     return {
-      version: 1,
+      version: 2,
       isTranslation: value.isTranslation,
-      translatorText: cleanTranslatorText(value.translatorText),
+      translators: value.translators as ConfirmedCreatorSelection[] | null,
     };
   } catch {
     return null;
@@ -34,20 +32,20 @@ export function readTranslationPreference(
 
 export function updateTranslationPreference(
   userId: number,
-  patch: Partial<Pick<UploadTranslationPreferenceV1, "isTranslation" | "translatorText">>,
+  patch: Partial<Pick<UploadTranslationPreferenceV2, "isTranslation" | "translators">>,
 ): void {
   try {
     const current = readTranslationPreference(userId) ?? {
-      version: 1 as const,
+      version: 2 as const,
       isTranslation: false,
-      translatorText: null,
+      translators: null,
     };
-    const next: UploadTranslationPreferenceV1 = {
-      version: 1,
+    const next: UploadTranslationPreferenceV2 = {
+      version: 2,
       isTranslation: patch.isTranslation ?? current.isTranslation,
-      translatorText: Object.hasOwn(patch, "translatorText")
-        ? cleanTranslatorText(patch.translatorText ?? null)
-        : current.translatorText,
+      translators: Object.hasOwn(patch, "translators")
+        ? patch.translators ?? null
+        : current.translators,
     };
     localStorage.setItem(preferenceKey(userId), JSON.stringify(next));
   } catch {
@@ -56,11 +54,19 @@ export function updateTranslationPreference(
 }
 
 function preferenceKey(userId: number): string {
-  return `viprpg.upload.translation-preference.v1:${userId}`;
+  return `viprpg.upload.translation-preference.v2:${userId}`;
 }
 
-function cleanTranslatorText(value: string | null): string | null {
-  return value?.trim() || null;
+export function rememberPublishedTranslators(userId: number, translators: ConfirmedCreatorSelection[]): void {
+  updateTranslationPreference(userId, translators.length
+    ? { isTranslation: true, translators }
+    : { isTranslation: false });
+}
+
+function isSelection(value: unknown): value is ConfirmedCreatorSelection {
+  return isRecord(value) && typeof value.name === "string" && Boolean(value.name.trim()) &&
+    typeof value.displayName === "string" && Boolean(value.displayName.trim()) &&
+    value.kind === "existing" && Number.isSafeInteger(value.creatorId) && Number(value.creatorId) > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

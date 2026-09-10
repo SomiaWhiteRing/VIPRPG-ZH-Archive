@@ -67,37 +67,6 @@ export function listPermissions(): readonly Permission[] {
   return PERMISSION_LIST;
 }
 
-export async function listPermissionKeysForUser(userId: number): Promise<PermissionKey[]> {
-  const rows = await getD1().prepare(`
-    SELECT DISTINCT rp.permission_key
-    FROM role_permissions rp
-    JOIN user_roles ur ON ur.role_id = rp.role_id
-    JOIN roles r ON r.id = ur.role_id
-    WHERE ur.user_id = ? AND r.status = 'active'
-    ORDER BY rp.permission_key
-  `).bind(userId).all<{ permission_key: string }>();
-  return parsePermissionKeys((rows.results ?? []).map((row) => row.permission_key));
-}
-
-export async function listRolesForUser(userId: number): Promise<Array<{
-  id: number;
-  key: string;
-  name: string;
-  priority: number;
-  kind: RoleKind;
-}>> {
-  const rows = await getD1().prepare(`
-    SELECT r.id, r.key, r.name, r.priority, r.kind
-    FROM user_roles ur JOIN roles r ON r.id = ur.role_id
-    WHERE ur.user_id = ? AND r.status = 'active'
-    ORDER BY r.priority DESC, r.id
-  `).bind(userId).all<{ id: number; key: string; name: string; priority: number; kind: RoleKind }>();
-  for (const role of rows.results ?? []) {
-    if (!isRoleKind(role.kind)) throw new Error(`Unknown role kind: ${String(role.kind)}`);
-  }
-  return rows.results ?? [];
-}
-
 export async function listRoles(): Promise<RoleSummary[]> {
   const rows = await getD1().prepare(`
     SELECT r.id, r.key, r.name, r.description, r.priority, r.kind, r.status,

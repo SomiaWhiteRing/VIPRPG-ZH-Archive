@@ -4,6 +4,7 @@ import {
   updateOwnedWork,
 } from "@/lib/server/db/game-library";
 import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
+import { getWorkTranslators, parseTranslatorSelectionsJson, parseExtraStaffJson } from "@/lib/server/db/creators";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import {
   ensureCharacterFaceSheets,
@@ -57,7 +58,7 @@ export async function POST(
       ...metadata,
       previewBlobSha256s,
     }, current);
-    return json({ ok: true });
+    return json({ ok: true, translators: await getWorkTranslators(workId) });
   } catch (error) {
     return jsonError("作品资料保存失败", error);
   }
@@ -86,8 +87,9 @@ function parseMetadata(form: FormData) {
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),
-    authors: singleName(form.get("author")),
-    translators: singleName(form.get("translator")),
+    authors: parseTranslatorSelectionsJson(form.get("authors")),
+    extraStaff: parseExtraStaffJson(form.get("extra_staff")),
+    translators: parseTranslatorSelectionsJson(form.get("translators")),
     downloadUrl: readNullableString(form.get("download_url")),
     sourceUrl: readNullableString(form.get("source_url")),
   };
@@ -117,9 +119,4 @@ function readList(value: FormDataEntryValue | null): string[] {
     .split(/[,，\r\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function singleName(value: FormDataEntryValue | null): string[] {
-  const name = readNullableString(value);
-  return name ? [name] : [];
 }

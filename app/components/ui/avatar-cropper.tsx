@@ -3,15 +3,29 @@
 import Cropper, { type Area } from "react-easy-crop";
 import { Dialog, Slider } from "radix-ui";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/app/components/ui/button";
+import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 
-export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha256: string | null; displayName: string }) {
+export function AvatarCropper({
+  avatarBlobSha256,
+  displayName,
+  endpoint = "/api/account/avatar",
+  shape = "round",
+  allowDelete = false,
+}: {
+  avatarBlobSha256: string | null;
+  displayName: string;
+  endpoint?: string;
+  shape?: "round" | "square";
+  allowDelete?: boolean;
+}) {
   const router = useRouter();
+  const dialogId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const [source, setSource] = useState<string | null>(null);
@@ -27,7 +41,7 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
 
   function choose(file: File | undefined) {
     if (!file) return;
-    if (!(["image/jpeg", "image/png", "image/webp"] as string[]).includes(file.type)) {
+    if (!(new Set(["image/jpeg", "image/png", "image/webp"])).has(file.type)) {
       setMessage("请选择 JPEG、PNG 或 WebP 图片。");
       return;
     }
@@ -49,7 +63,7 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
     setMessage(null);
     try {
       const blob = await cropToPng(source, area);
-      const response = await fetch("/api/account/avatar", {
+      const response = await fetch(endpoint, {
         method: "PUT",
         credentials: "same-origin",
         headers: { "content-type": "image/png" },
@@ -66,41 +80,71 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
     }
   }
 
+  async function remove() {
+    if (!avatarBlobSha256 || busy || !window.confirm("确定删除当前头像吗？")) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(endpoint, { method: "DELETE", credentials: "same-origin" });
+      const result = await response.json() as { detail?: string };
+      if (!response.ok) throw new Error(result.detail || "头像删除失败");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "头像删除失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <UserAvatar avatarBlobSha256={avatarBlobSha256} className="size-20" displayName={displayName} size={80} />
+      {shape === "round" ? (
+        <UserAvatar avatarBlobSha256={avatarBlobSha256} className="size-20" displayName={displayName} size={80} />
+      ) : (
+        <CreatorPortrait avatarBlobSha256={avatarBlobSha256} className="size-24" name={displayName} size={96} />
+      )}
       <div className="grid gap-2">
         <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => choose(event.target.files?.[0])} ref={fileInputRef} type="file" />
-        <Button
-          aria-controls="avatar-crop-dialog"
-          aria-expanded={Boolean(source)}
-          aria-haspopup="dialog"
-          ref={editButtonRef}
-          onClick={() => fileInputRef.current?.click()}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          修改头像
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            aria-controls={dialogId}
+            aria-expanded={Boolean(source)}
+            aria-haspopup="dialog"
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+            ref={editButtonRef}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            修改头像
+          </Button>
+          {allowDelete && avatarBlobSha256 ? (
+            <Button disabled={busy} onClick={() => void remove()} size="sm" type="button" variant="ghost">
+              删除头像
+            </Button>
+          ) : null}
+        </div>
         {message ? <p className="m-0 max-w-sm text-sm text-red-700" role="status">{message}</p> : null}
       </div>
       <Dialog.Root open={Boolean(source)} onOpenChange={(open) => { if (!open && !busy) setSource(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
           <Dialog.Content
-            aria-describedby="avatar-crop-description"
+            aria-describedby={`${dialogId}-description`}
             className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-4 shadow-surface"
-            id="avatar-crop-dialog"
+            id={dialogId}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               editButtonRef.current?.focus();
             }}
           >
             <Dialog.Title className="m-0 text-lg font-bold">裁剪头像</Dialog.Title>
-            <Dialog.Description className="m-0 text-sm text-muted" id="avatar-crop-description">拖动图片并缩放，圆形区域是最终显示范围。</Dialog.Description>
+            <Dialog.Description className="m-0 text-sm text-muted" id={`${dialogId}-description`}>
+              拖动图片并缩放，裁剪区域是最终显示范围。
+            </Dialog.Description>
             <div className="relative h-[min(55vh,380px)] overflow-hidden rounded-md bg-black">
-              {source ? <Cropper aspect={1} crop={crop} cropShape="round" image={source} onCropChange={setCrop} onCropComplete={(_, pixels) => setArea(pixels)} onZoomChange={setZoom} showGrid={false} zoom={zoom} /> : null}
+              {source ? <Cropper aspect={1} crop={crop} cropShape={shape === "round" ? "round" : "rect"} image={source} onCropChange={setCrop} onCropComplete={(_, pixels) => setArea(pixels)} onZoomChange={setZoom} showGrid={false} zoom={zoom} /> : null}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm">缩放</span>
@@ -112,7 +156,7 @@ export function AvatarCropper({ avatarBlobSha256, displayName }: { avatarBlobSha
             {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
             <div className="flex justify-end gap-2">
               <Rm2kButton disabled={busy} onClick={() => setSource(null)} type="button">取消</Rm2kButton>
-              <Rm2kButton disabled={busy || !area} onClick={upload} type="button">{busy ? "正在上传…" : "保存头像"}</Rm2kButton>
+              <Rm2kButton disabled={busy || !area} onClick={() => void upload()} type="button">{busy ? "正在上传…" : "保存头像"}</Rm2kButton>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

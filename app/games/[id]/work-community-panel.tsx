@@ -4,27 +4,30 @@ import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { CommentBodySegment, CommentDto, CustomEmojiDto } from "@/lib/server/db/work-community";
+import type { CommentBodySegment, CommentDto, CommentTarget, CustomEmojiDto } from "@/lib/server/db/work-community";
 import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
 type Props = {
-  workId: number;
+  target: CommentTarget;
+  placeholder?: string;
   currentUserId: number | null;
   initialComments: CommentDto[];
   initialNextCursor: string | null;
   emojis: CustomEmojiDto[];
 };
 
-export function WorkCommunityPanel({
-  workId,
+export function CommentPanel({
+  target,
+  placeholder = "写下你的游玩感受、攻略提示或考证……",
   currentUserId,
   initialComments,
   initialNextCursor,
   emojis,
 }: Props) {
+  const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [body, setBody] = useState("");
@@ -38,7 +41,7 @@ export function WorkCommunityPanel({
     setBusy(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/works/${workId}/comments`, {
+      const response = await fetch(endpoint, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
@@ -124,7 +127,7 @@ export function WorkCommunityPanel({
     setBusy(true);
     try {
       const response = await fetch(
-        `/api/works/${workId}/comments?cursor=${encodeURIComponent(nextCursor)}`,
+        `${endpoint}?cursor=${encodeURIComponent(nextCursor)}`,
         { credentials: "same-origin" },
       );
       const result = (await response.json()) as {
@@ -182,7 +185,7 @@ export function WorkCommunityPanel({
             id="comment-input"
             maxLength={2000}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="写下你的游玩感受、攻略提示或考证……"
+            placeholder={placeholder}
             ref={textareaRef}
             rows={4}
             value={body}
@@ -221,6 +224,12 @@ export function WorkCommunityPanel({
       {message ? <p className="text-sm text-muted" role="status">{message}</p> : null}
     </div>
   );
+}
+
+function commentEndpoint(target: CommentTarget): string {
+  return target.kind === "work"
+    ? `/api/works/${target.id}/comments`
+    : `/api/creators/${target.id}/comments`;
 }
 
 function CommentCard({

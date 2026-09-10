@@ -53,40 +53,6 @@ type RoleEventRow = {
   created_at: string;
 };
 
-export async function listAdminAuditLogs(limit = 200): Promise<AdminAuditLog[]> {
-  const rows = await getD1()
-    .prepare(
-      `SELECT
-        a.id,
-        a.user_id,
-        u.display_name AS actor_name,
-        COALESCE(a.email, u.email) AS email,
-        a.event_type,
-        a.ip_hash,
-        a.user_agent_hash,
-        a.detail_json,
-        a.created_at
-      FROM auth_audit_logs a
-      LEFT JOIN users u ON u.id = a.user_id
-      ORDER BY datetime(a.created_at) DESC, a.id DESC
-      LIMIT ?`,
-    )
-    .bind(clampLimit(limit))
-    .all<AuditLogRow>();
-
-  return (rows.results ?? []).map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    actorName: row.actor_name,
-    email: row.email,
-    eventType: row.event_type,
-    ipHash: row.ip_hash,
-    userAgentHash: row.user_agent_hash,
-    detail: parseDetail(row.detail_json),
-    createdAt: row.created_at,
-  }));
-}
-
 export async function searchAdminAuditLogs(input: {
   query?: string;
   eventType?: string;
