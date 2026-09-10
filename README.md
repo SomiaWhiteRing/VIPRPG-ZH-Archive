@@ -52,6 +52,7 @@ npm run dev -- -p 3001
 ```powershell
 npm run check           # 类型、lint、静态架构和安全规则
 npm test                # 隔离 D1/API 的持久契约，不启动浏览器
+npm run regression      # 串行运行 check + test，并保留回归报告
 npm run test:flow       # 预生产关键流程：Chromium、Worker、R2/OPFS
 npm run verify:preprod  # check + test:flow + production build
 npm run smoke:staging   # 已部署 staging 的最小健康检查
@@ -59,7 +60,7 @@ npm run build           # Next.js 生产构建
 npm run preview         # OpenNext/Cloudflare Workers 本地预览
 ```
 
-敏捷开发默认按改动选择 `npm run check` 或 `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。两种测试都不依赖开发 seed，也不修改 `.wrangler/state`；成功后删除临时状态，失败时输出保留的日志与截图目录。
+敏捷开发默认运行 `npm run regression`，或按改动选择 `npm run check` / `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。回归入口会串行执行有状态检查，并在 `output/regression/` 保留报告和阶段日志；失败分类与停止条件见 [`docs/maintenance-regression.md`](docs/maintenance-regression.md)。
 
 `npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
 

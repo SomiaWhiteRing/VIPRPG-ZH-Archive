@@ -21,6 +21,10 @@
 - 失败后先分类为产品、测试夹具、环境或调度问题；夹具和环境失败不能作为改造产品代码的依据。有状态 D1、API、Worker 和浏览器检查必须串行运行。
 - 新增测试代码或执行人工 UI 测试仍需用户明确授权。
 
+日常回归使用 `npm run regression`，它串行执行 `npm run check` 和 `npm test`，并把工作树快照、每阶段日志和失败分类写入被忽略的 `output/regression/`。只有预生产、发布前或用户明确要求时，才使用 `npm run regression -- --flow --build`；不要并行运行有状态 D1、API、Worker 或浏览器检查。
+
+本文件只保留必须始终生效的边界。命令用途、故障定位顺序和回归证据格式以 `docs/maintenance-regression.md` 为准；产品领域文档只记录各自领域的不变量，不复制整套测试流程。
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
