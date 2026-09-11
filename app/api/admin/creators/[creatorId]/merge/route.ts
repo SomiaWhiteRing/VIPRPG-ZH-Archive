@@ -4,7 +4,7 @@ import { parsePositiveId } from "@/lib/server/http/request";
 import { json, jsonError } from "@/lib/server/http/json";
 
 export async function POST(request: Request, context: { params: Promise<{ creatorId: string }> }) {
-  const auth=await requirePermission(request,"creator.update");
+  const auth=await requirePermission(request,"creator.merge_any");
   if("response" in auth) return auth.response;
   try {
     const source=parsePositiveId((await context.params).creatorId,"creator id");

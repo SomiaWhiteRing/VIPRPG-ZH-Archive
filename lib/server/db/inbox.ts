@@ -34,6 +34,8 @@ export type InboxItem = {
   body: string;
   createdAt: string;
   readAt: string | null;
+  canApprove: boolean;
+  canReject: boolean;
 };
 
 export type RoleSnapshot = { id: RoleId | null; key: RoleKey; name: string };
@@ -59,6 +61,12 @@ type InboxItemRow = {
   body: string;
   created_at: string;
   read_at: string | null;
+  target_status: string | null;
+  target_priority: number;
+  role_priority: number | null;
+  role_kind: string | null;
+  role_status: string | null;
+  already_assigned: number;
 };
 
 const INBOX_SELECT = `SELECT
@@ -81,10 +89,17 @@ const INBOX_SELECT = `SELECT
   i.title,
   i.body,
   i.created_at,
+  target.status AS target_status,
+  COALESCE((SELECT MAX(r.priority) FROM user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) AS target_priority,
+  requested_role.priority AS role_priority,
+  requested_role.kind AS role_kind,
+  requested_role.status AS role_status,
+  EXISTS(SELECT 1 FROM user_roles ur WHERE ur.user_id=target.id AND ur.role_id=i.requested_role_id) AS already_assigned,
   reads.read_at
 FROM inbox_items i
 LEFT JOIN users sender ON sender.id = i.sender_user_id
 LEFT JOIN users target ON target.id = i.target_user_id
+LEFT JOIN roles requested_role ON requested_role.id=i.requested_role_id
 LEFT JOIN users resolver ON resolver.id = i.resolved_by_user_id
 LEFT JOIN inbox_item_reads reads ON reads.item_id = i.id AND reads.user_id = ?`;
 
@@ -121,7 +136,15 @@ export async function listInboxItemsForUser(user: ArchiveUser): Promise<InboxIte
     .all<InboxItemRow>();
 
   return (rows.results ?? [])
-    .map(mapInboxItemRow)
+    .map((row) => {
+      const item = mapInboxItemRow(row);
+      const manageable = row.type === "role_change_request" && row.status === "pending" &&
+        hasPermission(user, "inbox.role_request.resolve") && hasPermission(user, "user.role.assign") &&
+        row.target_user_id !== user.id && row.target_status === "active" &&
+        row.role_priority !== null && row.role_kind !== "bootstrap_admin" &&
+        user.maxRolePriority > row.target_priority && user.maxRolePriority > row.role_priority;
+      return { ...item, canReject: manageable, canApprove: manageable && row.role_status === "active" && !row.already_assigned };
+    })
     .filter((item) => canViewInboxItem(user, item));
 }
 
@@ -233,6 +256,8 @@ function canViewInboxItem(user: ArchiveUser, item: InboxItem): boolean {
 
 function mapInboxItemRow(row: InboxItemRow): InboxItem {
   return {
+    canApprove: false,
+    canReject: false,
     id: row.id,
     type: row.type,
     status: row.status,

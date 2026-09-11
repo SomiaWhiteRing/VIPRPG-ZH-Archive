@@ -7,7 +7,7 @@ import { readJsonObject } from "@/lib/server/http/request";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const auth = await requirePermission(request, "character.update");
+  const auth = await requirePermission(request, "character.metadata.update_any");
   if ("response" in auth) return auth.response;
 
   try {

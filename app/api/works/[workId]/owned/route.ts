@@ -4,14 +4,21 @@ import {
   updateOwnedWork,
 } from "@/lib/server/db/game-library";
 import { parseCharacterSelectionsJson } from "@/lib/server/db/characters";
-import { getWorkTranslators, parseTranslatorSelectionsJson, parseExtraStaffJson } from "@/lib/server/db/creators";
+import {
+  getWorkTranslators,
+  parseTranslatorSelectionsJson,
+  parseExtraStaffJson,
+} from "@/lib/server/db/creators";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
 import {
   ensureCharacterFaceSheets,
   readCharacterFaceSheet,
   storeCharacterFaceSheets,
 } from "@/lib/server/storage/character-portraits";
-import { readWorkImage, storeWorkImages } from "@/lib/server/storage/work-images";
+import {
+  readWorkImage,
+  storeWorkImages,
+} from "@/lib/server/storage/work-images";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +42,9 @@ export async function POST(
       .map((value) => readCharacterFaceSheet(value));
     const imageEntries = form
       .getAll("images[]")
-      .filter((value): value is File => value instanceof File && value.size > 0);
+      .filter(
+        (value): value is File => value instanceof File && value.size > 0,
+      );
     const previewBlobSha256s = imageEntries.length
       ? await storeWorkImages(
           imageEntries.map((value) => readWorkImage(value, "images[]")),
@@ -52,12 +61,15 @@ export async function POST(
       ]),
       auth.user.id,
     );
-    await updateOwnedWork({
-      user: auth.user,
-      workId,
-      ...metadata,
-      previewBlobSha256s,
-    }, current);
+    await updateOwnedWork(
+      {
+        user: auth.user,
+        workId,
+        ...metadata,
+        previewBlobSha256s,
+      },
+      current,
+    );
     return json({ ok: true, translators: await getWorkTranslators(workId) });
   } catch (error) {
     return jsonError("作品资料保存失败", error);
@@ -69,17 +81,26 @@ function parseMetadata(form: FormData) {
   if (status !== "published" && status !== "hidden") {
     throw new HttpError(400, "status 不合法");
   }
-  const distribution = readRequiredString(form.get("distribution"), "distribution");
+  const distribution = readRequiredString(
+    form.get("distribution"),
+    "distribution",
+  );
   if (distribution !== "archive" && distribution !== "external") {
     throw new HttpError(400, "distribution 不合法");
   }
   return {
     distribution: distribution as "archive" | "external",
-    originalTitle: readRequiredString(form.get("original_title"), "original_title"),
+    originalTitle: readRequiredString(
+      form.get("original_title"),
+      "original_title",
+    ),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
     originalReleaseDate: readNullableString(form.get("original_release_date")),
-    engineFamily: readRequiredString(form.get("engine_family"), "engine_family"),
+    engineFamily: readRequiredString(
+      form.get("engine_family"),
+      "engine_family",
+    ),
     isOriginal: form.has("is_original"),
     isTranslation: form.has("is_translation"),
     language: readRequiredString(form.get("language"), "language"),
@@ -97,7 +118,8 @@ function parseMetadata(form: FormData) {
 
 function parseWorkId(value: string): number {
   const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "作品 ID 不合法");
+  if (!Number.isSafeInteger(id) || id <= 0)
+    throw new HttpError(400, "作品 ID 不合法");
   return id;
 }
 

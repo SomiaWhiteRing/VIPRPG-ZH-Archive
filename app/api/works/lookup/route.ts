@@ -100,7 +100,7 @@ export async function GET(request: Request) {
       .bind(
         auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
         auth.user.id,
-        auth.user.permissionKeys.includes("work.update") ? 1 : 0,
+        auth.user.permissionKeys.includes("work.metadata.update_any") ? 1 : 0,
         auth.user.permissionKeys.includes("work.read_private") ? 1 : 0,
         auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
         auth.user.id,

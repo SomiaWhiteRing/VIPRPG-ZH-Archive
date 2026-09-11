@@ -11,6 +11,7 @@ import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
+import { hasPermission } from "@/lib/authz/permissions";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
@@ -44,12 +45,14 @@ export default async function AdminArchiveVersionEditPage({
         actions={
           <>
             <BackLink href="/admin/archive-versions" label="返回归档管理" />
-            <Link
-              className={buttonVariants({ variant: "outline" })}
-              href={`/admin/works/${archiveVersion.workId}`}
-            >
-              编辑游戏
-            </Link>
+            {hasPermission(adminUser, "work.metadata.update_any") ? (
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                href={`/admin/works/${archiveVersion.workId}`}
+              >
+                编辑游戏
+              </Link>
+            ) : null}
             <Link
               className={buttonVariants({ variant: "outline" })}
               href={`/games/${archiveVersion.workId}`}
@@ -101,7 +104,8 @@ export default async function AdminArchiveVersionEditPage({
         </Pane>
         <StickySaveBar>
           <Button type="submit">保存归档</Button>
-          {archiveVersion.status === "published" &&
+          {hasPermission(adminUser, "archive_version.set_current") &&
+          archiveVersion.status === "published" &&
           !archiveVersion.isCurrent ? (
             <Button
               form="set-current-archive-version"
@@ -113,7 +117,9 @@ export default async function AdminArchiveVersionEditPage({
           ) : null}
         </StickySaveBar>
       </form>
-      {archiveVersion.status === "published" && !archiveVersion.isCurrent ? (
+      {hasPermission(adminUser, "archive_version.set_current") &&
+      archiveVersion.status === "published" &&
+      !archiveVersion.isCurrent ? (
         <form
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
           id="set-current-archive-version"

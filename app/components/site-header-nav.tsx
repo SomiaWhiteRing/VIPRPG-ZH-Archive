@@ -66,19 +66,20 @@ const ADMIN_LINKS: Array<HeaderNavigationLink & {
     label: "维护",
     permission: "system.maintenance.run",
   },
+  { href: "/admin/archive-versions/trash", label: "回收站", permission: "archive_version.restore" },
   { href: "/admin/audit", label: "审计", permission: "audit.read" },
 ];
+
+function getAdminLinks(session: Session | null) {
+  return ADMIN_LINKS.filter((link) => session && (link.bootstrapOnly ? session.isBootstrapAdmin : !link.permission || hasPermissionKey(session.permissionKeys, link.permission)));
+}
 
 export function SiteHeaderNav({ session, loginLink }: Props) {
   const pathname = usePathname() ?? "/";
   const inAdmin = pathname.startsWith("/admin");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const visibleAdminLinks = ADMIN_LINKS.filter((link) => {
-    if (!session) return false;
-    if (link.bootstrapOnly) return session.isBootstrapAdmin;
-    return link.permission ? hasPermissionKey(session.permissionKeys, link.permission) : true;
-  });
+  const visibleAdminLinks = getAdminLinks(session);
   const visibleHeaderLinks = inAdmin ? visibleAdminLinks : PUBLIC_LINKS;
 
   return (
@@ -86,7 +87,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
       <div className="mx-auto flex min-h-14 w-[min(1280px,calc(100vw-2rem))] items-center gap-2 py-1.5 sm:gap-4">
         <Link
           className="inline-flex shrink-0 items-center gap-2 font-extrabold tracking-wide"
-          href={inAdmin ? "/admin" : "/"}
+          href={inAdmin ? visibleAdminLinks[0]?.href ?? "/" : "/"}
         >
           <Image
             alt=""
@@ -229,7 +230,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 }
 
 function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) {
-  const canAccessConsole = hasPermissionKey(session.permissionKeys, "system.dashboard.read");
+  const consoleHref = getAdminLinks(session)[0]?.href;
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const itemClass =
     "flex min-h-9 w-full cursor-default items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
@@ -289,9 +290,9 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
                 返回站点
               </Link>
             </DropdownMenu.Item>
-          ) : canAccessConsole ? (
+          ) : consoleHref ? (
             <DropdownMenu.Item asChild>
-              <Link className={itemClass} href="/admin">
+              <Link className={itemClass} href={consoleHref}>
                 控制台
               </Link>
             </DropdownMenu.Item>

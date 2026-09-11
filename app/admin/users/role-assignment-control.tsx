@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { SelectField } from "@/app/components/ui/select";
 import type { RoleSummary } from "@/lib/server/db/permissions";
@@ -14,7 +15,9 @@ export function RoleAssignmentControl({
   initialRoleIds: number[];
   roles: RoleSummary[];
 }) {
-  const [roleIds, setRoleIds] = useState(initialRoleIds);
+  const roleIds = initialRoleIds;
+  const router = useRouter();
+  const [refreshing, startTransition] = useTransition();
   const [selectedRoleId, setSelectedRoleId] = useState(roles[0]?.id ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,7 @@ export function RoleAssignmentControl({
         detail?: string;
       };
       if (!response.ok || !payload.ok) throw new Error(payload.detail ?? payload.error ?? "操作失败");
+      startTransition(() => router.refresh());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "操作失败");
       throw cause;
@@ -51,7 +55,6 @@ export function RoleAssignmentControl({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roleId: effectiveSelectedRoleId }),
       });
-      setRoleIds((current) => [...current, effectiveSelectedRoleId]);
       setSelectedRoleId(0);
     } catch {
       return;
@@ -63,7 +66,6 @@ export function RoleAssignmentControl({
       await request(`/api/admin/users/${userId}/roles/${roleId}`, {
         method: "DELETE",
       });
-      setRoleIds((current) => current.filter((id) => id !== roleId));
     } catch {
       return;
     }
@@ -73,8 +75,8 @@ export function RoleAssignmentControl({
     <div className="grid min-w-56 gap-2">
       {assigned.map((role) => (
         <div className="flex items-center justify-between gap-2" key={role.id}>
-          <span className="text-sm">{role.name}</span>
-          <Button disabled={saving} onClick={() => remove(role.id)} size="sm" type="button" variant="outline">
+          <span className="text-sm">{role.name}{role.status === "disabled" ? "（已停用）" : ""}</span>
+          <Button disabled={saving || refreshing} onClick={() => remove(role.id)} size="sm" type="button" variant="outline">
             移除
           </Button>
         </div>
@@ -91,7 +93,7 @@ export function RoleAssignmentControl({
             }))}
             value={String(effectiveSelectedRoleId)}
           />
-          <Button disabled={saving} onClick={assign} size="sm" type="button">
+          <Button disabled={saving || refreshing} onClick={assign} size="sm" type="button">
             分配
           </Button>
         </div>

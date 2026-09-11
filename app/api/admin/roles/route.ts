@@ -1,12 +1,21 @@
 import { requireBootstrapAdmin } from "@/lib/server/auth/authorize";
 import { json, jsonError } from "@/lib/server/http/json";
-import { createRole } from "@/lib/server/db/permissions";
+import { createRole, listRoles } from "@/lib/server/db/permissions";
+import { ROLE_TEMPLATES } from "@/lib/authz/roles";
 
 export async function POST(request: Request) {
   const auth = await requireBootstrapAdmin(request);
   if ("response" in auth) return auth.response;
   try {
-    const body = await request.json() as { key?: string; name?: string; description?: string; priority?: number };
+    const body = await request.json() as { key?: string; name?: string; description?: string; priority?: number; template?: unknown };
+    if (body.template !== undefined) {
+      if (body.template !== "wiki_editor") return json({ ok: false, error: "Unknown role template" }, { status: 400 });
+      const preset = ROLE_TEMPLATES[body.template];
+      const id = await createRole({ actor: auth.user, ...preset, template: body.template });
+      const role = (await listRoles()).find((item) => item.id === id);
+      if (!role) throw new Error("创建的角色不可读取");
+      return json({ ok: true, id, role }, { status: 201 });
+    }
     const key = body.key?.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
     const name = body.name?.trim();
     if (!key || !name || key.length > 64) return json({ ok: false, error: "Invalid role" }, { status: 400 });

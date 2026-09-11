@@ -71,12 +71,18 @@ export function parseTranslatorSelectionsJson(value: FormDataEntryValue | null):
 }
 
 export function parseExtraStaffJson(value: FormDataEntryValue | null): WorkStaffCreditInput[] {
+  const credits = parseWorkStaffJson(value);
+  if (credits.some((credit) => !isExtraStaffRole(credit.roleKey))) throw new HttpError(400, "其他制作人员职务不合法。");
+  return credits;
+}
+
+export function parseWorkStaffJson(value: FormDataEntryValue | null): WorkStaffCreditInput[] {
   if (typeof value !== "string") throw new HttpError(400, "缺少制作人员资料。");
   let items: unknown;
   try { items = JSON.parse(value); } catch { throw new HttpError(400, "制作人员资料无法读取。"); }
   if (!Array.isArray(items)) throw new HttpError(400, "制作人员资料必须为列表。");
   return items.map((item: unknown) => {
-    if (!isRecord(item) || !isExtraStaffRole(item.roleKey) ||
+    if (!isRecord(item) || !(item.roleKey === "author" || item.roleKey === "translator" || isExtraStaffRole(item.roleKey)) ||
         (item.roleLabel !== null && typeof item.roleLabel !== "string") ||
         (item.notes !== null && typeof item.notes !== "string")) {
       throw new HttpError(400, "制作人员职务格式不合法。");

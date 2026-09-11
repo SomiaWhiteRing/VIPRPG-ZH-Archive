@@ -1,4 +1,5 @@
 import type { StaffCredit } from "@/lib/staff-credits";
+import { hasPermission } from "@/lib/authz/permissions";
 import {
   isArchiveEngineFamily,
   isExternalEngineFamily,
@@ -24,7 +25,7 @@ import {
   parseCharacterSelectionsJson,
   prepareWorkCharacterStatements,
 } from "@/lib/server/db/characters";
-import { prepareWorkStaffStatements } from "@/lib/server/db/creators";
+import { parseWorkStaffJson, prepareWorkStaffStatements } from "@/lib/server/db/creators";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   mapCharacterPortrait,
@@ -281,6 +282,8 @@ type WorkEditInput = {
   originalReleasePrecision: string;
   engineFamily: string;
   isOriginal: boolean;
+  isTranslation: boolean;
+  workStaff: StaffCredit[];
   language: string;
   status: string;
   aliases: string[];
@@ -848,6 +851,24 @@ export async function updateWorkForAdmin(
   input: WorkEditInput,
   actor: ArchiveUser,
 ): Promise<void> {
+  if (!hasPermission(actor, "work.metadata.update_any")) {
+    throw new HttpError(403, "没有编辑作品资料的权限");
+  }
+  const currentStatus = await getD1()
+    .prepare(`SELECT status FROM works WHERE id=?`)
+    .bind(input.workId)
+    .first<{ status: string }>();
+  if (!currentStatus) throw new HttpError(404, "作品不存在");
+  const canUpdateStatus = hasPermission(actor, "work.status.update_any");
+  if (currentStatus.status === "deleted" && !canUpdateStatus) throw new HttpError(403, "已删除作品须由有状态管理权限的账户恢复");
+  if (input.status && input.status !== currentStatus.status && !canUpdateStatus) {
+    throw new HttpError(403, "没有调整作品状态的权限");
+  }
+  if (!canUpdateStatus) input.status = currentStatus.status;
+  assertPublicationDeclarations(input.isOriginal, input.isTranslation);
+  if (input.isTranslation !== input.workStaff.some((credit) => credit.roleKey === "translator")) {
+    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
+  }
   assertEnum(
     input.originalReleasePrecision,
     ["year", "month", "day", "unknown"],
@@ -913,13 +934,10 @@ export async function updateWorkForAdmin(
          original_release_precision = ?,
          engine_family = ?,
          is_original = ?,
+         is_translation = ?,
          language = ?,
-         status = ?,
-         updated_at = CURRENT_TIMESTAMP,
-         published_at = CASE
-           WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
-           ELSE published_at
-         END
+         ${canUpdateStatus ? "status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
+         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       )
       .bind(
@@ -929,11 +947,13 @@ export async function updateWorkForAdmin(
         input.originalReleasePrecision,
         input.engineFamily,
         input.isOriginal ? 1 : 0,
+        input.isTranslation ? 1 : 0,
         input.language,
-        input.status,
-        input.status,
+        ...(canUpdateStatus ? [input.status, input.status] : []),
         input.workId,
       ),
+    database.prepare(`DELETE FROM work_staff WHERE work_id=?`).bind(input.workId),
+    ...(await prepareWorkStaffStatements({ database, workId: input.workId, credits: input.workStaff })),
     database.prepare(`DELETE FROM work_titles WHERE work_id=?`).bind(input.workId),
     database.prepare(`DELETE FROM work_tags WHERE work_id=?`).bind(input.workId),
     database
@@ -1250,8 +1270,10 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     ),
     engineFamily: String(form.get("engine_family") ?? "other"),
     isOriginal: checked(form, "is_original"),
+    isTranslation: checked(form, "is_translation"),
+    workStaff: parseWorkStaffJson(form.get("work_staff")),
     language: String(form.get("language") ?? "zh-CN"),
-    status: String(form.get("status") ?? "published"),
+    status: String(form.get("status") ?? ""),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),

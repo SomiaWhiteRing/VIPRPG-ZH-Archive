@@ -4,7 +4,7 @@ import { hashPassword, passwordHashNeedsUpgrade, verifyPassword } from "@/lib/se
 import { hasPermission, parsePermissionKeys, type PermissionKey } from "@/lib/authz/permissions";
 import type { RoleKind } from "@/lib/authz/roles";
 import { getD1 } from "@/lib/server/db/d1";
-import { canManageUser } from "@/lib/server/db/permissions";
+import { canManageUser, userManagementScopeSql } from "@/lib/server/db/permissions";
 import { HttpError } from "@/lib/server/http/json";
 import type { ProfileVisibility } from "@/lib/user-profile";
 
@@ -164,10 +164,6 @@ export function normalizeEmail(value: string): string {
   }
 
   return email;
-}
-
-export function canUpload(user: ArchiveUser): boolean {
-  return hasPermission(user, "import_job.create");
 }
 
 export async function findUserById(id: number): Promise<ArchiveUser | null> {
@@ -593,10 +589,14 @@ export async function setUserStatusForAdmin(input: {
 
   const database = getD1();
   const statements = [
+    database.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+      SELECT ?,?,'admin_user_status_update',? FROM users target WHERE target.id=? AND target.status=?
+        AND target.status<>'deleted' AND ${userManagementScopeSql("user.status.update", "target.id")}`)
+      .bind(input.actor.id, input.actor.email, JSON.stringify({ targetUserId: target.id, before: target.status, status: input.status }), target.id, target.status, input.actor.id),
     database.prepare(
       `UPDATE users
       SET status = ?
-      WHERE id = ?`,
+      WHERE id = ? AND changes() = 1`,
     )
     .bind(input.status, target.id),
   ];
@@ -604,14 +604,11 @@ export async function setUserStatusForAdmin(input: {
     statements.push(database.prepare(`
       UPDATE user_sessions
       SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
-      WHERE user_id = ? AND revoked_at IS NULL
+      WHERE user_id = ? AND revoked_at IS NULL AND changes() = 1
     `).bind(target.id));
   }
-  statements.push(database.prepare(`
-    INSERT INTO auth_audit_logs (user_id, email, event_type, detail_json)
-    VALUES (?, ?, 'admin_user_status_update', ?)
-  `).bind(input.actor.id, input.actor.email, JSON.stringify({ targetUserId: target.id, status: input.status })));
-  await database.batch(statements);
+  const [authorization] = await database.batch(statements);
+  if (Number(authorization.meta.changes) !== 1) throw new HttpError(409, "账户或管理权限已变化，请刷新后重试。");
 
   const updated = await findUserById(target.id);
 

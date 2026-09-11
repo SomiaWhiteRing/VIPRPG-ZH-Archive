@@ -7,10 +7,10 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AdminListControls, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { searchUsersForAdmin } from "@/lib/server/db/users";
-import { listAssignableRoles } from "@/lib/server/db/permissions";
+import { listRoles, listUserRoleMemberships } from "@/lib/server/db/permissions";
 import { RoleAssignmentControl } from "./role-assignment-control";
 import { formatDate } from "@/lib/format";
-import { hasPermission } from "@/lib/authz/permissions";
+import { hasPermission, PERMISSION_LIST } from "@/lib/authz/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +27,16 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const page = parseAdminPage(params.page);
   const [result, roles] = await Promise.all([
     searchUsersForAdmin({ actor: adminUser, query, status, sort, page, pageSize: PAGE_SIZE }),
-    canAssignRoles ? listAssignableRoles(adminUser) : Promise.resolve([]),
+    listRoles(),
   ]);
+  const memberships = await listUserRoleMemberships(result.items.map((user) => user.id));
+  const assignableRoles = roles.filter((role) => role.key !== "user" && role.kind !== "bootstrap_admin" && role.priority < adminUser.maxRolePriority);
 
   return (
     <main>
       <PageHeader
         compact
-        title="用户与上传权限"
+        title="用户与角色"
         subtitle="管理账户状态以及当前管理员有权分配的角色。"
       />
       <AdminListControls action="/admin/users" noun="用户" query={query} status={status} statusOptions={[{ value: "all", label: "全部状态" }, { value: "active", label: "正常" }, { value: "disabled", label: "已禁用" }]} sort={sort} sortOptions={[{ value: "default", label: "最近注册" }, { value: "name", label: "显示名称" }]} total={result.total} />
@@ -57,12 +59,25 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               </td>
               <td>
                 <div className="flex flex-wrap gap-2">
-                  {user.roleKeys.map((role) => (
-                    <span className="session-pill" key={role}>
-                      {role}
+                  {roles.filter((role) => memberships.get(user.id)?.includes(role.id)).map((role) => (
+                    <span className="session-pill" key={role.id}>
+                      {role.name}{role.status === "disabled" ? "（已停用）" : ""}
                     </span>
                   ))}
                 </div>
+                <details className="mt-2 text-sm">
+                  <summary className="cursor-pointer text-primary">生效权限与来源</summary>
+                  {user.status !== "active" ? <p className="py-2 text-muted">账户不可用，所有权限均不生效。</p> : (
+                    <ul className="mt-2 grid gap-1">
+                      {PERMISSION_LIST.filter((permission) => user.permissionKeys.includes(permission.key)).map((permission) => (
+                        <li key={permission.key}>
+                          {permission.label}
+                          <span className="block text-xs text-muted">{roles.filter((role) => role.status === "active" && memberships.get(user.id)?.includes(role.id) && role.permissionKeys.includes(permission.key)).map((role) => role.name).join("、")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
               </td>
               <td>
                 <StatusBadge kind="account" value={user.status} />
@@ -70,8 +85,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               <td>{formatDate(user.createdAt)}</td>
               <td>
                 <div className="flex flex-wrap items-center gap-3">
-                  {canAssignRoles ? (
-                    <RoleAssignmentControl initialRoleIds={user.roleIds} roles={roles} userId={user.id} />
+                  {canAssignRoles && user.status === "active" ? (
+                    <RoleAssignmentControl initialRoleIds={memberships.get(user.id) ?? []} roles={assignableRoles} userId={user.id} />
                   ) : null}
                   {canUpdateStatus && user.status !== "deleted" ? (
                     <form action={`/api/admin/users/${user.id}/status`} method="post" className="inline-flex">

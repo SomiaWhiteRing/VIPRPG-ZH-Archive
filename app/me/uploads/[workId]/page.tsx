@@ -1,4 +1,5 @@
 import { isExtraStaffRole } from "@/lib/staff-credits";
+import { hasPermission } from "@/lib/authz/permissions";
 import { notFound } from "next/navigation";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Button } from "@/app/components/ui/button";
@@ -24,6 +25,7 @@ export default async function UploadedWorkPage({
 }) {
   const workId = parseId((await params).workId);
   const user = await requireAccountUser(`/me/uploads/${workId}`);
+  if (!hasPermission(user, "work.update_own")) notFound();
   const work = await getOwnedWorkForEdit(workId, user);
   if (!work) notFound();
   const suggestions = await loadUploadSuggestions();
@@ -69,17 +71,28 @@ export default async function UploadedWorkPage({
             notes: character.notes,
           })),
           authors: staffCredits(work, "author"),
-          extraStaff: work.creators.filter((creator) => isExtraStaffRole(creator.roleKey)).map((creator) => ({
-            selection: { kind: "existing" as const, creatorId: creator.id, name: creator.name, displayName: creator.displayName },
-            roleKey: creator.roleKey as UploadInitialWork["authors"][number]["roleKey"],
-            roleLabel: creator.roleLabel, notes: creator.notes,
-          })),
+          extraStaff: work.creators
+            .filter((creator) => isExtraStaffRole(creator.roleKey))
+            .map((creator) => ({
+              selection: {
+                kind: "existing" as const,
+                creatorId: creator.id,
+                name: creator.name,
+                displayName: creator.displayName,
+              },
+              roleKey:
+                creator.roleKey as UploadInitialWork["authors"][number]["roleKey"],
+              roleLabel: creator.roleLabel,
+              notes: creator.notes,
+            })),
           translators: staffCredits(work, "translator"),
           externalDownloadUrl: work.externalDownloadUrl,
           sourceUrl: work.sourceUrl,
           previewBlobSha256s: work.media
             .filter((media) => media.kind === "preview")
-            .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+            .sort(
+              (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
+            )
             .map((media) => media.blobSha256),
           currentArchive: work.currentArchive
             ? {
@@ -91,10 +104,17 @@ export default async function UploadedWorkPage({
         }}
         suggestions={suggestions}
       />
-      <ConfirmingForm action={`/api/works/${work.id}/delete`} className="mt-8" confirmField="confirm"
-        title="确认删除作品？" description="删除后，作品将从公开页面和“我的上传”中移除，你将无法查看或修改。文件和资料会保留，只有管理员可以恢复。">
+      <ConfirmingForm
+        action={`/api/works/${work.id}/delete`}
+        className="mt-8"
+        confirmField="confirm"
+        title="确认删除作品？"
+        description="删除后，作品将从公开页面和“我的上传”中移除，你将无法查看或修改。文件和资料会保留，只有管理员可以恢复。"
+      >
         <input name="confirm" type="hidden" value="delete" />
-        <Button type="submit" variant="destructive">删除作品</Button>
+        <Button type="submit" variant="destructive">
+          删除作品
+        </Button>
       </ConfirmingForm>
     </div>
   );
@@ -128,7 +148,10 @@ function parseId(value: string): number {
 function characterRole(
   value: string,
 ): "main" | "supporting" | "cameo" | "mentioned" | "other" {
-  return value === "main" || value === "cameo" || value === "mentioned" || value === "other"
+  return value === "main" ||
+    value === "cameo" ||
+    value === "mentioned" ||
+    value === "other"
     ? value
     : "supporting";
 }

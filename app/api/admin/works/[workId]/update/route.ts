@@ -16,7 +16,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requirePermission(request, "work.update");
+  const auth = await requirePermission(request, "work.metadata.update_any");
 
   if ("response" in auth) {
     return auth.response;

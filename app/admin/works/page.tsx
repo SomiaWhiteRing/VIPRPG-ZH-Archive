@@ -11,6 +11,7 @@ import {
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
+import { hasPermission } from "@/lib/authz/permissions";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { searchEditableWorksForAdmin } from "@/lib/server/db/game-library";
 import { formatNumber, formatBytes } from "@/lib/format";
@@ -24,11 +25,22 @@ export default async function AdminWorksPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requirePagePermission("/admin/works", "work.read_private");
+  const adminUser = await requirePagePermission(
+    "/admin/works",
+    "work.read_private",
+  );
   const params = await searchParams;
   const query = searchParam(params.q);
-  const status = allowed(searchParam(params.status), ["all", "published", "processing", "hidden", "deleted"], "all");
-  const sort = allowed(searchParam(params.sort), ["default", "title", "release"], "default");
+  const status = allowed(
+    searchParam(params.status),
+    ["all", "published", "processing", "hidden", "deleted"],
+    "all",
+  );
+  const sort = allowed(
+    searchParam(params.sort),
+    ["default", "title", "release"],
+    "default",
+  );
   const page = parseAdminPage(params.page);
   const result = await searchEditableWorksForAdmin({
     query,
@@ -60,66 +72,99 @@ export default async function AdminWorksPage({
           { value: "all", label: "全部状态" },
           { value: "published", label: "已发布" },
           { value: "processing", label: "处理中" },
-          { value: "hidden", label: "隐藏" }, { value: "deleted", label: "已删除" },
+          { value: "hidden", label: "隐藏" },
+          { value: "deleted", label: "已删除" },
         ]}
         total={result.total}
       />
 
-      {result.items.length > 0 ? <TableWrap compact label="作品列表" minWidth={980}>
-        <thead>
-          <tr>
-            <th>作品</th>
-            <th>状态</th>
-            <th>规模</th>
-            <th>标签</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.items.map((work) => (
-            <tr key={work.id}>
-              <td>
-                <strong>{work.chineseTitle || work.originalTitle}</strong>
-                {work.chineseTitle ? <span className="text-sm text-muted">{work.originalTitle}</span> : null}
-              </td>
-              <td>
-                <StatusBadge kind="publication" value={work.status} />
-              </td>
-              <td>
-                {work.distribution === "external" ? (
-                  <span>外部下载</span>
-                ) : (
-                  <>
-                    {formatNumber(work.archiveVersionCount)} 个归档快照
-                    <span className="text-sm text-muted">{formatBytes(work.totalSizeBytes)}</span>
-                  </>
-                )}
-              </td>
-              <td>
-                {work.tags.length > 0 ? (
-                  <ChipList compact items={work.tags.slice(0, 6).map((tag) => ({ label: tag.name }))} />
-                ) : (
-                  <span className="text-sm text-muted">未填写</span>
-                )}
-              </td>
-              <td>
-                <Link className={buttonVariants()} href={`/admin/works/${work.id}`}>编辑</Link>
-              </td>
+      {result.items.length > 0 ? (
+        <TableWrap compact label="作品列表" minWidth={980}>
+          <thead>
+            <tr>
+              <th>作品</th>
+              <th>状态</th>
+              <th>规模</th>
+              <th>标签</th>
+              <th>操作</th>
             </tr>
-          ))}
-        </tbody>
-      </TableWrap> : <EmptyState title="没有找到匹配的作品。" />}
+          </thead>
+          <tbody>
+            {result.items.map((work) => (
+              <tr key={work.id}>
+                <td>
+                  <strong>{work.chineseTitle || work.originalTitle}</strong>
+                  {work.chineseTitle ? (
+                    <span className="text-sm text-muted">
+                      {work.originalTitle}
+                    </span>
+                  ) : null}
+                </td>
+                <td>
+                  <StatusBadge kind="publication" value={work.status} />
+                </td>
+                <td>
+                  {work.distribution === "external" ? (
+                    <span>外部下载</span>
+                  ) : (
+                    <>
+                      {formatNumber(work.archiveVersionCount)} 个归档快照
+                      <span className="text-sm text-muted">
+                        {formatBytes(work.totalSizeBytes)}
+                      </span>
+                    </>
+                  )}
+                </td>
+                <td>
+                  {work.tags.length > 0 ? (
+                    <ChipList
+                      compact
+                      items={work.tags
+                        .slice(0, 6)
+                        .map((tag) => ({ label: tag.name }))}
+                    />
+                  ) : (
+                    <span className="text-sm text-muted">未填写</span>
+                  )}
+                </td>
+                <td>
+                  {hasPermission(adminUser, "work.metadata.update_any") && (work.status !== "deleted" || hasPermission(adminUser, "work.status.update_any")) ? (
+                    <Link
+                      className={buttonVariants()}
+                      href={`/admin/works/${work.id}`}
+                    >
+                      编辑
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-muted">只读</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </TableWrap>
+      ) : (
+        <EmptyState title="没有找到匹配的作品。" />
+      )}
       <PaginationLinks
         basePath="/admin/works"
         page={page}
         pageSize={PAGE_SIZE}
         total={result.total}
-        params={{ q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort }}
+        params={{
+          q: query || undefined,
+          status: status === "all" ? undefined : status,
+          sort: sort === "default" ? undefined : sort,
+        }}
       />
     </main>
   );
 }
 
-function allowed<T extends string>(value: string, values: readonly T[], fallback: T): T {
-  return values.includes(value as T) ? value as T : fallback;
+function allowed<T extends string>(
+  value: string,
+  values: readonly T[],
+  fallback: T,
+): T {
+  return values.includes(value as T) ? (value as T) : fallback;
 }

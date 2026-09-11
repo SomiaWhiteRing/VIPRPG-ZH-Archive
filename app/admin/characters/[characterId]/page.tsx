@@ -13,7 +13,10 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { getCharacterForAdminEdit, listCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
+import {
+  getCharacterForAdminEdit,
+  listCharactersForAdmin,
+} from "@/lib/server/db/taxonomy-library";
 import { getCharacterPortraitLibraryForAdmin } from "@/lib/server/db/character-portrait-library";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
@@ -29,18 +32,25 @@ type AdminCharacterEditPageProps = {
   }>;
 };
 
-export default async function AdminCharacterEditPage({ params, searchParams }: AdminCharacterEditPageProps) {
+export default async function AdminCharacterEditPage({
+  params,
+  searchParams,
+}: AdminCharacterEditPageProps) {
   const { characterId: rawCharacterId } = await params;
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const characterId = parseId(rawCharacterId);
-  const adminUser = await requirePagePermission(`/admin/characters/${characterId}`, "character.update");
-  const [character, unreadInboxCount, candidates, portraitLibrary] = await Promise.all([
-    getCharacterForAdminEdit(characterId),
-    countUnreadInboxItemsForUser(adminUser),
-    listCharactersForAdmin(2000),
-    getCharacterPortraitLibraryForAdmin(characterId),
-  ]);
+  const adminUser = await requirePagePermission(
+    `/admin/characters/${characterId}`,
+    "character.metadata.update_any",
+  );
+  const [character, unreadInboxCount, candidates, portraitLibrary] =
+    await Promise.all([
+      getCharacterForAdminEdit(characterId),
+      countUnreadInboxItemsForUser(adminUser),
+      listCharactersForAdmin(2000),
+      getCharacterPortraitLibraryForAdmin(characterId),
+    ]);
 
   if (!character) {
     notFound();
@@ -68,7 +78,10 @@ export default async function AdminCharacterEditPage({ params, searchParams }: A
       />
 
       {formError ? (
-        <p className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+        <p
+          className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+          role="alert"
+        >
           {formError}
         </p>
       ) : null}
@@ -105,24 +118,45 @@ export default async function AdminCharacterEditPage({ params, searchParams }: A
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="名称">
-              <Input defaultValue={character.primaryName} name="primary_name" required />
+              <Input
+                defaultValue={character.primaryName}
+                name="primary_name"
+                required
+              />
             </FormField>
             <FormField label="原名">
-              <Input defaultValue={character.originalName} name="original_name" required />
+              <Input
+                defaultValue={character.originalName}
+                name="original_name"
+                required
+              />
             </FormField>
             <FormField label="简介" wide>
-              <Textarea defaultValue={character.description ?? ""} name="description" rows={6} />
+              <Textarea
+                defaultValue={character.description ?? ""}
+                name="description"
+                rows={6}
+              />
             </FormField>
             <FormField hint="每行一个；可添加、修改或删除。" label="日文别名">
               <Textarea
-                defaultValue={character.aliases.filter((alias) => alias.language === "ja").map((alias) => alias.name).join("\n")}
+                defaultValue={character.aliases
+                  .filter((alias) => alias.language === "ja")
+                  .map((alias) => alias.name)
+                  .join("\n")}
                 name="japanese_aliases"
                 rows={5}
               />
             </FormField>
-            <FormField hint="每行一个；角色名称本身不必重复填写。" label="中文别名">
+            <FormField
+              hint="每行一个；角色名称本身不必重复填写。"
+              label="中文别名"
+            >
               <Textarea
-                defaultValue={character.aliases.filter((alias) => alias.language === "zh").map((alias) => alias.name).join("\n")}
+                defaultValue={character.aliases
+                  .filter((alias) => alias.language === "zh")
+                  .map((alias) => alias.name)
+                  .join("\n")}
                 name="chinese_aliases"
                 rows={5}
               />
@@ -131,7 +165,11 @@ export default async function AdminCharacterEditPage({ params, searchParams }: A
         </Pane>
 
         <Pane heading="合并重复角色" tone="danger">
-          <FormField hint="提交后，登场关系会移至目标角色，当前角色会被删除。" hintId="character-merge-target-hint" label="目标角色">
+          <FormField
+            hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
+            hintId="character-merge-target-hint"
+            label="目标角色"
+          >
             <CharacterMergeTargetField
               candidates={candidates
                 .filter((candidate) => candidate.id !== character.id)

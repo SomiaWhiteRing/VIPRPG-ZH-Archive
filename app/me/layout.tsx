@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { canUpload } from "@/lib/server/db/users";
+import { canAccessOwnWorks } from "@/lib/authz/permissions";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { AccountNavigation } from "./account-navigation";
 
@@ -20,10 +20,10 @@ export default async function AccountLayout({ children }: { children: ReactNode 
               </div>
             </div>
           ) : null}
-          <AccountNavigation canUpload={Boolean(user && canUpload(user))} />
+          <AccountNavigation canUpload={Boolean(user && canAccessOwnWorks(user))} />
         </div>
         <div className="account-navigation-slot md:hidden">
-          <AccountNavigation canUpload={Boolean(user && canUpload(user))} />
+          <AccountNavigation canUpload={Boolean(user && canAccessOwnWorks(user))} />
         </div>
         <div className="min-w-0 pt-5 md:pt-0">{children}</div>
       </div>
