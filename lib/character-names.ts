@@ -2,6 +2,20 @@ import { normalizeEntityName } from "@/lib/entity-name";
 
 export type CharacterNameLanguage = "ja" | "zh";
 
+export const CHARACTER_ROLE_LABELS = {
+  main: "主角",
+  supporting: "配角",
+  cameo: "客串",
+  mentioned: "提及",
+  other: "其他",
+} as const;
+
+export type CharacterRoleKey = keyof typeof CHARACTER_ROLE_LABELS;
+
+export function isCharacterRoleKey(value: unknown): value is CharacterRoleKey {
+  return typeof value === "string" && Object.hasOwn(CHARACTER_ROLE_LABELS, value);
+}
+
 export type CharacterAliasSuggestion = {
   name: string;
   language: CharacterNameLanguage;
@@ -56,6 +70,7 @@ export type CharacterSelection =
 
 export type CharacterCreditSelection = {
   selection: CharacterSelection;
+  roleKey: CharacterRoleKey;
   portrait: CharacterPortraitChoice | null;
   faceSheetBlobSha256s: string[];
 };

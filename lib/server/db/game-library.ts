@@ -9,6 +9,7 @@ import type {
   CharacterPortrait,
   CharacterPortraitChoice,
 } from "@/lib/character-names";
+import { isCharacterRoleKey } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
 import { creatorSelectionKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
@@ -709,7 +710,6 @@ export async function updateOwnedWork(
     const existing = takeExistingCharacter(existingCharacters, credit);
     return {
       ...credit,
-      roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
       notes: existing?.notes ?? null,
@@ -895,7 +895,6 @@ export async function updateWorkForAdmin(
     const existing = takeExistingCharacter(existingCharacters, credit);
     return {
       ...credit,
-      roleKey: isCharacterRoleKey(existing?.roleKey) ? existing.roleKey : "supporting",
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
       notes: existing?.notes ?? null,
@@ -1085,7 +1084,6 @@ export async function createExternalWork(
         workId: workId as number,
         credits: characters.map((credit, index) => ({
           ...credit,
-          roleKey: "supporting",
           spoilerLevel: 0,
           sortOrder: index + 1,
           notes: null,
@@ -1988,6 +1986,7 @@ function characterSelectionFromGameCharacter(
     },
     portrait: character.portraitChoice,
     faceSheetBlobSha256s: [],
+    roleKey: isCharacterRoleKey(character.roleKey) ? character.roleKey : "supporting",
   };
 }
 
@@ -2042,12 +2041,6 @@ function assertPublicationDeclarations(
   if (isOriginal && isTranslation) {
     throw new HttpError(400, "原创声明与翻译声明不能同时选择");
   }
-}
-
-function isCharacterRoleKey(
-  value: string | undefined,
-): value is "main" | "supporting" | "cameo" | "mentioned" | "other" {
-  return value === "main" || value === "supporting" || value === "cameo" || value === "mentioned" || value === "other";
 }
 
 function uniqueText(values: string[]): string[] {

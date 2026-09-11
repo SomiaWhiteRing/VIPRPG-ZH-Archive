@@ -863,39 +863,39 @@ function normalizeMetadata(
     })
     .filter((title) => title.title);
 
-  const characters = (metadata.characters ?? [])
-    .map((character, index) => {
-      if (
-        !isRecord(character) ||
-        !isEnum(character.roleKey, [
-          "main",
-          "supporting",
-          "cameo",
-          "mentioned",
-          "other",
-        ] as const) ||
-        !Number.isSafeInteger(character.spoilerLevel) ||
-        character.spoilerLevel < 0 ||
-        !(
-          character.sortOrder === null ||
-          Number.isSafeInteger(character.sortOrder)
-        ) ||
-        !isNullableString(character.notes)
-      ) {
-        throw new HttpError(400, "Upload metadata character is invalid");
-      }
-      return {
-        ...parseCharacterCreditSelection({
-          selection: character.selection,
-          portrait: character.portrait,
-          faceSheetBlobSha256s: character.faceSheetBlobSha256s,
-        }),
+  const characters = (metadata.characters ?? []).map((character, index) => {
+    if (
+      !isRecord(character) ||
+      !isEnum(character.roleKey, [
+        "main",
+        "supporting",
+        "cameo",
+        "mentioned",
+        "other",
+      ] as const) ||
+      !Number.isSafeInteger(character.spoilerLevel) ||
+      character.spoilerLevel < 0 ||
+      !(
+        character.sortOrder === null ||
+        Number.isSafeInteger(character.sortOrder)
+      ) ||
+      !isNullableString(character.notes)
+    ) {
+      throw new HttpError(400, "Upload metadata character is invalid");
+    }
+    return {
+      ...parseCharacterCreditSelection({
+        selection: character.selection,
         roleKey: character.roleKey,
-        spoilerLevel: character.spoilerLevel,
-        sortOrder: character.sortOrder ?? index + 1,
-        notes: character.notes?.trim() || null,
-      };
-    });
+        portrait: character.portrait,
+        faceSheetBlobSha256s: character.faceSheetBlobSha256s,
+      }),
+      roleKey: character.roleKey,
+      spoilerLevel: character.spoilerLevel,
+      sortOrder: character.sortOrder ?? index + 1,
+      notes: character.notes?.trim() || null,
+    };
+  });
 
   const workStaff = metadata.workStaff
     .map((staff) => {

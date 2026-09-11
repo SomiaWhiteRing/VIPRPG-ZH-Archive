@@ -3,13 +3,12 @@ import type {
   CharacterPortraitChoice,
   CharacterSelection,
 } from "@/lib/character-names";
-import { characterNameKey } from "@/lib/character-names";
+import { characterNameKey, isCharacterRoleKey } from "@/lib/character-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { normalizeSha256 } from "@/lib/server/crypto/sha256";
 import { HttpError } from "@/lib/server/http/json";
 
 export type WorkCharacterCreditInput = CharacterCreditSelection & {
-  roleKey: "main" | "supporting" | "cameo" | "mentioned" | "other";
   spoilerLevel: number;
   sortOrder: number | null;
   notes: string | null;
@@ -54,8 +53,10 @@ export function parseCharacterSelection(value: unknown): CharacterSelection {
 
 export function parseCharacterCreditSelection(value: unknown): CharacterCreditSelection {
   if (!isRecord(value)) throw new HttpError(400, "角色关联格式不合法");
+  if (!isCharacterRoleKey(value.roleKey)) throw new HttpError(400, "角色身份不合法");
   return {
     selection: parseCharacterSelection(value.selection),
+    roleKey: value.roleKey,
     portrait: parsePortraitChoice(value.portrait),
     faceSheetBlobSha256s: parseFaceSheetHashes(value.faceSheetBlobSha256s),
   };
@@ -119,6 +120,19 @@ export async function prepareWorkCharacterStatements(input: {
     if (input.requirePortrait && !credit.portrait && character.has_default_portrait !== 1) {
       throw new HttpError(400, `角色“${credit.selection.originalName}”需要选择头像`);
     }
+    if (!character.display_name) {
+      const displayKey = characterNameKey(credit.selection.displayName);
+      setupStatements.push(
+        input.database
+          .prepare(
+            `INSERT OR IGNORE INTO character_aliases(
+               character_id,name,name_key,language,source
+             ) SELECT id,?,?,'zh',? FROM characters
+               WHERE id=? AND primary_name_key<>?`,
+          )
+          .bind(credit.selection.displayName, displayKey, input.source, character.id, displayKey),
+      );
+    }
     if (credit.portrait && sheet) {
       addPortraitReferenceStatements(
         setupStatements,
@@ -140,7 +154,7 @@ export async function prepareWorkCharacterStatements(input: {
         input.database,
         input.workId,
         character.id,
-        character.display_name as string,
+        character.display_name ?? credit.selection.displayName,
         credit,
       ),
     );
@@ -284,12 +298,6 @@ async function resolveExistingCharacters(
       throw new HttpError(
         409,
         `角色“${credits[index].selection.originalName}”已不存在，请重新选择`,
-      );
-    }
-    if (!row.display_name) {
-      throw new HttpError(
-        409,
-        `角色“${row.original_name}”不包含中文名称“${credits[index].selection.displayName}”，请重新选择`,
       );
     }
     return row;

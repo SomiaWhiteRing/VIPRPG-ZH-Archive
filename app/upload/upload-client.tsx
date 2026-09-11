@@ -23,8 +23,8 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
 import { CharacterPicker } from "@/app/upload/character-picker";
+import { CreatorTokenPicker } from "@/app/upload/creator-token-picker";
 import { StaffEditor, staffRows, staffRowErrors, extraStaffCredits, type StaffRow } from "@/app/upload/staff-editor";
-import { CreatorPicker } from "@/app/upload/creator-picker";
 import { inspectUploadSource } from "@/app/upload/archive-source";
 import {
   ArchiveSourcePicker,
@@ -411,8 +411,7 @@ export function UploadClient({
     }
     if (form.isTranslation && (!form.translators.length || form.translators.some((item) => !item?.displayName.trim()))) {
       setTranslatorError("请填写译者。");
-      const index = form.translators.findIndex((item) => !item?.displayName.trim());
-      document.getElementById(index > 0 ? `upload-translator-${index}` : "upload-translator")?.focus();
+      document.getElementById("upload-translator")?.focus();
       return;
     }
     if (!form.originalTitle.trim()) {
@@ -930,36 +929,28 @@ function MetadataFields({
           <Input disabled={disabled} id="upload-original-title" onChange={(event) => setForm((current) => ({ ...current, originalTitle: event.target.value }))} required value={form.originalTitle} />
         </WorkbenchField>
         <WorkbenchField controlId="upload-author" label="作者">
-          <div className="grid gap-2">
-            {form.authors.map((author, index) => <div className="flex items-start gap-2" key={index}>
-              <div className="min-w-0 flex-1"><CreatorPicker disabled={disabled} id={index ? `upload-author-${index}` : "upload-author"}
-                onChange={(value) => setForm((current) => ({ ...current, authors: current.authors.map((item, i) => i === index ? value : item) }))}
-                placeholder="搜索或新建作者" suggestions={suggestions.creators} value={author} /></div>
-              <Button disabled={disabled} type="button" size="sm" variant="ghost" aria-label={`移除作者 ${index + 1}`}
-                onClick={() => setForm((current) => ({ ...current, authors: current.authors.filter((_, i) => i !== index) }))}>移除</Button>
-            </div>)}
-            <Button disabled={disabled} type="button" size="sm" variant="ghost" className="w-fit"
-              onClick={() => setForm((current) => ({ ...current, authors: [...current.authors, null] }))}>＋ 添加作者</Button>
-          </div>
+          <CreatorTokenPicker
+            disabled={disabled}
+            id="upload-author"
+            label="作者"
+            onChange={(authors) => setForm((current) => ({ ...current, authors }))}
+            suggestions={suggestions.creators}
+            values={form.authors.filter((value): value is CreatorSelection => value !== null)}
+          />
         </WorkbenchField>
         {form.isTranslation ? (
           <WorkbenchField controlId="upload-translator" label="译者" required>
             <div className="grid gap-1.5">
-              {form.translators.map((translator, index) => (
-                <div className="flex items-start gap-2" key={index}>
-                  <div className="min-w-0 flex-1">
-                    <Label className="sr-only" htmlFor={index ? `upload-translator-${index}` : "upload-translator"}>译者 {index + 1}</Label>
-                    <CreatorPicker compact disabled={disabled} id={index ? `upload-translator-${index}` : "upload-translator"}
-                      value={translator} suggestions={suggestions.creators} placeholder="搜索或新建译者"
-                      invalid={Boolean(translatorError)} errorId={translatorError ? "upload-translator-error" : undefined}
-                      onChange={(value) => changeTranslator(form.translators.map((item, itemIndex) => itemIndex === index ? value : item))} />
-                  </div>
-                  {form.translators.length > 1 ? <Button type="button" size="sm" variant="ghost" disabled={disabled}
-                    aria-label={`移除译者 ${index + 1}`} onClick={() => changeTranslator(form.translators.filter((_, itemIndex) => itemIndex !== index))}>移除</Button> : null}
-                </div>
-              ))}
-              <Button type="button" className="w-fit" size="sm" variant="ghost" disabled={disabled}
-                onClick={() => changeTranslator([...form.translators, null])}>＋ 添加译者</Button>
+              <CreatorTokenPicker
+                disabled={disabled}
+                errorId={translatorError ? "upload-translator-error" : undefined}
+                id="upload-translator"
+                invalid={Boolean(translatorError)}
+                label="译者"
+                onChange={changeTranslator}
+                suggestions={suggestions.creators}
+                values={form.translators.filter((value): value is CreatorSelection => value !== null)}
+              />
               {translatorError ? (
                 <p className="text-sm text-red-700" id="upload-translator-error" role="alert">
                   {translatorError}
@@ -1169,9 +1160,10 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     tags: metadata.tags,
     characters: (metadata.characters ?? []).map(({
       selection,
+      roleKey,
       portrait,
       faceSheetBlobSha256s,
-    }) => ({ selection, portrait, faceSheetBlobSha256s })),
+    }) => ({ selection, roleKey, portrait, faceSheetBlobSha256s })),
     authors: authors.length ? authors.map((credit) => credit.selection) : [null],
     extraStaff: staffRows(metadata.workStaff.filter((staff) => staff.roleKey !== "author" && staff.roleKey !== "translator")),
     translators: metadata.workStaff.filter((staff) => staff.roleKey === "translator").map((staff) => staff.selection),
@@ -1203,7 +1195,7 @@ function buildMetadata(
       selection,
       portrait: resolved.portrait,
       faceSheetBlobSha256s: resolved.faceSheetBlobSha256s,
-      roleKey: existing?.roleKey ?? "supporting",
+      roleKey: credit.roleKey,
       spoilerLevel: existing?.spoilerLevel ?? 0,
       sortOrder: index + 1,
       notes: existing?.notes ?? null,

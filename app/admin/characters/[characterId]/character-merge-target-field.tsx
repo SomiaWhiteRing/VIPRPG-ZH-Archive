@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FocusEvent,
   type KeyboardEvent,
 } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -39,10 +38,11 @@ export function CharacterMergeTargetField({
   const [selected, setSelected] = useState<MergeCandidate | null>(null);
   const activeOptionRef = useRef<HTMLButtonElement>(null);
   const matches = useMemo(() => matchCandidates(candidates, query), [candidates, query]);
+  const menuOpen = open && Boolean(normalizeSearch(query));
 
   useEffect(() => {
-    if (open) activeOptionRef.current?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, open]);
+    if (menuOpen) activeOptionRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, menuOpen]);
 
   function choose(candidate: MergeCandidate) {
     setSelected(candidate);
@@ -85,21 +85,18 @@ export function CharacterMergeTargetField({
     }
   }
 
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-  }
-
   return (
-    <div className="grid gap-2" onBlur={onBlur}>
+    <div className="grid gap-2">
       <input name={name} readOnly type="hidden" value={selected?.id ?? ""} />
       <div className="relative">
         <Input
-          aria-activedescendant={open && matches.items[activeIndex] ? `${listId}-${matches.items[activeIndex].id}` : undefined}
+          aria-activedescendant={menuOpen && matches.items[activeIndex] ? `${listId}-${matches.items[activeIndex].id}` : undefined}
           aria-autocomplete="list"
           aria-controls={listId}
           aria-describedby={descriptionId}
-          aria-expanded={open}
+          aria-expanded={menuOpen}
           aria-label="目标角色"
+          onBlur={() => setOpen(false)}
           onChange={(event) => changeQuery(event.target.value)}
           onFocus={() => setOpen(Boolean(normalizeSearch(query)))}
           onKeyDown={onKeyDown}
@@ -108,7 +105,7 @@ export function CharacterMergeTargetField({
           type="search"
           value={query}
         />
-        {open ? (
+        {menuOpen ? (
           <div
             className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-72 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
             id={listId}
@@ -127,6 +124,7 @@ export function CharacterMergeTargetField({
                 onMouseDown={(event) => event.preventDefault()}
                 ref={index === activeIndex ? activeOptionRef : undefined}
                 role="option"
+                tabIndex={-1}
                 type="button"
                 variant="ghost"
               >
