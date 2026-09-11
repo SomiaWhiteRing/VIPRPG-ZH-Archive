@@ -977,30 +977,25 @@ END;
 CREATE TABLE IF NOT EXISTS creators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL COLLATE NOCASE,
-  name_key TEXT NOT NULL,
-  disambiguation TEXT NOT NULL DEFAULT '',
+  name_key TEXT NOT NULL UNIQUE,
   avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
   website_url TEXT,
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(name_key, disambiguation)
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS creator_aliases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   creator_id INTEGER NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  name_key TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE,
   source TEXT NOT NULL CHECK (source IN ('user', 'admin')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (creator_id, name_key)
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_creator_aliases_creator
   ON creator_aliases(creator_id, id);
-
-CREATE INDEX IF NOT EXISTS idx_creator_aliases_name_key ON creator_aliases(name_key);
 
 CREATE TRIGGER IF NOT EXISTS creators_avatar_require_active_blob
 BEFORE UPDATE OF avatar_blob_sha256 ON creators

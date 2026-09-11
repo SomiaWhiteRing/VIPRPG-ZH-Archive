@@ -43,7 +43,7 @@ export default async function AdminCreatorsPage({ searchParams }: { searchParams
           {result.items.map((creator) => (
             <tr key={creator.id}>
               <td>
-                <strong>{creator.name}{creator.disambiguation ? `（${creator.disambiguation}）` : ""}</strong>
+                <strong>{creator.name}</strong>
               </td>
               <td>
                 {formatNumber(creator.workCreditCount)} 个游戏

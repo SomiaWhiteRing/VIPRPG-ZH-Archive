@@ -36,8 +36,7 @@ export async function mergeCreators(actor: ArchiveUser, source: number, target: 
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO creator_aliases(creator_id,name,name_key,source)
       SELECT ?,name,name_key,'admin' FROM creators WHERE id=?`).bind(target,source),
-    db.prepare(`INSERT OR IGNORE INTO creator_aliases(creator_id,name,name_key,source)
-      SELECT ?,name,name_key,source FROM creator_aliases WHERE creator_id=?`).bind(target,source),
+    db.prepare(`UPDATE creator_aliases SET creator_id=? WHERE creator_id=?`).bind(target,source),
     db.prepare(`INSERT OR IGNORE INTO work_staff(work_id,creator_id,display_name,role_key,role_label,notes)
       SELECT work_id,?,display_name,role_key,role_label,notes FROM work_staff WHERE creator_id=?`).bind(target,source),
     db.prepare(`UPDATE comments SET creator_id=? WHERE creator_id=?`).bind(target,source),
