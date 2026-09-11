@@ -1,12 +1,14 @@
 import {
   PERMISSION_LIST,
   hasPermission,
+  hasUploaderAccess,
   parsePermissionKeys,
   type PermissionDefinition,
   type PermissionKey,
 } from "@/lib/authz/permissions";
 import {
   isCustomRolePriority,
+  ROLE_TEMPLATES,
   type RoleKind,
   type RoleStatus,
 } from "@/lib/authz/roles";
@@ -50,6 +52,30 @@ type RoleTarget = {
 
 type UserPriorityTarget = { status: string; priority: number };
 
+export class RoleConflictError extends HttpError {
+  constructor(public readonly currentRole: RoleSummary | null) {
+    super(409, "此角色已在其他页面修改。请核对最新配置后重新编辑。", "role_conflict");
+  }
+}
+
+const ROLE_EDIT_SNAPSHOT_SQL = `json_array(r.name,r.description,r.priority,r.status,
+  json((SELECT json_group_array(permission_key) FROM
+    (SELECT permission_key FROM role_permissions WHERE role_id=r.id ORDER BY permission_key))))`;
+
+const CURRENT_BOOTSTRAP_SQL = `EXISTS (SELECT 1 FROM users a JOIN user_roles ar ON ar.user_id=a.id
+  JOIN roles root ON root.id=ar.role_id WHERE a.id=? AND a.status='active'
+  AND root.kind='bootstrap_admin' AND root.status='active')`;
+
+export function userManagementScopeSql(permission: "user.role.assign" | "user.status.update", target: string): string {
+  return `EXISTS (SELECT 1 FROM users manager WHERE manager.id=? AND manager.status='active'
+    AND manager.id<>${target}
+    AND EXISTS (SELECT 1 FROM user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
+      JOIN role_permissions p ON p.role_id=r.id WHERE mr.user_id=manager.id AND p.permission_key='${permission}')
+    AND COALESCE((SELECT MAX(r.priority) FROM user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
+      WHERE mr.user_id=manager.id),0) > COALESCE((SELECT MAX(r.priority) FROM user_roles tr
+      JOIN roles r ON r.id=tr.role_id AND r.status='active' WHERE tr.user_id=${target}),0))`;
+}
+
 type RoleRequestTarget = {
   type: string;
   status: string;
@@ -92,16 +118,24 @@ export async function listRoles(): Promise<RoleSummary[]> {
   return roles.map((row) => ({ ...row, userCount: Number(row.user_count), permissionKeys: byRole.get(row.id) ?? [] }));
 }
 
-export async function listAssignableRoles(actor: ArchiveUser): Promise<RoleSummary[]> {
-  return (await listRoles()).filter((role) =>
-    role.key !== "user" && role.kind !== "bootstrap_admin" &&
-    role.priority < actor.maxRolePriority,
-  );
+export async function listUserRoleMemberships(userIds: number[]): Promise<Map<number, number[]>> {
+  const result = new Map<number, number[]>();
+  if (!userIds.length) return result;
+  const rows = await getD1().prepare(`SELECT user_id,role_id FROM user_roles WHERE user_id IN (${userIds.map(() => "?").join(",")})`)
+    .bind(...userIds).all<{ user_id: number; role_id: number }>();
+  for (const row of rows.results ?? []) result.set(row.user_id, [...(result.get(row.user_id) ?? []), row.role_id]);
+  return result;
+}
+
+export async function latestUploaderRequest(userId: number): Promise<{ status: string; id: number } | null> {
+  return getD1().prepare(`SELECT id,status FROM inbox_items WHERE type='role_change_request'
+    AND target_user_id=? AND requested_role_key_snapshot='uploader' ORDER BY id DESC LIMIT 1`)
+    .bind(userId).first<{ status: string; id: number }>();
 }
 
 export async function requestUploaderRole(actor: ArchiveUser): Promise<RoleRequestSummary> {
   if (actor.status !== "active") throw new HttpError(401, "账户不可用");
-  if (hasPermission(actor, "import_job.create")) {
+  if (hasUploaderAccess(actor)) {
     throw new HttpError(409, "当前账户已有上传权限");
   }
 
@@ -173,19 +207,26 @@ export async function createRole(input: {
   name: string;
   description?: string;
   priority: number;
+  template?: keyof typeof ROLE_TEMPLATES;
 }): Promise<number> {
   requireBootstrapAdmin(input.actor);
   const key = normalizeRoleKey(input.key);
   const name = normalizeRoleName(input.name);
   if (!isCustomRolePriority(input.priority)) throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
   const database = getD1();
+  const grants = input.template ? ROLE_TEMPLATES[input.template].permissionKeys : [];
   const [result] = await database.batch([
     database.prepare(`
       INSERT INTO roles (key, name, description, priority, kind)
-      VALUES (?, ?, ?, ?, 'custom')
-    `).bind(key, name, input.description?.trim() ?? "", input.priority),
-    auditStatement(database, input.actor, "role_created", { key, priority: input.priority }),
+      SELECT ?, ?, ?, ?, 'custom' WHERE ${CURRENT_BOOTSTRAP_SQL}
+    `).bind(key, name, input.description?.trim() ?? "", input.priority, input.actor.id),
+    requiredPreviousMutationAuditStatement(database, input.actor, "role_created", { key, priority: input.priority }),
+    ...grants.map((permission) => database.prepare(`
+      INSERT INTO role_permissions (role_id, permission_key)
+      SELECT id, ? FROM roles WHERE key=? AND changes()=1
+    `).bind(permission, key)),
   ]);
+  if (Number(result.meta.changes) !== 1) throw new HttpError(403, "当前账户已无权创建角色");
   const roleId = Number(result.meta.last_row_id);
   if (!Number.isSafeInteger(roleId) || roleId <= 0) throw new Error("创建角色失败");
   return roleId;
@@ -198,22 +239,29 @@ export async function updateRole(input: {
   description?: string;
   priority: number;
   status: RoleStatus;
+  expected: string;
 }): Promise<void> {
   requireBootstrapAdmin(input.actor);
   if (!isCustomRolePriority(input.priority)) throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
   const database = getD1();
   const role = await requiredCustomRole(input.roleId);
-  await database.batch([
-    database.prepare(`UPDATE roles SET name = ?, description = ?, priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND kind = 'custom'`)
-      .bind(normalizeRoleName(input.name), input.description?.trim() ?? "", input.priority, input.status, role.id),
-    auditStatement(database, input.actor, "role_updated", { roleId: role.id, priority: input.priority, status: input.status }),
+  const [result] = await database.batch([
+    database.prepare(`UPDATE roles AS r SET name = ?, description = ?, priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND kind = 'custom' AND ${ROLE_EDIT_SNAPSHOT_SQL}=? AND ${CURRENT_BOOTSTRAP_SQL}`)
+      .bind(normalizeRoleName(input.name), input.description?.trim() ?? "", input.priority, input.status, role.id, input.expected, input.actor.id),
+    requiredPreviousMutationAuditStatement(database, input.actor, "role_updated", {
+      roleId: role.id, before: input.expected, name: input.name.trim(), description: input.description?.trim() ?? "",
+      priority: input.priority, status: input.status,
+    }),
   ]);
+  if (Number(result.meta.changes) !== 1) throw new RoleConflictError((await listRoles()).find((item) => item.id === role.id) ?? null);
 }
 
 export async function replaceRolePermissions(input: {
   actor: ArchiveUser;
   roleId: number;
   permissionKeys: readonly unknown[];
+  expected: string;
 }): Promise<void> {
   requireBootstrapAdmin(input.actor);
   let permissions: PermissionKey[];
@@ -224,11 +272,20 @@ export async function replaceRolePermissions(input: {
   }
   const role = await requiredCustomRole(input.roleId);
   const database = getD1();
-  await database.batch([
-    database.prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(role.id),
-    ...permissions.map((permission) => database.prepare("INSERT INTO role_permissions (role_id, permission_key) VALUES (?, ?)").bind(role.id, permission)),
-    auditStatement(database, input.actor, "role_permissions_updated", { roleId: role.id, permissionCount: permissions.length }),
+  const eventKey = crypto.randomUUID();
+  const authorized = `EXISTS (SELECT 1 FROM auth_audit_logs WHERE user_id=? AND event_type='role_permissions_updated' AND json_extract(detail_json,'$.eventKey')=?)`;
+  const [result] = await database.batch([
+    database.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+      SELECT ?,?,'role_permissions_updated',json_object('eventKey',?,'roleId',r.id,
+        'before',json((SELECT json_group_array(permission_key) FROM (SELECT permission_key FROM role_permissions WHERE role_id=r.id ORDER BY permission_key))),
+        'after',json(?))
+      FROM roles r WHERE r.id=? AND r.kind='custom' AND ${ROLE_EDIT_SNAPSHOT_SQL}=? AND ${CURRENT_BOOTSTRAP_SQL}`)
+      .bind(input.actor.id, input.actor.email, eventKey, JSON.stringify([...permissions].sort()), role.id, input.expected, input.actor.id),
+    database.prepare(`DELETE FROM role_permissions WHERE role_id = ? AND ${authorized}`).bind(role.id, input.actor.id, eventKey),
+    ...permissions.map((permission) => database.prepare(`INSERT INTO role_permissions (role_id, permission_key) SELECT ?, ? WHERE ${authorized}`)
+      .bind(role.id, permission, input.actor.id, eventKey)),
   ]);
+  if (Number(result.meta.changes) !== 1) throw new RoleConflictError((await listRoles()).find((item) => item.id === role.id) ?? null);
 }
 
 export async function assignRoleToUser(input: {
@@ -255,7 +312,7 @@ export async function resolveRoleRequest(input: {
   itemId: number;
   decision: "approve" | "reject";
 }): Promise<void> {
-  if (!hasPermission(input.actor, "inbox.role_request.resolve")) {
+  if (!hasPermission(input.actor, "inbox.role_request.resolve") || !hasPermission(input.actor, "user.role.assign")) {
     throw new HttpError(403, "没有处理角色申请的权限");
   }
   const database = getD1();
@@ -291,6 +348,9 @@ export async function resolveRoleRequest(input: {
   const role = roleResult.results?.[0] as RoleTarget | undefined;
   assertManageableRoleChange(input.actor, request.target_user_id, target ?? null, role ?? null);
   const results = await database.batch([
+    roleChangeAuditStatement(database, input.actor, request.target_user_id, role!, "role_request_rejected", {
+      inboxItemId: input.itemId, targetUserId: request.target_user_id, roleId: request.requested_role_id,
+    }, false, input.itemId),
     resolvedRoleRequestStatement(database, {
       itemId: input.itemId,
       actorUserId: input.actor.id,
@@ -309,11 +369,6 @@ export async function resolveRoleRequest(input: {
       "角色申请未通过",
       `${input.actor.displayName} 未通过你的角色 ${role!.name} 申请。`,
     ),
-    requiredPreviousMutationAuditStatement(database, input.actor, "role_request_rejected", {
-      inboxItemId: input.itemId,
-      targetUserId: request.target_user_id,
-      roleId: request.requested_role_id,
-    }),
   ]);
   if (Number(results[0]?.meta.changes ?? 0) !== 1) {
     throw new HttpError(409, "这条申请已经被其他操作处理");
@@ -377,13 +432,12 @@ async function changeUserRole(input: {
   const actionLabel = input.action === "assigned" ? "分配" : "移除";
   const eventKey = crypto.randomUUID();
   const mutation = input.action === "assigned"
-    ? (sourceInboxItemId
-      ? database.prepare("INSERT INTO user_roles (user_id, role_id) SELECT ?, ? WHERE changes() = 1").bind(input.targetUserId, role!.id)
-      : database.prepare("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)").bind(input.targetUserId, role!.id))
-    : (sourceInboxItemId
-      ? database.prepare("DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND changes() = 1").bind(input.targetUserId, role!.id)
-      : database.prepare("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?").bind(input.targetUserId, role!.id));
+    ? database.prepare("INSERT INTO user_roles (user_id, role_id) SELECT ?, ? WHERE changes() = 1").bind(input.targetUserId, role!.id)
+    : database.prepare("DELETE FROM user_roles WHERE user_id = ? AND role_id = ? AND changes() = 1").bind(input.targetUserId, role!.id);
   const statements = [
+    roleChangeAuditStatement(database, input.actor, input.targetUserId, role!, input.action === "assigned" ? "user_role_assigned" : "user_role_removed", {
+      targetUserId: input.targetUserId, roleId: role!.id, roleKey: role!.key,
+    }, input.action === "assigned", sourceInboxItemId, input.action),
     ...(sourceInboxItemId ? [resolvedRoleRequestStatement(database, {
       itemId: sourceInboxItemId,
       actorUserId: input.actor.id,
@@ -409,14 +463,11 @@ async function changeUserRole(input: {
         ?, ?
       WHERE changes() = 1
     `).bind(input.actor.id, input.targetUserId, input.targetUserId, eventKey, "账户角色已调整", `${input.actor.displayName} 已${actionLabel}角色 ${role!.name}。`),
-    requiredPreviousMutationAuditStatement(database, input.actor, input.action === "assigned" ? "user_role_assigned" : "user_role_removed", {
-      targetUserId: input.targetUserId, roleId: role!.id, roleKey: role!.key,
-    }),
   ];
   const results = await database.batch(statements);
-  const mutationResult = results[sourceInboxItemId ? 1 : 0];
+  const mutationResult = results[sourceInboxItemId ? 2 : 1];
   if (Number(mutationResult?.meta.changes ?? 0) !== 1) {
-    throw new HttpError(409, "角色申请已经被其他操作处理");
+    throw new HttpError(409, "账户、角色或申请状态已变化，请刷新后重试。");
   }
 }
 
@@ -449,6 +500,28 @@ function assertManageableRoleChange(
   }
 }
 
+function roleChangeAuditStatement(
+  database: ReturnType<typeof getD1>, actor: ArchiveUser, targetUserId: number, role: RoleTarget,
+  eventType: string, detail: Record<string, string | number | boolean | null>, requireActiveRole: boolean,
+  inboxItemId: number | null = null, action?: "assigned" | "removed",
+) {
+  return database.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+    SELECT ?,?,?,? FROM users target JOIN roles role ON role.id=?
+    WHERE target.id=? AND target.status='active' AND role.kind<>'bootstrap_admin'
+      AND role.name=? AND role.priority=? AND (?=0 OR role.status='active')
+      AND ${userManagementScopeSql("user.role.assign", "target.id")}
+      AND role.priority < (SELECT MAX(r.priority) FROM user_roles ar JOIN roles r ON r.id=ar.role_id
+        WHERE ar.user_id=? AND r.status='active')
+      ${action ? `AND ${action === "assigned" ? "NOT " : ""}EXISTS (SELECT 1 FROM user_roles WHERE user_id=target.id AND role_id=role.id)` : ""}
+      ${action === "removed" ? "AND role.key<>'user'" : ""}
+      ${inboxItemId ? `AND EXISTS (SELECT 1 FROM inbox_items WHERE id=? AND type='role_change_request' AND status='pending'
+        AND target_user_id=target.id AND requested_role_id=role.id)
+        AND EXISTS (SELECT 1 FROM user_roles ar JOIN roles r ON r.id=ar.role_id AND r.status='active'
+          JOIN role_permissions p ON p.role_id=r.id WHERE ar.user_id=? AND p.permission_key='inbox.role_request.resolve')` : ""}`)
+    .bind(actor.id, actor.email, eventType, JSON.stringify(detail), role.id, targetUserId, role.name, role.priority,
+      requireActiveRole ? 1 : 0, actor.id, actor.id, ...(inboxItemId ? [inboxItemId, actor.id] : []));
+}
+
 function resolvedRoleRequestStatement(
   database: ReturnType<typeof getD1>,
   input: {
@@ -465,6 +538,7 @@ function resolvedRoleRequestStatement(
       resolved_by_user_id = ?,
       resolved_at = CURRENT_TIMESTAMP
     WHERE id = ?
+      AND changes() = 1
       AND type = 'role_change_request'
       AND status = 'pending'
       AND target_user_id = ?
@@ -493,18 +567,6 @@ function normalizeRoleName(value: string): string {
 
 function isRoleKind(value: string): value is RoleKind {
   return value === "built_in" || value === "bootstrap_admin" || value === "custom";
-}
-
-function auditStatement(
-  database: ReturnType<typeof getD1>,
-  actor: ArchiveUser,
-  eventType: string,
-  detail: Record<string, string | number | boolean | null>,
-) {
-  return database.prepare(`
-    INSERT INTO auth_audit_logs (user_id, email, event_type, detail_json)
-    VALUES (?, ?, ?, ?)
-  `).bind(actor.id, actor.email, eventType, JSON.stringify(detail));
 }
 
 function requiredPreviousMutationAuditStatement(

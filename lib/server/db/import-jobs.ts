@@ -65,7 +65,10 @@ export async function createImportJob(input: {
   filePolicyVersion: string;
 }): Promise<ImportJobRow> {
   if (input.targetWorkId !== null) {
-    await assertArchiveWorkCanReceiveVersion(input.targetWorkId, input.uploader);
+    await assertArchiveWorkCanReceiveVersion(
+      input.targetWorkId,
+      input.uploader,
+    );
   }
 
   let result: D1Result;
@@ -109,8 +112,6 @@ async function assertArchiveWorkCanReceiveVersion(
   workId: number,
   user: ArchiveUser,
 ): Promise<void> {
-  const canEditAny =
-    user.status === "active" && user.permissionKeys.includes("work.update");
   const row = await getD1()
     .prepare(
       `SELECT
@@ -137,7 +138,7 @@ async function assertArchiveWorkCanReceiveVersion(
     }>();
 
   if (!row || row.status === "deleted") throw new HttpError(404, "作品不存在");
-  if (!canEditAny && row.is_uploader !== 1) {
+  if (user.status !== "active" || !user.permissionKeys.includes("work.update_own") || row.is_uploader !== 1) {
     throw new HttpError(403, "无权更新这款作品");
   }
   if (
@@ -180,7 +181,15 @@ export async function requiredOwnedImportJob(
   user: ArchiveUser,
 ): Promise<ImportJobRow> {
   const job = await findImportJob(id);
-  if (!job || job.uploader_id !== user.id || (job.work_id && await getD1().prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`).bind(job.work_id).first())) {
+  if (
+    !job ||
+    job.uploader_id !== user.id ||
+    (job.work_id &&
+      (await getD1()
+        .prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`)
+        .bind(job.work_id)
+        .first()))
+  ) {
     throw new HttpError(404, "Import job not found");
   }
   return job;
@@ -413,7 +422,8 @@ export function parseImportJobId(value: string): number {
     throw new HttpError(400, "Invalid import job id");
   }
   const id = Number(value);
-  if (!Number.isSafeInteger(id)) throw new HttpError(400, "Invalid import job id");
+  if (!Number.isSafeInteger(id))
+    throw new HttpError(400, "Invalid import job id");
   return id;
 }
 

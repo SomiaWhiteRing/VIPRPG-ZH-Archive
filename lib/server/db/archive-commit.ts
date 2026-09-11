@@ -37,9 +37,7 @@ import {
 } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
-import {
-  ensureCharacterFaceSheets,
-} from "@/lib/server/storage/character-portraits";
+import { ensureCharacterFaceSheets } from "@/lib/server/storage/character-portraits";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
 
 export type CommitArchiveImportInput = {
@@ -132,7 +130,8 @@ export async function commitArchiveImport(
   }
 
   const sourceManifest = sourceManifestFromArchive(manifest);
-  const sourceManifestSha256 = await archiveSourceManifestSha256(sourceManifest);
+  const sourceManifestSha256 =
+    await archiveSourceManifestSha256(sourceManifest);
   if (
     !job.source_manifest_sha256 ||
     job.source_manifest_sha256 !== sourceManifestSha256
@@ -154,7 +153,10 @@ export async function commitArchiveImport(
   const corePackHashes = manifest.corePacks.map((corePack) =>
     normalizeSha256(corePack.sha256),
   );
-  const objectLedger = await loadArchiveObjectLedger(allBlobHashes, corePackHashes);
+  const objectLedger = await loadArchiveObjectLedger(
+    allBlobHashes,
+    corePackHashes,
+  );
   const missingBlobs = allBlobHashes.filter(
     (sha256) => !objectLedger.blobs.has(sha256),
   );
@@ -184,9 +186,7 @@ export async function commitArchiveImport(
   );
   if (metadata.target.mode === "update") {
     const preserved = await getD1()
-      .prepare(
-        `SELECT extra_json FROM works WHERE id=? LIMIT 1`,
-      )
+      .prepare(`SELECT extra_json FROM works WHERE id=? LIMIT 1`)
       .bind(workId)
       .first<{
         extra_json: string;
@@ -251,7 +251,9 @@ export async function commitArchiveImport(
   await writeArchiveObjectLinks({
     archiveVersionId,
     blobHashes,
-    corePacks: corePackHashes.map((sha256) => objectLedger.corePacks.get(sha256)!),
+    corePacks: corePackHashes.map((sha256) =>
+      objectLedger.corePacks.get(sha256)!,
+    ),
   });
   await finalizeArchiveCommit({
     importJobId: job.id,
@@ -290,7 +292,10 @@ export async function verifyArchiveSourceManifest(
   const corePackHashes = manifest.corePacks.map((corePack) =>
     normalizeSha256(corePack.sha256),
   );
-  const objectLedger = await loadArchiveObjectLedger(blobHashes, corePackHashes);
+  const objectLedger = await loadArchiveObjectLedger(
+    blobHashes,
+    corePackHashes,
+  );
   const missingBlobs = blobHashes.filter(
     (sha256) => !objectLedger.blobs.has(sha256),
   );
@@ -333,15 +338,14 @@ function sourceManifestFromArchive(
 async function archiveSourceManifestSha256(
   manifest: ArchiveSourceManifest,
 ): Promise<string> {
-  return sha256Hex(
-    new TextEncoder().encode(stableJson(manifest)).buffer,
-  );
+  return sha256Hex(new TextEncoder().encode(stableJson(manifest)).buffer);
 }
 
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     const encoded = JSON.stringify(value);
-    if (encoded === undefined) throw new Error("Source manifest is not JSON-safe");
+    if (encoded === undefined)
+      throw new Error("Source manifest is not JSON-safe");
     return encoded;
   }
   if (Array.isArray(value)) {
@@ -376,7 +380,10 @@ function validateBlobReferences(
     const blob = blobs.get(sha256);
     if (!blob) throw new HttpError(409, `Blob record is missing: ${sha256}`);
     if (blob.sizeBytes !== expectedSize) {
-      throw new HttpError(400, `Blob metadata does not match manifest: ${sha256}`);
+      throw new HttpError(
+        400,
+        `Blob metadata does not match manifest: ${sha256}`,
+      );
     }
   }
 }
@@ -414,13 +421,22 @@ async function loadArchiveObjectLedger(
         .bind(...chunk),
     });
   }
-  const ledger: ArchiveObjectLedger = { blobs: new Map(), corePacks: new Map() };
+  const ledger: ArchiveObjectLedger = {
+    blobs: new Map(),
+    corePacks: new Map(),
+  };
   if (queries.length === 0) return ledger;
   const results = await database.batch(queries.map((query) => query.statement));
   results.forEach((result, index) => {
     if (queries[index].kind === "blob") {
-      for (const row of (result.results ?? []) as Array<{ sha256: string; size_bytes: number }>) {
-        ledger.blobs.set(row.sha256, { sha256: row.sha256, sizeBytes: row.size_bytes });
+      for (const row of (result.results ?? []) as Array<{
+        sha256: string;
+        size_bytes: number;
+      }>) {
+        ledger.blobs.set(row.sha256, {
+          sha256: row.sha256,
+          sizeBytes: row.size_bytes,
+        });
       }
       return;
     }
@@ -466,9 +482,10 @@ function validateManifest(
   }
 
   if (manifest.game.isTranslation !== metadata.game.isTranslation) {
-    throw new Error("Manifest game translation declaration does not match metadata");
+    throw new Error(
+      "Manifest game translation declaration does not match metadata",
+    );
   }
-
 
   const snapshotFields: Array<[unknown, unknown, string]> = [
     [
@@ -603,7 +620,9 @@ function sumManifestFileSizes(files: ArchiveManifest["files"]): number {
   return total;
 }
 
-export function parseArchiveSourceManifest(value: unknown): ArchiveSourceManifest {
+export function parseArchiveSourceManifest(
+  value: unknown,
+): ArchiveSourceManifest {
   if (
     !isRecord(value) ||
     !isRecord(value.archiveVersion) ||
@@ -673,7 +692,10 @@ export function parseArchiveSourceManifest(value: unknown): ArchiveSourceManifes
         typeof file.storage.packId !== "string" ||
         typeof file.storage.entry !== "string"
       )
-        throw new HttpError(400, "Source manifest core pack reference is invalid");
+        throw new HttpError(
+          400,
+          "Source manifest core pack reference is invalid",
+        );
     } else {
       throw new HttpError(400, "Source manifest storage kind is invalid");
     }
@@ -777,7 +799,7 @@ function normalizeMetadata(
     typeof game.isOriginal !== "boolean" ||
     typeof game.isTranslation !== "boolean" ||
     typeof game.language !== "string" ||
-      !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
+    !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
     !isRecord(game.extra) ||
     !Array.isArray(game.browsingImageBlobSha256s)
   ) {
@@ -925,7 +947,10 @@ function normalizeMetadata(
       };
     })
     .filter(uniqueStaffEntry());
-  if (game.isTranslation !== workStaff.some((staff) => staff.roleKey === "translator")) {
+  if (
+    game.isTranslation !==
+    workStaff.some((staff) => staff.roleKey === "translator")
+  ) {
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   }
 
@@ -993,17 +1018,13 @@ function normalizeNullableWorkText(value: string | null): string | null {
 }
 
 function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
-  return unique(
-    [
-      ...metadata.game.browsingImageBlobSha256s,
-      ...(metadata.characters ?? []).flatMap((credit) =>
-        [
-          ...credit.faceSheetBlobSha256s,
-          ...(credit.portrait ? [credit.portrait.blobSha256] : []),
-        ],
-      ),
-    ],
-  );
+  return unique([
+    ...metadata.game.browsingImageBlobSha256s,
+    ...(metadata.characters ?? []).flatMap((credit) => [
+      ...credit.faceSheetBlobSha256s,
+      ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+    ]),
+  ]);
 }
 
 async function resolveTargetWork(
@@ -1108,17 +1129,7 @@ async function canEditWork(
   workId: number,
   user: ArchiveUser,
 ): Promise<boolean> {
-  if (hasWorkUpdatePermission(user)) {
-    return Boolean(
-      await getD1()
-        .prepare(
-          `SELECT 1 FROM works WHERE id = ? AND status <> 'deleted' LIMIT 1`,
-        )
-        .bind(workId)
-        .first(),
-    );
-  }
-  if (!user.permissionKeys.includes("work.update_own")) return false;
+  if (user.status !== "active" || !user.permissionKeys.includes("work.update_own")) return false;
   const row = await getD1()
     .prepare(
       `SELECT 1 AS allowed FROM work_uploaders wu JOIN works w ON w.id=wu.work_id WHERE wu.work_id = ? AND wu.user_id = ? AND w.status <> 'deleted' LIMIT 1`,
@@ -1128,16 +1139,10 @@ async function canEditWork(
   return Boolean(row);
 }
 
-function hasWorkUpdatePermission(user: ArchiveUser): boolean {
-  return (
-    user.status === "active" && user.permissionKeys.includes("work.update")
-  );
-}
 
 function isSupportedLanguage(value: string): boolean {
   return isLanguageCode(value);
 }
-
 
 async function findReusableDraftByManifest(
   workId: number,
@@ -1199,7 +1204,7 @@ async function finalizeArchiveCommit(input: {
   statements.push(
     database
       .prepare(
-      `UPDATE works
+        `UPDATE works
        SET original_title = ?,
          chinese_title = ?,
          description = ?,
@@ -1368,12 +1373,7 @@ async function finalizeArchiveCommit(input: {
          ) SELECT ?, id, ?, ? FROM media_assets
              WHERE blob_sha256 = ? AND kind = 'preview'`,
         )
-        .bind(
-          input.workId,
-          index + 1,
-          index === 0 ? 1 : 0,
-          sha256,
-        ),
+        .bind(input.workId, index + 1, index === 0 ? 1 : 0, sha256),
     );
   }
 
@@ -1547,7 +1547,7 @@ async function insertArchiveVersion(input: {
 
 async function writeArchiveObjectLinks(input: {
   archiveVersionId: number;
-  blobHashes: string[],
+  blobHashes: string[];
   corePacks: CorePackMetadata[];
 }): Promise<void> {
   const database = getD1();
@@ -1556,38 +1556,43 @@ async function writeArchiveObjectLinks(input: {
   const corePacks = new Map(input.corePacks.map((pack) => [pack.sha256, pack]));
   for (const chunk of chunkArray(blobHashes, 50)) {
     statements.push(
-      database.prepare(
-        `UPDATE blobs
+      database
+        .prepare(
+          `UPDATE blobs
          SET first_seen_archive_version_id=COALESCE(first_seen_archive_version_id,?)
          WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
-      )
-      .bind(input.archiveVersionId, ...chunk),
+        )
+        .bind(input.archiveVersionId, ...chunk),
     );
   }
   for (const chunk of chunkArray([...corePacks.keys()], 50)) {
     statements.push(
-      database.prepare(
-        `UPDATE core_packs
+      database
+        .prepare(
+          `UPDATE core_packs
          SET first_seen_archive_version_id=COALESCE(first_seen_archive_version_id,?)
          WHERE status='active' AND sha256 IN (${chunk.map(() => "?").join(",")})`,
-      )
-      .bind(input.archiveVersionId, ...chunk),
+        )
+        .bind(input.archiveVersionId, ...chunk),
     );
   }
   for (const chunk of chunkArray(blobHashes, 50)) {
     const placeholders = chunk.map(() => "(?, ?)").join(", ");
     const values = chunk.flatMap((sha256) => [input.archiveVersionId, sha256]);
     statements.push(
-      database.prepare(
-        `INSERT OR IGNORE INTO archive_version_blob_refs (
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO archive_version_blob_refs (
           archive_version_id,
           blob_sha256
         ) VALUES ${placeholders}`,
-      )
-      .bind(...values),
+        )
+        .bind(...values),
     );
   }
-  const corePackIds = uniqueNumbers([...corePacks.values()].map((pack) => pack.id));
+  const corePackIds = uniqueNumbers(
+    [...corePacks.values()].map((pack) => pack.id),
+  );
   for (const chunk of chunkArray(corePackIds, 50)) {
     const placeholders = chunk.map(() => "(?, ?)").join(", ");
     const values = chunk.flatMap((corePackId) => [
@@ -1595,13 +1600,14 @@ async function writeArchiveObjectLinks(input: {
       corePackId,
     ]);
     statements.push(
-      database.prepare(
-        `INSERT OR IGNORE INTO archive_version_core_pack_refs (
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO archive_version_core_pack_refs (
           archive_version_id,
           core_pack_id
         ) VALUES ${placeholders}`,
-      )
-      .bind(...values),
+        )
+        .bind(...values),
     );
   }
   if (statements.length) await database.batch(statements);

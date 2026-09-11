@@ -2,7 +2,7 @@ import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { hasPermission } from "@/lib/authz/permissions";
+import { canPublishWork } from "@/lib/authz/permissions";
 import { UploadClient } from "@/app/upload/upload-client";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
@@ -17,10 +17,7 @@ export default async function UploadPage() {
     redirect("/login?next=/upload");
   }
 
-  if (
-    !hasPermission(currentUser, "import_job.create") &&
-    !hasPermission(currentUser, "work.external_create")
-  ) {
+  if (!canPublishWork(currentUser)) {
     return (
       <main>
         <PageHeader title="需要上传者权限" />
@@ -28,7 +25,7 @@ export default async function UploadPage() {
         <Pane>
           <p>上传需要上传者权限，可在「我的账户」申请。</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Link className={buttonVariants()} href="/me">
+            <Link className={buttonVariants()} href="/me#upload-access">
               前往我的账户
             </Link>
           </div>

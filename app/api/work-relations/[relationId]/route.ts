@@ -12,9 +12,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ relationId: string }> },
 ) {
-  const auth = await requireAnyPermission(request, [
-    "relation.manage_any",
-  ]);
+  const auth = await requireAnyPermission(request, ["relation.delete_any"]);
   if ("response" in auth) return auth.response;
   try {
     await deleteWorkRelation(
@@ -31,9 +29,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ relationId: string }> },
 ) {
-  const auth = await requireAnyPermission(request, [
-    "relation.manage_any",
-  ]);
+  const auth = await requireAnyPermission(request, ["relation.update_any"]);
   if ("response" in auth) return auth.response;
   try {
     const body = await readBody(request);
@@ -52,9 +48,7 @@ export async function PATCH(
   }
 }
 
-async function readBody(
-  request: Request,
-): Promise<{ relationType: string }> {
+async function readBody(request: Request): Promise<{ relationType: string }> {
   const body = await readJsonObject(request, "Invalid relation body");
   if (typeof body.relationType !== "string")
     throw new HttpError(400, "Relation type must be a string");

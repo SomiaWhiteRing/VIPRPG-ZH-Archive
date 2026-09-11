@@ -12,7 +12,10 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { getTagForAdminEdit, listTagsForAdmin } from "@/lib/server/db/taxonomy-library";
+import {
+  getTagForAdminEdit,
+  listTagsForAdmin,
+} from "@/lib/server/db/taxonomy-library";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +29,18 @@ type AdminTagEditPageProps = {
   }>;
 };
 
-export default async function AdminTagEditPage({ params, searchParams }: AdminTagEditPageProps) {
+export default async function AdminTagEditPage({
+  params,
+  searchParams,
+}: AdminTagEditPageProps) {
   const { tagId: rawTagId } = await params;
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const tagId = parseId(rawTagId);
-  const adminUser = await requirePagePermission(`/admin/tags/${tagId}`, "tag.update");
+  const adminUser = await requirePagePermission(
+    `/admin/tags/${tagId}`,
+    "tag.metadata.update_any",
+  );
   const [tag, unreadInboxCount, candidates] = await Promise.all([
     getTagForAdminEdit(tagId),
     countUnreadInboxItemsForUser(adminUser),
@@ -64,7 +73,10 @@ export default async function AdminTagEditPage({ params, searchParams }: AdminTa
       />
 
       {formError ? (
-        <p className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+        <p
+          className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+          role="alert"
+        >
           {formError}
         </p>
       ) : null}
@@ -100,13 +112,21 @@ export default async function AdminTagEditPage({ params, searchParams }: AdminTa
               />
             </FormField>
             <FormField label="描述" wide>
-              <Textarea defaultValue={tag.description ?? ""} name="description" rows={6} />
+              <Textarea
+                defaultValue={tag.description ?? ""}
+                name="description"
+                rows={6}
+              />
             </FormField>
           </div>
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField hint="提交后，游戏关联会移至目标标签，当前标签会被删除。" hintId="tag-merge-target-hint" label="目标标签">
+          <FormField
+            hint="提交后，游戏关联会移至目标标签，当前标签会被删除。"
+            hintId="tag-merge-target-hint"
+            label="目标标签"
+          >
             <SelectField
               aria-describedby="tag-merge-target-hint"
               aria-label="目标标签"
@@ -115,7 +135,10 @@ export default async function AdminTagEditPage({ params, searchParams }: AdminTa
                 { value: "", label: "不合并" },
                 ...candidates
                   .filter((candidate) => candidate.id !== tag.id)
-                  .map((candidate) => ({ value: String(candidate.id), label: candidate.name })),
+                  .map((candidate) => ({
+                    value: String(candidate.id),
+                    label: candidate.name,
+                  })),
               ]}
             />
           </FormField>

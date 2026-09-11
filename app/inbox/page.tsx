@@ -21,7 +21,6 @@ export default async function InboxPage() {
 
   const items = await listInboxItemsForUser(currentUser);
   const unreadInboxCount = await countUnreadInboxItemsForUser(currentUser);
-  const canResolveRoleRequests = hasPermission(currentUser, "inbox.role_request.resolve");
 
   return (
     <main>
@@ -82,7 +81,7 @@ export default async function InboxPage() {
                       <StatusBadge kind="approval" value={item.status} />
                     </td>
                     <td>{formatDate(item.createdAt)}</td>
-                    <td>{renderActions(item, canResolveRoleRequests)}</td>
+                    <td>{renderActions(item)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -116,7 +115,7 @@ export default async function InboxPage() {
                     <dd>{formatDate(item.createdAt)}</dd>
                   </div>
                 </dl>
-                <div className="mt-3">{renderActions(item, canResolveRoleRequests)}</div>
+                <div className="mt-3">{renderActions(item)}</div>
               </li>
             ))}
           </ul>
@@ -126,20 +125,20 @@ export default async function InboxPage() {
   );
 }
 
-function renderActions(item: InboxItem, canManageInbox: boolean) {
-  if (item.type === "role_change_request" && item.status === "pending" && canManageInbox) {
+function renderActions(item: InboxItem) {
+  if (item.canApprove || item.canReject) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <form action={`/api/inbox/${item.id}/resolve`} method="post">
+        {item.canApprove ? <form action={`/api/inbox/${item.id}/resolve`} method="post">
           <input type="hidden" name="decision" value="approve" />
           <Button type="submit">通过</Button>
-        </form>
-        <form action={`/api/inbox/${item.id}/resolve`} method="post">
+        </form> : null}
+        {item.canReject ? <form action={`/api/inbox/${item.id}/resolve`} method="post">
           <input type="hidden" name="decision" value="reject" />
           <Button variant="outline" type="submit">
             驳回
           </Button>
-        </form>
+        </form> : null}
       </div>
     );
   }

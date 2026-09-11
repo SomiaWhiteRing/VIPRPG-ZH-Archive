@@ -12,13 +12,21 @@ type RouteContext = {
 };
 
 export async function PUT(request: Request, context: RouteContext) {
-  const auth = await requirePermission(request, "creator.update");
+  const auth = await requirePermission(request, "creator.metadata.update_any");
   if ("response" in auth) return auth.response;
   try {
-    if (!request.headers.get("content-type")?.toLowerCase().startsWith("image/png")) {
+    if (
+      !request.headers
+        .get("content-type")
+        ?.toLowerCase()
+        .startsWith("image/png")
+    ) {
       throw new HttpError(415, "头像必须是 PNG 文件");
     }
-    const creatorId = parsePositiveId((await context.params).creatorId, "creator id");
+    const creatorId = parsePositiveId(
+      (await context.params).creatorId,
+      "creator id",
+    );
     const sha256 = await storeAvatarPng(await request.arrayBuffer());
     await updateCreatorAvatar(creatorId, sha256);
     await writeAuthAuditLog({
@@ -34,10 +42,13 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const auth = await requirePermission(request, "creator.update");
+  const auth = await requirePermission(request, "creator.metadata.update_any");
   if ("response" in auth) return auth.response;
   try {
-    const creatorId = parsePositiveId((await context.params).creatorId, "creator id");
+    const creatorId = parsePositiveId(
+      (await context.params).creatorId,
+      "creator id",
+    );
     await updateCreatorAvatar(creatorId, null);
     await writeAuthAuditLog({
       userId: auth.user.id,

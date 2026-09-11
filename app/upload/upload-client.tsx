@@ -1,5 +1,7 @@
 "use client";
 
+import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
+
 import type { ConfirmedCreatorSelection } from "@/lib/creator-names";
 
 import { useRouter } from "next/navigation";
@@ -159,7 +161,7 @@ export function UploadClient({
 }) {
   const router = useRouter();
   const upload = useUploadController(currentUser.id);
-  const canArchiveUpload = currentUser.permissionKeys.includes("import_job.create");
+  const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) => currentUser.permissionKeys.includes(key));
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser.displayName, initialWork),
@@ -638,6 +640,9 @@ export function UploadClient({
                 if (option.distribution === "archive" && !canArchiveUpload) {
                   return "当前账户没有本站归档上传权限";
                 }
+                if (option.distribution === "external" && !initialWork && !currentUser.permissionKeys.includes("work.external_create")) {
+                  return "当前账户没有外链作品发布权限";
+                }
                 const targetArchive = option.distribution === "archive";
                 if (targetArchive === archiveMode) return null;
                 if (gameFileLocksType) return "已有游戏文件，不能切换到外链类型";
@@ -658,7 +663,7 @@ export function UploadClient({
                 {archiveMode ? (
                   <ArchiveSourcePicker
                     canceling={upload.canceling}
-                    disabled={preparing || Boolean(sourceSummary) || upload.active}
+                    disabled={!canArchiveUpload || preparing || Boolean(sourceSummary) || upload.active}
                     existingSource={sourceSummary ? null : existingArchive}
                     mode={mode}
                     onCancel={() => void cancelUpload()}

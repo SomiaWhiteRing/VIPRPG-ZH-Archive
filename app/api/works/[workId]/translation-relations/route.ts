@@ -11,7 +11,7 @@ export async function POST(
 ) {
   const auth = await requireAnyPermission(request, [
     "translation_relation.create",
-    "translation_relation.manage_any",
+    "translation_relation.create_any",
   ]);
   if ("response" in auth) return auth.response;
   try {
@@ -22,10 +22,10 @@ export async function POST(
     const body = await readBody(request);
     const result = await createTranslationRelation(
       {
-          sourceWorkId,
-          targetRole: body.targetRole as never,
-          targetWorkId: Number(body.targetWorkId),
-        },
+        sourceWorkId,
+        targetRole: body.targetRole as never,
+        targetWorkId: Number(body.targetWorkId),
+      },
       auth.user,
     );
     return json({ ok: true, ...result }, { status: 201 });
@@ -34,9 +34,7 @@ export async function POST(
   }
 }
 
-async function readBody(
-  request: Request,
-): Promise<{
+async function readBody(request: Request): Promise<{
   targetRole?: "original" | "translation";
   targetWorkId?: number;
 }> {

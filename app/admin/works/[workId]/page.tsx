@@ -14,12 +14,15 @@ import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getWorkForAdminEdit } from "@/lib/server/db/game-library";
 import { listCharacterSuggestions } from "@/lib/server/db/taxonomy-library";
 import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
-import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
+import { getRelationEditorCapabilities, canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import { AdminLanguageField } from "../language-field";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { StructuredWorkFields } from "../structured-work-fields";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
+import { WorkStaffFields } from "../work-staff-fields";
+import { listCreatorSuggestions } from "@/lib/server/db/creator-library";
+import type { StaffCredit } from "@/lib/staff-credits";
 import { listWorkMaintainers } from "@/lib/server/db/catalog-maintenance";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +35,19 @@ export default async function AdminWorkEditPage({
   const workId = parseId((await params).workId);
   const adminUser = await requirePagePermission(
     `/admin/works/${workId}`,
-    "work.update",
+    "work.metadata.update_any",
   );
-  const [work, unreadInboxCount, characterSuggestions] = await Promise.all([
+  const [work, unreadInboxCount, characterSuggestions, creatorSuggestions] = await Promise.all([
     getWorkForAdminEdit(workId),
     countUnreadInboxItemsForUser(adminUser),
     listCharacterSuggestions(),
+    listCreatorSuggestions(),
   ]);
   if (!work) notFound();
-  const maintainers = await listWorkMaintainers(workId);
-  const relationCapabilities = getRelationEditorCapabilities(adminUser, true);
+  const canUpdateStatus = hasPermission(adminUser, "work.status.update_any");
+  if (work.status === "deleted" && !canUpdateStatus) notFound();
+  const maintainers = hasPermission(adminUser, "work.maintainer.manage_any") ? await listWorkMaintainers(workId) : [];
+  const relationCapabilities = getRelationEditorCapabilities(adminUser);
   return (
     <main>
       <PageHeader
@@ -116,7 +122,7 @@ export default async function AdminWorkEditPage({
                 ]}
               />
             </FormField>
-            <FormField label="状态">
+            {canUpdateStatus ? <FormField label="状态">
               <SelectField
                 aria-label="状态"
                 defaultValue={work.status}
@@ -127,7 +133,8 @@ export default async function AdminWorkEditPage({
                   { value: "deleted", label: "已删除（仅后台可见）" },
                 ]}
               />
-            </FormField>
+            </FormField> : null}
+            <CheckboxField defaultChecked={work.isTranslation} label="本站翻译" name="is_translation" />
             <FormField label="简介" wide>
               <Textarea
                 defaultValue={work.description ?? ""}
@@ -138,6 +145,10 @@ export default async function AdminWorkEditPage({
           </div>
         </Pane>
         <Pane heading="作者、标签与资料">
+          <div className="mb-4"><WorkStaffFields suggestions={creatorSuggestions} credits={work.creators.map((creator) => ({
+            selection: { kind: "existing", creatorId: creator.id, name: creator.name, displayName: creator.displayName },
+            roleKey: creator.roleKey as StaffCredit["roleKey"], roleLabel: creator.roleLabel, notes: creator.notes,
+          }))} /></div>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField hint="每行一个别名。" label="别名">
               <Textarea
@@ -167,15 +178,15 @@ export default async function AdminWorkEditPage({
               查看公开页
             </Link>
           ) : null}
-          <Link
+          {hasPermission(adminUser, "archive_version.read_private") ? <Link
             className={buttonVariants({ variant: "outline" })}
             href="/admin/archive-versions"
           >
             查看归档历史
-          </Link>
+          </Link> : null}
         </StickySaveBar>
       </form>
-      <Pane heading="作品维护者">
+      {hasPermission(adminUser, "work.maintainer.manage_any") ? <Pane heading="作品维护者">
         <ul className="grid gap-2">
           {maintainers.map((person) => <li key={person.id} className="flex items-center justify-between gap-3">
             <span>{person.name} · {person.email}</span>
@@ -188,17 +199,17 @@ export default async function AdminWorkEditPage({
         </ul>
         <ConfirmingForm action={`/api/admin/works/${workId}/maintainers`} className="mt-4 flex items-end gap-3" confirmField="confirm"
           title="添加维护者" description="该账户将获得此作品的维护权限。">
-          <FormField label="维护者邮箱" hint="账户需已有上传权限。"><Input name="email" type="email" required /></FormField>
+          <FormField label="维护者邮箱" hint="账户需有“管理自己维护的作品”权限。"><Input name="email" type="email" required /></FormField>
           <Button type="submit">添加</Button>
         </ConfirmingForm>
-      </Pane>
-      <Pane heading="合并重复作品" tone="danger">
+      </Pane> : null}
+      {canMergeWorks(adminUser) ? <Pane heading="合并重复作品" tone="danger">
         <ConfirmingForm action={`/api/admin/works/${workId}/merge`} confirmField="target_id" title="确认合并作品？"
           description="保留目标作品资料和下载入口，将归档、评论、收藏与关联转移至目标，当前作品设为已删除。此操作无法撤销；浏览器存档仍按原 Work ID 保存，不会自动转移。">
           <FormField label="目标作品 ID"><Input name="target_id" type="number" min={1} required /></FormField>
           <Button className="mt-3" type="submit" variant="destructive">合并到目标作品</Button>
         </ConfirmingForm>
-      </Pane>
+      </Pane> : null}
       <Pane heading="关系资料">
         <p className="text-sm text-muted">
           普通关联、原版/译版关联和目录成员在上传完成后单独维护，不与游戏资料保存混在一起。

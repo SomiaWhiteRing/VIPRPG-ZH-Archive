@@ -11,7 +11,7 @@ export async function POST(
 ) {
   const auth = await requireAnyPermission(request, [
     "relation.create",
-    "relation.manage_any",
+    "relation.create_any",
   ]);
   if ("response" in auth) return auth.response;
   try {
@@ -31,9 +31,7 @@ export async function POST(
   }
 }
 
-async function readBody(
-  request: Request,
-): Promise<{
+async function readBody(request: Request): Promise<{
   targetWorkId?: number;
   relationType?: string;
 }> {
