@@ -7,7 +7,6 @@ export type CreatorAliasSuggestion = {
 export type CreatorSuggestion = {
   id: number;
   name: string;
-  disambiguation: string;
   aliases: CreatorAliasSuggestion[];
   workCount: number;
 };
@@ -21,7 +20,6 @@ export type CreatorSelection =
     }
   | {
       kind: "new";
-      disambiguation?: string;
       name: string;
       displayName: string;
     };
@@ -35,5 +33,5 @@ export type ConfirmedCreatorSelection = Extract<CreatorSelection, { kind: "exist
 export function creatorSelectionKey(value: CreatorSelection): string {
   return value.kind === "existing"
     ? `existing:${value.creatorId}`
-    : `new:${creatorNameKey(value.name)}:${value.disambiguation?.trim() ?? ""}`;
+    : `new:${creatorNameKey(value.name)}`;
 }

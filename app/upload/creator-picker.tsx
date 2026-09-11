@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
@@ -46,6 +46,7 @@ export function CreatorPicker({
     [identityLocked, inputValue, suggestions],
   );
   const menuId = `${id}-options`;
+  const menuOpen = open && !disabled && options.length > 0;
 
   function choose(option: CreatorOption) {
     onChange({
@@ -62,8 +63,8 @@ export function CreatorPicker({
     if (value?.kind === "existing") {
       onChange({ ...value, displayName: rawValue });
     } else {
-      onChange(rawValue ? { kind: "new", name: rawValue, displayName: rawValue, disambiguation: value?.kind === "new" ? value.disambiguation : "" } : null);
-      setOpen(true);
+      onChange(rawValue ? { kind: "new", name: rawValue, displayName: rawValue } : null);
+      setOpen(Boolean(creatorNameKey(rawValue)));
       setActiveIndex(0);
     }
   }
@@ -73,7 +74,7 @@ export function CreatorPicker({
     onChange(displayName
       ? { kind: "new", name: displayName, displayName }
       : null);
-    setOpen(true);
+    setOpen(Boolean(creatorNameKey(displayName)));
     setActiveIndex(0);
     window.requestAnimationFrame(() => document.getElementById(id)?.focus());
   }
@@ -90,34 +91,31 @@ export function CreatorPicker({
       setActiveIndex((current) => (current - 1 + options.length) % options.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (open && options[activeIndex]) choose(options[activeIndex]);
+      if (menuOpen && options[activeIndex]) choose(options[activeIndex]);
       else setOpen(false);
     } else if (event.key === "Escape") {
       setOpen(false);
     }
   }
 
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-  }
-
   return (
-    <div className={cn("grid gap-1.5", disabled && "opacity-60")} onBlur={onBlur}>
+    <div className={cn("grid gap-1.5", disabled && "opacity-60")}>
       {name ? <input name={name} readOnly type="hidden" value={value ? JSON.stringify(normalizedSelection(value)) : ""} /> : null}
       <div className="relative">
         <Input
           className={compact && identityLocked ? "pr-12" : undefined}
-          aria-activedescendant={open && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
+          aria-activedescendant={menuOpen && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
           aria-autocomplete="list"
           aria-controls={menuId}
           aria-describedby={errorId}
-          aria-expanded={open}
+          aria-expanded={menuOpen}
           aria-invalid={invalid || undefined}
           disabled={disabled}
           id={id}
+          onBlur={() => setOpen(false)}
           onChange={(event) => changeDisplayName(event.target.value)}
           onFocus={() => {
-            if (!identityLocked) setOpen(true);
+            setOpen(!identityLocked && Boolean(creatorNameKey(inputValue)));
           }}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
@@ -129,7 +127,7 @@ export function CreatorPicker({
             title={`已关联：${value.name}`} aria-label={`更换人物，当前关联：${value.name}`}
             onClick={unlockIdentity} size="sm" type="button" variant="ghost">更换</Button>
         ) : null}
-        {open && !disabled && options.length ? (
+        {menuOpen ? (
           <div
             className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
             id={menuId}
@@ -148,6 +146,7 @@ export function CreatorPicker({
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
                 size="sm"
+                tabIndex={-1}
                 type="button"
                 variant="ghost"
               >
@@ -157,15 +156,12 @@ export function CreatorPicker({
                     <span className="block text-xs text-muted">身份：{option.creator.name}</span>
                   ) : null}
                 </span>
-                <span className="shrink-0 text-xs text-muted">{option.creator.disambiguation || `人物 #${option.creator.id}`}</span>
+                <span className="shrink-0 text-xs text-muted">{option.creator.workCount} 部作品</span>
               </Button>
             ))}
           </div>
         ) : null}
       </div>
-      {value?.kind === "new" ? <Input aria-label="同名区分说明" placeholder="同名区分说明（所属团队或代表作）"
-        disabled={disabled} value={value.disambiguation ?? ""}
-        onChange={(event) => onChange({ ...value, disambiguation: event.target.value })} /> : null}
       {!compact ? <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs text-muted">
         {value?.kind === "existing" ? (
           <>
@@ -175,7 +171,7 @@ export function CreatorPicker({
             </Button>
           </>
         ) : value?.displayName.trim() ? (
-          <span>新建人物；如已收录，请从搜索结果选择。</span>
+          <span>保存时关联同名人物，未收录则新建。</span>
         ) : (
           <span>输入名称可搜索规范名和别名。</span>
         )}
@@ -184,16 +180,12 @@ export function CreatorPicker({
   );
 }
 
-function creatorOptions(
+export function creatorOptions(
   suggestions: CreatorSuggestion[],
   query: string,
 ): CreatorOption[] {
   const queryKey = creatorNameKey(query);
-  if (!queryKey) return suggestions.slice(0, 8).map((creator) => ({
-    creator,
-    matchedName: creator.name,
-    matchedKind: "规范名",
-  }));
+  if (!queryKey) return [];
   const matches = suggestions
     .flatMap((creator) => [
       { creator, matchedName: creator.name, matchedKind: "规范名" as const },

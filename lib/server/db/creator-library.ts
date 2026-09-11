@@ -20,7 +20,6 @@ export type CreatorWorkCredit = {
 export type PublicCreatorSummary = {
   id: number;
   name: string;
-  disambiguation: string;
   avatarBlobSha256: string | null;
   websiteUrl: string | null;
   bio: string | null;
@@ -41,7 +40,6 @@ export type AdminCreatorEdit = PublicCreatorSummary & {
 type CreatorRow = {
   id: number;
   name: string;
-  disambiguation: string;
   avatar_blob_sha256: string | null;
   website_url: string | null;
   extra_json: string;
@@ -106,7 +104,7 @@ export async function listCreatorSuggestions(): Promise<CreatorSuggestion[]> {
   const database = getD1();
   const [creatorsResult, aliasesResult] = await database.batch([
     database.prepare(
-      `SELECT c.id,c.name,c.disambiguation,
+      `SELECT c.id,c.name,
         (SELECT COUNT(DISTINCT ws.work_id) FROM work_staff ws WHERE ws.creator_id=c.id) AS work_count
        FROM creators c
        ORDER BY work_count DESC,c.name ASC
@@ -119,7 +117,6 @@ export async function listCreatorSuggestions(): Promise<CreatorSuggestion[]> {
   const rows = (creatorsResult.results ?? []) as Array<{
       id: number;
       name: string;
-      disambiguation: string;
       work_count: number;
     }>;
   const suggestions = new Map<number, CreatorSuggestion>();
@@ -127,7 +124,6 @@ export async function listCreatorSuggestions(): Promise<CreatorSuggestion[]> {
     suggestions.set(row.id, {
       id: row.id,
       name: row.name,
-      disambiguation: row.disambiguation,
       aliases: [],
       workCount: row.work_count,
     });
@@ -203,7 +199,6 @@ export async function getCreatorForAdminEdit(
 export async function updateCreatorForAdmin(input: {
   creatorId: number;
   name: string;
-  disambiguation: string;
   websiteUrl: string | null;
   bio: string | null;
   aliases: string[];
@@ -227,13 +222,16 @@ export async function updateCreatorForAdmin(input: {
       database
         .prepare(
           `UPDATE creators
-           SET name=?,name_key=?,disambiguation=?,website_url=?,extra_json=?,updated_at=CURRENT_TIMESTAMP
+           SET name=?,name_key=CASE
+             WHEN EXISTS(SELECT 1 FROM creator_aliases WHERE name_key=? AND creator_id<>?) THEN NULL
+             ELSE ? END,website_url=?,extra_json=?,updated_at=CURRENT_TIMESTAMP
            WHERE id=?`,
         )
         .bind(
           name,
           creatorNameKey(name),
-          input.disambiguation.trim(),
+          input.creatorId,
+          creatorNameKey(name),
           websiteUrl,
           JSON.stringify(extra),
           input.creatorId,
@@ -242,16 +240,18 @@ export async function updateCreatorForAdmin(input: {
         database
           .prepare(
             `INSERT INTO creator_aliases(creator_id,name,name_key,source)
-             VALUES(?,?,?,'admin')`,
+             VALUES(?,?,CASE
+               WHEN EXISTS(SELECT 1 FROM creators WHERE name_key=? AND id<>?) THEN NULL
+               ELSE ? END,'admin')`,
           )
-          .bind(input.creatorId, alias, creatorNameKey(alias)),
+          .bind(input.creatorId, alias, creatorNameKey(alias), input.creatorId, creatorNameKey(alias)),
       ),
     ]);
   } catch (error) {
     if (isCreatorIdentityConstraintError(error)) {
       throw new HttpError(
         409,
-        "已有同名且区分说明相同的人物，请选择不同说明或在后台合并重复人物。",
+        "名称或别名已被其他人物使用，请使用不同名称。",
         "creator_name_conflict",
       );
     }
@@ -286,7 +286,6 @@ export function parseCreatorEditForm(
   return {
     creatorId: id,
     name: String(form.get("name") ?? ""),
-    disambiguation: String(form.get("disambiguation") ?? "").trim(),
     websiteUrl: clean(form.get("website_url")),
     bio: clean(form.get("bio")),
     aliases: lines(form.get("aliases")),
@@ -345,7 +344,6 @@ function summarySql(): string {
     SELECT
       c.id,
       c.name,
-      c.disambiguation,
       c.avatar_blob_sha256,
       c.website_url,
       c.extra_json,
@@ -368,7 +366,6 @@ function mapSummary(row: CreatorRow): PublicCreatorSummary {
   return {
     id: row.id,
     name: row.name,
-    disambiguation: row.disambiguation,
     avatarBlobSha256: row.avatar_blob_sha256,
     websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
     bio: bio(row.extra_json),
@@ -416,7 +413,7 @@ function uniqueNames(values: string[]): string[] {
 }
 
 function isCreatorIdentityConstraintError(error: unknown): boolean {
-  return /unique constraint failed: creators\.name_key/i.test(
+  return /(?:unique|not null) constraint failed: (?:creators|creator_aliases)\.name_key/i.test(
     error instanceof Error ? error.message : String(error),
   );
 }

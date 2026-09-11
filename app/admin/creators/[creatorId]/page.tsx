@@ -72,7 +72,6 @@ export default async function AdminCreatorEditPage({ params }: AdminCreatorEditP
             <FormField label="名称">
               <Input defaultValue={creator.name} name="name" required type="text" />
             </FormField>
-            <FormField label="同名区分说明"><Input defaultValue={creator.disambiguation} name="disambiguation" placeholder="例如：所属团队或代表作" /></FormField>
             <FormField hint="每行一个；规范名称不必重复填写。" label="别名" wide>
               <Textarea defaultValue={creator.aliases.join("\n")} name="aliases" rows={5} />
             </FormField>

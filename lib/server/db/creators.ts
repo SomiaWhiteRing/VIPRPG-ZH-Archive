@@ -45,7 +45,7 @@ export function parseCreatorSelection(value: unknown): CreatorSelection {
     return { kind: "existing", creatorId, name, displayName };
   }
   if (value.kind === "new") {
-    return { kind: "new", name, displayName, disambiguation: normalizeEntityName(stringValue(value.disambiguation)) };
+    return { kind: "new", name, displayName };
   }
   throw new HttpError(400, "制作人员选择类型不合法，请重新选择后再提交。");
 }
@@ -99,6 +99,23 @@ export async function prepareWorkStaffStatements(input: {
     roleLabel: credit.roleLabel?.trim() || null,
     notes: credit.notes?.trim() || null,
   }));
+  const resolvedNames = new Map<string, { id: number; name: string } | null>();
+  for (const credit of credits) {
+    const selection = credit.selection;
+    if (selection.kind !== "new") continue;
+    const nameKey = creatorNameKey(selection.name);
+    if (!resolvedNames.has(nameKey)) {
+      resolvedNames.set(nameKey, await input.database
+        .prepare(`SELECT id,name FROM creators WHERE name_key=?
+          UNION SELECT c.id,c.name FROM creator_aliases ca
+          JOIN creators c ON c.id=ca.creator_id WHERE ca.name_key=?`)
+        .bind(nameKey, nameKey).first<{ id: number; name: string }>());
+    }
+    const existing = resolvedNames.get(nameKey);
+    if (existing) {
+      credit.selection = { kind: "existing", creatorId: existing.id, name: existing.name, displayName: selection.displayName };
+    }
+  }
   const existingIds = [
     ...new Set(
       credits.flatMap((credit) =>
@@ -125,16 +142,6 @@ export async function prepareWorkStaffStatements(input: {
   }
 
   const statements: D1PreparedStatement[] = [];
-  const checkedNewIdentities = new Set<string>();
-  for (const { selection } of credits) {
-    if (selection.kind !== "new") continue;
-    const key = creatorSelectionKey(selection);
-    if (checkedNewIdentities.has(key)) continue;
-    checkedNewIdentities.add(key);
-    const existing = await input.database.prepare(`SELECT id FROM creators WHERE name_key=? AND disambiguation=?`)
-      .bind(creatorNameKey(selection.name), selection.disambiguation ?? "").first<{ id: number }>();
-    if (existing) throw new HttpError(409, `“${selection.name}”已有相同区分说明的人物，请选择已有条目 #${existing.id}，或为另一位同名人物填写不同的区分说明。`);
-  }
   const seen = new Set<string>();
   for (const credit of credits) {
     const identity = creatorSelectionKey(credit.selection);
@@ -167,15 +174,19 @@ export async function prepareWorkStaffStatements(input: {
     statements.push(
       input.database
         .prepare(
-          `INSERT OR IGNORE INTO creators(name,name_key,disambiguation,extra_json)
-           VALUES(?,?,?,'{}')`,
+          `INSERT INTO creators(name,name_key,extra_json)
+           SELECT ?,?,'{}' WHERE NOT EXISTS (SELECT 1 FROM creator_aliases WHERE name_key=?)
+           ON CONFLICT(name_key) DO NOTHING`,
         )
-        .bind(selection.name, nameKey, selection.disambiguation ?? ""),
+        .bind(selection.name, nameKey, nameKey),
       input.database
         .prepare(
           `INSERT INTO work_staff(
              work_id,creator_id,display_name,role_key,role_label,notes
-           ) SELECT ?,id,?,?,?,? FROM creators WHERE name_key=? AND disambiguation=?`,
+           ) SELECT ?,id,?,?,?,? FROM (
+             SELECT id FROM creators WHERE name_key=?
+             UNION SELECT creator_id AS id FROM creator_aliases WHERE name_key=?
+           )`,
         )
         .bind(
           input.workId,
@@ -184,7 +195,7 @@ export async function prepareWorkStaffStatements(input: {
           credit.roleLabel,
           credit.notes,
           nameKey,
-          selection.disambiguation ?? "",
+          nameKey,
         ),
     );
   }
