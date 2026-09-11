@@ -1,5 +1,6 @@
 export type OriginalReleasePrecision = "year" | "month" | "day" | "unknown";
 
+export const ORIGINAL_RELEASE_DATE_REQUIRED_ERROR = "请选择发布日期。";
 export const ORIGINAL_RELEASE_DATE_FORMAT_ERROR =
   "发布日期格式应为 YYYY、YYYY-MM 或 YYYY-MM-DD。";
 
