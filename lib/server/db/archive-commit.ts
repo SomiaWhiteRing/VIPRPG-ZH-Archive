@@ -11,6 +11,7 @@ import { creatorSelectionKey } from "@/lib/creator-names";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  ORIGINAL_RELEASE_DATE_REQUIRED_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { assertTranslationLanguageChangeAllowed } from "@/lib/server/db/relations";
@@ -786,10 +787,10 @@ function normalizeMetadata(
     throw new HttpError(400, "Unsupported game language");
   }
   const releaseDate = parseOriginalReleaseDate(game.originalReleaseDate);
-  if (
-    !releaseDate ||
-    releaseDate.precision !== game.originalReleasePrecision
-  ) {
+  if (releaseDate && !releaseDate.value) {
+    throw new HttpError(400, ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
+  }
+  if (!releaseDate || releaseDate.precision !== game.originalReleasePrecision) {
     throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   }
   if (!isArchiveEngineFamily(game.engineFamily)) {

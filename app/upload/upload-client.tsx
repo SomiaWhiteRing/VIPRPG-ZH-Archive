@@ -19,6 +19,7 @@ import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
@@ -64,6 +65,7 @@ import { formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+  ORIGINAL_RELEASE_DATE_REQUIRED_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { cn } from "@/lib/ui/cn";
@@ -418,8 +420,9 @@ export function UploadClient({
       setSubmitError("请填写作品原名。");
       return;
     }
-    if (!parseOriginalReleaseDate(form.originalReleaseDate)) {
-      setSubmitError(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+    const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
+    if (!releaseDate?.value) {
+      setSubmitError(releaseDate ? ORIGINAL_RELEASE_DATE_REQUIRED_ERROR : ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
       document.getElementById("upload-release-date")?.focus();
       return;
     }
@@ -962,13 +965,15 @@ function MetadataFields({
         <WorkbenchField
           className="md:col-span-2"
           controlId="upload-release-date"
-          info="作品最初发表的日期"
           label="发布日期"
+          required
         >
-          <Input
+          <PrecisionDatePicker
             disabled={disabled}
             id="upload-release-date"
-            onChange={(event) => setForm((current) => ({ ...current, originalReleaseDate: event.target.value }))}
+            onChange={(value) => setForm((current) => ({ ...current, originalReleaseDate: value }))}
+            placeholder="作品最初发表的日期"
+            required
             value={form.originalReleaseDate}
           />
         </WorkbenchField>
@@ -1186,6 +1191,7 @@ function buildMetadata(
 ): ArchiveCommitMetadata {
   const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
   if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+  if (!releaseDate.value) throw new Error(ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
   const characterDefaults = groupCharacterDefaults(defaults.characters);
   const characters = form.characters.map((credit, index) => {
     const selection = credit.selection;
