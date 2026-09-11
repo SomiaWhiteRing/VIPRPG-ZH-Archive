@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState, type FocusEvent, type KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
+import { TokenChip, TokenInput } from "@/app/upload/token-input";
 import type { UploadTaxonomySuggestion } from "@/app/upload/upload-types";
 import { cn } from "@/lib/ui/cn";
 
@@ -38,9 +37,10 @@ export function TokenPicker({
   const selectedKeys = useMemo(() => new Set(values.map(tokenKey)), [values]);
   const options = useMemo<TokenOption[]>(() => {
     const normalizedQuery = tokenKey(query);
+    if (!normalizedQuery) return [];
     const matches: TokenOption[] = suggestions
       .filter((item) => !selectedKeys.has(tokenKey(item.value)))
-      .filter((item) => !normalizedQuery || tokenKey(item.value).includes(normalizedQuery))
+      .filter((item) => tokenKey(item.value).includes(normalizedQuery))
       .slice(0, 8)
       .map((item) => ({ ...item, kind: "existing" as const }));
     const normalizedValue = normalizeToken(query);
@@ -54,6 +54,7 @@ export function TokenPicker({
     .filter((item) => !selectedKeys.has(tokenKey(item.value)))
     .slice(0, 6);
   const menuId = `${id}-options`;
+  const menuOpen = open && !disabled && options.length > 0;
 
   function add(rawValue: string) {
     const value = normalizeToken(rawValue);
@@ -61,7 +62,7 @@ export function TokenPicker({
     onChange([...values, value]);
     setQuery("");
     setActiveIndex(0);
-    setOpen(true);
+    setOpen(false);
   }
 
   function remove(value: string) {
@@ -69,6 +70,7 @@ export function TokenPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "ArrowDown" && options.length) {
       event.preventDefault();
       setOpen(true);
@@ -83,7 +85,7 @@ export function TokenPicker({
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      const active = open ? options[activeIndex] : null;
+      const active = menuOpen ? options[activeIndex] : null;
       add(active?.value ?? query);
       return;
     }
@@ -94,62 +96,37 @@ export function TokenPicker({
     if (event.key === "Escape") setOpen(false);
   }
 
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-  }
-
   return (
-    <div className={cn("grid gap-2", disabled && "opacity-60")} onBlur={onBlur}>
+    <div className={cn("grid gap-2", disabled && "opacity-60")}>
       {name ? <input name={name} readOnly type="hidden" value={values.join("\n")} /> : null}
       <div className="relative">
-        <div
-          className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-md border border-input bg-card px-2 py-1.5 shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
-          onClick={() => document.getElementById(id)?.focus()}
+        <TokenInput
+          aria-activedescendant={menuOpen && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
+          aria-autocomplete="list"
+          aria-controls={menuId}
+          aria-expanded={menuOpen}
+          disabled={disabled}
+          id={id}
+          onBlur={() => setOpen(false)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setActiveIndex(0);
+            setOpen(Boolean(tokenKey(event.target.value)));
+          }}
+          onFocus={() => setOpen(Boolean(tokenKey(query)))}
+          onKeyDown={onKeyDown}
+          placeholder={values.length ? "继续添加" : placeholder}
+          role="combobox"
+          type="text"
+          value={query}
         >
           {values.map((value) => (
-            <span
-              className="inline-flex min-h-7 items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary"
-              key={tokenKey(value)}
-            >
+            <TokenChip disabled={disabled} key={tokenKey(value)} label={value} onRemove={() => remove(value)}>
               {value}
-              <Button
-                aria-label={`移除 ${value}`}
-                className="size-4 min-h-0 rounded-full p-0 hover:bg-primary/15"
-                disabled={disabled}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  remove(value);
-                }}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <X className="size-3" />
-              </Button>
-            </span>
+            </TokenChip>
           ))}
-          <Input
-            aria-activedescendant={open && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
-            aria-autocomplete="list"
-            aria-controls={menuId}
-            aria-expanded={open}
-            className="h-auto min-h-7 min-w-40 flex-1 border-0 bg-transparent px-1 py-0 text-sm shadow-none outline-none placeholder:text-muted focus-visible:border-0 focus-visible:ring-0"
-            disabled={disabled}
-            id={id}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={onKeyDown}
-            placeholder={values.length ? "继续添加" : placeholder}
-            role="combobox"
-            type="text"
-            value={query}
-          />
-        </div>
-        {open && !disabled && options.length ? (
+        </TokenInput>
+        {menuOpen ? (
           <div
             className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
             id={menuId}
@@ -168,6 +145,7 @@ export function TokenPicker({
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
                 size="sm"
+                tabIndex={-1}
                 type="button"
                 variant="ghost"
               >

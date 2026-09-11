@@ -6,32 +6,38 @@ import {
   useMemo,
   useRef,
   useState,
-  type FocusEvent,
+  type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import {
   CharacterCreateDialog,
   type CharacterNameInput,
 } from "@/app/components/characters/character-create-dialog";
 import { Button, buttonVariants } from "@/app/components/ui/button";
+import { badgeVariants } from "@/app/components/ui/badge";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { SelectField } from "@/app/components/ui/select";
+import { TokenChip, TokenInput } from "@/app/upload/token-input";
 import type {
   CharacterCreditSelection,
   CharacterFaceSheet,
   CharacterNameLanguage,
   CharacterPortrait as CharacterPortraitValue,
+  CharacterRoleKey,
   CharacterSelection,
   CharacterSuggestion,
 } from "@/lib/character-names";
 import {
+  CHARACTER_ROLE_LABELS,
   characterNameKey,
   characterSelectionKey,
   characterSelectionLabel,
+  isCharacterRoleKey,
 } from "@/lib/character-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
@@ -48,6 +54,7 @@ type ExistingOption = {
 type CreateOption = { kind: "create"; query: string };
 type CharacterOption = ExistingOption | CreateOption;
 const EMPTY_FACE_SHEET_FILES: Record<number, File[]> = {};
+const CHARACTER_ROLE_OPTIONS = Object.entries(CHARACTER_ROLE_LABELS).map(([value, label]) => ({ value, label }));
 
 export function CharacterPicker({
   disabled = false,
@@ -76,8 +83,10 @@ export function CharacterPicker({
   const [createOpen, setCreateOpen] = useState(false);
   const [createQuery, setCreateQuery] = useState("");
   const [portraitIndex, setPortraitIndex] = useState<number | null>(null);
+  const [aliasEdit, setAliasEdit] = useState<{ index: number; value: string; roleKey: CharacterRoleKey } | null>(null);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
+  const aliasReturnFocusRef = useRef<HTMLElement | null>(null);
   const [portraitErrors, setPortraitErrors] = useState<Record<number, string>>({});
   const suggestionsById = useMemo(
     () => new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])),
@@ -121,9 +130,10 @@ export function CharacterPicker({
     ? suggestionsById.get(activeCredit.selection.characterId) ?? null
     : null;
   const menuId = `${id}-options`;
+  const menuOpen = open && !disabled && options.length > 0;
 
   function addExisting(selection: Extract<CharacterSelection, { kind: "existing" }>) {
-    onChange([...values, { selection, portrait: null, faceSheetBlobSha256s: [] }]);
+    onChange([...values, { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] }]);
     setQuery("");
     setActiveIndex(0);
     setOpen(false);
@@ -136,7 +146,23 @@ export function CharacterPicker({
       if (current === null || current < index) return current;
       return current === index ? null : current - 1;
     });
+    setAliasEdit((current) => {
+      if (!current || current.index < index) return current;
+      return current.index === index ? null : { ...current, index: current.index - 1 };
+    });
     onChange(values.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function saveAlias(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (disabled || !aliasEdit) return;
+    const displayName = normalizeEntityName(aliasEdit.value);
+    if (!displayName || !values[aliasEdit.index]) return;
+    onChange(values.map((credit, index) => index === aliasEdit.index
+      ? { ...credit, selection: { ...credit.selection, displayName }, roleKey: aliasEdit.roleKey }
+      : credit));
+    setAliasEdit(null);
   }
 
   function updatePortrait(
@@ -161,7 +187,7 @@ export function CharacterPicker({
 
   function addNewCharacter({ originalName, displayName }: CharacterNameInput) {
     const selection: CharacterSelection = { kind: "new", originalName, displayName };
-    onChange([...values, { selection, portrait: null, faceSheetBlobSha256s: [] }]);
+    onChange([...values, { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] }]);
     setQuery("");
     setActiveIndex(0);
     portraitReturnFocusRef.current = document.getElementById(id);
@@ -229,6 +255,7 @@ export function CharacterPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "ArrowDown" && options.length) {
       event.preventDefault();
       setOpen(true);
@@ -243,44 +270,118 @@ export function CharacterPicker({
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      const active = open ? options[activeIndex] : null;
+      const active = menuOpen ? options[activeIndex] : options[0];
       if (!active) return;
       if (active.kind === "create") startCreate(active.query);
       else addExisting(active.selection);
       return;
     }
+    if (event.key === "Backspace" && !query && values.length) {
+      remove(values.length - 1);
+      return;
+    }
     if (event.key === "Escape") setOpen(false);
-  }
-
-  function onBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
   }
 
   return (
     <>
-      <div className={cn("grid gap-3", disabled && "opacity-60")} onBlur={onBlur}>
+      <div className={cn("grid gap-2", disabled && "opacity-60")}>
         {name ? <input name={name} readOnly type="hidden" value={JSON.stringify(values)} /> : null}
         <div className="relative">
-          <Input
-            aria-activedescendant={open && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
+          <TokenInput
+            aria-activedescendant={menuOpen && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
             aria-autocomplete="list"
             aria-controls={menuId}
-            aria-expanded={open}
+            aria-expanded={menuOpen}
             disabled={disabled}
             id={id}
+            onBlur={() => setOpen(false)}
             onChange={(event) => {
               setQuery(event.target.value);
               setActiveIndex(0);
-              setOpen(true);
+              setOpen(Boolean(characterNameKey(event.target.value)));
             }}
-            onFocus={() => setOpen(true)}
+            onFocus={() => setOpen(Boolean(characterNameKey(query)))}
             onKeyDown={onKeyDown}
-            placeholder="输入角色日语原名"
+            placeholder={values.length ? "添加更多" : "本作的主要角色（或更多）"}
+            preserveHoverRows
             role="combobox"
             type="text"
             value={query}
-          />
-          {open && !disabled && options.length ? (
+          >
+            {values.map((credit, index) => {
+              const selection = credit.selection;
+              const label = selection.displayName;
+              const suggestion = selection.kind === "existing"
+                ? suggestionsById.get(selection.characterId) ?? null
+                : null;
+              const files = faceSheetFiles[index] ?? [];
+              const missingPortrait = !hasPortrait(credit, suggestion);
+              return (
+                <TokenChip
+                  className={missingPortrait ? "bg-red-700/10 text-red-700" : undefined}
+                  disabled={disabled}
+                  key={`${characterSelectionKey(selection)}:${index}`}
+                  label={label}
+                  onRemove={() => remove(index)}
+                >
+                  <Button
+                    aria-controls={`${id}-portrait-dialog`}
+                    aria-expanded={portraitIndex === index}
+                    aria-haspopup="dialog"
+                    aria-label={`选择 ${label} 的头像`}
+                    className="group/portrait relative size-6 min-h-0 cursor-pointer overflow-hidden rounded-sm p-0 hover:bg-transparent"
+                    disabled={disabled}
+                    onClick={(event) => {
+                      portraitReturnFocusRef.current = event.currentTarget;
+                      setOpen(false);
+                      setPortraitIndex(index);
+                    }}
+                    size="icon"
+                    title={`${label} · ${portraitStatus(credit, suggestion, files)}`}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <LocalPortraitPreview credit={credit} files={files} portrait={resolvePortrait(credit, suggestion)} />
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 text-white opacity-0 transition-opacity group-hover/portrait:opacity-100 group-focus-visible/portrait:opacity-100 motion-reduce:transition-none">
+                      <Pencil className="size-3.5" />
+                    </span>
+                  </Button>
+                  <span className="group/character-name inline-flex min-w-0 items-center">
+                    <span className="truncate">{label}</span>
+                    <span className={cn(badgeVariants({ variant: "secondary" }), "ml-1.5 min-h-5 shrink-0 px-1.5 py-0 text-[10px] font-normal")}>
+                      {CHARACTER_ROLE_LABELS[credit.roleKey]}
+                    </span>
+                    {!disabled ? (
+                      <Button
+                        aria-controls={`${id}-alias-dialog`}
+                        aria-expanded={aliasEdit?.index === index}
+                        aria-haspopup="dialog"
+                        aria-label={`编辑 ${label} 的详细信息`}
+                        data-token-hover-expansion=""
+                        className="pointer-events-none size-5 min-h-0 w-0 shrink-0 -translate-x-1 cursor-pointer overflow-hidden rounded-sm p-0 text-current opacity-0 transition-[width,opacity,transform] group-hover/character-name:pointer-events-auto group-hover/character-name:w-5 group-hover/character-name:translate-x-0 group-hover/character-name:opacity-100 group-focus-within/character-name:pointer-events-auto group-focus-within/character-name:w-5 group-focus-within/character-name:translate-x-0 group-focus-within/character-name:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:w-5 [@media(hover:none)]:translate-x-0 [@media(hover:none)]:opacity-100 motion-reduce:transition-none"
+                        onClick={(event) => {
+                          aliasReturnFocusRef.current = event.detail === 0
+                            ? event.currentTarget
+                            : document.getElementById(id);
+                          setOpen(false);
+                          setAliasEdit({ index, value: selection.displayName, roleKey: credit.roleKey });
+                        }}
+                        size="icon"
+                        title="编辑详细信息"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Pencil className="size-3" />
+                      </Button>
+                    ) : null}
+                  </span>
+                  {missingPortrait ? <span className="shrink-0 font-normal">待选头像</span> : null}
+                </TokenChip>
+              );
+            })}
+          </TokenInput>
+          {menuOpen ? (
             <div
               className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-72 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
               id={menuId}
@@ -300,6 +401,7 @@ export function CharacterPicker({
                   onClick={() => option.kind === "create" ? startCreate(option.query) : addExisting(option.selection)}
                   onMouseDown={(event) => event.preventDefault()}
                   role="option"
+                  tabIndex={-1}
                   type="button"
                   variant="ghost"
                 >
@@ -318,7 +420,7 @@ export function CharacterPicker({
                           size={36}
                           toneKey={option.selection.characterId}
                         />
-                        <span className="truncate">{characterSelectionLabel(option.selection)}</span>
+                        <span className="truncate">{option.selection.displayName}</span>
                       </span>
                       <span className="shrink-0 text-xs text-muted">{option.meta}</span>
                     </>
@@ -329,63 +431,7 @@ export function CharacterPicker({
           ) : null}
         </div>
 
-        {values.length ? (
-          <div className="grid gap-2">
-            {values.map((credit, index) => {
-              const selection = credit.selection;
-              const key = characterSelectionKey(selection);
-              const suggestion = selection.kind === "existing"
-                ? suggestionsById.get(selection.characterId) ?? null
-                : null;
-              const files = faceSheetFiles[index] ?? [];
-              const portrait = resolvePortrait(credit, suggestion);
-              return (
-                <div
-                  className="grid grid-cols-[48px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border border-border bg-card p-2.5"
-                  key={`${key}:${index}`}
-                >
-                  <LocalPortraitPreview credit={credit} files={files} portrait={portrait} />
-                  <div className="min-w-0">
-                    <strong className="block truncate text-sm">{characterSelectionLabel(selection)}</strong>
-                    <span className={cn("block truncate text-xs", hasPortrait(credit, suggestion) ? "text-muted" : "text-red-700")}>
-                      {portraitStatus(credit, suggestion, files)}
-                    </span>
-                  </div>
-                  <Button
-                    aria-controls={`${id}-portrait-dialog`}
-                    aria-expanded={portraitIndex === index}
-                    aria-haspopup="dialog"
-                    disabled={disabled}
-                    onClick={(event) => {
-                      portraitReturnFocusRef.current = event.currentTarget;
-                      setPortraitIndex(index);
-                    }}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    选择头像
-                  </Button>
-                  <Button
-                    aria-label={`移除 ${characterSelectionLabel(selection)}`}
-                    disabled={disabled}
-                    onClick={() => remove(index)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <span>已选 {values.length} 项登场</span>
-          <span>先选角色，再确定本作使用的脸图</span>
-        </div>
+        <span className="text-xs text-muted">输入后按 Enter 添加</span>
         {recommended.length ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-xs text-muted">常用角色</span>
@@ -411,12 +457,71 @@ export function CharacterPicker({
                   size={24}
                   toneKey={item.id}
                 />
-                {item.originalName} · {item.primaryName}
+                {item.primaryName}
               </Button>
             ))}
           </div>
         ) : null}
       </div>
+
+      <Dialog.Root open={aliasEdit !== null} onOpenChange={(nextOpen) => !nextOpen && setAliasEdit(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-surface"
+            id={`${id}-alias-dialog`}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              const returnFocus = aliasReturnFocusRef.current?.isConnected
+                ? aliasReturnFocusRef.current
+                : document.getElementById(id);
+              returnFocus?.focus();
+            }}
+          >
+            <Dialog.Title className="m-0 text-lg font-bold">编辑详细信息</Dialog.Title>
+            <Dialog.Description className="sr-only">设置角色在本作品中的别名和身份，随作品保存。</Dialog.Description>
+            <form className="grid gap-4" onSubmit={saveAlias}>
+              <div className="grid gap-2">
+                <Label className="flex items-baseline gap-2" htmlFor={`${id}-alias-name`}>
+                  别名
+                  <span className="text-xs font-normal text-muted">在本作中的名称</span>
+                </Label>
+                <Input
+                  disabled={disabled}
+                  id={`${id}-alias-name`}
+                  onChange={(event) => setAliasEdit((current) => current ? { ...current, value: event.target.value } : null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && (event.nativeEvent.isComposing || event.keyCode === 229)) {
+                      event.preventDefault();
+                    }
+                  }}
+                  required
+                  value={aliasEdit?.value ?? ""}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`${id}-alias-role`}>身份</Label>
+                <SelectField
+                  disabled={disabled}
+                  id={`${id}-alias-role`}
+                  onValueChange={(roleKey) => {
+                    if (isCharacterRoleKey(roleKey)) {
+                      setAliasEdit((current) => current ? { ...current, roleKey } : null);
+                    }
+                  }}
+                  options={CHARACTER_ROLE_OPTIONS}
+                  required
+                  value={aliasEdit?.roleKey ?? "main"}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Dialog.Close asChild><Button type="button" variant="outline">取消</Button></Dialog.Close>
+                <Button disabled={disabled || !normalizeEntityName(aliasEdit?.value ?? "")} type="submit">保存</Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root open={Boolean(activeCredit)} onOpenChange={(nextOpen) => !nextOpen && setPortraitIndex(null)}>
         <Dialog.Portal>
@@ -436,7 +541,7 @@ export function CharacterPicker({
               <div>
                 <Dialog.Title className="m-0 text-lg font-bold">选择本作头像</Dialog.Title>
                 <Dialog.Description className="mt-0.5 text-sm text-muted">
-                  {activeCredit ? characterSelectionLabel(activeCredit.selection) : ""} · 左侧选素材表，右侧选格子
+                  {activeCredit?.selection.displayName ?? ""} · 左侧选素材表，右侧选格子
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -934,11 +1039,11 @@ function LocalPortraitPreview({
   const selection = credit.selection;
   return (
     <CharacterPortrait
-      className="size-12 rounded-md text-base"
+      className="size-6 shrink-0 rounded-sm text-[11px]"
       displayName={selection.displayName}
       portrait={localPortrait}
       previewSrc={preview?.src ?? null}
-      size={48}
+      size={24}
       toneKey={selection.kind === "existing" ? selection.characterId : selection.originalName}
     />
   );
