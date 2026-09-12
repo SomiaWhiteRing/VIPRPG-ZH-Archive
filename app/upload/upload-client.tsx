@@ -28,6 +28,8 @@ import { EnginePicker } from "@/app/upload/engine-picker";
 import { CharacterPicker } from "@/app/upload/character-picker";
 import { CreatorTokenPicker } from "@/app/upload/creator-token-picker";
 import { StaffEditor, staffRows, staffRowErrors, extraStaffCredits, type StaffRow } from "@/app/upload/staff-editor";
+import { WorkMoreInfoEditor, moreInfoRows, type MoreInfoRow } from "@/app/components/work/work-more-info-editor";
+import { moreInfoItemError, normalizeWorkMoreInfo, type WorkMoreInfo } from "@/lib/work-more-info";
 import { inspectUploadSource } from "@/app/upload/archive-source";
 import {
   ArchiveSourcePicker,
@@ -91,6 +93,7 @@ type FlatMetadata = {
   characters: CharacterCreditSelection[];
   authors: (CreatorSelection | null)[];
   extraStaff: StaffRow[];
+  moreInfo: MoreInfoRow[];
   translators: (CreatorSelection | null)[];
   originalReleaseDate: string;
   isOriginal: boolean;
@@ -135,6 +138,7 @@ export type UploadInitialWork = {
   characterCredits: CharacterCredit[];
   authors: UploadStaffCredit[];
   extraStaff: UploadStaffCredit[];
+  moreInfo: WorkMoreInfo[];
   translators: UploadStaffCredit[];
   externalDownloadUrl: string | null;
   sourceUrl: string | null;
@@ -193,6 +197,7 @@ export function UploadClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [staffErrorsVisible, setStaffErrorsVisible] = useState(false);
+  const [moreInfoErrorsVisible, setMoreInfoErrorsVisible] = useState(false);
   const [translatorError, setTranslatorError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const coverCandidates = useMemo(
@@ -401,12 +406,21 @@ export function UploadClient({
     setSubmitSuccess(null);
     setTranslatorError(null);
     setStaffErrorsVisible(true);
+    setMoreInfoErrorsVisible(true);
     const staffErrors = staffRowErrors(form.extraStaff);
     const invalidStaffIndex = staffErrors.findIndex(Boolean);
     if (invalidStaffIndex >= 0) {
       const details = document.getElementById("upload-more-settings") as HTMLDetailsElement | null;
       if (details) details.open = true;
       requestAnimationFrame(() => document.getElementById(`staff-${form.extraStaff[invalidStaffIndex].id}-${staffErrors[invalidStaffIndex]?.field}`)?.focus());
+      return;
+    }
+    const invalidMoreInfoIndex = form.moreInfo.findIndex((item) => moreInfoItemError(item));
+    if (invalidMoreInfoIndex >= 0) {
+      const details = document.getElementById("upload-more-settings") as HTMLDetailsElement | null;
+      if (details) details.open = true;
+      const row = form.moreInfo[invalidMoreInfoIndex];
+      requestAnimationFrame(() => document.getElementById(`upload-more-info-${row.id}-${moreInfoItemError(row)?.field}`)?.focus());
       return;
     }
     if (form.isOriginal && form.isTranslation) {
@@ -726,6 +740,7 @@ export function UploadClient({
                     setImageSelections={setImageSelections}
                     suggestions={suggestions}
                     staffErrorsVisible={staffErrorsVisible}
+                    moreInfoErrorsVisible={moreInfoErrorsVisible}
                     translatorError={translatorError}
                   />
                 )}
@@ -897,6 +912,7 @@ function MetadataFields({
   suggestions,
   translatorError,
   staffErrorsVisible,
+  moreInfoErrorsVisible,
 }: {
   characterFaceSheetFiles: CharacterFaceSheetFiles;
   changeCharacterFaceSheetFiles: (index: number, files: File[]) => void;
@@ -918,14 +934,17 @@ function MetadataFields({
   };
   translatorError: string | null;
   staffErrorsVisible: boolean;
+  moreInfoErrorsVisible: boolean;
 }) {
   const moreSettingsRef = useRef<HTMLDetailsElement>(null);
   const hasStaff = form.extraStaff.length > 0;
+  const hasMoreInfo = form.moreInfo.length > 0;
+  const filledMoreInfoCount = form.moreInfo.filter((item) => item.title.trim() && item.body.trim()).length;
   const filledStaffCount = form.extraStaff.filter((row) => row.roleKey && row.selection?.displayName.trim() &&
     (row.roleKey !== "other" || row.roleLabel.trim())).length;
   useEffect(() => {
-    if (hasStaff && moreSettingsRef.current) moreSettingsRef.current.open = true;
-  }, [hasStaff]);
+    if ((hasStaff || hasMoreInfo) && moreSettingsRef.current) moreSettingsRef.current.open = true;
+  }, [hasStaff, hasMoreInfo]);
   return (
     <div>
       <h2 className="mb-4 text-lg font-bold">作品资料</h2>
@@ -1031,7 +1050,7 @@ function MetadataFields({
           />
         </WorkbenchField>
         <details className="md:col-span-2" id="upload-more-settings" ref={moreSettingsRef}>
-          <summary className="cursor-pointer py-1 text-sm font-bold">更多设置{filledStaffCount > 0 ? <span className="ml-2 text-xs font-normal text-muted">制作人员 {filledStaffCount}</span> : null}</summary>
+          <summary className="cursor-pointer py-1 text-sm font-bold">更多设置{filledStaffCount > 0 ? <span className="ml-2 text-xs font-normal text-muted">制作人员 {filledStaffCount}</span> : null}{filledMoreInfoCount > 0 ? <span className="ml-2 text-xs font-normal text-muted">更多信息 {filledMoreInfoCount}</span> : null}</summary>
           <div className="mt-3 grid gap-4 border-t border-border pt-4">
             <WorkbenchField label="预览图">
               <PreviewPicker disabled={disabled} existingCount={existingPreviewCount} files={imageSelections.browsingImages} onChange={(browsingImages) => setImageSelections((current) => ({ ...current, browsingImages }))} />
@@ -1053,6 +1072,8 @@ function MetadataFields({
             </WorkbenchField>
             <StaffEditor rows={form.extraStaff} disabled={disabled} suggestions={suggestions.creators} showErrors={staffErrorsVisible}
               onChange={(extraStaff) => setForm((current) => ({ ...current, extraStaff }))} />
+            <WorkMoreInfoEditor id="upload-more-info" rows={form.moreInfo} disabled={disabled} showErrors={moreInfoErrorsVisible}
+              onChange={(moreInfo) => setForm((current) => ({ ...current, moreInfo }))} />
           </div>
         </details>
       </div>
@@ -1120,6 +1141,7 @@ function initialForm(
       characters: initialWork.characters,
       authors: initialWork.authors.length ? initialWork.authors.map((credit) => credit.selection) : [null],
       extraStaff: staffRows(initialWork.extraStaff),
+      moreInfo: moreInfoRows(initialWork.moreInfo),
       translators: initialWork.translators.length ? initialWork.translators.map((credit) => credit.selection) : [newTranslator(displayName)],
       originalReleaseDate: initialWork.originalReleaseDate ?? "",
       isOriginal: initialWork.isOriginal,
@@ -1140,6 +1162,7 @@ function initialForm(
     characters: [],
     authors: [null],
     extraStaff: [],
+    moreInfo: [],
     translators: [newTranslator(displayName)],
     originalReleaseDate: "",
     isOriginal: false,
@@ -1176,6 +1199,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     }) => ({ selection, roleKey, portrait, faceSheetBlobSha256s })),
     authors: authors.length ? authors.map((credit) => credit.selection) : [null],
     extraStaff: staffRows(metadata.workStaff.filter((staff) => staff.roleKey !== "author" && staff.roleKey !== "translator")),
+    moreInfo: moreInfoRows(normalizeWorkMoreInfo(metadata.game.extra.moreInfo)),
     translators: metadata.workStaff.filter((staff) => staff.roleKey === "translator").map((staff) => staff.selection),
     originalReleaseDate: metadata.game.originalReleaseDate ?? "",
     isOriginal: metadata.game.isOriginal,
@@ -1219,7 +1243,7 @@ function buildMetadata(
     notes: authorDefaults.get(creatorSelectionKey(selection))?.notes ?? null,
   }));
   return {
-    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: releaseDate.value, originalReleasePrecision: releaseDate.precision, engineFamily: form.engineFamily, isOriginal: form.isOriginal, isTranslation: form.isTranslation, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: {} },
+    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: releaseDate.value, originalReleasePrecision: releaseDate.precision, engineFamily: form.engineFamily, isOriginal: form.isOriginal, isTranslation: form.isTranslation, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: { moreInfo: normalizeWorkMoreInfo(form.moreInfo) } },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
     archiveVersion: { sourceName: null, sourceUrl: cleanNullable(form.sourceUrl) },
     workTitles: uniqueTokens(form.aliasTitles).map((title) => ({ title, language: null, titleType: "alias" })),
@@ -1278,6 +1302,7 @@ async function submitExternalWork(
 ): Promise<{ workId: number; translators: ConfirmedCreatorSelection[] }> {
   if (!images.cover) throw new Error("外链作品必须提供封面图。");
   const body = new FormData();
+  body.set("more_info", JSON.stringify(normalizeWorkMoreInfo(form.moreInfo)));
   body.set("original_title", form.originalTitle.trim());
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
@@ -1320,6 +1345,7 @@ async function submitOwnedWork(
   faceSheets: PreparedCharacterFaceSheets,
 ): Promise<ConfirmedCreatorSelection[]> {
   const body = new FormData();
+  body.set("more_info", JSON.stringify(normalizeWorkMoreInfo(form.moreInfo)));
   body.set("distribution", distribution);
   body.set("original_title", form.originalTitle.trim());
   body.set("chinese_title", form.chineseTitle.trim());

@@ -21,6 +21,7 @@ import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { StructuredWorkFields } from "../structured-work-fields";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { WorkStaffFields } from "../work-staff-fields";
+import { WorkMoreInfoFields } from "@/app/components/work/work-more-info-editor";
 import { listCreatorSuggestions } from "@/lib/server/db/creator-library";
 import type { StaffCredit } from "@/lib/staff-credits";
 import { listWorkMaintainers } from "@/lib/server/db/catalog-maintenance";
@@ -167,6 +168,9 @@ export default async function AdminWorkEditPage({
               />
             </div>
           </div>
+        </Pane>
+        <Pane>
+          <WorkMoreInfoFields items={work.moreInfo} />
         </Pane>
         <StickySaveBar>
           <Button type="submit">保存游戏资料</Button>
