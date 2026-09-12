@@ -17,7 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans">
+    // Browser extensions (e.g. Immersive Translate) may add root attributes before hydration.
+    <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
         <SiteHeader />
         {children}
