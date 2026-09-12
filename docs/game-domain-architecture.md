@@ -27,6 +27,7 @@ ArchiveVersion
 Work 回答“这是什么作品”。它拥有：
 
 - 原名、中文名、别名和简介；
+- 用户自定义标题与正文的“更多信息”；
 - 语言、原始发布日期、引擎、原创声明和翻译声明；
 - 封面、浏览图和外部链接；
 - 作者/制作人员、登场角色和标签；
@@ -205,6 +206,10 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 1. 经常查询、筛选或校验的字段进入明确列。
 2. 多值、可关联或需要完整性的资料进入规范化关系表。
 3. 低频、只展示、不参与权限和查询的资料可以进入经过 JSON schema 约束的 `extra_json`。
+
+“更多信息”使用 `works.extra_json.moreInfo` 保存有序的 `{ title: string, body: string }[]`，结构与长度由 `lib/work-more-info.ts` 统一校验；未填写时为空列表。它属于可编辑的 Work 资料，不属于 ArchiveVersion 或不可变 manifest，也不进入搜索索引。
+
+所有资料保存入口以完整列表替换 `moreInfo`，空列表表示清空；其他 `extra_json` 键保持原值。条目没有独立身份、关联或修订历史，权限沿用作品资料维护权限。
 
 没有管理员动态建字段的真实需求前，不引入 EAV、自定义字段系统或通用 entity/attribute 抽象。
 

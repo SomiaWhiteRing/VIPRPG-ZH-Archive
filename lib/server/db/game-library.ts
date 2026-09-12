@@ -1,4 +1,6 @@
 import type { StaffCredit } from "@/lib/staff-credits";
+import { normalizeWorkMoreInfo, type WorkMoreInfo } from "@/lib/work-more-info";
+import { parseWorkMoreInfo, parseWorkMoreInfoJson } from "@/lib/server/http/work-more-info";
 import { hasPermission } from "@/lib/authz/permissions";
 import {
   isArchiveEngineFamily,
@@ -144,6 +146,7 @@ export type GameWorkSummary = {
   distribution: WorkDistribution;
 };
 export type GameWorkDetail = GameWorkSummary & {
+  moreInfo: WorkMoreInfo[];
   aliases: string[];
   creators: GameCreatorCredit[];
   media: GameMediaAsset[];
@@ -154,6 +157,7 @@ export type GameWorkDetail = GameWorkSummary & {
   parallelTranslations: GameTranslationRelation[];
 };
 export type AdminWorkEdit = {
+  moreInfo: WorkMoreInfo[];
   id: number;
   originalTitle: string;
   chineseTitle: string | null;
@@ -238,6 +242,7 @@ type SummaryRow = {
   download_link_count: number;
 };
 type WorkRow = {
+  extra_json: string;
   id: number;
   original_title: string;
   chinese_title: string | null;
@@ -275,6 +280,7 @@ type ArchiveEditRow = {
   source_url: string | null;
 };
 type WorkEditInput = {
+  moreInfo: WorkMoreInfo[];
   workId: number;
   chineseTitle: string | null;
   description: string | null;
@@ -295,6 +301,7 @@ type WorkEditInput = {
 };
 
 export type ExternalWorkInput = {
+  moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
   originalTitle: string;
   chineseTitle: string | null;
@@ -365,6 +372,7 @@ export type UploaderWorkEdit = AdminWorkEdit & {
 };
 
 export type UploaderWorkUpdateInput = {
+  moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
   workId: number;
   distribution: "archive" | "external";
@@ -493,11 +501,11 @@ export async function getGameWorkDetail(
 ): Promise<GameWorkDetail | null> {
   const row = await getD1()
     .prepare(
-      `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id LIMIT 1`,
     )
     .bind(id)
     .first<
-      SummaryRow
+      SummaryRow & { extra_json: string }
   >();
   if (!row) return null;
   const collections = await loadWorkCollections(row.id);
@@ -507,6 +515,7 @@ export async function getGameWorkDetail(
     (collections.translations.some((item) => item.role === "translation") ? row.id : null);
   return {
     ...summary,
+    moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
     aliases: collections.aliases,
     media: collections.media,
     externalLinks: collections.links,
@@ -576,6 +585,7 @@ export async function getWorkForAdminEdit(
     isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
+    moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
     aliases: collections.aliases,
     creators: collections.creators,
     tags: collections.tags.map((item) => item.name),
@@ -654,6 +664,7 @@ export async function updateOwnedWork(
   before: UploaderWorkEdit,
 ): Promise<void> {
   if (before.id !== input.workId) throw new Error("Owned work snapshot does not match update target");
+  const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
@@ -738,7 +749,7 @@ export async function updateOwnedWork(
     database
       .prepare(
         `UPDATE works
-         SET original_title=?,chinese_title=?,description=?,original_release_date=?,
+         SET original_title=?,chinese_title=?,description=?,extra_json=json_set(extra_json,'$.moreInfo',json(?)),original_release_date=?,
            original_release_precision=?,engine_family=?,
            is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
@@ -748,6 +759,7 @@ export async function updateOwnedWork(
         originalTitle,
         input.chineseTitle?.trim() || null,
         input.description?.trim() || null,
+        moreInfo,
         releaseDate.value,
         releaseDate.precision,
         input.engineFamily,
@@ -923,6 +935,7 @@ export async function updateWorkForAdmin(
       notes: existing?.notes ?? null,
     };
   });
+  const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
   const database = getD1();
   const statements: D1PreparedStatement[] = [
     database
@@ -930,6 +943,7 @@ export async function updateWorkForAdmin(
         `UPDATE works
        SET chinese_title = ?,
          description = ?,
+         extra_json = json_set(extra_json, '$.moreInfo', json(?)),
          original_release_date = ?,
          original_release_precision = ?,
          engine_family = ?,
@@ -943,6 +957,7 @@ export async function updateWorkForAdmin(
       .bind(
         input.chineseTitle,
         input.description,
+        moreInfo,
         input.originalReleaseDate,
         input.originalReleasePrecision,
         input.engineFamily,
@@ -1023,6 +1038,7 @@ export async function updateWorkForAdmin(
 export async function createExternalWork(
   input: ExternalWorkInput,
 ): Promise<{ workId: number }> {
+  const moreInfo = parseWorkMoreInfo(input.moreInfo);
   if (!isExternalEngineFamily(input.engineFamily)) {
     throw new HttpError(400, "外链下载作品必须使用非 RPG Maker 2000/2003 系引擎");
   }
@@ -1067,7 +1083,7 @@ export async function createExternalWork(
         original_title, chinese_title, description, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status,
         extra_json, created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', '{}', ?, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, CURRENT_TIMESTAMP)`,
     )
     .bind(
       originalTitle,
@@ -1079,6 +1095,7 @@ export async function createExternalWork(
       releaseDate.value,
       releaseDate.precision,
       input.engineFamily,
+      JSON.stringify({ moreInfo }),
       input.user.id,
     )
     .run();
@@ -1264,6 +1281,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
     description: clean(form.get("description")),
+    moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: clean(form.get("original_release_date")),
     originalReleasePrecision: String(
       form.get("original_release_precision") ?? "unknown",

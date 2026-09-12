@@ -10,6 +10,7 @@ import {
   parseExtraStaffJson,
 } from "@/lib/server/db/creators";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
+import { parseWorkMoreInfoJson } from "@/lib/server/http/work-more-info";
 import {
   ensureCharacterFaceSheets,
   readCharacterFaceSheet,
@@ -96,6 +97,7 @@ function parseMetadata(form: FormData) {
     ),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
+    moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(
       form.get("engine_family"),

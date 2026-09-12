@@ -47,6 +47,7 @@ export default async function UploadedWorkPage({
           originalTitle: work.originalTitle,
           chineseTitle: work.chineseTitle,
           description: work.description,
+          moreInfo: work.moreInfo,
           originalReleaseDate: work.originalReleaseDate,
           engineFamily: work.engineFamily as UploadInitialWork["engineFamily"],
           isOriginal: work.isOriginal,

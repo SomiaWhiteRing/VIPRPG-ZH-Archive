@@ -36,6 +36,7 @@ import {
   type CorePackMetadata,
 } from "@/lib/server/storage/core-pack-validation";
 import { HttpError } from "@/lib/server/http/json";
+import { parseWorkMoreInfo } from "@/lib/server/http/work-more-info";
 import { normalizeHttpUrl } from "@/lib/server/http/safe-url";
 import { ensureCharacterFaceSheets } from "@/lib/server/storage/character-portraits";
 import { assertSingleDownloadLink } from "@/lib/server/db/work-distribution";
@@ -994,6 +995,7 @@ function normalizeMetadata(
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       description: normalizeNullableWorkText(game.description),
+      extra: { ...game.extra, moreInfo: parseWorkMoreInfo(game.extra.moreInfo) },
       originalReleaseDate: releaseDate.value,
       originalReleasePrecision: releaseDate.precision,
       language: game.language.trim(),

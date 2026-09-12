@@ -10,6 +10,7 @@ import {
   storeCharacterFaceSheets,
 } from "@/lib/server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/server/http/json";
+import { parseWorkMoreInfoJson } from "@/lib/server/http/work-more-info";
 import type { CreatorSelection } from "@/lib/creator-names";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ function parseMetadata(form: FormData): {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  moreInfo: ReturnType<typeof parseWorkMoreInfoJson>;
   originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
@@ -73,6 +75,7 @@ function parseMetadata(form: FormData): {
     originalTitle: readRequiredString(form.get("original_title"), "original_title"),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
+    moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(form.get("engine_family"), "engine_family"),
     isOriginal: form.has("is_original"),

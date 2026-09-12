@@ -73,7 +73,7 @@ export function StaffEditor({ rows, onChange, disabled, suggestions, showErrors 
         const prefix = `staff-${row.id}`;
         const error = errors[index];
         return (
-          <div className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-start gap-2" key={row.id}>
+          <div className={`grid min-w-0 items-start gap-2 ${row.roleKey === "other" ? "grid-cols-[6.5rem_6.5rem_minmax(0,1fr)_auto]" : "grid-cols-[6.5rem_minmax(0,1fr)_auto]"}`} key={row.id}>
             <div className="grid gap-1">
               <Label className="sr-only" htmlFor={`${prefix}-role`}>职务</Label>
               <SelectField id={`${prefix}-role`} disabled={disabled} value={row.roleKey} options={EXTRA_STAFF_ROLES}
@@ -82,26 +82,26 @@ export function StaffEditor({ rows, onChange, disabled, suggestions, showErrors 
                   if (isExtraStaffRole(roleKey)) update(row.id, { roleKey, roleLabel: "" });
                 }} />
             </div>
-            <div className="grid min-w-0 gap-1">
-              <Label className="sr-only" htmlFor={`${prefix}-person`}>人物</Label>
-              <CreatorPicker compact id={`${prefix}-person`} disabled={disabled} value={row.selection} suggestions={suggestions}
-                placeholder="搜索或新建人物" invalid={error?.field === "person"} errorId={error?.field === "person" ? `${prefix}-error` : undefined}
-                onChange={(selection) => update(row.id, { selection })} />
-            </div>
-            <Button className="col-start-3 row-start-1 px-1.5" size="sm" variant="ghost" type="button" disabled={disabled}
-              aria-label={`移除第 ${index + 1} 条制作署名`} onClick={() => {
-                onChange(rows.filter((item) => item.id !== row.id));
-                requestAnimationFrame(() => document.getElementById("add-work-staff")?.focus());
-              }}>移除</Button>
             {row.roleKey === "other" ? (
-              <div className="col-span-3 grid gap-1">
+              <div className="grid min-w-0 gap-1">
                 <Label className="sr-only" htmlFor={`${prefix}-label`}>职务名称</Label>
                 <Input id={`${prefix}-label`} value={row.roleLabel} disabled={disabled} placeholder="职务名称"
                   aria-invalid={error?.field === "label"} aria-describedby={error?.field === "label" ? `${prefix}-error` : undefined}
                   onChange={(event) => update(row.id, { roleLabel: event.target.value })} />
               </div>
             ) : null}
-            {error ? <p className="col-span-3 text-xs text-red-600" id={`${prefix}-error`} role="alert">{error.message}</p> : null}
+            <div className="grid min-w-0 gap-1">
+              <Label className="sr-only" htmlFor={`${prefix}-person`}>人物</Label>
+              <CreatorPicker compact id={`${prefix}-person`} disabled={disabled} value={row.selection} suggestions={suggestions}
+                placeholder="搜索或新建人物" invalid={error?.field === "person"} errorId={error?.field === "person" ? `${prefix}-error` : undefined}
+                onChange={(selection) => update(row.id, { selection })} />
+            </div>
+            <Button className="px-1.5" size="sm" variant="ghost" type="button" disabled={disabled}
+              aria-label={`移除第 ${index + 1} 条制作署名`} onClick={() => {
+                onChange(rows.filter((item) => item.id !== row.id));
+                requestAnimationFrame(() => document.getElementById("add-work-staff")?.focus());
+              }}>移除</Button>
+            {error ? <p className="col-span-full text-xs text-red-600" id={`${prefix}-error`} role="alert">{error.message}</p> : null}
           </div>
         );
       })}

@@ -130,6 +130,7 @@ export default async function GameDetailPage({
         originalTitle={work.originalTitle}
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
+          ...(work.moreInfo.length ? [{ href: "#sec-more-info", label: "更多信息" }] : []),
           ...(current ? [{ href: `/play/${current.id}`, label: "在线游玩" }] : []),
           ...(media.length ? [{ href: "#sec-gallery", label: "截图", count: media.length }] : []),
           ...(work.characters.length ? [{ href: "#sec-cast", label: "角色", count: work.characters.length }] : []),
@@ -176,6 +177,20 @@ export default async function GameDetailPage({
               </div>
             ) : null}
           </section>
+
+          {work.moreInfo.length ? (
+            <section aria-labelledby="more-info-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-more-info">
+              <h2 className="mb-3.5 text-base font-bold" id="more-info-title">更多信息</h2>
+              <div className="grid min-w-0 gap-5">
+                {work.moreInfo.map((item, index) => (
+                  <div className="min-w-0" key={index}>
+                    <h3 className="mb-2 text-sm font-bold wrap-anywhere">{item.title}</h3>
+                    <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">{item.body}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {media.length ? (
             <section aria-labelledby="gallery-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-gallery">

@@ -1,4 +1,5 @@
 import type { ArchiveFileRole } from "@/lib/archive/file-policy";
+import type { WorkMoreInfo } from "@/lib/work-more-info";
 
 import type {
   CharacterPortraitChoice,
@@ -105,7 +106,7 @@ export type ArchiveCommitMetadata = {
     language: string;
     browsingImageBlobSha256s: string[];
     status: "processing" | "published" | "hidden";
-    extra: Record<string, unknown>;
+    extra: Record<string, unknown> & { moreInfo?: WorkMoreInfo[] };
   };
   target: {
     mode: "create" | "update";
