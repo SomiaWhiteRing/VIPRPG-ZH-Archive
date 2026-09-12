@@ -5,6 +5,7 @@ const wranglerCli = fileURLToPath(new URL("../node_modules/wrangler/wrangler-dis
 const successPattern = /commands executed successfully|No migrations to apply|Upload complete|Resource location: local[\s\S]*success/i;
 
 export function runWrangler(args) {
+  const isMigration = args[0] === "d1" && args[1] === "migrations" && args[2] === "apply";
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [wranglerCli, ...args], {
       env: { ...process.env, CI: "true", WRANGLER_SEND_METRICS: "false" },
@@ -18,7 +19,13 @@ export function runWrangler(args) {
       const text = chunk.toString();
       stream.write(text);
       output = `${output}${text}`.slice(-20_000);
-      successSeen ||= successPattern.test(output);
+      // A successful SQL batch is only one step of a multi-file migration.
+      // Wait for the final status table before applying the Windows exit workaround.
+      const statusTable = output.slice(output.lastIndexOf("┌"));
+      successSeen = isMigration
+        ? /No migrations to apply/i.test(output) ||
+          (statusTable.includes("└") && statusTable.includes("✅") && !/[🕒❌]/u.test(statusTable))
+        : successSeen || successPattern.test(output);
       clearTimeout(idleTimer);
       if (successSeen) {
         // ponytail: Wrangler 4.125 keeps local Windows handles open after success.

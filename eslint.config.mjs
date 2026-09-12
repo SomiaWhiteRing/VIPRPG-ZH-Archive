@@ -8,6 +8,7 @@ const eslintConfig = [
     ".next-system-test/**",
     ".open-next/**",
     "out/**",
+    "output/**",
     "cloudflare-env.d.ts",
     "public/play/runtime/**",
   ]),
