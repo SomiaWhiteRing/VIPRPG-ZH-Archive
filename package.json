@@ -12,6 +12,7 @@
     "db:local:migrate": "wrangler d1 migrations apply viprpg-archive-prod --local",
     "db:local:reset": "node scripts/local-d1-reset.mjs",
     "db:local:seed": "node scripts/dev-seed.mjs",
+    "db:local:seed:update": "node scripts/dev-seed.mjs --update",
     "cf-typegen": "node scripts/cf-typegen.mjs",
     "check": "next typegen && tsc --noEmit --project tsconfig.check.json && eslint . && tsx scripts/security-self-check.ts && tsx scripts/ui-self-check.ts",
     "test": "tsx scripts/system-self-check.ts contract",
