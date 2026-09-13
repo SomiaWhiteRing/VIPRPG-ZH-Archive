@@ -19,7 +19,7 @@ Copy-Item .env.example .env.local
 
 如果已经有自己的 `.env.local`，不要覆盖它；只需确认至少设置了 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。
 
-首次使用或需要演示数据时，初始化本地 D1 和 R2：
+首次使用时，初始化本地 D1 和 R2（reset 会清空现有本地数据库）：
 
 ```powershell
 npm run db:local:reset
@@ -34,6 +34,14 @@ npm run db:local:seed
 | `admin@dev.local` | admin |
 | `uploader@dev.local` | uploader |
 | `user@dev.local` | user |
+
+已有开发数据时，补充近期功能的展示场景：
+
+```powershell
+npm run db:local:seed:update
+```
+
+更新前自动备份数据库，只插入缺失的场景记录，保留已有数据和手工编辑。完整 seed 也包含这些场景。新增账号、作品及论坛入口见[本地展示数据](docs/local-demo-data.md)。
 
 启动开发服务器：
 

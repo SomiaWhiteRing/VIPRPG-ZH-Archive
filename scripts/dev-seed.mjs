@@ -5,7 +5,14 @@ import { createHash, webcrypto } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { runWrangler } from "./run-wrangler.mjs";
 import { seedCharacterFaceAssets } from "./seed-character-face-assets.mjs";
+import { seedDevScenarios } from "./dev-seed-scenarios.mjs";
 import passwordPolicy from "../lib/server/auth/password-policy.json" with { type: "json" };
+
+if (process.argv.includes("--update")) {
+  if (process.argv.includes("--reset")) throw new Error("--update 与 --reset 不能同时使用。");
+  await seedDevScenarios();
+  process.exit(0);
+}
 
 const databaseName = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
 const bucketName = process.env.LOCAL_R2_BUCKET || "viprpg-archive-prod";
@@ -556,6 +563,7 @@ for (const item of archives) {
 console.log(
   "本地测试数据已写入。账号密码均为 dev123456789：super@dev.local / admin@dev.local / uploader@dev.local / user@dev.local",
 );
+await seedDevScenarios();
 
 function game(id, originalTitle, chineseTitle, options = {}) {
   const status = options.status ?? "published";
