@@ -1,4 +1,5 @@
 import { timingSafeEqualString } from "@/lib/server/crypto/sha256";
+import passwordPolicy from "./password-policy.json";
 import {
   base64UrlDecodeBytes,
   base64UrlEncodeBytes,
@@ -7,7 +8,7 @@ import {
 } from "@/lib/server/crypto/encoding";
 
 const PASSWORD_HASH_VERSION = "pbkdf2-sha256";
-export const PASSWORD_HASH_ITERATIONS = 870_000;
+export const PASSWORD_HASH_ITERATIONS = passwordPolicy.iterations;
 const SALT_BYTES = 16;
 const DERIVED_KEY_BITS = 256;
 
