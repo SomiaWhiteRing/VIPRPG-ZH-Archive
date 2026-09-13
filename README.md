@@ -64,6 +64,8 @@ npm run preview         # OpenNext/Cloudflare Workers 本地预览
 
 `npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
 
+论坛图片复用 `ARCHIVE_BUCKET`，无需额外图床密钥。原始文件单张最多 2 MiB，浏览器同格式处理后在发布时上传；读取权限和人工清理规则见[论坛设计文档](docs/forum-discussion-design.md#图片存储与清理)。
+
 唯一根账户只能通过受审计运维命令轮换。远程环境还必须提供与目标邮箱相同的 `--confirm`：
 
 ```powershell

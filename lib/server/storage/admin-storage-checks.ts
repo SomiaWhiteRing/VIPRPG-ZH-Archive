@@ -410,6 +410,8 @@ async function scanR2Objects(
   const zipOutsideCorePack: R2OrphanObject[] = [];
 
   for (const object of listedObjects.objects) {
+    // Forum images have their own visibility and manual cleanup lifecycle.
+    if (object.key.startsWith("forum-images/")) continue;
     const info = parseR2Key(object.key);
 
     if (info.type === "unknown") {

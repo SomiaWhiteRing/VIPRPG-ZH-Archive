@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/app/components/site-header";
 import { SiteFooter } from "@/app/components/site-footer";
+import { DiscussionVisitBoundary } from "@/app/discussions/visit";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
     <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
         <SiteHeader />
+        <DiscussionVisitBoundary />
         {children}
         <SiteFooter />
       </body>

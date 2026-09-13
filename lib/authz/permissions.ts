@@ -18,6 +18,7 @@ export const PERMISSION_CATEGORIES = {
   tag: { group: "reference", label: "标签整理" },
   catalog: { group: "community", label: "作品目录" },
   comment: { group: "community", label: "评论审核" },
+  forum: { group: "community", label: "讨论区" },
   emoji: { group: "community", label: "站点表情" },
   user: { group: "access", label: "账户管理" },
   role_access: { group: "access", label: "角色分配与审批" },
@@ -203,6 +204,18 @@ export const PERMISSIONS = {
     label: "审核所有评论",
     scope: "全部未删除评论",
     description: "隐藏评论或恢复被隐藏的评论；已删除评论不能恢复。",
+  },
+  "forum.content.moderate_any": {
+    category: "forum", label: "审核讨论内容", scope: "全部讨论与举报",
+    description: "查看审核上下文，隐藏或恢复被隐藏内容，锁定或解锁主题并处理举报。",
+  },
+  "forum.topic.feature_any": {
+    category: "forum", label: "策展公开讨论", scope: "全部公开主题",
+    description: "加精、取消加精及纠正主题 TAG；不授予举报处理或全站 TAG 管理能力。",
+  },
+  "forum.tag.manage": {
+    category: "forum", label: "管理讨论 TAG", scope: "全部讨论 TAG",
+    description: "改名、合并、停用、隐藏或恢复讨论 TAG。",
   },
   "custom_emoji.manage": {
     category: "emoji",
@@ -573,6 +586,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "translation_relation.create_any", "translation_relation.delete_any",
     "catalog.manage_any",
     "comment.manage_any",
+    "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
     "custom_emoji.manage",
     "archive_version.read_private",
     "archive_version.update",
@@ -614,6 +628,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "translation_relation.create_any", "translation_relation.delete_any",
     "catalog.manage_any",
     "comment.manage_any",
+    "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
     "custom_emoji.manage",
     "archive_version.read_private",
     "archive_version.update",
