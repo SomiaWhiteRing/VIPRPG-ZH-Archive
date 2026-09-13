@@ -8801,6 +8801,20 @@
           "source": "admin"
         }
       ]
+    },
+    {
+      "originalName": "ミラーバリア",
+      "primaryName": "镜面屏障",
+      "description": null,
+      "extra": {},
+      "aliases": []
+    },
+    {
+      "originalName": "ミラージュバリア",
+      "primaryName": "幻影屏障",
+      "description": null,
+      "extra": {},
+      "aliases": []
     }
   ]
 }
