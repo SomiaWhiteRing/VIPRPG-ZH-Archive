@@ -106449,6 +106449,181 @@
       "bindingPriorities": {
         "リリックス": 1
       }
+    },
+    {
+      "sha256": "445c0dcb279efc0fa643394295c998b6d863b6345595ba943c68b6e72250a4e4",
+      "file": "assets/445c0dcb279efc0fa643394295c998b6d863b6345595ba943c68b6e72250a4e4.png",
+      "contentType": "image/png",
+      "sizeBytes": 6746,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4222,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23392/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%83%90%E3%83%AA%E3%82%A21.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラーバリア1.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラーバリア"
+      ],
+      "bindingPriorities": {
+        "ミラーバリア": 1
+      }
+    },
+    {
+      "sha256": "de3898af6c433192a31358ac2f90eaed15efe5cb18a61bb66f52cd16184025a3",
+      "file": "assets/de3898af6c433192a31358ac2f90eaed15efe5cb18a61bb66f52cd16184025a3.png",
+      "contentType": "image/png",
+      "sizeBytes": 7190,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4223,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23393/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%83%90%E3%83%AA%E3%82%A22.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラーバリア2.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラーバリア"
+      ],
+      "bindingPriorities": {
+        "ミラーバリア": 1
+      }
+    },
+    {
+      "sha256": "fada44be66c8c8eeb09e09d492c1acd6eca89c953fcfe2fad16cebbc51799f3b",
+      "file": "assets/fada44be66c8c8eeb09e09d492c1acd6eca89c953fcfe2fad16cebbc51799f3b.png",
+      "contentType": "image/png",
+      "sizeBytes": 6805,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4224,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23394/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%83%90%E3%83%AA%E3%82%A23.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラーバリア3.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラーバリア"
+      ],
+      "bindingPriorities": {
+        "ミラーバリア": 1
+      }
+    },
+    {
+      "sha256": "a2319fe53fd54f3164e25f8a65478d49d3cd105e2b4b8d814569043c0b9592cb",
+      "file": "assets/a2319fe53fd54f3164e25f8a65478d49d3cd105e2b4b8d814569043c0b9592cb.png",
+      "contentType": "image/png",
+      "sizeBytes": 6333,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4225,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23395/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%83%90%E3%83%AA%E3%82%A24.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラーバリア4.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラーバリア"
+      ],
+      "bindingPriorities": {
+        "ミラーバリア": 1
+      }
+    },
+    {
+      "sha256": "82949a1210b1076aba8faafd9199ab30ac07bb22f893db34b62d1ba009dff787",
+      "file": "assets/82949a1210b1076aba8faafd9199ab30ac07bb22f893db34b62d1ba009dff787.png",
+      "contentType": "image/png",
+      "sizeBytes": 6351,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4226,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23389/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%82%B8%E3%83%A5%E3%83%90%E3%83%AA%E3%82%A21.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラージュバリア1.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラージュバリア"
+      ],
+      "bindingPriorities": {
+        "ミラージュバリア": 1
+      }
+    },
+    {
+      "sha256": "91cf0db731a24f9ed215778b1dbb9a0c7f69b9f3a22a7dadd843861a707e612b",
+      "file": "assets/91cf0db731a24f9ed215778b1dbb9a0c7f69b9f3a22a7dadd843861a707e612b.png",
+      "contentType": "image/png",
+      "sizeBytes": 6204,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4227,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23390/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%82%B8%E3%83%A5%E3%83%90%E3%83%AA%E3%82%A22.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラージュバリア2.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラージュバリア"
+      ],
+      "bindingPriorities": {
+        "ミラージュバリア": 1
+      }
+    },
+    {
+      "sha256": "8b3cd5a1973f588e0588c14918da5f410d9823974e7981c6d3983a8de14f9e21",
+      "file": "assets/8b3cd5a1973f588e0588c14918da5f410d9823974e7981c6d3983a8de14f9e21.png",
+      "contentType": "image/png",
+      "sizeBytes": 6268,
+      "width": 192,
+      "height": 192,
+      "sourceKind": "atwiki",
+      "sourceOrder": 4228,
+      "sources": [
+        {
+          "pageUrl": "https://w.atwiki.jp/viprpg_sozai/pages/91.html",
+          "pageTitle": "その他（バリアーズ）",
+          "imageUrl": "https://img.atwiki.jp/viprpg_sozai/attach/91/23391/f_%E3%83%9F%E3%83%A9%E3%83%BC%E3%82%B8%E3%83%A5%E3%83%90%E3%83%AA%E3%82%A23.png",
+          "sectionTitle": "ミラーバリア&ミラージュバリア / 顔グラ",
+          "originalFilename": "f_ミラージュバリア3.png"
+        }
+      ],
+      "boundOriginalNames": [
+        "ミラージュバリア"
+      ],
+      "bindingPriorities": {
+        "ミラージュバリア": 1
+      }
     }
   ],
   "defaults": [
@@ -110112,6 +110287,18 @@
       "row": 0,
       "column": 0,
       "confidence": "confirmed"
+    },
+    {
+      "originalName": "ミラーバリア",
+      "sha256": "445c0dcb279efc0fa643394295c998b6d863b6345595ba943c68b6e72250a4e4",
+      "row": 0,
+      "column": 0
+    },
+    {
+      "originalName": "ミラージュバリア",
+      "sha256": "82949a1210b1076aba8faafd9199ab30ac07bb22f893db34b62d1ba009dff787",
+      "row": 0,
+      "column": 0
     }
   ]
 }
