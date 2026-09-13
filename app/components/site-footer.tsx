@@ -1,6 +1,10 @@
+"use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname === "/discussions" || pathname.startsWith("/discussions/")) return null;
   return (
     <footer className="border-t border-border bg-primary text-primary-foreground">
       <div className="mx-auto flex w-[min(1180px,calc(100vw-2rem))] flex-wrap items-center justify-between gap-4 py-8 text-sm">

@@ -5,6 +5,7 @@
 ## 当前契约
 
 - [产品方向](./product-direction-plan.md)：产品边界和信息架构
+- [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
 - [认证与权限基线](./authentication-authorization-baseline-plan.md)：认证、角色、授权和审计边界
 - [游戏领域架构](./game-domain-architecture.md)：Work、ArchiveVersion、关系、目录和公开查询
 - [上传发布声明与译者字段契约](./upload-translation-declaration-requirements.md)：上传表单的声明、译者、缓存和提交契约

@@ -32,12 +32,14 @@ type Props = {
 const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/", label: "首页", exact: true },
   { href: "/games", label: "游戏库" },
+  { href: "/discussions", label: "讨论" },
   { href: "/catalogs", label: "目录" },
   { href: "/upload", label: "上传" },
 ];
 
 const ADMIN_LINKS: Array<HeaderNavigationLink & {
   permission?: PermissionKey;
+  anyPermission?: PermissionKey[];
   bootstrapOnly?: boolean;
 }> = [
   { href: "/admin", label: "仪表盘", exact: true, permission: "system.dashboard.read" },
@@ -59,6 +61,8 @@ const ADMIN_LINKS: Array<HeaderNavigationLink & {
   },
   { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
   { href: "/admin/emojis", label: "站点表情", permission: "custom_emoji.manage" },
+  { href: "/admin/discussions", label: "讨论", anyPermission: ["forum.content.moderate_any","forum.topic.feature_any"] },
+  { href: "/admin/discussion-tags", label: "讨论 TAG", permission: "forum.tag.manage" },
   { href: "/admin/users", label: "用户", permission: "user.read" },
   { href: "/admin/permissions", label: "权限", bootstrapOnly: true },
   {
@@ -71,7 +75,7 @@ const ADMIN_LINKS: Array<HeaderNavigationLink & {
 ];
 
 function getAdminLinks(session: Session | null) {
-  return ADMIN_LINKS.filter((link) => session && (link.bootstrapOnly ? session.isBootstrapAdmin : !link.permission || hasPermissionKey(session.permissionKeys, link.permission)));
+  return ADMIN_LINKS.filter((link) => session && (link.bootstrapOnly ? session.isBootstrapAdmin : link.anyPermission ? link.anyPermission.some(key=>hasPermissionKey(session.permissionKeys,key)) : !link.permission || hasPermissionKey(session.permissionKeys, link.permission)));
 }
 
 export function SiteHeaderNav({ session, loginLink }: Props) {

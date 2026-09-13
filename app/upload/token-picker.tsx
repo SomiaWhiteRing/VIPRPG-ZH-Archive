@@ -19,6 +19,11 @@ export function TokenPicker({
   showSelectionCount = true,
   suggestions,
   values,
+  maxValues,
+  normalizeValue = normalizeToken,
+  validateValue,
+  onQueryChange,
+  sortable = false,
 }: {
   disabled?: boolean;
   id: string;
@@ -30,26 +35,33 @@ export function TokenPicker({
   showSelectionCount?: boolean;
   suggestions: UploadTaxonomySuggestion[];
   values: string[];
+  maxValues?: number;
+  normalizeValue?: (value: string) => string;
+  validateValue?: (value: string) => string | null;
+  onQueryChange?: (query: string) => void;
+  sortable?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const selectedKeys = useMemo(() => new Set(values.map(tokenKey)), [values]);
+  const [error, setError] = useState<string | null>(null);
+  const atLimit = maxValues !== undefined && values.length >= maxValues;
+  const selectedKeys = useMemo(() => new Set(values.map(value => tokenKey(normalizeValue(value)))), [values,normalizeValue]);
   const options = useMemo<TokenOption[]>(() => {
-    const normalizedQuery = tokenKey(query);
+    const normalizedQuery = tokenKey(normalizeValue(query));
     if (!normalizedQuery) return [];
     const matches: TokenOption[] = suggestions
-      .filter((item) => !selectedKeys.has(tokenKey(item.value)))
-      .filter((item) => tokenKey(item.value).includes(normalizedQuery))
+      .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
+      .filter((item) => tokenKey(normalizeValue(item.value)).includes(normalizedQuery))
       .slice(0, 8)
       .map((item) => ({ ...item, kind: "existing" as const }));
-    const normalizedValue = normalizeToken(query);
-    const exactMatch = suggestions.some((item) => tokenKey(item.value) === tokenKey(normalizedValue));
+    const normalizedValue = normalizeValue(query);
+    const exactMatch = suggestions.some((item) => tokenKey(normalizeValue(item.value)) === tokenKey(normalizedValue));
     if (normalizedValue && !exactMatch && !selectedKeys.has(tokenKey(normalizedValue))) {
       matches.push({ value: normalizedValue, meta: "新建", kind: "create" });
     }
     return matches;
-  }, [query, selectedKeys, suggestions]);
+  }, [query, selectedKeys, suggestions,normalizeValue]);
   const recommended = suggestions
     .filter((item) => !selectedKeys.has(tokenKey(item.value)))
     .slice(0, 6);
@@ -57,12 +69,17 @@ export function TokenPicker({
   const menuOpen = open && !disabled && options.length > 0;
 
   function add(rawValue: string) {
-    const value = normalizeToken(rawValue);
+    if (disabled || atLimit) return;
+    const validation = (query ? validateValue?.(query) : null) ?? validateValue?.(rawValue);
+    if (validation) { setError(validation); return; }
+    const value = normalizeValue(rawValue);
     if (!value || selectedKeys.has(tokenKey(value))) return;
     onChange([...values, value]);
     setQuery("");
     setActiveIndex(0);
     setOpen(false);
+    setError(null);
+    onQueryChange?.("");
   }
 
   function remove(value: string) {
@@ -105,6 +122,7 @@ export function TokenPicker({
           aria-autocomplete="list"
           aria-controls={menuId}
           aria-expanded={menuOpen}
+          aria-describedby={error || atLimit ? `${id}-feedback` : undefined}
           disabled={disabled}
           id={id}
           onBlur={() => setOpen(false)}
@@ -112,6 +130,8 @@ export function TokenPicker({
             setQuery(event.target.value);
             setActiveIndex(0);
             setOpen(Boolean(tokenKey(event.target.value)));
+            setError(null);
+            onQueryChange?.(event.target.value);
           }}
           onFocus={() => setOpen(Boolean(tokenKey(query)))}
           onKeyDown={onKeyDown}
@@ -142,6 +162,7 @@ export function TokenPicker({
                 id={`${menuId}-${index}`}
                 key={`${option.kind}-${tokenKey(option.value)}`}
                 onClick={() => add(option.value)}
+                disabled={atLimit}
                 onMouseDown={(event) => event.preventDefault()}
                 role="option"
                 size="sm"
@@ -156,6 +177,10 @@ export function TokenPicker({
           </div>
         ) : null}
       </div>
+      {error || atLimit ? <p className="text-sm text-destructive" id={`${id}-feedback`} role="status">{error ?? `最多选择 ${maxValues} 项`}</p> : null}
+      {sortable && values.length > 1 ? <div className="flex flex-wrap gap-1" aria-label="TAG 顺序">
+        {values.map((value,index) => <Button className="min-h-9 text-xs" disabled={disabled || index===0} key={value} size="sm" type="button" variant="ghost" aria-label={`将 ${value} 前移`} onClick={()=>{const next=[...values];[next[index-1],next[index]]=[next[index],next[index-1]];onChange(next);}}>{value} ↑</Button>)}
+      </div> : null}
       <div
         className={cn(
           "flex flex-wrap items-center gap-2 text-xs text-muted",

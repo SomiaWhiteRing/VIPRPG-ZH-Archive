@@ -18,7 +18,7 @@ export function PaginationLinks({
   basePath: string;
   page: number;
   pageSize: number;
-  params?: Record<string, string | undefined>;
+  params?: Record<string, string | readonly string[] | undefined>;
   total: number;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -28,10 +28,11 @@ export function PaginationLinks({
   const makeHref = (nextPage: number) => {
     const query = new URLSearchParams();
     Object.entries(params ?? {}).forEach(([key, value]) => {
-      if (value) query.set(key, value);
+      if (value) for (const item of typeof value === "string" ? [value] : value) query.append(key, item);
     });
-    query.set("page", String(nextPage));
-    return `${basePath}?${query.toString()}`;
+    query.delete("page");
+    if (nextPage > 1) query.set("page", String(nextPage));
+    return `${basePath}${query.size ? `?${query.toString()}` : ""}`;
   };
   return (
     <nav className="my-8 flex flex-wrap items-center justify-start gap-2" aria-label="分页">
@@ -79,8 +80,8 @@ export function PaginationLinks({
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Form action={basePath} className="contents">
-          {Object.entries(params ?? {}).map(([key, value]) =>
-            value && key !== "page" ? <input key={key} name={key} type="hidden" value={value} /> : null,
+          {Object.entries(params ?? {}).flatMap(([key, value]) =>
+            value && key !== "page" ? (typeof value === "string" ? [value] : value).map((item,index) => <input key={`${key}-${index}`} name={key} type="hidden" value={item} />) : [],
           )}
           <Input
             aria-label={`跳转页码，范围 1 到 ${totalPages}`}
