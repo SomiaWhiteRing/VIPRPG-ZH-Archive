@@ -5,6 +5,7 @@ import { createHash, webcrypto } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { runWrangler } from "./run-wrangler.mjs";
 import { seedCharacterFaceAssets } from "./seed-character-face-assets.mjs";
+import passwordPolicy from "../lib/server/auth/password-policy.json" with { type: "json" };
 
 const databaseName = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
 const bucketName = process.env.LOCAL_R2_BUCKET || "viprpg-archive-prod";
@@ -744,10 +745,10 @@ async function hashPassword(password) {
     ["deriveBits"],
   );
   const bits = await webcrypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 100000 },
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: passwordPolicy.iterations },
     key,
     256,
   );
   const b = (v) => Buffer.from(v).toString("base64url");
-  return `pbkdf2-sha256$100000$${b(salt)}$${b(new Uint8Array(bits))}`;
+  return `pbkdf2-sha256$${passwordPolicy.iterations}$${b(salt)}$${b(new Uint8Array(bits))}`;
 }
