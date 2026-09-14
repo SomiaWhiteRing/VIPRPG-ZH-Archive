@@ -369,6 +369,7 @@ export async function resolveRoleRequest(input: {
       "角色申请未通过",
       `${input.actor.displayName} 未通过你的角色 ${role!.name} 申请。`,
     ),
+    resolvedInboxReadStatement(database,input.itemId,input.actor.id),
   ]);
   if (Number(results[0]?.meta.changes ?? 0) !== 1) {
     throw new HttpError(409, "这条申请已经被其他操作处理");
@@ -463,12 +464,19 @@ async function changeUserRole(input: {
         ?, ?
       WHERE changes() = 1
     `).bind(input.actor.id, input.targetUserId, input.targetUserId, eventKey, "账户角色已调整", `${input.actor.displayName} 已${actionLabel}角色 ${role!.name}。`),
+    ...(sourceInboxItemId ? [resolvedInboxReadStatement(database,sourceInboxItemId,input.actor.id)] : []),
   ];
   const results = await database.batch(statements);
   const mutationResult = results[sourceInboxItemId ? 2 : 1];
   if (Number(mutationResult?.meta.changes ?? 0) !== 1) {
     throw new HttpError(409, "账户、角色或申请状态已变化，请刷新后重试。");
   }
+}
+
+function resolvedInboxReadStatement(database: ReturnType<typeof getD1>, itemId: number, userId: number) {
+  return database.prepare(`INSERT INTO inbox_item_reads(item_id,user_id,read_at)
+    SELECT id,?,CURRENT_TIMESTAMP FROM inbox_items WHERE id=? AND resolved_by_user_id=? AND changes()=1
+    ON CONFLICT(item_id,user_id) DO NOTHING`).bind(userId,itemId,userId);
 }
 
 function userPriorityTargetStatement(

@@ -1,4 +1,5 @@
 import { contentIndexStatements, searchVisibilityStatement, topicSearchDocuments } from "./search-index";
+import { likeNotificationStatement, replyNotificationStatement } from "./notifications";
 import type { ForumRuntime } from "./runtime";
 import { imageIds, imageOffsets, imageGuard, imageStatements } from "./images";
 import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
@@ -454,6 +455,7 @@ export async function publishForum(ctx: ForumRuntime,
     db.prepare(`UPDATE forum_topics SET reply_count=reply_count+1,last_activity_at=CURRENT_TIMESTAMP,last_comment_id=(SELECT id FROM forum_post_comments WHERE user_id=? AND revision=?),last_post_id=NULL WHERE id=? AND write_token=?`).bind(actor.id, token, topic.id, token),
   );
   statements.push(...contentIndexStatements(ctx, kind, actor.id, token, "", body, "insert"));
+  statements.push(replyNotificationStatement(ctx, kind, actor.id, token));
   await db.batch(statements);
   const result = await db
     .prepare(
@@ -585,12 +587,13 @@ export async function likeForum(ctx: ForumRuntime,
     throw new HttpError(400, "点赞状态无效。");
   if (!await ctx.db.prepare("SELECT id FROM forum_public_posts WHERE id=?").bind(postId).first()) unavailable();
   if (input.liked)
-    await ctx.db
+    await ctx.db.batch([ctx.db
       .prepare(
         `INSERT OR IGNORE INTO forum_post_likes(post_id,user_id) SELECT id,? FROM forum_public_posts WHERE id=? AND ${forumActorSql()}`,
       )
-      .bind(actor.id, postId, actor.id)
-      .run();
+      .bind(actor.id, postId, actor.id),
+      likeNotificationStatement(ctx, actor.id, postId),
+    ]);
   else
     await ctx.db
       .prepare(
