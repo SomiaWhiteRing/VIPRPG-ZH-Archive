@@ -61,17 +61,6 @@ export function AdminDiscussions({
       <PageHeader
         compact
         title="讨论管理"
-        actions={
-          viewer.moderate && viewer.tags ? (
-            <a
-              className="text-sm text-primary"
-              href="/api/admin/discussions?op=export"
-              download
-            >
-              导出讨论数据（不含图片文件）
-            </a>
-          ) : null
-        }
       />
       <nav className="flex flex-wrap gap-4 text-sm" aria-label="讨论管理视图">
         {(viewer.moderate

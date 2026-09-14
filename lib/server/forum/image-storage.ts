@@ -1,7 +1,8 @@
+import type { ForumRuntime } from "./runtime";
 import { type ForumImage } from "@/lib/forum";
-import { getD1 } from "@/lib/server/db/d1";
+
 import { HttpError } from "@/lib/server/http/json";
-import { getArchiveBucket } from "@/lib/server/storage/archive-bucket";
+
 import { imageColumns } from "./images";
 
 export type StoredForumImage = ForumImage & {
@@ -32,8 +33,8 @@ function verifyObject(row: StoredForumImage, object: R2Object) {
     throw new HttpError(409, "存储图片与上传记录不一致，未覆盖现有对象。");
 }
 
-async function finishUpload(row: StoredForumImage): Promise<ForumImage> {
-  const db = getD1();
+async function finishUpload(ctx: ForumRuntime, row: StoredForumImage): Promise<ForumImage> {
+  const db = ctx.db;
   const ready = await db.prepare(`UPDATE forum_images SET status='ready',updated_at=CURRENT_TIMESTAMP
     WHERE id=? AND status='uploading' AND updated_at=? RETURNING ${imageColumns}`)
     .bind(row.id, row.updated_at).first<ForumImage>();
@@ -43,12 +44,12 @@ async function finishUpload(row: StoredForumImage): Promise<ForumImage> {
   if (current?.status === "ready") return current;
   // A late upload must not leave an object behind after an explicit cleanup.
   if (current?.status === "cleanup" || current?.status === "cleaned")
-    await getArchiveBucket().delete(row.object_key);
+    await ctx.bucket.delete(row.object_key);
   throw imageUploadPending();
 }
 
-export async function writeForumImage(row: StoredForumImage, bytes: ArrayBuffer): Promise<ForumImage> {
-  const bucket = getArchiveBucket();
+export async function writeForumImage(ctx: ForumRuntime, row: StoredForumImage, bytes: ArrayBuffer): Promise<ForumImage> {
+  const bucket = ctx.bucket;
   try {
     let object = await bucket.head(row.object_key);
     if (!object) {
@@ -62,9 +63,9 @@ export async function writeForumImage(row: StoredForumImage, bytes: ArrayBuffer)
     }
     if (!object) throw imageUploadPending();
     verifyObject(row, object);
-    return await finishUpload(row);
+    return await finishUpload(ctx, row);
   } catch (error) {
-    await getD1().prepare(`UPDATE forum_images SET status='uncertain',updated_at=CURRENT_TIMESTAMP
+    await ctx.db.prepare(`UPDATE forum_images SET status='uncertain',updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND status='uploading' AND updated_at=?`).bind(row.id, row.updated_at).run();
     if (error instanceof HttpError) throw error;
     throw imageUploadPending();
@@ -73,8 +74,8 @@ export async function writeForumImage(row: StoredForumImage, bytes: ArrayBuffer)
 
 // Administrative reconciliation never writes image bytes. It must first acquire
 // the same expired upload state used by the uploader's retry.
-export async function reconcileForumImage(id: string) {
-  const db = getD1();
+export async function reconcileForumImage(ctx: ForumRuntime, id: string) {
+  const db = ctx.db;
   const stamp = new Date().toISOString();
   const row = await db.prepare(`UPDATE forum_images SET status='uploading',updated_at=?
     WHERE id=? AND status IN('uploading','uncertain')
@@ -82,10 +83,10 @@ export async function reconcileForumImage(id: string) {
     .bind(stamp, id).first<StoredForumImage>();
   if (!row) throw imageUploadPending();
   try {
-    const object = await getArchiveBucket().head(row.object_key);
+    const object = await ctx.bucket.head(row.object_key);
     if (object) {
       verifyObject(row, object);
-      await finishUpload(row);
+      await finishUpload(ctx, row);
     } else {
       await db.prepare(`UPDATE forum_images SET status='failed',updated_at=CURRENT_TIMESTAMP
         WHERE id=? AND status='uploading' AND updated_at=?`).bind(id, stamp).run();

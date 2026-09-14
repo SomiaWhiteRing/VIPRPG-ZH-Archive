@@ -1,88 +1,21 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {ForumReplyBar,draftSnapshot,draftValue,forumReplyLauncherClass,type ForumDraft} from "./draft";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ImagePlus, Smile } from "lucide-react";
-import { UserAvatar } from "@/app/components/ui/user-avatar";
+
 import Image from "next/image";
 import { Button } from "@/app/components/ui/button";
-import { BottomBar } from "@/app/components/ui/bottom-bar";
+
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
 import { SelectField } from "@/app/components/ui/select";
-import {
-  FORUM_BODY_LENGTH,
-  FORUM_COMMENT_LENGTH,
-  FORUM_TITLE_LENGTH,
-  type ForumEditVersion,
-  type ForumTarget,
-  type ForumViewer,
-} from "@/lib/forum";
-import type { CustomEmojiDto } from "@/lib/server/db/work-community";
-import { ForumTagEditor, ForumModal } from "./shared";
-import { ForumImages, existingDraftImages, type DraftImage } from "./images";
-import { MixedEditor, type MixedEditorHandle } from "./mixed-editor";
-export type ForumDraft = {
-  editorId: string;
-  mode: "topic" | "post" | "comment";
-  target?: ForumTarget;
-  postId?: number;
-  postNumber?: number;
-  replyToId?: number;
-  replyName?: string;
-  title: string;
-  body: string;
-  images: DraftImage[];
-  tags: string[];
-  original: ForumDraftSnapshot;
-  revision?: string;
-  topicRevision?: string;
-  requestKey: string;
-  currentVersion?: ForumEditVersion;
-};
-type ForumDraftSnapshot = {
-  title: string;
-  body: string;
-  tags: string[];
-  replyToId?: number;
-  images: { key: string; offset: number }[];
-};
-export function draftSnapshot(draft: ForumDraftSnapshot): ForumDraftSnapshot {
-  return {
-    title: draft.title,
-    body: draft.body,
-    tags: [...draft.tags],
-    replyToId: draft.replyToId,
-    images: draft.images.map(({ key, offset }) => ({ key, offset })),
-  };
-}
-export function draftValue(draft: ForumDraftSnapshot) {
-  return JSON.stringify(draftSnapshot(draft));
-}
-export function ForumReplyBar({
-  children,
-  viewer,
-}: {
-  children: ReactNode;
-  viewer: ForumViewer;
-}) {
-  return (
-    <BottomBar anchorId="post-1">
-      <div className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3">
-        {viewer ? (
-          <UserAvatar
-            displayName={viewer.name}
-            avatarBlobSha256={viewer.avatar}
-            className="size-8 sm:size-10"
-          />
-        ) : null}
-        <div className="min-w-0 flex-1">{children}</div>
-      </div>
-    </BottomBar>
-  );
-}
+import { Textarea } from "@/app/components/ui/textarea";
 
-export const forumReplyLauncherClass =
-  "flex min-h-10 w-full items-center justify-start gap-2 font-normal rounded-md border border-border bg-muted/10 px-3 py-2 text-left text-sm text-muted hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-50";
+import { FORUM_BODY_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_TITLE_LENGTH, type ForumViewer } from "@/lib/forum";
+import type { CustomEmojiDto } from "@/lib/server/db/work-community";
+import { ForumTagEditor, ForumModal, forumRequest } from "./shared";
+import { ForumImages, existingDraftImages } from "./images";
+import { MixedEditor, type MixedEditorHandle } from "./mixed-editor";
 
 export function ForumEditor({
   draft,
@@ -117,6 +50,13 @@ export function ForumEditor({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [catalogue,setCatalogue]=useState<CustomEmojiDto[]|null>(null);
+  async function openEmojis(){
+    try{
+      if(!catalogue)setCatalogue((await forumRequest<{emojis:CustomEmojiDto[]}>("/api/discussions?op=emojis")).emojis);
+      setEmojiOpen(true);
+    }catch(error){onError(error instanceof Error?error.message:"表情加载失败。");}
+  }
   const picker = useRef<HTMLInputElement>(null);
   const mixed = useRef<MixedEditorHandle>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -125,7 +65,7 @@ export function ForumEditor({
   const topic = draft.mode === "topic";
   const inline = draft.mode === "comment";
   const isCollapsed = collapsed && !error && !draft.currentVersion;
-  const limit = inline ? FORUM_COMMENT_LENGTH : FORUM_BODY_LENGTH;
+  const limit = inline ? FORUM_COMMENT_LENGTH : topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH;
   const label = draft.target
     ? "保存修改"
     : topic
@@ -285,7 +225,7 @@ export function ForumEditor({
             ) : null}
             <div
               className={
-                topic ? "flex min-h-48 flex-1 flex-col gap-1" : "min-w-0"
+                topic ? "flex min-h-48 shrink-0 flex-col gap-1" : "min-w-0"
               }
             >
               <Label
@@ -380,7 +320,7 @@ export function ForumEditor({
               aria-label="站点表情"
               title="站点表情"
               disabled={busy}
-              onClick={() => setEmojiOpen(true)}
+              onClick={() => void openEmojis()}
             >
               <Smile />
             </Button>
@@ -459,7 +399,7 @@ export function ForumEditor({
         </form>
       <ForumModal open={emojiOpen} onOpenChange={setEmojiOpen} title="站点表情">
         <div className="grid grid-cols-6 gap-2">
-          {emojis
+          {(catalogue??emojis)
             .filter(
               (emoji) => emoji.status === "active" && emoji.visibleInPicker,
             )
@@ -506,7 +446,7 @@ export function ForumEditor({
               </Button>
             ))}
         </div>
-        {!emojis.length ? <p>还没有可用的表情。</p> : null}
+        {catalogue?.length===0 ? <p>还没有可用的表情。</p> : null}
       </ForumModal>
     </section>
   );

@@ -14,7 +14,7 @@ import { Plugin, type SelectionBookmark } from "@tiptap/pm/state";
 import { closeHistory } from "@tiptap/pm/history";
 import { X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { FORUM_BODY_LENGTH } from "@/lib/forum";
+import { FORUM_BODY_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_IMAGE_COUNT } from "@/lib/forum";
 import { selectDraftImages, cloneDraftImage, type DraftImage } from "./images";
 import { editorDocument, imageContent, inlineSlice, readDocument, textContent } from "./editor-document";
 import styles from "./mixed-editor.module.css";
@@ -86,7 +86,7 @@ export function MixedEditor({ body, images, busy, topic, onChange, onBusyChange,
             filterTransaction(transaction) {
               if (!transaction.docChanged) return true;
               const value = readDocument(transaction.doc, assets);
-              return value.body.length <= FORUM_BODY_LENGTH &&
+              return value.body.length <= (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH) && value.images.length<=FORUM_IMAGE_COUNT &&
                 new Set(value.images.map((image) => image.key)).size === value.images.length;
             },
           })];
@@ -185,6 +185,7 @@ export function MixedEditor({ body, images, busy, topic, onChange, onBusyChange,
     if (!files.length) return;
     return insert(async () => {
       processor.current ??= createImageProcessor();
+      if(readDocument(editor!.state.doc,assets).images.length+files.length>FORUM_IMAGE_COUNT)throw new Error("每帖最多 10 张图片。");
       const added = await selectDraftImages(files, processor.current.process);
       if (!mounted.current) {
         for (const image of added) URL.revokeObjectURL(image.preview);

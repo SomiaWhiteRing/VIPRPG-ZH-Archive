@@ -1,10 +1,13 @@
 export const FORUM_PAGE_SIZE = 30;
+export const FORUM_POST_PAGE_SIZE = 20;
 export const FORUM_COMMENT_PAGE_SIZE = 20;
 export const FORUM_PREVIEW_SIZE = 5;
 export const FORUM_TAG_LIMIT = 5;
 export const FORUM_TAG_LENGTH = 16;
 export const FORUM_TITLE_LENGTH = 160;
 export const FORUM_BODY_LENGTH = 20000;
+export const FORUM_POST_BODY_LENGTH = 5000;
+export const FORUM_IMAGE_COUNT = 10;
 export const FORUM_COMMENT_LENGTH = 2000;
 export const FORUM_QUERY_LENGTH = 200;
 export const FORUM_WRITES_PER_MINUTE = 10;
@@ -108,8 +111,8 @@ export type ForumPage<T> = {
   pageSize: number;
 };
 export type ForumFloor = ForumContent & {
-  comments: ForumPage<ForumContent>;
   commentPreview: ForumContent[];
+  comments: ForumPage<ForumContent>;
   commentsAvailable: boolean;
 };
 export type ForumDetail = {

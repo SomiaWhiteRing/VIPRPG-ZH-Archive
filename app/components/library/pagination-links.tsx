@@ -14,12 +14,14 @@ export function PaginationLinks({
   pageSize,
   params,
   total,
+  prefetch,
 }: {
   basePath: string;
   page: number;
   pageSize: number;
   params?: Record<string, string | readonly string[] | undefined>;
   total: number;
+  prefetch?: false;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
@@ -39,10 +41,10 @@ export function PaginationLinks({
       <div className="flex max-w-full items-center justify-center gap-1.5">
         {page > 1 ? (
           <>
-            <Link aria-label="首页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(1)}>
+            <Link prefetch={prefetch} aria-label="首页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(1)}>
               <ChevronFirst aria-hidden />
             </Link>
-            <Link aria-label="上一页" className={paginationItem} href={makeHref(page - 1)}>
+            <Link prefetch={prefetch} aria-label="上一页" className={paginationItem} href={makeHref(page - 1)}>
               <ChevronsLeft aria-hidden />
             </Link>
           </>
@@ -57,7 +59,7 @@ export function PaginationLinks({
               {pageNumber}
             </span>
           ) : (
-            <Link
+            <Link prefetch={prefetch}
               aria-label={`第 ${pageNumber} 页`}
               className={cn(paginationItem, !mobilePages.has(pageNumber) && "hidden sm:inline-flex")}
               href={makeHref(pageNumber)}
@@ -69,17 +71,17 @@ export function PaginationLinks({
         )}
         {page < totalPages ? (
           <>
-            <Link aria-label="下一页" className={paginationItem} href={makeHref(page + 1)}>
+            <Link prefetch={prefetch} aria-label="下一页" className={paginationItem} href={makeHref(page + 1)}>
               <ChevronsRight aria-hidden />
             </Link>
-            <Link aria-label="末页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(totalPages)}>
+            <Link prefetch={prefetch} aria-label="末页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(totalPages)}>
               <ChevronLast aria-hidden />
             </Link>
           </>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Form action={basePath} className="contents">
+        <Form prefetch={prefetch} action={basePath} className="contents">
           {Object.entries(params ?? {}).flatMap(([key, value]) =>
             value && key !== "page" ? (typeof value === "string" ? [value] : value).map((item,index) => <input key={`${key}-${index}`} name={key} type="hidden" value={item} />) : [],
           )}

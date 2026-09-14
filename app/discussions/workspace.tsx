@@ -1,5 +1,9 @@
 "use client";
 import Link from "next/link";
+import Form from "next/form";
+import dynamic from "next/dynamic";
+import { interactiveContent } from "@/lib/forum-state";
+import type { PublicForumContent } from "@/lib/forum-public";
 import { ThumbsUp, MessageSquare } from "lucide-react";
 import {
   ForumImages,
@@ -47,15 +51,16 @@ import {
   TopicTags,
   forumRequest,
   readForumEditVersion,
+  referencedForumEmojis,
 } from "./shared";
 import {
-  ForumEditor,
   ForumReplyBar,
   forumReplyLauncherClass,
   draftValue,
   draftSnapshot,
   type ForumDraft,
-} from "./editor";
+} from "./draft";
+const ForumEditor = dynamic(() => import("./editor").then((module) => module.ForumEditor));
 import {
   ForumActionDialog,
   ForumMenu,
@@ -110,6 +115,7 @@ export function DiscussionWorkspace({
   initialReply,
 }: Props) {
   const router = useRouter();
+  const [currentEmojis, setCurrentEmojis] = useState(emojis);
   const [pending, startTransition] = useTransition();
   useDiscussionVisit(initialDetail?.topic.id);
   const [detail, setDetail] = useState(initialDetail),
@@ -191,7 +197,9 @@ export function DiscussionWorkspace({
       void ask().then((ok) => {
         if (ok) {
           protectedRef.current.dirty = false;
-          window.location.assign(link.href);
+          setDraft(null);
+          if (url.origin === location.origin) router.push(url.pathname + url.search + url.hash);
+          else window.location.assign(link.href);
         }
       });
     }
@@ -230,7 +238,8 @@ export function DiscussionWorkspace({
       void ask().then((ok) => {
         if (ok) {
           protectedRef.current.dirty = false;
-          location.assign(destination);
+          setDraft(null);
+          router.push(destination);
         }
       });
     }
@@ -246,11 +255,11 @@ export function DiscussionWorkspace({
     };
   }, [ask, router, rememberLocation]);
   useEffect(() => {
-    if (!initialDetail) return;
-    const targetId = initialDetail.comment
-      ? `comment-${initialDetail.comment}`
-      : initialDetail.floor
-        ? `post-${initialDetail.floor}`
+    if (!detail) return;
+    const targetId = detail.comment
+      ? `comment-${detail.comment}`
+      : detail.floor
+        ? `post-${detail.floor}`
         : location.hash.slice(1);
     const replyEditor = initialReply
       ? document.querySelector<HTMLElement>(
@@ -282,7 +291,7 @@ export function DiscussionWorkspace({
       );
       rememberLocation();
     }
-  }, [initialDetail, initialReply, rememberLocation]);
+  }, [detail, initialReply, rememberLocation]);
   async function refreshDetail(removed?: ForumTarget, hidden = false) {
     if (!detail) {
       startTransition(() => router.refresh());
@@ -303,7 +312,7 @@ export function DiscussionWorkspace({
         );
         rememberLocation();
       }
-      const result = await forumRequest<{ detail: ForumDetail }>(
+      const result = await forumRequest<{ detail: ForumDetail; emojis: CustomEmojiDto[] }>(
         forumHref("/api/discussions", {
           op: "detail",
           topicId: detail.topic.id,
@@ -313,6 +322,7 @@ export function DiscussionWorkspace({
           comment: params.get("comment"),
         }),
       );
+      setCurrentEmojis(result.emojis);
       setDetail(result.detail);
     } catch (e) {
       if (e instanceof ForumRequestError && e.status === 404)
@@ -426,8 +436,13 @@ export function DiscussionWorkspace({
       const destination = new URL(result.href, location.origin);
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
-      router.push(destination.pathname + destination.search + destination.hash);
-      router.refresh();
+      if (detail?.topic.id === result.topicId) {
+        history.pushState(null, "", destination.pathname + destination.search + destination.hash);
+        rememberLocation();
+        await refreshDetail();
+      } else {
+        router.push(destination.pathname + destination.search + destination.hash);
+      }
     } catch (e) {
       setError(
         e instanceof ForumRequestError && e.status === 0
@@ -616,7 +631,7 @@ export function DiscussionWorkspace({
       progress={uploadProgress}
       loginExpired={requestError?.status === 401}
       conflict={!!draft.target && requestError?.code === "forum_conflict"}
-      emojis={emojis}
+      emojis={currentEmojis}
     />
   ) : null;
   const replyBar = detail && !unavailable && draft?.mode !== "topic" ? (
@@ -678,8 +693,7 @@ export function DiscussionWorkspace({
   }
   return (
     <main
-      className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4"
-      style={{ paddingBottom: "calc(1rem + var(--forum-reply-clearance, 0px))" }}
+      className="mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]"
     >
       {unavailable ? (
         <>
@@ -720,7 +734,7 @@ export function DiscussionWorkspace({
                   key={`${post.id}-${detail.topic.revision}`}
                   post={post}
                   topic={detail.topic}
-                  emojis={emojis}
+                  emojis={currentEmojis}
                   viewer={viewer}
                   page={detail.posts.page}
                   returnTo={returnTo}
@@ -792,7 +806,7 @@ export function DiscussionWorkspace({
               title="讨论"
               actions={
                 <>
-                  <form
+                  <Form
                     className="hidden items-center gap-2 md:flex"
                     action="/search"
                   >
@@ -809,7 +823,7 @@ export function DiscussionWorkspace({
                     <Button type="submit" variant="outline">
                       搜索
                     </Button>
-                  </form>
+                  </Form>
                   <Button
                     className="md:hidden"
                     type="button"
@@ -944,7 +958,7 @@ export function DiscussionWorkspace({
                 total={topics.total}
                 params={{
                   view: featured ? "featured" : undefined,
-                  tag: selected.map((t) => String(t.id)),
+                  tag: selected.map((tag) => String(tag.id)),
                 }}
               />
             ) : null}
@@ -1010,7 +1024,7 @@ export function DiscussionWorkspace({
         onOpenChange={setSearchOpen}
         title="搜索讨论"
       >
-        <form action="/search" className="flex gap-2">
+        <Form action="/search" className="flex gap-2">
           <input type="hidden" name="scope" value="discussions" />
           <Label className="sr-only" htmlFor="discussion-mobile-search">
             搜索讨论
@@ -1022,7 +1036,7 @@ export function DiscussionWorkspace({
             type="search"
           />
           <Button type="submit">搜索</Button>
-        </form>
+        </Form>
       </ForumModal>
     </main>
   );
@@ -1054,6 +1068,7 @@ function ForumFloorView({
   onLocationChange: () => void;
 }) {
   const [expanded, setExpanded] = useState(initialExpanded),
+    [commentEmojis, setCommentEmojis] = useState(emojis),
     [comments, setComments] = useState(post.comments),
     [preview, setPreview] = useState(post.commentPreview),
     [loading, setLoading] = useState(false),
@@ -1065,16 +1080,22 @@ function ForumFloorView({
     setLoading(true);
     setError("");
     try {
-      const result = await forumRequest<{ comments: ForumPage<ForumContent> }>(
+      const result = await forumRequest<{ comments: ForumPage<PublicForumContent> }>(
         forumHref("/api/discussions", {
           op: "comments",
           postId: post.id,
           page,
         }),
       );
-      setComments(result.comments);
+      const mapped = { ...result.comments, items: result.comments.items.map((item) => {
+        const content = interactiveContent(item, topic, viewer);
+        content.capabilities.reply &&= post.state === "published";
+        return content;
+      }) };
+      setCommentEmojis(await referencedForumEmojis(mapped.items.map((item) => item.body)));
+      setComments(mapped);
       if (result.comments.page === 1)
-        setPreview(result.comments.items.slice(0, FORUM_PREVIEW_SIZE));
+        setPreview(mapped.items.slice(0, FORUM_PREVIEW_SIZE));
       setExpanded(true);
       const params = new URLSearchParams(location.search);
       params.set("floor", String(post.postNumber));
@@ -1257,7 +1278,7 @@ function ForumFloorView({
                         </>
                       ) : null}
                       ：
-                      <ForumBody body={comment.body!} emojis={emojis} inline />
+                      <ForumBody body={comment.body!} emojis={commentEmojis} inline />
                     </>
                   ) : (
                     <span className="text-muted">
