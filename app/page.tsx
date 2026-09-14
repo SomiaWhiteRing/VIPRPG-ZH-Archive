@@ -1,126 +1,78 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Link from "next/link";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { listGameWorks } from "@/lib/server/db/game-library";
-import { HomeAnchors } from "@/app/components/home/home-tabs";
 import { GameCard } from "@/app/components/home/game-card";
+import { HomeCommunity } from "@/app/components/home/home-community";
+import { listGameWorks } from "@/lib/server/db/game-library";
+import { getForumRuntime } from "@/lib/server/forum/next";
+import { publicTopicList } from "@/lib/server/forum/public-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [currentUser, recentWorks, recentOriginalWorks] = await Promise.all([
-    getCurrentUserFromCookies(),
+  const [recentWorks, recentOriginalWorks, topics] = await Promise.all([
     listGameWorks({ limit: 12 }),
-    listGameWorks({ limit: 12, isOriginal: true }),
+    listGameWorks({ limit: 4, isOriginal: true }),
+    publicTopicList(getForumRuntime(), { tags: [], featured: false, page: 1 }),
   ]);
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
-      <section
-        className="gap-8 border-b border-border py-6 pb-10 hidden md:grid"
-        aria-label="作品发现"
-      >
-        <div>
-          <h1 className="text-xl font-extrabold leading-[0.98] tracking-tight md:text-6xl">
-            夢溢れるエターナラーを応援しています。
-          </h1>
-          <p className="mt-4 max-w-xl text-lg leading-8 text-muted">
-            欢迎来到VIPRPG中文保管库。
-          </p>
-        </div>
-      </section>
-
-      <HomeAnchors />
-
-      <HomeGameSection
-        description="最近更新的公开游戏。"
-        id="recent-updates"
-        moreHref="/games"
-        title="最近更新"
-        works={recentWorks}
-      />
-
-      <HomeGameSection
-        className="mt-14"
-        description="由作者亲自在本站发表的游戏。"
-        id="recent-original"
-        moreHref="/games?original=1"
-        title="最近原创"
-        works={recentOriginalWorks}
-      />
-
-      <section className="mt-14 scroll-mt-36" id="about-site" aria-labelledby="about-site-title">
-        <div className="mb-5 flex items-end justify-between gap-5">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight" id="about-site-title">
-              关于本站
-            </h2>
-            <p className="mt-1 text-muted">一个面向玩家的 VIPRPG 作品空间。</p>
+    <main className="mx-auto w-[min(1280px,calc(100%-2rem))] pt-6 pb-10 min-[561px]:w-[min(1280px,calc(100%-3rem))] min-[561px]:pt-8 min-[1101px]:w-[min(1280px,calc(100%-5.5rem))]">
+      <div className="grid gap-7 min-[561px]:gap-8 min-[851px]:grid-cols-[minmax(0,1fr)_205px] min-[851px]:gap-6 min-[1101px]:grid-cols-[minmax(0,1fr)_237px] min-[1101px]:gap-9">
+        <section className="min-w-0 scroll-mt-24" id="recent-updates" aria-labelledby="recent-heading">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3 min-[561px]:mb-5">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-tight" id="recent-heading">
+                最近更新
+              </h1>
+              <p className="mt-1 text-muted">最近更新的公开游戏。</p>
+            </div>
+            <Link className="shrink-0 text-sm font-bold text-primary hover:text-accent" href="/games">
+              查看全部游戏 →
+            </Link>
           </div>
-          <Link className="text-sm font-bold text-primary hover:text-accent" href="/about">
-            了解更多 →
+          <HomeWorkGrid works={recentWorks} />
+        </section>
+
+        <HomeCommunity topics={topics.items.slice(0, 5)} />
+      </div>
+
+      <section
+        className="mt-7 grid gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:grid-cols-[135px_minmax(0,1fr)] min-[851px]:gap-6 min-[1101px]:grid-cols-[170px_minmax(0,1fr)] min-[1101px]:gap-8 scroll-mt-24"
+        id="recent-original"
+        aria-labelledby="original-heading"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3 min-[851px]:block">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight" id="original-heading">
+              最近原创
+            </h2>
+            <p className="mt-1 text-muted">由作者亲自在本站发表的游戏。</p>
+          </div>
+          <Link className="ml-auto shrink-0 text-sm font-bold text-primary hover:text-accent min-[851px]:mt-5 min-[851px]:inline-block" href="/games?original=1">
+            查看全部游戏 →
           </Link>
         </div>
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
-          <p className="max-w-175 text-muted leading-7">
-            VIPRPG.org 收录 VIPRPG 活动与社区相关的 RPG Maker 2000/2003 作品，
-            提供清晰的游戏资料、当前快照、在线游玩和下载入口。这里优先展示真实作品内容，
-            让你从浏览到开始游戏只需要几步。
-          </p>
-          <div className="grid gap-3 border-l-4 border-accent pl-5">
-            <div>
-              <strong>作品优先</strong>
-              <span>封面、简介和游玩入口先于技术细节。</span>
-            </div>
-            <div>
-              <strong>可追溯</strong>
-              <span>历史快照保留在站内，公开页始终指向当前内容。</span>
-            </div>
-            <div>
-              <strong>一起补充</strong>
-              <span>{currentUser ? "可以从账户入口查看你的贡献状态。" : "登录后可以申请上传权限。"}</span>
-            </div>
-          </div>
-        </div>
+        <HomeWorkGrid original works={recentOriginalWorks} />
       </section>
     </main>
   );
 }
 
-function HomeGameSection({
-  className,
-  description,
-  id,
-  moreHref,
-  title,
-  works,
-}: {
-  className?: string;
-  description: string;
-  id: string;
-  moreHref: string;
-  title: string;
+function HomeWorkGrid({ works, original = false }: {
   works: Awaited<ReturnType<typeof listGameWorks>>;
+  original?: boolean;
 }) {
+  if (!works.length) {
+    return <EmptyState title={original ? "目前还没有公开原创作品。" : "目前还没有公开作品。"} variant="plain" className="py-6" />;
+  }
+
   return (
-    <section className={`${className ?? ""} @container scroll-mt-36`} id={id} aria-labelledby={`${id}-title`}>
-        <div className="mb-5 flex items-end justify-between gap-5">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight" id={`${id}-title`}>
-              {title}
-            </h2>
-            <p className="mt-1 text-muted">{description}</p>
-          </div>
-          <Link className="text-sm font-bold text-primary hover:text-accent" href={moreHref}>
-            查看全部游戏 →
-          </Link>
-        </div>
-        {works.length > 0 ? (
-          <div className="grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4">
-            {works.map((work) => <GameCard key={work.id} work={work} />)}
-          </div>
-        ) : (
-          <p className="max-w-175 text-muted leading-7">目前还没有公开作品。</p>
-        )}
-      </section>
+    <div className="@container min-w-0">
+      <div className={`grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4 ${original
+        ? "@max-[609px]:[&>*:nth-child(n+3)]:hidden @max-[889px]:[&>*:nth-child(n+4)]:hidden"
+        : "@max-[609px]:[&>*:nth-child(n+7)]:hidden @max-[889px]:[&>*:nth-child(n+10)]:hidden"}`}>
+        {works.map((work) => <GameCard key={work.id} work={work} />)}
+      </div>
+    </div>
   );
 }
