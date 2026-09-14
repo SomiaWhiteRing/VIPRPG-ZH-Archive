@@ -1,9 +1,11 @@
-import { base64UrlEncodeBytes, toArrayBuffer, utf8Encode } from "@/lib/server/crypto/encoding";
-import { sha256Hex } from "@/lib/server/crypto/sha256";
+import { SESSION_COOKIE_NAME, hashSessionToken, parseCookie, isSessionToken } from "./session-token";
+export { getSessionHashFromCookieHeader, hashSessionToken } from "./session-token";
+import { base64UrlEncodeBytes } from "@/lib/server/crypto/encoding";
+
 import { getRequestFingerprints } from "@/lib/server/auth/request-context";
 import { getD1 } from "@/lib/server/db/d1";
 
-export const SESSION_COOKIE_NAME = "viprpg_session";
+export { SESSION_COOKIE_NAME } from "./session-token";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 
 export type SessionIdentity = { id: number; userId: number };
@@ -24,11 +26,7 @@ export function createClearSessionCookie(requestUrl: string): string {
   return serializeCookie(SESSION_COOKIE_NAME, "", { maxAge: 0, requestUrl });
 }
 
-export async function getSessionHashFromCookieHeader(cookieHeader: string | null): Promise<string | null> {
-  const token = parseCookie(cookieHeader, SESSION_COOKIE_NAME);
-  if (!isSessionToken(token)) return null;
-  return hashSessionToken(token);
-}
+
 
 export async function revokeSessionFromCookieHeader(cookieHeader: string | null): Promise<void> {
   const token = parseCookie(cookieHeader, SESSION_COOKIE_NAME);
@@ -37,9 +35,7 @@ export async function revokeSessionFromCookieHeader(cookieHeader: string | null)
     .bind(await hashSessionToken(token)).run();
 }
 
-export async function hashSessionToken(token: string): Promise<string> {
-  return sha256Hex(toArrayBuffer(utf8Encode(token)));
-}
+
 
 function serializeCookie(name: string, value: string, options: { maxAge: number; requestUrl: string }): string {
   const parts = [
@@ -51,17 +47,4 @@ function serializeCookie(name: string, value: string, options: { maxAge: number;
   ];
   if (new URL(options.requestUrl).protocol === "https:") parts.push("Secure");
   return parts.join("; ");
-}
-
-function parseCookie(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(";")) {
-    const [rawName, ...rawValue] = part.trim().split("=");
-    if (rawName === name) return rawValue.join("=") || null;
-  }
-  return null;
-}
-
-function isSessionToken(token: string | null): token is string {
-  return Boolean(token && /^[A-Za-z0-9_-]{43}$/.test(token));
 }

@@ -1,5 +1,7 @@
-import { getD1 } from "@/lib/server/db/d1";
+import type { ForumRuntime } from "./runtime";
+
 import { HttpError } from "@/lib/server/http/json";
+import { FORUM_IMAGE_COUNT } from "@/lib/forum";
 
 export const imageColumns =
   "id,('/api/discussions/images/' || id) AS url,('/api/discussions/images/' || id) AS thumb,width,height,size,format,body_offset AS offset";
@@ -8,6 +10,7 @@ export function imageIds(value: unknown, comment = false): string[] {
   if (value === undefined) return [];
   if (
     !Array.isArray(value) ||
+    value.length > FORUM_IMAGE_COUNT ||
     (comment && value.length > 0) ||
     value.some(
       (id) => typeof id !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(id),
@@ -55,13 +58,13 @@ export function imageOffsets(
 }
 // The post revision is written by the existing guarded transaction. A failed
 // topic/content guard cannot detach or claim any attachment.
-export function imageStatements(
+export function imageStatements(ctx: ForumRuntime,
   ids: string[],
   userId: number,
   revision: string,
   offsets: number[],
 ) {
-  const db = getD1(),
+  const db = ctx.db,
     target = "SELECT id FROM forum_posts WHERE user_id=? AND revision=?";
   return [
     db

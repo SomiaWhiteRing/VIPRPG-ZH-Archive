@@ -1,3 +1,4 @@
+import type { ForumRuntime } from "./runtime";
 import type { ForumImage } from "@/lib/forum";
 import { hasPermission } from "@/lib/authz/permissions";
 import {
@@ -10,7 +11,7 @@ import {
   type ForumTag,
   type ForumTarget,
 } from "@/lib/forum";
-import { getD1 } from "@/lib/server/db/d1";
+
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { HttpError } from "@/lib/server/http/json";
 import {
@@ -68,7 +69,7 @@ export type ForumAdminDetail = {
     createdAt: string;
   }[];
 };
-export async function adminForumList(
+export async function adminForumList(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: { view: string; query?: string; state?: string; page: number },
 ): Promise<ForumPage<ForumAdminRow>> {
@@ -91,13 +92,13 @@ export async function adminForumList(
     UNION ALL SELECT c.id,'comment',p.topic_id,p.post_number,t.title,c.body,c.status,u.display_name,c.created_at FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id JOIN forum_topics t ON t.id=p.topic_id JOIN users u ON u.id=c.user_id`;
   else
     source = `SELECT t.id,'topic' AS kind,t.id AS topicId,1 AS postNumber,t.title,p.body,t.status AS state,u.display_name AS author,t.updated_at AS createdAt,t.locked,t.featured_at AS featured,
-    (SELECT COUNT(*) FROM forum_public_content pc WHERE pc.topic_id=t.id AND NOT(pc.kind='post' AND pc.post_number=1)) AS replies,
+    t.reply_count AS replies,
     (SELECT group_concat(g.name,' / ') FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden') AS tags
     FROM ${moderate ? "forum_topics" : "forum_public_topics"} t JOIN forum_posts p ON p.topic_id=t.id AND p.post_number=1 JOIN users u ON u.id=t.user_id`;
   const where = `WHERE (?='' OR instr(lower(title),lower(?))>0 OR instr(lower(body),lower(?))>0 OR instr(lower(author),lower(?))>0 OR CAST(id AS TEXT)=?
     OR EXISTS(SELECT 1 FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=rows.topicId ${moderate ? "" : "AND g.status<>'hidden'"} AND instr(g.name_key,lower(?))>0)) AND (?='' OR state=?)`;
   const args = [query, query, query, query, query, query, state, state];
-  const total = (await getD1()
+  const total = (await ctx.db
     .prepare(`WITH rows AS(${source}) SELECT COUNT(*) AS n FROM rows ${where}`)
     .bind(...args)
     .first<{ n: number }>())!.n;
@@ -105,7 +106,7 @@ export async function adminForumList(
     forumPage(input.page),
     Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
   );
-  const rows = await getD1()
+  const rows = await ctx.db
     .prepare(
       `WITH rows AS(${source}) SELECT * FROM rows ${where} ORDER BY createdAt ${input.view === "reports" ? "ASC" : "DESC"},id LIMIT ? OFFSET ?`,
     )
@@ -113,16 +114,16 @@ export async function adminForumList(
     .all<ForumAdminRow>();
   return { items: rows.results, total, page, pageSize: FORUM_PAGE_SIZE };
 }
-export async function adminForumDetail(
+export async function adminForumDetail(ctx: ForumRuntime,
   actor: ArchiveUser,
   target: ForumTarget,
 ): Promise<ForumAdminDetail> {
   const moderate = hasPermission(actor, "forum.content.moderate_any");
   if (!moderate) checkPermission(actor, "forum.topic.feature_any");
-  const row = await rawContent(target),
-    topic = await rawTopic(row.topic_id);
+  const row = await rawContent(ctx, target),
+    topic = await rawTopic(ctx, row.topic_id);
   if (!moderate && (target.kind !== "topic" || !topic.public)) unavailable();
-  const tags = await topicTags([topic.id]);
+  const tags = await topicTags(ctx, [topic.id]);
   const dto = mapTopic(topic, forumViewer(actor), tags.get(topic.id) ?? []);
   const normalized =
     row.kind === "post" && row.post_number === 1
@@ -133,7 +134,7 @@ export async function adminForumDetail(
   const auditDetail = moderate
     ? "a.detail_json"
     : "json_object('topicId',json_extract(a.detail_json,'$.topicId'),'action',substr(a.event_type,7))";
-  const audit = await getD1()
+  const audit = await ctx.db
     .prepare(
       `SELECT a.id,u.display_name AS actor,a.event_type AS event,${auditDetail} AS detail,a.created_at AS createdAt
     FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.event_type LIKE 'forum_%'
@@ -143,7 +144,7 @@ export async function adminForumDetail(
     .all<ForumAdminDetail["audit"][number]>();
   const parent =
     target.kind === "comment"
-      ? await rawContent({ kind: "post", id: row.post_id })
+      ? await rawContent(ctx, { kind: "post", id: row.post_id })
       : null;
   return {
     target: normalized,
@@ -171,7 +172,7 @@ export type AdminForumTag = ForumTag & {
   updatedAt: string;
   affectedCount: number;
 };
-export async function adminForumTags(
+export async function adminForumTags(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: { query?: string; state?: string; page: number },
 ): Promise<ForumPage<AdminForumTag>> {
@@ -181,7 +182,7 @@ export async function adminForumTags(
   const where =
     "WHERE (?='' OR instr(g.name_key,?)>0 OR CAST(g.id AS TEXT)=?) AND (?='' OR g.status=?)";
   const args = [query, forumTagKey(query), query, state, state];
-  const total = (await getD1()
+  const total = (await ctx.db
     .prepare(`SELECT COUNT(*) AS n FROM forum_tags g ${where}`)
     .bind(...args)
     .first<{ n: number }>())!.n;
@@ -189,7 +190,7 @@ export async function adminForumTags(
     forumPage(input.page),
     Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
   );
-  const rows = await getD1()
+  const rows = await ctx.db
     .prepare(
       `SELECT g.id,g.name,g.status AS state,g.revision,u.display_name AS creator,g.updated_at AS updatedAt,
     (SELECT COUNT(*) FROM forum_topic_tags x WHERE x.tag_id=g.id) AS affectedCount,
@@ -200,7 +201,7 @@ export async function adminForumTags(
     .all<AdminForumTag>();
   return { items: rows.results, total, page, pageSize: FORUM_PAGE_SIZE };
 }
-export async function manageForumTag(
+export async function manageForumTag(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
@@ -208,7 +209,7 @@ export async function manageForumTag(
   const id = Number(input.id);
   if (!Number.isSafeInteger(id) || id < 1)
     throw new HttpError(400, "TAG 无效。");
-  const row = await getD1()
+  const row = await ctx.db
     .prepare("SELECT * FROM forum_tags WHERE id=?")
     .bind(id)
     .first<{
@@ -236,7 +237,7 @@ export async function manageForumTag(
     name = normalizeForumTag(name);
     key = forumTagKey(name);
     if (
-      await getD1()
+      await ctx.db
         .prepare("SELECT id FROM forum_tags WHERE name_key=? AND id<>?")
         .bind(key, id)
         .first()
@@ -244,7 +245,7 @@ export async function manageForumTag(
       throw new HttpError(409, "此名称已被使用，请选择合并。");
   }
   if (action === "merge") {
-    target = await getD1()
+    target = await ctx.db
       .prepare(
         "SELECT id,revision,name FROM forum_tags WHERE id=? AND status='active' AND id<>?",
       )
@@ -254,7 +255,7 @@ export async function manageForumTag(
     if (target.revision !== input.targetRevision) conflict();
   }
   const token = crypto.randomUUID(),
-    db = getD1();
+    db = ctx.db;
   const guard = "EXISTS(SELECT 1 FROM forum_tags WHERE id=? AND revision=?)";
   const state =
     action === "disable"
@@ -340,24 +341,4 @@ export async function manageForumTag(
     );
   const results = await db.batch(statements);
   if (!results[0].meta.changes) conflict();
-}
-export async function exportForum(actor: ArchiveUser) {
-  checkPermission(actor, "forum.content.moderate_any");
-  checkPermission(actor, "forum.tag.manage");
-  const tables = [
-    "forum_topics",
-    "forum_posts",
-    "forum_images",
-    "forum_post_comments",
-    "forum_tags",
-    "forum_topic_tags",
-    "forum_post_likes",
-    "forum_content_reports",
-  ];
-  const results = await getD1().batch(
-    tables.map((table) => getD1().prepare(`SELECT * FROM ${table}`)),
-  );
-  return Object.fromEntries(
-    tables.map((table, index) => [table, results[index].results]),
-  );
 }

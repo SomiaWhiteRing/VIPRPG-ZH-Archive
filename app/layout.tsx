@@ -21,8 +21,8 @@ export default function RootLayout({
     // Browser extensions (e.g. Immersive Translate) may add root attributes before hydration.
     <html className="scroll-smooth motion-reduce:scroll-auto" lang="zh-Hans" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased" suppressHydrationWarning>
-        <SiteHeader />
         <DiscussionVisitBoundary />
+        <SiteHeader />
         {children}
         <SiteFooter />
       </body>

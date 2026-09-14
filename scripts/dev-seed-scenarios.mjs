@@ -5,6 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { DatabaseSync, backup } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { getPlatformProxy } from "wrangler";
+import { forumSearchTokens } from "../lib/forum-search-index.ts";
+import { searchScopeSql } from "../lib/server/forum/search-index.ts";
 import passwordPolicy from "../lib/server/auth/password-policy.json" with { type: "json" };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,8 +40,27 @@ export async function seedDevScenarios() {
   try {
     candidate.exec("PRAGMA foreign_keys=ON");
     statements = scenarioStatements(candidate);
+    candidate.exec(`BEGIN;\n${statements.join("\n")}\n`);
+    const mapping=`INSERT INTO forum_search_documents(post_id,comment_id)
+      SELECT post_id,comment_id FROM (
+        SELECT p.id AS post_id,NULL AS comment_id,p.created_at,0 AS kind,p.id FROM forum_posts p WHERE NOT EXISTS(SELECT 1 FROM forum_search_documents d WHERE d.post_id=p.id)
+        UNION ALL SELECT NULL,c.id,c.created_at,1,c.id FROM forum_post_comments c WHERE NOT EXISTS(SELECT 1 FROM forum_search_documents d WHERE d.comment_id=c.id)
+      ) ORDER BY created_at,kind,id;`;
+    candidate.exec(mapping);statements.push(mapping);
+    const missing=candidate.prepare(`SELECT d.id,CASE WHEN p.post_number=1 THEN t.title ELSE '' END AS title,COALESCE(p.body,c.body) AS body
+      FROM forum_search_documents d LEFT JOIN forum_posts p ON p.id=d.post_id LEFT JOIN forum_post_comments c ON c.id=d.comment_id
+      LEFT JOIN forum_topics t ON t.id=p.topic_id WHERE COALESCE(p.status,c.status)<>'deleted' AND NOT EXISTS(SELECT 1 FROM forum_search_index f WHERE f.rowid=d.id)`).all();
+    for(const row of missing){
+      const encoded=forumSearchTokens(row.body);
+      const statement=`INSERT INTO forum_search_index(rowid,title,body,scope) SELECT d.id,${quote(forumSearchTokens(row.title??""))},${quote(encoded.slice(0,32000))},${searchScopeSql} FROM forum_search_documents d WHERE d.id=${row.id};`;
+      candidate.exec(statement);statements.push(statement);
+      for(let start=32000;start<encoded.length;start+=32000){
+        const append=`UPDATE forum_search_index SET body=body||${quote(encoded.slice(start,start+32000))} WHERE rowid=${row.id};`;
+        candidate.exec(append);statements.push(append);
+      }
+    }
+    candidate.exec("COMMIT");
     writeFileSync(join(outputDir, "scenarios.sql"), `${statements.join("\n")}\n`);
-    candidate.exec(`BEGIN;\n${statements.join("\n")}\nCOMMIT;`);
     if (candidate.prepare("PRAGMA foreign_key_check").all().length) {
       throw new Error("候选数据存在外键错误，未写入开发库。");
     }
@@ -226,25 +247,27 @@ function scenarioStatements(db) {
 
   const forum = JSON.parse(readFileSync(join(root, "data/dev/forum.json"), "utf8"));
   const forumUser = { 1: users.super, 2: users.admin, 3: users.user };
-  const idFields = new Set(["id", "topic_id", "post_id", "tag_id", "reply_to_id", "comment_id", "target_id"]);
+  const idFields = new Set(["id", "topic_id", "post_id", "tag_id", "reply_to_id", "comment_id", "target_id", "last_post_id", "last_comment_id"]);
   for (const table of ["forum_tags", "forum_topics", "forum_topic_tags", "forum_posts", "forum_post_comments", "forum_content_reports"]) {
     for (const original of forum[table]) {
       const row = Object.fromEntries(Object.entries(original).map(([column, value]) => [
-        column, idFields.has(column) ? value + 10000 : ["user_id", "featured_by", "resolved_by"].includes(column) ? forumUser[value] : value,
+        column, value == null ? value : idFields.has(column) ? value + 10000 : ["user_id", "featured_by", "resolved_by"].includes(column) ? forumUser[value] : value,
       ]));
-      if (row.title !== undefined) row.title_search = key(row.title);
       if (row.body !== undefined) {
         if (table === "forum_posts" && original.id === 1000) row.body += "\n\n相关作品：/games/10001\n欢迎补充体验！ :dev_wave:";
-        row.body_search = key(row.body);
       }
       if (table !== "forum_topic_tags" && table !== "forum_content_reports") row.revision = hash(`dev-${table}-${row.id}`);
       if (["forum_topics", "forum_posts", "forum_post_comments"].includes(table)) {
         row.request_key = `dev-${table}-${row.id}`;
         row.request_hash = hash(row.request_key);
       }
-      if (table === "forum_topics") row.write_token = hash(`dev-write-${row.id}`);
+      if (table === "forum_topics") {row.write_token = hash(`dev-write-${row.id}`);delete row.last_post_id;delete row.last_comment_id;}
       insert(table, row, table === "forum_topic_tags" ? "topic_id,tag_id" : "id");
     }
+  }
+  for(const topic of forum.forum_topics){
+    // Complete cyclic references only for pristine seeded topics; preserve later edits.
+    sql.push(`UPDATE forum_topics SET last_post_id=${quote(topic.last_post_id==null?null:topic.last_post_id+10000)},last_comment_id=${quote(topic.last_comment_id==null?null:topic.last_comment_id+10000)} WHERE id=${topic.id+10000} AND write_token=${quote(hash(`dev-write-${topic.id+10000}`))};`);
   }
   for (const user of [users.user, 10001, users.uploader]) insert("forum_post_likes", { post_id: 11000, user_id: user }, "post_id,user_id");
   for (const [id, status, target, targetId, post, comment] of [[10101, "resolved", "comment", 12003, 11001, 12003], [10102, "dismissed", "topic", 10102, null, null]]) {

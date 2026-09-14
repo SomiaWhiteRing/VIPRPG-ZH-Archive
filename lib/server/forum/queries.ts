@@ -1,29 +1,11 @@
+import type { ForumRuntime } from "./runtime";
 import { imageJsonSql } from "./images";
 import { hasPermission } from "@/lib/authz/permissions";
-import {
-  FORUM_COMMENT_PAGE_SIZE,
-  FORUM_PAGE_SIZE,
-  FORUM_PREVIEW_SIZE,
-  FORUM_QUERY_LENGTH,
-  forumHref,
-  forumPage,
-  type ForumAuthor,
-  type ForumCapabilities,
-  type ForumContent,
-  type ForumDetail,
-  type ForumImage,
-  type ForumPage,
-  type ForumSearchHit,
-  type ForumState,
-  type ForumTag,
-  type ForumTarget,
-  type ForumTopic,
-  type ForumViewer,
-} from "@/lib/forum";
-import { getD1 } from "@/lib/server/db/d1";
+import { type ForumAuthor, type ForumCapabilities, type ForumContent, type ForumImage, type ForumState, type ForumTag, type ForumTarget, type ForumTopic, type ForumViewer } from "@/lib/forum";
+
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { HttpError } from "@/lib/server/http/json";
-import { forumSearchSnippet, normalizeForumSearch } from "@/lib/forum-search";
+
 
 // Moderation audit detail only; TAG changes advance the owning topics' revisions.
 const TAG_SNAPSHOT = `(SELECT COALESCE(json_group_array(json_array(id,revision,position)),'[]') FROM
@@ -51,12 +33,15 @@ export type TopicRow = {
   last_avatar: string | null;
   last_status: string | null;
   deletable: number;
+  next_post_number: number;
 };
 export type ContentRow = {
   id: number;
   topic_id: number;
   post_id: number;
   post_number: number;
+  comment_number: number;
+  next_comment_number: number;
   user_id: number;
   kind: "post" | "comment";
   body: string;
@@ -81,16 +66,18 @@ export type ContentRow = {
   liked: number;
 };
 const authorColumns = `u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar,u.status AS author_status`;
-const topicSql = `SELECT t.*,${authorColumns},${TAG_SNAPSHOT} AS tag_snapshot,
+export const topicSql = `SELECT t.*,${authorColumns},${TAG_SNAPSHOT} AS tag_snapshot,
   EXISTS(SELECT 1 FROM forum_public_topics pt WHERE pt.id=t.id) AS public,
-  (SELECT COUNT(*) FROM forum_public_content c WHERE c.topic_id=t.id AND NOT(c.kind='post' AND c.post_number=1)) AS replies,
-  COALESCE((SELECT MAX(c.created_at) FROM forum_public_content c WHERE c.topic_id=t.id),t.created_at) AS active_at,
+  t.reply_count AS replies,t.last_activity_at AS active_at,
   last_user.id AS last_user_id,last_user.display_name AS last_name,last_user.avatar_blob_sha256 AS last_avatar,last_user.status AS last_status,
-  NOT EXISTS(SELECT 1 FROM forum_posts p WHERE p.topic_id=t.id AND p.post_number<>1 AND p.status<>'deleted')
-    AND NOT EXISTS(SELECT 1 FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id WHERE p.topic_id=t.id AND c.status<>'deleted') AS deletable
+  0 AS deletable
   FROM forum_topics t JOIN users u ON u.id=t.user_id
-  LEFT JOIN users last_user ON last_user.id=(SELECT c.user_id FROM forum_public_content c WHERE c.topic_id=t.id
-    AND NOT(c.kind='post' AND c.post_number=1) ORDER BY c.created_at DESC,c.kind,c.id DESC LIMIT 1)`;
+  LEFT JOIN forum_posts last_post ON last_post.id=t.last_post_id AND last_post.status='published'
+  LEFT JOIN forum_post_comments last_comment ON last_comment.id=t.last_comment_id AND last_comment.status='published'
+  LEFT JOIN forum_posts last_parent ON last_parent.id=last_comment.post_id AND last_parent.status IN('published','deleted')
+  LEFT JOIN users last_parent_user ON last_parent_user.id=last_parent.user_id AND last_parent_user.status IN('active','deleted')
+  LEFT JOIN users last_user ON last_user.id=COALESCE(last_post.user_id,CASE WHEN last_parent_user.id IS NOT NULL THEN last_comment.user_id END)
+    AND last_user.status IN('active','deleted')`;
 
 export function forumViewer(user: ArchiveUser | null): ForumViewer {
   return user
@@ -120,23 +107,23 @@ export function author(
     profile: status === "active",
   };
 }
-export async function rawTopic(id: number): Promise<TopicRow> {
-  const row = await getD1()
+export async function rawTopic(ctx: ForumRuntime, id: number): Promise<TopicRow> {
+  const row = await ctx.db
     .prepare(`${topicSql} WHERE t.id=?`)
     .bind(id)
     .first<TopicRow>();
   if (!row) unavailable();
   return row;
 }
-export async function topicTags(
+export async function topicTags(ctx: ForumRuntime,
   ids: number[],
 ): Promise<Map<number, ForumTag[]>> {
   const tags = new Map<number, ForumTag[]>();
   if (!ids.length) return tags;
-  const rows = await getD1()
+  const rows = await ctx.db
     .prepare(
       `SELECT x.topic_id,g.id,g.name,g.status AS state,g.revision,
-    (SELECT COUNT(*) FROM forum_topic_tags tx JOIN forum_public_topics pt ON pt.id=tx.topic_id WHERE tx.tag_id=g.id) AS count
+    0 AS count
     FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id
     WHERE x.topic_id IN (SELECT value FROM json_each(?)) AND g.status<>'hidden'
     ORDER BY x.topic_id,x.position`,
@@ -194,41 +181,17 @@ export function mapTopic(
     },
   };
 }
-export async function publicTopic(
+export async function publicTopic(ctx: ForumRuntime,
   id: number,
   viewer: ForumViewer,
 ): Promise<ForumTopic> {
-  const row = await rawTopic(id);
+  const row = await rawTopic(ctx, id);
   if (!row.public) unavailable();
-  const tags = await topicTags([id]);
+  const tags = await topicTags(ctx, [id]);
   return mapTopic(row, viewer, tags.get(id) ?? []);
 }
-export async function listForumTags(
-  query = "",
-  mode: "filter" | "suggest" | "popular" = "filter",
-): Promise<ForumTag[]> {
-  const term = query
-    .normalize("NFKC")
-    .trim()
-    .toLowerCase()
-    .slice(0, FORUM_QUERY_LENGTH);
-  const rows = await getD1()
-    .prepare(
-      `SELECT g.id,g.name,g.status AS state,g.revision,
-    (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_public_topics t ON t.id=x.topic_id WHERE x.tag_id=g.id) AS count
-    FROM forum_tags g WHERE g.status ${mode === "suggest" ? "='active'" : "<>'hidden'"} AND instr(g.name_key,?)>0
-    ORDER BY ${mode === "popular" ? `(SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_public_topics t ON t.id=x.topic_id WHERE x.tag_id=g.id AND t.created_at>=datetime('now','-90 days')) DESC,` : "CASE WHEN substr(g.name_key,1,length(?))=? THEN 0 ELSE 1 END,"}
-    count DESC,g.name_key LIMIT ?`,
-    )
-    .bind(
-      ...(mode === "popular"
-        ? [term, 10]
-        : [term, term, term, mode === "suggest" ? 8 : 100]),
-    )
-    .all<ForumTag>();
-  return rows.results;
-}
-export async function resolveTags(raw: string[]): Promise<ForumTag[]> {
+export async function resolveTags(ctx: ForumRuntime, raw: string[]): Promise<ForumTag[]> {
+  if(raw.length>5)throw new HttpError(400,"最多选择 5 个 TAG。");
   const ids = [
     ...new Set(
       raw
@@ -238,7 +201,7 @@ export async function resolveTags(raw: string[]): Promise<ForumTag[]> {
   ].sort((a, b) => a - b);
   if (!ids.length) return [];
   // JSON keeps arbitrary input out of SQL and avoids D1's bound-parameter limit.
-  const rows = await getD1()
+  const rows = await ctx.db
     .prepare(
       `SELECT id,name,status AS state,revision,0 AS count FROM forum_tags
     WHERE id IN (SELECT value FROM json_each(?)) AND status<>'hidden' ORDER BY id`,
@@ -247,53 +210,30 @@ export async function resolveTags(raw: string[]): Promise<ForumTag[]> {
     .all<ForumTag>();
   return rows.results;
 }
-export async function listForumTopics(
-  input: { tags?: number[]; featured?: boolean; page?: number },
-  viewer: ForumViewer,
-): Promise<ForumPage<ForumTopic>> {
-  const ids = input.tags ?? [];
-  if (ids.length > 5) throw new HttpError(400, "最多选择 5 个 TAG。");
-  const where = `t.id IN (SELECT id FROM forum_public_topics) ${input.featured ? "AND t.featured_at IS NOT NULL" : ""}
-    AND (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id
-      AND g.status<>'hidden' AND x.tag_id IN (SELECT value FROM json_each(?)))=?`;
-  const args = [JSON.stringify(ids), ids.length];
-  const total = (await getD1()
-    .prepare(`SELECT COUNT(*) AS n FROM forum_topics t WHERE ${where}`)
-    .bind(...args)
-    .first<{ n: number }>())!.n;
-  const page = Math.min(
-    forumPage(input.page),
-    Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
-  );
-  const rows = await getD1()
-    .prepare(
-      `${topicSql} WHERE ${where} ORDER BY ${input.featured ? "t.featured_at" : "active_at"} DESC,t.id DESC LIMIT ? OFFSET ?`,
-    )
-    .bind(...args, FORUM_PAGE_SIZE, (page - 1) * FORUM_PAGE_SIZE)
-    .all<TopicRow>();
-  const tags = await topicTags(rows.results.map((row) => row.id));
-  const items = rows.results.map((row) =>
-    mapTopic(row, viewer, tags.get(row.id) ?? []),
-  );
-  return { items, total, page, pageSize: FORUM_PAGE_SIZE };
-}
 
-function contentSql(kind: "post" | "comment", viewerId: number): string {
-  if (kind === "post")
-    return `SELECT p.*,${imageJsonSql} AS images_json,'post' AS kind,p.id AS post_id,${authorColumns},p.status AS parent_status,u.status AS parent_user_status,
-    EXISTS(SELECT 1 FROM forum_public_posts v WHERE v.id=p.id) AS public,NULL AS reply_to_id,0 AS target_public,NULL AS target_user_id,
-    NULL AS target_name,NULL AS target_avatar,NULL AS target_status,
-    (SELECT COUNT(*) FROM forum_post_likes l WHERE l.post_id=p.id) AS likes,
-    EXISTS(SELECT 1 FROM forum_post_likes l WHERE l.post_id=p.id AND l.user_id=${viewerId}) AS liked
+export function contentSql(kind: "post" | "comment", viewerId: number, publicOnly = false): string {
+  const readable = kind === "post" ? "EXISTS(SELECT 1 FROM forum_public_posts visible WHERE visible.id=p.id)" : "EXISTS(SELECT 1 FROM forum_public_comments visible WHERE visible.id=c.id)";
+  const source = kind === "post" ? "p" : "c";
+  const projection = publicOnly ? `${source}.id,${source}.user_id,${source}.status,${source}.created_at,
+    CASE WHEN ${readable} THEN ${source}.revision ELSE '' END AS revision,
+    CASE WHEN ${readable} THEN ${source}.body ELSE '' END AS body,
+    CASE WHEN ${readable} THEN ${source}.edited_at END AS edited_at,
+    CASE WHEN ${readable} THEN u.display_name ELSE '' END AS author_name,
+    CASE WHEN ${readable} THEN u.avatar_blob_sha256 END AS author_avatar,u.status AS author_status` : `${source}.*,${authorColumns}`;
+  if (kind === "post") return `SELECT ${projection},${publicOnly ? "p.topic_id,p.post_number,p.next_comment_number," : ""}
+    ${publicOnly ? "'[]'" : imageJsonSql} AS images_json,
+    'post' AS kind,p.id AS post_id,p.status AS parent_status,u.status AS parent_user_status,
+    ${readable} AS public,NULL AS reply_to_id,0 AS target_public,NULL AS target_user_id,NULL AS target_name,NULL AS target_avatar,NULL AS target_status,
+    ${publicOnly ? "0" : "(SELECT COUNT(*) FROM forum_post_likes l WHERE l.post_id=p.id)"} AS likes,
+    ${viewerId ? `EXISTS(SELECT 1 FROM forum_post_likes l WHERE l.post_id=p.id AND l.user_id=${viewerId})` : "0"} AS liked
     FROM forum_posts p JOIN users u ON u.id=p.user_id`;
-  return `SELECT c.*,p.topic_id,p.post_number,'comment' AS kind,${authorColumns},p.status AS parent_status,pu.status AS parent_user_status,
-    EXISTS(SELECT 1 FROM forum_public_comments v WHERE v.id=c.id) AS public,
-    EXISTS(SELECT 1 FROM forum_public_comments v WHERE v.id=c.reply_to_id) AS target_public,
-    target.user_id AS target_user_id,tu.display_name AS target_name,tu.avatar_blob_sha256 AS target_avatar,tu.status AS target_status,0 AS likes,0 AS liked
+  return `SELECT ${projection},${publicOnly ? "c.post_id,c.comment_number,c.reply_to_id," : ""}p.topic_id,p.post_number,'comment' AS kind,
+    p.status AS parent_status,pu.status AS parent_user_status,${readable} AS public,
+    target.id IS NOT NULL AND tu.status IN('active','deleted') AND p.status IN('published','deleted') AND pu.status IN('active','deleted') AS target_public,target.user_id AS target_user_id,tu.display_name AS target_name,tu.avatar_blob_sha256 AS target_avatar,tu.status AS target_status,0 AS likes,0 AS liked
     FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id JOIN users u ON u.id=c.user_id JOIN users pu ON pu.id=p.user_id
-    LEFT JOIN forum_post_comments target ON target.id=c.reply_to_id LEFT JOIN users tu ON tu.id=target.user_id`;
+    LEFT JOIN forum_post_comments target ON target.id=c.reply_to_id AND target.status='published' LEFT JOIN users tu ON tu.id=target.user_id`;
 }
-export async function rawContent(
+export async function rawContent(ctx: ForumRuntime,
   target: ForumTarget,
   viewerId = 0,
 ): Promise<ContentRow> {
@@ -304,12 +244,24 @@ export async function rawContent(
     target.kind === "topic"
       ? "p.topic_id=? AND p.post_number=1"
       : `${kind === "post" ? "p" : "c"}.id=?`;
-  const row = await getD1()
+  const row = await ctx.db
     .prepare(`${contentSql(kind, viewerId)} WHERE ${condition}`)
     .bind(target.id)
     .first<ContentRow>();
   if (!row) unavailable();
   return row;
+}
+
+/** Mutation gates need identity/status/version, never image JSON, likes or the body. */
+export async function contentIdentity(ctx:ForumRuntime,target:ForumTarget):Promise<ContentRow> {
+  const comment=target.kind==="comment",source=comment?"c":"p";
+  const where=target.kind==="topic"?"p.topic_id=? AND p.post_number=1":`${source}.id=?`;
+  const row=await ctx.db.prepare(`SELECT ${source}.id,${source}.user_id,${source}.status,${source}.revision,
+    p.topic_id,p.post_number,p.id AS post_id,${comment?"c.comment_number":"0"} AS comment_number,
+    '${comment?"comment":"post"}' AS kind,
+    EXISTS(SELECT 1 FROM ${comment?"forum_public_comments":"forum_public_posts"} visible WHERE visible.id=${source}.id) AS public
+    FROM ${comment?"forum_post_comments c JOIN forum_posts p ON p.id=c.post_id":"forum_posts p"} WHERE ${where}`).bind(target.id).first<ContentRow>();
+  if(!row)unavailable();return row;
 }
 export function contentImages(row: Pick<ContentRow, "kind" | "images_json">): ForumImage[] {
   return row.kind === "post" ? JSON.parse(row.images_json ?? "[]") : [];
@@ -380,243 +332,4 @@ export function mapContent(
         : null,
     capabilities: capability,
   };
-}
-export async function forumComments(
-  postId: number,
-  requestedPage: number,
-  viewer: ForumViewer,
-  preview = false,
-): Promise<ForumPage<ForumContent>> {
-  const parent = await rawContent({ kind: "post", id: postId });
-  const topic = await publicTopic(parent.topic_id, viewer);
-  if (
-    parent.parent_status === "hidden" ||
-    !["active", "deleted"].includes(parent.author_status)
-  )
-    unavailable();
-  const total = (await getD1()
-    .prepare("SELECT COUNT(*) AS n FROM forum_post_comments WHERE post_id=?")
-    .bind(postId)
-    .first<{ n: number }>())!.n;
-  const page = Math.min(
-    forumPage(requestedPage),
-    Math.max(1, Math.ceil(total / FORUM_COMMENT_PAGE_SIZE)),
-  );
-  const rows = await getD1()
-    .prepare(
-      `${contentSql("comment", viewer?.id ?? 0)} WHERE c.post_id=? ORDER BY c.created_at,c.id LIMIT ? OFFSET ?`,
-    )
-    .bind(
-      postId,
-      preview ? FORUM_PREVIEW_SIZE : FORUM_COMMENT_PAGE_SIZE,
-      preview ? 0 : (page - 1) * FORUM_COMMENT_PAGE_SIZE,
-    )
-    .all<ContentRow>();
-  return {
-    items: rows.results.map((row) => mapContent(row, topic, viewer)),
-    total,
-    page,
-    pageSize: FORUM_COMMENT_PAGE_SIZE,
-  };
-}
-export async function locateForumContent(
-  topicId: number,
-  target: { postNumber?: number; commentId?: number },
-  viewer: ForumViewer,
-) {
-  const topic = await publicTopic(topicId, viewer);
-  let row: ContentRow;
-  if (target.commentId)
-    row = await rawContent({ kind: "comment", id: target.commentId });
-  else {
-    const found = await getD1()
-      .prepare("SELECT id FROM forum_posts WHERE topic_id=? AND post_number=?")
-      .bind(topicId, target.postNumber ?? 1)
-      .first<{ id: number }>();
-    if (!found) unavailable();
-    row = await rawContent({ kind: "post", id: found.id });
-  }
-  if (!row.public || row.topic_id !== topic.id) unavailable();
-  const count = (await getD1()
-    .prepare(
-      "SELECT COUNT(*) AS n FROM forum_posts WHERE topic_id=? AND post_number<=?",
-    )
-    .bind(topicId, row.post_number)
-    .first<{ n: number }>())!.n;
-  const page = Math.ceil(count / FORUM_PAGE_SIZE);
-  let commentPage = 1;
-  if (target.commentId)
-    commentPage = Math.ceil(
-      (await getD1()
-        .prepare(
-          "SELECT COUNT(*) AS n FROM forum_post_comments WHERE post_id=? AND (created_at<? OR (created_at=? AND id<=?))",
-        )
-        .bind(row.post_id, row.created_at, row.created_at, row.id)
-        .first<{ n: number }>())!.n / FORUM_COMMENT_PAGE_SIZE,
-    );
-  const href =
-    forumHref(`/discussions/${topicId}`, {
-      page,
-      floor: target.commentId ? row.post_number : null,
-      commentPage: target.commentId ? commentPage : null,
-      comment: target.commentId,
-    }) + (target.commentId ? `#comment-${row.id}` : `#post-${row.post_number}`);
-  return { page, commentPage, postNumber: row.post_number, href };
-}
-export async function forumDetail(
-  id: number,
-  input: {
-    page?: number;
-    floor?: number;
-    commentPage?: number;
-    comment?: number;
-  },
-  viewer: ForumViewer,
-): Promise<ForumDetail> {
-  const topic = await publicTopic(id, viewer);
-  let requestedPage = input.page ?? 1;
-  let floor = input.floor ?? null;
-  let commentPage = input.commentPage ?? 1;
-  if (input.comment) {
-    const found = await locateForumContent(
-      id,
-      { commentId: input.comment },
-      viewer,
-    );
-    requestedPage = found.page;
-    floor = found.postNumber;
-    commentPage = found.commentPage;
-  } else if (floor) {
-    const parent = await getD1()
-      .prepare(
-        "SELECT p.post_number,p.status,u.status AS user_status FROM forum_posts p JOIN users u ON u.id=p.user_id WHERE p.topic_id=? AND p.post_number=?",
-      )
-      .bind(id, floor)
-      .first<{ post_number: number; status: string; user_status: string }>();
-    if (
-      !parent ||
-      parent.status === "hidden" ||
-      parent.user_status === "disabled"
-    )
-      unavailable();
-    requestedPage = Math.ceil(
-      (await getD1()
-        .prepare(
-          "SELECT COUNT(*) AS n FROM forum_posts WHERE topic_id=? AND post_number<=?",
-        )
-        .bind(id, floor)
-        .first<{ n: number }>())!.n / FORUM_PAGE_SIZE,
-    );
-  }
-  const total = (await getD1()
-    .prepare("SELECT COUNT(*) AS n FROM forum_posts WHERE topic_id=?")
-    .bind(id)
-    .first<{ n: number }>())!.n;
-  const page = Math.min(
-    forumPage(requestedPage),
-    Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
-  );
-  const rows = await getD1()
-    .prepare(
-      `${contentSql("post", viewer?.id ?? 0)} WHERE p.topic_id=? ORDER BY p.post_number LIMIT ? OFFSET ?`,
-    )
-    .bind(id, FORUM_PAGE_SIZE, (page - 1) * FORUM_PAGE_SIZE)
-    .all<ContentRow>();
-  const items: ForumDetail["posts"]["items"] = [];
-  for (const row of rows.results) {
-    const commentsAvailable =
-      row.status !== "hidden" && row.author_status !== "disabled";
-    const comments: ForumPage<ForumContent> = commentsAvailable
-      ? await forumComments(
-          row.id,
-          row.post_number === floor ? commentPage : 1,
-          viewer,
-          row.post_number !== floor,
-        )
-      : { items: [], total: 0, page: 1, pageSize: FORUM_COMMENT_PAGE_SIZE };
-    const commentPreview =
-      comments.page === 1
-        ? comments.items.slice(0, FORUM_PREVIEW_SIZE)
-        : (await forumComments(row.id, 1, viewer, true)).items;
-    items.push({
-      ...mapContent(row, topic, viewer),
-      commentsAvailable,
-      comments,
-      commentPreview,
-    });
-  }
-  // A concurrent moderation may have invalidated the enclosing topic while rows were read.
-  await publicTopic(id, viewer);
-  return {
-    topic,
-    posts: { items, total, page, pageSize: FORUM_PAGE_SIZE },
-    floor,
-    comment: input.comment ?? null,
-  };
-}
-export async function searchForum(
-  input: {
-    query: string;
-    tags: number[];
-    featured: boolean;
-    latest: boolean;
-    page: number;
-  },
-  viewer: ForumViewer,
-): Promise<ForumPage<ForumSearchHit>> {
-  const query = normalizeForumSearch(input.query).trim();
-  if (query.length > FORUM_QUERY_LENGTH)
-    throw new HttpError(400, `搜索词最多 ${FORUM_QUERY_LENGTH} 个字符。`);
-  if (!query)
-    return { items: [], total: 0, page: 1, pageSize: FORUM_PAGE_SIZE };
-  if (input.tags.length > 5) throw new HttpError(400, "最多选择 5 个 TAG。");
-  const source = `WITH matches AS (SELECT c.*,CASE
-    WHEN c.kind='post' AND c.post_number=1 AND instr(t.title_search,?)>0 THEN 4
-    WHEN c.kind='post' AND c.post_number=1 AND EXISTS(SELECT 1 FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden' AND instr(g.name_key,?)>0) THEN 3
-    WHEN instr(c.body_search,?)>0 THEN 2 WHEN instr(lower(u.display_name),?)>0 THEN 1 ELSE 0 END AS score
-    FROM forum_public_content c JOIN forum_public_topics t ON t.id=c.topic_id JOIN users u ON u.id=c.user_id
-    WHERE ${input.featured ? "t.featured_at IS NOT NULL AND" : ""}
-    (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden' AND x.tag_id IN(SELECT value FROM json_each(?)))=?)`;
-  const binds = [
-    query,
-    query,
-    query,
-    query,
-    JSON.stringify(input.tags),
-    input.tags.length,
-  ];
-  const total = (await getD1()
-    .prepare(`${source} SELECT COUNT(*) AS n FROM matches WHERE score>0`)
-    .bind(...binds)
-    .first<{ n: number }>())!.n;
-  const page = Math.min(
-    forumPage(input.page),
-    Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
-  );
-  const rows = await getD1()
-    .prepare(
-      `${source} SELECT * FROM matches WHERE score>0 ORDER BY ${input.latest ? "" : "score DESC,"} created_at DESC,kind,id DESC LIMIT ? OFFSET ?`,
-    )
-    .bind(...binds, FORUM_PAGE_SIZE, (page - 1) * FORUM_PAGE_SIZE)
-    .all<{
-      kind: "post" | "comment";
-      id: number;
-      topic_id: number;
-      score: number;
-    }>();
-  const items: ForumSearchHit[] = [];
-  for (const row of rows.results) {
-    const raw = await rawContent(row, viewer?.id);
-    if (!raw.public) continue;
-    const topic = await publicTopic(row.topic_id, viewer);
-    const content = mapContent(raw, topic, viewer);
-    items.push({
-      content,
-      topic,
-      score: row.score,
-      snippet: !raw.body && content.images.length ? `图片 × ${content.images.length}` :
-        forumSearchSnippet(raw.body, query),
-    });
-  }
-  return { items, total, page, pageSize: FORUM_PAGE_SIZE };
 }

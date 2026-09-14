@@ -79,6 +79,15 @@ export function readForumEditVersion(target: ForumTarget) {
     forumHref("/api/discussions", { op: "edit", ...target }),
   );
 }
+export async function referencedForumEmojis(bodies:(string|null)[],signal?:AbortSignal) {
+  const codes=[...new Set(bodies.flatMap((body)=>[...(body??"").matchAll(/:([A-Za-z0-9_+\-]{1,64}):/g)].map((m)=>m[1])))];
+  const emojis:CustomEmojiDto[]=[];
+  for(let start=0;start<codes.length;start+=100){
+    const data=await forumRequest<{emojis:CustomEmojiDto[]}>(forumHref("/api/discussions",{op:"emojis",shortcode:codes.slice(start,start+100)}),undefined,signal);
+    emojis.push(...data.emojis);
+  }
+  return emojis;
+}
 export function ForumAuthorName({
   author,
   query = "",
@@ -87,7 +96,7 @@ export function ForumAuthorName({
   query?: string;
 }) {
   return author.profile ? (
-    <Link
+    <Link prefetch={false}
       className="break-all text-primary hover:underline"
       href={`/users/${author.id}`}
     >
@@ -107,7 +116,7 @@ export function DiscussionTagLink({
   query?: string;
 }) {
   return (
-    <Link
+    <Link prefetch={false}
       className="break-words text-primary hover:bg-primary/5 hover:underline focus-visible:ring-2 focus-visible:ring-primary"
       href={forumHref("/discussions", { tag: tag.id })}
     >
@@ -144,6 +153,7 @@ export function TopicStatus({
     </div>
   );
 }
+const forumDateFormatter=new Intl.DateTimeFormat("zh-CN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Hong_Kong"});
 export function ForumTime({
   value,
   relative = false,
@@ -154,11 +164,7 @@ export function ForumTime({
   const date = new Date(
     value.includes("T") ? value : value.replace(" ", "T") + "Z",
   );
-  const full = new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Hong_Kong",
-  }).format(date);
+  const full = forumDateFormatter.format(date);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setNow(Date.now()), 0);
@@ -202,6 +208,7 @@ export function Highlight({ text, query }: { text: string; query: string }) {
   parts.push(text.slice(cursor));
   return <>{parts}</>;
 }
+const emojiMaps=new WeakMap<CustomEmojiDto[],Map<string,CustomEmojiDto>>();
 export function ForumBody({
   body,
   emojis,
@@ -211,6 +218,8 @@ export function ForumBody({
   emojis: CustomEmojiDto[];
   inline?: boolean;
 }) {
+  let emojiMap=emojiMaps.get(emojis);
+  if(!emojiMap){emojiMap=new Map(emojis.map((e)=>[`:${e.shortcode}:`,e]));emojiMaps.set(emojis,emojiMap);}
   const segments = body.split(/(https?:\/\/[^\s<>]+|:[A-Za-z0-9_+\-]{1,64}:)/g);
   return (
     <span
@@ -218,7 +227,7 @@ export function ForumBody({
     >
       {segments.map((part, index) => {
         const emoji = part.startsWith(":")
-          ? emojis.find((e) => `:${e.shortcode}:` === part)
+          ? emojiMap.get(part)
           : null;
         if (emoji)
           return (
@@ -339,25 +348,32 @@ export function ForumTagEditor({
   id: string;
 }) {
   const [query, setQuery] = useState("");
+  const [submitted,setSubmitted]=useState("");
+  const [cursor,setCursor]=useState<string|null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => { setSubmitted(query); setCursor(null); }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const [nextCursor,setNextCursor]=useState<string|null>(null);
   const [tags, setTags] = useState<ForumTag[]>([]);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void forumRequest<{ tags: ForumTag[] }>(
-      forumHref("/api/discussions", { op: "tags", mode: "suggest", q: query }),
+    void forumRequest<{ tags: ForumTag[];nextCursor:string|null }>(
+      forumHref("/api/discussions", { op: "tags", mode: "suggest", q: submitted, cursor }),
       undefined,
       controller.signal,
     )
       .then((result) => {
-        setTags(result.tags);
+        setTags((old)=>cursor?[...old,...result.tags]:result.tags);setNextCursor(result.nextCursor);
         setError("");
       })
       .catch((e) => {
         if (e.name !== "AbortError") setError("TAG 建议加载失败");
       });
     return () => controller.abort();
-  }, [query, retry]);
+  }, [submitted, cursor, retry]);
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>TAG</Label>
@@ -365,9 +381,10 @@ export function ForumTagEditor({
         id={id}
         values={values}
         onChange={onChange}
-        suggestions={tags.map((t) => ({
+        suggestions={tags.filter((t)=>t.name.toLowerCase().includes(query.toLowerCase())).map((t) => ({
           value: t.name,
-          meta: `${t.count} 个主题`,
+          meta: "",
+
         }))}
         placeholder="选择或创建 TAG"
         disabled={disabled}
@@ -378,6 +395,7 @@ export function ForumTagEditor({
         sortable
         showRecommendations={false}
       />
+{nextCursor ? <Button type="button" variant="ghost" size="sm" onClick={() => setCursor(nextCursor)}>加载更多</Button> : null}
       {error ? (
         <p className="text-sm text-destructive" role="status">
           {error}
@@ -406,24 +424,31 @@ export function TagFilter({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(selected);
   const [query, setQuery] = useState("");
+  const [submitted,setSubmitted]=useState("");
+  const [cursor,setCursor]=useState<string|null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => { setSubmitted(query); setCursor(null); }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const [nextCursor,setNextCursor]=useState<string|null>(null);
   const [tags, setTags] = useState<ForumTag[]>([]);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [loaded, setLoaded] = useState<string | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [mobile, setMobile] = useState(false);
-  const requestKey = `${query}:${retry}`;
+  const requestKey = `${submitted}:${cursor}:${retry}`;
   const loading = loaded !== requestKey;
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    void forumRequest<{ tags: ForumTag[] }>(
-      forumHref("/api/discussions", { op: "tags", q: query }),
+    void forumRequest<{ tags: ForumTag[];nextCursor:string|null }>(
+      forumHref("/api/discussions", { op: "tags", q: submitted, cursor }),
       undefined,
       controller.signal,
     )
       .then((data) => {
-        setTags(data.tags);
+        setTags((old)=>cursor?[...old,...data.tags]:data.tags);setNextCursor(data.nextCursor);
         setError("");
         setLoaded(requestKey);
       })
@@ -434,7 +459,7 @@ export function TagFilter({
         }
       });
     return () => controller.abort();
-  }, [open, query, retry, requestKey]);
+  }, [open, submitted, cursor, retry, requestKey]);
   const fields = (
     <>
       <Label htmlFor="forum-filter-query">搜索 TAG</Label>
@@ -444,6 +469,7 @@ export function TagFilter({
         onChange={(e) => setQuery(e.target.value)}
         autoFocus
       />
+{nextCursor ? <Button type="button" variant="ghost" size="sm" onClick={() => setCursor(nextCursor)}>加载更多</Button> : null}
       <div className="my-3 flex flex-wrap gap-2">
         {draft.map((tag) => (
           <Button
@@ -463,7 +489,7 @@ export function TagFilter({
         className="my-4 grid max-h-72 gap-2 overflow-y-auto"
         aria-busy={loading}
       >
-        {tags.map((tag) => (
+        {tags.filter((t)=>t.name.toLowerCase().includes(query.toLowerCase())).map((tag) => (
           <div className="flex min-h-10 items-center gap-2" key={tag.id}>
             <Checkbox
               id={`filter-tag-${tag.id}`}
@@ -480,7 +506,7 @@ export function TagFilter({
               }
             />
             <Label htmlFor={`filter-tag-${tag.id}`}>
-              {tag.name} · {tag.count} 个主题
+              {tag.name}
             </Label>
           </div>
         ))}

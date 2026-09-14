@@ -1,3 +1,4 @@
+import { getForumRuntime } from "@/lib/server/forum/next";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { adminForumTags } from "@/lib/server/forum/admin";
 import { forumPage } from "@/lib/forum";
@@ -18,7 +19,7 @@ export default async function DiscussionTagsPage({
   return (
     <AdminDiscussionTags
       key={JSON.stringify(p)}
-      data={await adminForumTags(user, {
+      data={await adminForumTags(getForumRuntime(), user, {
         query,
         state,
         page: forumPage(p.page),

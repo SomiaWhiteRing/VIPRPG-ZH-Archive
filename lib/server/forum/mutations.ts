@@ -1,8 +1,10 @@
+import { contentIndexStatements, searchVisibilityStatement, topicSearchDocuments } from "./search-index";
+import type { ForumRuntime } from "./runtime";
 import { imageIds, imageOffsets, imageGuard, imageStatements } from "./images";
 import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
-import { normalizeForumSearch } from "@/lib/forum-search";
 import {
   FORUM_BODY_LENGTH,
+  FORUM_POST_BODY_LENGTH,
   FORUM_COMMENT_LENGTH,
   FORUM_TITLE_LENGTH,
   FORUM_WRITES_PER_MINUTE,
@@ -13,11 +15,11 @@ import {
   type ForumAction,
   type ForumTarget,
 } from "@/lib/forum";
-import { getD1 } from "@/lib/server/db/d1";
+
 import type { ArchiveUser } from "@/lib/server/db/users";
 import { HttpError } from "@/lib/server/http/json";
 import {
-  rawContent,
+  contentIdentity,
   rawTopic,
   unavailable,
   type ContentRow,
@@ -35,7 +37,7 @@ export const forumActorSql = (
     WHERE ur.user_id=actor.id AND r.status='active' AND rp.permission_key='${permission}')`
       : ""
   })`;
-const publicTopicSql = "t.id IN(SELECT id FROM forum_public_topics)";
+const publicTopicSql = "EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id)";
 const rateSql = `((SELECT COUNT(*) FROM forum_posts WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_post_comments WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_content_reports WHERE user_id=? AND created_at>=datetime('now','-1 minute'))) < ${FORUM_WRITES_PER_MINUTE}`;
@@ -44,16 +46,17 @@ export function forumText(value: unknown, max: number, label: string): string {
     throw new HttpError(400, `${label}需要 1–${max} 个字符。`);
   return value.trim().replace(/\r\n?/g, "\n");
 }
-function mixedBody(value: unknown, images: string[], comment: boolean) {
+function mixedBody(value: unknown, images: string[], kind: "topic" | "post" | "comment") {
+  const limit = kind === "topic" ? FORUM_BODY_LENGTH : kind === "post" ? FORUM_POST_BODY_LENGTH : FORUM_COMMENT_LENGTH;
   if (!images.length)
     return forumText(
       value,
-      comment ? FORUM_COMMENT_LENGTH : FORUM_BODY_LENGTH,
+      limit,
       "正文",
     );
   if (
     typeof value !== "string" ||
-    value.length > FORUM_BODY_LENGTH ||
+    value.length > limit ||
     value.includes("\r")
   )
     throw new HttpError(400, "正文长度或换行格式无效。");
@@ -103,7 +106,7 @@ type TagsInput = {
   existingId: number | null;
   revision: string | null;
 }[];
-async function prepareTags(
+async function prepareTags(ctx: ForumRuntime,
   value: unknown,
   topicId?: number,
 ): Promise<TagsInput> {
@@ -117,7 +120,7 @@ async function prepareTags(
     const name = normalizeForumTag(raw),
       key = forumTagKey(name);
     if (tags.some((tag) => tag.key === key)) continue;
-    const row = await getD1()
+    const row = await ctx.db
       .prepare(
         `SELECT g.*,EXISTS(SELECT 1 FROM forum_topic_tags x WHERE x.topic_id=? AND x.tag_id=g.id) AS selected FROM forum_tags g WHERE name_key=?`,
       )
@@ -159,13 +162,13 @@ function tagsPredicate(tags: TagsInput): Predicate {
   });
   return { sql: clauses.join(" AND ") || "1", args };
 }
-function tagStatements(
+function tagStatements(ctx: ForumRuntime,
   topicId: number | { key: string; userId: number },
   tags: TagsInput,
   actor: ArchiveUser,
   token: string,
 ): D1PreparedStatement[] {
-  const db = getD1();
+  const db = ctx.db;
   const target =
     typeof topicId === "number"
       ? { sql: "id=?", args: [topicId] }
@@ -202,14 +205,14 @@ function tagStatements(
   );
   return statements;
 }
-function guard(
+function guard(ctx: ForumRuntime,
   topic: TopicRow,
   actor: ArchiveUser,
   token: string,
   predicate: Predicate,
   permission?: PermissionKey,
 ): D1PreparedStatement {
-  return getD1()
+  return ctx.db
     .prepare(
       `UPDATE forum_topics AS t SET write_token=?,revision=?,updated_at=CURRENT_TIMESTAMP
     WHERE t.id=? AND t.revision=? AND ${forumActorSql(permission)} AND (${predicate.sql})`,
@@ -229,7 +232,7 @@ function topicGate(topicId: number, token: string) {
     args: [topicId, token],
   };
 }
-export function auditStatement(
+export function auditStatement(ctx: ForumRuntime,
   actor: ArchiveUser,
   event: string,
   target: ForumTarget,
@@ -238,7 +241,7 @@ export function auditStatement(
   detail: unknown,
 ): D1PreparedStatement {
   const gate = topicGate(topicId, token);
-  return getD1()
+  return ctx.db
     .prepare(
       `INSERT INTO auth_audit_logs(user_id,event_type,detail_json) SELECT ?,?,? WHERE ${gate.sql}`,
     )
@@ -249,8 +252,8 @@ export function auditStatement(
       ...gate.args,
     );
 }
-async function runGuarded(statements: D1PreparedStatement[]) {
-  const result = await getD1().batch(statements);
+async function runGuarded(ctx: ForumRuntime, statements: D1PreparedStatement[]) {
+  const result = await ctx.db.batch(statements);
   if (!result[0].meta.changes) conflict();
 }
 function normalizeTarget(target: ForumTarget, row: ContentRow): ForumTarget {
@@ -262,7 +265,7 @@ function currentPublic(row: ContentRow) {
   if (!row.public) unavailable();
 }
 
-export async function publishForum(
+export async function publishForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
@@ -276,7 +279,7 @@ export async function publishForum(
       : kind === "post"
         ? "forum_posts"
         : "forum_post_comments";
-  const existing = await getD1()
+  const existing = await ctx.db
     .prepare(`SELECT * FROM ${table} WHERE user_id=? AND request_key=?`)
     .bind(actor.id, identity.key)
     .first<{
@@ -289,33 +292,32 @@ export async function publishForum(
     if (existing.request_hash !== identity.hash) conflict();
     return { target: { kind, id: existing.id } as ForumTarget };
   }
-  const count = await getD1()
+  const count = await ctx.db
     .prepare(`SELECT ${rateSql} AS allowed`)
     .bind(actor.id, actor.id, actor.id)
     .first<{ allowed: number }>();
   if (!count?.allowed) throw new HttpError(429, "操作过于频繁，请稍后再试。");
   const images = imageIds(input.images, kind === "comment");
   const attachments = imageGuard(images, actor.id);
-  const body = mixedBody(input.body, images, kind === "comment");
+  const body = mixedBody(input.body, images, kind);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const token = crypto.randomUUID(),
-    db = getD1();
+    db = ctx.db;
   if (kind === "topic") {
     const title = forumText(input.title, FORUM_TITLE_LENGTH, "标题"),
-      tags = await prepareTags(input.tags ?? []),
+      tags = await prepareTags(ctx, input.tags ?? []),
       tagGuard = tagsPredicate(tags);
     const gate =
       "EXISTS(SELECT 1 FROM forum_topics WHERE user_id=? AND request_key=? AND write_token=?)";
     const results = await db.batch([
       db
         .prepare(
-          `INSERT INTO forum_topics(user_id,title,title_search,revision,write_token,request_key,request_hash)
-        SELECT ?,?,?,?,?,?,? WHERE ${forumActorSql()} AND ${rateSql} AND ${tagGuard.sql} AND ${attachments.sql} ON CONFLICT(user_id,request_key) DO NOTHING`,
+          `INSERT INTO forum_topics(user_id,title,revision,write_token,request_key,request_hash)
+        SELECT ?,?,?,?,?,? WHERE ${forumActorSql()} AND ${rateSql} AND ${tagGuard.sql} AND ${attachments.sql} ON CONFLICT(user_id,request_key) DO NOTHING`,
         )
         .bind(
           actor.id,
           title,
-          normalizeForumSearch(title),
           token,
           token,
           identity.key,
@@ -329,13 +331,12 @@ export async function publishForum(
         ),
       db
         .prepare(
-          `INSERT INTO forum_posts(topic_id,post_number,user_id,body,body_search,revision,request_key,request_hash)
-        SELECT id,1,?,?,?,?,?,? FROM forum_topics WHERE user_id=? AND request_key=? AND write_token=?`,
+          `INSERT INTO forum_posts(topic_id,post_number,user_id,body,revision,request_key,request_hash)
+        SELECT id,1,?,?,?,?,? FROM forum_topics WHERE user_id=? AND request_key=? AND write_token=?`,
         )
         .bind(
           actor.id,
           body,
-          normalizeForumSearch(body),
           token,
           `root-${identity.key}`,
           identity.hash,
@@ -343,8 +344,10 @@ export async function publishForum(
           identity.key,
           token,
         ),
-      ...imageStatements(images, actor.id, token, offsets),
-      ...tagStatements(
+      ...imageStatements(ctx, images, actor.id, token, offsets),
+      ...contentIndexStatements(ctx, "post", actor.id, token, title, body, "insert"),
+      db.prepare("UPDATE forum_topics SET last_activity_at=created_at WHERE user_id=? AND request_key=? AND write_token=?").bind(actor.id, identity.key, token),
+      ...tagStatements(ctx,
         { key: identity.key, userId: actor.id },
         tags,
         actor,
@@ -370,17 +373,17 @@ export async function publishForum(
     }
     return { target: { kind, id: found.id } as ForumTarget };
   }
-  const parent = await rawContent(
+  const parent = await contentIdentity(ctx,
     kind === "post"
       ? { kind: "topic", id: id(input.topicId) }
       : { kind: "post", id: id(input.postId) },
   );
   currentPublic(parent);
-  const topic = await rawTopic(parent.topic_id);
+  const topic = await rawTopic(ctx, parent.topic_id);
   if (topic.locked) throw new HttpError(409, "主题已锁定，不能继续回复。");
   const targetId = input.replyToId == null ? null : id(input.replyToId);
   if (kind === "comment" && targetId) {
-    const target = await rawContent({ kind: "comment", id: targetId });
+    const target = await contentIdentity(ctx, { kind: "comment", id: targetId });
     if (!target.public || target.post_id !== parent.id)
       throw new HttpError(409, "回复目标已不可用。", "forum_reply_target");
   }
@@ -400,18 +403,17 @@ export async function publishForum(
       ...(kind === "comment" && targetId ? [targetId, parent.id] : []),
     ],
   };
-  const statements = [guard(topic, actor, token, predicate)];
+  const statements = [guard(ctx, topic, actor, token, predicate)];
   if (kind === "post") {
     statements.push(
       db
         .prepare(
-          `INSERT INTO forum_posts(topic_id,post_number,user_id,body,body_search,revision,request_key,request_hash)
-      SELECT id,next_post_number,?,?,?,?,?,? FROM forum_topics WHERE id=? AND write_token=?`,
+          `INSERT INTO forum_posts(topic_id,post_number,user_id,body,revision,request_key,request_hash)
+      SELECT id,next_post_number,?,?,?,?,? FROM forum_topics WHERE id=? AND write_token=?`,
         )
         .bind(
           actor.id,
           body,
-          normalizeForumSearch(body),
           token,
           identity.key,
           identity.hash,
@@ -422,31 +424,36 @@ export async function publishForum(
     statements.push(
       db
         .prepare(
-          "UPDATE forum_topics SET next_post_number=next_post_number+1 WHERE id=? AND write_token=?",
+          "UPDATE forum_topics SET next_post_number=next_post_number+1,reply_count=reply_count+1,last_activity_at=CURRENT_TIMESTAMP,last_post_id=(SELECT id FROM forum_posts WHERE user_id=? AND revision=?),last_comment_id=NULL WHERE id=? AND write_token=?",
         )
-        .bind(topic.id, token),
+        .bind(actor.id, token, topic.id, token),
     );
   } else
     statements.push(
       db
         .prepare(
-          `INSERT INTO forum_post_comments(post_id,user_id,reply_to_id,body,body_search,revision,request_key,request_hash)
-    SELECT ?,?,?,?,?,?,?,? WHERE ${tokenGate.sql}`,
+          `INSERT INTO forum_post_comments(post_id,user_id,reply_to_id,body,revision,request_key,request_hash,comment_number)
+    SELECT ?,?,?,?,?,?,?,next_comment_number FROM forum_posts WHERE id=? AND ${tokenGate.sql}`,
         )
         .bind(
           parent.id,
           actor.id,
           targetId,
           body,
-          normalizeForumSearch(body),
           token,
           identity.key,
           identity.hash,
+          parent.id,
           ...tokenGate.args,
         ),
     );
   if (kind === "post")
-    statements.push(...imageStatements(images, actor.id, token, offsets));
+    statements.push(...imageStatements(ctx, images, actor.id, token, offsets));
+  if (kind === "comment") statements.push(
+    db.prepare(`UPDATE forum_posts SET next_comment_number=next_comment_number+1 WHERE id=? AND ${tokenGate.sql}`).bind(parent.id, ...tokenGate.args),
+    db.prepare(`UPDATE forum_topics SET reply_count=reply_count+1,last_activity_at=CURRENT_TIMESTAMP,last_comment_id=(SELECT id FROM forum_post_comments WHERE user_id=? AND revision=?),last_post_id=NULL WHERE id=? AND write_token=?`).bind(actor.id, token, topic.id, token),
+  );
+  statements.push(...contentIndexStatements(ctx, kind, actor.id, token, "", body, "insert"));
   await db.batch(statements);
   const result = await db
     .prepare(
@@ -458,15 +465,15 @@ export async function publishForum(
   return { target: { kind, id: result.id } as ForumTarget };
 }
 
-export async function editForum(
+export async function editForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
   let target = forumTarget(input.target);
-  const row = await rawContent(target);
+  const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
-  const topic = await rawTopic(row.topic_id);
+  const topic = await rawTopic(ctx, row.topic_id);
   if (input.topicRevision !== topic.revision) conflict();
   if (actor.id !== row.user_id)
     throw new HttpError(403, "只能编辑自己的内容。");
@@ -474,7 +481,7 @@ export async function editForum(
   if (row.revision !== input.revision) conflict();
   const images = imageIds(input.images, target.kind === "comment");
   const attachments = imageGuard(images, actor.id, row.id);
-  const body = mixedBody(input.body, images, target.kind === "comment");
+  const body = mixedBody(input.body, images, target.kind);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const title =
     target.kind === "topic"
@@ -482,7 +489,7 @@ export async function editForum(
       : null;
   const tags =
     target.kind === "topic" && input.tagsChanged === true
-      ? await prepareTags(input.tags, topic.id)
+      ? await prepareTags(ctx, input.tags, topic.id)
       : null;
   const tagGuard = tags ? tagsPredicate(tags) : { sql: "1", args: [] };
   const token = crypto.randomUUID(),
@@ -492,7 +499,7 @@ export async function editForum(
   const view =
     target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   const statements = [
-    guard(topic, actor, token, {
+    guard(ctx, topic, actor, token, {
       sql: `${publicTopicSql} AND t.locked=0 AND EXISTS(SELECT 1 FROM ${view} WHERE id=? AND user_id=? AND revision=?) AND ${tagGuard.sql} AND ${attachments.sql}`,
       args: [
         row.id,
@@ -502,13 +509,12 @@ export async function editForum(
         ...attachments.args,
       ],
     }),
-    getD1()
+    ctx.db
       .prepare(
-        `UPDATE ${table} SET body=?,body_search=?,revision=?,edited_at=CURRENT_TIMESTAMP WHERE id=? AND ${gate.sql}`,
+        `UPDATE ${table} SET body=?,revision=?,edited_at=CURRENT_TIMESTAMP WHERE id=? AND ${gate.sql}`,
       )
       .bind(
         body,
-        normalizeForumSearch(body),
         token,
         row.id,
         ...gate.args,
@@ -516,31 +522,32 @@ export async function editForum(
   ];
   if (title)
     statements.push(
-      getD1()
+      ctx.db
         .prepare(
-          "UPDATE forum_topics SET title=?,title_search=? WHERE id=? AND write_token=?",
+          "UPDATE forum_topics SET title=? WHERE id=? AND write_token=?",
         )
-        .bind(title, normalizeForumSearch(title), topic.id, token),
+        .bind(title, topic.id, token),
     );
-  if (tags) statements.push(...tagStatements(topic.id, tags, actor, token));
+  if (tags) statements.push(...tagStatements(ctx, topic.id, tags, actor, token));
   if (target.kind !== "comment")
-    statements.push(...imageStatements(images, actor.id, token, offsets));
-  await runGuarded(statements);
+    statements.push(...imageStatements(ctx, images, actor.id, token, offsets));
+  statements.push(...contentIndexStatements(ctx, target.kind === "comment" ? "comment" : "post", actor.id, token, title ?? "", body, "edit"));
+  await runGuarded(ctx, statements);
   return { target };
 }
-export async function deleteForum(
+export async function deleteForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
   let target = forumTarget(input.target);
-  const row = await rawContent(target);
+  const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
   if (row.user_id !== actor.id)
     throw new HttpError(403, "只能删除自己的内容。");
-  const topic = await rawTopic(row.topic_id);
+  const topic = await rawTopic(ctx, row.topic_id);
   if (input.topicRevision !== topic.revision) conflict();
-  if (target.kind === "topic" && !topic.deletable)
+  if (target.kind === "topic" && await ctx.db.prepare("SELECT 1 FROM forum_posts WHERE topic_id=? AND post_number<>1 AND status<>'deleted' UNION ALL SELECT 1 FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id WHERE p.topic_id=? AND c.status<>'deleted' LIMIT 1").bind(topic.id, topic.id).first())
     throw new HttpError(409, "主题已有回复，请请求管理人员处理。");
   const token = crypto.randomUUID(),
     gate = topicGate(topic.id, token),
@@ -551,59 +558,62 @@ export async function deleteForum(
     args: [row.id, actor.id],
   };
   const statements = [
-    guard(topic, actor, token, predicate),
-    getD1()
+    guard(ctx, topic, actor, token, predicate),
+    ctx.db
       .prepare(
-        `UPDATE ${table} SET status='deleted',body='',body_search='',revision=? WHERE id=? AND ${gate.sql}`,
+        `UPDATE ${table} SET status='deleted',body='',revision=? WHERE id=? AND ${gate.sql}`,
       )
       .bind(token, row.id, ...gate.args),
   ];
   if (target.kind === "topic")
     statements.push(
-      getD1()
+      ctx.db
         .prepare(
-          "UPDATE forum_topics SET status='deleted',title='',title_search='',featured_at=NULL,featured_by=NULL WHERE id=? AND write_token=?",
+          "UPDATE forum_topics SET status='deleted',title='',featured_at=NULL,featured_by=NULL WHERE id=? AND write_token=?",
         )
         .bind(topic.id, token),
     );
-  await runGuarded(statements);
+  statements.push(...contentIndexStatements(ctx, target.kind === "comment" ? "comment" : "post", actor.id, token, "", "", "delete"));
+  await runGuarded(ctx, statements);
 }
-export async function likeForum(
+export async function likeForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
   const postId = id(input.postId);
   if (typeof input.liked !== "boolean")
     throw new HttpError(400, "点赞状态无效。");
-  const row = await rawContent({ kind: "post", id: postId });
-  currentPublic(row);
+  if (!await ctx.db.prepare("SELECT id FROM forum_public_posts WHERE id=?").bind(postId).first()) unavailable();
   if (input.liked)
-    await getD1()
+    await ctx.db
       .prepare(
         `INSERT OR IGNORE INTO forum_post_likes(post_id,user_id) SELECT id,? FROM forum_public_posts WHERE id=? AND ${forumActorSql()}`,
       )
       .bind(actor.id, postId, actor.id)
       .run();
   else
-    await getD1()
+    await ctx.db
       .prepare(
         `DELETE FROM forum_post_likes WHERE post_id=? AND user_id=? AND ${forumActorSql()} AND EXISTS(SELECT 1 FROM forum_public_posts WHERE id=?)`,
       )
       .bind(postId, actor.id, actor.id, postId)
       .run();
-  const fresh = await rawContent({ kind: "post", id: postId }, actor.id);
-  currentPublic(fresh);
+  const fresh = await ctx.db.prepare(`SELECT
+    (SELECT COUNT(*) FROM forum_post_likes WHERE post_id=p.id) AS likes,
+    EXISTS(SELECT 1 FROM forum_post_likes WHERE post_id=p.id AND user_id=?) AS liked
+    FROM forum_public_posts p WHERE p.id=?`).bind(actor.id, postId).first<{likes:number;liked:number}>();
+  if (!fresh) unavailable();
   return { liked: !!fresh.liked, likes: fresh.likes };
 }
-export async function reportForum(
+export async function reportForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
   let target = forumTarget(input.target);
-  const row = await rawContent(target);
+  const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
-  const existing = await getD1()
+  const existing = await ctx.db
     .prepare(
       "SELECT id FROM forum_content_reports WHERE user_id=? AND target_kind=? AND target_id=? AND status='pending'",
     )
@@ -622,7 +632,7 @@ export async function reportForum(
     throw new HttpError(400, "请填写 1–2000 个字符的说明。");
   const view =
     target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
-  await getD1()
+  await ctx.db
     .prepare(
       `INSERT OR IGNORE INTO forum_content_reports(user_id,topic_id,post_id,comment_id,target_kind,target_id,reason,explanation)
     SELECT ?,?,?,?,?,?,?,? WHERE ${forumActorSql()} AND ${rateSql} AND EXISTS(SELECT 1 FROM ${view} WHERE id=?)`,
@@ -643,7 +653,7 @@ export async function reportForum(
       row.id,
     )
     .run();
-  const found = await getD1()
+  const found = await ctx.db
     .prepare(
       "SELECT id FROM forum_content_reports WHERE user_id=? AND target_kind=? AND target_id=? AND status='pending'",
     )
@@ -654,12 +664,12 @@ export async function reportForum(
   return found;
 }
 
-export async function moderateForum(
+export async function moderateForum(ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
   let target = forumTarget(input.target);
-  const row = await rawContent(target);
+  const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   const action = input.action as ForumAction | "none";
   if (
@@ -681,7 +691,7 @@ export async function moderateForum(
     ? "forum.topic.feature_any"
     : "forum.content.moderate_any";
   checkPermission(actor, permission);
-  const topic = await rawTopic(row.topic_id);
+  const topic = await rawTopic(ctx, row.topic_id);
   if (input.topicRevision !== topic.revision) conflict();
   const reason = forumText(input.reason, 1000, "原因");
   if (action !== "none" && row.status === "deleted")
@@ -695,11 +705,11 @@ export async function moderateForum(
   if (action === "restore" && row.status !== "hidden")
     throw new HttpError(409, "目标未被隐藏。");
   const tags =
-      action === "tags" ? await prepareTags(input.tags, topic.id) : null,
+      action === "tags" ? await prepareTags(ctx, input.tags, topic.id) : null,
     tagGuard = tags ? tagsPredicate(tags) : { sql: "1", args: [] };
   const token = crypto.randomUUID(),
     gate = topicGate(topic.id, token),
-    db = getD1();
+    db = ctx.db;
   let report: {
     id: number;
     status: string;
@@ -738,7 +748,7 @@ export async function moderateForum(
     ${report ? `AND ${forumActorSql("forum.content.moderate_any")} AND EXISTS(SELECT 1 FROM forum_content_reports WHERE id=? AND status='pending')` : ""}`,
     args: [...tagGuard.args, ...restoreImages.args, ...(report ? [actor.id, report.id] : [])],
   };
-  const statements = [guard(topic, actor, token, predicate, permission)];
+  const statements = [guard(ctx, topic, actor, token, predicate, permission)];
   if (action === "hide" || action === "restore") {
     const status = action === "hide" ? "hidden" : "published";
     statements.push(
@@ -780,7 +790,7 @@ export async function moderateForum(
         )
         .bind(topic.id, token),
     );
-  if (tags) statements.push(...tagStatements(topic.id, tags, actor, token));
+  if (tags) statements.push(...tagStatements(ctx, topic.id, tags, actor, token));
   if (report)
     statements.push(
       db
@@ -794,9 +804,14 @@ export async function moderateForum(
           report.id,
           ...gate.args,
         ),
-    );
+      );
+  if (action === "hide" || action === "restore") {
+    const selected = target.kind === "topic" ? topic.id : row.id;
+    statements.push(searchVisibilityStatement(db, topicSearchDocuments(target.kind),
+      target.kind === "comment" ? [selected] : [selected, selected]));
+  }
   statements.push(
-    auditStatement(actor, action, target, topic.id, token, {
+    auditStatement(ctx, actor, action, target, topic.id, token, {
       reason,
       before: {
         status: row.status,
@@ -809,5 +824,5 @@ export async function moderateForum(
       resolution: input.resolution,
     }),
   );
-  await runGuarded(statements);
+  await runGuarded(ctx, statements);
 }

@@ -1,3 +1,4 @@
+import { getForumRuntime } from "@/lib/server/forum/next";
 import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/authz/permissions";
 import { forumPage } from "@/lib/forum";
@@ -25,7 +26,7 @@ export default async function AdminDiscussionsPage({
           : "topics";
   const query = typeof p.q === "string" ? p.q : "",
     state = typeof p.state === "string" ? p.state : "";
-  const data = await adminForumList(user, {
+  const data = await adminForumList(getForumRuntime(), user, {
     view,
     query,
     state,
