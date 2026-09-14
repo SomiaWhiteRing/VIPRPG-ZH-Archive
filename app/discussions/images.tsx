@@ -2,11 +2,8 @@
 import Image from "next/image";
 import { inspectForumImage } from "@/lib/forum-image-format";
 import { useState } from "react";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import Counter from "yet-another-react-lightbox/plugins/counter";
-import "yet-another-react-lightbox/styles.css";
-import "yet-another-react-lightbox/plugins/counter.css";
+import dynamic from "next/dynamic";
+const ForumLightbox=dynamic(()=>import("./lightbox").then((m)=>m.ForumLightbox),{ssr:false});
 import { ForumBody } from "./shared";
 import type { CustomEmojiDto } from "@/lib/server/db/work-community";
 import { Button } from "@/app/components/ui/button";
@@ -143,29 +140,7 @@ export function ForumImages({
           <ForumBody body={body.slice(lastOffset)} emojis={emojis} />
         ) : null}
       </div>
-      <Lightbox
-        open={active >= 0}
-        close={() => setActive(-1)}
-        index={active}
-        slides={images.map((image, index) => ({
-          src: image.url,
-          width: image.width,
-          height: image.height,
-          alt: `图片 ${index + 1}`,
-        }))}
-        plugins={[Zoom, Counter]}
-        carousel={{ finite: true }}
-        controller={{ closeOnBackdropClick: true }}
-        zoom={{ maxZoomPixelRatio: 4, scrollToZoom: true }}
-        animation={{ fade: 150, swipe: 200 }}
-        labels={{
-          Close: "关闭看图",
-          Next: "下一张",
-          Previous: "上一张",
-          "Zoom in": "放大",
-          "Zoom out": "缩小",
-        }}
-      />
+      {active>=0?<ForumLightbox images={images} active={active} setActive={setActive}/>:null}
     </>
   );
 }
