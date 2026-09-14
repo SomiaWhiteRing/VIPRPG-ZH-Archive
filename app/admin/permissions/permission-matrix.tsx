@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
@@ -244,7 +245,7 @@ export function PermissionMatrix({ permissions, roles: initialRoles }: {
                     {dirtyRoleIds.includes(item.id) ? <span className="shrink-0 text-xs text-primary">未保存</span> : null}
                   </Button>
                 ))}
-                {custom && !roles.some((item) => item.kind === "custom") ? <p className="px-2 text-xs text-muted">暂无自定义角色</p> : null}
+                {custom && !roles.some((item) => item.kind === "custom") ? <EmptyState title="暂无自定义角色" variant="plain" className="px-2 text-xs" /> : null}
               </div>
             ))}
           </nav>
@@ -398,13 +399,13 @@ export function PermissionMatrix({ permissions, roles: initialRoles }: {
             })}
             </Table>
           </div>
-          {visiblePermissions.length === 0 ? <p className="py-4 text-sm text-muted">没有匹配的权限，请尝试其他关键词。</p> : null}
+          {visiblePermissions.length === 0 ? <EmptyState title="没有匹配的权限，请尝试其他关键词。" variant="plain" className="py-4" /> : null}
 
           {editable ? <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-3">
             <span className="text-sm text-muted" role="status">{changedPermissions.length ? `${changedPermissions.length} 项权限修改未保存（含其他分类）` : "权限无未保存修改"}{profileDirty ? " · 角色资料另有未保存修改" : ""}</span>
             <div className="flex gap-2"><Button disabled={saving !== null || changedPermissions.length === 0} onClick={() => updateRole({ permissionKeys: [...saved.permissionKeys] })} type="button" variant="ghost">撤销权限修改</Button><Button disabled={saving !== null || changedPermissions.length === 0} onClick={savePermissions} type="button">{saving === "permissions" ? "保存中…" : "保存该角色全部权限"}</Button></div>
           </div> : null}
-        </section> : <p className="text-sm text-muted">暂无角色，请先创建角色。</p>}
+        </section> : <EmptyState title="暂无角色，请先创建角色。" />}
       </div>
     </div>
   );

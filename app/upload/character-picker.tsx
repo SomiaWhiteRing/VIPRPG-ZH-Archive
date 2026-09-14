@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
 import {
   useEffect,
@@ -705,9 +706,7 @@ function PortraitSelectionWorkbench({
             />
           ))}
           {!files.length && !faceSheets.length ? (
-            <div className="grid h-full min-h-28 place-items-center px-3 text-center text-sm text-muted">
-              这个角色还没有脸图素材表
-            </div>
+            <EmptyState title="这个角色还没有脸图素材表" variant="plain" className="h-full min-h-28 place-items-center px-3 text-center" />
           ) : null}
         </div>
 
@@ -805,9 +804,7 @@ function PortraitSelectionWorkbench({
               width={activeLibrarySheet.width}
             />
           ) : (
-            <span className="text-sm text-muted">
-              {onUpload ? "请先上传脸图素材表" : "没有可选的脸图素材表"}
-            </span>
+            <EmptyState title={onUpload ? "请先上传脸图素材表" : "没有可选的脸图素材表"} variant="plain" />
           )}
         </div>
 

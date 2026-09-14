@@ -1,4 +1,5 @@
 "use client";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { ForumImages } from "@/app/discussions/images";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -194,7 +195,7 @@ export function AdminDiscussions({
           </tbody>
         </table>
         {!data.items.length ? (
-          <p className="p-4 text-sm text-muted">没有匹配的记录。</p>
+          <EmptyState title="没有匹配的记录。" variant="plain" className="p-4" />
         ) : null}
       </div>
       <PaginationLinks

@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -397,7 +398,7 @@ export function PortraitLibraryEditor({
                 ) : null}
               </div>
             ) : (
-              <div className="grid h-full place-items-center text-sm text-muted">没有匹配的素材表</div>
+              <EmptyState title="没有匹配的素材表" variant="plain" className="h-full place-items-center" />
             )}
           </div>
         </section>

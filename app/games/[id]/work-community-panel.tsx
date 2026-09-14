@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -212,7 +213,7 @@ export function CommentPanel({
             onLike={toggleLike}
             onReply={startReply}
           />
-        )) : <p className="text-sm text-muted">还没有评论。</p>}
+        )) : <EmptyState title="还没有评论。" variant="plain" />}
       </div>
       {nextCursor ? (
         <div>
@@ -406,7 +407,7 @@ function EmojiPicker({ emojis, onSelect }: { emojis: CustomEmojiDto[]; onSelect:
               >
                 <Image alt={emoji.name} height={24} src={emoji.imageUrl} unoptimized width={24} />
               </Button>
-            )) : <span className="col-span-6 p-2 text-sm text-muted">暂无站点表情。</span>}
+            )) : <EmptyState title="暂无站点表情。" variant="plain" className="col-span-6 p-2" />}
           </div>
         </div>
       ) : null}

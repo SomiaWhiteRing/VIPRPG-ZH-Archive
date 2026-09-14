@@ -1,4 +1,5 @@
 "use client";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import {ForumReplyBar,draftSnapshot,draftValue,forumReplyLauncherClass,type ForumDraft} from "./draft";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ImagePlus, Smile } from "lucide-react";
@@ -446,7 +447,7 @@ export function ForumEditor({
               </Button>
             ))}
         </div>
-        {catalogue?.length===0 ? <p>还没有可用的表情。</p> : null}
+        {catalogue?.length===0 ? <EmptyState title="还没有可用的表情。" variant="plain" /> : null}
       </ForumModal>
     </section>
   );

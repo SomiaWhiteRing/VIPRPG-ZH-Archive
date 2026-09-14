@@ -108,7 +108,7 @@ export function RelationCreateDialog({
   );
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ kind: "empty" | "feedback"; text: string } | null>(null);
 
   function changeOpen(nextOpen: boolean) {
     if (busy) return;
@@ -137,7 +137,7 @@ export function RelationCreateDialog({
         detail?: string;
       };
       if (!response.ok || !body.ok) {
-        setMessage(body.detail ?? "查找游戏失败。");
+        setMessage({ kind: "feedback", text: body.detail ?? "查找游戏失败。" });
         return;
       }
       const works = (body.works ?? [])
@@ -148,9 +148,9 @@ export function RelationCreateDialog({
           title: candidate.chineseTitle || candidate.originalTitle,
         }));
       setCandidates(works);
-      if (!works.length) setMessage("没有找到可关联的游戏。");
+      if (!works.length) setMessage({ kind: "empty", text: "没有找到可关联的游戏。" });
     } catch {
-      setMessage("网络请求失败，请检查连接后重试。");
+      setMessage({ kind: "feedback", text: "网络请求失败，请检查连接后重试。" });
     } finally {
       setSearching(false);
     }
@@ -158,11 +158,11 @@ export function RelationCreateDialog({
 
   async function createRelation() {
     if (!selected) {
-      setMessage("请先查找并选择关联对象。");
+      setMessage({ kind: "feedback", text: "请先查找并选择关联对象。" });
       return;
     }
     if (relationChoice.startsWith("translation:") && selected.language === language) {
-      setMessage("原版和译版语言必须不同。");
+      setMessage({ kind: "feedback", text: "原版和译版语言必须不同。" });
       return;
     }
 
@@ -193,13 +193,13 @@ export function RelationCreateDialog({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setMessage(body.detail ?? "保存关联失败。");
+        setMessage({ kind: "feedback", text: body.detail ?? "保存关联失败。" });
         return;
       }
       setOpen(false);
       router.refresh();
     } catch {
-      setMessage("网络请求失败，请检查连接后重试。");
+      setMessage({ kind: "feedback", text: "网络请求失败，请检查连接后重试。" });
     } finally {
       setBusy(false);
     }
@@ -308,9 +308,11 @@ export function RelationCreateDialog({
                 ))}
               </ol>
             ) : null}
-            {message ? (
+            {message?.kind === "empty" ? (
+              <EmptyState title={message.text} variant="plain" className="py-3 font-normal" role="status" />
+            ) : message ? (
               <p className="m-0 py-3 text-sm font-normal text-muted" role="status">
-                {message}
+                {message.text}
               </p>
             ) : null}
           </div>

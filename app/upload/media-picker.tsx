@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
 import Cropper, { type Area } from "react-easy-crop";
 import { Dialog, Slider } from "radix-ui";
@@ -314,7 +315,7 @@ export function CoverPicker({
                     ))}
                   </div>
                 ) : (
-                  <p className="m-0 px-3 pb-3 text-xs text-muted">暂无候选图</p>
+                  <EmptyState title="暂无候选图" variant="plain" className="px-3 pb-3 text-xs" />
                 )}
               </aside>
 
