@@ -12,7 +12,7 @@ export async function forumTagHeat(ctx: ForumRequestRuntime) {
       JOIN forum_public_topics t ON t.id=x.topic_id WHERE t.created_at>=datetime('now','-90 days')
       GROUP BY x.tag_id ORDER BY count DESC,x.tag_id LIMIT 100`).all<Candidate>();
     saved={at:new Date().toISOString(),items:rows.results};
-    if (cache) ctx.execution.waitUntil(cache.put(key,Response.json(saved,{headers:{"Cache-Control":"public,max-age=3600"}})));
+    if (cache) ctx.execution.waitUntil(cache.put(key,Response.json(saved,{headers:{"Cache-Control":"public,max-age=86400"}})));
   }
   const rows=await ctx.db.prepare(`SELECT id,name,status AS state,revision FROM forum_tags
     WHERE id IN(SELECT value FROM json_each(?)) AND status<>'hidden'`).bind(JSON.stringify(saved.items.map((r)=>r.id)))

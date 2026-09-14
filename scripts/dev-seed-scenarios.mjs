@@ -123,7 +123,7 @@ function scenarioStatements(db) {
       avatar_blob_sha256: status === "deleted" ? null : avatar,
       bio: status === "deleted" ? "" : "本地演示账户：整理作品资料、收藏短篇并参与讨论。",
       profile_show_bio: visible, profile_show_favorites: visible, profile_show_history: visible,
-      profile_show_catalogs: visible, profile_show_comments: visible,
+      profile_show_catalogs: visible, profile_show_comments: visible, profile_show_discussions: visible,
       email_verified_at: status === "deleted" ? null : now, created_at: now, updated_at: now,
     });
   }

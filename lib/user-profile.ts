@@ -6,6 +6,7 @@ export type ProfileVisibility = {
   history: boolean;
   catalogs: boolean;
   comments: boolean;
+  discussions: boolean;
 };
 
 export type PublicProfileSection = Exclude<keyof ProfileVisibility, "bio">;

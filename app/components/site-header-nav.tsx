@@ -32,7 +32,7 @@ type Props = {
 const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/", label: "首页", exact: true },
   { href: "/games", label: "游戏库" },
-  { href: "/discussions", label: "讨论" },
+  { href: "/discussions", label: "讨论版" },
   { href: "/catalogs", label: "目录" },
   { href: "/upload", label: "上传" },
 ];
@@ -61,7 +61,7 @@ const ADMIN_LINKS: Array<HeaderNavigationLink & {
   },
   { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
   { href: "/admin/emojis", label: "站点表情", permission: "custom_emoji.manage" },
-  { href: "/admin/discussions", label: "讨论", anyPermission: ["forum.content.moderate_any","forum.topic.feature_any"] },
+  { href: "/admin/discussions", label: "讨论版", anyPermission: ["forum.content.moderate_any","forum.topic.feature_any"] },
   { href: "/admin/discussion-tags", label: "讨论 TAG", permission: "forum.tag.manage" },
   { href: "/admin/users", label: "用户", permission: "user.read" },
   { href: "/admin/permissions", label: "权限", bootstrapOnly: true },

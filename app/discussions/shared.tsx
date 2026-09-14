@@ -2,20 +2,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
   type ReactNode,
   type KeyboardEventHandler,
 } from "react";
-import { Dialog, Popover } from "radix-ui";
+import { Dialog } from "radix-ui";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { TokenPicker } from "@/app/upload/token-picker";
 import {
+  FORUM_TAG_LIMIT,
   forumHref,
   forumTagError,
   normalizeForumTag,
@@ -412,181 +412,56 @@ export function ForumTagEditor({
     </div>
   );
 }
-export function TagFilter({
+export function PopularTagFilter({
+  popular,
   selected,
-  onApply,
+  onChange,
+  hrefForTags,
   disabled,
 }: {
+  popular: ForumTag[];
   selected: ForumTag[];
-  onApply: (tags: ForumTag[]) => void;
+  onChange: (tags: ForumTag[]) => void;
+  hrefForTags: (tags: ForumTag[]) => string;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(selected);
-  const [query, setQuery] = useState("");
-  const [submitted,setSubmitted]=useState("");
-  const [cursor,setCursor]=useState<string|null>(null);
-  useEffect(() => {
-    const timer = setTimeout(() => { setSubmitted(query); setCursor(null); }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const [nextCursor,setNextCursor]=useState<string|null>(null);
-  const [tags, setTags] = useState<ForumTag[]>([]);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const [loaded, setLoaded] = useState<string | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [mobile, setMobile] = useState(false);
-  const requestKey = `${submitted}:${cursor}:${retry}`;
-  const loading = loaded !== requestKey;
-  useEffect(() => {
-    if (!open) return;
-    const controller = new AbortController();
-    void forumRequest<{ tags: ForumTag[];nextCursor:string|null }>(
-      forumHref("/api/discussions", { op: "tags", q: submitted, cursor }),
-      undefined,
-      controller.signal,
-    )
-      .then((data) => {
-        setTags((old)=>cursor?[...old,...data.tags]:data.tags);setNextCursor(data.nextCursor);
-        setError("");
-        setLoaded(requestKey);
-      })
-      .catch((e) => {
-        if (e.name !== "AbortError") {
-          setError("TAG 加载失败。");
-          setLoaded(requestKey);
-        }
-      });
-    return () => controller.abort();
-  }, [open, submitted, cursor, retry, requestKey]);
-  const fields = (
-    <>
-      <Label htmlFor="forum-filter-query">搜索 TAG</Label>
-      <Input
-        id="forum-filter-query"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
-{nextCursor ? <Button type="button" variant="ghost" size="sm" onClick={() => setCursor(nextCursor)}>加载更多</Button> : null}
-      <div className="my-3 flex flex-wrap gap-2">
-        {draft.map((tag) => (
-          <Button
-            key={tag.id}
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              setDraft((items) => items.filter((t) => t.id !== tag.id))
-            }
-          >
-            [{tag.name}] ×
-          </Button>
-        ))}
-      </div>
-      <div
-        className="my-4 grid max-h-72 gap-2 overflow-y-auto"
-        aria-busy={loading}
-      >
-        {tags.filter((t)=>t.name.toLowerCase().includes(query.toLowerCase())).map((tag) => (
-          <div className="flex min-h-10 items-center gap-2" key={tag.id}>
-            <Checkbox
-              id={`filter-tag-${tag.id}`}
-              checked={draft.some((t) => t.id === tag.id)}
-              disabled={
-                draft.length >= 5 && !draft.some((t) => t.id === tag.id)
-              }
-              onCheckedChange={(checked) =>
-                setDraft((items) =>
-                  checked
-                    ? [...items, tag]
-                    : items.filter((t) => t.id !== tag.id),
-                )
-              }
-            />
-            <Label htmlFor={`filter-tag-${tag.id}`}>
-              {tag.name}
-            </Label>
-          </div>
-        ))}
-      </div>
-      {loading ? (
-        <p role="status">正在加载 TAG…</p>
-      ) : error ? (
-        <p role="alert">
-          {error}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setRetry((n) => n + 1)}
-          >
-            重试
-          </Button>
-        </p>
-      ) : !tags.length ? (
-        <p>还没有可用的 TAG</p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            onApply([]);
-            setOpen(false);
-          }}
-        >
-          重置
-        </Button>
-        <Button
-          type="button"
-          disabled={draft.length > 5}
-          onClick={() => {
-            onApply(draft);
-            setOpen(false);
-          }}
-        >
-          应用筛选
-        </Button>
-      </div>
-    </>
-  );
   return (
-    <Popover.Root open={open && !mobile} onOpenChange={setOpen}>
-      <Popover.Anchor asChild>
-        <Button
-          ref={trigger}
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          aria-expanded={open}
-          onClick={() => {
-            setDraft(selected);
-            setMobile(matchMedia("(max-width: 767px)").matches);
-            setLoaded(null);
-            setOpen((value) => !value);
-          }}
-        >
-          筛选 TAG
-        </Button>
-      </Popover.Anchor>
-      <Popover.Portal>
-        <Popover.Content
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            trigger.current?.focus();
-          }}
-          align="start"
-          sideOffset={8}
-          aria-label="筛选 TAG"
-          className="z-50 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-4 shadow-surface"
-        >
-          {fields}
-        </Popover.Content>
-      </Popover.Portal>
-      <ForumModal open={open && mobile} onOpenChange={setOpen} title="筛选 TAG">
-        {fields}
-      </ForumModal>
-    </Popover.Root>
+    <div role="group" aria-label="常用 TAG" className="flex min-w-0 gap-2 overflow-x-auto py-1 lg:grid lg:overflow-visible lg:py-0">
+      {popular.map((tag) => {
+        const active = selected.some((item) => item.id === tag.id);
+        const nextTags = active
+          ? selected.filter((item) => item.id !== tag.id)
+          : [...selected, tag];
+        const unavailable = disabled || (!active && selected.length >= FORUM_TAG_LIMIT);
+        return (
+          <Fragment key={tag.id}>
+          <Link
+            className="hidden text-sm text-primary hover:underline lg:block"
+            href={hrefForTags(unavailable ? selected : nextTags)}
+            aria-current={active ? "true" : undefined}
+            aria-disabled={unavailable || undefined}
+            onNavigate={(event) => {
+              event.preventDefault();
+              if (!unavailable) onChange(nextTags);
+            }}
+          >
+            {tag.name}
+          </Link>
+          <Button
+            type="button"
+            size="sm"
+            variant={active ? "default" : "outline"}
+            className="shrink-0 lg:hidden"
+            aria-pressed={active}
+            disabled={unavailable}
+            onClick={() => onChange(nextTags)}
+          >
+            {active ? <span aria-hidden="true">✓</span> : null}
+            {tag.name}
+          </Button>
+          </Fragment>
+        );
+      })}
+    </div>
   );
 }

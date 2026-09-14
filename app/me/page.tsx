@@ -10,6 +10,9 @@ import {
 } from "@/lib/server/db/game-library";
 import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
 import { searchUserComments } from "@/lib/server/db/work-community";
+import { getForumRuntime } from "@/lib/server/forum/next";
+import { ownUserDiscussions } from "@/lib/server/forum/user-discussions";
+import { DiscussionList } from "./discussion-list";
 import {
   canAccessOwnWorks,
   canPublishWork,
@@ -28,7 +31,7 @@ export const dynamic = "force-dynamic";
 export default async function MePage() {
   const user = await requireAccountUser("/me");
   const showUploads = canAccessOwnWorks(user);
-  const [played, favorites, catalogs, comments, uploads] = await Promise.all([
+  const [played, favorites, catalogs, comments, uploads, discussions] = await Promise.all([
     searchUserWorks({ userId: user.id, kind: "played", pageSize: 4 }),
     searchUserWorks({ userId: user.id, kind: "favorite", pageSize: 4 }),
     searchCatalogsForOwner({ userId: user.id, pageSize: 3 }),
@@ -36,6 +39,7 @@ export default async function MePage() {
     showUploads
       ? searchUploadedWorks({ userId: user.id, pageSize: 3 })
       : Promise.resolve(null),
+    ownUserDiscussions(getForumRuntime(), user, { pageSize: 3 }),
   ]);
 
   return (
@@ -169,6 +173,13 @@ export default async function MePage() {
         ) : (
           <AccountEmpty>浏览作品或作者资料并留下第一条评论。</AccountEmpty>
         )}
+      </AccountSection>
+      <AccountSection
+        href="/me/discussions"
+        status={!user.profileVisibility.discussions ? <Badge variant="outline">未在个人主页展示</Badge> : undefined}
+        title="最近讨论"
+      >
+        <DiscussionList items={discussions.items} compact />
       </AccountSection>
       {uploads ? (
         <AccountSection href="/me/uploads" title="最近上传">

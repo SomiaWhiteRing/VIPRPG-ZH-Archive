@@ -37,6 +37,7 @@ export type UserRow = {
   profile_show_history: number;
   profile_show_catalogs: number;
   profile_show_comments: number;
+  profile_show_discussions: number;
   status: UserStatus;
   email_verified_at: string | null;
   last_login_at: string | null;
@@ -62,6 +63,7 @@ export type ProfileVisibilityRow = Pick<
   | "profile_show_history"
   | "profile_show_catalogs"
   | "profile_show_comments"
+  | "profile_show_discussions"
 >;
 
 export const USER_ACCESS_COLUMNS = `
@@ -76,6 +78,7 @@ export const USER_ACCESS_COLUMNS = `
   u.profile_show_history,
   u.profile_show_catalogs,
   u.profile_show_comments,
+  u.profile_show_discussions,
   u.status,
   u.email_verified_at,
   u.last_login_at,
@@ -166,6 +169,7 @@ export function mapProfileVisibility(row: ProfileVisibilityRow): ProfileVisibili
     history: row.profile_show_history === 1,
     catalogs: row.profile_show_catalogs === 1,
     comments: row.profile_show_comments === 1,
+    discussions: row.profile_show_discussions === 1,
   };
 }
 

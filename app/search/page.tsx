@@ -13,6 +13,7 @@ import { stringParam } from "@/lib/params";
 import { searchCatalogs } from "@/lib/server/db/catalogs";
 import Form from "next/form";
 import { DiscussionSearchResults } from "@/app/discussions/search/results";
+import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
 
 export const dynamic = "force-dynamic";
 type SearchPageProps = {
@@ -20,7 +21,7 @@ type SearchPageProps = {
 };
 const SCOPES = [
   ["works", "作品"],
-  ["discussions", "讨论"],
+  ["discussions", "讨论版"],
   ["creators", "作者"],
   ["characters", "角色"],
   ["tags", "标签"],
@@ -43,7 +44,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       <header className="mb-6 border-b border-border pb-6">
         <h1 className="text-3xl font-extrabold tracking-tight">搜索站内内容</h1>
       </header>
-      {scope !== "discussions" ? <Form className="my-6 flex gap-2" action="/search">
+      <Form key={`${scope}:${query}`} className="my-6 flex gap-2" action="/search">
         <Label className="sr-only" htmlFor="search-query">
           搜索关键词
         </Label>
@@ -54,10 +55,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           defaultValue={query}
           placeholder="输入关键词"
           type="search"
+          maxLength={scope === "discussions" ? FORUM_SEARCH_QUERY_LENGTH : undefined}
         />
         <input name="scope" type="hidden" value={scope} />
         <Rm2kButton type="submit">搜索</Rm2kButton>
-      </Form> : null}
+      </Form>
       <nav
         className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border pb-4 text-sm font-bold"
         aria-label="搜索范围"

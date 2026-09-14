@@ -13,5 +13,6 @@ export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me/catalogs", label: "我的目录" },
   { href: "/me/history", label: "游玩历史" },
   { href: "/me/comments", label: "我的评论" },
+  { href: "/me/discussions", label: "我的讨论" },
   { href: "/me/uploads", label: "我的上传", requiresUpload: true },
 ] as const;
