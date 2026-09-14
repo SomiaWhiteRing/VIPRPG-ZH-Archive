@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { SelectField } from "@/app/components/ui/select";
@@ -135,7 +136,7 @@ export function CatalogAddDialog({
             </>
           ) : (
             <>
-              <p className="m-0 text-sm text-muted">你还没有可用的目录。</p>
+              <EmptyState title="你还没有可用的目录。" variant="plain" />
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <Dialog.Close asChild>
                   <Button type="button" variant="outline">

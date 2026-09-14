@@ -1,3 +1,4 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -182,9 +183,7 @@ export default async function CatalogPage({
                 ))}
               </ul>
             ) : (
-              <p className="m-0 text-sm leading-6 text-muted">
-                这位用户还没有其他公开目录。
-              </p>
+              <EmptyState title="这位用户还没有其他公开目录。" variant="plain" className="leading-6" />
             )}
             {catalog.ownerProfileShowsCatalogs ? (
               <Link

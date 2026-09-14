@@ -49,7 +49,7 @@ export function CatalogItemsSection({
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [addMessage, setAddMessage] = useState<string | null>(null);
+  const [addMessage, setAddMessage] = useState<{ kind: "empty" | "feedback"; text: string } | null>(null);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
@@ -88,16 +88,16 @@ export function CatalogItemsSection({
         detail?: string;
       };
       if (!response.ok) {
-        setAddMessage(body.detail ?? "查找游戏失败。");
+        setAddMessage({ kind: "feedback", text: body.detail ?? "查找游戏失败。" });
         return;
       }
       const works = (body.works ?? []).filter(
         (work) => !items.some((item) => item.workId === work.id),
       );
       setCandidates(works);
-      if (!works.length) setAddMessage("没有找到可添加的游戏。");
+      if (!works.length) setAddMessage({ kind: "empty", text: "没有找到可添加的游戏。" });
     } catch {
-      setAddMessage("网络请求失败。");
+      setAddMessage({ kind: "feedback", text: "网络请求失败。" });
     } finally {
       setSearching(false);
     }
@@ -115,13 +115,13 @@ export function CatalogItemsSection({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setAddMessage(body.detail ?? "游戏添加失败。");
+        setAddMessage({ kind: "feedback", text: body.detail ?? "游戏添加失败。" });
         return;
       }
       setAddOpen(false);
       router.refresh();
     } catch {
-      setAddMessage("网络请求失败。");
+      setAddMessage({ kind: "feedback", text: "网络请求失败。" });
     } finally {
       setAdding(false);
     }
@@ -351,7 +351,7 @@ export function CatalogItemsSection({
                   ))}
                 </ol>
               ) : null}
-              {addMessage ? <p className="m-0 text-sm text-muted" role="status">{addMessage}</p> : null}
+              {addMessage?.kind === "empty" ? <EmptyState title={addMessage.text} variant="plain" role="status" /> : addMessage ? <p className="m-0 text-sm text-muted" role="status">{addMessage.text}</p> : null}
             </div>
             <div className="flex justify-end border-t border-border pt-4">
               <Dialog.Close asChild>

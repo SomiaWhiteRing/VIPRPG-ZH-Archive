@@ -1,3 +1,4 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Link from "next/link";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getD1 } from "@/lib/server/db/d1";
@@ -78,7 +79,7 @@ export default async function ForumImageCleanup({
         ))}
       </ul>
       {!rows.results.length ? (
-        <p className="text-sm text-muted">暂无待清理图片。</p>
+        <EmptyState title="暂无待清理图片。" />
       ) : null}
       <nav
         className="flex gap-4 text-sm text-primary"

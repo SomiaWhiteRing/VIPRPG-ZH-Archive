@@ -1,3 +1,4 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -100,7 +101,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </ul>
               ) : (
-                <p className="m-0 text-sm text-muted">暂无参与作品。</p>
+                <EmptyState title="暂无参与作品。" variant="plain" />
               )}
             </section>
 

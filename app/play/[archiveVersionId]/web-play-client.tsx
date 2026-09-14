@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Expand, Minimize2, MonitorPlay, RectangleHorizontal, RectangleVertical } from "lucide-react";
@@ -713,7 +714,7 @@ export function WebPlayClient({
                             </li>
                           ))}
                         </ol>
-                      ) : <p className="m-0 text-muted">暂无日志。</p>}
+                      ) : <EmptyState title="暂无日志。" variant="plain" className="text-xs" />}
                     </div>
                   </div>
                 </details>

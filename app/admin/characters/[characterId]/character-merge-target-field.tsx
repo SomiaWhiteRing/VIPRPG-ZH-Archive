@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/app/components/ui/empty-state";
 import {
   useEffect,
   useId,
@@ -132,7 +133,7 @@ export function CharacterMergeTargetField({
                 <span className="shrink-0 text-xs text-muted">#{candidate.id} · {candidate.workCount} 部作品</span>
               </Button>
             )) : (
-              <p className="m-0 px-2.5 py-2 text-sm text-muted" role="status">没有匹配角色</p>
+              <EmptyState title="没有匹配角色" variant="plain" className="px-2.5 py-2" role="status" />
             )}
             {matches.total > RESULT_LIMIT ? (
               <p className="m-0 border-t border-border px-2.5 py-2 text-xs text-muted" role="status">

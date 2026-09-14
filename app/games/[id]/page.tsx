@@ -1,3 +1,4 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
@@ -267,7 +268,7 @@ export default async function GameDetailPage({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted">暂无公开关联作品。</p>
+                <EmptyState title="暂无公开关联作品。" variant="plain" />
               )}
             </section>
           ) : null}

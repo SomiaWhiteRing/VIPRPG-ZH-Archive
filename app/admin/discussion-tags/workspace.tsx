@@ -1,4 +1,5 @@
 "use client";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -96,7 +97,7 @@ export function AdminDiscussionTags({
             ))}
           </tbody>
         </table>
-        {!data.items.length ? <p className="p-4">没有匹配的 TAG。</p> : null}
+        {!data.items.length ? <EmptyState title="没有匹配的 TAG。" variant="plain" className="p-4" /> : null}
       </div>
       <PaginationLinks
         basePath="/admin/discussion-tags"

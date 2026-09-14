@@ -56,7 +56,7 @@ export default async function AdminPage() {
             </span>
           </Link>
         </div>
-        {!failedImports?.count && !totalPending && !observability.downloads.failureCount ? <p className="mt-3 text-sm text-muted">当前没有待处理的任务或失败记录。</p> : null}
+        {!failedImports?.count && !totalPending && !observability.downloads.failureCount ? <EmptyState title="当前没有待处理的任务或失败记录。" variant="plain" className="mt-3" /> : null}
       </Pane>
 
       <Pane heading="近期导入">
