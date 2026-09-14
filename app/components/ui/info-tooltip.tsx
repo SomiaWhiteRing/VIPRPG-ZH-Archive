@@ -11,7 +11,7 @@ export function InfoTooltip({ children }: { children: ReactNode }) {
         <TooltipPrimitive.Trigger asChild>
           <button
             aria-label="查看说明"
-            className="inline-grid size-5 shrink-0 place-items-center rounded-sm text-muted outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="inline-grid cursor-help size-5 shrink-0 place-items-center rounded-sm text-muted outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/30"
             type="button"
           >
             <Info aria-hidden className="size-3.5" />

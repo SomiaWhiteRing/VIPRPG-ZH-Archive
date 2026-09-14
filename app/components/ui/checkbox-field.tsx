@@ -27,7 +27,7 @@ export function CheckboxField({
         name={name}
         value={value}
       />
-      <Label htmlFor={id}>{label}</Label>
+      <Label className="cursor-pointer" htmlFor={id}>{label}</Label>
     </div>
   );
 }
