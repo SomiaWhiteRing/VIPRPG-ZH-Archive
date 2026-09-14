@@ -19,6 +19,7 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Prom
     { name: "showHistory", label: "在个人主页展示游玩历史", checked: user.profileVisibility.history },
     { name: "showCatalogs", label: "在个人主页展示目录", checked: user.profileVisibility.catalogs },
     { name: "showComments", label: "在个人主页展示评论", checked: user.profileVisibility.comments },
+    { name: "showDiscussions", label: "在个人主页展示讨论", checked: user.profileVisibility.discussions },
   ];
 
   return (
@@ -34,7 +35,7 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Prom
             </div>
           ))}
         </div>
-        <p className="mb-0 mt-3 text-xs text-muted">这些设置只控制个人主页。已发布的目录仍可被浏览，已发布的评论仍会显示在作品页。</p>
+        <p className="mb-0 mt-3 text-xs text-muted">这些设置只控制个人主页。公开目录仍可被浏览，公开评论仍会显示在作品或作者页，公开发帖和回帖仍会显示在讨论版。</p>
         <div className="mt-5"><Rm2kButton type="submit">保存隐私设置</Rm2kButton></div>
       </form>
     </div>

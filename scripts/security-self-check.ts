@@ -95,6 +95,7 @@ function fakeUser(
       history: true,
       catalogs: true,
       comments: true,
+      discussions: true,
     },
     roleIds: [],
     roleKeys: [],

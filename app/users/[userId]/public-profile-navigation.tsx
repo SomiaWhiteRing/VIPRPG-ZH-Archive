@@ -13,6 +13,7 @@ export function PublicProfileNavigation({ userId, visibility }: { userId: number
     ...(visibility.history ? [{ href: `${base}/history`, label: "最近游玩" }] : []),
     ...(visibility.catalogs ? [{ href: `${base}/catalogs`, label: "目录" }] : []),
     ...(visibility.comments ? [{ href: `${base}/comments`, label: "评论" }] : []),
+    ...(visibility.discussions ? [{ href: `${base}/discussions`, label: "讨论" }] : []),
   ];
   return (
     <nav aria-label="用户公开资料导航" className="flex gap-1 overflow-x-auto border-b border-border py-2">

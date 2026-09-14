@@ -53,6 +53,7 @@ const USER_SELECT = `SELECT
   profile_show_history,
   profile_show_catalogs,
   profile_show_comments,
+  profile_show_discussions,
   status,
   email_verified_at,
   last_login_at,
@@ -72,6 +73,7 @@ const USER_AUTH_SELECT = `SELECT
   profile_show_history,
   profile_show_catalogs,
   profile_show_comments,
+  profile_show_discussions,
   status,
   email_verified_at,
   last_login_at,
@@ -137,7 +139,7 @@ export const findPublicUserById = cache(async (id: number): Promise<PublicUserPr
     .prepare(
       `SELECT id,display_name,avatar_blob_sha256,bio,
               profile_show_bio,profile_show_favorites,profile_show_history,
-              profile_show_catalogs,profile_show_comments,created_at
+              profile_show_catalogs,profile_show_comments,profile_show_discussions,created_at
        FROM users
        WHERE id=? AND status IN ('active','deleted')
        LIMIT 1`,
@@ -342,7 +344,7 @@ export async function updateOwnProfileVisibility(input: {
       .prepare(
         `UPDATE users
          SET profile_show_bio=?,profile_show_favorites=?,profile_show_history=?,
-             profile_show_catalogs=?,profile_show_comments=?,updated_at=CURRENT_TIMESTAMP
+             profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,updated_at=CURRENT_TIMESTAMP
          WHERE id=?`,
       )
       .bind(
@@ -351,6 +353,7 @@ export async function updateOwnProfileVisibility(input: {
         input.visibility.history ? 1 : 0,
         input.visibility.catalogs ? 1 : 0,
         input.visibility.comments ? 1 : 0,
+        input.visibility.discussions ? 1 : 0,
         input.user.id,
       ),
     getD1()
@@ -645,7 +648,7 @@ export async function deleteOwnAccount(user: ArchiveUser, password: string): Pro
   await db.batch([
     db.prepare(`UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
       bio='',password_hash=NULL,profile_show_bio=0,profile_show_favorites=0,profile_show_history=0,
-      profile_show_catalogs=0,profile_show_comments=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`).bind(user.id),
+      profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`).bind(user.id),
     db.prepare(`UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE user_id=?`).bind(user.id),
     db.prepare(`DELETE FROM user_roles WHERE user_id=? AND role_id NOT IN (SELECT id FROM roles WHERE key='user')`).bind(user.id),
     db.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'account_deleted')`).bind(user.id,user.email),

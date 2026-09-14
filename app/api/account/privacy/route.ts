@@ -19,6 +19,7 @@ export async function POST(request: Request) {
         history: form.get("showHistory") === "1",
         catalogs: form.get("showCatalogs") === "1",
         comments: form.get("showComments") === "1",
+        discussions: form.get("showDiscussions") === "1",
       },
     });
     return redirectWithParams(request, "/me/privacy", { privacyUpdated: "1" });

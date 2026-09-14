@@ -46,7 +46,7 @@ import {
   ForumModal,
   ForumRequestError,
   ForumTime,
-  TagFilter,
+  PopularTagFilter,
   TopicStatus,
   TopicTags,
   forumRequest,
@@ -698,7 +698,7 @@ export function DiscussionWorkspace({
       {unavailable ? (
         <>
           <PageHeader compact title="内容不可用" />
-          <Link href={returnTo ?? "/discussions"}>返回讨论</Link>
+          <Link href={returnTo ?? "/discussions"}>返回讨论版</Link>
         </>
       ) : detail ? (
         <>
@@ -706,7 +706,7 @@ export function DiscussionWorkspace({
             className="mb-4 inline-block text-sm text-primary"
             href={returnTo ?? "/discussions"}
           >
-            ← 返回讨论
+            ← 返回讨论版
           </Link>
           <div className="mb-2 text-sm leading-relaxed">
             <TopicTags tags={detail.topic.tags} />
@@ -764,8 +764,8 @@ export function DiscussionWorkspace({
       ) : (
         <div className="grid min-w-0 gap-6 lg:grid-cols-[192px_minmax(0,1fr)]">
           <aside className="hidden self-start lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
-            <h2 className="mb-4 font-bold">讨论</h2>
-            <nav className="grid gap-2" aria-label="讨论导航">
+            <h2 className="mb-4 font-bold">讨论版</h2>
+            <nav className="grid gap-2" aria-label="讨论版导航">
               {[false, true].map((value) => (
                 <Link
                   key={String(value)}
@@ -781,29 +781,18 @@ export function DiscussionWorkspace({
               ))}
             </nav>
             <h3 className="mb-2 mt-6 text-sm font-bold">常用 TAG</h3>
-            <div className="grid gap-2">
-              {popular.map((tag) => (
-                <Link
-                  className="text-sm text-primary hover:underline"
-                  href={forumHref("/discussions", { tag: tag.id })}
-                  key={tag.id}
-                >
-                  {tag.name}
-                </Link>
-              ))}
-            </div>
-            <div className="mt-4">
-              <TagFilter
-                selected={selected}
-                onApply={(tags) => listNavigate(featured, tags)}
-                disabled={pending}
-              />
-            </div>
+            <PopularTagFilter
+              popular={popular}
+              selected={selected}
+              hrefForTags={(tags) => forumHref("/discussions", { view: featured ? "featured" : null, tag: tags.map((tag) => tag.id).sort((a, b) => a - b) })}
+              onChange={(tags) => listNavigate(featured, tags)}
+              disabled={pending}
+            />
           </aside>
           <div className="min-w-0">
             <PageHeader
               compact
-              title="讨论"
+              title="讨论版"
               actions={
                 <>
                   <Form
@@ -855,9 +844,13 @@ export function DiscussionWorkspace({
                   {value ? "精品" : "最新"}
                 </Button>
               ))}
-              <TagFilter
+            </div>
+            <div className="my-3 min-w-0 lg:hidden">
+              <PopularTagFilter
+                popular={popular}
                 selected={selected}
-                onApply={(tags) => listNavigate(featured, tags)}
+                hrefForTags={(tags) => forumHref("/discussions", { view: featured ? "featured" : null, tag: tags.map((tag) => tag.id).sort((a, b) => a - b) })}
+                onChange={(tags) => listNavigate(featured, tags)}
                 disabled={pending}
               />
             </div>
@@ -886,7 +879,7 @@ export function DiscussionWorkspace({
               </p>
             ) : topics?.items.length ? (
               <section aria-label="讨论主题" aria-busy={pending}>
-                <div className="hidden grid-cols-[minmax(0,1fr)_72px_96px] border-b border-border py-2 text-right text-xs text-muted md:grid lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
+                <div className="hidden grid-cols-[minmax(0,1fr)_72px_96px] gap-2 border-b border-border py-2 text-right text-xs text-muted md:grid lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
                   <span />
                   <span>回复</span>
                   <span className="hidden lg:block">浏览</span>
@@ -894,16 +887,18 @@ export function DiscussionWorkspace({
                 </div>
                 {topics.items.map((item) => (
                   <article
-                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-primary/5 focus-within:bg-primary/5 md:grid-cols-[minmax(0,1fr)_72px_96px] lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
+                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-primary/5 focus-within:bg-primary/5 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
                     key={item.id}
                   >
                     <div className="min-w-0">
-                      <div className="break-words text-sm">
-                        <TopicTags tags={item.tags} />
-                        <TopicStatus topic={item} />
-                      </div>
+                      {item.tags.length > 0 || item.featured || item.locked ? (
+                        <div className="mb-1 break-words text-sm">
+                          <TopicTags tags={item.tags} />
+                          <TopicStatus topic={item} />
+                        </div>
+                      ) : null}
                       <Link
-                        className="mt-1 line-clamp-2 break-words font-bold text-foreground hover:text-primary"
+                        className="line-clamp-2 break-words font-bold text-foreground hover:text-primary"
                         href={forumHref(`/discussions/${item.id}`, {
                           from: listHref === "/discussions" ? null : listHref,
                         })}
@@ -933,7 +928,7 @@ export function DiscussionWorkspace({
                     <span className="hidden text-right font-mono text-sm tabular-nums lg:block">
                       {item.views}
                     </span>
-                    <span className="hidden text-right md:block">
+                    <span className="hidden text-right md:flex md:items-center md:justify-end">
                       <ForumTime value={item.activeAt} relative />
                     </span>
                   </article>

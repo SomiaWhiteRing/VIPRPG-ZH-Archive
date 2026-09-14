@@ -32,7 +32,7 @@ export async function generateMetadata({ params, searchParams }: TopicProps): Pr
   const id = optionalId(topicId)!;
   const detail = await loadDetail(id, forumPage(query.page), optionalId(query.floor), forumPage(query.commentPage), optionalId(query.comment));
   return {
-    title: `${detail.topic.title} - 讨论 - VIPRPG.org`,
+    title: `${detail.topic.title} - 讨论版 - VIPRPG.org`,
     description: detail.posts.items.find((post) => post.postNumber === 1)?.body?.slice(0, 160) || detail.topic.title,
     alternates: { canonical: `/discussions/${id}` },
   };
