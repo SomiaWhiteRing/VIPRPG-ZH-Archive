@@ -8,6 +8,8 @@ import { forumViewer } from "@/lib/server/forum/queries";
 import { forumHref, forumListReturn, forumPage } from "@/lib/forum";
 import { HttpError } from "@/lib/server/http/json";
 import { DiscussionWorkspace } from "../workspace";
+import { getInboxItemForUser } from "@/lib/server/db/inbox";
+import { InboxReadOnView } from "@/app/inbox/read-on-view";
 export const dynamic = "force-dynamic";
 type TopicProps = {
   params: Promise<{ topicId: string }>;
@@ -58,6 +60,7 @@ export default async function TopicPage({
     : null;
   const returnTo = forumListReturn(query.from);
   const initialReply = query.reply === "topic" ? "topic" : optionalId(query.reply);
+  const inboxId = optionalId(query.inbox);
   const canonical = forumHref(`/discussions/${topicId}`, {
     page: detail.posts.page,
     floor: detail.floor,
@@ -65,6 +68,7 @@ export default async function TopicPage({
     comment: detail.comment,
     from: returnTo,
     reply: initialReply,
+    inbox: inboxId,
   });
   const incoming = new URLSearchParams();
   for (const [key, value] of Object.entries(query))
@@ -75,7 +79,19 @@ export default async function TopicPage({
     `/discussions/${topicId}${incoming.size ? `?${incoming}` : ""}`
   )
     redirect(canonical + (detail.comment ? `#comment-${detail.comment}` : ""));
+  const inboxItem = inboxId && user ? await getInboxItemForUser(inboxId,user).catch((error: unknown) => {
+    if (error instanceof HttpError && error.status === 404) return null;
+    throw error;
+  }) : null;
+  const interaction = inboxItem?.interaction;
+  const displayedPost = interaction?.topicId === Number(topicId)
+    ? detail.posts.items.find((post) => post.postNumber === interaction.postNumber && post.state === "published") : null;
+  const displayed = displayedPost && (!interaction?.commentId ||
+    (detail.comment === interaction.commentId && displayedPost.comments.items.some((comment) => comment.id === interaction.commentId && comment.state === "published")));
   return (
+    <>
+    {displayed && inboxItem && !inboxItem.readAt && interaction ? <InboxReadOnView
+      itemId={inboxItem.id} topicId={interaction.topicId} postNumber={interaction.postNumber} commentId={interaction.commentId} /> : null}
     <DiscussionWorkspace
       key={`${canonical}-${detail.topic.revision}`}
       viewer={viewer}
@@ -84,5 +100,6 @@ export default async function TopicPage({
       returnTo={returnTo}
       initialReply={initialReply}
     />
+    </>
   );
 }

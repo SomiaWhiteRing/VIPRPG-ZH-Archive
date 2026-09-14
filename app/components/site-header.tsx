@@ -12,6 +12,7 @@ export async function SiteHeader() {
       session={
         currentUser
           ? {
+              id: currentUser.id,
               displayName: currentUser.displayName,
               avatarBlobSha256: currentUser.avatarBlobSha256,
               unread,

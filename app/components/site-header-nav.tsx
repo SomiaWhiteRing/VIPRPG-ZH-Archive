@@ -1,7 +1,9 @@
 "use client";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
+import { InboxIndicator } from "@/app/components/inbox-indicator";
 import { Badge } from "@/app/components/ui/badge";
+import { formatUnreadCount } from "@/lib/format";
 import { HeaderNavigation, type HeaderNavigationLink } from "@/app/components/header-navigation";
 import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
@@ -12,11 +14,11 @@ import type { ReactNode } from "react";
 import { ChevronDown, Search, Menu, X } from "lucide-react";
 import Image from "next/image";
 import { hasPermissionKey, type PermissionKey } from "@/lib/authz/permissions";
-import { formatUnreadCount } from "@/lib/format";
 import { DropdownMenu } from "radix-ui";
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 
 type Session = {
+  id: number;
   displayName: string;
   avatarBlobSha256: string | null;
   unread: number;
@@ -157,7 +159,11 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
         
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {session ? (
-            <UserMenu inAdmin={inAdmin} session={session} />
+            <Suspense fallback={<UserMenu inAdmin={inAdmin} session={session} />}>
+              <InboxIndicator key={session.id} initialUnread={session.unread}>
+                {(unread) => <UserMenu inAdmin={inAdmin} session={{ ...session, unread }} />}
+              </InboxIndicator>
+            </Suspense>
           ) : (
             <>
               {/* 移动端搜索按钮 - 放在登录注册按钮左边 */}
@@ -279,7 +285,7 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
           </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
           <DropdownMenu.Item asChild>
-            <Link className={itemClass} href="/inbox">
+            <Link className={itemClass} href="/inbox" prefetch={false} aria-label={`提醒，${session.unread} 条未读`}>
               <span>提醒</span>
               {session.unread > 0 ? (
                 <Badge className="min-h-5 px-1.5 text-[11px]" variant="negative">
