@@ -70,7 +70,7 @@ npm run preview         # OpenNext/Cloudflare Workers 本地预览
 
 敏捷开发默认运行 `npm run regression`，或按改动选择 `npm run check` / `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。回归入口会串行执行有状态检查，并在 `output/regression/` 保留报告和阶段日志；失败分类与停止条件见 [`docs/maintenance-regression.md`](docs/maintenance-regression.md)。
 
-`npm run dev` 适合页面和普通 API 开发；需要验证原生 Worker、D1/R2 binding 或下载链路时使用 `npm run preview`。
+`npm run dev` 用于主站和论坛开发；验证 OpenNext、真实 Worker binding 和原生下载链路时使用 `npm run preview`。
 
 论坛图片复用 `ARCHIVE_BUCKET`，无需额外图床密钥。原始文件单张最多 2 MiB，浏览器同格式处理后在发布时上传；读取权限和人工清理规则见[论坛设计文档](docs/forum-discussion-design.md#图片存储与清理)。
 

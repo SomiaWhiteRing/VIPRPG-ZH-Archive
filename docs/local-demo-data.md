@@ -10,7 +10,7 @@
 npm run db:local:seed:update
 ```
 
-也可直接执行 `node scripts/dev-seed.mjs --update`。不要使用 `--reset` 更新已有数据。空环境仍按 README 先运行 `db:local:reset`、`db:local:seed`，完整 seed 会自动包含扩展场景。
+也可直接执行 `node --import tsx scripts/dev-seed.mjs --update`。不要使用 `--reset` 更新已有数据。空环境仍按 README 先运行 `db:local:reset`、`db:local:seed`，完整 seed 会自动包含扩展场景。
 
 脚本固定使用 `wrangler.jsonc` 的本地 binding 和 `.wrangler/state`，关闭远程 binding。更新前通过 SQLite 在线备份保存包含 WAL 已提交内容的快照，再在副本中检查 SQL 和外键，最后以一个 D1 batch 事务写入。证据保存在被 Git 忽略的 `output/dev-seed/<时间>/`：
 
@@ -21,7 +21,7 @@ npm run db:local:seed:update
 
 扩展记录使用固定编号；在各表中保留 10001–12053 段供这些场景使用。重复执行时，已存在的主键记录保持原样，因此后续编辑、审核和隐私设置不会被重置。名称等其他唯一键冲突会报错，需先核对占用记录；脚本不会合并或覆盖它们。
 
-前提是基础 seed 的四个账号、角色词典和预览素材仍存在，并且开发库已应用当前 migration（包括论坛图片的 0003、0004）。此更新入口不负责修复旧数据库结构或同步已修改过的初始 migration。
+前提是基础 seed 的四个账号、角色词典和预览素材仍存在，并且开发库已应用当前 migration（包括论坛读取模型的 0005；已有论坛先按离线转换流程升级）。此更新入口不负责修复旧数据库结构或同步已修改过的初始 migration。
 
 ## 账号
 
@@ -43,7 +43,7 @@ npm run db:local:seed:update
 
 ## 展示入口
 
-以下路径相对于开发服务地址，默认 `http://localhost:3000`。
+主站和论坛开发使用 `npm run dev`（默认 `http://localhost:3000`）；验证 OpenNext、真实 Worker binding 和原生下载链路时使用 `npm run preview`（默认 `http://localhost:8787`）。以下均为相对路径。
 
 | 功能 | 入口与场景 |
 | --- | --- |
@@ -63,7 +63,7 @@ npm run db:local:seed:update
 | 长标题、多 TAG、多页楼层及楼中楼 | `/discussions/10100`：5 个 TAG、32 个楼层，两组各 27 条楼中楼，另有点赞和表情 |
 | 锁定、本人编辑、隐藏审核 | `/discussions/10102` 锁定；10103 属于普通用户；10104 隐藏，管理员可查看 |
 | TAG 状态 | `/admin/discussion-tags`：启用、停用、隐藏 TAG；10105 主题关联了状态不同的 TAG |
-| 全文搜索 | `/search?scope=discussions&q=窗口模式`：命中楼中楼 |
+| 全文搜索 | `/discussions/search?q=窗口模式`：命中楼中楼 |
 | 举报处理 | `/admin/discussions`：待处理、已处理、已驳回各 1 条，覆盖楼层、楼中楼和主题 |
 
 新增公开作品使用 MV 引擎和合法的单一外部下载字段，能够进入公开列表和详情页。下载地址在 `example.com` 下，仅为占位；这些场景不含可运行游戏。原有 5 份归档仍是空 core pack 的展示资料，不能据此验收真实下载、游戏启动、ZIP 上传或浏览器安装。
