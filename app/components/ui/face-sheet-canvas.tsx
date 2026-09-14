@@ -60,7 +60,7 @@ export function FaceSheetCanvas({
               aria-label={`第 ${row + 1} 行，第 ${column + 1} 列`}
               aria-pressed={selected}
               className={cn(
-                "border border-white/20 bg-transparent hover:border-2 hover:border-emerald-400 hover:bg-emerald-400/15 focus-visible:z-10 focus-visible:border-2 focus-visible:border-accent focus-visible:outline-none",
+                "cursor-pointer border border-white/20 bg-transparent hover:border-2 hover:border-emerald-400 hover:bg-emerald-400/15 focus-visible:z-10 focus-visible:border-2 focus-visible:border-accent focus-visible:outline-none",
                 selected && "border-2 border-emerald-500 bg-emerald-400/20",
               )}
               key={`${row}:${column}`}

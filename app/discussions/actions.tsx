@@ -47,7 +47,7 @@ export function ForumMenu({ items }: { items: ForumMenuItem[] }) {
         >
           {items.map((item) => (
             <DropdownMenu.Item
-              className={`cursor-default rounded-sm px-3 py-2 text-sm outline-none focus:bg-primary/10 ${item.danger ? "text-destructive" : ""}`}
+              className={`cursor-pointer data-[disabled]:cursor-not-allowed rounded-sm px-3 py-2 text-sm outline-none focus:bg-primary/10 ${item.danger ? "text-destructive" : ""}`}
               key={item.label}
               onSelect={item.run}
             >

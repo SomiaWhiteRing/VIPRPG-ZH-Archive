@@ -69,7 +69,7 @@ type PendingRemoval = {
 };
 
 const menuItemClass =
-  "flex min-h-9 w-full cursor-default items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+  "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export function RelationEditor(props: RelationEditorProps) {
   const showCreate = props.canCreateRelation || props.canCreateTranslation;

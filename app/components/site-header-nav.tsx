@@ -243,7 +243,7 @@ function UserMenu({ inAdmin, session }: { inAdmin: boolean; session: Session }) 
   const consoleHref = getAdminLinks(session)[0]?.href;
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const itemClass =
-    "flex min-h-9 w-full cursor-default items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
+    "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
 
   return (
     <>

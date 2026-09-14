@@ -12,7 +12,7 @@ export const Checkbox = forwardRef<
   return (
     <CheckboxPrimitive.Root
       className={cn(
-        "peer size-4 shrink-0 rounded-sm border border-input bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+        "peer cursor-pointer disabled:cursor-not-allowed aria-disabled:cursor-not-allowed size-4 shrink-0 rounded-sm border border-input bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
         className,
       )}
       ref={ref}

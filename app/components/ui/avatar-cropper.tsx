@@ -148,9 +148,9 @@ export function AvatarCropper({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm">缩放</span>
-              <Slider.Root className="relative flex h-5 flex-1 touch-none select-none items-center" max={3} min={1} onValueChange={([value]) => setZoom(value)} step={0.01} value={[zoom]}>
+              <Slider.Root className="relative flex h-5 flex-1 cursor-pointer touch-none select-none items-center" max={3} min={1} onValueChange={([value]) => setZoom(value)} step={0.01} value={[zoom]}>
                 <Slider.Track className="relative h-1 grow rounded-full bg-muted/30"><Slider.Range className="absolute h-full rounded-full bg-primary" /></Slider.Track>
-                <Slider.Thumb aria-label="缩放头像" className="block size-4 rounded-full border border-primary bg-card shadow-sm" />
+                <Slider.Thumb aria-label="缩放头像" className="block size-4 cursor-grab active:cursor-grabbing rounded-full border border-primary bg-card shadow-sm" />
               </Slider.Root>
             </div>
             {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
