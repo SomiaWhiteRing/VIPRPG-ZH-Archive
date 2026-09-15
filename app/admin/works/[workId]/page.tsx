@@ -7,13 +7,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getWorkForAdminEdit } from "@/lib/server/db/game-library";
 import { listCharacterSuggestions } from "@/lib/server/db/taxonomy-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { getRelationEditorCapabilities, canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import { AdminLanguageField } from "../language-field";
@@ -38,9 +36,8 @@ export default async function AdminWorkEditPage({
     `/admin/works/${workId}`,
     "work.metadata.update_any",
   );
-  const [work, unreadInboxCount, characterSuggestions, creatorSuggestions] = await Promise.all([
+  const [work, characterSuggestions, creatorSuggestions] = await Promise.all([
     getWorkForAdminEdit(workId),
-    countUnreadInboxItemsForUser(adminUser),
     listCharacterSuggestions(),
     listCreatorSuggestions(),
   ]);
@@ -55,10 +52,7 @@ export default async function AdminWorkEditPage({
         compact
         title={work.chineseTitle || work.originalTitle}
         actions={
-          <>
-            <BackLink href="/admin/works" label="返回游戏维护" />
-            <InboxLink unread={unreadInboxCount} />
-          </>
+          <BackLink href="/admin/works" label="返回游戏维护" />
         }
       />
       <form

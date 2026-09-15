@@ -7,11 +7,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import {
   getTagForAdminEdit,
   listTagsForAdmin,
@@ -37,13 +35,12 @@ export default async function AdminTagEditPage({
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const tagId = parseId(rawTagId);
-  const adminUser = await requirePagePermission(
+  await requirePagePermission(
     `/admin/tags/${tagId}`,
     "tag.metadata.update_any",
   );
-  const [tag, unreadInboxCount, candidates] = await Promise.all([
+  const [tag, candidates] = await Promise.all([
     getTagForAdminEdit(tagId),
-    countUnreadInboxItemsForUser(adminUser),
     listTagsForAdmin(),
   ]);
 
@@ -67,7 +64,6 @@ export default async function AdminTagEditPage({
                 查看作品
               </Link>
             ) : null}
-            <InboxLink unread={unreadInboxCount} />
           </>
         }
       />
