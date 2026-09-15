@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import Link from "next/link";
@@ -30,23 +31,24 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   }
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-12 mx-auto w-full max-w-md">
-      <PageHeader title="注册" subtitle="注册后需要管理员批准才可以上传游戏。" />
-
-      <Pane>
-        {params.error ? (
-          <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">{params.error}</p>
-        ) : null}
-        {params.sent ? (
-          <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
-        ) : (
-          <RegisterStartForm nextPath={nextPath} />
-        )}
-        <div className="mt-4 flex flex-wrap gap-4 text-sm text-primary">
-          <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
-        </div>
-      </Pane>
-    </main>
+    <PageContainer>
+      <PageHeader compact title="注册" subtitle="注册后需要管理员批准才可以上传游戏。" />
+      <div className="mx-auto mt-5 max-w-md">
+        <Pane>
+          {params.error ? (
+            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">{params.error}</p>
+          ) : null}
+          {params.sent ? (
+            <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
+          ) : (
+            <RegisterStartForm nextPath={nextPath} />
+          )}
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-primary">
+            <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
+          </div>
+        </Pane>
+      </div>
+    </PageContainer>
   );
 }
 
