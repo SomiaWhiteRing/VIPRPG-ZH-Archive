@@ -6,13 +6,14 @@ import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
+import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { listPublicCharacters, listPublicTags } from "@/lib/server/db/taxonomy-library";
 import { listPublicCreators } from "@/lib/server/db/creator-library";
 import { searchGameWorks } from "@/lib/server/db/game-library";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
-import { searchCatalogs } from "@/lib/server/db/catalogs";
+import { searchCatalogs, type CatalogSummary } from "@/lib/server/db/catalogs";
 import Form from "next/form";
 import { DiscussionSearchResults } from "@/app/discussions/search/results";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
@@ -104,8 +105,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             “{query}”在{scopeLabel}中找到 {formatNumber(directory?.total ?? 0)} 个结果
           </p>
           {directory && directory.items.length > 0 ? (
-            <section className="grid gap-2.5" aria-label="分类搜索结果">
-              {directory.items.map((item) => (
+            <section
+              className={scope === "catalogs" ? "divide-y divide-border border-y border-border" : "grid gap-2.5"}
+              aria-label={scope === "catalogs" ? "目录搜索结果" : "分类搜索结果"}
+            >
+              {directory.items.map((item) => item.catalog ? (
+                <CatalogListRow catalog={item.catalog} key={item.href} />
+              ) : (
                 <Link
                   className="grid gap-1 border-b border-border p-4 text-foreground no-underline hover:bg-primary/5 md:grid-cols-[minmax(0,1fr)_auto]"
                   href={item.href}
@@ -137,7 +143,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
 async function listDirectory(scope: string, query: string, page: number) {
   const pageSize = 20;
-  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string }>;
+  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string; catalog?: CatalogSummary }>;
   if (scope === "creators")
     items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
       href: `/creators/${item.id}`,
@@ -163,8 +169,9 @@ async function listDirectory(scope: string, query: string, page: number) {
     items = (await searchCatalogs(query, 300)).map((item) => ({
       href: `/catalogs/${item.id}`,
       title: item.title,
-      subtitle: item.description,
+      subtitle: null,
       meta: `${item.itemCount} 个游戏 · ${item.ownerName}`,
+      catalog: item,
     }));
   else items = [];
   return {
