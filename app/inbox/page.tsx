@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Bell, Heart, MessageCircle, ShieldCheck } from "lucide-react";
@@ -31,7 +32,7 @@ export default async function InboxPage({ searchParams }: {
   const result = await listInboxItemsForUser(currentUser,{category,unread,page});
   if (page !== result.page) redirect(inboxHref(category,unread,result.page));
   return (
-    <main className="mx-auto w-[min(1280px,calc(100%-2rem))] min-w-0 py-8">
+    <PageContainer>
       <PageHeader compact title={<span>提醒{result.unread > 0 ? <span className="ml-3 align-middle font-sans text-sm font-normal text-muted">{formatUnreadCount(result.unread)} 未读</span> : null}</span>}
         actions={result.unread > 0 ? <InboxActions all /> : null} />
       <InboxControls category={category} unread={unread} pendingCount={result.pending} canResolve={canResolve} />
@@ -41,7 +42,7 @@ export default async function InboxPage({ searchParams }: {
       </ul> : <EmptyState title={emptyLabel(category,unread)} />}
       <PaginationLinks basePath="/inbox" page={result.page} pageSize={result.pageSize} total={result.total} prefetch={false}
         params={{ category:category === "all" ? undefined : category,unread:unread ? "1" : undefined }} />
-    </main>
+    </PageContainer>
   );
 }
 

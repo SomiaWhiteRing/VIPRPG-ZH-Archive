@@ -1,3 +1,5 @@
+import { PageHeader } from "@/app/components/ui/page-header";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import Link from "next/link";
 import { GameCard } from "@/app/components/home/game-card";
@@ -16,21 +18,21 @@ export default async function HomePage() {
   ]);
 
   return (
-    <main className="mx-auto w-[min(1280px,calc(100%-2rem))] pt-6 pb-10 min-[561px]:w-[min(1280px,calc(100%-3rem))] min-[561px]:pt-8 min-[1101px]:w-[min(1280px,calc(100%-5.5rem))]">
+    <PageContainer>
       <div className="grid gap-7 min-[561px]:gap-8 min-[851px]:grid-cols-[minmax(0,1fr)_205px] min-[851px]:gap-6 min-[1101px]:grid-cols-[minmax(0,1fr)_237px] min-[1101px]:gap-9">
         <section className="min-w-0 scroll-mt-24" id="recent-updates" aria-labelledby="recent-heading">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3 min-[561px]:mb-5">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight" id="recent-heading">
-                最近更新
-              </h1>
-              <p className="mt-1 text-muted">最近更新的公开游戏。</p>
-            </div>
-            <Link className="shrink-0 text-sm font-bold text-primary hover:text-accent" href="/games">
-              查看全部游戏 →
-            </Link>
-          </div>
-          <HomeWorkGrid works={recentWorks} />
+          <PageHeader
+            compact
+            title="最近更新"
+            titleId="recent-heading"
+            subtitle="最近更新的公开游戏。"
+            actions={
+              <Link className="shrink-0 text-sm font-bold text-primary hover:text-accent" href="/games">
+                查看全部游戏 →
+              </Link>
+            }
+          />
+          <div className="mt-5"><HomeWorkGrid works={recentWorks} /></div>
         </section>
 
         <HomeCommunity topics={topics.items.slice(0, 5)} />
@@ -54,7 +56,7 @@ export default async function HomePage() {
         </div>
         <HomeWorkGrid original works={recentOriginalWorks} />
       </section>
-    </main>
+    </PageContainer>
   );
 }
 

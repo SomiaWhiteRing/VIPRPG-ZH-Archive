@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
@@ -22,8 +23,8 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
   const tags = await listPublicTags({ query });
 
   return (
-    <main>
-      <PageHeader title="标签" />
+    <PageContainer className="space-y-5">
+      <PageHeader compact title="标签" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
@@ -57,7 +58,7 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       ) : (
         <EmptyState title="没有找到匹配的标签。" />
       )}
-    </main>
+    </PageContainer>
   );
 }
 

@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import type { ReactNode } from "react";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
@@ -8,7 +9,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
   const user = await getCurrentUserFromCookies();
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+    <PageContainer>
       <div className="account-layout md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
         <div className="account-navigation-slot sticky top-20 hidden self-start md:block">
           {user ? (
@@ -27,6 +28,6 @@ export default async function AccountLayout({ children }: { children: ReactNode 
         </div>
         <div className="min-w-0 pt-5 md:pt-0">{children}</div>
       </div>
-    </main>
+    </PageContainer>
   );
 }

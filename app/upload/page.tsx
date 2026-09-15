@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import { buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -19,8 +20,8 @@ export default async function UploadPage() {
 
   if (!canPublishWork(currentUser)) {
     return (
-      <main>
-        <PageHeader title="需要上传者权限" />
+      <PageContainer className="space-y-5">
+        <PageHeader compact title="需要上传者权限" />
 
         <Pane>
           <p>上传需要上传者权限，可在「我的账户」申请。</p>
@@ -30,15 +31,15 @@ export default async function UploadPage() {
             </Link>
           </div>
         </Pane>
-      </main>
+      </PageContainer>
     );
   }
 
   const suggestions = await loadUploadSuggestions();
 
   return (
-    <main className="mx-auto w-[min(1120px,calc(100%-2rem))] py-6">
-      <PageHeader title="上传游戏" />
+    <PageContainer className="space-y-5">
+      <PageHeader compact title="上传游戏" />
       <UploadClient
         currentUser={{
           id: currentUser.id,
@@ -47,6 +48,6 @@ export default async function UploadPage() {
         }}
         suggestions={suggestions}
       />
-    </main>
+    </PageContainer>
   );
 }
