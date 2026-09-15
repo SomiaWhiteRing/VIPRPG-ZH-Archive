@@ -131,9 +131,8 @@ export default async function GameDetailPage({
         originalTitle={work.originalTitle}
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
-          ...(work.moreInfo.length ? [{ href: "#sec-more-info", label: "更多信息" }] : []),
           ...(current ? [{ href: `/play/${current.id}`, label: "在线游玩" }] : []),
-          ...(media.length ? [{ href: "#sec-gallery", label: "截图", count: media.length }] : []),
+          ...(media.length ? [{ href: "#sec-gallery", label: "预览图", count: media.length }] : []),
           ...(work.characters.length ? [{ href: "#sec-cast", label: "角色", count: work.characters.length }] : []),
           ...(relationCards.length ? [{ href: "#sec-relations", label: "关联", count: relationCards.length }] : []),
           { href: "#sec-comments", label: "评论", count: community.commentCount },
@@ -147,9 +146,6 @@ export default async function GameDetailPage({
           <section aria-labelledby="intro-title" className="scroll-mt-20 py-4.5" id="sec-intro">
             <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
               <h2 className="m-0 text-base font-bold" id="intro-title">简介</h2>
-              {work.distribution === "external" ? (
-                <span className="font-mono text-xs text-muted max-[560px]:text-left">外部发布 · 未收录归档</span>
-              ) : null}
             </div>
             {work.engineFamily === "rpg_maker_2003_maniac" ? (
               <div className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]" role="note">
@@ -179,24 +175,10 @@ export default async function GameDetailPage({
             ) : null}
           </section>
 
-          {work.moreInfo.length ? (
-            <section aria-labelledby="more-info-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-more-info">
-              <h2 className="mb-3.5 text-base font-bold" id="more-info-title">更多信息</h2>
-              <div className="grid min-w-0 gap-5">
-                {work.moreInfo.map((item, index) => (
-                  <div className="min-w-0" key={index}>
-                    <h3 className="mb-2 text-sm font-bold wrap-anywhere">{item.title}</h3>
-                    <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">{item.body}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
           {media.length ? (
             <section aria-labelledby="gallery-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-gallery">
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="gallery-title">截图</h2>
+                <h2 className="m-0 text-base font-bold" id="gallery-title">预览图</h2>
                 <span className="font-mono text-xs text-muted max-[560px]:text-left">{media.length} 张 · 点击放大</span>
               </div>
               <WorkMediaGallery items={media} title={title} />
@@ -350,15 +332,6 @@ export default async function GameDetailPage({
               </>
             }
             mobilePrimaryFirst
-            notice={work.distribution === "external" ? (
-              <div className="flex gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2.5" role="note">
-                <AlertTriangle aria-hidden className="shrink-0 text-[#a7471e]" size={18} />
-                <div>
-                  <strong className="block text-sm text-[#a7471e]">该作品的文件由外部网站提供</strong>
-                  <p className="m-0 mt-1 text-xs leading-[1.55] text-foreground">本站未收录游戏文件，不提供网页游玩与直链下载；请在外部页面自行确认来源与文件安全性。</p>
-                </div>
-              </div>
-            ) : null}
             primary={
               <WorkActionBar
                 archive={current ? {

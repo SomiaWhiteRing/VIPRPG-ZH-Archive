@@ -10,7 +10,7 @@ const MEDIA_LABELS: Record<string, string> = {
   icon: "图标",
   cover: "封面",
   preview: "预览图",
-  screenshot: "截图",
+  screenshot: "预览图",
   banner: "横幅",
   other: "媒体",
 };
@@ -38,7 +38,7 @@ export function WorkMediaGallery({
   return (
     <>
       <div
-        aria-label="截图列表"
+        aria-label="预览图列表"
         className="flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin"
       >
         {items.map((item, index) => {
@@ -72,7 +72,7 @@ export function WorkMediaGallery({
       </div>
 
       <dialog
-        aria-label="截图放大查看"
+        aria-label="预览图放大查看"
         className="m-auto w-[min(880px,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-border bg-card p-0 text-foreground shadow-[0_24px_64px_rgb(23_33_43/28%)] backdrop:bg-[rgb(23_33_43/48%)]"
         onCancel={() => setSelected(null)}
         onClose={() => setSelected(null)}
@@ -93,7 +93,7 @@ export function WorkMediaGallery({
             <div className="flex items-center justify-between gap-4 border-t border-border px-3 py-2">
               <strong>{selected.title?.trim() || MEDIA_LABELS[selected.kind] || "媒体"}</strong>
               <Button
-                aria-label="关闭截图"
+                aria-label="关闭预览图"
                 onClick={() => dialogRef.current?.close()}
                 size="sm"
                 type="button"

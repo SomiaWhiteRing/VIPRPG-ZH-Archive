@@ -16,6 +16,7 @@ export function WorkSidebarInfo({
     | "engineFamily"
     | "isOriginal"
     | "language"
+    | "moreInfo"
     | "originalReleaseDate"
     | "originalReleasePrecision"
   >;
@@ -54,6 +55,11 @@ export function WorkSidebarInfo({
           </InfoRow>
         ))}
         {!work.creators.length ? <InfoRow label="记录">暂无</InfoRow> : null}
+        {work.moreInfo.map((item, index) => (
+          <InfoRow key={`more-info-${index}`} label={item.title}>
+            <span className="whitespace-pre-wrap">{item.body}</span>
+          </InfoRow>
+        ))}
       </dl>
     </div>
   );
@@ -70,7 +76,7 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-baseline gap-3 border-b border-dashed border-border py-1.75 text-sm last:border-b-0">
-      <dt className="w-17 shrink-0 text-xs text-muted">{label}</dt>
+      <dt className="w-17 shrink-0 text-xs text-muted wrap-anywhere">{label}</dt>
       <dd className={`m-0 min-w-0 wrap-anywhere ${mono ? "font-mono" : ""}`}>{children}</dd>
     </div>
   );

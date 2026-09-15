@@ -51,6 +51,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
 
       <DetailPageLayout
         compactSidebar
+        sidebarPosition="left"
         sidebarLabel="作者资料"
         main={
           <>
