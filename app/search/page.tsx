@@ -1,3 +1,5 @@
+import { PageHeader } from "@/app/components/ui/page-header";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import Link from "next/link";
@@ -40,10 +42,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
 
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-4 sm:py-6">
-      <header className="mb-6 border-b border-border pb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight">搜索站内内容</h1>
-      </header>
+    <PageContainer>
+      <PageHeader compact title="搜索站内内容" />
       <Form key={`${scope}:${query}`} className="my-6 flex gap-2" action="/search">
         <Label className="sr-only" htmlFor="search-query">
           搜索关键词
@@ -131,7 +131,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           ) : null}
         </>
       )}
-    </main>
+    </PageContainer>
   );
 }
 

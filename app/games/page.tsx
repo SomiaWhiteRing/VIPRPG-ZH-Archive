@@ -1,3 +1,5 @@
+import { PageHeader } from "@/app/components/ui/page-header";
+import { PageContainer } from "@/app/components/ui/page-container";
 import Link from "next/link";
 import { LayoutGrid, List } from "lucide-react";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -82,14 +84,12 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   const hasFilters = engine !== "all" || Boolean(tag || character || language || original);
 
   return (
-    <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
-      <header className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b border-border pb-4.5">
-        <div>
-          <h1 className="m-0 font-display text-[clamp(24px,3vw,30px)] font-bold leading-[1.2]">全部游戏</h1>
-          <p className="mt-1.5 text-[13.5px] text-muted">浏览可游玩与下载的游戏。</p>
-        </div>
-        <span className="pb-0.5 font-mono text-[12.5px] text-muted">共 {formatNumber(total)} 个作品</span>
-      </header>
+    <PageContainer>
+      <PageHeader
+        compact
+        title="全部游戏"
+        actions={<span className="text-sm text-muted">共 <strong className="tabular-nums text-foreground">{formatNumber(total)}</strong> 个作品</span>}
+      />
       <div className="grid gap-x-9 pb-11 min-[981px]:grid-cols-[minmax(0,1fr)_252px]">
         <div className="@container min-w-0">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5" aria-label="游戏工具栏">
@@ -169,7 +169,7 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           </FilterSection>
         </aside>
       </div>
-    </main>
+    </PageContainer>
   );
 }
 

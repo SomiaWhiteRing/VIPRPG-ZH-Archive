@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
@@ -21,8 +22,8 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
   const creators = await listPublicCreators({ query });
 
   return (
-    <main>
-      <PageHeader title="作者与制作人员" />
+    <PageContainer className="space-y-5">
+      <PageHeader compact title="作者与制作人员" />
 
       <form
         className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
@@ -55,7 +56,7 @@ export default async function CreatorsPage({ searchParams }: CreatorsPageProps) 
       ) : (
         <EmptyState title="没有找到匹配的作者。" />
       )}
-    </main>
+    </PageContainer>
   );
 }
 

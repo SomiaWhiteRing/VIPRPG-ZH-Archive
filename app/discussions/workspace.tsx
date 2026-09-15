@@ -15,6 +15,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, useTransition } fro
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -691,9 +692,10 @@ export function DiscussionWorkspace({
       ),
     );
   }
+  const Container = detail || unavailable ? "main" : PageContainer;
   return (
-    <main
-      className="mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]"
+    <Container
+      className={detail || unavailable ? "mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]" : undefined}
     >
       {unavailable ? (
         <>
@@ -1033,7 +1035,7 @@ export function DiscussionWorkspace({
           <Button type="submit">搜索</Button>
         </Form>
       </ForumModal>
-    </main>
+    </Container>
   );
 }
 

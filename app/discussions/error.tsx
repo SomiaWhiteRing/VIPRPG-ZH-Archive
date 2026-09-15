@@ -1,9 +1,10 @@
 "use client";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 export default function DiscussionError({ reset }: { reset: () => void }) {
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-6">
+    <PageContainer>
       <PageHeader compact title="讨论版" />
       <p className="my-4" role="alert">
         讨论加载失败。
@@ -11,6 +12,6 @@ export default function DiscussionError({ reset }: { reset: () => void }) {
       <Button onClick={reset} type="button">
         重试
       </Button>
-    </main>
+    </PageContainer>
   );
 }

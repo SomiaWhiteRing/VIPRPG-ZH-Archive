@@ -1,3 +1,4 @@
+import { PageContainer } from "@/app/components/ui/page-container";
 import Link from "next/link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
@@ -10,8 +11,8 @@ export const metadata = {
 
 export default function AboutPage() {
   return (
-    <main>
-      <PageHeader title="关于本站" />
+    <PageContainer className="space-y-5">
+      <PageHeader compact title="关于本站" />
 
       <Pane heading="项目目标">
         <p>
@@ -54,6 +55,6 @@ export default function AboutPage() {
           <Link href="/me">我的账户</Link>。
         </p>
       </Pane>
-    </main>
+    </PageContainer>
   );
 }

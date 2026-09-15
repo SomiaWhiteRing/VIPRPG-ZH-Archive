@@ -45,6 +45,7 @@ export default async function MePage() {
   return (
     <div className="grid gap-7">
       <PageHeader
+        compact
         title="个人中心"
         subtitle="从这里继续最近的游戏、收藏和内容维护。"
       />
