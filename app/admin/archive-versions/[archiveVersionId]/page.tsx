@@ -4,7 +4,6 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
@@ -14,7 +13,6 @@ import { StatusBadge } from "@/app/components/ui/status-badge";
 import { hasPermission } from "@/lib/authz/permissions";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
@@ -30,10 +28,7 @@ export default async function AdminArchiveVersionEditPage({
     `/admin/archive-versions/${archiveVersionId}`,
     "archive_version.update",
   );
-  const [archiveVersion, unreadInboxCount] = await Promise.all([
-    getArchiveVersionForAdminEdit(archiveVersionId),
-    countUnreadInboxItemsForUser(adminUser),
-  ]);
+  const archiveVersion = await getArchiveVersionForAdminEdit(archiveVersionId);
   if (!archiveVersion) notFound();
   return (
     <main>
@@ -59,7 +54,6 @@ export default async function AdminArchiveVersionEditPage({
             >
               查看公开页
             </Link>
-            <InboxLink unread={unreadInboxCount} />
           </>
         }
       />

@@ -7,12 +7,10 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { FormField } from "@/app/components/ui/form-field";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { getCreatorForAdminEdit } from "@/lib/server/db/creator-library";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
@@ -35,10 +33,7 @@ export default async function AdminCreatorEditPage({
     `/admin/creators/${creatorId}`,
     "creator.metadata.update_any",
   );
-  const [creator, unreadInboxCount] = await Promise.all([
-    getCreatorForAdminEdit(creatorId),
-    countUnreadInboxItemsForUser(adminUser),
-  ]);
+  const creator = await getCreatorForAdminEdit(creatorId);
 
   if (!creator) {
     notFound();
@@ -58,7 +53,6 @@ export default async function AdminCreatorEditPage({
             >
               查看公开页
             </Link>
-            <InboxLink unread={unreadInboxCount} />
           </>
         }
       />

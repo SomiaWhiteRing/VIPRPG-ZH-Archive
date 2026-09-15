@@ -8,11 +8,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
-import { InboxLink } from "@/app/components/ui/inbox-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { countUnreadInboxItemsForUser } from "@/lib/server/db/inbox";
 import {
   getCharacterForAdminEdit,
   listCharactersForAdmin,
@@ -40,14 +38,13 @@ export default async function AdminCharacterEditPage({
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const characterId = parseId(rawCharacterId);
-  const adminUser = await requirePagePermission(
+  await requirePagePermission(
     `/admin/characters/${characterId}`,
     "character.metadata.update_any",
   );
-  const [character, unreadInboxCount, candidates, portraitLibrary] =
+  const [character, candidates, portraitLibrary] =
     await Promise.all([
       getCharacterForAdminEdit(characterId),
-      countUnreadInboxItemsForUser(adminUser),
       listCharactersForAdmin(2000),
       getCharacterPortraitLibraryForAdmin(characterId),
     ]);
@@ -72,7 +69,6 @@ export default async function AdminCharacterEditPage({
                 查看作品
               </Link>
             ) : null}
-            <InboxLink unread={unreadInboxCount} />
           </>
         }
       />
