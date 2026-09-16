@@ -9,6 +9,7 @@ import { HttpError } from "@/lib/server/http/json";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   DEFAULT_CHARACTER_PORTRAIT_JOINS,
+  PUBLIC_CHARACTER_PORTRAIT_CONDITION,
   mapCharacterPortrait,
   type CharacterPortraitRow,
 } from "@/lib/server/db/character-portrait-library";
@@ -25,6 +26,9 @@ export type PublicCharacterSummary = {
 export type AdminCharacterEdit = PublicCharacterSummary & {
   aliases: CharacterAliasSuggestion[];
   extra: Record<string, unknown>;
+};
+export type PublicCharacterIndexEntry = PublicCharacterSummary & {
+  aliases: CharacterAliasSuggestion[];
 };
 export type CharacterAliasMergeCandidate = {
   id: number;
@@ -76,26 +80,67 @@ export async function listPublicCharacters(
   input: { query?: string; limit?: number } = {},
 ): Promise<PublicCharacterSummary[]> {
   const binds: Array<string | number> = [];
-  const where = [
-    `EXISTS(SELECT 1 FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published')`,
-  ];
+  // Character identities are public even when they have no published works.
+  const where: string[] = [];
   if (input.query?.trim()) {
-    const q = `%${input.query.trim()}%`;
-    where.push("(ch.primary_name LIKE ? OR ch.original_name LIKE ? OR EXISTS(SELECT 1 FROM character_aliases ca WHERE ca.character_id=ch.id AND ca.name LIKE ?))");
+    const q = input.query.trim();
+    where.push("(instr(lower(ch.primary_name),lower(?)) > 0 OR instr(lower(ch.original_name),lower(?)) > 0 OR EXISTS(SELECT 1 FROM character_aliases ca WHERE ca.character_id=ch.id AND instr(lower(ca.name),lower(?)) > 0))");
     binds.push(q, q, q);
   }
   const rows = await getD1()
     .prepare(
-      `${characterSql()} WHERE ${where.join(" AND ")} ORDER BY work_count DESC,ch.primary_name ASC LIMIT ?`,
+      `${characterSql("", "", true)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY work_count DESC,ch.primary_name ASC LIMIT ?`,
     )
     .bind(...binds, limitValue(input.limit ?? 120, 300))
     .all<CharacterRow>();
   return (rows.results ?? []).map(mapCharacter);
 }
+
+export async function searchPublicCharacters(input: { query?: string; page?: number; pageSize?: number } = {}) {
+  const pageSize = limitValue(input.pageSize ?? 20, 100);
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const binds: string[] = [];
+  const where: string[] = [];
+  if (input.query?.trim()) {
+    const q = input.query.trim();
+    where.push("(instr(lower(ch.primary_name),lower(?)) > 0 OR instr(lower(ch.original_name),lower(?)) > 0 OR EXISTS(SELECT 1 FROM character_aliases ca WHERE ca.character_id=ch.id AND instr(lower(ca.name),lower(?)) > 0))");
+    binds.push(q, q, q);
+  }
+  const clause = where.length ? ` WHERE ${where.join(" AND ")}` : "";
+  const database = getD1();
+  const [rows, count] = await database.batch([
+    database.prepare(`${characterSql("", "", true)}${clause} ORDER BY work_count DESC,ch.primary_name ASC,ch.id ASC LIMIT ? OFFSET ?`).bind(...binds, pageSize, (page - 1) * pageSize),
+    database.prepare(`SELECT COUNT(*) AS count FROM characters ch${clause}`).bind(...binds),
+  ]);
+  return { items: (rows.results ?? []).map((row) => mapCharacter(row as CharacterRow)), total: Number((count.results?.[0] as { count?: number } | undefined)?.count ?? 0), page, pageSize };
+}
 export async function getPublicCharacterSummary(
   id: number,
 ): Promise<PublicCharacterSummary | null> {
   return getCharacter(id, false);
+}
+
+// Character identities are public taxonomy. Counts include only published works.
+export async function listPublicCharacterIndex(): Promise<PublicCharacterIndexEntry[]> {
+  const database = getD1();
+  const [characters, aliases] = await database.batch([
+    database.prepare(`${characterSql("", "", true)} ORDER BY ch.primary_name,ch.id`),
+    database.prepare("SELECT character_id,name,language FROM character_aliases ORDER BY character_id,language,name"),
+  ]);
+  const byCharacter = new Map<number, CharacterAliasSuggestion[]>();
+  for (const row of (aliases.results ?? []) as Array<{
+    character_id: number;
+    name: string;
+    language: "ja" | "zh";
+  }>) {
+    const names = byCharacter.get(row.character_id) ?? [];
+    names.push({ name: row.name, language: row.language });
+    byCharacter.set(row.character_id, names);
+  }
+  return ((characters.results ?? []) as CharacterRow[]).map((row) => ({
+    ...mapCharacter(row),
+    aliases: byCharacter.get(row.id) ?? [],
+  }));
 }
 export async function listCharactersForAdmin(
   limit = 1000,
@@ -116,6 +161,7 @@ export async function listCharacterSuggestions(): Promise<CharacterSuggestion[]>
       `${characterSql(
         ",ca.name AS alias_name,ca.language AS alias_language",
         "LEFT JOIN character_aliases ca ON ca.character_id=ch.id",
+        true,
       )}
        ORDER BY work_count DESC,ch.primary_name ASC,ca.language,ca.name
        LIMIT 5000`,
@@ -262,13 +308,8 @@ export async function createCharacterForAdmin(input: {
 
   const existingId = existingIds[0] ?? null;
   if (existingId !== null) {
-    await database.prepare(
-      `INSERT OR IGNORE INTO character_aliases(character_id,name,name_key,language,source)
-       SELECT id,?,?,'zh','admin' FROM characters
-       WHERE id=? AND primary_name_key<>?`,
-    ).bind(primaryName, primaryKey, existingId, primaryKey).run();
     const character = await getCharacterForAdminEdit(existingId);
-    if (!character) throw new Error("已有角色更新后不可读取");
+    if (!character) throw new Error("已有角色不可读取");
     return { character, created: false };
   }
 
@@ -301,7 +342,7 @@ export async function updateCharacterForAdmin(input: {
   characterId: number;
   primaryName: string;
   originalName: string;
-  description: string | null;
+  description?: string | null;
   japaneseAliases: string[];
   chineseAliases: string[];
   mergeTargetId: number | null;
@@ -324,6 +365,8 @@ export async function updateCharacterForAdmin(input: {
     if (!target) throw new HttpError(404, "合并目标不存在，请刷新页面后重新选择。", "character_merge_target_missing");
     return target;
   }
+  const existingCharacter = await getCharacterForAdminEdit(input.characterId);
+  if (!existingCharacter) throw new HttpError(404, "角色不存在，请刷新后重试。", "character_missing");
   const aliases = [
     ...normalizeCharacterAliases(input.japaneseAliases, "ja", originalName),
     ...normalizeCharacterAliases(input.chineseAliases, "zh", primaryName),
@@ -367,7 +410,7 @@ export async function updateCharacterForAdmin(input: {
         characterId: input.characterId,
         primaryName,
         originalName,
-        description: input.description,
+        description: input.description === undefined ? existingCharacter.description : input.description,
         aliases: aliasesToSave,
       }),
     ]);
@@ -393,7 +436,6 @@ export function parseCharacterEditForm(
     characterId: id,
     primaryName: String(form.get("primary_name") ?? ""),
     originalName: String(form.get("original_name") ?? ""),
-    description: clean(form.get("description")),
     japaneseAliases: lines(form.get("japanese_aliases")),
     chineseAliases: lines(form.get("chinese_aliases")),
     mergeTargetId: nullablePositive(form.get("merge_target_id")),
@@ -522,7 +564,7 @@ async function getCharacter(
   includeNonPublic: boolean,
 ): Promise<PublicCharacterSummary | null> {
   const row = await getD1()
-    .prepare(`${characterSql()} WHERE ch.id=? LIMIT 1`)
+    .prepare(`${characterSql("", "", !includeNonPublic)} WHERE ch.id=? LIMIT 1`)
     .bind(id)
     .first<CharacterRow>();
   if (!row) return null;
@@ -649,6 +691,10 @@ async function prepareCharacterMerge(
     database
       .prepare(`UPDATE character_aliases SET character_id=? WHERE character_id=?`)
       .bind(targetRow.id, sourceRow.id),
+    database.prepare(`INSERT OR IGNORE INTO character_category_memberships(category_id,character_id,sort_order,display_name,original_name) SELECT category_id,?,sort_order,COALESCE(display_name,?),COALESCE(original_name,?) FROM character_category_memberships WHERE character_id=?`).bind(targetRow.id, sourceRow.primary_name, sourceRow.original_name, sourceRow.id),
+    database.prepare(`INSERT OR IGNORE INTO character_sources(character_id,url,sort_order) SELECT ?,url,sort_order FROM character_sources WHERE character_id=?`).bind(targetRow.id, sourceRow.id),
+    database.prepare(`UPDATE comments SET character_id=? WHERE character_id=?`).bind(targetRow.id, sourceRow.id),
+    database.prepare(`INSERT OR IGNORE INTO character_material_bindings(character_id,material_id,sort_order) SELECT ?,material_id,sort_order FROM character_material_bindings WHERE character_id=?`).bind(targetRow.id, sourceRow.id),
     database.prepare(`DELETE FROM characters WHERE id=?`).bind(sourceRow.id),
     database
       .prepare(
@@ -715,8 +761,8 @@ async function mergeTag(id: number, targetId: number): Promise<void> {
     database.prepare(`DELETE FROM tags WHERE id=?`).bind(id),
   ]);
 }
-function characterSql(extraColumns = "", extraJoins = ""): string {
-  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS} ${extraJoins}`;
+function characterSql(extraColumns = "", extraJoins = "", publicPortrait = false): string {
+  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""} ${extraJoins}`;
 }
 function tagSql(): string {
   return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published') AS work_count,t.updated_at`;

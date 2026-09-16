@@ -31,3 +31,31 @@
 .account-layout:has([data-account-full-width]) > .account-navigation-slot {
   display: none;
 }
+
+.character-menu-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 22%, transparent) transparent;
+}
+
+.character-menu-scrollbar:hover,
+.character-menu-scrollbar:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 50%, transparent) transparent;
+}
+
+.character-menu-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.character-menu-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.character-menu-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+}
+
+.character-menu-scrollbar:hover::-webkit-scrollbar-thumb,
+.character-menu-scrollbar:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}

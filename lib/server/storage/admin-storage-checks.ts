@@ -789,6 +789,9 @@ function eligibleGcSummaryStatement(
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
+            SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
@@ -845,6 +848,9 @@ async function listEligibleGcRows(
           )
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
@@ -966,6 +972,9 @@ async function markGcCandidatePurging(
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
+            SELECT 1 FROM character_materials m WHERE m.blob_sha256 = blobs.sha256
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
@@ -1060,6 +1069,9 @@ function deletedOnlyGcSummaryStatement(
               SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
+              SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
+            )
+            AND NOT EXISTS (
               SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
@@ -1118,6 +1130,9 @@ function gcCandidateRowsStatement(
           )
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256

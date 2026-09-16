@@ -11,6 +11,15 @@ node scripts/collect-character-materials.mjs --limit 1 --download
 
 # 串行采集全部已知来源页，下载原图；重复执行可继续
 node scripts/collect-character-materials.mjs --all --download
+
+# 只补采自动生成角色的来源页与原图
+node scripts/collect-character-materials.mjs --generated --all --download
+
+# 采集分类本身的来源，包括尚未关联任何角色的空分类
+node scripts/collect-character-materials.mjs --categories --all --download
+
+# 只下载已在 materialAssignments 中确认归属的原图
+node scripts/collect-character-materials.mjs --categories --all --download --assigned
 ```
 
 浏览器会话保存在被 Git 忽略的 `output/playwright/atwiki-profile/`，不要提交或分享其中的 Cookie。页面缓存、栏目 HTML、素材来源、原文件名、文件哈希和汇总位于 `output/playwright/character-materials/`。不带 `--download` 时只收集链接。默认只采集一个未缓存或需更新的页面，`--limit N` 控制新增或更新页面数；旧版双栏目缓存会自动更新为四栏目，并保留已有下载记录，避免重复下载。已有当前版本缓存仍会读取，启用下载时会补齐其中缺失的图片。
@@ -21,4 +30,4 @@ node scripts/collect-character-materials.mjs --all --download
 
 当前版本从清单首个页面开始更新旧缓存，保存每页完整浏览器 DOM 到 `<页面编号>.html`，JSON 同时保留正文 HTML、图片的标题层级 `sectionPath`、原始链接及采集时间。完整 HTML 用于后续整理，不是离线镜像（不打包外部样式、脚本等资源），也不是服务器原始响应。已有图片校验哈希后复用。重新运行会跳过已更新页面；若需要再次强制刷新某页，可只删除该页 `.html` 文件，保留 JSON 和图片。
 
-来源页关联的角色名只作为 `candidateOriginalNames` 输出，不自动写入数据库。多人素材表和页面内的变体必须在导入时确认归属。工具只读取上述栏目中的站内附件图片，不递归追踪其他页面或采集音乐。当前尚未接入角色页或生产素材存储。
+来源页包含已有脸图来源、角色分类初始化清单中的 `sources` 及分类自身的 `sourceUrl`，空分类也会采集。角色名只作为 `candidateOriginalNames` 输出，不自动写入数据库。多人素材表和页面内的变体必须在导入时确认归属。工具只读取上述栏目中的站内附件图片，不递归追踪其他页面或采集音乐。已确定或人工接受的归属生成 `data/character-materials/manifest.json`，经本地导入后在角色详情按中文分类展示；导入与存储规则见 `docs/character-material-library.md`。采集工具本身不写数据库或 R2。

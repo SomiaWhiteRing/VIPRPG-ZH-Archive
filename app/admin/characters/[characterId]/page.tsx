@@ -12,12 +12,14 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { FormField } from "@/app/components/ui/form-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
+import { CHARACTER_DETAIL_PERMISSIONS, CHARACTER_INDEX_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
+import { requireAnyPagePermission } from "@/lib/server/auth/authorize";
 import {
   getCharacterForAdminEdit,
   listCharactersForAdmin,
 } from "@/lib/server/db/taxonomy-library";
 import { getCharacterPortraitLibraryForAdmin } from "@/lib/server/db/character-portrait-library";
+import { readCharacterIndex } from "@/lib/server/db/character-index";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 export const dynamic = "force-dynamic";
@@ -40,15 +42,20 @@ export default async function AdminCharacterEditPage({
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const characterId = parseId(rawCharacterId);
-  await requirePagePermission(
+  const adminUser = await requireAnyPagePermission(
     `/admin/characters/${characterId}`,
-    "character.metadata.update_any",
+    CHARACTER_DETAIL_PERMISSIONS,
   );
-  const [character, candidates, portraitLibrary] =
+  const canEdit = hasPermission(adminUser, "character.metadata.update_any");
+  const canMerge = hasPermission(adminUser, "character.merge_any");
+  const canManagePortrait = hasPermission(adminUser, "character.portrait.manage_any");
+  const canUploadPortrait = hasPermission(adminUser, "character.portrait.upload");
+  const [character, candidates, portraitLibrary, characterIndex] =
     await Promise.all([
       getCharacterForAdminEdit(characterId),
       listCharactersForAdmin(2000),
       getCharacterPortraitLibraryForAdmin(characterId),
+      readCharacterIndex(),
     ]);
 
   if (!character) {
@@ -63,6 +70,7 @@ export default async function AdminCharacterEditPage({
         actions={
           <>
             <BackLink href="/admin/characters" label="返回角色维护" />
+            {CHARACTER_INDEX_PERMISSIONS.some((key) => hasPermission(adminUser, key)) ? <Link className={buttonVariants({ variant: "outline" })} href={`/admin/characters/index?character=${character.id}`}>编辑所属分类</Link> : null}
             {character.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
@@ -84,6 +92,24 @@ export default async function AdminCharacterEditPage({
         </Notice>
       ) : null}
 
+      <section id="portrait-workbench" className="min-w-0" aria-labelledby="material-workbench-heading">
+          <h2 id="material-workbench-heading" className="mb-4 text-lg font-bold">素材工作台</h2>
+          <PortraitLibraryEditor
+            key={character.id}
+            canManage={canManagePortrait}
+            canUpload={canUploadPortrait}
+            characterIndex={characterIndex}
+            initialSheets={portraitLibrary.sheets}
+            initialMaterials={portraitLibrary.materials}
+            characterId={character.id}
+            characterName={character.primaryName}
+            characterOriginalName={character.originalName}
+            defaultPortrait={portraitLibrary.defaultPortrait}
+            initialBoundSheetIds={portraitLibrary.boundSheetIds}
+            initialBoundMaterialIds={portraitLibrary.boundMaterialIds}
+          />
+      </section>
+
       <ConfirmingForm
         action={`/api/admin/characters/${character.id}/update`}
         className="grid gap-4"
@@ -95,26 +121,9 @@ export default async function AdminCharacterEditPage({
         description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
       >
         <input name="character_id" type="hidden" value={character.id} />
-        <div id="portrait-workbench">
-          <Pane compact heading="脸图工作台">
-            <PortraitLibraryEditor
-              allCharacters={candidates.map((candidate) => ({
-                id: candidate.id,
-                originalName: candidate.originalName,
-                primaryName: candidate.primaryName,
-              }))}
-              allSheets={portraitLibrary.sheets}
-              characterId={character.id}
-              characterName={character.primaryName}
-              characterOriginalName={character.originalName}
-              defaultPortrait={portraitLibrary.defaultPortrait}
-              initialBoundSheetIds={portraitLibrary.boundSheetIds}
-            />
-          </Pane>
-        </div>
 
         <Pane heading="基础信息">
-          <div className="grid gap-4 md:grid-cols-2">
+          <fieldset disabled={!canEdit} className="grid gap-4 md:grid-cols-2">
             <FormField controlId="admin-characters-characterId--field-1" label="名称">
               <Input id="admin-characters-characterId--field-1"
                 defaultValue={character.primaryName}
@@ -127,13 +136,6 @@ export default async function AdminCharacterEditPage({
                 defaultValue={character.originalName}
                 name="original_name"
                 required
-              />
-            </FormField>
-            <FormField controlId="admin-characters-characterId--description" label="简介" wide>
-              <Textarea id="admin-characters-characterId--description"
-                defaultValue={character.description ?? ""}
-                name="description"
-                rows={6}
               />
             </FormField>
             <FormField controlId="admin-characters-characterId--field-3" hint="每行一个；可添加、修改或删除。" label="日文别名">
@@ -159,10 +161,10 @@ export default async function AdminCharacterEditPage({
                 rows={5}
               />
             </FormField>
-          </div>
+          </fieldset>
         </Pane>
 
-        <Pane heading="合并重复角色" tone="danger">
+        {canMerge ? <Pane heading="合并重复角色" tone="danger">
           <FormField controlId="admin-characters-characterId--field-5"
             hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
             hintId="character-merge-target-hint"
@@ -181,11 +183,11 @@ export default async function AdminCharacterEditPage({
               name="merge_target_id"
             />
           </FormField>
-        </Pane>
+        </Pane> : null}
 
-        <StickySaveBar>
+        {canEdit || canMerge ? <StickySaveBar>
           <Button type="submit">保存角色资料</Button>
-        </StickySaveBar>
+        </StickySaveBar> : null}
       </ConfirmingForm>
     </main>
   );

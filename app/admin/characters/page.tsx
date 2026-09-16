@@ -10,8 +10,8 @@ import {
   searchParam,
 } from "@/app/admin/admin-list-controls";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { hasPermission } from "@/lib/authz/permissions";
+import { requireAnyPagePermission } from "@/lib/server/auth/authorize";
+import { CHARACTER_ADMIN_PERMISSIONS, CHARACTER_DETAIL_PERMISSIONS, CHARACTER_INDEX_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
 import { searchCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 
@@ -24,9 +24,9 @@ export default async function AdminCharactersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const adminUser = await requirePagePermission(
+  const adminUser = await requireAnyPagePermission(
     "/admin/characters",
-    "character.read_private",
+    CHARACTER_ADMIN_PERMISSIONS,
   );
   const params = await searchParams;
   const query = searchParam(params.q);
@@ -51,9 +51,8 @@ export default async function AdminCharactersPage({
         subtitle="维护角色名称、说明和作品关联。"
         actions={
           <>
-            {hasPermission(adminUser, "character.metadata.update_any") ? (
-              <CharacterCreateButton />
-            ) : null}
+            {hasPermission(adminUser, "character.admin.read") || CHARACTER_INDEX_PERMISSIONS.some((key) => hasPermission(adminUser, key)) ? <Link className={buttonVariants({ variant: "outline" })} href="/admin/characters/index">角色分类</Link> : null}
+            {hasPermission(adminUser, "character.create") ? <CharacterCreateButton /> : null}
             <Link
               className={buttonVariants({ variant: "outline" })}
               href="/characters"
@@ -99,12 +98,12 @@ export default async function AdminCharactersPage({
                 <td>{formatNumber(character.workCount)}</td>
                 <td>{character.updatedAt}</td>
                 <td>
-                  {hasPermission(adminUser, "character.metadata.update_any") ? (
+                  {CHARACTER_DETAIL_PERMISSIONS.some((key) => hasPermission(adminUser, key)) ? (
                     <Link
                       className={buttonVariants()}
                       href={`/admin/characters/${character.id}`}
                     >
-                      编辑
+                      查看与维护
                     </Link>
                   ) : (
                     <span className="text-sm text-muted">只读</span>

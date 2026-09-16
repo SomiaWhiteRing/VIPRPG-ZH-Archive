@@ -1,15 +1,21 @@
-import { Input } from "@/app/components/ui/input";
-import { Button, buttonVariants } from "@/app/components/ui/button";
-import { Label } from "@/app/components/ui/label";
+import { PageContainer } from "@/app/components/ui/page-container";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { EmptyState } from "@/app/components/ui/empty-state";
+import { FolderPen } from "lucide-react";
+import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { StatList } from "@/app/components/ui/stat-list";
-import { listPublicCharacters, type PublicCharacterSummary } from "@/lib/server/db/taxonomy-library";
+import { CharacterIndexBrowser } from "@/app/characters/character-index-browser";
+import { readCharacterIndex } from "@/lib/server/db/character-index";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
+import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
+import { CHARACTER_EDIT_PERMISSIONS, CHARACTER_INDEX_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "角色索引 · VIPRPG.org",
+  description: "按阵营与角色群浏览 VIPRPG 角色，查找中日文名称、别名、Wiki 资料与登场作品。",
+};
 
 type CharactersPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -17,62 +23,25 @@ type CharactersPageProps = {
 
 export default async function CharactersPage({ searchParams }: CharactersPageProps) {
   const params = await searchParams;
-  const query = stringParam(params.q);
-  const characters = await listPublicCharacters({ query });
+  const query = stringParam(params.q).trim();
+  const [data, currentUser] = await Promise.all([readCharacterIndex(), getCurrentUserFromCookies()]);
+  const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) => hasPermission(currentUser, permission));
+  const canEditIndex = CHARACTER_INDEX_PERMISSIONS.some((permission) => hasPermission(currentUser, permission));
 
   return (
-    <main>
-      <PageHeader title="登场角色" />
+    <PageContainer>
+      <PageHeader
+        compact
+        title="角色索引"
+        actions={<>
+          <span className="text-sm text-muted">收录 <strong className="tabular-nums text-foreground">{formatNumber(data.characters.length)}</strong> 位角色</span>
+          {canEditIndex ? <Link aria-label="编辑角色索引" className={buttonVariants({ variant: "ghost", size: "icon" })} href="/admin/characters/index" prefetch={false} title="编辑角色索引"><FolderPen aria-hidden /></Link> : null}
+        </>}
+      />
 
-      <form
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4"
-        action="/characters"
-        method="get"
-      >
-        <Label>
-          <span>搜索</span>
-          <Input defaultValue={query} name="q" placeholder="角色名、原名或别名" type="search" />
-        </Label>
-        <Button type="submit">筛选</Button>
-        {query ? (
-          <Link className={buttonVariants({ variant: "outline" })} href="/characters">
-            清除
-          </Link>
-        ) : null}
-      </form>
-
-      <section className="text-sm text-muted" aria-label="角色摘要">
-        <strong>共 {formatNumber(characters.length)} </strong>
-        <span>位角色</span>
-      </section>
-
-      {characters.length > 0 ? (
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="角色列表">
-          {characters.map((character) => (
-            <CharacterCard character={character} key={character.id} />
-          ))}
-        </section>
-      ) : (
-        <EmptyState title="没有找到匹配的角色。" />
-      )}
-    </main>
-  );
-}
-
-function CharacterCard({ character }: { character: PublicCharacterSummary }) {
-  return (
-    <article className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div>
-        <Link
-          className="text-lg font-bold text-primary hover:text-accent"
-          href={`/games?character=${character.id}`}
-        >
-          {character.primaryName}
-        </Link>
-        {character.originalName ? <span className="text-sm text-muted">{character.originalName}</span> : null}
+      <div className="mt-5">
+        <CharacterIndexBrowser canEdit={canEdit} canEditIndex={canEditIndex} data={data} initialQuery={query} key={query} />
       </div>
-      {character.description ? <p>{character.description}</p> : null}
-      <StatList columns={3} items={[{ label: "登场作品", value: formatNumber(character.workCount) }]} variant="tiles" />
-    </article>
+    </PageContainer>
   );
 }

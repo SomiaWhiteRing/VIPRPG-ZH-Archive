@@ -1,3 +1,4 @@
+import { commentTargetHref } from "@/lib/comment-target";
 import Link from "next/link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
@@ -161,7 +162,7 @@ export default async function MePage() {
               >
                 <Link
                   className="font-semibold"
-                  href={`${comment.target.kind === "work" ? `/games/${comment.target.id}` : `/creators/${comment.target.id}`}#comment-${comment.id}`}
+                  href={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
                 >
                   {comment.targetTitle}
                 </Link>

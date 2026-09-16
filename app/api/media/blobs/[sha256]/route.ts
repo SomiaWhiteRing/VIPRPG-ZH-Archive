@@ -65,6 +65,11 @@ export async function GET(_request: Request, context: RouteContext) {
                 AND c.status = 'published'
             )
             OR EXISTS (
+              SELECT 1 FROM character_materials m
+              JOIN character_material_bindings binding ON binding.material_id=m.id
+              WHERE m.blob_sha256=b.sha256
+            )
+            OR EXISTS (
               SELECT 1
               FROM face_sheets fs
               WHERE fs.blob_sha256 = b.sha256

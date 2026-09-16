@@ -13,7 +13,7 @@ type CharacterCreateResponse = ApiResponsePayload & {
   character?: { id: number };
 };
 
-export function CharacterCreateButton() {
+export function CharacterCreateButton({ disabled = false }: { disabled?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -41,11 +41,11 @@ export function CharacterCreateButton() {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} ref={triggerRef} type="button">
+      <Button disabled={disabled} onClick={() => setOpen(true)} ref={triggerRef} type="button">
         创建角色
       </Button>
       <CharacterCreateDialog
-        description="若日语名已存在，将打开已有角色，并在需要时添加中文别名；否则创建新角色。"
+        description="若日语名已存在，将打开已有角色，不修改已有资料；否则创建新角色。"
         onCreate={createCharacter}
         onOpenChange={setOpen}
         open={open}

@@ -229,9 +229,8 @@ export function CommentPanel({
 }
 
 function commentEndpoint(target: CommentTarget): string {
-  return target.kind === "work"
-    ? `/api/works/${target.id}/comments`
-    : `/api/creators/${target.id}/comments`;
+  const paths = { work: "works", creator: "creators", character: "characters" };
+  return `/api/${paths[target.kind]}/${target.id}/comments`;
 }
 
 function CommentCard({
