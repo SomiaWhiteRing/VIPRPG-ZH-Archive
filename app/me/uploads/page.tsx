@@ -1,41 +1,52 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { StatusBadge } from "@/app/components/ui/status-badge";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import {
-  requireAccountUser,
   parseAccountPage,
-} from "@/lib/server/auth/account-user";
+  requireAccountUser,
+} from "@/app/.server/auth/account-user";
+import { searchUploadedWorks } from "@/app/.server/db/game-library";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { AccountEmpty } from "@/app/components/profile/account-content";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { StatusBadge } from "@/app/components/ui/status-badge";
 import {
   canAccessOwnWorks,
   canPublishWork,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { searchUploadedWorks } from "@/lib/server/db/game-library";
-import { engineLabel, languageLabel } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { AccountEmpty } from "@/app/components/profile/account-content";
+import { engineLabel, languageLabel } from "@/lib/labels";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
 
-export default async function UploadsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string | string[] }>;
-}) {
   const page = parseAccountPage((await searchParams).page);
   const user = await requireAccountUser(
+    runtime,
     `/me/uploads${page > 1 ? `?page=${page}` : ""}`,
   );
-  if (!canAccessOwnWorks(user)) notFound();
-  const result = await searchUploadedWorks({
+  if (!canAccessOwnWorks(user)) throwNotFound();
+  const result = await searchUploadedWorks(runtime, {
     userId: user.id,
     page,
     pageSize: 20,
   });
 
+  return {
+    page,
+    user: pickPageFields(user, ["id", "status", "permissionKeys"]),
+    result,
+  };
+}
+
+export default function UploadsPage() {
+  const { page, user, result } = useLoaderData<typeof loader>();
   return (
     <div>
       <PageHeader
@@ -58,7 +69,7 @@ export default async function UploadsPage({
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     className="truncate font-semibold"
-                    href={`/games/${work.id}`}
+                    to={`/games/${work.id}`}
                   >
                     {work.chineseTitle || work.originalTitle}
                   </Link>

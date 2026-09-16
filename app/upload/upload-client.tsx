@@ -1,24 +1,16 @@
-"use client";
-
 import { Notice } from "@/app/components/ui/notice";
 
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
 
 import type { ConfirmedCreatorSelection } from "@/lib/creator-names";
 
-import { useRouter } from "next/navigation";
+import { CharacterPicker } from "@/app/components/characters/character-picker";
 import {
-  type Dispatch,
-  type DragEvent,
-  type FormEvent,
-  type SetStateAction,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Check, Link as LinkIcon } from "lucide-react";
-import { LanguageField } from "@/app/components/work/language-field";
+  CoverPicker,
+  PreviewPicker,
+} from "@/app/components/media/media-picker";
+import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
+import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
@@ -26,12 +18,12 @@ import { Label } from "@/app/components/ui/label";
 import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
-import { EnginePicker } from "@/app/upload/engine-picker";
-import { CharacterPicker } from "@/app/components/characters/character-picker";
-import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
-import { StaffEditor, staffRows, staffRowErrors, extraStaffCredits, type StaffRow } from "@/app/upload/staff-editor";
-import { WorkMoreInfoEditor, moreInfoRows, type MoreInfoRow } from "@/app/components/work/work-more-info-editor";
-import { moreInfoItemError, normalizeWorkMoreInfo, type WorkMoreInfo } from "@/lib/work-more-info";
+import { LanguageField } from "@/app/components/work/language-field";
+import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
+import {
+  WorkMoreInfoEditor,
+  moreInfoRows,
+} from "@/app/components/work/work-more-info-editor";
 import { inspectUploadSource } from "@/app/upload/archive-source";
 import {
   ArchiveSourcePicker,
@@ -39,11 +31,19 @@ import {
   readDroppedFolder as readSharedDroppedFolder,
   uploadPhaseLabel,
 } from "@/app/upload/archive-source-picker";
+import { EnginePicker } from "@/app/upload/engine-picker";
+import type { StaffRow } from "@/app/upload/staff-editor";
 import {
-  CoverPicker,
-  PreviewPicker,
-} from "@/app/components/media/media-picker";
-import { TokenPicker } from "@/app/components/pickers/token-picker";
+  StaffEditor,
+  extraStaffCredits,
+  staffRowErrors,
+  staffRows,
+} from "@/app/upload/staff-editor";
+import {
+  readTranslationPreference,
+  rememberPublishedTranslators,
+  updateTranslationPreference,
+} from "@/app/upload/translation-preference";
 import { useUploadController } from "@/app/upload/upload-controller";
 import type {
   BrowserUploadTaskSnapshot,
@@ -54,11 +54,6 @@ import type {
   UploadTaxonomySuggestion,
 } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
-import {
-  readTranslationPreference,
-  rememberPublishedTranslators,
-  updateTranslationPreference,
-} from "@/app/upload/translation-preference";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import type {
   CharacterCreditSelection,
@@ -75,6 +70,12 @@ import {
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { cn } from "@/lib/ui/cn";
+import type { WorkMoreInfo } from "@/lib/work-more-info";
+import { moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
+import { Check, Link as LinkIcon } from "lucide-react";
+import type { Dispatch, DragEvent, FormEvent, SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useRevalidator } from "react-router";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
@@ -165,29 +166,35 @@ export function UploadClient({
     creators: CreatorSuggestion[];
   };
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const upload = useUploadController(currentUser.id);
-  const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) => currentUser.permissionKeys.includes(key));
+  const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
+    currentUser.permissionKeys.includes(key),
+  );
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser.displayName, initialWork),
   );
-  const [associationDefaults, setAssociationDefaults] = useState<AssociationDefaults>(
-    () => initialWork
-      ? {
-          characters: initialWork.characterCredits,
-          authors: initialWork.authors,
-          translators: initialWork.translators,
-        }
-      : { characters: [], authors: [], translators: [] },
-  );
+  const [associationDefaults, setAssociationDefaults] =
+    useState<AssociationDefaults>(() =>
+      initialWork
+        ? {
+            characters: initialWork.characterCredits,
+            authors: initialWork.authors,
+            translators: initialWork.translators,
+          }
+        : { characters: [], authors: [], translators: [] },
+    );
   const [imageSelections, setImageSelections] = useState<ImageSelections>({
     cover: null,
     browsingImages: [],
   });
   const [characterFaceSheetFiles, setCharacterFaceSheetFiles] =
     useState<CharacterFaceSheetFiles>({});
-  const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>([]);
+  const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>(
+    [],
+  );
   const sourceInspectionGenerationRef = useRef(0);
   const automaticCoverRef = useRef<File | null>(null);
   const [sourceSummary, setSourceSummary] = useState<{
@@ -195,7 +202,9 @@ export function UploadClient({
     fileCount: number;
     sizeBytes: number;
   } | null>(null);
-  const [existingArchive, setExistingArchive] = useState(initialWork?.currentArchive ?? null);
+  const [existingArchive, setExistingArchive] = useState(
+    initialWork?.currentArchive ?? null,
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [staffErrorsVisible, setStaffErrorsVisible] = useState(false);
@@ -207,10 +216,14 @@ export function UploadClient({
     [imageSelections.browsingImages, sourceCoverCandidates],
   );
   const archiveMode = isArchiveEngineFamily(form.engineFamily);
-  const metadataLocked = upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
+  const metadataLocked =
+    upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
   const formDisabled = preparing || metadataLocked;
   const gameFileLocksType = Boolean(
-    existingArchive || sourceSummary || upload.active || upload.task?.sourceReady,
+    existingArchive ||
+      sourceSummary ||
+      upload.active ||
+      upload.task?.sourceReady,
   );
   const externalLinkLocksType = Boolean(form.externalDownloadUrl.trim());
   const editSourceReady = archiveMode
@@ -231,7 +244,9 @@ export function UploadClient({
         ...current,
         isOriginal: false,
         isTranslation: preference.isTranslation,
-        translators: preference.translators?.length ? preference.translators : [newTranslator(currentUser.displayName)],
+        translators: preference.translators?.length
+          ? preference.translators
+          : [newTranslator(currentUser.displayName)],
       }));
     }, 0);
     return () => window.clearTimeout(timeoutId);
@@ -265,23 +280,28 @@ export function UploadClient({
     updateTranslationPreference(currentUser.id, {
       isTranslation: form.isTranslation,
       ...(value.every((item) => item?.kind === "existing")
-        ? { translators: value as ConfirmedCreatorSelection[] } : {}),
+        ? { translators: value as ConfirmedCreatorSelection[] }
+        : {}),
     });
   }
 
   function changeCharacters(characters: CharacterCreditSelection[]) {
     setCharacterFaceSheetFiles((current) =>
       Object.fromEntries(
-        Object.entries(current).filter(([index]) => Number(index) < characters.length),
+        Object.entries(current).filter(
+          ([index]) => Number(index) < characters.length,
+        ),
       ),
     );
     setForm((current) => ({ ...current, characters }));
   }
 
   function changeCharacterFaceSheetFiles(index: number, files: File[]) {
-    setCharacterFaceSheetFiles((current) => files.length
-      ? { ...current, [index]: files }
-      : omitIndexedFiles(current, index));
+    setCharacterFaceSheetFiles((current) =>
+      files.length
+        ? { ...current, [index]: files }
+        : omitIndexedFiles(current, index),
+    );
   }
 
   function removeCharacterFaceSheetFiles(removedIndex: number) {
@@ -311,7 +331,10 @@ export function UploadClient({
         setForm((current) =>
           current.originalTitle.trim()
             ? current
-            : { ...current, originalTitle: prefill.gameTitle ?? current.originalTitle },
+            : {
+                ...current,
+                originalTitle: prefill.gameTitle ?? current.originalTitle,
+              },
         );
       }
 
@@ -329,16 +352,25 @@ export function UploadClient({
     }
   }
 
-  async function startFolder(rawFiles: UploadSourceFile[], suggestedName: string) {
+  async function startFolder(
+    rawFiles: UploadSourceFile[],
+    suggestedName: string,
+  ) {
     setSubmitError(null);
     try {
       const source = normalizeSharedFolderSource(rawFiles, suggestedName);
-      if (!source.files.some((item) => item.relativePath.toLowerCase() === "rpg_rt.lmt")) {
+      if (
+        !source.files.some(
+          (item) => item.relativePath.toLowerCase() === "rpg_rt.lmt",
+        )
+      ) {
         throw new Error("所选文件夹根目录缺少 RPG_RT.lmt，请选择游戏根目录。");
       }
       startSource("folder", source.sourceName, source.files);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "无法读取所选文件夹。");
+      setSubmitError(
+        error instanceof Error ? error.message : "无法读取所选文件夹。",
+      );
     }
   }
 
@@ -356,7 +388,9 @@ export function UploadClient({
     automaticCoverRef.current = null;
     if (previousAutomaticCover) {
       setImageSelections((current) =>
-        current.cover === previousAutomaticCover ? { ...current, cover: null } : current,
+        current.cover === previousAutomaticCover
+          ? { ...current, cover: null }
+          : current,
       );
     }
     setMode(sourceKind);
@@ -382,20 +416,30 @@ export function UploadClient({
     try {
       const firstItem = event.dataTransfer.items[0];
       const getEntry = firstItem
-        ? (firstItem as DataTransferItem & {
-            webkitGetAsEntry?: () => { isDirectory: boolean } | null;
-          }).webkitGetAsEntry
+        ? (
+            firstItem as DataTransferItem & {
+              webkitGetAsEntry?: () => { isDirectory: boolean } | null;
+            }
+          ).webkitGetAsEntry
         : undefined;
       const entry = getEntry?.call(firstItem) ?? null;
       const files = Array.from(event.dataTransfer.files);
-      if (files.length === 1 && !entry?.isDirectory && /\.zip$/i.test(files[0].name)) {
-        startSource("zip", files[0].name, [{ file: files[0], relativePath: files[0].name }]);
+      if (
+        files.length === 1 &&
+        !entry?.isDirectory &&
+        /\.zip$/i.test(files[0].name)
+      ) {
+        startSource("zip", files[0].name, [
+          { file: files[0], relativePath: files[0].name },
+        ]);
       } else {
         const dropped = await readSharedDroppedFolder(event.dataTransfer);
         await startFolder(dropped.files, dropped.sourceName);
       }
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "无法读取拖入的游戏文件。");
+      setSubmitError(
+        error instanceof Error ? error.message : "无法读取拖入的游戏文件。",
+      );
     } finally {
       setPreparing(false);
     }
@@ -412,24 +456,46 @@ export function UploadClient({
     const staffErrors = staffRowErrors(form.extraStaff);
     const invalidStaffIndex = staffErrors.findIndex(Boolean);
     if (invalidStaffIndex >= 0) {
-      const details = document.getElementById("upload-more-settings") as HTMLDetailsElement | null;
+      const details = document.getElementById(
+        "upload-more-settings",
+      ) as HTMLDetailsElement | null;
       if (details) details.open = true;
-      requestAnimationFrame(() => document.getElementById(`staff-${form.extraStaff[invalidStaffIndex].id}-${staffErrors[invalidStaffIndex]?.field}`)?.focus());
+      requestAnimationFrame(() =>
+        document
+          .getElementById(
+            `staff-${form.extraStaff[invalidStaffIndex].id}-${staffErrors[invalidStaffIndex]?.field}`,
+          )
+          ?.focus(),
+      );
       return;
     }
-    const invalidMoreInfoIndex = form.moreInfo.findIndex((item) => moreInfoItemError(item));
+    const invalidMoreInfoIndex = form.moreInfo.findIndex((item) =>
+      moreInfoItemError(item),
+    );
     if (invalidMoreInfoIndex >= 0) {
-      const details = document.getElementById("upload-more-settings") as HTMLDetailsElement | null;
+      const details = document.getElementById(
+        "upload-more-settings",
+      ) as HTMLDetailsElement | null;
       if (details) details.open = true;
       const row = form.moreInfo[invalidMoreInfoIndex];
-      requestAnimationFrame(() => document.getElementById(`upload-more-info-${row.id}-${moreInfoItemError(row)?.field}`)?.focus());
+      requestAnimationFrame(() =>
+        document
+          .getElementById(
+            `upload-more-info-${row.id}-${moreInfoItemError(row)?.field}`,
+          )
+          ?.focus(),
+      );
       return;
     }
     if (form.isOriginal && form.isTranslation) {
       setSubmitError("原创声明与翻译声明不能同时选择。");
       return;
     }
-    if (form.isTranslation && (!form.translators.length || form.translators.some((item) => !item?.displayName.trim()))) {
+    if (
+      form.isTranslation &&
+      (!form.translators.length ||
+        form.translators.some((item) => !item?.displayName.trim()))
+    ) {
       setTranslatorError("请填写译者。");
       document.getElementById("upload-translator")?.focus();
       return;
@@ -440,16 +506,23 @@ export function UploadClient({
     }
     const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
     if (!releaseDate?.value) {
-      setSubmitError(releaseDate ? ORIGINAL_RELEASE_DATE_REQUIRED_ERROR : ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+      setSubmitError(
+        releaseDate
+          ? ORIGINAL_RELEASE_DATE_REQUIRED_ERROR
+          : ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
+      );
       document.getElementById("upload-release-date")?.focus();
       return;
     }
     const characterWithoutPortrait = form.characters.find((credit) => {
       const selection = credit.selection;
       if (credit.portrait) return false;
-      return selection.kind === "new" || !suggestions.characters.find(
-        (item) => item.id === selection.characterId,
-      )?.defaultPortrait;
+      return (
+        selection.kind === "new" ||
+        !suggestions.characters.find(
+          (item) => item.id === selection.characterId,
+        )?.defaultPortrait
+      );
     });
     if (characterWithoutPortrait) {
       setSubmitError(
@@ -473,18 +546,35 @@ export function UploadClient({
       }
       setPreparing(true);
       try {
-        const faceSheets = await prepareCharacterFaceSheets(characterFaceSheetFiles);
+        const faceSheets = await prepareCharacterFaceSheets(
+          characterFaceSheetFiles,
+        );
         if (initialWork) {
-          rememberPublishedTranslators(currentUser.id, await submitOwnedWork(initialWork.id, "external", form, imageSelections, faceSheets));
-          router.refresh();
+          rememberPublishedTranslators(
+            currentUser.id,
+            await submitOwnedWork(
+              initialWork.id,
+              "external",
+              form,
+              imageSelections,
+              faceSheets,
+            ),
+          );
+          revalidator.revalidate();
           setSubmitSuccess("作品资料已保存。");
         } else {
-          const result = await submitExternalWork(form, imageSelections, faceSheets);
+          const result = await submitExternalWork(
+            form,
+            imageSelections,
+            faceSheets,
+          );
           rememberPublishedTranslators(currentUser.id, result.translators);
-          router.push(`/games/${result.workId}`);
+          navigate(`/games/${result.workId}`);
         }
       } catch (error) {
-        setSubmitError(error instanceof Error ? error.message : "作品资料保存失败。");
+        setSubmitError(
+          error instanceof Error ? error.message : "作品资料保存失败。",
+        );
       } finally {
         setPreparing(false);
       }
@@ -501,10 +591,21 @@ export function UploadClient({
     }
     setPreparing(true);
     try {
-      const faceSheets = await prepareCharacterFaceSheets(characterFaceSheetFiles);
+      const faceSheets = await prepareCharacterFaceSheets(
+        characterFaceSheetFiles,
+      );
       if (initialWork && existingArchive && !upload.active) {
-        rememberPublishedTranslators(currentUser.id, await submitOwnedWork(initialWork.id, "archive", form, imageSelections, faceSheets));
-        router.refresh();
+        rememberPublishedTranslators(
+          currentUser.id,
+          await submitOwnedWork(
+            initialWork.id,
+            "archive",
+            form,
+            imageSelections,
+            faceSheets,
+          ),
+        );
+        revalidator.revalidate();
         setSubmitSuccess("作品资料已保存。");
         return;
       }
@@ -523,14 +624,21 @@ export function UploadClient({
         uniqueMetadataBlobs([...images.blobs, ...faceSheets.blobs]),
       );
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "作品资料确认失败。");
+      setSubmitError(
+        error instanceof Error ? error.message : "作品资料确认失败。",
+      );
     } finally {
       setPreparing(false);
     }
   }
 
   async function restore(draft: UploadRecoveryDraft) {
-    if (!(await upload.restoreDraft(draft, { clearMetadata: Boolean(initialWork) }))) return;
+    if (
+      !(await upload.restoreDraft(draft, {
+        clearMetadata: Boolean(initialWork),
+      }))
+    )
+      return;
     sourceInspectionGenerationRef.current += 1;
     automaticCoverRef.current = null;
     setSourceCoverCandidates([]);
@@ -574,7 +682,9 @@ export function UploadClient({
     automaticCoverRef.current = null;
     if (previousAutomaticCover) {
       setImageSelections((current) =>
-        current.cover === previousAutomaticCover ? { ...current, cover: null } : current,
+        current.cover === previousAutomaticCover
+          ? { ...current, cover: null }
+          : current,
       );
     }
     upload.resetTask();
@@ -591,7 +701,10 @@ export function UploadClient({
   }
 
   return (
-    <div className="grid gap-5" data-upload-phase={upload.task?.phase ?? "idle"}>
+    <div
+      className="grid gap-5"
+      data-upload-phase={upload.task?.phase ?? "idle"}
+    >
       {relevantDrafts.length ? (
         <section className="overflow-hidden rounded-lg border border-border bg-card">
           <header className="border-b border-border px-4 py-3">
@@ -599,14 +712,18 @@ export function UploadClient({
           </header>
           <ul className="divide-y divide-border px-4">
             {relevantDrafts.map((draft) => {
-              const committing = upload.committingDraftIds.includes(draft.serverImportJobId);
+              const committing = upload.committingDraftIds.includes(
+                draft.serverImportJobId,
+              );
               return (
                 <li
                   className="flex flex-wrap items-center justify-between gap-3 py-3"
                   key={draft.key}
                 >
                   <div className="min-w-0">
-                    <strong className="block truncate">{draft.preparedSource.sourceName}</strong>
+                    <strong className="block truncate">
+                      {draft.preparedSource.sourceName}
+                    </strong>
                     <p className="mt-1 text-sm text-muted">
                       {committing
                         ? "正在提交，暂时不能继续编辑"
@@ -656,13 +773,19 @@ export function UploadClient({
                 if (option.distribution === "archive" && !canArchiveUpload) {
                   return "当前账户没有本站归档上传权限";
                 }
-                if (option.distribution === "external" && !initialWork && !currentUser.permissionKeys.includes("work.external_create")) {
+                if (
+                  option.distribution === "external" &&
+                  !initialWork &&
+                  !currentUser.permissionKeys.includes("work.external_create")
+                ) {
                   return "当前账户没有外链作品发布权限";
                 }
                 const targetArchive = option.distribution === "archive";
                 if (targetArchive === archiveMode) return null;
-                if (gameFileLocksType) return "已有游戏文件，不能切换到外链类型";
-                if (externalLinkLocksType) return "请先清空外部下载链接再切换到保存库类型";
+                if (gameFileLocksType)
+                  return "已有游戏文件，不能切换到外链类型";
+                if (externalLinkLocksType)
+                  return "请先清空外部下载链接再切换到保存库类型";
                 return null;
               }}
               onValueChange={(engineFamily) => {
@@ -679,12 +802,19 @@ export function UploadClient({
                 {archiveMode ? (
                   <ArchiveSourcePicker
                     canceling={upload.canceling}
-                    disabled={!canArchiveUpload || preparing || Boolean(sourceSummary) || upload.active}
+                    disabled={
+                      !canArchiveUpload ||
+                      preparing ||
+                      Boolean(sourceSummary) ||
+                      upload.active
+                    }
                     existingSource={sourceSummary ? null : existingArchive}
                     mode={mode}
                     onCancel={() => void cancelUpload()}
                     onDrop={onSourceDrop}
-                    onFolder={(files, sourceName) => void startFolder(files, sourceName)}
+                    onFolder={(files, sourceName) =>
+                      void startFolder(files, sourceName)
+                    }
                     onModeChange={setMode}
                     onRemoveExisting={() => {
                       setExistingArchive(null);
@@ -693,7 +823,9 @@ export function UploadClient({
                     }}
                     onRestart={restart}
                     onZip={(file) =>
-                      startSource("zip", file.name, [{ file, relativePath: file.name }])
+                      startSource("zip", file.name, [
+                        { file, relativePath: file.name },
+                      ])
                     }
                     sourceSummary={sourceSummary}
                     task={upload.task}
@@ -702,7 +834,10 @@ export function UploadClient({
                   <ExternalSourceSection
                     disabled={formDisabled}
                     onChange={(externalDownloadUrl) =>
-                      setForm((current) => ({ ...current, externalDownloadUrl }))
+                      setForm((current) => ({
+                        ...current,
+                        externalDownloadUrl,
+                      }))
                     }
                     value={form.externalDownloadUrl}
                   />
@@ -726,9 +861,13 @@ export function UploadClient({
                   <MetadataFields
                     characterFaceSheetFiles={characterFaceSheetFiles}
                     changeOriginalDeclaration={changeOriginalDeclaration}
-                    changeCharacterFaceSheetFiles={changeCharacterFaceSheetFiles}
+                    changeCharacterFaceSheetFiles={
+                      changeCharacterFaceSheetFiles
+                    }
                     changeCharacters={changeCharacters}
-                    removeCharacterFaceSheetFiles={removeCharacterFaceSheetFiles}
+                    removeCharacterFaceSheetFiles={
+                      removeCharacterFaceSheetFiles
+                    }
                     changeTranslationDeclaration={changeTranslationDeclaration}
                     changeTranslator={changeTranslator}
                     disabled={preparing}
@@ -782,9 +921,14 @@ export function UploadClient({
                   />
                 </div>
 
-                <fieldset className="grid gap-4 border-b border-border p-4" disabled={formDisabled}>
+                <fieldset
+                  className="grid gap-4 border-b border-border p-4"
+                  disabled={formDisabled}
+                >
                   <div className="grid gap-2">
-                    <span className="text-sm font-bold">游戏语言 <span className="text-accent">*</span></span>
+                    <span className="text-sm font-bold">
+                      游戏语言 <span className="text-accent">*</span>
+                    </span>
                     <LanguageField
                       onValueChange={(language) =>
                         setForm((current) => ({ ...current, language }))
@@ -816,12 +960,20 @@ export function UploadClient({
 
                 <div className="grid gap-3 p-4">
                   {submitError ? (
-                    <Notice tone="error" className="border p-3 text-sm" role="alert">
+                    <Notice
+                      tone="error"
+                      className="border p-3 text-sm"
+                      role="alert"
+                    >
                       {submitError}
                     </Notice>
                   ) : null}
                   {submitSuccess ? (
-                    <Notice tone="success" className="border p-3 text-sm" role="status">
+                    <Notice
+                      tone="success"
+                      className="border p-3 text-sm"
+                      role="status"
+                    >
                       {submitSuccess}
                     </Notice>
                   ) : null}
@@ -843,7 +995,9 @@ export function UploadClient({
                   ) : (
                     <Button
                       className="min-h-12 w-full"
-                      disabled={preparing || Boolean(initialWork && !editSourceReady)}
+                      disabled={
+                        preparing || Boolean(initialWork && !editSourceReady)
+                      }
                       type="submit"
                       variant="rm2k"
                     >
@@ -853,9 +1007,9 @@ export function UploadClient({
                           : "正在发布…"
                         : initialWork
                           ? "保存作品资料"
-                        : archiveMode
-                          ? "确认作品资料"
-                          : "发布外链作品"}
+                          : archiveMode
+                            ? "确认作品资料"
+                            : "发布外链作品"}
                     </Button>
                   )}
                 </div>
@@ -868,7 +1022,11 @@ export function UploadClient({
   );
 }
 
-function ExternalSourceSection({ disabled, onChange, value }: {
+function ExternalSourceSection({
+  disabled,
+  onChange,
+  value,
+}: {
   disabled: boolean;
   onChange: (value: string) => void;
   value: string;
@@ -941,30 +1099,62 @@ function MetadataFields({
   const moreSettingsRef = useRef<HTMLDetailsElement>(null);
   const hasStaff = form.extraStaff.length > 0;
   const hasMoreInfo = form.moreInfo.length > 0;
-  const filledMoreInfoCount = form.moreInfo.filter((item) => item.title.trim() && item.body.trim()).length;
-  const filledStaffCount = form.extraStaff.filter((row) => row.roleKey && row.selection?.displayName.trim() &&
-    (row.roleKey !== "other" || row.roleLabel.trim())).length;
+  const filledMoreInfoCount = form.moreInfo.filter(
+    (item) => item.title.trim() && item.body.trim(),
+  ).length;
+  const filledStaffCount = form.extraStaff.filter(
+    (row) =>
+      row.roleKey &&
+      row.selection?.displayName.trim() &&
+      (row.roleKey !== "other" || row.roleLabel.trim()),
+  ).length;
   useEffect(() => {
-    if ((hasStaff || hasMoreInfo) && moreSettingsRef.current) moreSettingsRef.current.open = true;
+    if ((hasStaff || hasMoreInfo) && moreSettingsRef.current)
+      moreSettingsRef.current.open = true;
   }, [hasStaff, hasMoreInfo]);
   return (
     <div>
       <h2 className="mb-4 text-lg font-bold">作品资料</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <WorkbenchField controlId="upload-chinese-title" label="中文名">
-          <Input disabled={disabled} id="upload-chinese-title" onChange={(event) => setForm((current) => ({ ...current, chineseTitle: event.target.value }))} value={form.chineseTitle} />
+          <Input
+            disabled={disabled}
+            id="upload-chinese-title"
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                chineseTitle: event.target.value,
+              }))
+            }
+            value={form.chineseTitle}
+          />
         </WorkbenchField>
         <WorkbenchField controlId="upload-original-title" label="原名" required>
-          <Input disabled={disabled} id="upload-original-title" onChange={(event) => setForm((current) => ({ ...current, originalTitle: event.target.value }))} required value={form.originalTitle} />
+          <Input
+            disabled={disabled}
+            id="upload-original-title"
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                originalTitle: event.target.value,
+              }))
+            }
+            required
+            value={form.originalTitle}
+          />
         </WorkbenchField>
         <WorkbenchField controlId="upload-author" label="作者">
           <CreatorTokenPicker
             disabled={disabled}
             id="upload-author"
             label="作者"
-            onChange={(authors) => setForm((current) => ({ ...current, authors }))}
+            onChange={(authors) =>
+              setForm((current) => ({ ...current, authors }))
+            }
             suggestions={suggestions.creators}
-            values={form.authors.filter((value): value is CreatorSelection => value !== null)}
+            values={form.authors.filter(
+              (value): value is CreatorSelection => value !== null,
+            )}
           />
         </WorkbenchField>
         {form.isTranslation ? (
@@ -972,16 +1162,24 @@ function MetadataFields({
             <div className="grid gap-1.5">
               <CreatorTokenPicker
                 disabled={disabled}
-                errorId={translatorError ? "upload-translator-error" : undefined}
+                errorId={
+                  translatorError ? "upload-translator-error" : undefined
+                }
                 id="upload-translator"
                 invalid={Boolean(translatorError)}
                 label="译者"
                 onChange={changeTranslator}
                 suggestions={suggestions.creators}
-                values={form.translators.filter((value): value is CreatorSelection => value !== null)}
+                values={form.translators.filter(
+                  (value): value is CreatorSelection => value !== null,
+                )}
               />
               {translatorError ? (
-                <p className="text-sm text-red-700" id="upload-translator-error" role="alert">
+                <p
+                  className="text-sm text-red-700"
+                  id="upload-translator-error"
+                  role="alert"
+                >
                   {translatorError}
                 </p>
               ) : null}
@@ -997,7 +1195,9 @@ function MetadataFields({
           <PrecisionDatePicker
             disabled={disabled}
             id="upload-release-date"
-            onChange={(value) => setForm((current) => ({ ...current, originalReleaseDate: value }))}
+            onChange={(value) =>
+              setForm((current) => ({ ...current, originalReleaseDate: value }))
+            }
             placeholder="作品最初发表的日期"
             required
             value={form.originalReleaseDate}
@@ -1012,34 +1212,75 @@ function MetadataFields({
             className="flex flex-wrap gap-x-5 gap-y-3 py-2.5"
             role="group"
           >
-            <Label className="flex w-fit items-center gap-2 text-sm text-red-700" htmlFor="upload-is-original">
+            <Label
+              className="flex w-fit items-center gap-2 text-sm text-red-700"
+              htmlFor="upload-is-original"
+            >
               <Checkbox
                 checked={form.isOriginal}
                 className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700"
                 disabled={disabled}
                 id="upload-is-original"
-                onCheckedChange={(checked) => changeOriginalDeclaration(checked === true)}
+                onCheckedChange={(checked) =>
+                  changeOriginalDeclaration(checked === true)
+                }
               />
               本作品为我原创。
             </Label>
-            <Label className="flex w-fit items-center gap-2 text-sm" htmlFor="upload-is-translation">
+            <Label
+              className="flex w-fit items-center gap-2 text-sm"
+              htmlFor="upload-is-translation"
+            >
               <Checkbox
                 checked={form.isTranslation}
                 disabled={disabled}
                 id="upload-is-translation"
-                onCheckedChange={(checked) => changeTranslationDeclaration(checked === true)}
+                onCheckedChange={(checked) =>
+                  changeTranslationDeclaration(checked === true)
+                }
               />
               本作品为翻译作品。
             </Label>
           </div>
         </WorkbenchField>
-        <WorkbenchField className="md:col-span-2" controlId="upload-description" label="简介">
-          <Textarea disabled={disabled} id="upload-description" onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} value={form.description} />
+        <WorkbenchField
+          className="md:col-span-2"
+          controlId="upload-description"
+          label="简介"
+        >
+          <Textarea
+            disabled={disabled}
+            id="upload-description"
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+            rows={4}
+            value={form.description}
+          />
         </WorkbenchField>
-        <WorkbenchField className="md:col-span-2" controlId="upload-tags" label="标签">
-          <TokenPicker disabled={disabled} id="upload-tags" onChange={(tags) => setForm((current) => ({ ...current, tags }))} placeholder="搜索或创建标签" recommendationLabel="推荐标签" suggestions={suggestions.tags} values={form.tags} />
+        <WorkbenchField
+          className="md:col-span-2"
+          controlId="upload-tags"
+          label="标签"
+        >
+          <TokenPicker
+            disabled={disabled}
+            id="upload-tags"
+            onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+            placeholder="搜索或创建标签"
+            recommendationLabel="推荐标签"
+            suggestions={suggestions.tags}
+            values={form.tags}
+          />
         </WorkbenchField>
-        <WorkbenchField className="md:col-span-2" controlId="upload-characters" label="登场角色">
+        <WorkbenchField
+          className="md:col-span-2"
+          controlId="upload-characters"
+          label="登场角色"
+        >
           <CharacterPicker
             disabled={disabled}
             faceSheetFiles={characterFaceSheetFiles}
@@ -1051,17 +1292,45 @@ function MetadataFields({
             values={form.characters}
           />
         </WorkbenchField>
-        <details className="md:col-span-2" id="upload-more-settings" ref={moreSettingsRef}>
-          <summary className="cursor-pointer py-1 text-sm font-bold">更多设置{filledStaffCount > 0 ? <span className="ml-2 text-xs font-normal text-muted">制作人员 {filledStaffCount}</span> : null}{filledMoreInfoCount > 0 ? <span className="ml-2 text-xs font-normal text-muted">更多信息 {filledMoreInfoCount}</span> : null}</summary>
+        <details
+          className="md:col-span-2"
+          id="upload-more-settings"
+          ref={moreSettingsRef}
+        >
+          <summary className="cursor-pointer py-1 text-sm font-bold">
+            更多设置
+            {filledStaffCount > 0 ? (
+              <span className="ml-2 text-xs font-normal text-muted">
+                制作人员 {filledStaffCount}
+              </span>
+            ) : null}
+            {filledMoreInfoCount > 0 ? (
+              <span className="ml-2 text-xs font-normal text-muted">
+                更多信息 {filledMoreInfoCount}
+              </span>
+            ) : null}
+          </summary>
           <div className="mt-3 grid gap-4 border-t border-border pt-4">
             <WorkbenchField label="预览图">
-              <PreviewPicker disabled={disabled} existingCount={existingPreviewCount} files={imageSelections.browsingImages} onChange={(browsingImages) => setImageSelections((current) => ({ ...current, browsingImages }))} />
+              <PreviewPicker
+                disabled={disabled}
+                existingCount={existingPreviewCount}
+                files={imageSelections.browsingImages}
+                onChange={(browsingImages) =>
+                  setImageSelections((current) => ({
+                    ...current,
+                    browsingImages,
+                  }))
+                }
+              />
             </WorkbenchField>
             <WorkbenchField controlId="upload-aliases" label="别名">
               <TokenPicker
                 disabled={disabled}
                 id="upload-aliases"
-                onChange={(aliasTitles) => setForm((current) => ({ ...current, aliasTitles }))}
+                onChange={(aliasTitles) =>
+                  setForm((current) => ({ ...current, aliasTitles }))
+                }
                 placeholder="输入别名"
                 showRecommendations={false}
                 showSelectionCount={false}
@@ -1070,12 +1339,37 @@ function MetadataFields({
               />
             </WorkbenchField>
             <WorkbenchField controlId="upload-source-url" label="来源链接">
-              <Input disabled={disabled} id="upload-source-url" onChange={(event) => setForm((current) => ({ ...current, sourceUrl: event.target.value }))} type="url" value={form.sourceUrl} />
+              <Input
+                disabled={disabled}
+                id="upload-source-url"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    sourceUrl: event.target.value,
+                  }))
+                }
+                type="url"
+                value={form.sourceUrl}
+              />
             </WorkbenchField>
-            <StaffEditor rows={form.extraStaff} disabled={disabled} suggestions={suggestions.creators} showErrors={staffErrorsVisible}
-              onChange={(extraStaff) => setForm((current) => ({ ...current, extraStaff }))} />
-            <WorkMoreInfoEditor id="upload-more-info" rows={form.moreInfo} disabled={disabled} showErrors={moreInfoErrorsVisible}
-              onChange={(moreInfo) => setForm((current) => ({ ...current, moreInfo }))} />
+            <StaffEditor
+              rows={form.extraStaff}
+              disabled={disabled}
+              suggestions={suggestions.creators}
+              showErrors={staffErrorsVisible}
+              onChange={(extraStaff) =>
+                setForm((current) => ({ ...current, extraStaff }))
+              }
+            />
+            <WorkMoreInfoEditor
+              id="upload-more-info"
+              rows={form.moreInfo}
+              disabled={disabled}
+              showErrors={moreInfoErrorsVisible}
+              onChange={(moreInfo) =>
+                setForm((current) => ({ ...current, moreInfo }))
+              }
+            />
           </div>
         </details>
       </div>
@@ -1083,9 +1377,20 @@ function MetadataFields({
   );
 }
 
-function ReadinessList({ archiveMode, existingArchive, metadataConfirmed, preparing, sourceSummary, task }: {
+function ReadinessList({
+  archiveMode,
+  existingArchive,
+  metadataConfirmed,
+  preparing,
+  sourceSummary,
+  task,
+}: {
   archiveMode: boolean;
-  existingArchive: { name: string; fileCount: number; sizeBytes: number } | null;
+  existingArchive: {
+    name: string;
+    fileCount: number;
+    sizeBytes: number;
+  } | null;
   metadataConfirmed: boolean;
   preparing: boolean;
   sourceSummary: { name: string; fileCount: number; sizeBytes: number } | null;
@@ -1093,20 +1398,80 @@ function ReadinessList({ archiveMode, existingArchive, metadataConfirmed, prepar
 }) {
   const items = archiveMode
     ? [
-        { label: "游戏文件", value: existingArchive || task?.sourceReady ? "已就绪" : task ? uploadPhaseLabel(task.phase) : sourceSummary ? "准备中" : "尚未选择", tone: existingArchive || task?.sourceReady ? "ready" : task ? "running" : "idle" },
-        { label: "作品资料", value: task?.commitStarted ? "已锁定" : metadataConfirmed ? "已确认" : "编辑中", tone: metadataConfirmed ? "ready" : "idle" },
-        { label: "发布", value: task?.result ? "已完成" : task?.commitStarted ? uploadPhaseLabel(task.phase) : task?.sourceReady && !metadataConfirmed ? "等待作品资料" : !task?.sourceReady && metadataConfirmed ? "等待游戏文件" : "等待两项就绪", tone: task?.result ? "ready" : task?.commitStarted ? "running" : "idle" },
+        {
+          label: "游戏文件",
+          value:
+            existingArchive || task?.sourceReady
+              ? "已就绪"
+              : task
+                ? uploadPhaseLabel(task.phase)
+                : sourceSummary
+                  ? "准备中"
+                  : "尚未选择",
+          tone:
+            existingArchive || task?.sourceReady
+              ? "ready"
+              : task
+                ? "running"
+                : "idle",
+        },
+        {
+          label: "作品资料",
+          value: task?.commitStarted
+            ? "已锁定"
+            : metadataConfirmed
+              ? "已确认"
+              : "编辑中",
+          tone: metadataConfirmed ? "ready" : "idle",
+        },
+        {
+          label: "发布",
+          value: task?.result
+            ? "已完成"
+            : task?.commitStarted
+              ? uploadPhaseLabel(task.phase)
+              : task?.sourceReady && !metadataConfirmed
+                ? "等待作品资料"
+                : !task?.sourceReady && metadataConfirmed
+                  ? "等待游戏文件"
+                  : "等待两项就绪",
+          tone: task?.result
+            ? "ready"
+            : task?.commitStarted
+              ? "running"
+              : "idle",
+        },
       ]
     : [
-        { label: "作品资料", value: preparing ? "正在发布" : "编辑中", tone: preparing ? "running" : "idle" },
-        { label: "发布", value: preparing ? "提交中" : "等待发布", tone: preparing ? "running" : "idle" },
+        {
+          label: "作品资料",
+          value: preparing ? "正在发布" : "编辑中",
+          tone: preparing ? "running" : "idle",
+        },
+        {
+          label: "发布",
+          value: preparing ? "提交中" : "等待发布",
+          tone: preparing ? "running" : "idle",
+        },
       ];
   return (
     <div className="grid gap-3">
       {items.map((item) => (
-        <div className="grid grid-cols-[10px_minmax(0,1fr)] items-start gap-2.5" key={item.label}>
-          <span className={cn("mt-1.5 size-2.5 rounded-full bg-muted/40", item.tone === "ready" && "bg-emerald-500", item.tone === "running" && "animate-pulse bg-primary")} />
-          <span><strong className="block text-sm">{item.label}</strong><span className="block text-xs text-muted">{item.value}</span></span>
+        <div
+          className="grid grid-cols-[10px_minmax(0,1fr)] items-start gap-2.5"
+          key={item.label}
+        >
+          <span
+            className={cn(
+              "mt-1.5 size-2.5 rounded-full bg-muted/40",
+              item.tone === "ready" && "bg-emerald-500",
+              item.tone === "running" && "animate-pulse bg-primary",
+            )}
+          />
+          <span>
+            <strong className="block text-sm">{item.label}</strong>
+            <span className="block text-xs text-muted">{item.value}</span>
+          </span>
         </div>
       ))}
     </div>
@@ -1117,13 +1482,23 @@ function newTranslator(name: string): CreatorSelection {
   return { kind: "new", name, displayName: name };
 }
 
-function translatorStaff(form: FlatMetadata, defaults: UploadStaffCredit[] = []): WorkStaffCredit[] {
+function translatorStaff(
+  form: FlatMetadata,
+  defaults: UploadStaffCredit[] = [],
+): WorkStaffCredit[] {
   if (!form.isTranslation) return [];
-  const existing = new Map(defaults.map((credit) => [creatorSelectionKey(credit.selection), credit]));
+  const existing = new Map(
+    defaults.map((credit) => [creatorSelectionKey(credit.selection), credit]),
+  );
   return form.translators.map((selection) => {
     if (!selection?.displayName.trim()) throw new Error("请填写译者。");
     const credit = existing.get(creatorSelectionKey(selection));
-    return { selection, roleKey: "translator", roleLabel: credit?.roleLabel ?? null, notes: credit?.notes ?? null };
+    return {
+      selection,
+      roleKey: "translator",
+      roleLabel: credit?.roleLabel ?? null,
+      notes: credit?.notes ?? null,
+    };
   });
 }
 
@@ -1141,10 +1516,14 @@ function initialForm(
       description: initialWork.description ?? "",
       tags: initialWork.tags,
       characters: initialWork.characters,
-      authors: initialWork.authors.length ? initialWork.authors.map((credit) => credit.selection) : [null],
+      authors: initialWork.authors.length
+        ? initialWork.authors.map((credit) => credit.selection)
+        : [null],
       extraStaff: staffRows(initialWork.extraStaff),
       moreInfo: moreInfoRows(initialWork.moreInfo),
-      translators: initialWork.translators.length ? initialWork.translators.map((credit) => credit.selection) : [newTranslator(displayName)],
+      translators: initialWork.translators.length
+        ? initialWork.translators.map((credit) => credit.selection)
+        : [newTranslator(displayName)],
       originalReleaseDate: initialWork.originalReleaseDate ?? "",
       isOriginal: initialWork.isOriginal,
       isTranslation: initialWork.isTranslation,
@@ -1176,16 +1555,22 @@ function initialForm(
   };
 }
 
-function associationsFromMetadata(metadata: ArchiveCommitMetadata): AssociationDefaults {
+function associationsFromMetadata(
+  metadata: ArchiveCommitMetadata,
+): AssociationDefaults {
   return {
     characters: metadata.characters ?? [],
     authors: metadata.workStaff.filter((staff) => staff.roleKey === "author"),
-    translators: metadata.workStaff.filter((staff) => staff.roleKey === "translator"),
+    translators: metadata.workStaff.filter(
+      (staff) => staff.roleKey === "translator",
+    ),
   };
 }
 
 function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
-  const authors = metadata.workStaff.filter((staff) => staff.roleKey === "author");
+  const authors = metadata.workStaff.filter(
+    (staff) => staff.roleKey === "author",
+  );
   return {
     originalTitle: metadata.game.originalTitle,
     chineseTitle: metadata.game.chineseTitle ?? "",
@@ -1193,16 +1578,26 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
     tags: metadata.tags,
-    characters: (metadata.characters ?? []).map(({
-      selection,
-      roleKey,
-      portrait,
-      faceSheetBlobSha256s,
-    }) => ({ selection, roleKey, portrait, faceSheetBlobSha256s })),
-    authors: authors.length ? authors.map((credit) => credit.selection) : [null],
-    extraStaff: staffRows(metadata.workStaff.filter((staff) => staff.roleKey !== "author" && staff.roleKey !== "translator")),
+    characters: (metadata.characters ?? []).map(
+      ({ selection, roleKey, portrait, faceSheetBlobSha256s }) => ({
+        selection,
+        roleKey,
+        portrait,
+        faceSheetBlobSha256s,
+      }),
+    ),
+    authors: authors.length
+      ? authors.map((credit) => credit.selection)
+      : [null],
+    extraStaff: staffRows(
+      metadata.workStaff.filter(
+        (staff) => staff.roleKey !== "author" && staff.roleKey !== "translator",
+      ),
+    ),
     moreInfo: moreInfoRows(normalizeWorkMoreInfo(metadata.game.extra.moreInfo)),
-    translators: metadata.workStaff.filter((staff) => staff.roleKey === "translator").map((staff) => staff.selection),
+    translators: metadata.workStaff
+      .filter((staff) => staff.roleKey === "translator")
+      .map((staff) => staff.selection),
     originalReleaseDate: metadata.game.originalReleaseDate ?? "",
     isOriginal: metadata.game.isOriginal,
     isTranslation: metadata.game.isTranslation,
@@ -1227,7 +1622,11 @@ function buildMetadata(
   const characters = form.characters.map((credit, index) => {
     const selection = credit.selection;
     const existing = takeCharacterDefault(characterDefaults, credit);
-    const resolved = withCharacterFaceSheetHashes(credit, index, faceSheetHashes);
+    const resolved = withCharacterFaceSheetHashes(
+      credit,
+      index,
+      faceSheetHashes,
+    );
     return {
       selection,
       portrait: resolved.portrait,
@@ -1238,19 +1637,52 @@ function buildMetadata(
       notes: existing?.notes ?? null,
     } satisfies CharacterCredit;
   });
-  const authorDefaults = new Map(defaults.authors.map((staff) => [creatorSelectionKey(staff.selection), staff]));
-  const authorStaff = form.authors.filter((value): value is CreatorSelection => value !== null).map((selection) => ({
-    selection, roleKey: "author" as const,
-    roleLabel: authorDefaults.get(creatorSelectionKey(selection))?.roleLabel ?? "作者",
-    notes: authorDefaults.get(creatorSelectionKey(selection))?.notes ?? null,
-  }));
+  const authorDefaults = new Map(
+    defaults.authors.map((staff) => [
+      creatorSelectionKey(staff.selection),
+      staff,
+    ]),
+  );
+  const authorStaff = form.authors
+    .filter((value): value is CreatorSelection => value !== null)
+    .map((selection) => ({
+      selection,
+      roleKey: "author" as const,
+      roleLabel:
+        authorDefaults.get(creatorSelectionKey(selection))?.roleLabel ?? "作者",
+      notes: authorDefaults.get(creatorSelectionKey(selection))?.notes ?? null,
+    }));
   return {
-    game: { originalTitle: form.originalTitle.trim(), chineseTitle: cleanNullable(form.chineseTitle), description: cleanNullable(form.description), originalReleaseDate: releaseDate.value, originalReleasePrecision: releaseDate.precision, engineFamily: form.engineFamily, isOriginal: form.isOriginal, isTranslation: form.isTranslation, language: form.language, browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s, status: form.status, extra: { moreInfo: normalizeWorkMoreInfo(form.moreInfo) } },
+    game: {
+      originalTitle: form.originalTitle.trim(),
+      chineseTitle: cleanNullable(form.chineseTitle),
+      description: cleanNullable(form.description),
+      originalReleaseDate: releaseDate.value,
+      originalReleasePrecision: releaseDate.precision,
+      engineFamily: form.engineFamily,
+      isOriginal: form.isOriginal,
+      isTranslation: form.isTranslation,
+      language: form.language,
+      browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s,
+      status: form.status,
+      extra: { moreInfo: normalizeWorkMoreInfo(form.moreInfo) },
+    },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
-    archiveVersion: { sourceName: null, sourceUrl: cleanNullable(form.sourceUrl) },
-    workTitles: uniqueTokens(form.aliasTitles).map((title) => ({ title, language: null, titleType: "alias" })),
+    archiveVersion: {
+      sourceName: null,
+      sourceUrl: cleanNullable(form.sourceUrl),
+    },
+    workTitles: uniqueTokens(form.aliasTitles).map((title) => ({
+      title,
+      language: null,
+      titleType: "alias",
+    })),
     characters,
-    workStaff: [...authorStaff, ...extraStaffCredits(form.extraStaff), ...translatorStaff(form, defaults.translators)],
+    workStaff: [
+      ...authorStaff,
+      ...extraStaffCredits(form.extraStaff),
+      ...translatorStaff(form, defaults.translators),
+    ],
     tags: uniqueTokens(form.tags),
     externalLinks: { work: [] },
   };
@@ -1269,8 +1701,12 @@ async function prepareSelectedImages(
   const blobs: MetadataBlobUpload[] = [];
   const hashes: string[] = [];
   if (input.cover) hashes.push(await prepareMetadataImage(input.cover, blobs));
-  for (const file of input.browsingImages) hashes.push(await prepareMetadataImage(file, blobs));
-  return { hashes: { browsingImageBlobSha256s: hashes }, blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()] };
+  for (const file of input.browsingImages)
+    hashes.push(await prepareMetadataImage(file, blobs));
+  return {
+    hashes: { browsingImageBlobSha256s: hashes },
+    blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()],
+  };
 }
 
 async function prepareCharacterFaceSheets(
@@ -1289,10 +1725,19 @@ async function prepareCharacterFaceSheets(
   };
 }
 
-async function prepareMetadataImage(file: File, blobs: MetadataBlobUpload[]): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error(`${file.name} 不是图片文件。`);
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  const sha256 = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+async function prepareMetadataImage(
+  file: File,
+  blobs: MetadataBlobUpload[],
+): Promise<string> {
+  if (!file.type.startsWith("image/"))
+    throw new Error(`${file.name} 不是图片文件。`);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    await file.arrayBuffer(),
+  );
+  const sha256 = [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
   blobs.push({ sha256, file, contentType: file.type });
   return sha256;
 }
@@ -1325,17 +1770,32 @@ async function submitExternalWork(
   );
   body.set("authors", JSON.stringify(form.authors.filter(Boolean)));
   body.set("extra_staff", JSON.stringify(extraStaffCredits(form.extraStaff)));
-  body.set("translators", JSON.stringify(translatorStaff(form).map((staff) => staff.selection)));
+  body.set(
+    "translators",
+    JSON.stringify(translatorStaff(form).map((staff) => staff.selection)),
+  );
   body.set("download_url", form.externalDownloadUrl.trim());
   body.set("source_url", form.sourceUrl.trim());
   body.set("cover", images.cover);
-  for (const image of images.browsingImages) body.append("browsing_images[]", image);
+  for (const image of images.browsingImages)
+    body.append("browsing_images[]", image);
   for (const faceSheet of faceSheets.blobs) {
     body.append("character_face_sheets[]", faceSheet.file);
   }
-  const response = await fetch("/api/works/external", { method: "POST", body, credentials: "same-origin" });
-  const payload = (await response.json().catch(() => null)) as { ok?: boolean; workId?: number; translators: ConfirmedCreatorSelection[]; detail?: string; error?: string } | null;
-  if (!response.ok || !payload?.ok || !payload.workId) throw new Error(payload?.detail || payload?.error || "发布外链作品失败。");
+  const response = await fetch("/api/works/external", {
+    method: "POST",
+    body,
+    credentials: "same-origin",
+  });
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    workId?: number;
+    translators: ConfirmedCreatorSelection[];
+    detail?: string;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload?.ok || !payload.workId)
+    throw new Error(payload?.detail || payload?.error || "发布外链作品失败。");
   return { workId: payload.workId, translators: payload.translators };
 }
 
@@ -1370,9 +1830,18 @@ async function submitOwnedWork(
   );
   body.set("authors", JSON.stringify(form.authors.filter(Boolean)));
   body.set("extra_staff", JSON.stringify(extraStaffCredits(form.extraStaff)));
-  body.set("translators", JSON.stringify(translatorStaff(form).map((staff) => staff.selection)));
-  body.set("download_url", distribution === "external" ? form.externalDownloadUrl.trim() : "");
-  body.set("source_url", distribution === "external" ? form.sourceUrl.trim() : "");
+  body.set(
+    "translators",
+    JSON.stringify(translatorStaff(form).map((staff) => staff.selection)),
+  );
+  body.set(
+    "download_url",
+    distribution === "external" ? form.externalDownloadUrl.trim() : "",
+  );
+  body.set(
+    "source_url",
+    distribution === "external" ? form.sourceUrl.trim() : "",
+  );
   if (images.cover) {
     body.append("images[]", images.cover);
     for (const image of images.browsingImages) body.append("images[]", image);
@@ -1433,7 +1902,9 @@ function takeCharacterDefault(
   return group.splice(matchingIndex < 0 ? 0 : matchingIndex, 1)[0];
 }
 
-function uniqueMetadataBlobs(blobs: MetadataBlobUpload[]): MetadataBlobUpload[] {
+function uniqueMetadataBlobs(
+  blobs: MetadataBlobUpload[],
+): MetadataBlobUpload[] {
   return [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()];
 }
 
@@ -1447,5 +1918,15 @@ function omitIndexedFiles(
   return next;
 }
 
-function cleanNullable(value: string): string | null { return value.trim() || null; }
-function uniqueTokens(values: string[]): string[] { const seen = new Set<string>(); return values.filter((value) => { const key = value.trim().toLocaleLowerCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; }); }
+function cleanNullable(value: string): string | null {
+  return value.trim() || null;
+}
+function uniqueTokens(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.trim().toLocaleLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

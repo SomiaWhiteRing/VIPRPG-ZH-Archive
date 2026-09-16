@@ -63,11 +63,11 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 
 - 关系不能指向自身。
 - 有明确反向语义的关系由服务层创建一条系统反向记录；反向记录只能独立排序，不能脱离正向记录改语义。
-- 同一逻辑关系只能存在一次；数据库索引与 `lib/server/db/relations.ts` 共同防止正反重复。
+- 同一逻辑关系只能存在一次；数据库索引与 `app/.server/db/relations.ts` 共同防止正反重复。
 - collaboration 没有自动反向语义时按显式记录处理。
 - `created_by_user_id` 记录创建者；公共入口保留添加，已有关系只允许管理员修改和删除。
 
-关系类型与反向映射的唯一实现位于 `lib/server/db/relations.ts` 和 `lib/labels.ts`。
+关系类型与反向映射的唯一实现位于 `app/.server/db/relations.ts` 和 `lib/labels.ts`。
 
 ### 翻译关系
 
@@ -154,7 +154,7 @@ target.mode=update
 
 Work 更新与 ArchiveVersion 创建必须在同一 commit 边界完成。不能先发布资料、后补文件引用，也不能因为同名作品自动合并；客户端必须提交明确 `workId`。
 
-commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/archive-commit.ts` 发布。前端字段不是领域契约的独立副本。
+commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `app/.server/db/archive-commit.ts` 发布。前端字段不是领域契约的独立副本。
 
 ## 5. 生命周期
 
@@ -191,7 +191,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `lib/server/db/arch
 - 作品与归档 own-scope 按 `work_uploaders` 判断；已删除作品不向维护者开放。目录 own-scope 按 owner 判断。
 - 删除、restore、current 和 any-scope 操作仍由领域服务检查目标状态。
 
-查询实现集中在 `lib/server/db/game-library.ts`、`creator-library.ts`、`taxonomy-library.ts`、`relations.ts` 和 `catalogs.ts`。
+查询实现集中在 `app/.server/db/game-library.ts`、`creator-library.ts`、`taxonomy-library.ts`、`relations.ts` 和 `catalogs.ts`。
 
 ## 7. 搜索
 

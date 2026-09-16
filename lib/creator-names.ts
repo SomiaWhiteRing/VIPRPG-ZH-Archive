@@ -28,7 +28,10 @@ export function creatorNameKey(value: string): string {
   return normalizeEntityName(value).toLocaleLowerCase();
 }
 
-export type ConfirmedCreatorSelection = Extract<CreatorSelection, { kind: "existing" }>;
+export type ConfirmedCreatorSelection = Extract<
+  CreatorSelection,
+  { kind: "existing" }
+>;
 
 export function creatorSelectionKey(value: CreatorSelection): string {
   return value.kind === "existing"

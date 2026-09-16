@@ -1,8 +1,48 @@
-import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
+import { parseAccountPage } from "@/app/.server/auth/account-user";
+import { searchUserComments } from "@/app/.server/db/work-community";
+import { requirePublicProfileSection } from "@/app/.server/public-user";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { parseAccountPage } from "@/lib/server/auth/account-user";
-import { searchUserComments } from "@/lib/server/db/work-community";
 import { AccountEmpty } from "@/app/components/profile/account-content";
-import { requirePublicProfileSection } from "../public-user";
-export const dynamic = "force-dynamic";
-export default async function PublicComments({ params, searchParams }: { params: Promise<{ userId: string }>; searchParams: Promise<{ page?: string | string[] }> }) { const user = await requirePublicProfileSection((await params).userId, "comments"); const page = parseAccountPage((await searchParams).page); const result = await searchUserComments({ userId: user.id, publicOnly: true, page, pageSize: 20 }); const base = `/users/${user.id}/comments`; return <section><h2>公开评论</h2>{result.items.length ? <CommentSummaryList items={result.items}  /> : <AccountEmpty>还没有公开评论。</AccountEmpty>}<PaginationLinks basePath={base} page={page} pageSize={result.pageSize} total={result.total} /></section>; }
+import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params, searchParams } = routeInput(args);
+  const user = await requirePublicProfileSection(
+    runtime,
+    (await params).userId,
+    "comments",
+  );
+  const page = parseAccountPage((await searchParams).page);
+  const result = await searchUserComments(runtime, {
+    userId: user.id,
+    publicOnly: true,
+    page,
+    pageSize: 20,
+  });
+  const base = `/users/${user.id}/comments`;
+  return { page, result, base };
+}
+
+export default function PublicComments() {
+  const { page, result, base } = useLoaderData<typeof loader>();
+  return (
+    <section>
+      <h2>公开评论</h2>
+      {result.items.length ? (
+        <CommentSummaryList items={result.items} />
+      ) : (
+        <AccountEmpty>还没有公开评论。</AccountEmpty>
+      )}
+      <PaginationLinks
+        basePath={base}
+        page={page}
+        pageSize={result.pageSize}
+        total={result.total}
+      />
+    </section>
+  );
+}

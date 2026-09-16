@@ -1,11 +1,11 @@
 # VIPRPG.org
 
-基于 Next.js、OpenNext 和 Cloudflare D1/R2 的 VIPRPG 游戏归档站。
+基于 Hono、React Router SSR 和 Cloudflare Workers/D1/R2 的 VIPRPG 游戏归档站。
 
 ## 环境要求
 
 - Windows、macOS 或 Linux
-- Node.js 22 LTS（`>=22.16.0`）或 24 及以上版本
+- Node.js 24 LTS（精确开发版本见 `.node-version`）
 - npm（随 Node.js 安装）
 
 ## 本地启动
@@ -13,7 +13,8 @@
 在仓库根目录执行：
 
 ```powershell
-npm install
+npm ci
+Copy-Item wrangler.example.jsonc wrangler.jsonc
 Copy-Item .env.example .env.local
 ```
 
@@ -52,7 +53,7 @@ npm run dev
 然后打开 <http://localhost:3000>。如果 3000 端口已被占用，可以指定其他端口：
 
 ```powershell
-npm run dev -- -p 3001
+npm run dev -- --port 3001
 ```
 
 ## 常用命令
@@ -64,13 +65,13 @@ npm run regression      # 串行运行 check + test，并保留回归报告
 npm run test:flow       # 预生产关键流程：Chromium、Worker、R2/OPFS
 npm run verify:preprod  # check + test:flow + production build
 npm run smoke:staging   # 已部署 staging 的最小健康检查
-npm run build           # Next.js 生产构建
-npm run preview         # OpenNext/Cloudflare Workers 本地预览
+npm run build           # Vite 浏览器资源与 SSR Worker 构建
+npm run preview         # 构建后在 workerd 中预览生产产物
 ```
 
 敏捷开发默认运行 `npm run regression`，或按改动选择 `npm run check` / `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。回归入口会串行执行有状态检查，并在 `output/regression/` 保留报告和阶段日志；失败分类与停止条件见 [`docs/maintenance-regression.md`](docs/maintenance-regression.md)。
 
-`npm run dev` 用于主站和论坛开发；验证 OpenNext、真实 Worker binding 和原生下载链路时使用 `npm run preview`。
+`npm run dev` 用于主站和论坛开发；开发环境即运行于 workerd；验证生产产物使用 `npm run preview`。
 
 论坛图片复用 `ARCHIVE_BUCKET`，无需额外图床密钥。原始文件单张最多 2 MiB，浏览器同格式处理后在发布时上传；读取权限和人工清理规则见[论坛设计文档](docs/forum-discussion-design.md#图片存储与清理)。
 
@@ -90,12 +91,13 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 npm run verify:preprod
 ```
 
-远程 D1 migration、部署和 smoke test 必须按目标环境串行执行。具体命令不在快速入门中复制，以 [`docs/README.md`](docs/README.md) 链接的 OpenNext 与 GitHub Actions 运行手册为准。
+远程 D1 migration、部署和 smoke test 必须按目标环境串行执行。具体命令不在快速入门中复制，以 [`docs/README.md`](docs/README.md) 链接的 Workers 与 GitHub Actions 运行手册为准。
 
 ## 目录概览
 
-- `app/`：Next.js App Router 页面和 API
-- `lib/`：归档、数据库、认证和 Cloudflare 运行时逻辑
+- `app/`：React Router 页面、loader、组件；`app/.server/`：Hono API、认证与业务服务
+- `lib/`：共享 DTO、领域规则和浏览器纯函数
+- `worker.ts`：Hono、SSR 与 scheduled 事件入口
 - `migrations/`：D1 统一初始化（上线前仅维护 `0001_init_archive_schema.sql`）
 - `public/play/`：EasyRPG Web Player 运行时
 - `scripts/`：本地数据库、种子数据、构建和 smoke test 脚本

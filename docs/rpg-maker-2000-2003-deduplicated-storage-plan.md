@@ -1,6 +1,6 @@
 # RPG Maker 2000/2003 去重存储架构
 
-本文定义归档文件进入 R2、D1、下载流和垃圾回收时必须保持的稳定边界。作品资料和 ArchiveVersion 关系见[游戏领域架构](./game-domain-architecture.md)，在线游玩本地安装见[EasyRPG 架构](./easyrpg-web-play-architecture.md)，Cloudflare 环境操作见[OpenNext 与 Cloudflare 运行手册](./opennext-cloudflare-development-path.md)。
+本文定义归档文件进入 R2、D1、下载流和垃圾回收时必须保持的稳定边界。作品资料和 ArchiveVersion 关系见[游戏领域架构](./game-domain-architecture.md)，在线游玩本地安装见[EasyRPG 架构](./easyrpg-web-play-architecture.md)，Cloudflare 环境操作见[Workers 与 React Router 运行手册](./workers-development.md)。
 
 认证、角色和授权只以[认证与权限基线](./authentication-authorization-baseline-plan.md)为准；本文不复制 permission key 或端点清单。
 
@@ -68,7 +68,7 @@ Manifest 自身按规范 JSON 字节计算 SHA-256。`archive_versions.manifest_
 
 ## 3. 对象键与身份
 
-R2 key 只由 `lib/server/storage/archive-keys.ts` 生成：
+R2 key 只由 `app/.server/storage/archive-keys.ts` 生成：
 
 - `blobKey(sha256)`
 - `corePackKey(sha256)`
@@ -148,7 +148,7 @@ Commit 是发布引用的唯一边界：
 4. 在同一 D1 batch 中写入 Work 变更、ArchiveVersion、对象引用和 import job 结果。
 5. 只有 commit 成功后，新归档才进入可管理的领域模型；失败不得留下半成品引用。
 
-核心校验集中在 `lib/server/db/archive-commit.ts`，客户端生成结果不构成信任依据。
+核心校验集中在 `app/.server/db/archive-commit.ts`，客户端生成结果不构成信任依据。
 
 ## 6. 下载重组
 
@@ -188,7 +188,7 @@ published Work + published current ArchiveVersion
 4. 只有引用计数为零且超过宽限期的 blob/core pack 才能进入 GC 候选。
 5. sweep 使用 `active -> purging -> purged` 状态转换；R2 删除失败恢复为 active 并报告。
 
-GC 实现位于 `lib/server/storage/admin-storage-checks.ts` 和 `worker/archive-gc.mjs`。最终 sweep 必须有权限、显式确认、固定批次上限和审计；dry-run 不得产生删除副作用。
+GC 实现位于 `app/.server/storage/admin-storage-checks.ts` 和 `worker/archive-gc.mjs`。最终 sweep 必须有权限、显式确认、固定批次上限和审计；dry-run 不得产生删除副作用。
 
 禁止根据“某个目录看起来不用了”直接删除 R2 prefix，也禁止只查单个 ArchiveVersion 就判断共享对象无引用。
 

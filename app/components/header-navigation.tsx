@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { Link } from "react-router";
 
 export type HeaderNavigationLink = {
   href: string;
@@ -42,7 +40,11 @@ export function HeaderNavigation({
         ref={navigationRef}
       >
         {links.map((link) => (
-          <HeaderNavigationItem key={link.href} link={link} pathname={pathname} />
+          <HeaderNavigationItem
+            key={link.href}
+            link={link}
+            pathname={pathname}
+          />
         ))}
       </nav>
       {mobileOpen ? (
@@ -93,7 +95,7 @@ function HeaderNavigationItem({
     <Link
       aria-current={active ? "page" : undefined}
       className={className}
-      href={link.href}
+      to={link.href}
       onClick={onNavigate}
     >
       {link.label}

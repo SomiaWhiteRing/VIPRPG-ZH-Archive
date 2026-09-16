@@ -1,7 +1,6 @@
-import Image from "next/image";
-import Link from "next/link";
+import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { formatDate, formatNumber } from "@/lib/format";
-import type { CatalogSummary } from "@/lib/server/db/catalogs";
+import { Link } from "react-router";
 
 export function CatalogListRow({ catalog }: { catalog: CatalogSummary }) {
   const href = `/catalogs/${catalog.id}`;
@@ -11,16 +10,16 @@ export function CatalogListRow({ catalog }: { catalog: CatalogSummary }) {
       <Link
         aria-label={`查看目录：${catalog.title}`}
         className="group relative block aspect-4/3 w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
-        href={href}
+        to={href}
       >
         {catalog.coverBlobSha256 ? (
-          <Image
+          <img
             alt=""
             className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
             height={96}
             src={`/api/media/blobs/${catalog.coverBlobSha256}`}
-            unoptimized
             width={128}
+            loading="lazy"
           />
         ) : (
           <span className="flex h-full items-center justify-center px-1 text-center font-mono text-[10.5px] text-muted">
@@ -32,7 +31,7 @@ export function CatalogListRow({ catalog }: { catalog: CatalogSummary }) {
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <Link
             className="text-[15.5px] font-bold leading-[1.45] hover:text-primary hover:underline hover:underline-offset-3"
-            href={href}
+            to={href}
           >
             {catalog.title}
           </Link>
@@ -48,16 +47,22 @@ export function CatalogListRow({ catalog }: { catalog: CatalogSummary }) {
             创建者{" "}
             <Link
               className="font-semibold text-primary hover:underline hover:underline-offset-2"
-              href={`/users/${catalog.ownerUserId}`}
+              to={`/users/${catalog.ownerUserId}`}
             >
               {catalog.ownerName}
             </Link>
           </span>
           <span>
-            创建于 <time className="font-mono" dateTime={catalog.createdAt}>{formatDate(catalog.createdAt)}</time>
+            创建于{" "}
+            <time className="font-mono" dateTime={catalog.createdAt}>
+              {formatDate(catalog.createdAt)}
+            </time>
           </span>
           <span>
-            更新于 <time className="font-mono" dateTime={catalog.updatedAt}>{formatDate(catalog.updatedAt)}</time>
+            更新于{" "}
+            <time className="font-mono" dateTime={catalog.updatedAt}>
+              {formatDate(catalog.updatedAt)}
+            </time>
           </span>
         </div>
       </div>

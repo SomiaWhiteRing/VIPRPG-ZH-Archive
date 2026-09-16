@@ -1,46 +1,45 @@
+import { unzipSync, zipSync } from "fflate";
 import assert from "node:assert/strict";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   createWriteStream,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { basename, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { unzipSync, zipSync } from "fflate";
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type Page,
-} from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
+import { chromium } from "playwright";
+import { hashSessionToken } from "../app/.server/auth/session";
 import { downloadZipBuilderVersion } from "../lib/archive/download";
-import { hashSessionToken } from "../lib/server/auth/session";
-// @ts-expect-error The shared command helper is intentionally a plain Node module.
 import { runWrangler } from "./run-wrangler.mjs";
+import { verifyEasyRpgGame } from "./easyrpg-flow-check";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-system-test-"));
 const persistRoot = join(tempDir, "state");
-const persistV3 = join(persistRoot, "v3");
 const configPath = join(tempDir, "wrangler.json");
+const nativeConfigPath = join(tempDir, "native-wrangler.json");
 const seedPath = join(tempDir, "seed.sql");
 const workerEntryPath = join(tempDir, "system-worker.mjs");
-const systemTestDistDir = `.next-system-test/${basename(tempDir)}`;
-const systemTestDistPath = resolve(projectRoot, systemTestDistDir);
-const systemTsconfigPath = resolve(projectRoot, `${systemTestDistDir}.tsconfig.json`);
-const nextCli = resolve(projectRoot, "node_modules/next/dist/bin/next");
 const wranglerCli = resolve(
   projectRoot,
   "node_modules/wrangler/wrangler-dist/cli.js",
 );
 const testMode = process.argv[2] ?? "contract";
+const gameIndex = process.argv.indexOf("--game");
+const gamePath = gameIndex >= 0 ? process.argv[gameIndex + 1] : undefined;
+if (gameIndex >= 0)
+  assert.ok(
+    testMode === "flow" && gamePath,
+    "--game requires flow and a ZIP path",
+  );
 assert.ok(
   testMode === "contract" || testMode === "flow",
   "usage: tsx scripts/system-self-check.ts [contract|flow]",
@@ -55,10 +54,12 @@ const coverBytes = new Uint8Array(
     "base64",
   ),
 );
-const sourceFiles = {
-  "RPG_RT.lmt": new TextEncoder().encode("system-test-map-tree"),
-  "Picture/system-test.png": coverBytes,
-};
+const sourceFiles = gamePath
+  ? unzipSync(readFileSync(gamePath))
+  : {
+      "RPG_RT.lmt": new TextEncoder().encode("system-test-map-tree"),
+      "Picture/system-test.png": coverBytes,
+    };
 const sourceZip = zipSync(sourceFiles, { level: 0 });
 const catalogWorkIds = [101, 102] as const;
 const managedChildren = new Set<ChildProcess>();
@@ -79,8 +80,9 @@ let browser: Browser | null = null;
 let context: BrowserContext | null = null;
 let page: Page | null = null;
 let passed = false;
+const browserErrors: string[] = [];
 
-const watchdogSeconds = testMode === "contract" ? 90 : 180;
+const watchdogSeconds = testMode === "contract" ? 90 : gamePath ? 360 : 180;
 const watchdog = setTimeout(() => {
   console.error(
     `[system:${testMode}] exceeded ${watchdogSeconds} seconds; artifacts preserved at ${tempDir}`,
@@ -95,14 +97,21 @@ try {
 } catch (error) {
   await captureFailure(page);
   const message = error instanceof Error ? error.message : String(error);
-  throw new Error(`${message}\nSystem-test artifacts: ${tempDir}`, { cause: error });
+  throw new Error(`${message}\nSystem-test artifacts: ${tempDir}`, {
+    cause: error,
+  });
 } finally {
   clearTimeout(watchdog);
   await closeBrowser(browser);
   await Promise.all([stopProcess(app), stopProcess(worker)]);
-  rmSync(systemTsconfigPath, { force: true });
-  rmSync(systemTestDistPath, { recursive: true, force: true });
-  if (passed) rmSync(tempDir, { recursive: true, force: true });
+  // Windows can release SQLite and log handles shortly after process-tree termination.
+  if (passed)
+    await rm(tempDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
 }
 
 async function run(): Promise<void> {
@@ -141,12 +150,22 @@ async function run(): Promise<void> {
   stage("exercise stable HTTP and catalog contracts");
   app = startApp(appPort, origin, "app-1.log");
   await waitForHttp(`${origin}/api/health`, app);
-  await expectStatus("anonymous admin boundary", origin, "/api/admin/summary", {}, 401);
+  await expectStatus(
+    "anonymous admin boundary",
+    origin,
+    "/api/admin/summary",
+    {},
+    401,
+  );
   await expectStatus(
     "missing Origin boundary",
     origin,
     "/api/imports",
-    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    },
     403,
   );
 
@@ -240,6 +259,7 @@ async function run(): Promise<void> {
       400,
     );
   }
+  await verifyPageContracts(origin, adminCookie);
   if (testMode === "contract") return;
 
   stage("prepare uploader permission for the preproduction flow");
@@ -269,55 +289,136 @@ async function run(): Promise<void> {
     200,
   );
 
-  stage("recover a real browser upload");
   browser = await chromium.launch({ headless: true });
+  await verifyEditorNavigation(browser, origin, adminCookie);
+  await verifyPermissionHistory(browser, origin);
+  stage("recover a real browser upload");
   context = await browser.newContext();
-  await context.addCookies([
-    {
-      name: "viprpg_session",
-      value: sessionToken(userCookie),
-      url: origin,
-    },
-  ]);
   page = await context.newPage();
+  page.on("pageerror", (error) => browserErrors.push(error.message));
   page.setDefaultTimeout(10_000);
   page.setDefaultNavigationTimeout(60_000);
+  await page.goto(`${origin}/login`);
+  await page.locator('input[name="email"]').fill("user@example.test");
+  await page.locator('input[name="password"]').fill(password);
+  await page
+    .locator('form[action="/api/auth/login"] button[type="submit"]')
+    .click();
+  await page.waitForURL(origin + "/");
+  const browserSession = (await context.cookies()).find(
+    (cookie) => cookie.name === "viprpg_session",
+  );
+  assert.ok(browserSession?.httpOnly && browserSession.sameSite === "Lax");
+  await verifyForumNavigation(page, origin);
   await page.goto(`${origin}/upload`, { waitUntil: "networkidle" });
-  const zipInput = page.locator('input[type="file"][accept=".zip,application/zip"]');
+  const zipInput = page.locator(
+    'input[type="file"][accept=".zip,application/zip"]',
+  );
   await zipInput.setInputFiles({
     name: "system-archive.zip",
     mimeType: "application/zip",
     buffer: Buffer.from(sourceZip),
   });
-  await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor({ timeout: 45_000 });
+  await page
+    .locator('[data-upload-phase="awaiting_metadata"]')
+    .waitFor({ timeout: 45_000 });
   const importJobId = await waitForUploadDraft(page);
+  const competingTab = await context.newPage();
+  await competingTab.goto(`${origin}/upload`, { waitUntil: "networkidle" });
+  await competingTab.locator('[data-upload-action="resume-draft"]').click();
+  await competingTab
+    .getByText("这个上传草稿正在另一个标签页中处理。", { exact: true })
+    .waitFor();
+  assert.equal(
+    await competingTab
+      .locator('[data-upload-phase="awaiting_metadata"]')
+      .count(),
+    0,
+    "another tab cannot take over an active upload",
+  );
+  await competingTab.close();
   await page.reload();
   await page.locator('[data-upload-action="resume-draft"]').click();
   await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor();
   await page.locator("#upload-original-title").fill("System Archive");
-  await page.locator('input[type="file"][accept="image/*"][required]').setInputFiles({
-    name: "cover.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(coverBytes),
-  });
+  await page.locator("#upload-release-date").click();
+  await page
+    .getByText(String(new Date().getFullYear()), { exact: true })
+    .click();
+  await page.locator("#upload-release-date").press("Escape");
+  await page
+    .locator('input[type="file"][accept="image/*"][required]')
+    .setInputFiles({
+      name: "cover.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(coverBytes),
+    });
+  await page.getByRole("button", { name: "选择封面", exact: true }).click();
+  await page.getByRole("button", { name: "使用此封面", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "设置封面" })
+    .waitFor({ state: "hidden" });
+  assert.equal(
+    await page
+      .locator("[data-upload-phase] form")
+      .evaluate((form) => (form as HTMLFormElement).checkValidity()),
+    true,
+    "complete upload metadata fixture",
+  );
   const [commitResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
-        new URL(response.url()).pathname === `/api/imports/${importJobId}/commit`,
+        new URL(response.url()).pathname ===
+          `/api/imports/${importJobId}/commit`,
       { timeout: 45_000 },
     ),
     page.locator('[data-upload-phase] form button[type="submit"]').click(),
   ]);
   if (commitResponse.status() !== 200) {
-    throw new Error(`archive commit: ${commitResponse.status()} ${await commitResponse.text()}`);
+    throw new Error(
+      `archive commit: ${commitResponse.status()} ${await commitResponse.text()}`,
+    );
   }
   const commitPayload = (await commitResponse.json()) as {
     result: { workId: number; archiveVersionId: number; fileCount: number };
   };
   const { workId, archiveVersionId } = commitPayload.result;
   assert.ok(workId > 0 && archiveVersionId > 0);
-  assert.equal(commitPayload.result.fileCount, 2);
+  assert.equal(commitPayload.result.fileCount, Object.keys(sourceFiles).length);
+  await waitForNoUploadDrafts(page);
+
+  stage("verify cancel-on-leave releases the upload draft");
+  await page.goto(`${origin}/upload`);
+  await page
+    .locator('input[type="file"][accept=".zip,application/zip"]')
+    .setInputFiles({
+      name: "cancel-archive.zip",
+      mimeType: "application/zip",
+      buffer: Buffer.from(sourceZip),
+    });
+  await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor();
+  const canceledJob = await waitForUploadDraft(page);
+  const dismissUploadLeave = (dialog: import("playwright").Dialog) =>
+    void dialog.dismiss();
+  page.on("dialog", dismissUploadLeave);
+  await page.locator('a[href="/games"]').first().click();
+  assert.equal(new URL(page.url()).pathname, "/upload");
+  page.off("dialog", dismissUploadLeave);
+  const acceptUploadLeave = (dialog: import("playwright").Dialog) =>
+    void dialog.accept();
+  page.on("dialog", acceptUploadLeave);
+  await page.locator('a[href="/games"]').first().click();
+  page.off("dialog", acceptUploadLeave);
+  await page.waitForURL(origin + "/games");
+  const canceled = await jsonResponse<{ importJob: { status: string } }>(
+    "canceled upload",
+    origin,
+    `/api/imports/${canceledJob}`,
+    { headers: { cookie: userCookie } },
+    200,
+  );
+  assert.equal(canceled.importJob.status, "canceled");
   await waitForNoUploadDrafts(page);
 
   stage("exercise archive deletion and restore");
@@ -325,7 +426,10 @@ async function run(): Promise<void> {
     "move archive to trash",
     origin,
     `/api/admin/archive-versions/${archiveVersionId}/delete`,
-    { method: "POST", headers: { accept: "application/json", cookie: userCookie, origin } },
+    {
+      method: "POST",
+      headers: { accept: "application/json", cookie: userCookie, origin },
+    },
     200,
   );
   await expectStatus(
@@ -339,7 +443,10 @@ async function run(): Promise<void> {
     "restore archive",
     origin,
     `/api/admin/archive-versions/${archiveVersionId}/restore`,
-    { method: "POST", headers: { accept: "application/json", cookie: adminCookie, origin } },
+    {
+      method: "POST",
+      headers: { accept: "application/json", cookie: adminCookie, origin },
+    },
     200,
   );
   const webPlay = await jsonResponse<{ playKey: string }>(
@@ -358,7 +465,9 @@ async function run(): Promise<void> {
   await waitForHttp(`${workerOrigin}/__system/health`, worker);
   const gcResponse = await fetch(`${workerOrigin}/__system/gc`);
   if (gcResponse.status !== 200) {
-    throw new Error(`scheduled GC: ${gcResponse.status} ${await gcResponse.text()}`);
+    throw new Error(
+      `scheduled GC: ${gcResponse.status} ${await gcResponse.text()}`,
+    );
   }
   const gc = (await gcResponse.json()) as {
     archiveVersions: { failedCount: number };
@@ -372,13 +481,24 @@ async function run(): Promise<void> {
     `${workerOrigin}/api/archive-versions/${archiveVersionId}/download?zip_builder=${encodeURIComponent(downloadZipBuilderVersion)}`,
   );
   if (download.status !== 200) {
-    throw new Error(`native download: ${download.status} ${await download.text()}`);
+    throw new Error(
+      `native download: ${download.status} ${await download.text()}`,
+    );
   }
-  assert.equal(download.headers.get("x-archive-version-id"), String(archiveVersionId));
-  assert.equal(download.headers.get("x-download-zip-builder"), downloadZipBuilderVersion);
+  assert.equal(
+    download.headers.get("x-archive-version-id"),
+    String(archiveVersionId),
+  );
+  assert.equal(
+    download.headers.get("x-download-zip-builder"),
+    downloadZipBuilderVersion,
+  );
   const nativeZip = new Uint8Array(await download.arrayBuffer());
   const extracted = unzipSync(nativeZip);
-  assert.deepEqual(Object.keys(extracted).sort(), Object.keys(sourceFiles).sort());
+  assert.deepEqual(
+    Object.keys(extracted).sort(),
+    Object.keys(sourceFiles).sort(),
+  );
   for (const [path, bytes] of Object.entries(sourceFiles)) {
     assert.deepEqual(extracted[path], bytes, `downloaded bytes for ${path}`);
   }
@@ -388,33 +508,576 @@ async function run(): Promise<void> {
   stage("install the native archive into Chromium OPFS and reload it");
   app = startApp(appPort, origin, "app-2.log");
   await waitForHttp(`${origin}/api/health`, app);
-  await context.route(
-    `**/api/archive-versions/${archiveVersionId}/download**`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        headers: {
-          "content-type": "application/zip",
-          "content-length": String(nativeZip.byteLength),
-          "x-download-zip-builder": downloadZipBuilderVersion,
-        },
-        body: Buffer.from(nativeZip),
-      }),
-  );
-  await page.goto(`${origin}/play/${archiveVersionId}`);
+  await page.goto(`${origin}/games/${workId}`);
+  await page.locator(`a[href="/play/${archiveVersionId}"]`).first().click();
+  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
   await page.locator('[data-web-play-action="install"]').click();
-  await page.locator('[data-web-play-status="ready"]').waitFor({ timeout: 45_000 });
+  await page
+    .locator('[data-web-play-status="ready"]')
+    .waitFor({ timeout: 45_000 });
   const opfs = await inspectOpfs(page, webPlay.playKey);
-  assert.deepEqual(opfs.rootEntries, ["index.json", "pack-index.json", "packs"]);
+  assert.deepEqual(opfs.rootEntries, [
+    "index.json",
+    "pack-index.json",
+    "packs",
+  ]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
+  const virtualFiles = await page.evaluate(
+    async ({ playKey, workId }) => {
+      const prefix = `/play/runtime/easyrpg/0.8.1.1/games/${playKey}`;
+      const valid = await fetch(prefix + "/RPG_RT.lmt");
+      const other = await fetch(
+        prefix.replace(playKey, playKey + "-other") + "/RPG_RT.lmt",
+      );
+      const wasm = await fetch("/play/runtime/easyrpg/0.8.1.1/index.wasm");
+      const wasmMime = wasm.headers.get("content-type");
+      await WebAssembly.compileStreaming(wasm);
+      const pageData = await fetch(`/games/${workId}.data`);
+      return {
+        pageData: pageData.status,
+        valid: valid.status,
+        body: await valid.text(),
+        other: other.status,
+        wasmMime,
+        scope: (await navigator.serviceWorker.getRegistration())?.scope,
+      };
+    },
+    { playKey: webPlay.playKey, workId },
+  );
+  assert.equal(virtualFiles.valid, 200);
+  assert.equal(virtualFiles.pageData, 200, "play SW must leave Router page data to the server");
+  assert.equal(
+    virtualFiles.body,
+    new TextDecoder().decode(sourceFiles["RPG_RT.lmt"]),
+  );
+  assert.equal(
+    virtualFiles.other,
+    404,
+    "uninstalled playKey cannot read a different version's files",
+  );
+  assert.match(virtualFiles.wasmMime ?? "", /application\/wasm/);
+  assert.equal(virtualFiles.scope, origin + "/play/");
   await page.reload();
   await page.locator('[data-web-play-status="ready"]').waitFor();
+  // Exercise the action button as well as the tab, from a document outside /play/.
+  await page.goto(`${origin}/games/${workId}`);
+  await page.locator(`a[href="/play/${archiveVersionId}"]`).last().click();
+  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
+  await page.locator('[data-web-play-status="ready"]').waitFor();
+  assert.equal(
+    await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL),
+    origin + "/play/sw.js",
+    "both play entry points must load a document controlled by the play worker",
+  );
+  assert.deepEqual(
+    browserErrors,
+    [],
+    "hydration and browser Workers have no uncaught errors",
+  );
+  if (gamePath) {
+    stage(
+      "run the official EasyRPG game, save/load, and verify player/installer lifetimes",
+    );
+    await verifyEasyRpgGame(page, origin, workId, archiveVersionId);
+    assert.deepEqual(
+      browserErrors,
+      [],
+      "real-game flow has no uncaught browser errors",
+    );
+  }
+}
+
+async function verifyEditorNavigation(
+  currentBrowser: Browser,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("verify editor state follows the entity through browser history");
+  const editorContext = await currentBrowser.newContext();
+  const editor = await editorContext.newPage();
+  try {
+    await editorContext.addCookies([
+      { name: "viprpg_session", value: adminCookie.split("=")[1], url: origin },
+    ]);
+    editor.on("pageerror", (error) => browserErrors.push(error.message));
+    editor.setDefaultTimeout(10_000);
+    const cases = [
+      {
+        paths: ["/admin/archive-versions/201", "/admin/archive-versions/202"],
+        field: 'input[name="source_name"]',
+        values: ["Editor Archive A", "Editor Archive B"],
+        targets: [201, 202].map(
+          (id) => `form[action="/api/admin/archive-versions/${id}/update"]`,
+        ),
+      },
+      {
+        paths: catalogWorkIds.map((id) => `/me/uploads/${id}`),
+        field: "#upload-original-title",
+        values: ["Contract Work A", "Contract Work B"],
+        targets: catalogWorkIds.map(
+          (id) => `form[action="/api/works/${id}/delete"]`,
+        ),
+      },
+    ];
+    for (const { paths, field, values, targets } of cases) {
+      await editor.goto(origin + paths[0]);
+      await editor.locator(field).waitFor();
+      assert.equal(await editor.locator(field).inputValue(), values[0]);
+      // Add a same-document history entry, then traverse it with native Back/Forward.
+      // No router globals or test-only product routes are needed.
+      await editor.evaluate((path) => {
+        history.pushState(
+          { ...history.state, idx: history.state.idx + 1 },
+          "",
+          path,
+        );
+      }, paths[1]);
+      await editor.goBack();
+      await editor.waitForURL(origin + paths[0]);
+      await editor.locator(field).fill("Unsaved value from A");
+      const originalDocument = await editor.locator("body").elementHandle();
+      await editor.goForward();
+      await editor.waitForURL(origin + paths[1]);
+      await editor.locator(targets[1]).waitFor({ state: "attached" });
+      assert.equal(
+        await originalDocument!.evaluate((body) => body === document.body),
+        true,
+        "history traversal must keep the document alive",
+      );
+      assert.equal(
+        await editor.locator(field).inputValue(),
+        values[1],
+        `${paths[1]} loaded its submission target but retained another entity's field value`,
+      );
+      if (paths[1].startsWith("/admin/archive-versions/")) {
+        assert.equal(
+          await editor.locator('input[name="archive_version_id"]').inputValue(),
+          "202",
+        );
+        const form = editor.locator(
+          'form:has(input[name="archive_version_id"])',
+        );
+        assert.equal(
+          await form.getAttribute("action"),
+          "/api/admin/archive-versions/202/update",
+        );
+        const submitted = await form.evaluate((element) =>
+          Object.fromEntries(new FormData(element as HTMLFormElement)),
+        );
+        assert.equal(submitted.status, "hidden");
+        assert.equal(submitted.source_url, "https://example.test/editor-b");
+      }
+      await editor.locator(field).fill("Unsaved value from B");
+      await editor.goBack();
+      await editor.waitForURL(origin + paths[0]);
+      await editor.locator(targets[0]).waitFor({ state: "attached" });
+      assert.equal(
+        await editor.locator(field).inputValue(),
+        values[0],
+        `${paths[0]} must restore its own data on Back navigation`,
+      );
+    }
+    await verifyCatalogEditorNavigation(editor, origin, adminCookie);
+    await verifyWorkDialogs(editor, origin, adminCookie);
+  } catch (error) {
+    await captureFailure(editor);
+    throw error;
+  } finally {
+    await editorContext.close();
+  }
+}
+
+async function verifyWorkDialogs(
+  editor: Page,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("verify hydrated game views and work dialog identity");
+  await editor.goto(origin + "/games", { waitUntil: "networkidle" });
+  await editor.locator('a[href="/games/101"]').first().waitFor();
+  for (const view of ["网格视图", "列表视图"]) {
+    await editor.getByRole("link", { name: view, exact: true }).click();
+    await editor.waitForLoadState("networkidle");
+    assert.ok(await editor.locator('a[href="/games/101"]').count());
+  }
+  await expectStatus(
+    "related navigation fixture",
+    origin,
+    "/api/works/101/relations",
+    jsonMutation(origin, adminCookie, {
+      targetWorkId: 102,
+      relationType: "same_setting",
+    }),
+    201,
+  );
+  const catalog = await jsonResponse<{ catalog: { id: number } }>(
+    "dialog catalog",
+    origin,
+    "/api/catalogs",
+    jsonMutation(origin, adminCookie, { title: "Dialog destination" }),
+    201,
+  );
+  await editor.goto(origin + "/games/101", { waitUntil: "networkidle" });
+  await editor.locator('a[href="/games/102"]').first().click();
+  await editor.waitForURL(origin + "/games/102");
+  await editor.getByRole("button", { name: "添加到目录", exact: true }).click();
+  await editor.getByRole("combobox", { name: "目录", exact: true }).click();
+  await editor
+    .getByRole("option", { name: "Dialog destination", exact: true })
+    .click();
+  // Successful revalidation of this same work preserves the open dialog and its selection.
+  const saved = editor.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/api/catalogs/${catalog.catalog.id}/items`) &&
+      r.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "添加", exact: true }).click();
+  assert.equal((await saved).status(), 200);
+  await editor.waitForLoadState("networkidle");
+  assert.equal(await editor.getByRole("dialog").count(), 1);
+  await editor.goBack();
+  await editor.waitForURL(origin + "/games/101");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+
+  await editor.goto(origin + "/games/102/relations", {
+    waitUntil: "networkidle",
+  });
+  for (const path of ["/games/102", "/games/101", "/games/101/relations"]) {
+    await editor.locator(`a[href="${path}"]`).first().click();
+    await editor.waitForURL(origin + path);
+  }
+  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
+  await editor
+    .getByRole("textbox", { name: "查找关联对象" })
+    .fill("Relation target C");
+  await editor.getByRole("button", { name: "查找", exact: true }).click();
+  await editor.getByRole("button", { name: "选择", exact: true }).click();
+  await editor.evaluate(() => history.go(-3));
+  await editor.waitForURL(origin + "/games/102/relations");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
+  assert.equal(
+    await editor.getByRole("textbox", { name: "查找关联对象" }).inputValue(),
+    "",
+  );
+  assert.equal(
+    await editor
+      .getByRole("button", { name: "建立关联", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await editor.getByRole("button", { name: "取消", exact: true }).click();
+}
+
+async function verifyPermissionHistory(
+  currentBrowser: Browser,
+  origin: string,
+) {
+  stage("protect permission drafts without the Navigation API");
+  const rootCookie = await login(origin, "root@example.test");
+  const rootContext = await currentBrowser.newContext();
+  try {
+    await rootContext.addCookies([
+      { name: "viprpg_session", value: rootCookie.split("=")[1], url: origin },
+    ]);
+    await rootContext.addInitScript(() =>
+      Object.defineProperty(window, "navigation", {
+        value: undefined,
+        configurable: true,
+      }),
+    );
+    const matrix = await rootContext.newPage();
+    await matrix.goto(origin + "/admin", { waitUntil: "networkidle" });
+    await matrix.locator('a[href="/admin/permissions"]').first().click();
+    await matrix.waitForURL(origin + "/admin/permissions");
+    await matrix
+      .locator("summary")
+      .filter({ hasText: "新建自定义角色" })
+      .click();
+    const field = matrix.locator('details input[name="name"]');
+    await field.fill("Unsaved role");
+    let accept = false;
+    matrix.on(
+      "dialog",
+      (dialog) => void (accept ? dialog.accept() : dialog.dismiss()),
+    );
+    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    await matrix.waitForURL(origin + "/admin/permissions");
+    assert.equal(await field.inputValue(), "Unsaved role");
+    accept = true;
+    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    await matrix.waitForURL(origin + "/admin");
+  } finally {
+    await rootContext.close();
+  }
+}
+
+async function verifyCatalogEditorNavigation(
+  editor: Page,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("prevent catalog drafts from being submitted to another catalog");
+  const catalogs: Array<{ id: number; title: string }> = [];
+  for (const title of ["Editor catalog A", "Editor catalog B"]) {
+    const result = await jsonResponse<{
+      catalog: { id: number; title: string };
+    }>(
+      "create editor catalog",
+      origin,
+      "/api/catalogs",
+      jsonMutation(origin, adminCookie, { title }),
+      201,
+    );
+    catalogs.push(result.catalog);
+  }
+  const [a, b] = catalogs;
+  await editor.goto(`${origin}/catalogs/${b.id}`);
+  await editor.locator(`a[href="/catalogs/${a.id}"]`).click();
+  await editor.waitForURL(`${origin}/catalogs/${a.id}`);
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  await editor.locator("#catalog-title").fill("Unsaved catalog A");
+  await editor.goBack();
+  await editor.waitForURL(`${origin}/catalogs/${b.id}`);
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  assert.equal(await editor.locator("#catalog-title").inputValue(), b.title);
+  await editor.locator("#catalog-title").fill("Updated catalog B");
+  const [saved] = await Promise.all([
+    editor.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        new URL(response.url()).pathname === `/api/catalogs/${b.id}`,
+    ),
+    editor.getByRole("button", { name: "保存资料", exact: true }).click(),
+  ]);
+  assert.equal(saved.status(), 200);
+  const result = (await saved.json()) as {
+    catalog: { id: number; title: string };
+  };
+  assert.equal(result.catalog.id, b.id);
+  assert.equal(result.catalog.title, "Updated catalog B");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.goForward();
+  await editor.waitForURL(`${origin}/catalogs/${a.id}`);
+  await editor.getByRole("heading", { name: a.title, exact: true }).waitFor();
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  assert.equal(await editor.locator("#catalog-title").inputValue(), a.title);
+}
+
+async function verifyForumNavigation(currentPage: Page, origin: string) {
+  stage(
+    "verify client navigation, forum publishing and unsaved draft protection",
+  );
+  await currentPage.goto(`${origin}/games/${catalogWorkIds[0]}`);
+  await currentPage.evaluate(() => {
+    (window as Window & { migrationDocument?: string }).migrationDocument =
+      "same-document";
+  });
+  await currentPage.locator('a[href="/discussions"]').first().click();
+  await currentPage.waitForURL(origin + "/discussions");
+  assert.equal(
+    await currentPage.evaluate(
+      () =>
+        (window as Window & { migrationDocument?: string }).migrationDocument,
+    ),
+    "same-document",
+  );
+  await currentPage
+    .getByRole("button", { name: "发布主题", exact: true })
+    .click();
+  await currentPage.locator("#forum-title").fill("SSR migration discussion");
+  await currentPage
+    .locator('[data-forum-editor] [contenteditable="true"]')
+    .fill("Published through the browser");
+  const jpeg = await currentPage.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 16;
+    canvas.getContext("2d")!.fillRect(0, 0, 16, 16);
+    return canvas.toDataURL("image/jpeg").split(",")[1];
+  });
+  await currentPage
+    .locator('[data-forum-editor] input[type="file"]')
+    .setInputFiles({
+      name: "forum.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(jpeg, "base64"),
+    });
+  await currentPage.locator("[data-forum-editor] img").first().waitFor();
+  await currentPage
+    .locator("[data-forum-editor]")
+    .getByRole("button", { name: "发布主题", exact: true })
+    .click();
+  await currentPage.waitForURL(/\/discussions\/\d+(?:[#?].*)?$/);
+  const topicUrl = currentPage.url();
+  await currentPage
+    .getByRole("button", { name: "更多操作", exact: true })
+    .first()
+    .click();
+  await currentPage
+    .getByRole("menuitem", { name: "编辑主题", exact: true })
+    .click();
+  await currentPage.locator("#forum-title").fill("Edited migration discussion");
+  await currentPage
+    .locator("[data-forum-editor]")
+    .getByRole("button", { name: "保存修改", exact: true })
+    .click();
+  await currentPage
+    .getByRole("heading", { name: "Edited migration discussion", exact: true })
+    .waitFor();
+  const raw = await fetch(topicUrl);
+  assert.ok((await raw.text()).includes("Edited migration discussion"));
+  await currentPage
+    .getByRole("button", { name: "回复主题……", exact: true })
+    .click();
+  await currentPage
+    .locator('[data-forum-editor] [contenteditable="true"]')
+    .fill("Draft must survive canceled navigation");
+  const confirmation = currentPage.getByRole("alertdialog");
+  await currentPage.locator('a[href="/games"]').first().click();
+  await confirmation.waitFor();
+  await confirmation.getByRole("button", { name: "取消", exact: true }).click();
+  assert.equal(currentPage.url(), topicUrl);
+  assert.ok(
+    (
+      await currentPage
+        .locator('[data-forum-editor] [contenteditable="true"]')
+        .textContent()
+    )?.includes("Draft must survive"),
+  );
+  await currentPage.locator('a[href="/games"]').first().click();
+  await confirmation.getByRole("button", { name: "舍弃", exact: true }).click();
+  await currentPage.waitForURL(origin + "/games");
+  await currentPage.goBack();
+  await currentPage.waitForURL(topicUrl);
+  await currentPage.goForward();
+  await currentPage.waitForURL(origin + "/games");
+}
+
+async function verifyPageContracts(origin: string, adminCookie: string) {
+  stage("verify SSR, routing and request isolation");
+  const document = await fetch(`${origin}/games/${catalogWorkIds[0]}`);
+  assert.equal(document.status, 200);
+  assert.equal(document.headers.get("cache-control"), "private, no-store");
+  const html = await document.text();
+  const visibleHtml = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  assert.ok(
+    visibleHtml.includes("Contract Work A"),
+    "public content is present before hydration",
+  );
+  assert.match(html, /<title>[^<]+<\/title>/);
+  for (const path of [
+    "/missing-page",
+    "/games/99999999",
+    "/assets/missing.js",
+    "/play/runtime/missing.wasm",
+  ]) {
+    const response = await fetch(origin + path);
+    assert.equal(response.status, 404, path);
+    if (path.startsWith("/assets/") || path.startsWith("/play/runtime/")) {
+      assert.ok(
+        !(await response.text()).includes("__reactRouter"),
+        "missing assets cannot fall through to SSR",
+      );
+    }
+  }
+  const missingApi = await fetch(`${origin}/api/not-a-route`);
+  assert.equal(missingApi.status, 404);
+  assert.match(
+    missingApi.headers.get("content-type") ?? "",
+    /application\/json/,
+  );
+  const method = await fetch(`${origin}/api/health`, { method: "POST" });
+  assert.equal(method.status, 405);
+  const head = await fetch(`${origin}/games/${catalogWorkIds[0]}`, {
+    method: "HEAD",
+  });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+
+  const memberCookie = await login(origin, "user@example.test");
+  for (const path of ["/me", "/me/discussions"]) {
+    await expectStatus(
+      "own discussion history",
+      origin,
+      path,
+      { headers: { cookie: memberCookie } },
+      200,
+    );
+  }
+  for (const path of [
+    "/admin/users",
+    "/admin/users.data?_routes=admin/users/page",
+    "/me/profile.data?_routes=me/profile/page",
+  ]) {
+    const anonymous = await fetch(origin + path, { redirect: "manual" });
+    const dataRequest = path.includes(".data");
+    if (dataRequest) {
+      const data = await anonymous.text();
+      assert.ok(
+        anonymous.status >= 300 || data.includes("/login"),
+        "data loaders independently enforce login",
+      );
+      assert.ok(!data.includes("root@example.test"));
+    } else {
+      assert.equal(anonymous.status, 307);
+      assert.match(anonymous.headers.get("location") ?? "", /^\/login/);
+    }
+  }
+  const denied = await fetch(
+    `${origin}/admin/users.data?_routes=admin/users/page`,
+    { headers: { cookie: memberCookie }, redirect: "manual" },
+  );
+  const deniedBody = await denied.text();
+  assert.ok(
+    denied.status >= 300 ||
+      (deniedBody.includes("redirect") && deniedBody.includes('"/"')),
+    "child loader preserves the permission-denied redirect",
+  );
+  assert.ok(!deniedBody.includes("root@example.test"));
+  // Serial requests through one live isolate expose accidental module-level user caching.
+  for (const [cookie, expected, absent] of [
+    [adminCookie, "Admin", "user@example.test"],
+    [memberCookie, "User", "admin@example.test"],
+    [adminCookie, "Admin", "user@example.test"],
+  ]) {
+    const response = await fetch(`${origin}/me/profile`, {
+      headers: { cookie },
+    });
+    assert.equal(response.status, 200);
+    const content = await response.text();
+    assert.ok(content.includes(expected));
+    assert.ok(
+      !content.includes(absent),
+      "identity cannot leak across requests",
+    );
+    assert.ok(
+      !content.includes("pbkdf2-sha256$") &&
+        !content.includes("sessionHash") &&
+        !content.includes("passwordHash"),
+      "private auth fields cannot enter hydration data",
+    );
+  }
+  const sw = await fetch(`${origin}/play/sw.js`);
+  assert.equal(sw.status, 200);
+  assert.match(sw.headers.get("cache-control") ?? "", /no-store/);
+  const player = await fetch(`${origin}/play/player.html`);
+  assert.equal(player.status, 200);
+  assert.match(player.headers.get("content-type") ?? "", /text\/html/);
+  assert.match(player.headers.get("cache-control") ?? "", /no-store/);
+  assert.ok(!(await player.text()).includes("__reactRouter"));
 }
 
 function writeTestFiles(origin: string): void {
-  const workerImport = modulePath(relative(tempDir, resolve(projectRoot, "worker/archive-download.mjs")));
-  const gcImport = modulePath(relative(tempDir, resolve(projectRoot, "worker/archive-gc.mjs")));
-  const migrationsDir = modulePath(relative(tempDir, resolve(projectRoot, "migrations")));
+  const workerImport = modulePath(
+    relative(tempDir, resolve(projectRoot, "worker/archive-download.mjs")),
+  );
+  const gcImport = modulePath(
+    relative(tempDir, resolve(projectRoot, "worker/archive-gc.mjs")),
+  );
+  const migrationsDir = modulePath(
+    relative(tempDir, resolve(projectRoot, "migrations")),
+  );
   writeFileSync(
     workerEntryPath,
     `import { maybeHandleArchiveDownload } from ${JSON.stringify(workerImport)};
@@ -466,15 +1129,26 @@ export default {
     )}\n`,
     "utf8",
   );
-  mkdirSync(resolve(projectRoot, ".next-system-test"), { recursive: true });
+  const nativeConfig = JSON.parse(readFileSync(configPath, "utf8"));
+  writeFileSync(nativeConfigPath, JSON.stringify(nativeConfig));
+  const serverEntry = resolve(projectRoot, "build/server/index.js");
+  assert.ok(
+    existsSync(serverEntry),
+    "Run npm run build before the system checks",
+  );
   writeFileSync(
-    systemTsconfigPath,
-    `${JSON.stringify(
-      { extends: "../tsconfig.json", exclude: ["../node_modules", "../.next", "."] },
-      null,
-      2,
-    )}\n`,
-    "utf8",
+    configPath,
+    JSON.stringify({
+      ...nativeConfig,
+      main: serverEntry,
+      assets: {
+        directory: resolve(projectRoot, "build/client"),
+        binding: "ASSETS",
+        html_handling: "none",
+        not_found_handling: "none",
+      },
+      vars: { ...nativeConfig.vars, AUTH_SECRET: "system-self-check-secret" },
+    }),
   );
 }
 
@@ -495,23 +1169,60 @@ INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
 VALUES
   (${catalogWorkIds[0]}, 'Contract Work A', 'published', 2, CURRENT_TIMESTAMP),
   (${catalogWorkIds[1]}, 'Contract Work B', 'published', 2, CURRENT_TIMESTAMP);
+UPDATE works SET engine_family='rpg_maker_mv' WHERE id IN (${catalogWorkIds.join(",")});
+INSERT INTO work_external_links (work_id, label, url, link_type)
+VALUES (${catalogWorkIds[0]}, 'Download', 'https://example.test/a', 'download_page'),
+       (${catalogWorkIds[1]}, 'Download', 'https://example.test/b', 'download_page');
+INSERT INTO work_uploaders (work_id, user_id)
+VALUES (${catalogWorkIds[0]}, 2), (${catalogWorkIds[1]}, 2);
+${
+  testMode === "flow"
+    ? `
+INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
+VALUES (103, 'Relation target C', 'published', 2, CURRENT_TIMESTAMP);
+INSERT INTO works (id, original_title, status, created_by_user_id)
+VALUES (201, 'Editor Archive Work A', 'hidden', 2),
+       (202, 'Editor Archive Work B', 'hidden', 2);
+INSERT INTO archive_versions (id, work_id, source_name, source_url,
+  manifest_sha256, file_policy_version, packer_version, source_type, status)
+VALUES (201, 201, 'Editor Archive A', 'https://example.test/editor-a',
+  '${"a".repeat(64)}', '1', '1', 'browser_zip', 'published'),
+       (202, 202, 'Editor Archive B', 'https://example.test/editor-b',
+  '${"b".repeat(64)}', '1', '1', 'browser_zip', 'hidden');
+`
+    : ""
+}
 `;
 }
 
-function startApp(port: number, origin: string, logName: string): ManagedProcess {
+function startApp(
+  port: number,
+  _origin: string,
+  logName: string,
+): ManagedProcess {
   return startProcess(
-    "Next dev server",
-    [nextCli, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
+    "production Worker",
+    [
+      wranglerCli,
+      "dev",
+      "--config",
+      configPath,
+      "--local",
+      "--persist-to",
+      persistRoot,
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--show-interactive-dev-session=false",
+      "--log-level",
+      "warn",
+    ],
     join(tempDir, logName),
     {
-      APP_ORIGIN: origin,
-      AUTH_SECRET: "system-self-check-secret",
       CI: "true",
-      NEXT_TELEMETRY_DISABLED: "1",
-      SYSTEM_TEST_PERSIST_PATH: persistV3,
-      SYSTEM_TEST_WRANGLER_CONFIG: configPath,
-      SYSTEM_TEST_DIST_DIR: systemTestDistDir,
       WRANGLER_SEND_METRICS: "false",
+      CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
     },
   );
 }
@@ -523,7 +1234,7 @@ function startWorker(port: number): ManagedProcess {
       wranglerCli,
       "dev",
       "--config",
-      configPath,
+      nativeConfigPath,
       "--local",
       "--persist-to",
       persistRoot,
@@ -546,7 +1257,9 @@ async function login(origin: string, email: string): Promise<string> {
     redirect: "manual",
   });
   assert.equal(response.status, 303, `login status for ${email}`);
-  const cookie = response.headers.get("set-cookie")?.match(/viprpg_session=[A-Za-z0-9_-]{43}/)?.[0];
+  const cookie = response.headers
+    .get("set-cookie")
+    ?.match(/viprpg_session=[A-Za-z0-9_-]{43}/)?.[0];
   assert.ok(cookie, `opaque session cookie for ${email}`);
   return cookie;
 }
@@ -558,7 +1271,10 @@ async function expectStatus(
   init: RequestInit,
   expected: number,
 ): Promise<Response> {
-  const response = await fetch(new URL(path, origin), { redirect: "manual", ...init });
+  const response = await fetch(new URL(path, origin), {
+    redirect: "manual",
+    ...init,
+  });
   if (response.status !== expected) {
     throw new Error(
       `${label}: expected ${expected}, received ${response.status}: ${await response.text()}`,
@@ -625,7 +1341,10 @@ async function waitForUploadDraft(currentPage: Page): Promise<number> {
     return rows[0]?.serverImportJobId ?? 0;
   });
   const id = await handle.jsonValue();
-  assert.ok(Number.isSafeInteger(id) && id > 0, "upload recovery draft has an import id");
+  assert.ok(
+    Number.isSafeInteger(id) && id > 0,
+    "upload recovery draft has an import id",
+  );
   return id;
 }
 
@@ -690,12 +1409,17 @@ function startProcess(
   return { child, label, logPath };
 }
 
-async function waitForHttp(url: string, process: ManagedProcess): Promise<void> {
+async function waitForHttp(
+  url: string,
+  process: ManagedProcess,
+): Promise<void> {
   const deadline = Date.now() + 60_000;
   let lastError = "not ready";
   while (Date.now() < deadline) {
     if (process.child.exitCode !== null) {
-      throw new Error(`${process.label} exited early:\n${logTail(process.logPath)}`);
+      throw new Error(
+        `${process.label} exited early:\n${logTail(process.logPath)}`,
+      );
     }
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
@@ -714,9 +1438,25 @@ async function waitForHttp(url: string, process: ManagedProcess): Promise<void> 
 async function stopProcess(managed: ManagedProcess | null): Promise<void> {
   const child = managed?.child;
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
-  child.kill();
-  if (await Promise.race([closed.then(() => true), delay(3_000).then(() => false)])) return;
+  const closed = new Promise<void>((resolve) =>
+    child.once("close", () => resolve()),
+  );
+  if (process.platform === "win32" && child.pid) {
+    // Terminate the process tree before the parent exits, so workerd releases D1/R2 files.
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    child.kill();
+  }
+  if (
+    await Promise.race([
+      closed.then(() => true),
+      delay(3_000).then(() => false),
+    ])
+  )
+    return;
   if (process.platform === "win32" && child.pid) {
     spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
       stdio: "ignore",
@@ -758,12 +1498,6 @@ async function freePort(): Promise<number> {
       server.close((error) => (error ? reject(error) : resolvePort(port)));
     });
   });
-}
-
-function sessionToken(cookie: string): string {
-  const token = cookie.split("=", 2)[1];
-  assert.ok(token);
-  return token;
 }
 
 function sqlQuote(value: string): string {

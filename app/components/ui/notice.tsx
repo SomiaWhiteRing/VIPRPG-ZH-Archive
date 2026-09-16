@@ -7,6 +7,17 @@ const tones = {
   warning: "border-amber-300 bg-amber-50 text-amber-900",
 };
 
-export function Notice({ tone = "error", className, role, ...props }: ComponentProps<"p"> & { tone?: keyof typeof tones }) {
-  return <p className={cn("rounded-md border p-3 text-sm", tones[tone], className)} role={role ?? (tone === "error" ? "alert" : "status")} {...props} />;
+export function Notice({
+  tone = "error",
+  className,
+  role,
+  ...props
+}: ComponentProps<"p"> & { tone?: keyof typeof tones }) {
+  return (
+    <p
+      className={cn("rounded-md border p-3 text-sm", tones[tone], className)}
+      role={role ?? (tone === "error" ? "alert" : "status")}
+      {...props}
+    />
+  );
 }

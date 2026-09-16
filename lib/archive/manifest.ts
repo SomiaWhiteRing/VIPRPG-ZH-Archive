@@ -132,7 +132,15 @@ export type ArchiveCommitMetadata = {
   }>;
   workStaff: Array<{
     selection: CreatorSelection;
-    roleKey: "author" | "scenario" | "graphics" | "music" | "planning" | "programming" | "translator" | "other";
+    roleKey:
+      | "author"
+      | "scenario"
+      | "graphics"
+      | "music"
+      | "planning"
+      | "programming"
+      | "translator"
+      | "other";
     roleLabel: string | null;
     notes: string | null;
   }>;
@@ -141,7 +149,13 @@ export type ArchiveCommitMetadata = {
     work: Array<{
       label: string;
       url: string;
-      linkType: "official" | "wiki" | "source" | "video" | "download_page" | "other";
+      linkType:
+        | "official"
+        | "wiki"
+        | "source"
+        | "video"
+        | "download_page"
+        | "other";
     }>;
   };
 };

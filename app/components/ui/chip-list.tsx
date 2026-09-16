@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Badge } from "@/app/components/ui/badge";
+import { Link } from "react-router";
 
 type ChipListProps = {
   compact?: boolean;
@@ -12,11 +12,13 @@ type ChipListProps = {
 
 export function ChipList({ compact = false, items }: ChipListProps) {
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${compact ? "gap-1" : ""}`}>
+    <div
+      className={`flex flex-wrap items-center gap-2 ${compact ? "gap-1" : ""}`}
+    >
       {items.map((item, index) =>
         item.href ? (
           <Link
-            href={item.href}
+            to={item.href}
             key={`${item.href}-${item.label}-${index}`}
             rel={item.external ? "noreferrer" : undefined}
             target={item.external ? "_blank" : undefined}

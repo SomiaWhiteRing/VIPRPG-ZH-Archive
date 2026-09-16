@@ -1,15 +1,16 @@
-import { buttonVariants } from "@/app/components/ui/button";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { getAdminObservability } from "@/app/.server/db/admin-observability";
+import { runtimeContext } from "@/app/.server/router-context";
+import { runGcDryRun } from "@/app/.server/storage/admin-storage-checks";
 import { AdminOperationPanel } from "@/app/admin/admin-operation-panel";
+import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { StatList } from "@/app/components/ui/stat-list";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
 import { hasPermission } from "@/lib/authz/permissions";
-import { getAdminObservability } from "@/lib/server/db/admin-observability";
-import { runGcDryRun } from "@/lib/server/storage/admin-storage-checks";
-import { formatNumber, formatBytes } from "@/lib/format";
-
-export const dynamic = "force-dynamic";
+import { formatBytes, formatNumber } from "@/lib/format";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
 const HEALTH_LINKS = [
   { href: "/api/health", label: "查看运行状态" },
@@ -21,11 +22,20 @@ const HEALTH_LINKS = [
   { href: "/api/admin/gc/dry-run", label: "运行清理预演" },
 ];
 
-export default async function AdminMaintenancePage() {
-  const adminUser = await requirePagePermission("/admin/maintenance", "system.maintenance.run");
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+
+  const adminUser = await requirePagePermission(
+    runtime,
+    "/admin/maintenance",
+    "system.maintenance.run",
+  );
   const canRunFinalCleanup = hasPermission(adminUser, "storage.gc.sweep");
 
-  const [observability, gcDryRun] = await Promise.all([getAdminObservability(), runGcDryRun({ sampleLimit: 5 })]);
+  const [observability, gcDryRun] = await Promise.all([
+    getAdminObservability(runtime),
+    runGcDryRun(runtime, { sampleLimit: 5 }),
+  ]);
 
   const downloadMetrics: Array<[string, string]> = [
     ["总下载次数", formatNumber(observability.downloads.totalDownloadCount)],
@@ -33,7 +43,10 @@ export default async function AdminMaintenancePage() {
     ["缓存未命中", formatNumber(observability.downloads.cacheMissCount)],
     ["下载失败", formatNumber(observability.downloads.failureCount)],
     ["对象存储读取", formatNumber(observability.downloads.totalR2GetCount)],
-    ["缓存减少读取", formatNumber(observability.downloads.estimatedR2GetSavedByCache)],
+    [
+      "缓存减少读取",
+      formatNumber(observability.downloads.estimatedR2GetSavedByCache),
+    ],
     ["ZIP 下载流量", formatBytes(observability.downloads.totalBytesServed)],
   ];
 
@@ -60,14 +73,28 @@ export default async function AdminMaintenancePage() {
     ],
   ];
 
+  return { canRunFinalCleanup, gcDryRun, downloadMetrics, gcMetrics };
+}
+
+export default function AdminMaintenancePage() {
+  const { canRunFinalCleanup, gcDryRun, downloadMetrics, gcMetrics } =
+    useLoaderData<typeof loader>();
   return (
     <main>
-      <PageHeader compact title="维护与一致性" subtitle="先检查当前状态和清理范围，再执行会修改数据的操作。" />
+      <PageHeader
+        compact
+        title="维护与一致性"
+        subtitle="先检查当前状态和清理范围，再执行会修改数据的操作。"
+      />
 
       <Pane heading="只读诊断">
         <div className="flex flex-wrap items-center gap-3">
           {HEALTH_LINKS.map((link) => (
-            <a className={buttonVariants({ variant: "outline" })} href={link.href} key={link.href}>
+            <a
+              className={buttonVariants({ variant: "outline" })}
+              href={link.href}
+              key={link.href}
+            >
               {link.label}
             </a>
           ))}
@@ -76,17 +103,25 @@ export default async function AdminMaintenancePage() {
 
       <section className="grid gap-3 md:grid-cols-2" aria-label="观测摘要">
         <Pane heading="下载观测">
-          <StatList items={downloadMetrics.map(([label, value]) => ({ label, value }))} />
+          <StatList
+            items={downloadMetrics.map(([label, value]) => ({ label, value }))}
+          />
         </Pane>
 
         <Pane heading="清理预演">
-          <p className="text-sm text-muted">预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。</p>
-          <StatList items={gcMetrics.map(([label, value]) => ({ label, value }))} />
+          <p className="text-sm text-muted">
+            预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。
+          </p>
+          <StatList
+            items={gcMetrics.map(([label, value]) => ({ label, value }))}
+          />
         </Pane>
       </section>
 
       <Pane heading="执行维护" tone="danger">
-        <p className="text-sm">最终清理会永久删除已进入清理范围的文件引用和对象，无法撤销。</p>
+        <p className="text-sm">
+          最终清理会永久删除已进入清理范围的文件引用和对象，无法撤销。
+        </p>
         <AdminOperationPanel canRunFinalCleanup={canRunFinalCleanup} />
       </Pane>
     </main>

@@ -1,0 +1,357 @@
+import { getD1 } from "@/app/.server/db/d1";
+import type { AppRuntime } from "@/app/.server/runtime";
+import type {
+  AdminImportJobDetail,
+  AdminObservability,
+  RecentImportJob,
+  StatusCount,
+} from "@/lib/dto/db/admin-observability";
+
+type ImportTotalsRow = {
+  total_source_size_bytes: number | null;
+  total_accepted_size_bytes: number | null;
+  total_excluded_size_bytes: number | null;
+  total_missing_blob_count: number | null;
+  total_missing_core_pack_count: number | null;
+  total_missing_blob_size_bytes: number | null;
+  total_missing_core_pack_size_bytes: number | null;
+  total_uploaded_blob_count: number | null;
+  total_uploaded_blob_size_bytes: number | null;
+  total_uploaded_core_pack_count: number | null;
+  total_uploaded_core_pack_size_bytes: number | null;
+  total_manifest_size_bytes: number | null;
+  total_r2_put_count: number | null;
+  average_preflight_duration_ms: number | null;
+  average_upload_duration_ms: number | null;
+  average_commit_duration_ms: number | null;
+};
+
+type DownloadTotalsRow = {
+  build_count: number | null;
+  total_download_count: number | null;
+  cache_hit_count: number | null;
+  cache_miss_count: number | null;
+  cache_bypass_count: number | null;
+  failure_count: number | null;
+  total_r2_get_count: number | null;
+  total_bytes_served: number | null;
+  cached_bytes_served: number | null;
+  estimated_r2_get_saved_by_cache: number | null;
+};
+
+type RecentImportRow = {
+  id: number;
+  work_id: number | null;
+  work_title: string | null;
+  status: string;
+  source_name: string | null;
+  source_size_bytes: number | null;
+  file_count: number;
+  excluded_file_count: number;
+  excluded_size_bytes: number;
+  missing_blob_count: number;
+  missing_core_pack_count: number;
+  uploaded_blob_count: number;
+  uploaded_blob_size_bytes: number;
+  uploaded_core_pack_count: number;
+  uploaded_core_pack_size_bytes: number;
+  r2_put_count: number;
+  preflight_duration_ms: number | null;
+  upload_duration_ms: number;
+  commit_duration_ms: number | null;
+  failed_stage: string | null;
+  error_message: string | null;
+  archive_version_id: number | null;
+  uploader_name: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+type RecentDownloadRow = {
+  id: number;
+  archive_version_id: number;
+  work_title: string;
+  download_count: number;
+  cache_hit_count: number;
+  cache_miss_count: number;
+  failure_count: number;
+  total_r2_get_count: number;
+  size_bytes: number | null;
+  last_cache_status: string | null;
+  last_duration_ms: number | null;
+  last_error_message: string | null;
+  last_accessed_at: string | null;
+};
+
+type ExpensiveArchiveRow = {
+  archive_version_id: number;
+  work_title: string;
+  total_files: number;
+  total_size_bytes: number;
+  estimated_r2_get_count: number;
+};
+
+export async function getAdminObservability(
+  runtime: AppRuntime,
+): Promise<AdminObservability> {
+  const database = getD1(runtime);
+  const results = await database.batch([
+    database.prepare(
+      `SELECT status,COUNT(*) AS count
+       FROM import_jobs GROUP BY status ORDER BY count DESC,status`,
+    ),
+    database.prepare(
+      `SELECT
+         SUM(source_size_bytes) AS total_source_size_bytes,
+         SUM(COALESCE(source_size_bytes,0)-excluded_size_bytes) AS total_accepted_size_bytes,
+         SUM(excluded_size_bytes) AS total_excluded_size_bytes,
+         SUM(missing_blob_count) AS total_missing_blob_count,
+         SUM(missing_core_pack_count) AS total_missing_core_pack_count,
+         SUM(missing_blob_size_bytes) AS total_missing_blob_size_bytes,
+         SUM(missing_core_pack_size_bytes) AS total_missing_core_pack_size_bytes,
+         SUM(uploaded_blob_count) AS total_uploaded_blob_count,
+         SUM(uploaded_blob_size_bytes) AS total_uploaded_blob_size_bytes,
+         SUM(uploaded_core_pack_count) AS total_uploaded_core_pack_count,
+         SUM(uploaded_core_pack_size_bytes) AS total_uploaded_core_pack_size_bytes,
+         SUM(manifest_size_bytes) AS total_manifest_size_bytes,
+         SUM(r2_put_count) AS total_r2_put_count,
+         AVG(preflight_duration_ms) AS average_preflight_duration_ms,
+         AVG(NULLIF(upload_duration_ms,0)) AS average_upload_duration_ms,
+         AVG(commit_duration_ms) AS average_commit_duration_ms
+       FROM import_jobs`,
+    ),
+    database.prepare(
+      `${adminImportSelect()} ORDER BY ij.created_at DESC LIMIT 10`,
+    ),
+    database.prepare(
+      `SELECT COUNT(*) AS build_count,
+         SUM(download_count) AS total_download_count,
+         SUM(cache_hit_count) AS cache_hit_count,
+         SUM(cache_miss_count) AS cache_miss_count,
+         SUM(cache_bypass_count) AS cache_bypass_count,
+         SUM(failure_count) AS failure_count,
+         SUM(total_r2_get_count) AS total_r2_get_count,
+         SUM(COALESCE(size_bytes,0)*download_count) AS total_bytes_served,
+         SUM(COALESCE(size_bytes,0)*cache_hit_count) AS cached_bytes_served,
+         SUM(COALESCE(estimated_r2_get_count,0)*cache_hit_count) AS estimated_r2_get_saved_by_cache
+       FROM download_builds`,
+    ),
+    database.prepare(
+      `SELECT db.id,db.archive_version_id,
+         COALESCE(w.chinese_title,w.original_title) AS work_title,
+         db.download_count,db.cache_hit_count,db.cache_miss_count,db.failure_count,
+         db.total_r2_get_count,db.size_bytes,db.last_cache_status,db.last_duration_ms,
+         db.last_error_message,db.last_accessed_at
+       FROM download_builds db
+       JOIN archive_versions av ON av.id=db.archive_version_id
+       JOIN works w ON w.id=av.work_id
+       ORDER BY db.last_accessed_at DESC LIMIT 10`,
+    ),
+    database.prepare(
+      `SELECT av.id AS archive_version_id,
+         COALESCE(w.chinese_title,w.original_title) AS work_title,
+         av.total_files,av.total_size_bytes,av.estimated_r2_get_count
+       FROM archive_versions av JOIN works w ON w.id=av.work_id
+       WHERE av.status='published'
+       ORDER BY av.estimated_r2_get_count DESC,av.total_size_bytes DESC LIMIT 10`,
+    ),
+  ]);
+  const importStatusCounts = (results[0].results ?? []) as StatusCount[];
+  const importTotals = (results[1].results?.[0] ??
+    {}) as Partial<ImportTotalsRow>;
+  const recentImports = ((results[2].results ?? []) as RecentImportRow[]).map(
+    mapRecentImport,
+  );
+  const downloadTotals = (results[3].results?.[0] ??
+    {}) as Partial<DownloadTotalsRow>;
+  const recentDownloads = (
+    (results[4].results ?? []) as RecentDownloadRow[]
+  ).map((row) => ({
+    id: row.id,
+    archiveVersionId: row.archive_version_id,
+    workTitle: row.work_title,
+    downloadCount: row.download_count,
+    cacheHitCount: row.cache_hit_count,
+    cacheMissCount: row.cache_miss_count,
+    failureCount: row.failure_count,
+    totalR2GetCount: row.total_r2_get_count,
+    sizeBytes: row.size_bytes,
+    lastCacheStatus: row.last_cache_status,
+    lastDurationMs: row.last_duration_ms,
+    lastErrorMessage: row.last_error_message,
+    lastAccessedAt: row.last_accessed_at,
+  }));
+  const expensiveArchives = (
+    (results[5].results ?? []) as ExpensiveArchiveRow[]
+  ).map((row) => ({
+    archiveVersionId: row.archive_version_id,
+    workTitle: row.work_title,
+    totalFiles: row.total_files,
+    totalSizeBytes: row.total_size_bytes,
+    estimatedR2GetCount: row.estimated_r2_get_count,
+  }));
+
+  return {
+    imports: {
+      statusCounts: importStatusCounts,
+      totalSourceSizeBytes: importTotals.total_source_size_bytes ?? 0,
+      totalAcceptedSizeBytes: importTotals.total_accepted_size_bytes ?? 0,
+      totalExcludedSizeBytes: importTotals.total_excluded_size_bytes ?? 0,
+      totalMissingBlobCount: importTotals.total_missing_blob_count ?? 0,
+      totalMissingCorePackCount:
+        importTotals.total_missing_core_pack_count ?? 0,
+      totalMissingBlobSizeBytes:
+        importTotals.total_missing_blob_size_bytes ?? 0,
+      totalMissingCorePackSizeBytes:
+        importTotals.total_missing_core_pack_size_bytes ?? 0,
+      totalUploadedBlobCount: importTotals.total_uploaded_blob_count ?? 0,
+      totalUploadedBlobSizeBytes:
+        importTotals.total_uploaded_blob_size_bytes ?? 0,
+      totalUploadedCorePackCount:
+        importTotals.total_uploaded_core_pack_count ?? 0,
+      totalUploadedCorePackSizeBytes:
+        importTotals.total_uploaded_core_pack_size_bytes ?? 0,
+      totalManifestSizeBytes: importTotals.total_manifest_size_bytes ?? 0,
+      totalR2PutCount: importTotals.total_r2_put_count ?? 0,
+      averagePreflightDurationMs:
+        importTotals.average_preflight_duration_ms ?? 0,
+      averageUploadDurationMs: importTotals.average_upload_duration_ms ?? 0,
+      averageCommitDurationMs: importTotals.average_commit_duration_ms ?? 0,
+      recent: recentImports,
+    },
+    downloads: {
+      buildCount: downloadTotals.build_count ?? 0,
+      totalDownloadCount: downloadTotals.total_download_count ?? 0,
+      cacheHitCount: downloadTotals.cache_hit_count ?? 0,
+      cacheMissCount: downloadTotals.cache_miss_count ?? 0,
+      cacheBypassCount: downloadTotals.cache_bypass_count ?? 0,
+      failureCount: downloadTotals.failure_count ?? 0,
+      totalR2GetCount: downloadTotals.total_r2_get_count ?? 0,
+      totalBytesServed: downloadTotals.total_bytes_served ?? 0,
+      cachedBytesServed: downloadTotals.cached_bytes_served ?? 0,
+      estimatedR2GetSavedByCache:
+        downloadTotals.estimated_r2_get_saved_by_cache ?? 0,
+      recent: recentDownloads,
+      expensiveArchives,
+    },
+  };
+}
+
+export async function searchAdminImportJobs(
+  runtime: AppRuntime,
+  input: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+  },
+): Promise<{
+  items: RecentImportJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 50)));
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const status = input.status && input.status !== "all" ? input.status : null;
+  const where = status ? "WHERE ij.status = ?" : "";
+  const binds: Array<string | number> = status ? [status] : [];
+  const database = getD1(runtime);
+  const [countResult, rowsResult] = await database.batch([
+    database
+      .prepare(`SELECT COUNT(*) AS count FROM import_jobs ij ${where}`)
+      .bind(...binds),
+    database
+      .prepare(
+        `${adminImportSelect()} ${where} ORDER BY datetime(ij.created_at) DESC,ij.id DESC LIMIT ? OFFSET ?`,
+      )
+      .bind(...binds, pageSize, (page - 1) * pageSize),
+  ]);
+  return {
+    items: ((rowsResult.results ?? []) as RecentImportRow[]).map(
+      mapRecentImport,
+    ),
+    total: Number(
+      (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
+    ),
+    page,
+    pageSize,
+  };
+}
+
+export async function getAdminImportJob(
+  runtime: AppRuntime,
+  id: number,
+): Promise<AdminImportJobDetail | null> {
+  const row = await getD1(runtime)
+    .prepare(`${adminImportSelect()} WHERE ij.id = ? LIMIT 1`)
+    .bind(id)
+    .first<RecentImportRow>();
+  if (!row) return null;
+  const excluded = await getD1(runtime)
+    .prepare(
+      `SELECT file_type,file_count,total_size_bytes,example_path FROM import_job_excluded_file_types WHERE import_job_id=? ORDER BY total_size_bytes DESC,file_type`,
+    )
+    .bind(id)
+    .all<{
+      file_type: string;
+      file_count: number;
+      total_size_bytes: number;
+      example_path: string | null;
+    }>();
+  return {
+    ...mapRecentImport(row),
+    excludedFileTypes: (excluded.results ?? []).map((item) => ({
+      fileType: item.file_type,
+      fileCount: item.file_count,
+      totalSizeBytes: item.total_size_bytes,
+      examplePath: item.example_path,
+    })),
+  };
+}
+
+function adminImportSelect(): string {
+  return `SELECT
+    ij.id,ij.work_id,COALESCE(w.chinese_title,w.original_title) AS work_title,
+    ij.status,ij.source_name,ij.source_size_bytes,ij.file_count,
+    ij.excluded_file_count,ij.excluded_size_bytes,ij.missing_blob_count,
+    ij.missing_core_pack_count,ij.uploaded_blob_count,ij.uploaded_blob_size_bytes,
+    ij.uploaded_core_pack_count,ij.uploaded_core_pack_size_bytes,ij.r2_put_count,
+    ij.preflight_duration_ms,ij.upload_duration_ms,ij.commit_duration_ms,
+    ij.failed_stage,ij.error_message,ij.archive_version_id,
+    u.display_name AS uploader_name,ij.created_at,ij.updated_at,ij.completed_at
+    FROM import_jobs ij
+    LEFT JOIN users u ON u.id=ij.uploader_id
+    LEFT JOIN works w ON w.id=ij.work_id`;
+}
+
+function mapRecentImport(row: RecentImportRow): RecentImportJob {
+  return {
+    id: row.id,
+    workId: row.work_id,
+    workTitle: row.work_title,
+    status: row.status,
+    sourceName: row.source_name,
+    sourceSizeBytes: row.source_size_bytes,
+    fileCount: row.file_count,
+    excludedFileCount: row.excluded_file_count,
+    excludedSizeBytes: row.excluded_size_bytes,
+    missingBlobCount: row.missing_blob_count,
+    missingCorePackCount: row.missing_core_pack_count,
+    uploadedBlobCount: row.uploaded_blob_count,
+    uploadedBlobSizeBytes: row.uploaded_blob_size_bytes,
+    uploadedCorePackCount: row.uploaded_core_pack_count,
+    uploadedCorePackSizeBytes: row.uploaded_core_pack_size_bytes,
+    r2PutCount: row.r2_put_count,
+    preflightDurationMs: row.preflight_duration_ms,
+    uploadDurationMs: row.upload_duration_ms,
+    commitDurationMs: row.commit_duration_ms,
+    failedStage: row.failed_stage,
+    errorMessage: row.error_message,
+    archiveVersionId: row.archive_version_id,
+    uploaderName: row.uploader_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at,
+  };
+}

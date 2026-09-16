@@ -1,30 +1,32 @@
-import { buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { TableWrap } from "@/app/components/ui/table-wrap";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { searchTagsForAdmin } from "@/app/.server/db/taxonomy-library";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import {
   AdminListControls,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { buttonVariants } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { searchTagsForAdmin } from "@/lib/server/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { namespaceLabel } from "@/lib/labels";
-
-export const dynamic = "force-dynamic";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
-export default async function AdminTagsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const adminUser = await requirePagePermission(
+    runtime,
     "/admin/tags",
     "tag.read_private",
   );
@@ -41,7 +43,7 @@ export default async function AdminTagsPage({
     "default",
   );
   const page = parseAdminPage(params.page);
-  const result = await searchTagsForAdmin({
+  const result = await searchTagsForAdmin(runtime, {
     query,
     namespace,
     sort,
@@ -49,6 +51,19 @@ export default async function AdminTagsPage({
     pageSize: PAGE_SIZE,
   });
 
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    query,
+    namespace,
+    sort,
+    page,
+    result,
+  };
+}
+
+export default function AdminTagsPage() {
+  const { adminUser, query, namespace, sort, page, result } =
+    useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -56,7 +71,7 @@ export default async function AdminTagsPage({
         title="标签维护"
         subtitle="维护标签命名空间、说明和作品关联。"
         actions={
-          <Link className={buttonVariants({ variant: "outline" })} href="/tags">
+          <Link className={buttonVariants({ variant: "outline" })} to="/tags">
             查看公开列表
           </Link>
         }
@@ -105,7 +120,7 @@ export default async function AdminTagsPage({
                   {hasPermission(adminUser, "tag.metadata.update_any") ? (
                     <Link
                       className={buttonVariants()}
-                      href={`/admin/tags/${tag.id}`}
+                      to={`/admin/tags/${tag.id}`}
                     >
                       编辑
                     </Link>

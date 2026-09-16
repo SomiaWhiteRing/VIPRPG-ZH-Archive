@@ -1,22 +1,24 @@
-import { getForumRuntime } from "@/lib/server/forum/next";
-import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { adminForumList } from "@/app/.server/forum/admin";
+import { getForumRuntime } from "@/app/.server/forum/context";
+import { forumViewer } from "@/app/.server/forum/queries";
+import { redirectPage } from "@/app/.server/http/page-response";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { hasPermission } from "@/lib/authz/permissions";
 import { forumPage } from "@/lib/forum";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { adminForumList } from "@/lib/server/forum/admin";
-import { forumViewer } from "@/lib/server/forum/queries";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 import { AdminDiscussions } from "./workspace";
-export const dynamic = "force-dynamic";
-export default async function AdminDiscussionsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const user = await getCurrentUserFromCookies();
-  if (!user) redirect("/login?next=%2Fadmin%2Fdiscussions");
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
+  const user = await getCurrentUser(runtime);
+  if (!user) redirectPage("/login?next=%2Fadmin%2Fdiscussions");
   const moderate = hasPermission(user, "forum.content.moderate_any");
   if (!moderate && !hasPermission(user, "forum.topic.feature_any"))
-    redirect("/");
+    redirectPage("/");
   const p = await searchParams,
     view =
       moderate && ["reports", "posts", "topics"].includes(String(p.view))
@@ -26,12 +28,19 @@ export default async function AdminDiscussionsPage({
           : "topics";
   const query = typeof p.q === "string" ? p.q : "",
     state = typeof p.state === "string" ? p.state : "";
-  const data = await adminForumList(getForumRuntime(), user, {
+  const data = await adminForumList(getForumRuntime(runtime), user, {
     view,
     query,
     state,
     page: forumPage(p.page),
   });
+
+  return { viewer: forumViewer(user)!, p, view, query, state, data };
+}
+
+export default function AdminDiscussionsPage() {
+  const { viewer, p, view, query, state, data } =
+    useLoaderData<typeof loader>();
   return (
     <AdminDiscussions
       key={JSON.stringify(p)}
@@ -39,7 +48,7 @@ export default async function AdminDiscussionsPage({
       view={view}
       query={query}
       state={state}
-      viewer={forumViewer(user)!}
+      viewer={viewer}
     />
   );
 }

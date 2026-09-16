@@ -1,15 +1,14 @@
-"use client";
-import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
-
-import { EmptyState } from "@/app/components/ui/empty-state";
 import {
-  useId,
-  useMemo,
-  useState,
-  type KeyboardEvent,
-} from "react";
+  ComboboxOption,
+  ComboboxOptions,
+  handleComboboxNavigation,
+} from "@/app/components/ui/combobox";
+
 import { Button } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
+import type { KeyboardEvent } from "react";
+import { useId, useMemo, useState } from "react";
 
 type MergeCandidate = {
   id: number;
@@ -38,9 +37,11 @@ export function CharacterMergeTargetField({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selected, setSelected] = useState<MergeCandidate | null>(null);
-  const matches = useMemo(() => matchCandidates(candidates, query), [candidates, query]);
+  const matches = useMemo(
+    () => matchCandidates(candidates, query),
+    [candidates, query],
+  );
   const menuOpen = open && Boolean(normalizeSearch(query));
-
 
   function choose(candidate: MergeCandidate) {
     setSelected(candidate);
@@ -57,10 +58,20 @@ export function CharacterMergeTargetField({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (handleComboboxNavigation(event, { count: matches.items.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
+    if (
+      handleComboboxNavigation(event, {
+        count: matches.items.length,
+        open: menuOpen,
+        activeIndex,
+        setOpen,
+        setActiveIndex,
+      })
+    )
+      return;
     if (event.key === "Enter" && normalizeSearch(query)) {
       event.preventDefault();
-      if (open && matches.items[activeIndex]) choose(matches.items[activeIndex]);
+      if (open && matches.items[activeIndex])
+        choose(matches.items[activeIndex]);
       else setOpen(true);
     }
   }
@@ -69,8 +80,13 @@ export function CharacterMergeTargetField({
     <div className="grid gap-2">
       <input name={name} readOnly type="hidden" value={selected?.id ?? ""} />
       <div className="relative">
-        <Input id={id}
-          aria-activedescendant={menuOpen && matches.items[activeIndex] ? `${listId}-${matches.items[activeIndex].id}` : undefined}
+        <Input
+          id={id}
+          aria-activedescendant={
+            menuOpen && matches.items[activeIndex]
+              ? `${listId}-${matches.items[activeIndex].id}`
+              : undefined
+          }
           aria-autocomplete="list"
           aria-controls={listId}
           aria-describedby={descriptionId}
@@ -86,20 +102,41 @@ export function CharacterMergeTargetField({
           value={query}
         />
         {menuOpen ? (
-          <ComboboxOptions id={listId} activeIndex={activeIndex} className="max-h-72">
-            {matches.items.length ? matches.items.map((candidate, index) => (
-              <ComboboxOption selected={index === activeIndex} className="min-h-11"
+          <ComboboxOptions
+            id={listId}
+            activeIndex={activeIndex}
+            className="max-h-72"
+          >
+            {matches.items.length ? (
+              matches.items.map((candidate, index) => (
+                <ComboboxOption
+                  selected={index === activeIndex}
+                  className="min-h-11"
                   id={`${listId}-${candidate.id}`}
                   key={candidate.id}
-                  onClick={() => choose(candidate)}>
-                <span className="min-w-0 truncate">{candidate.originalName} · {candidate.primaryName}</span>
-                <span className="shrink-0 text-xs text-muted">#{candidate.id} · {candidate.workCount} 部作品</span>
-              </ComboboxOption>
-            )) : (
-              <EmptyState title="没有匹配角色" variant="plain" className="px-2.5 py-2" role="status" />
+                  onClick={() => choose(candidate)}
+                >
+                  <span className="min-w-0 truncate">
+                    {candidate.originalName} · {candidate.primaryName}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted">
+                    #{candidate.id} · {candidate.workCount} 部作品
+                  </span>
+                </ComboboxOption>
+              ))
+            ) : (
+              <EmptyState
+                title="没有匹配角色"
+                variant="plain"
+                className="px-2.5 py-2"
+                role="status"
+              />
             )}
             {matches.total > RESULT_LIMIT ? (
-              <p className="m-0 border-t border-border px-2.5 py-2 text-xs text-muted" role="status">
+              <p
+                className="m-0 border-t border-border px-2.5 py-2 text-xs text-muted"
+                role="status"
+              >
                 匹配 {matches.total} 个，显示前 {RESULT_LIMIT} 个
               </p>
             ) : null}
@@ -110,7 +147,9 @@ export function CharacterMergeTargetField({
         <div className="flex min-h-10 items-center justify-between gap-3 border-y border-border py-2">
           <span className="min-w-0 truncate text-sm font-normal">
             已选择：{selected.originalName} · {selected.primaryName}
-            <span className="ml-2 text-xs text-muted">#{selected.id} · {selected.workCount} 部作品</span>
+            <span className="ml-2 text-xs text-muted">
+              #{selected.id} · {selected.workCount} 部作品
+            </span>
           </span>
           <Button
             aria-label={`清除目标角色 ${selected.originalName} · ${selected.primaryName}`}
@@ -123,38 +162,50 @@ export function CharacterMergeTargetField({
           </Button>
         </div>
       ) : (
-        <span className="text-xs font-normal text-muted" role="status">当前不合并</span>
+        <span className="text-xs font-normal text-muted" role="status">
+          当前不合并
+        </span>
       )}
     </div>
   );
 }
 
-function matchCandidates(candidates: MergeCandidate[], rawQuery: string): {
+function matchCandidates(
+  candidates: MergeCandidate[],
+  rawQuery: string,
+): {
   items: MergeCandidate[];
   total: number;
 } {
   const query = normalizeSearch(rawQuery);
   if (!query) return { items: [], total: 0 };
   const terms = query.split(" ").filter(Boolean);
-  const ranked = candidates.flatMap((candidate) => {
-    const fields = [
-      String(candidate.id),
-      `#${candidate.id}`,
-      normalizeSearch(candidate.originalName),
-      normalizeSearch(candidate.primaryName),
-    ];
-    if (!terms.every((term) => fields.some((field) => field.includes(term)))) return [];
-    const rank = fields.includes(query)
-      ? 0
-      : fields.some((field) => field.startsWith(query))
-        ? 1
-        : 2;
-    return [{ candidate, rank }];
-  }).sort((left, right) =>
-    left.rank - right.rank ||
-    right.candidate.workCount - left.candidate.workCount ||
-    left.candidate.originalName.localeCompare(right.candidate.originalName, "ja"),
-  );
+  const ranked = candidates
+    .flatMap((candidate) => {
+      const fields = [
+        String(candidate.id),
+        `#${candidate.id}`,
+        normalizeSearch(candidate.originalName),
+        normalizeSearch(candidate.primaryName),
+      ];
+      if (!terms.every((term) => fields.some((field) => field.includes(term))))
+        return [];
+      const rank = fields.includes(query)
+        ? 0
+        : fields.some((field) => field.startsWith(query))
+          ? 1
+          : 2;
+      return [{ candidate, rank }];
+    })
+    .sort(
+      (left, right) =>
+        left.rank - right.rank ||
+        right.candidate.workCount - left.candidate.workCount ||
+        left.candidate.originalName.localeCompare(
+          right.candidate.originalName,
+          "ja",
+        ),
+    );
   return {
     items: ranked.slice(0, RESULT_LIMIT).map(({ candidate }) => candidate),
     total: ranked.length,
@@ -162,5 +213,9 @@ function matchCandidates(candidates: MergeCandidate[], rawQuery: string): {
 }
 
 function normalizeSearch(value: unknown): string {
-  return String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase("ja").replace(/\s+/g, " ");
+  return String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase("ja")
+    .replace(/\s+/g, " ");
 }

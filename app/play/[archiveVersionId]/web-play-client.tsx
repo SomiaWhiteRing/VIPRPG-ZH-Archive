@@ -1,13 +1,5 @@
-"use client";
-
 import { Notice } from "@/app/components/ui/notice";
 
-import { EmptyState } from "@/app/components/ui/empty-state";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Expand, Minimize2, MonitorPlay, RectangleHorizontal, RectangleVertical } from "lucide-react";
-import { Button, buttonVariants } from "@/app/components/ui/button";
-import { Progress } from "@/app/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,8 +9,14 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
-import { WorkSidebar } from "@/app/components/work/work-page-layout";
+import { Button, buttonVariants } from "@/app/components/ui/button";
 import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { Progress } from "@/app/components/ui/progress";
+import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import { createPlayerSession } from "./web-play-player";
+import type { PlayerSession } from "./web-play-player";
+import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   deleteWebPlayInstallation,
   getWebPlayInstallation,
@@ -34,16 +32,22 @@ import type {
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { formatBytes } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
+import {
+  Download,
+  Expand,
+  Minimize2,
+  MonitorPlay,
+  RectangleHorizontal,
+  RectangleVertical,
+} from "lucide-react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WebPlayLog = {
   id: string;
   level: "info" | "warning" | "error";
   message: string;
   createdAt: string;
-};
-
-type EasyRpgModule = {
-  initApi?: () => void;
 };
 
 type DisplayOrientation = "landscape" | "portrait";
@@ -63,12 +67,6 @@ type WebPlayClientProps = {
   stats: ReactNode;
 };
 
-declare global {
-  interface Window {
-    createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<EasyRpgModule>;
-  }
-}
-
 export function WebPlayClient({
   comments,
   engagement,
@@ -78,7 +76,9 @@ export function WebPlayClient({
   secondary,
   stats,
 }: WebPlayClientProps) {
-  const [installation, setInstallation] = useState<WebPlayInstallation | null>(null);
+  const [installation, setInstallation] = useState<WebPlayInstallation | null>(
+    null,
+  );
   const [loadingLocalState, setLoadingLocalState] = useState(true);
   const [installSessionActive, setInstallSessionActive] = useState(false);
   const [running, setRunning] = useState(false);
@@ -89,12 +89,16 @@ export function WebPlayClient({
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
   const [nativeFullscreen, setNativeFullscreen] = useState(false);
   const [fallbackImmersive, setFallbackImmersive] = useState(false);
-  const [displayOrientation, setDisplayOrientation] = useState<DisplayOrientation>("landscape");
+  const [displayOrientation, setDisplayOrientation] =
+    useState<DisplayOrientation>("landscape");
   const [orientationLockActive, setOrientationLockActive] = useState(false);
   const [viewportPortrait, setViewportPortrait] = useState(false);
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const moduleRef = useRef<EasyRpgModule | null>(null);
+  const playerHostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<PlayerSession | null>(null);
+  const lifetimeRef = useRef<AbortController | null>(null);
+  const startingRef = useRef(false);
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
@@ -119,6 +123,23 @@ export function WebPlayClient({
   }, []);
 
   useEffect(() => {
+    const lifetime = new AbortController();
+    lifetimeRef.current = lifetime;
+    return () => {
+      lifetime.abort();
+      playerRef.current?.dispose();
+      playerRef.current = null;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      unlockScreenOrientation();
+    };
+  }, []);
+
+  useNavigationGuard(installSessionActive, () =>
+    window.confirm("游戏安装尚未完成，确定离开并中断安装吗？"),
+  );
+
+  useEffect(() => {
     let mounted = true;
 
     getWebPlayInstallation(metadata.playKey)
@@ -127,13 +148,19 @@ export function WebPlayClient({
           setInstallation(value);
 
           if (value?.status === "installing") {
-            addLog("warning", "检测到上次安装未完成。浏览器刷新或崩溃后，当前版本会清理并重新安装。");
+            addLog(
+              "warning",
+              "检测到上次安装未完成。浏览器刷新或崩溃后，当前版本会清理并重新安装。",
+            );
           }
         }
       })
       .catch((error: unknown) => {
         if (mounted) {
-          addLog("warning", error instanceof Error ? error.message : "读取本地安装状态失败。");
+          addLog(
+            "warning",
+            error instanceof Error ? error.message : "读取本地安装状态失败。",
+          );
         }
       })
       .finally(() => {
@@ -156,7 +183,10 @@ export function WebPlayClient({
         message?: string;
       };
 
-      if (message.type !== "web-play-file-missing" || message.playKey !== metadata.playKey) {
+      if (
+        message.type !== "web-play-file-missing" ||
+        message.playKey !== metadata.playKey
+      ) {
         return;
       }
 
@@ -169,23 +199,6 @@ export function WebPlayClient({
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [addLog, metadata.playKey]);
-
-  useEffect(() => {
-    if (!activeInstalling) {
-      return;
-    }
-
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    window.addEventListener("beforeunload", onBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-    };
-  }, [activeInstalling]);
 
   useEffect(() => {
     const frame = document.getElementById("web-player-frame");
@@ -201,7 +214,8 @@ export function WebPlayClient({
     };
 
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -226,9 +240,12 @@ export function WebPlayClient({
       return workerRef.current;
     }
 
-    const worker = new Worker(new URL("./web-play-install-worker.ts", import.meta.url), {
-      type: "module",
-    });
+    const worker = new Worker(
+      new URL("./web-play-install-worker.ts", import.meta.url),
+      {
+        type: "module",
+      },
+    );
 
     worker.onmessage = (event: MessageEvent<WebPlayInstallWorkerOutput>) => {
       const message = event.data;
@@ -255,6 +272,7 @@ export function WebPlayClient({
   }, [addLog]);
 
   const startInstall = useCallback(async () => {
+    const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
     try {
@@ -264,7 +282,9 @@ export function WebPlayClient({
 
       setInstallSessionActive(true);
       const storageSnapshot = await requestBrowserStorage();
-      await registerPlayServiceWorker();
+      signal.throwIfAborted();
+      await registerPlayServiceWorker(signal);
+      signal.throwIfAborted();
       const worker = ensureWorker();
 
       worker.postMessage({
@@ -274,6 +294,7 @@ export function WebPlayClient({
       } satisfies WebPlayInstallWorkerInput);
       addLog("info", "开始下载并安装到浏览器本地。");
     } catch (error) {
+      if (signal.aborted) return;
       setInstallSessionActive(false);
       const message = error instanceof Error ? error.message : "启动安装失败。";
       setOperationError(message);
@@ -302,43 +323,38 @@ export function WebPlayClient({
       setInstallation(null);
       addLog("info", "已删除本地游戏文件。游戏存档不受影响。");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "删除本地缓存失败。";
+      const message =
+        error instanceof Error ? error.message : "删除本地缓存失败。";
       setOperationError(message);
       addLog("error", message);
     }
   }, [addLog, metadata.playKey, playerBusy]);
 
   const startPlayer = useCallback(async (): Promise<boolean> => {
+    if (running) return true;
+    if (startingRef.current) return false;
+    const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
     try {
-      if (running) return true;
-      if (playerStarting) return false;
-
       if (!installed) {
         throw new Error("需要先完成本地安装。");
       }
 
+      startingRef.current = true;
       setPlayerStarting(true);
-      await registerPlayServiceWorker();
-      await loadEasyRpgRuntime(metadata.runtimeBasePath);
-
-      if (!window.createEasyRpgPlayer) {
-        throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
-      }
-
-      setRunning(true);
+      await registerPlayServiceWorker(signal);
+      signal.throwIfAborted();
+      if (!playerHostRef.current) return false;
       addLog("info", "游戏运行组件已加载，正在启动游戏。");
-      const playerModule = await window.createEasyRpgPlayer({
-        game: metadata.playKey,
-        workId: metadata.workId,
-        locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
-      });
-
-      playerModule.initApi?.();
-      moduleRef.current = playerModule;
+      const player = createPlayerSession(playerHostRef.current, metadata);
+      playerRef.current = player;
+      await player.ready;
+      signal.throwIfAborted();
+      setRunning(true);
       focusPlayerCanvas();
       await markWebPlayLastPlayed(metadata.playKey);
+      signal.throwIfAborted();
       if (isAuthenticated) {
         void fetch(`/api/works/${metadata.workId}/played`, {
           method: "POST",
@@ -349,65 +365,80 @@ export function WebPlayClient({
       addLog("info", "游戏已启动。");
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "启动在线游玩失败。";
+      if (signal.aborted) return false;
+      playerRef.current?.dispose();
+      playerRef.current = null;
+      const message =
+        error instanceof Error ? error.message : "启动在线游玩失败。";
       setOperationError(message);
       addLog("error", message);
       setRunning(false);
       return false;
     } finally {
-      setPlayerStarting(false);
+      startingRef.current = false;
+      if (!signal.aborted) setPlayerStarting(false);
     }
-  }, [addLog, installed, isAuthenticated, metadata.playKey, metadata.runtimeBasePath, metadata.workId, playerStarting, running]);
+  }, [addLog, installed, isAuthenticated, metadata, running]);
 
-  const lockOrientation = useCallback(async (next: DisplayOrientation): Promise<boolean> => {
-    const orientation = screen.orientation as LockableScreenOrientation;
-    if (typeof orientation?.lock !== "function") {
-      setOrientationLockActive(false);
-      setDisplayMessage("浏览器不能锁定屏幕方向；画面已按所选方向铺满，请旋转设备。");
-      return false;
-    }
+  const lockOrientation = useCallback(
+    async (next: DisplayOrientation): Promise<boolean> => {
+      const orientation = screen.orientation as LockableScreenOrientation;
+      if (typeof orientation?.lock !== "function") {
+        setOrientationLockActive(false);
+        setDisplayMessage(
+          "浏览器不能锁定屏幕方向；画面已按所选方向铺满，请旋转设备。",
+        );
+        return false;
+      }
 
-    try {
-      await orientation.lock(next);
-      setOrientationLockActive(true);
-      setDisplayMessage(null);
-      return true;
-    } catch {
-      setOrientationLockActive(false);
-      setDisplayMessage("浏览器未允许锁定屏幕方向；画面已按所选方向铺满，请旋转设备。");
-      return false;
-    }
-  }, []);
-
-  const enterImmersive = useCallback(async (next: DisplayOrientation): Promise<boolean> => {
-    const frame = document.getElementById("web-player-frame");
-    if (!frame) {
-      setOperationError("找不到游戏画面，无法进入全屏。请刷新页面后重试。");
-      return false;
-    }
-
-    setDisplayOrientation(next);
-    setDisplayMessage(null);
-
-    if (document.fullscreenEnabled && frame.requestFullscreen) {
       try {
-        await frame.requestFullscreen({ navigationUI: "hide" });
-        setNativeFullscreen(true);
-        setFallbackImmersive(false);
-        await lockOrientation(next);
-        focusPlayerCanvas();
+        await orientation.lock(next);
+        setOrientationLockActive(true);
+        setDisplayMessage(null);
         return true;
       } catch {
-        addLog("warning", "浏览器未进入原生全屏，已改为铺满页面。");
+        setOrientationLockActive(false);
+        setDisplayMessage(
+          "浏览器未允许锁定屏幕方向；画面已按所选方向铺满，请旋转设备。",
+        );
+        return false;
       }
-    }
+    },
+    [],
+  );
 
-    setNativeFullscreen(false);
-    setFallbackImmersive(true);
-    await lockOrientation(next);
-    focusPlayerCanvas();
-    return true;
-  }, [addLog, lockOrientation]);
+  const enterImmersive = useCallback(
+    async (next: DisplayOrientation): Promise<boolean> => {
+      const frame = document.getElementById("web-player-frame");
+      if (!frame) {
+        setOperationError("找不到游戏画面，无法进入全屏。请刷新页面后重试。");
+        return false;
+      }
+
+      setDisplayOrientation(next);
+      setDisplayMessage(null);
+
+      if (document.fullscreenEnabled && frame.requestFullscreen) {
+        try {
+          await frame.requestFullscreen({ navigationUI: "hide" });
+          setNativeFullscreen(true);
+          setFallbackImmersive(false);
+          await lockOrientation(next);
+          focusPlayerCanvas();
+          return true;
+        } catch {
+          addLog("warning", "浏览器未进入原生全屏，已改为铺满页面。");
+        }
+      }
+
+      setNativeFullscreen(false);
+      setFallbackImmersive(true);
+      await lockOrientation(next);
+      focusPlayerCanvas();
+      return true;
+    },
+    [addLog, lockOrientation],
+  );
 
   const exitImmersive = useCallback(async () => {
     if (document.fullscreenElement) {
@@ -421,24 +452,33 @@ export function WebPlayClient({
     focusPlayerCanvas();
   }, []);
 
-  const startImmersivePlayer = useCallback(async (next: DisplayOrientation) => {
-    setOperationError(null);
-    const entered = await enterImmersive(next);
-    if (!entered) return;
-    const started = running || await startPlayer();
-    if (!started) await exitImmersive();
-  }, [enterImmersive, exitImmersive, running, startPlayer]);
+  const startImmersivePlayer = useCallback(
+    async (next: DisplayOrientation) => {
+      setOperationError(null);
+      const entered = await enterImmersive(next);
+      if (!entered) return;
+      const started = running || (await startPlayer());
+      if (lifetimeRef.current?.signal.aborted) return;
+      if (!started) await exitImmersive();
+    },
+    [enterImmersive, exitImmersive, running, startPlayer],
+  );
 
-  const changeDisplayOrientation = useCallback(async (next: DisplayOrientation) => {
-    setDisplayOrientation(next);
-    if (nativeFullscreen) {
-      await lockOrientation(next);
-    } else {
-      setOrientationLockActive(false);
-      setDisplayMessage("画面已切换方向；如设备没有自动旋转，请手动旋转设备。");
-    }
-    focusPlayerCanvas();
-  }, [lockOrientation, nativeFullscreen]);
+  const changeDisplayOrientation = useCallback(
+    async (next: DisplayOrientation) => {
+      setDisplayOrientation(next);
+      if (nativeFullscreen) {
+        await lockOrientation(next);
+      } else {
+        setOrientationLockActive(false);
+        setDisplayMessage(
+          "画面已切换方向；如设备没有自动旋转，请手动旋转设备。",
+        );
+      }
+      focusPlayerCanvas();
+    },
+    [lockOrientation, nativeFullscreen],
+  );
 
   const storageSummary = useMemo(() => {
     if (!installation) {
@@ -449,7 +489,12 @@ export function WebPlayClient({
       { label: "本地状态", value: installStatusLabel(installation.status) },
       {
         label: "长期保存",
-        value: installation.persistedStorage === null ? "未请求" : installation.persistedStorage ? "已允许" : "未允许",
+        value:
+          installation.persistedStorage === null
+            ? "未请求"
+            : installation.persistedStorage
+              ? "已允许"
+              : "未允许",
       },
       {
         label: "浏览器用量",
@@ -462,22 +507,26 @@ export function WebPlayClient({
     ];
   }, [installation]);
 
-  const rotation = immersive && !orientationLockActive
-    ? displayOrientation === "landscape" && viewportPortrait
-      ? 90
-      : displayOrientation === "portrait" && !viewportPortrait
-        ? -90
-        : 0
-    : 0;
-  const playerSurfaceClass = rotation === 90
-    ? "absolute left-1/2 top-1/2 h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 rotate-90"
-    : rotation === -90
-      ? "absolute left-1/2 top-1/2 h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 -rotate-90"
-      : "absolute inset-0";
+  const rotation =
+    immersive && !orientationLockActive
+      ? displayOrientation === "landscape" && viewportPortrait
+        ? 90
+        : displayOrientation === "portrait" && !viewportPortrait
+          ? -90
+          : 0
+      : 0;
+  const playerSurfaceClass =
+    rotation === 90
+      ? "absolute left-1/2 top-1/2 h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 rotate-90"
+      : rotation === -90
+        ? "absolute left-1/2 top-1/2 h-[100dvw] w-[100dvh] -translate-x-1/2 -translate-y-1/2 -rotate-90"
+        : "absolute inset-0";
 
   return (
     <div
-      data-web-play-status={loadingLocalState ? "loading" : (installation?.status ?? "deleted")}
+      data-web-play-status={
+        loadingLocalState ? "loading" : (installation?.status ?? "deleted")
+      }
     >
       <DetailPageLayout
         sidebarLabel="作品操作与资料"
@@ -485,93 +534,113 @@ export function WebPlayClient({
           <>
             <section aria-labelledby="player-title" className="py-4.5">
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
-                <h2 className="m-0 text-base font-bold" id="player-title">游戏画面</h2>
+                <h2 className="m-0 text-base font-bold" id="player-title">
+                  游戏画面
+                </h2>
                 <span className="font-mono text-xs text-muted">
                   {running ? "运行中" : playerStarting ? "启动中" : "待机"}
                 </span>
               </div>
               <div
-                className={immersive
-                  ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
-                  : "relative aspect-4/3 w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"}
+                className={
+                  immersive
+                    ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
+                    : "relative aspect-4/3 w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"
+                }
                 id="web-player-frame"
               >
-              <div
-                className={`${playerSurfaceClass} grid place-items-center [container-type:size]`}
-                id="web-player-surface"
-              >
-                <div className="relative aspect-4/3 w-[min(100cqw,133.333333cqh)] overflow-hidden bg-black">
-                  <canvas className="h-full w-full [image-rendering:pixelated]" id="canvas" tabIndex={0} />
-                  {!running ? (
-                    <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
-                      {playerStarting
-                        ? "正在启动 EasyRPG…"
-                        : activeInstalling
-                          ? "正在安装游戏文件…"
-                          : installed
-                            ? "游戏已准备好"
-                            : "安装后可在这里游玩"}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {immersive ? (
-                <div className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex flex-wrap justify-end gap-2">
-                  <Button
-                    aria-pressed={displayOrientation === "landscape"}
-                    className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                    onClick={() => void changeDisplayOrientation("landscape")}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <RectangleHorizontal aria-hidden />
-                    横屏
-                  </Button>
-                  <Button
-                    aria-pressed={displayOrientation === "portrait"}
-                    className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                    onClick={() => void changeDisplayOrientation("portrait")}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <RectangleVertical aria-hidden />
-                    竖屏
-                  </Button>
-                  <Button
-                    className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                    onClick={() => void exitImmersive()}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <Minimize2 aria-hidden />
-                    退出
-                  </Button>
-                </div>
-              ) : null}
-
-              {immersive && displayMessage ? (
                 <div
-                  className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-md bg-black/75 px-3 py-2 text-center text-sm text-white"
-                  role="status"
+                  className={`${playerSurfaceClass} grid place-items-center [container-type:size]`}
+                  id="web-player-surface"
                 >
-                  {displayMessage}
+                  <div className="relative aspect-4/3 w-[min(100cqw,133.333333cqh)] overflow-hidden bg-black">
+                    <div
+                      className="h-full w-full"
+                      id="web-player-host"
+                      ref={playerHostRef}
+                    />
+                    {!running ? (
+                      <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
+                        {playerStarting
+                          ? "正在启动 EasyRPG…"
+                          : activeInstalling
+                            ? "正在安装游戏文件…"
+                            : installed
+                              ? "游戏已准备好"
+                              : "安装后可在这里游玩"}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              ) : null}
+
+                {immersive ? (
+                  <div className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex flex-wrap justify-end gap-2">
+                    <Button
+                      aria-pressed={displayOrientation === "landscape"}
+                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                      onClick={() => void changeDisplayOrientation("landscape")}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <RectangleHorizontal aria-hidden />
+                      横屏
+                    </Button>
+                    <Button
+                      aria-pressed={displayOrientation === "portrait"}
+                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                      onClick={() => void changeDisplayOrientation("portrait")}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <RectangleVertical aria-hidden />
+                      竖屏
+                    </Button>
+                    <Button
+                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                      onClick={() => void exitImmersive()}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Minimize2 aria-hidden />
+                      退出
+                    </Button>
+                  </div>
+                ) : null}
+
+                {immersive && displayMessage ? (
+                  <div
+                    className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-md bg-black/75 px-3 py-2 text-center text-sm text-white"
+                    role="status"
+                  >
+                    {displayMessage}
+                  </div>
+                ) : null}
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-                <span id="status">{running ? "EasyRPG 正在运行" : "未启动"}</span>
-                {!immersive && displayMessage ? <span role="status">{displayMessage}</span> : null}
+                <span id="status">
+                  {running ? "EasyRPG 正在运行" : "未启动"}
+                </span>
+                {!immersive && displayMessage ? (
+                  <span role="status">{displayMessage}</span>
+                ) : null}
               </div>
             </section>
 
-            <section aria-labelledby="comments-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-comments">
+            <section
+              aria-labelledby="comments-title"
+              className="scroll-mt-20 border-t border-border py-4.5"
+              id="sec-comments"
+            >
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
-                <span className="font-mono text-xs text-muted max-[560px]:text-left">按发帖时间排序</span>
+                <h2 className="m-0 text-base font-bold" id="comments-title">
+                  评论
+                </h2>
+                <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                  按发帖时间排序
+                </span>
               </div>
               {comments}
             </section>
@@ -587,29 +656,56 @@ export function WebPlayClient({
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="m-0 text-base font-bold">在线游玩</h2>
                   <span className="font-mono text-xs text-muted">
-                    {loadingLocalState ? "读取中" : installStatusLabel(installation?.status ?? "deleted")}
+                    {loadingLocalState
+                      ? "读取中"
+                      : installStatusLabel(installation?.status ?? "deleted")}
                   </span>
                 </div>
 
                 {interruptedInstalling ? (
-                  <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">
+                  <Notice
+                    tone="error"
+                    className="m-0 rounded-md border p-3 text-sm"
+                  >
                     上次安装没有正常结束。请清理并重新安装。
                   </Notice>
                 ) : null}
                 {operationError ? (
-                  <Notice tone="error" className="m-0 rounded-md border p-3 text-sm" role="alert">
+                  <Notice
+                    tone="error"
+                    className="m-0 rounded-md border p-3 text-sm"
+                    role="alert"
+                  >
                     {operationError}
                   </Notice>
                 ) : null}
 
-                {activeInstalling && installation ? <InstallProgress installation={installation} /> : null}
+                {activeInstalling && installation ? (
+                  <InstallProgress installation={installation} />
+                ) : null}
 
                 {loadingLocalState ? (
-                  <Button className="w-full" disabled type="button">读取本地状态…</Button>
+                  <Button className="w-full" disabled type="button">
+                    读取本地状态…
+                  </Button>
                 ) : activeInstalling ? (
-                  <Button className="w-full" onClick={cancelInstall} type="button" variant="outline">取消安装</Button>
+                  <Button
+                    className="w-full"
+                    onClick={cancelInstall}
+                    type="button"
+                    variant="outline"
+                  >
+                    取消安装
+                  </Button>
                 ) : failed || interruptedInstalling ? (
-                  <Button className="w-full" data-web-play-action="install" onClick={startInstall} type="button">清理并重装</Button>
+                  <Button
+                    className="w-full"
+                    data-web-play-action="install"
+                    onClick={startInstall}
+                    type="button"
+                  >
+                    清理并重装
+                  </Button>
                 ) : installed ? (
                   <div className="grid gap-2.5">
                     <Button
@@ -624,7 +720,12 @@ export function WebPlayClient({
                       <span className="max-[980px]:hidden">全屏游玩</span>
                     </Button>
                     <div className="grid grid-cols-1 gap-2 max-[980px]:grid-cols-2">
-                      <Button disabled={playerBusy} onClick={() => void startPlayer()} type="button" variant="outline">
+                      <Button
+                        disabled={playerBusy}
+                        onClick={() => void startPlayer()}
+                        type="button"
+                        variant="outline"
+                      >
                         <MonitorPlay aria-hidden />
                         {running ? "窗口中运行" : "窗口游玩"}
                       </Button>
@@ -641,7 +742,12 @@ export function WebPlayClient({
                     </div>
                   </div>
                 ) : (
-                  <Button className="w-full" data-web-play-action="install" onClick={startInstall} type="button">
+                  <Button
+                    className="w-full"
+                    data-web-play-action="install"
+                    onClick={startInstall}
+                    type="button"
+                  >
                     安装到浏览器 · {formatBytes(metadata.totalSizeBytes)}
                   </Button>
                 )}
@@ -661,7 +767,9 @@ export function WebPlayClient({
                 >
                   <Download aria-hidden />
                   下载 ZIP
-                  <span className="text-xs text-muted">{formatBytes(metadata.totalSizeBytes)}</span>
+                  <span className="text-xs text-muted">
+                    {formatBytes(metadata.totalSizeBytes)}
+                  </span>
                 </a>
 
                 <details className="border-t border-border pt-3">
@@ -670,16 +778,36 @@ export function WebPlayClient({
                   </summary>
                   <div className="mt-3 grid gap-3">
                     <dl className="grid gap-2 text-xs">
-                      <DiagnosticRow label="归档内容" value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`} />
-                      <DiagnosticRow label="安装内容" value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`} />
-                      {storageSummary?.map((item) => <DiagnosticRow key={item.label} label={item.label} value={item.value} />)}
+                      <DiagnosticRow
+                        label="归档内容"
+                        value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`}
+                      />
+                      <DiagnosticRow
+                        label="安装内容"
+                        value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`}
+                      />
+                      {storageSummary?.map((item) => (
+                        <DiagnosticRow
+                          key={item.label}
+                          label={item.label}
+                          value={item.value}
+                        />
+                      ))}
                     </dl>
 
-                    {installation && !activeInstalling ? <InstallProgress installation={installation} compact /> : null}
+                    {installation && !activeInstalling ? (
+                      <InstallProgress installation={installation} compact />
+                    ) : null}
 
                     <div className="flex flex-wrap gap-2">
                       {installed || failed || interruptedInstalling ? (
-                        <Button disabled={playerBusy} onClick={startInstall} size="sm" type="button" variant="outline">
+                        <Button
+                          disabled={playerBusy}
+                          onClick={startInstall}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
                           重新安装
                         </Button>
                       ) : null}
@@ -704,24 +832,46 @@ export function WebPlayClient({
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <strong>运行日志 · {logs.length}</strong>
                         {logs.length ? (
-                          <Button onClick={() => setLogs([])} size="sm" type="button" variant="ghost">清空</Button>
+                          <Button
+                            onClick={() => setLogs([])}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            清空
+                          </Button>
                         ) : null}
                       </div>
                       {logs.length ? (
                         <ol className="m-0 grid max-h-64 list-none gap-2 overflow-y-auto p-0">
                           {logs.map((log) => (
                             <li className={logTone(log.level)} key={log.id}>
-                              <span>{new Date(log.createdAt).toLocaleTimeString("zh-CN")}</span>
-                              <p className="m-0 mt-0.5 wrap-anywhere">{log.message}</p>
+                              <span>
+                                {new Date(log.createdAt).toLocaleTimeString(
+                                  "zh-CN",
+                                )}
+                              </span>
+                              <p className="m-0 mt-0.5 wrap-anywhere">
+                                {log.message}
+                              </p>
                             </li>
                           ))}
                         </ol>
-                      ) : <EmptyState title="暂无日志。" variant="plain" className="text-xs" />}
+                      ) : (
+                        <EmptyState
+                          title="暂无日志。"
+                          variant="plain"
+                          className="text-xs"
+                        />
+                      )}
                     </div>
                   </div>
                 </details>
 
-                <AlertDialog onOpenChange={setDeleteDialogOpen} open={deleteDialogOpen}>
+                <AlertDialog
+                  onOpenChange={setDeleteDialogOpen}
+                  open={deleteDialogOpen}
+                >
                   <AlertDialogContent
                     id="delete-local-cache-dialog"
                     onCloseAutoFocus={(event) => {
@@ -734,7 +884,9 @@ export function WebPlayClient({
                       已下载的本地游戏文件将被删除，浏览器存档不会受到影响。之后需要重新安装才能在线游玩。
                     </AlertDialogDescription>
                     <AlertDialogFooter>
-                      <AlertDialogCancel asChild><Button variant="outline">取消</Button></AlertDialogCancel>
+                      <AlertDialogCancel asChild>
+                        <Button variant="outline">取消</Button>
+                      </AlertDialogCancel>
                       <AlertDialogAction asChild>
                         <Button
                           onClick={() => {
@@ -767,7 +919,10 @@ function InstallProgress({
   installation: WebPlayInstallation;
   compact?: boolean;
 }) {
-  const downloadPercent = percent(installation.downloadedBytes, installation.downloadBytesTotal);
+  const downloadPercent = percent(
+    installation.downloadedBytes,
+    installation.downloadBytesTotal,
+  );
   const extractPercent =
     installation.totalSizeBytes > 0
       ? percent(installation.installedBytes, installation.totalSizeBytes)
@@ -778,19 +933,23 @@ function InstallProgress({
       <div className="flex items-center justify-between gap-3">
         <span>下载进度</span>
         <strong className="text-right font-medium">
-          {formatBytes(installation.downloadedBytes)} / {formatBytes(installation.downloadBytesTotal)}
+          {formatBytes(installation.downloadedBytes)} /{" "}
+          {formatBytes(installation.downloadBytesTotal)}
         </strong>
       </div>
       <Progress aria-label="下载进度" value={downloadPercent} />
       <div className="flex items-center justify-between gap-3">
         <span>安装进度</span>
         <strong className="text-right font-medium">
-          {installation.installedFiles.toLocaleString("zh-CN")} / {installation.totalFiles.toLocaleString("zh-CN")} 文件
+          {installation.installedFiles.toLocaleString("zh-CN")} /{" "}
+          {installation.totalFiles.toLocaleString("zh-CN")} 文件
         </strong>
       </div>
       <Progress aria-label="安装进度" value={extractPercent} />
       {installation.error ? (
-        <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">{installation.error}</Notice>
+        <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">
+          {installation.error}
+        </Notice>
       ) : null}
     </div>
   );
@@ -812,11 +971,14 @@ function logTone(level: WebPlayLog["level"]): string {
 }
 
 function unlockScreenOrientation(): void {
-  const orientation = screen.orientation as LockableScreenOrientation | undefined;
+  const orientation = screen.orientation as
+    | LockableScreenOrientation
+    | undefined;
   orientation?.unlock?.();
 }
 
-async function registerPlayServiceWorker(): Promise<void> {
+async function registerPlayServiceWorker(signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
   if (!("serviceWorker" in navigator)) {
     throw new Error("当前浏览器不支持在线游玩所需的后台功能。");
   }
@@ -825,27 +987,46 @@ async function registerPlayServiceWorker(): Promise<void> {
     scope: "/play/",
   });
   await registration.update().catch(() => undefined);
-  await navigator.serviceWorker.ready;
+  signal.throwIfAborted();
+  // Play links load a document inside /play/. SPA navigation from another scope
+  // cannot give that document control, even when the registration is active.
+  const scriptUrl = new URL("/play/sw.js", window.location.origin).href;
+  const controlled = () =>
+    navigator.serviceWorker.controller?.scriptURL === scriptUrl;
+  if (controlled()) return;
 
-  if (!navigator.serviceWorker.controller) {
-    await new Promise<void>((resolve) => {
-      const timer = window.setTimeout(resolve, 1500);
-
-      navigator.serviceWorker.addEventListener(
+  await new Promise<void>((resolve, reject) => {
+    function cleanup() {
+      window.clearTimeout(timer);
+      navigator.serviceWorker.removeEventListener(
         "controllerchange",
-        () => {
-          window.clearTimeout(timer);
-          resolve();
-        },
-        { once: true },
+        onControl,
       );
-      registration.update().catch(() => undefined);
-    });
-  }
+      signal.removeEventListener("abort", onAbort);
+    }
+    function onControl() {
+      if (!controlled()) return;
+      cleanup();
+      resolve();
+    }
+    function onAbort() {
+      cleanup();
+      reject(signal.reason);
+    }
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("在线游玩初始化超时，请刷新页面后重试。"));
+    }, 10_000);
+    navigator.serviceWorker.addEventListener("controllerchange", onControl);
+    signal.addEventListener("abort", onAbort, { once: true });
+    onControl();
+  });
 }
 
 function focusPlayerCanvas(): void {
-  const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
+  const canvas = document
+    .querySelector<HTMLIFrameElement>("#web-player-host iframe")
+    ?.contentDocument?.querySelector<HTMLCanvasElement>("#canvas");
 
   canvas?.focus({ preventScroll: true });
 }
@@ -880,38 +1061,6 @@ async function requestBrowserStorage(): Promise<WebPlayStorageSnapshot> {
     storageQuotaBytes: estimate?.quota ?? null,
     storageUsageBytes: estimate?.usage ?? null,
   };
-}
-
-async function loadEasyRpgRuntime(runtimeBasePath: string): Promise<void> {
-  if (window.createEasyRpgPlayer) {
-    return;
-  }
-
-  const src = `${runtimeBasePath}/index.js`;
-  const existing = Array.from(document.querySelectorAll<HTMLScriptElement>("script[data-easyrpg-runtime]")).find(
-    (script) => script.dataset.easyrpgRuntime === src,
-  );
-
-  if (existing?.dataset.loaded === "true") {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = existing ?? document.createElement("script");
-
-    script.dataset.easyrpgRuntime = src;
-    script.async = true;
-    script.src = src;
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () => reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
-
-    if (!existing) {
-      document.head.appendChild(script);
-    }
-  });
 }
 
 function percent(done: number, total: number): number {

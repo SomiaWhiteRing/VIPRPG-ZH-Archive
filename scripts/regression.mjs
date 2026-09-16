@@ -12,7 +12,9 @@ const options = new Set(process.argv.slice(2));
 
 if (options.has("--flow")) stages.push("test:flow");
 if (options.has("--build")) stages.push("build");
-const unknownOptions = [...options].filter((option) => !["--flow", "--build"].includes(option));
+const unknownOptions = [...options].filter(
+  (option) => !["--flow", "--build"].includes(option),
+);
 if (unknownOptions.length > 0) {
   console.error(`unknown option: ${unknownOptions.join(", ")}`);
   console.error("usage: node scripts/regression.mjs [--flow] [--build]");
@@ -35,7 +37,9 @@ async function runRegression() {
   const reportPath = join(runRoot, "report.json");
   writeReport(reportPath, report);
 
-  console.log(`[regression] worktree: ${report.worktree.dirty ? "dirty (preserved)" : "clean"}`);
+  console.log(
+    `[regression] worktree: ${report.worktree.dirty ? "dirty (preserved)" : "clean"}`,
+  );
   console.log(`[regression] stages: ${stages.join(" -> ")}`);
 
   for (const stage of report.stages) {
@@ -55,9 +59,13 @@ async function runRegression() {
       report.status = "failed";
       report.finishedAt = stage.finishedAt;
       writeReport(reportPath, report);
-      console.error(`[regression] ${stage.name} failed (${stage.failureClass})`);
+      console.error(
+        `[regression] ${stage.name} failed (${stage.failureClass})`,
+      );
       console.error(`[regression] evidence: ${relative(projectRoot, logPath)}`);
-      console.error(`[regression] report: ${relative(projectRoot, reportPath)}`);
+      console.error(
+        `[regression] report: ${relative(projectRoot, reportPath)}`,
+      );
       process.exitCode = result.exitCode || 1;
       return;
     }
@@ -67,7 +75,9 @@ async function runRegression() {
   report.status = "passed";
   report.finishedAt = new Date().toISOString();
   writeReport(reportPath, report);
-  console.log(`[regression] passed; report: ${relative(projectRoot, reportPath)}`);
+  console.log(
+    `[regression] passed; report: ${relative(projectRoot, reportPath)}`,
+  );
 }
 
 function runNpmScript(scriptName, logPath) {
@@ -80,7 +90,11 @@ function runNpmScript(scriptName, logPath) {
       shell: process.platform === "win32",
       windowsHide: true,
     });
-    writeFileSync(logPath, `=== npm run ${scriptName} (${new Date().toISOString()}) ===\n`, "utf8");
+    writeFileSync(
+      logPath,
+      `=== npm run ${scriptName} (${new Date().toISOString()}) ===\n`,
+      "utf8",
+    );
     let output = "";
     const collect = (chunk) => {
       const text = chunk.toString();
@@ -96,7 +110,9 @@ function runNpmScript(scriptName, logPath) {
       appendFileSync(logPath, text);
       resolveResult({ exitCode: 1, output });
     });
-    child.on("close", (exitCode) => resolveResult({ exitCode: exitCode ?? 1, output }));
+    child.on("close", (exitCode) =>
+      resolveResult({ exitCode: exitCode ?? 1, output }),
+    );
   });
 }
 
@@ -106,7 +122,8 @@ function collectWorktreeState() {
     encoding: "utf8",
     windowsHide: true,
   });
-  const status = result.status === 0 ? result.stdout.trimEnd() : "git status unavailable";
+  const status =
+    result.status === 0 ? result.stdout.trimEnd() : "git status unavailable";
   return {
     dirty: status.length > 0,
     changedPathCount: status ? status.split(/\r?\n/).length : 0,
@@ -116,21 +133,31 @@ function collectWorktreeState() {
 
 function classifyFailure(output) {
   const lowerOutput = output.toLowerCase();
-  if (lowerOutput.includes("sqlite_busy") || lowerOutput.includes("database is locked")) return "scheduling";
-  if (lowerOutput.includes("exceeded") && lowerOutput.includes("artifacts preserved")) return "test-harness";
   if (
-    lowerOutput.includes("next.js dev-overlay") ||
+    lowerOutput.includes("sqlite_busy") ||
+    lowerOutput.includes("database is locked")
+  )
+    return "scheduling";
+  if (
+    lowerOutput.includes("exceeded") &&
+    lowerOutput.includes("artifacts preserved")
+  )
+    return "test-harness";
+  if (
+    lowerOutput.includes("vite error overlay") ||
     lowerOutput.includes("dev-overlay") ||
     lowerOutput.includes("locator") ||
     lowerOutput.includes("playwright")
-  ) return "test-harness";
+  )
+    return "test-harness";
   if (
     lowerOutput.includes("eacces") ||
     lowerOutput.includes("eperm") ||
     lowerOutput.includes("permission denied") ||
     lowerOutput.includes("command not found") ||
     lowerOutput.includes("enoent")
-  ) return "environment";
+  )
+    return "environment";
   return "unknown-product-or-harness";
 }
 

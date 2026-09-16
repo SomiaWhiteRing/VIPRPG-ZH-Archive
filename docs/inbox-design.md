@@ -26,7 +26,7 @@
 - 已注销账户在仍可公开的内容中显示本站统一名称与默认头像，不提供主页链接。恢复内容公开性不会制造新事件或新的未读。
 - 不可用提醒仍可单独或批量标记已读，未读计数不会静默排除它。
 
-写入入口为 [publishForum / likeForum](../lib/server/forum/mutations.ts)，提醒语句集中在 [notifications.ts](../lib/server/forum/notifications.ts)；查询与阅读操作集中在 [inbox.ts](../lib/server/db/inbox.ts)。
+写入入口为 [publishForum / likeForum](../app/.server/forum/mutations.ts)，提醒语句集中在 [notifications.ts](../app/.server/forum/notifications.ts)；查询与阅读操作集中在 [inbox.ts](../app/.server/db/inbox.ts)。
 
 ## 页面与列表
 

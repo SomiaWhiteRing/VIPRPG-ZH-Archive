@@ -1,12 +1,12 @@
-"use client";
-
-import { forwardRef, useLayoutEffect, useRef, useState, type InputHTMLAttributes } from "react";
-import DatePicker from "react-datepicker";
-import { zhCN } from "date-fns/locale/zh-CN";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { parseOriginalReleaseDate, type OriginalReleasePrecision } from "@/lib/original-release-date";
+import type { OriginalReleasePrecision } from "@/lib/original-release-date";
+import { parseOriginalReleaseDate } from "@/lib/original-release-date";
+import { zhCN } from "date-fns/locale/zh-CN";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import type { InputHTMLAttributes } from "react";
+import { forwardRef, useLayoutEffect, useRef, useState } from "react";
+import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import styles from "./precision-date-picker.module.css";
 
@@ -41,7 +41,13 @@ export function PrecisionDatePicker({
   const [precision, setPrecision] = useState<DatePrecision>("year");
   const selected = parsed?.value ? toLocalDate(parsed.value) : null;
   const displayValue = parsed?.value
-    ? parsed.value.split("-").map((part, index) => `${index === 0 ? part : Number(part)}${DATE_UNITS[index]}`).join("")
+    ? parsed.value
+        .split("-")
+        .map(
+          (part, index) =>
+            `${index === 0 ? part : Number(part)}${DATE_UNITS[index]}`,
+        )
+        .join("")
     : "";
 
   return (
@@ -50,7 +56,7 @@ export function PrecisionDatePicker({
         autoComplete="off"
         calendarClassName={styles.calendar}
         chooseDayAriaLabelPrefix="选择"
-        customInput={(
+        customInput={
           <DateSegmentInput
             className={`${styles.input} cursor-pointer pr-10 caret-transparent`}
             onPrecisionChange={(next) => {
@@ -59,7 +65,7 @@ export function PrecisionDatePicker({
             }}
             precision={precision}
           />
-        )}
+        }
         dateFormat={DATE_FORMATS[precision]}
         disabled={disabled}
         disabledDayAriaLabelPrefix="不可选择"
@@ -71,7 +77,9 @@ export function PrecisionDatePicker({
           if (!selection) event?.preventDefault();
         }}
         onSelect={(date) => {
-          onChange(date ? updateDatePart(date, precision, parsed?.value ?? "") : "");
+          onChange(
+            date ? updateDatePart(date, precision, parsed?.value ?? "") : "",
+          );
           if (date && precision !== "day") {
             setPrecision(precision === "year" ? "month" : "day");
             pickerRef.current?.setFocus();
@@ -87,10 +95,24 @@ export function PrecisionDatePicker({
           <div className="px-2 pb-1">
             <div className="flex items-center justify-between">
               <Button
-                aria-label={precision === "day" ? "上个月" : precision === "month" ? "上一年" : "前一组年份"}
+                aria-label={
+                  precision === "day"
+                    ? "上个月"
+                    : precision === "month"
+                      ? "上一年"
+                      : "前一组年份"
+                }
                 className="size-8"
-                disabled={precision === "day" ? header.prevMonthButtonDisabled : header.prevYearButtonDisabled}
-                onClick={precision === "day" ? header.decreaseMonth : header.decreaseYear}
+                disabled={
+                  precision === "day"
+                    ? header.prevMonthButtonDisabled
+                    : header.prevYearButtonDisabled
+                }
+                onClick={
+                  precision === "day"
+                    ? header.decreaseMonth
+                    : header.decreaseYear
+                }
                 size="icon"
                 type="button"
                 variant="ghost"
@@ -103,10 +125,24 @@ export function PrecisionDatePicker({
                   : `${header.date.getFullYear()}年${precision === "day" ? ` ${header.date.getMonth() + 1}月` : ""}`}
               </span>
               <Button
-                aria-label={precision === "day" ? "下个月" : precision === "month" ? "下一年" : "后一组年份"}
+                aria-label={
+                  precision === "day"
+                    ? "下个月"
+                    : precision === "month"
+                      ? "下一年"
+                      : "后一组年份"
+                }
                 className="size-8"
-                disabled={precision === "day" ? header.nextMonthButtonDisabled : header.nextYearButtonDisabled}
-                onClick={precision === "day" ? header.increaseMonth : header.increaseYear}
+                disabled={
+                  precision === "day"
+                    ? header.nextMonthButtonDisabled
+                    : header.nextYearButtonDisabled
+                }
+                onClick={
+                  precision === "day"
+                    ? header.increaseMonth
+                    : header.increaseYear
+                }
                 size="icon"
                 type="button"
                 variant="ghost"
@@ -126,7 +162,10 @@ export function PrecisionDatePicker({
         value={displayValue}
         wrapperClassName="w-full"
       />
-      <CalendarDays aria-hidden className="pointer-events-none absolute right-3 top-3 size-4 text-muted" />
+      <CalendarDays
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-3 size-4 text-muted"
+      />
     </div>
   );
 }
@@ -136,78 +175,115 @@ type DateSegmentInputProps = InputHTMLAttributes<HTMLInputElement> & {
   onPrecisionChange: (precision: DatePrecision) => void;
 };
 
-const DateSegmentInput = forwardRef<HTMLInputElement, DateSegmentInputProps>(function DateSegmentInput(
-  { precision, onPrecisionChange, onClick, onKeyDown, onFocus, onBlur, value, ...props },
-  ref,
-) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const pointerFocus = useRef(false);
+const DateSegmentInput = forwardRef<HTMLInputElement, DateSegmentInputProps>(
+  function DateSegmentInput(
+    {
+      precision,
+      onPrecisionChange,
+      onClick,
+      onKeyDown,
+      onFocus,
+      onBlur,
+      value,
+      ...props
+    },
+    ref,
+  ) {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const pointerFocus = useRef(false);
 
-  useLayoutEffect(() => {
-    const input = inputRef.current;
-    if (input && document.activeElement === input) selectDatePart(input, precision);
-  }, [precision, value]);
+    useLayoutEffect(() => {
+      const input = inputRef.current;
+      if (input && document.activeElement === input)
+        selectDatePart(input, precision);
+    }, [precision, value]);
 
-  return (
-    <Input
-      {...props}
-      inputMode="none"
-      onBlur={(event) => {
-        pointerFocus.current = false;
-        onBlur?.(event);
-      }}
-      onClick={(event) => {
-        const input = event.currentTarget;
-        const next = clickedDatePart(input, event.detail ? event.clientX : undefined);
-        selectDatePart(input, next);
-        onPrecisionChange(next);
-        pointerFocus.current = false;
-        onClick?.(event);
-      }}
-      onFocus={(event) => {
-        // Pointer focus must leave the caret intact until the clicked part is identified.
-        if (!pointerFocus.current) selectDatePart(event.currentTarget, precision);
-        onFocus?.(event);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-          event.preventDefault();
-          const count = [...event.currentTarget.value.matchAll(/\d+/g)].length;
-          const index = DATE_PARTS.indexOf(precision) + (event.key === "ArrowLeft" ? -1 : 1);
-          const next = DATE_PARTS[Math.max(0, Math.min(index, count, 2))];
-          selectDatePart(event.currentTarget, next);
+    return (
+      <Input
+        {...props}
+        inputMode="none"
+        onBlur={(event) => {
+          pointerFocus.current = false;
+          onBlur?.(event);
+        }}
+        onClick={(event) => {
+          const input = event.currentTarget;
+          const next = clickedDatePart(
+            input,
+            event.detail ? event.clientX : undefined,
+          );
+          selectDatePart(input, next);
           onPrecisionChange(next);
-          return;
-        }
-        onKeyDown?.(event);
-      }}
-      onPointerCancel={() => { pointerFocus.current = false; }}
-      onPointerDown={() => { pointerFocus.current = true; }}
-      readOnly
-      ref={(input) => {
-        inputRef.current = input;
-        if (typeof ref === "function") ref(input);
-        else if (ref) ref.current = input;
-      }}
-      value={value}
-    />
-  );
-});
+          pointerFocus.current = false;
+          onClick?.(event);
+        }}
+        onFocus={(event) => {
+          // Pointer focus must leave the caret intact until the clicked part is identified.
+          if (!pointerFocus.current)
+            selectDatePart(event.currentTarget, precision);
+          onFocus?.(event);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            const count = [...event.currentTarget.value.matchAll(/\d+/g)]
+              .length;
+            const index =
+              DATE_PARTS.indexOf(precision) +
+              (event.key === "ArrowLeft" ? -1 : 1);
+            const next = DATE_PARTS[Math.max(0, Math.min(index, count, 2))];
+            selectDatePart(event.currentTarget, next);
+            onPrecisionChange(next);
+            return;
+          }
+          onKeyDown?.(event);
+        }}
+        onPointerCancel={() => {
+          pointerFocus.current = false;
+        }}
+        onPointerDown={() => {
+          pointerFocus.current = true;
+        }}
+        readOnly
+        ref={(input) => {
+          inputRef.current = input;
+          if (typeof ref === "function") ref(input);
+          else if (ref) ref.current = input;
+        }}
+        value={value}
+      />
+    );
+  },
+);
 
-function clickedDatePart(input: HTMLInputElement, clientX?: number): DatePrecision {
+function clickedDatePart(
+  input: HTMLInputElement,
+  clientX?: number,
+): DatePrecision {
   const parts = [...input.value.matchAll(/\d+[年月日]/g)];
   let index = -1;
-  const context = clientX === undefined ? null : document.createElement("canvas").getContext("2d");
+  const context =
+    clientX === undefined
+      ? null
+      : document.createElement("canvas").getContext("2d");
   if (context && clientX !== undefined) {
     const style = getComputedStyle(input);
     context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const position = clientX - input.getBoundingClientRect().left
-      - parseFloat(style.borderLeftWidth) - parseFloat(style.paddingLeft) + input.scrollLeft;
+    const position =
+      clientX -
+      input.getBoundingClientRect().left -
+      parseFloat(style.borderLeftWidth) -
+      parseFloat(style.paddingLeft) +
+      input.scrollLeft;
     const letterSpacing = parseFloat(style.letterSpacing) || 0;
     // Measure the whole number-and-unit segment: caret positions round both sides of a character.
     index = parts.findIndex((part) => {
       const end = part.index + part[0].length;
-      return position < context.measureText(input.value.slice(0, end)).width + end * letterSpacing;
+      return (
+        position <
+        context.measureText(input.value.slice(0, end)).width +
+          end * letterSpacing
+      );
     });
   } else {
     const position = input.selectionStart ?? 0;
@@ -222,12 +298,25 @@ function selectDatePart(input: HTMLInputElement, precision: DatePrecision) {
   input.setSelectionRange(start, start + (part?.[0].length ?? 0));
 }
 
-function updateDatePart(date: Date, precision: DatePrecision, previous: string): string {
+function updateDatePart(
+  date: Date,
+  precision: DatePrecision,
+  previous: string,
+): string {
   const previousParts = previous.split("-");
-  const count = Math.max(previous ? previousParts.length : 0, DATE_PARTS.indexOf(precision) + 1);
+  const count = Math.max(
+    previous ? previousParts.length : 0,
+    DATE_PARTS.indexOf(precision) + 1,
+  );
   const year = date.getFullYear();
-  const month = precision === "year" && previousParts[1] ? Number(previousParts[1]) - 1 : date.getMonth();
-  const day = precision !== "day" && previousParts[2] ? Number(previousParts[2]) : date.getDate();
+  const month =
+    precision === "year" && previousParts[1]
+      ? Number(previousParts[1]) - 1
+      : date.getMonth();
+  const day =
+    precision !== "day" && previousParts[2]
+      ? Number(previousParts[2])
+      : date.getDate();
   const result = new Date(date);
   result.setFullYear(year, month + 1, 0);
   // Keep the other parts when editing, clamping dates such as February 29 in a non-leap year.
@@ -247,5 +336,9 @@ function formatDateValue(date: Date, precision: DatePrecision): string {
   const year = String(date.getFullYear()).padStart(4, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return precision === "year" ? year : precision === "month" ? `${year}-${month}` : `${year}-${month}-${day}`;
+  return precision === "year"
+    ? year
+    : precision === "month"
+      ? `${year}-${month}`
+      : `${year}-${month}-${day}`;
 }

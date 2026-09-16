@@ -1,13 +1,9 @@
 # Dependencies
 node_modules/
 
-# Next.js / OpenNext build output
-.next/
-.next-system-test/
-.next-system-test.tsconfig.json
-.open-next/
-out/
-next-env.d.ts
+# Application build output
+build/
+.react-router/
 
 # Cloudflare local state
 .wrangler/
