@@ -6,9 +6,12 @@ import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
+import { CharacterCard } from "@/app/components/characters/character-card";
 import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
+import type { CharacterIndexEntry } from "@/lib/character-index";
+import { readCharacterCounts } from "@/lib/server/db/character-index";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { listPublicCharacters, listPublicTags } from "@/lib/server/db/taxonomy-library";
+import { searchPublicCharacters, listPublicTags } from "@/lib/server/db/taxonomy-library";
 import { listPublicCreators } from "@/lib/server/db/creator-library";
 import { searchGameWorks } from "@/lib/server/db/game-library";
 import { formatNumber } from "@/lib/format";
@@ -106,10 +109,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </p>
           {directory && directory.items.length > 0 ? (
             <section
-              className={scope === "catalogs" ? "divide-y divide-border border-y border-border" : "grid gap-2.5"}
-              aria-label={scope === "catalogs" ? "目录搜索结果" : "分类搜索结果"}
+              className={scope === "characters" ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" : scope === "catalogs" ? "divide-y divide-border border-y border-border" : "grid gap-2.5"}
+              aria-label={scope === "characters" ? "角色搜索结果" : scope === "catalogs" ? "目录搜索结果" : "分类搜索结果"}
             >
-              {directory.items.map((item) => item.catalog ? (
+              {directory.items.map((item) => item.character ? (
+                <CharacterCard character={item.character} displayName={item.title} originalName={item.subtitle ?? item.title} headingLevel={2} key={item.href} />
+              ) : item.catalog ? (
                 <CatalogListRow catalog={item.catalog} key={item.href} />
               ) : (
                 <Link
@@ -143,7 +148,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
 async function listDirectory(scope: string, query: string, page: number) {
   const pageSize = 20;
-  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string; catalog?: CatalogSummary }>;
+  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string; character?: Pick<CharacterIndexEntry, "id" | "portrait" | "workCount" | "commentCount" | "materialCount">; catalog?: CatalogSummary }>;
   if (scope === "creators")
     items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
       href: `/creators/${item.id}`,
@@ -151,13 +156,24 @@ async function listDirectory(scope: string, query: string, page: number) {
       subtitle: null,
       meta: `${item.workCreditCount} 个作品`,
     }));
-  else if (scope === "characters")
-    items = (await listPublicCharacters({ query, limit: 300 })).map((item) => ({
-      href: `/games?character=${item.id}`,
+  else if (scope === "characters") {
+    const characters = await searchPublicCharacters({ query, page, pageSize });
+    const visibleCharacters = characters.items;
+    const { commentCounts, materialCounts } = visibleCharacters.length
+      ? await readCharacterCounts(visibleCharacters.map((character) => character.id))
+      : { commentCounts: new Map<number, number>(), materialCounts: new Map<number, number>() };
+    items = visibleCharacters.map((item) => ({
+      href: `/characters/${item.id}`,
       title: item.primaryName,
       subtitle: item.originalName,
       meta: `${item.workCount} 个作品`,
+      character: {
+        id: item.id, portrait: item.defaultPortrait, workCount: item.workCount,
+        commentCount: commentCounts.get(item.id) ?? 0, materialCount: materialCounts.get(item.id) ?? 0,
+      },
     }));
+    return { items, pageSize, total: characters.total };
+  }
   else if (scope === "tags")
     items = (await listPublicTags({ query, limit: 300 })).map((item) => ({
       href: `/games?tag=${item.id}`,

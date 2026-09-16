@@ -17,7 +17,11 @@ export const ROLE_TEMPLATES = {
     permissionKeys: [
       "work.lookup_non_deleted", "work.read_private", "work.metadata.update_any",
       "creator.read_private", "creator.metadata.update_any",
-      "character.read_private", "character.metadata.update_any",
+      "character.admin.read", "character.create", "character.metadata.update_any",
+      "character.portrait.manage_any", "character.portrait.upload",
+      "character_category.create", "character_category.update",
+      "character_membership.create", "character_membership.update", "character_membership.delete",
+      "character_index.reorder", "character.sources.update_any",
       "tag.read_private", "tag.metadata.update_any",
       "relation.create_any", "relation.update_any", "relation.delete_any",
       "translation_relation.create_any", "translation_relation.delete_any",

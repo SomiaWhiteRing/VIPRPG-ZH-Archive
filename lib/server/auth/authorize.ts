@@ -66,6 +66,12 @@ export async function requirePagePermission(nextPath: string, permission: Permis
   return context.user;
 }
 
+export async function requireAnyPagePermission(nextPath: string, permissions: readonly PermissionKey[]) {
+  const context = await requirePageContext(nextPath);
+  if (!permissions.some((permission) => hasPermission(context.user, permission))) redirect("/");
+  return context.user;
+}
+
 export async function requireBootstrapAdminPage(nextPath: string) {
   const context = await requirePageContext(nextPath);
   if (!context.isBootstrapAdmin) redirect("/");

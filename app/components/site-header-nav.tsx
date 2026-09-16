@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { ChevronDown, Search, Menu, X } from "lucide-react";
 import Image from "next/image";
-import { hasPermissionKey, type PermissionKey } from "@/lib/authz/permissions";
+import { CHARACTER_ADMIN_PERMISSIONS, hasPermissionKey, type PermissionKey } from "@/lib/authz/permissions";
 import { DropdownMenu } from "radix-ui";
 import { Suspense, useRef, useState } from "react";
 
@@ -34,6 +34,7 @@ type Props = {
 const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/", label: "首页", exact: true },
   { href: "/games", label: "游戏库" },
+  { href: "/characters", label: "角色" },
   { href: "/discussions", label: "讨论版" },
   { href: "/catalogs", label: "目录" },
   { href: "/upload", label: "上传" },
@@ -59,7 +60,7 @@ const ADMIN_LINKS: Array<HeaderNavigationLink & {
   {
     href: "/admin/characters",
     label: "角色",
-    permission: "character.read_private",
+    anyPermission: [...CHARACTER_ADMIN_PERMISSIONS],
   },
   { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
   { href: "/admin/emojis", label: "站点表情", permission: "custom_emoji.manage" },
@@ -89,7 +90,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const visibleHeaderLinks = inAdmin ? visibleAdminLinks : PUBLIC_LINKS;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 text-foreground shadow-sm backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 text-foreground shadow-sm backdrop-blur" id="site-header">
       <div className="mx-auto flex min-h-14 w-[min(1280px,calc(100vw-2rem))] items-center gap-2 py-1.5 sm:gap-4">
         <Link
           className="inline-flex shrink-0 items-center gap-2 font-extrabold tracking-wide"

@@ -10,7 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "output/playwright/character-materials");
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
-  console.log("node scripts/collect-character-materials.mjs [--open] [--all | --limit N] [--download]\nDefault: collect one uncached source page. --open opens the persistent browser for manual verification. Re-run to resume; output/playwright/character-materials holds the cache and report.");
+  console.log("node scripts/collect-character-materials.mjs [--open] [--all | --limit N] [--generated | --categories] [--download] [--assigned]\nDefault: collect one uncached source page. --generated limits collection to generated characters' sources; --categories limits collection to category sources. --assigned downloads only explicitly assigned images. --open opens the persistent browser for manual verification. Re-run to resume; output/playwright/character-materials holds the cache and report.");
   process.exit(0);
 }
 const limitIndex = args.indexOf("--limit");
@@ -56,6 +56,25 @@ for (const sheet of library.sheets) {
     // These are candidates from face provenance, not verified charset bindings.
     for (const name of sheet.boundOriginalNames) pages.get(source.pageUrl).names.add(name);
   }
+}
+// Characters added from the index may have no face sheet yet. Their source pages
+// must still be collected, otherwise the missing binding can never be filled.
+const classification = JSON.parse(readFileSync(join(root, "data/character-classification-bootstrap.json"), "utf8"));
+for (const source of classification.sources) {
+  for (const url of source.urls) {
+    if (!/^https:\/\/w\.atwiki\.jp\/viprpg_sozai\/pages\/\d+\.html$/.test(url)) continue;
+    if (!pages.has(url)) pages.set(url, { url, names: new Set() });
+    pages.get(url).names.add(source.characterName);
+  }
+}
+const categoryUrls = new Set(classification.categories.map((category) => category.sourceUrl).filter((url) => /^https:\/\/w\.atwiki\.jp\/viprpg_sozai\/pages\/\d+\.html$/.test(url ?? "")));
+for (const url of categoryUrls) if (!pages.has(url)) pages.set(url, { url, names: new Set() });
+if (args.includes("--categories")) {
+  for (const url of pages.keys()) if (!categoryUrls.has(url)) pages.delete(url);
+} else if (args.includes("--generated")) {
+  const generated = new Set(classification.newCharacters.map((character) => character.originalName));
+  const urls = new Set(classification.sources.filter((source) => generated.has(source.characterName)).flatMap((source) => source.urls));
+  for (const url of pages.keys()) if (!urls.has(url)) pages.delete(url);
 }
 if (args.includes("--open")) {
   console.log(cli("open", pages.keys().next().value, "--browser", "chrome", "--headed", "--persistent", "--profile", "output/playwright/atwiki-profile"));
@@ -130,7 +149,13 @@ try {
     report.push(entry);
     if (args.includes("--download")) {
       mkdirSync(join(output, "assets"), { recursive: true });
+      let selectedImageCount = 0;
       for (const material of page.images) {
+        if (args.includes("--assigned") && !(classification.materialAssignments ?? []).some((assignment) =>
+          assignment.pageUrl === page.url &&
+          (!assignment.sectionPrefix || material.sectionPath.some((part) => part.startsWith(assignment.sectionPrefix))) &&
+          (!assignment.filenames || assignment.filenames.includes(material.filename)))) continue;
+        selectedImageCount++;
         if (material.file && existsSync(join(output, material.file))) {
           const bytes = readFileSync(join(output, material.file));
           if (createHash("sha256").update(bytes).digest("hex") === material.sha256) continue;
@@ -173,7 +198,7 @@ try {
         save(path, page);
         console.log(`[${new Date().toISOString()}] Saved ${material.filename}: ${material.sizeBytes} bytes`);
       }
-      console.log(`Downloaded ${page.images.length} images: ${page.title}`);
+      console.log(`Downloaded ${selectedImageCount} selected images: ${page.title}`);
     }
   }
 } finally {

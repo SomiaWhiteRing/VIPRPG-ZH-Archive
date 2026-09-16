@@ -195,7 +195,7 @@ export default async function GameDetailPage({
                 {work.characters.map((character, index) => (
                   <Link
                     className="group grid basis-29 shrink-0 content-start gap-1 text-foreground max-[560px]:basis-27"
-                    href={`/games?character=${character.id}`}
+                    href={`/characters/${character.id}`}
                     key={`${character.id}:${index}`}
                   >
                     <CharacterPortrait

@@ -1,3 +1,4 @@
+import { commentTargetHref } from "@/lib/comment-target";
 import Link from "next/link";
 import { searchUserWorks } from "@/lib/server/db/game-library";
 import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
@@ -27,7 +28,7 @@ export default async function PublicUserPage({ params }: { params: Promise<{ use
       {played ? <AccountSection href={`${base}/history`} title="最近游玩">{played.items.length ? <AccountWorkGrid items={played.items} /> : <AccountEmpty>还没有公开游玩记录。</AccountEmpty>}</AccountSection> : null}
       {favorites ? <AccountSection href={`${base}/favorites`} title="最近收藏">{favorites.items.length ? <AccountWorkGrid items={favorites.items} /> : <AccountEmpty>还没有公开收藏。</AccountEmpty>}</AccountSection> : null}
       {catalogs ? <AccountSection href={`${base}/catalogs`} title="公开目录">{catalogs.items.length ? <ul className="divide-y divide-border border-y border-border">{catalogs.items.map((catalog, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={catalog.id}><Link className="font-semibold" href={`/catalogs/${catalog.id}`}>{catalog.title}</Link><p className="mt-1 text-sm text-muted">{catalog.itemCount} 部作品 · {formatDate(catalog.updatedAt)}</p></li>)}</ul> : <AccountEmpty>还没有公开目录。</AccountEmpty>}</AccountSection> : null}
-      {comments ? <AccountSection href={`${base}/comments`} title="最近评论">{comments.items.length ? <ul className="divide-y divide-border border-y border-border">{comments.items.map((comment, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={comment.id}><Link className="font-semibold" href={`${comment.target.kind === "work" ? `/games/${comment.target.id}` : `/creators/${comment.target.id}`}#comment-${comment.id}`}>{comment.targetTitle}</Link><p className="mt-1 line-clamp-2 text-sm text-muted">{comment.body}</p></li>)}</ul> : <AccountEmpty>还没有公开评论。</AccountEmpty>}</AccountSection> : null}
+      {comments ? <AccountSection href={`${base}/comments`} title="最近评论">{comments.items.length ? <ul className="divide-y divide-border border-y border-border">{comments.items.map((comment, index) => <li className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`} key={comment.id}><Link className="font-semibold" href={`${commentTargetHref(comment.target)}#comment-${comment.id}`}>{comment.targetTitle}</Link><p className="mt-1 line-clamp-2 text-sm text-muted">{comment.body}</p></li>)}</ul> : <AccountEmpty>还没有公开评论。</AccountEmpty>}</AccountSection> : null}
       {discussions ? <AccountSection href={`${base}/discussions`} title="最近讨论"><DiscussionList items={discussions.items} compact /></AccountSection> : null}
       {!hasVisibleSections ? <AccountEmpty>这位用户没有公开其他内容。</AccountEmpty> : null}
     </div>

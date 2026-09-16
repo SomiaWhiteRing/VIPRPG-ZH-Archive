@@ -4678,16 +4678,6 @@
           "source": "admin"
         },
         {
-          "name": "ネクロマンサー",
-          "language": "ja",
-          "source": "admin"
-        },
-        {
-          "name": "死灵法师",
-          "language": "zh",
-          "source": "admin"
-        },
-        {
           "name": "涅克罗女士",
           "language": "zh",
           "source": "admin"
@@ -5531,6 +5521,11 @@
           "name": "布兰迪",
           "language": "zh",
           "source": "admin"
+        },
+        {
+          "name": "ブラックサンダーⅠ",
+          "language": "ja",
+          "source": "admin"
         }
       ]
     },
@@ -6298,16 +6293,6 @@
         {
           "name": "ミミ子",
           "language": "ja",
-          "source": "admin"
-        },
-        {
-          "name": "レイズIII",
-          "language": "ja",
-          "source": "admin"
-        },
-        {
-          "name": "复活III",
-          "language": "zh",
           "source": "admin"
         },
         {
@@ -8812,6 +8797,13 @@
     {
       "originalName": "ミラージュバリア",
       "primaryName": "幻影屏障",
+      "description": null,
+      "extra": {},
+      "aliases": []
+    },
+    {
+      "originalName": "レイズIII",
+      "primaryName": "复活III",
       "description": null,
       "extra": {},
       "aliases": []

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createSourceOrderReader } from "./character-material-source-order.mjs";
+import { appendGeneratedCharacterMaterials } from "./complete-character-source-materials.mjs";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const reviewDirectory = resolve(root, "output/character-material-review");
@@ -20,6 +22,10 @@ export function readInput() {
   const items = readJson(resolve(root, "output/character-material-association/materials.json"));
   const scopes = readJson(resolve(root, "output/character-material-association/scopes.json"));
   const characters = readJson(resolve(root, "data/character-dictionary.json")).characters;
+  const generated = readJson(resolve(root, "data/character-classification-bootstrap.json")).newCharacters;
+  for (const character of generated) {
+    if (!characters.some((existing) => existing.originalName === character.originalName)) characters.push({ ...character, aliases: [] });
+  }
   const decisionsPath = resolve(reviewDirectory, "decisions.json");
   const decisions = existsSync(decisionsPath) ? readJson(decisionsPath) : {};
   const ids = new Set();
@@ -33,15 +39,22 @@ export function readInput() {
 }
 
 export function buildLibrary() {
+  const readSourceOrder = createSourceOrderReader(collectionDirectory);
   const { items, characters, decisions } = readInput();
+  const explicitAssignments = readJson(resolve(root, "data/character-classification-bootstrap.json")).materialAssignments ?? [];
   const knownNames = new Set(characters.map((c) => c.originalName));
   const records = new Map();
   const counts = { automatic: 0, reviewed: 0, discardedNoAnchor: 0, rejected: 0, pending: 0 };
   mkdirSync(resolve(libraryDirectory, "assets"), { recursive: true });
   for (const item of items) {
-    if (item.status === "no_face_anchor") { counts.discardedNoAnchor++; continue; }
+    const explicitNames = [...new Set(explicitAssignments.filter((assignment) =>
+      assignment.pageUrl === item.pageUrl && assignment.filenames?.includes(item.filename)
+      && (!assignment.sectionPrefix || item.sectionPath.some((section) => section.startsWith(assignment.sectionPrefix)))
+    ).flatMap((assignment) => assignment.originalNames))];
+    if (!explicitNames.length && item.status === "no_face_anchor") { counts.discardedNoAnchor++; continue; }
     let names;
-    if (item.status === "single_anchor") { names = item.candidates; counts.automatic++; }
+    if (explicitNames.length) { names = explicitNames; counts.automatic++; }
+    else if (item.status === "single_anchor") { names = item.candidates; counts.automatic++; }
     else {
       const decision = decisions[item.id];
       if (decision?.action === "reject") { counts.rejected++; continue; }
@@ -67,10 +80,15 @@ export function buildLibrary() {
     record.sources.push({
       referenceId: item.id, pageUrl: item.pageUrl, pageTitle: item.pageTitle,
       imageUrl: item.url, originalFilename: item.filename, sectionPath: item.sectionPath,
-      originalNames: names, decision: item.status === "single_anchor" ? "face_anchor" : "manual",
+      sourceOrder: readSourceOrder(item.pageUrl, item.url),
+      originalNames: names, decision: explicitNames.length ? "source_section" : item.status === "single_anchor" ? "face_anchor" : "manual",
     });
   }
   const materials = [...records.values()].sort((a, b) => `${a.kind}:${a.sha256}`.localeCompare(`${b.kind}:${b.sha256}`));
+  const facesPath = resolve(root, "data/character-face-sheets/manifest.json");
+  const faces = readJson(facesPath);
+  appendGeneratedCharacterMaterials(materials, faces);
+  saveJson(facesPath, faces);
   const manifest = { schema: "viprpg-character-material-library.v1", materials };
   saveJson(resolve(libraryDirectory, "manifest.json"), manifest);
   const summary = { ...counts, materials: materials.length, uniqueFiles: new Set(materials.map((m) => m.sha256)).size, bindings: materials.reduce((n, m) => n + m.boundOriginalNames.length, 0) };

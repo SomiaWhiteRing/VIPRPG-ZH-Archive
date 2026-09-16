@@ -1,0 +1,120 @@
+.layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  column-gap: clamp(24px, 3vw, 40px);
+  padding-top: 4px;
+  transition: grid-template-columns 280ms ease, column-gap 280ms ease;
+}
+
+.layout[data-collapsed="true"] {
+  grid-template-columns: 0px minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+.sidebarSlot {
+  position: sticky;
+  top: 74px;
+  min-width: 0;
+}
+
+.sidebar {
+  max-height: calc(100dvh - 5.5rem);
+  overflow: hidden auto;
+  opacity: 1;
+  visibility: visible;
+  transition: max-height 280ms ease, opacity 280ms ease, visibility 280ms;
+}
+
+.sidebarContent {
+  width: 300px;
+  padding-right: 4px;
+  transition: transform 280ms ease;
+}
+
+.layout[data-collapsed="true"] .sidebar {
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.layout[data-collapsed="true"] .sidebarContent {
+  transform: translateX(-100%);
+}
+
+.toggle {
+  position: absolute;
+  z-index: 10;
+  top: 12px;
+  right: -20px;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--color-background);
+  clip-path: inset(-4px);
+  transition: clip-path 280ms ease, background-color 150ms ease;
+}
+
+.chevron {
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(-135deg);
+  transition: transform 280ms ease;
+}
+
+.layout[data-collapsed="true"] .toggle {
+  clip-path: inset(-4px -4px -4px 50%);
+}
+
+.layout[data-collapsed="true"] .chevron {
+  transform: translateX(8px) rotate(45deg);
+}
+
+.main {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(24px, 3vw, 40px);
+  }
+
+  .sidebarSlot,
+  .sidebarContent,
+  .main {
+    width: 100%;
+  }
+
+  .sidebarSlot {
+    position: static;
+  }
+
+  .sidebar {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .sidebarContent {
+    padding-right: 0;
+  }
+
+  .toggle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout,
+  .sidebar,
+  .sidebarContent,
+  .toggle,
+  .chevron {
+    transition: none;
+  }
+}

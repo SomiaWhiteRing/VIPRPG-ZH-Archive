@@ -89,17 +89,89 @@ export const PERMISSIONS = {
     scope: "符合条件的重复作者",
     description: "将重复作者及其关联合并。",
   },
-  "character.read_private": {
+  "character.admin.read": {
     category: "character",
-    label: "查看非公开游戏角色",
-    scope: "全部游戏角色，含非公开角色",
-    description: "查看后台游戏角色列表；此处指作品中的人物，不是账户角色。",
+    label: "查看角色管理资料",
+    scope: "全部游戏角色及分类、脸图管理资料",
+    description: "访问角色管理列表、分类树及素材工作台；角色身份与公开素材本身无需此权限。",
+  },
+  "character.create": {
+    category: "character",
+    label: "在后台创建游戏角色",
+    scope: "新游戏角色",
+    description: "通过角色管理后台创建角色；命中已有角色时只返回已有身份，不修改其名称或别名。作品提交中的登场角色登记由对应作品权限控制。",
   },
   "character.metadata.update_any": {
     category: "character",
     label: "编辑所有游戏角色资料",
-    scope: "全部游戏角色资料",
-    description: "创建、编辑游戏角色，维护头像图集；不包含合并角色。",
+    scope: "全部角色名称与别名",
+    description: "编辑角色中文名、日文名和别名。",
+  },
+  "character.merge_any": {
+    category: "character",
+    label: "合并游戏角色",
+    scope: "符合条件的重复角色",
+    description: "将重复角色的作品关联、分类归属、来源、评论及素材迁移到目标角色，并删除源角色。",
+  },
+  "character.portrait.manage_any": {
+    category: "character",
+    label: "维护角色素材与默认头像",
+    scope: "全部角色的四类素材绑定和默认头像",
+    description: "绑定或移除已有脸图、行走图、怪物／战斗图、插图及其他素材，设置或清除默认头像。",
+  },
+  "character.portrait.upload": {
+    category: "character",
+    label: "上传角色素材",
+    scope: "新上传的四类角色素材",
+    description: "上传并公开角色素材，绑定到指定角色；不修改其他绑定或默认头像。",
+  },
+  "character_category.create": {
+    category: "character",
+    label: "创建角色分类",
+    scope: "新角色分类",
+    description: "创建一级或下级分类，并设置名称、来源和上级分类。",
+  },
+  "character_category.update": {
+    category: "character",
+    label: "编辑角色分类",
+    scope: "已有角色分类",
+    description: "修改分类名称、来源或上级分类。",
+  },
+  "character_category.delete": {
+    category: "character",
+    label: "删除角色分类",
+    scope: "没有子分类或角色的空分类",
+    description: "删除空分类；不删除角色身份。",
+  },
+  "character_membership.create": {
+    category: "character",
+    label: "添加角色分类归属",
+    scope: "角色与分类之间的新归属",
+    description: "将已有角色加入分类，并选择该归属使用的中日文名字。",
+  },
+  "character_membership.update": {
+    category: "character",
+    label: "修改角色分类归属",
+    scope: "已有角色分类归属",
+    description: "修改归属显示名或将这条归属移动到其他分类；不改变角色身份或其他归属。",
+  },
+  "character_membership.delete": {
+    category: "character",
+    label: "移除角色分类归属",
+    scope: "已有角色分类归属",
+    description: "移除指定分类与角色的归属；不删除角色或其他归属。",
+  },
+  "character_index.reorder": {
+    category: "character",
+    label: "调整角色目录顺序",
+    scope: "分类和分类内角色的展示顺序",
+    description: "调整同级分类及角色的混合展示顺序，不修改分类层级或角色归属。",
+  },
+  "character.sources.update_any": {
+    category: "character",
+    label: "编辑角色来源",
+    scope: "全部角色的来源链接",
+    description: "添加、修改、移除及排序角色自身的来源链接，不改变分类来源或归属。",
   },
   "tag.read_private": {
     category: "tag",
@@ -470,7 +542,6 @@ export function permissionConfigurationWarnings(
     "work.merge_any": "work.metadata.update_any",
     "creator.merge_any": "creator.metadata.update_any",
     "creator.metadata.update_any": "creator.read_private",
-    "character.metadata.update_any": "character.read_private",
     "tag.metadata.update_any": "tag.read_private",
     "archive_version.update": "archive_version.read_private",
     "archive_version.delete_any": "archive_version.read_private",
@@ -531,6 +602,25 @@ export function getRelationEditorCapabilities(
   };
 }
 
+export const CHARACTER_INDEX_PERMISSIONS = [
+  "character_category.create", "character_category.update", "character_category.delete",
+  "character_membership.create", "character_membership.update", "character_membership.delete",
+  "character_index.reorder", "character.sources.update_any",
+] as const satisfies readonly PermissionKey[];
+
+export const CHARACTER_EDIT_PERMISSIONS = [
+  "character.metadata.update_any",
+  "character.merge_any", "character.portrait.manage_any", "character.portrait.upload",
+] as const satisfies readonly PermissionKey[];
+
+export const CHARACTER_DETAIL_PERMISSIONS = [
+  "character.admin.read", "character.create", ...CHARACTER_EDIT_PERMISSIONS,
+] as const satisfies readonly PermissionKey[];
+
+export const CHARACTER_ADMIN_PERMISSIONS = [
+  ...CHARACTER_DETAIL_PERMISSIONS, ...CHARACTER_INDEX_PERMISSIONS,
+] as const satisfies readonly PermissionKey[];
+
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
     "work.lookup_non_deleted",
@@ -578,8 +668,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "work.metadata.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
-    "character.read_private",
-    "character.metadata.update_any",
+    ...CHARACTER_ADMIN_PERMISSIONS,
     "tag.read_private",
     "tag.metadata.update_any",
     "relation.create_any", "relation.update_any", "relation.delete_any",
@@ -620,8 +709,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "work.metadata.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
-    "character.read_private",
-    "character.metadata.update_any",
+    ...CHARACTER_ADMIN_PERMISSIONS,
     "tag.read_private",
     "tag.metadata.update_any",
     "relation.create_any", "relation.update_any", "relation.delete_any",

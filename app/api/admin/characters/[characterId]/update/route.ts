@@ -1,4 +1,5 @@
-import { requirePermission } from "@/lib/server/auth/authorize";
+import { hasPermission } from "@/lib/authz/permissions";
+import { requireAnyPermission } from "@/lib/server/auth/authorize";
 import { writeAuthAuditLog } from "@/lib/server/db/auth-audit";
 import {
   CharacterAliasMergeConflictError,
@@ -23,7 +24,7 @@ type RouteContext = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await requirePermission(request, "character.metadata.update_any");
+  const auth = await requireAnyPermission(request, ["character.metadata.update_any", "character.merge_any", "character.portrait.manage_any"]);
 
   if ("response" in auth) {
     return auth.response;
@@ -36,22 +37,38 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const characterId = parseId(rawCharacterId);
     const formData = await request.formData();
-    const parsedInput = parseCharacterEditForm(formData);
-    const portraitLibrary = parseCharacterPortraitLibraryForm(formData);
-    const input = parsedInput;
+    const metadataRequested = ["primary_name", "original_name", "japanese_aliases", "chinese_aliases"].some((key) => formData.has(key));
+    const portraitRequested = formData.has("face_sheet_ids") || formData.has("default_portrait");
+    const mergeRequested = Boolean(String(formData.get("merge_target_id") ?? "").trim() || String(formData.get("merge_source_id") ?? "").trim());
+    if ((metadataRequested && !hasPermission(auth.user, "character.metadata.update_any"))
+      || (portraitRequested && !hasPermission(auth.user, "character.portrait.manage_any"))
+      || (mergeRequested && !hasPermission(auth.user, "character.merge_any"))) {
+      return json({ ok: false, error: "Permission denied" }, { status: 403 });
+    }
+    if (!metadataRequested && !portraitRequested && !mergeRequested) throw new HttpError(400, "没有可保存的修改");
+    const currentCharacter = await getCharacterForAdminEdit(characterId);
+    if (!currentCharacter) throw new HttpError(404, "角色不存在");
+    if (!metadataRequested) {
+      formData.set("primary_name", currentCharacter.primaryName);
+      formData.set("original_name", currentCharacter.originalName);
+      formData.set("japanese_aliases", currentCharacter.aliases.filter((alias) => alias.language === "ja").map((alias) => alias.name).join("\n"));
+      formData.set("chinese_aliases", currentCharacter.aliases.filter((alias) => alias.language === "zh").map((alias) => alias.name).join("\n"));
+    }
+    const input = parseCharacterEditForm(formData);
+    const portraitLibrary = portraitRequested ? parseCharacterPortraitLibraryForm(formData) : null;
 
     if (input.characterId !== characterId) {
       throw new HttpError(400, "角色 ID 与当前页面不一致，请刷新页面后重试。", "character_id_mismatch");
     }
 
-    const mergePortraitConfigurations = input.mergeSourceId
+    const mergePortraitConfigurations = portraitLibrary && input.mergeSourceId
       ? await Promise.all([
           getCharacterPortraitConfigurationForAdmin(characterId),
           getCharacterPortraitConfigurationForAdmin(input.mergeSourceId),
         ])
       : null;
-    let character = await updateCharacterForAdmin(input);
-    if (!input.mergeTargetId) {
+    let character = metadataRequested || mergeRequested ? await updateCharacterForAdmin(input) : currentCharacter;
+    if (portraitLibrary && !input.mergeTargetId) {
       const [currentPortraitConfiguration, sourcePortraitConfiguration] =
         mergePortraitConfigurations ?? [null, null];
       await updateCharacterPortraitLibraryForAdmin({
@@ -82,7 +99,7 @@ export async function POST(request: Request, context: RouteContext) {
         resultingCharacterId: character.id,
         merged: Boolean(input.mergeTargetId || input.mergeSourceId),
         mergedSourceCharacterId: input.mergeSourceId,
-        portraitLibraryUpdated: !input.mergeTargetId,
+        portraitLibraryUpdated: Boolean(portraitLibrary) && !input.mergeTargetId,
       },
     });
 
@@ -96,7 +113,6 @@ export async function POST(request: Request, context: RouteContext) {
           primaryName: character.primaryName,
           originalName: character.originalName,
           defaultPortrait: character.defaultPortrait,
-          description: character.description,
           workCount: character.workCount,
         },
       });
@@ -104,6 +120,9 @@ export async function POST(request: Request, context: RouteContext) {
 
     return redirectResponse(new URL(redirectTo, request.url));
   } catch (error) {
+    if (error instanceof CharacterAliasMergeConflictError && !hasPermission(auth.user, "character.merge_any")) {
+      return formOrJsonError(request, fallbackPath, "Character update failed", new HttpError(409, "名称已属于其他角色，请联系有合并权限的维护者处理。"));
+    }
     if (requestWantsJson(request) && error instanceof CharacterAliasMergeConflictError) {
       const aliases = error.aliases.map((alias) => `“${alias}”`).join("、");
       return json(

@@ -13,6 +13,8 @@
     "db:local:reset": "node scripts/local-d1-reset.mjs",
     "db:local:seed": "node --import tsx scripts/dev-seed.mjs",
     "db:local:seed:update": "node --import tsx scripts/dev-seed.mjs --update",
+    "db:local:character-index": "node scripts/import-character-index.mjs",
+    "db:local:character-materials": "node scripts/import-character-materials.mjs",
     "forum:offline": "tsx scripts/forum-offline.ts",
     "test:forum": "tsx scripts/forum-contract-check.ts",
     "cf-typegen": "node scripts/cf-typegen.mjs",
