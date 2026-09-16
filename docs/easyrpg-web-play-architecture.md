@@ -4,7 +4,7 @@
 
 相关主文档：
 
-- [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
+- [RPG Maker 2000/2003 去重存储架构](./archive-storage.md)
 - [Workers 与 React Router 运行手册](./workers-development.md)
 
 ## 1. 固定结论
@@ -19,7 +19,7 @@
 - Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
 - 同时接受 runtime 相对路径 `/play/runtime/easyrpg/{version}/games/{playKey}/...`；只拦截这些同源路径，其他请求（包括 `/games/{id}.data`）由站点正常处理。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
-- EasyRPG 在同源 `/play/player.html` iframe 内运行，文档、全局输入、音频和 WASM 循环归属于该 iframe。离开页面或切换 playKey/账户时销毁文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。安装中的站内导航使用 Router blocker，刷新或关页保留浏览器确认。
+- EasyRPG 在同源 `/play/player.html` iframe 内运行；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker，刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
@@ -271,9 +271,9 @@ public/play/runtime/easyrpg/{version}/index.wasm
 
 - `index.wasm` 返回 `Content-Type: application/wasm`。
 - runtime 文件使用长期 immutable 缓存；升级时新增 `{version}` 目录。
-- 页面直接加载同源 runtime，不使用跨域 iframe。
-- React 页面直接挂载 canvas 并调用 `createEasyRpgPlayer(...)`，不使用 iframe。
-- CSP 需要允许同源 WASM 执行；具体指令在实现时以当前浏览器和 Vite 输出验证为准。
+- React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，在该文档内加载 runtime 并调用 `createEasyRpgPlayer(...)`。
+- canvas、全局输入、音频和 WASM 循环归属于 iframe。离开页面或切换 playKey／账户时销毁该文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。
+- 静态资源的缓存和 WASM 类型头由 [public/_headers](../public/_headers) 定义。调整内容安全策略时须允许同源 WASM 运行；运行兼容性仍需按受授权的浏览器验收确认。
 
 ## 12. 存档策略
 
@@ -307,7 +307,7 @@ const persisted = await navigator.storage.persist();
 - 同一页面内同一 `playKey` 同时只能有一个安装任务；刷新或崩溃后的遗留 `installing` 状态按中断安装处理并清理重装。当前不提供跨标签页强锁，同时在多个标签安装同一 `playKey` 不属于支持场景。
 - 安装完成前不能启动 EasyRPG。
 - `rpg_maker_2003_maniac` 作品允许在线游玩，但页面显示兼容性提示。
-- 非 UTF-8 路径问题会直接影响 EasyRPG 运行；如果真实样本出现路径损坏，应回到主架构中的 `pathBytesB64` 暂缓决策重新评估。
+- 非 UTF-8 路径问题会直接影响 EasyRPG 运行；真实样本出现路径损坏时，按[归档路径与编码](./archive-storage.md#路径与编码)核对 manifest、原始路径字节和 ZIP 输出。
 - Service Worker 和 OPFS 都是同源能力，跨域官方播放器无法访问本站 OPFS，因此不能用跨域 EasyRPG iframe。
 - Service Worker 对非法路径返回 400，对缺失文件返回 404 并通知页面；页面当前显示通用的重新安装提示，不承诺展示具体缺失路径。
 
@@ -329,11 +329,10 @@ const persisted = await navigator.storage.persist();
 - 播放器保持 4:3；移动端突出横屏全屏入口，并在沉浸模式内提供横竖屏切换与退出。
 - 不支持或拒绝原生 fullscreen、Screen Orientation Lock 的浏览器仍能页面铺满并旋转画面，同时提示用户手动旋转设备。
 
-## 15.1 实现约束
+### 交互与兼容性核对
 
-- 资源索引必须同时写入真实文件名和图像/音频资源的去扩展名别名。EasyRPG 会以 `System/sys-thin2`、`Title/titq`、`Music/Ad Astra` 这类无扩展名路径查询资源，仅保存 `*.png` / `*.ogg` 键会导致 Web 端素材缺失。
-- Web Play 本地写入跳过所有 `.txt`、`.exe`、`.dll` 文件。EasyRPG Web Player 不依赖 Windows 可执行文件和 DLL，RPG Maker 2000/2003 运行时也不依赖说明文本；跳过后可以减少 `StringScripts*` 等大量小文本和运行时二进制造成的 OPFS 写入压力。
-- 安装器不逐文件写入 OPFS，而是边下载边顺序写入 pack 文件。这个取舍减少大量小文件的 `createWritable/close` 成本，并保留普通下载 ZIP/CDN cache 的复用。
+文件跳过、pack 写入和资源别名分别以第 4、7、8 节为准；这里保留运行时交互需要单独核对的边界。
+
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
 - 全屏应让外层播放器容器进入浏览器原生 fullscreen。直接调用 EasyRPG/Emscripten runtime 的 fullscreen 路径会在当前 runtime 下造成 canvas 尺寸异常，表现为黑屏。
 - 移动端方向切换优先调用 Screen Orientation Lock；不可用或被拒绝时只旋转播放器画面并提示用户手动旋转设备，不能把方向锁定作为启动前提。

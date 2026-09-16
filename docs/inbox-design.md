@@ -1,6 +1,6 @@
 # 提醒产品与界面契约
 
-提醒提供讨论互动、角色申请、角色变更和系统消息的站内入口。讨论内容规则见[讨论设计](./forum-discussion-design.md)，角色审批规则见[认证与权限基线](./authentication-authorization-baseline-plan.md)。
+提醒提供讨论互动、角色申请、角色变更和系统消息的站内入口。讨论内容规则见[讨论设计](./forum-discussion-design.md)，角色审批规则见[认证与权限基线](./authentication-authorization.md)。
 
 ## 接收范围
 
@@ -66,8 +66,8 @@
 
 页面首次进入使用服务端初值；站内导航、窗口重新聚焦、页面恢复可见时查询未读数量。短时间重复触发合并，禁止重叠请求；标记已读或处理申请后立即同步。请求失败保留上次成功值，下次事件触发时重试。
 
-不做定时轮询，不周期性调用 `router.refresh()`。用户持续停留同一页且没有上述事件时，不主动更新新提醒；浏览器关闭后不推送。普通计数更新不重排当前提醒列表，不干扰帖子草稿。
+不做定时轮询或周期性页面刷新。用户持续停留同一页且没有上述事件时，不主动更新新提醒；浏览器关闭后不推送。普通计数更新不重排当前提醒列表，不干扰帖子草稿。
 
-入口组件为 [InboxIndicator](../app/components/inbox-indicator.tsx)，查询端点为 [GET /api/inbox/unread](../app/api/inbox/unread/route.ts)，仅返回当前登录用户未读数并禁止响应缓存。
+入口组件为 [InboxIndicator](../app/components/inbox-indicator.tsx)，查询端点为 [GET /api/inbox/unread](../app/.server/endpoints/api/inbox/unread/route.ts)，由 [Hono API](../app/.server/api.ts) 注册，仅返回当前登录用户未读数并禁止响应缓存。
 
 测试授权和验收分层遵循根目录 [AGENTS.md](../AGENTS.md)，操作入口见[维护与回归手册](./maintenance-regression.md)。

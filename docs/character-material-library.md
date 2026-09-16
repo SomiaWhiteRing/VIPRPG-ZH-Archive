@@ -1,4 +1,4 @@
-# 角色素材展示
+# 角色素材库
 
 角色详情的素材区按固定顺序显示「脸图」「行走图」「怪物／战斗图」「插图及其他」，空分类不显示。分类使用清单的 `kind`，不根据文件名或图片外观推测，也不直接显示日文来源栏目标题。图片平铺，悬停时显示手形指针，点击打开灯箱；灯箱右上角提供当前图片的原图下载入口，切换图片后下载目标随之更新。
 
@@ -14,7 +14,9 @@
 
 ## 本地导入
 
-显式从素材清单导入时，先执行 `npm run db:local:migrate` 应用素材及排序迁移（`0010`、`0011`），再执行 `npm run db:local:character-materials`。`node scripts/import-character-materials.mjs --dry-run` 只校验文件、角色映射及来源顺序。常规开发种子直接恢复已审核的数据库及 R2 快照，不再调用此导入器，详见[本地展示数据](./local-demo-data.md)。
+常规开发通过[固定种子](./local-demo-data.md)恢复已审核的数据库及 R2 快照。显式从素材清单导入时，数据库必须已具备[统一初始化 SQL](../migrations/0001_init_archive_schema.sql)定义的当前结构及清单引用的角色，然后执行 `npm run db:local:character-materials`。空库的 schema 可通过 `npm run db:local:migrate` 建立；已经登记旧版同名初始化文件的数据库不会由此升级，备份与重建按本地展示数据手册执行。
+
+`node scripts/import-character-materials.mjs --dry-run` 校验三类非脸图素材的文件、角色映射及来源顺序，不上传或写入；它跳过脸图导入阶段，不能据此宣称脸图也已校验。
 
 素材库构建器从 `output/playwright/character-materials/<页码>.json` 保存的源站正文 HTML 提取顺序。已有清单可运行 `node scripts/character-material-source-order.mjs` 刷新来源顺序，再重新导入。HTML 缺失或找不到对应图片时中止，不用哈希顺序代替；正常导入只读取清单，不依赖采集缓存。
 

@@ -47,6 +47,14 @@
 
 角色读取和写入集中在 `app/.server/db/permissions.ts`；页面、提醒和用户 API 不应各自实现角色状态转换。
 
+根账户轮换使用以下命令，远程环境的 `--confirm` 必须与目标邮箱相同：
+
+```powershell
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --local
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --staging --confirm admin@example.com
+node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production --confirm admin@example.com
+```
+
 ## 3. Session 与认证
 
 - session cookie 只保存随机 opaque token；D1 的 `user_sessions` 只保存 token SHA-256。
@@ -57,11 +65,15 @@
 - 密码格式、PBKDF2 参数和透明升级规则以 `app/.server/auth/password.ts` 为准。参数调整先运行 `npm run auth:calibrate-password`，再更新代码和开发 seed。
 - `BOOTSTRAP_ADMIN_EMAIL` 只在系统尚无 bootstrap admin 时用于首次授予，不是持续同步配置。
 
+### 账户注销
+
+本人输入当前密码并二次确认后可注销。保留用户 ID 和公共贡献，状态变为 deleted，名称改为“账户已注销”，头像恢复默认、简介清空、所有个人主页可见性关闭。撤销全部会话与附加角色，仅保留不可移除的基础角色；非活跃账号不获得任何权限。登录显示“账号不存在”；后台不能重新启用，注册与找回密码不能复活原身份。作品、评论、目录及其关联保留，评论仍可在原目标下阅读。根账户须先通过既有运维流程轮换后注销。
+
 ## 4. 请求边界
 
 ### 身份加载
 
-`AuthContext` 包含 session、用户、角色、permission key、最高 priority 和 bootstrap 身份。请求与 Server Component 分别通过 `app/.server/auth/current-user.ts` 中的 loader 获取同一语义的 context。
+`AuthContext` 包含 session、用户、角色、permission key、最高 priority 和 bootstrap 身份。Hono handler 与 React Router loader 都通过 `app/.server/auth/current-user.ts` 的 `getAuthContext(runtime)` 获取身份，并在同一请求的 `AppRuntime` 中复用读取结果。每个受保护 loader 独立鉴权，不能依赖父布局代为保护。
 
 ### 同源保护
 
@@ -76,7 +88,7 @@
 | 上传 | import 与 storage permission | import job 属于当前上传者且状态允许操作 |
 | 作品资料 | read/update permission | own/any、目标状态及关联一致性 |
 | 作品关系与目录 | create/update/delete permission | 创建者、owner、反向关系和成员约束 |
-| 评论与点赞 | `comment.manage_any`（管理员）或评论作者 own-scope | published Work 或公开作者、活跃用户、主楼/回复关系和评论状态 |
+| 评论与点赞 | `comment.manage_any`（管理员）或评论作者 own-scope | published Work、公开作者或角色、活跃用户、主楼/回复关系和评论状态 |
 | 自定义表情 | `custom_emoji.manage` | 管理员上传、图片 blob 状态、shortcode 不可改名、只能退休或恢复 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |
 | 用户与角色 | user/role permission 或 bootstrap 身份 | 双方 priority、角色 kind/status、自操作禁令 |
@@ -84,7 +96,7 @@
 | 媒体、下载与游玩 | 公开入口 | Work、ArchiveVersion 和引用链完整 published |
 | GC 与审计 | maintenance/sweep/audit permission | 显式确认、数量上限、状态转换和审计 |
 
-原生下载 Worker 也必须执行完整 published 引用链检查；不能因为绕过 App Router 而弱化公开性规则。
+原生下载在 React Router 页面处理之前独立分发，同样必须执行完整 published 引用链检查。
 
 ## 5. 安全验证
 
@@ -95,7 +107,7 @@
 - `npm run test:flow`：仅在预生产或明确要求时验证权限刷新、真实上传与恢复、归档生命周期、原生下载/GC 和浏览器安装。
 - `npm run verify:preprod`：预生产完整验收；包含静态检查、关键流程和生产构建。
 - `npm run smoke:staging`：部署后只验证 staging 的健康入口。
-- 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认目标 Work 或作者、主楼和评论用户均处于可公开状态。
+- 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认目标 Work、作者或角色、主楼和评论用户均处于可公开状态。
 
 有状态 D1、API、Worker 和浏览器检查只通过上述测试入口串行运行。测试自行迁移和 seed 临时状态，不依赖也不重置开发环境的 `.wrangler/state`。
 
@@ -111,7 +123,3 @@
 4. 只有新增持久权限不变量时才扩展 `npm run check` 或 `npm test`；不为每个端点新增测试，也不把文案、页面结构或操作顺序写入断言。
 5. 敏捷阶段只运行与改动相关的最小检查；进入预生产后运行 `npm run verify:preprod`。
 6. 只有稳定边界发生变化时更新本文；具体 key、角色 grant 和路由清单始终从代码读取。
-
-## 账户注销
-
-本人输入当前密码并二次确认后可注销。保留用户 ID 和公共贡献，状态变为 deleted，名称改为“账户已注销”，头像恢复默认、简介清空、所有个人主页可见性关闭。撤销全部会话与附加角色，仅保留不可移除的基础角色；非活跃账号不获得任何权限。登录显示“账号不存在”；后台不能重新启用，注册与找回密码不能复活原身份。作品、评论、目录及其关联保留，评论仍可在原目标下阅读。根账户须先通过既有运维流程轮换后注销。
