@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { cn } from "@/lib/ui/cn";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 
@@ -16,13 +15,16 @@ export function UserAvatar({
   size = 40,
 }: UserAvatarProps) {
   return (
-    <Image
+    <img
       alt={`${displayName}的头像`}
-      className={cn("shrink-0 rounded-full bg-muted/10 object-cover", className)}
+      className={cn(
+        "shrink-0 rounded-full bg-muted/10 object-cover",
+        className,
+      )}
       height={size}
       src={getUserAvatarSrc(avatarBlobSha256)}
-      unoptimized
       width={size}
+      loading="lazy"
     />
   );
 }

@@ -10,6 +10,8 @@ export const EXTRA_STAFF_ROLES = [
   { value: "other", label: "其他" },
 ] satisfies { value: StaffCredit["roleKey"]; label: string }[];
 
-export function isExtraStaffRole(value: unknown): value is Exclude<StaffCredit["roleKey"], "author" | "translator"> {
+export function isExtraStaffRole(
+  value: unknown,
+): value is Exclude<StaffCredit["roleKey"], "author" | "translator"> {
   return EXTRA_STAFF_ROLES.some((role) => role.value === value);
 }

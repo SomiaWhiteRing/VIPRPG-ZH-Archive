@@ -1,11 +1,3 @@
-"use client";
-
-import { EllipsisVertical } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import * as Dialog from "@/app/components/ui/dialog";
-import { DropdownMenu } from "radix-ui";
-import { WorkListItem } from "@/app/components/work/work-list-item";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +8,18 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
+import { WorkListItem } from "@/app/components/work/work-list-item";
+import type { CatalogItem } from "@/lib/dto/db/catalogs";
 import { formatNumber } from "@/lib/format";
-import type { CatalogItem } from "@/lib/server/db/catalogs";
+import { EllipsisVertical } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useRef, useState } from "react";
+import { useRevalidator } from "react-router";
 
 type Candidate = {
   id: number;
@@ -42,7 +40,7 @@ export function CatalogItemsSection({
   catalogId: number;
   items: CatalogItem[];
 }) {
-  const router = useRouter();
+  const revalidator = useRevalidator();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
   const removeReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -50,7 +48,10 @@ export function CatalogItemsSection({
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [addMessage, setAddMessage] = useState<{ kind: "empty" | "feedback"; text: string } | null>(null);
+  const [addMessage, setAddMessage] = useState<{
+    kind: "empty" | "feedback";
+    text: string;
+  } | null>(null);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
@@ -58,10 +59,13 @@ export function CatalogItemsSection({
   const [sortOrder, setSortOrder] = useState("0");
   const [editMessage, setEditMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pendingRemovalWorkId, setPendingRemovalWorkId] = useState<number | null>(null);
+  const [pendingRemovalWorkId, setPendingRemovalWorkId] = useState<
+    number | null
+  >(null);
   const [removingWorkId, setRemovingWorkId] = useState<number | null>(null);
   const [listMessage, setListMessage] = useState<string | null>(null);
-  const selectedItem = items.find((item) => item.workId === selectedWorkId) ?? null;
+  const selectedItem =
+    items.find((item) => item.workId === selectedWorkId) ?? null;
   const pendingRemovalItem =
     items.find((item) => item.workId === pendingRemovalWorkId) ?? null;
 
@@ -89,14 +93,18 @@ export function CatalogItemsSection({
         detail?: string;
       };
       if (!response.ok) {
-        setAddMessage({ kind: "feedback", text: body.detail ?? "查找游戏失败。" });
+        setAddMessage({
+          kind: "feedback",
+          text: body.detail ?? "查找游戏失败。",
+        });
         return;
       }
       const works = (body.works ?? []).filter(
         (work) => !items.some((item) => item.workId === work.id),
       );
       setCandidates(works);
-      if (!works.length) setAddMessage({ kind: "empty", text: "没有找到可添加的游戏。" });
+      if (!works.length)
+        setAddMessage({ kind: "empty", text: "没有找到可添加的游戏。" });
     } catch {
       setAddMessage({ kind: "feedback", text: "网络请求失败。" });
     } finally {
@@ -116,11 +124,14 @@ export function CatalogItemsSection({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setAddMessage({ kind: "feedback", text: body.detail ?? "游戏添加失败。" });
+        setAddMessage({
+          kind: "feedback",
+          text: body.detail ?? "游戏添加失败。",
+        });
         return;
       }
       setAddOpen(false);
-      router.refresh();
+      revalidator.revalidate();
     } catch {
       setAddMessage({ kind: "feedback", text: "网络请求失败。" });
     } finally {
@@ -166,7 +177,7 @@ export function CatalogItemsSection({
         return;
       }
       setSelectedWorkId(null);
-      router.refresh();
+      revalidator.revalidate();
     } catch {
       setEditMessage("网络请求失败。");
     } finally {
@@ -189,7 +200,7 @@ export function CatalogItemsSection({
       }
       removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
-      router.refresh();
+      revalidator.revalidate();
     } catch {
       setListMessage("网络请求失败。");
     } finally {
@@ -201,8 +212,15 @@ export function CatalogItemsSection({
     <section aria-labelledby="catalog-games-heading" className="mt-8">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
         <div className="flex items-baseline gap-3">
-          <h2 className="m-0 font-display text-xl font-bold" id="catalog-games-heading">收录游戏</h2>
-          <span className="font-mono text-xs text-muted">共 {formatNumber(items.length)} 个</span>
+          <h2
+            className="m-0 font-display text-xl font-bold"
+            id="catalog-games-heading"
+          >
+            收录游戏
+          </h2>
+          <span className="font-mono text-xs text-muted">
+            共 {formatNumber(items.length)} 个
+          </span>
         </div>
         {canEdit ? (
           <Button
@@ -218,7 +236,11 @@ export function CatalogItemsSection({
           </Button>
         ) : null}
       </header>
-      {listMessage ? <p className="mb-0 mt-3 text-sm text-red-700" role="status">{listMessage}</p> : null}
+      {listMessage ? (
+        <p className="mb-0 mt-3 text-sm text-red-700" role="status">
+          {listMessage}
+        </p>
+      ) : null}
       {items.length ? (
         <ol className="divide-y divide-border border-b border-border">
           {items.map((item, index) => (
@@ -227,20 +249,22 @@ export function CatalogItemsSection({
               item={item}
               key={item.workId}
               note={item.note}
-              management={canEdit ? (
-                <CatalogItemActions
-                  disabled={removingWorkId !== null}
-                  editing={selectedWorkId === item.workId}
-                  item={item}
-                  onEdit={(returnFocus) => openEditor(item, returnFocus)}
-                  onRemove={(returnFocus) => {
-                    removeReturnFocusRef.current = returnFocus;
-                    removalCompletedRef.current = false;
-                    setPendingRemovalWorkId(item.workId);
-                  }}
-                  removing={pendingRemovalWorkId === item.workId}
-                />
-              ) : null}
+              management={
+                canEdit ? (
+                  <CatalogItemActions
+                    disabled={removingWorkId !== null}
+                    editing={selectedWorkId === item.workId}
+                    item={item}
+                    onEdit={(returnFocus) => openEditor(item, returnFocus)}
+                    onRemove={(returnFocus) => {
+                      removeReturnFocusRef.current = returnFocus;
+                      removalCompletedRef.current = false;
+                      setPendingRemovalWorkId(item.workId);
+                    }}
+                    removing={pendingRemovalWorkId === item.workId}
+                  />
+                ) : null
+              }
             />
           ))}
         </ol>
@@ -275,13 +299,16 @@ export function CatalogItemsSection({
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button type="button" variant="outline">取消</Button>
+              <Button type="button" variant="outline">
+                取消
+              </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button
                 disabled={removingWorkId !== null || !pendingRemovalItem}
                 onClick={() => {
-                  if (pendingRemovalItem) void removeItem(pendingRemovalItem.workId);
+                  if (pendingRemovalItem)
+                    void removeItem(pendingRemovalItem.workId);
                 }}
                 type="button"
                 variant="destructive"
@@ -306,29 +333,46 @@ export function CatalogItemsSection({
             }}
           >
             <Dialog.Title>添加游戏</Dialog.Title>
-            <Dialog.Description className="sr-only" id="catalog-add-game-description">
+            <Dialog.Description
+              className="sr-only"
+              id="catalog-add-game-description"
+            >
               搜索并以默认排序值 0 将一个游戏加入目录。
             </Dialog.Description>
-            <form className="flex gap-2 max-sm:flex-col" onSubmit={(event) => { event.preventDefault(); void lookup(); }}>
+            <form
+              className="flex gap-2 max-sm:flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void lookup();
+              }}
+            >
               <Input
                 aria-label="查找游戏"
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="输入游戏标题"
                 value={query}
               />
-              <Button disabled={searching || adding || !query.trim()} type="submit" variant="outline">
+              <Button
+                disabled={searching || adding || !query.trim()}
+                type="submit"
+                variant="outline"
+              >
                 {searching ? "正在查找…" : "查找"}
               </Button>
             </form>
             <div className="min-h-0 overflow-y-auto">
               {candidates.length ? (
-                <ol aria-label="查找结果" className="divide-y divide-border border-y border-border">
+                <ol
+                  aria-label="查找结果"
+                  className="divide-y divide-border border-y border-border"
+                >
                   {candidates.map((candidate, index) => (
                     <WorkListItem
                       index={index}
                       item={{
                         workId: candidate.id,
-                        title: candidate.chineseTitle || candidate.originalTitle,
+                        title:
+                          candidate.chineseTitle || candidate.originalTitle,
                         originalTitle: candidate.originalTitle,
                         chineseTitle: candidate.chineseTitle,
                         originalReleaseDate: candidate.originalReleaseDate,
@@ -337,7 +381,7 @@ export function CatalogItemsSection({
                         previewBlobSha256: candidate.previewBlobSha256,
                       }}
                       key={candidate.id}
-                      management={(
+                      management={
                         <Button
                           disabled={adding}
                           onClick={() => void add(candidate)}
@@ -347,16 +391,28 @@ export function CatalogItemsSection({
                         >
                           添加
                         </Button>
-                      )}
+                      }
                     />
                   ))}
                 </ol>
               ) : null}
-              {addMessage?.kind === "empty" ? <EmptyState title={addMessage.text} variant="plain" role="status" /> : addMessage ? <p className="m-0 text-sm text-muted" role="status">{addMessage.text}</p> : null}
+              {addMessage?.kind === "empty" ? (
+                <EmptyState
+                  title={addMessage.text}
+                  variant="plain"
+                  role="status"
+                />
+              ) : addMessage ? (
+                <p className="m-0 text-sm text-muted" role="status">
+                  {addMessage.text}
+                </p>
+              ) : null}
             </div>
             <div className="flex justify-end border-t border-border pt-4">
               <Dialog.Close asChild>
-                <Button disabled={adding} type="button" variant="outline">取消</Button>
+                <Button disabled={adding} type="button" variant="outline">
+                  取消
+                </Button>
               </Dialog.Close>
             </div>
           </Dialog.Content>
@@ -365,7 +421,9 @@ export function CatalogItemsSection({
 
       <Dialog.Root
         open={selectedItem !== null}
-        onOpenChange={(open) => { if (!open && !saving) setSelectedWorkId(null); }}
+        onOpenChange={(open) => {
+          if (!open && !saving) setSelectedWorkId(null);
+        }}
       >
         <Dialog.Portal>
           <Dialog.Overlay />
@@ -375,11 +433,15 @@ export function CatalogItemsSection({
             id="catalog-edit-item-dialog"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              if (editReturnFocusRef.current?.isConnected) editReturnFocusRef.current.focus();
+              if (editReturnFocusRef.current?.isConnected)
+                editReturnFocusRef.current.focus();
             }}
           >
             <Dialog.Title>编辑条目</Dialog.Title>
-            <Dialog.Description className="sr-only" id="catalog-item-edit-description">
+            <Dialog.Description
+              className="sr-only"
+              id="catalog-item-edit-description"
+            >
               修改所选游戏在目录中的备注和排序值。
             </Dialog.Description>
             {selectedItem ? (
@@ -394,10 +456,7 @@ export function CatalogItemsSection({
                     value={note}
                   />
                 </FormField>
-                <FormField
-                  controlId="catalog-item-sort-order"
-                  label="排序值"
-                >
+                <FormField controlId="catalog-item-sort-order" label="排序值">
                   <Input
                     id="catalog-item-sort-order"
                     inputMode="numeric"
@@ -412,12 +471,22 @@ export function CatalogItemsSection({
                 </FormField>
               </>
             ) : null}
-            {editMessage ? <p className="m-0 text-sm text-red-700" role="status">{editMessage}</p> : null}
+            {editMessage ? (
+              <p className="m-0 text-sm text-red-700" role="status">
+                {editMessage}
+              </p>
+            ) : null}
             <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Dialog.Close asChild>
-                <Button disabled={saving} type="button" variant="outline">取消</Button>
+                <Button disabled={saving} type="button" variant="outline">
+                  取消
+                </Button>
               </Dialog.Close>
-              <Button disabled={saving || !selectedItem} onClick={() => void saveSelectedItem()} type="button">
+              <Button
+                disabled={saving || !selectedItem}
+                onClick={() => void saveSelectedItem()}
+                type="button"
+              >
                 {saving ? "正在保存…" : "保存条目"}
               </Button>
             </div>

@@ -1,29 +1,31 @@
-import { buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { TableWrap } from "@/app/components/ui/table-wrap";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { searchCreatorsForAdmin } from "@/app/.server/db/creator-library";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import {
   AdminListControls,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { buttonVariants } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { searchCreatorsForAdmin } from "@/lib/server/db/creator-library";
 import { formatNumber } from "@/lib/format";
-
-export const dynamic = "force-dynamic";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
-export default async function AdminCreatorsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const adminUser = await requirePagePermission(
+    runtime,
     "/admin/creators",
     "creator.read_private",
   );
@@ -35,13 +37,25 @@ export default async function AdminCreatorsPage({
     "default",
   );
   const page = parseAdminPage(params.page);
-  const result = await searchCreatorsForAdmin({
+  const result = await searchCreatorsForAdmin(runtime, {
     query,
     sort,
     page,
     pageSize: PAGE_SIZE,
   });
 
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    query,
+    sort,
+    page,
+    result,
+  };
+}
+
+export default function AdminCreatorsPage() {
+  const { adminUser, query, sort, page, result } =
+    useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -51,7 +65,7 @@ export default async function AdminCreatorsPage({
         actions={
           <Link
             className={buttonVariants({ variant: "outline" })}
-            href="/creators"
+            to="/creators"
           >
             查看公开列表
           </Link>
@@ -83,9 +97,7 @@ export default async function AdminCreatorsPage({
             {result.items.map((creator) => (
               <tr key={creator.id}>
                 <td>
-                  <strong>
-                    {creator.name}
-                  </strong>
+                  <strong>{creator.name}</strong>
                 </td>
                 <td>
                   {formatNumber(creator.workCreditCount)} 个游戏
@@ -112,7 +124,7 @@ export default async function AdminCreatorsPage({
                   {hasPermission(adminUser, "creator.metadata.update_any") ? (
                     <Link
                       className={buttonVariants()}
-                      href={`/admin/creators/${creator.id}`}
+                      to={`/admin/creators/${creator.id}`}
                     >
                       编辑
                     </Link>

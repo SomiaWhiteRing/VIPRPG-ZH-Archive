@@ -1,8 +1,14 @@
-"use client";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 // Measure the occupied viewport so content and scroll targets clear the bottom bar.
-export function BottomBar({ children, anchorId }: { children: ReactNode; anchorId?: string }) {
+export function BottomBar({
+  children,
+  anchorId,
+}: {
+  children: ReactNode;
+  anchorId?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -14,7 +20,9 @@ export function BottomBar({ children, anchorId }: { children: ReactNode; anchorI
     const viewport = window.visualViewport;
     const root = document.documentElement;
     const originalPadding = root.style.scrollPaddingBottom;
-    const originalClearance = root.style.getPropertyValue("--forum-reply-clearance");
+    const originalClearance = root.style.getPropertyValue(
+      "--forum-reply-clearance",
+    );
     let frame = 0;
     function measure() {
       if (!bar || !placeholder) return;
@@ -24,10 +32,15 @@ export function BottomBar({ children, anchorId }: { children: ReactNode; anchorI
         anchor = currentAnchor;
         if (anchor) observer.observe(anchor);
       }
-      const top = Math.max(viewport?.offsetTop ?? 0, header?.getBoundingClientRect().bottom ?? 0);
-      const viewBottom = (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight);
+      const top = Math.max(
+        viewport?.offsetTop ?? 0,
+        header?.getBoundingClientRect().bottom ?? 0,
+      );
+      const viewBottom =
+        (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight);
       const bounds = anchor?.getBoundingClientRect();
-      const docked = !bounds || bounds.bottom <= top || bounds.top >= viewBottom;
+      const docked =
+        !bounds || bounds.bottom <= top || bounds.top >= viewBottom;
       bar.dataset.docked = String(docked);
       const bottom = viewport
         ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
@@ -41,7 +54,9 @@ export function BottomBar({ children, anchorId }: { children: ReactNode; anchorI
       // Keep the same document slot when docking, so scrolling cannot oscillate.
       placeholder.style.height = anchor ? `${height}px` : "0px";
       const occupied = docked ? height + bottom : 0;
-      root.style.scrollPaddingBottom = docked ? `${occupied + 16}px` : originalPadding;
+      root.style.scrollPaddingBottom = docked
+        ? `${occupied + 16}px`
+        : originalPadding;
       root.style.setProperty("--forum-reply-clearance", `${occupied}px`);
     }
     function schedule() {
@@ -65,7 +80,8 @@ export function BottomBar({ children, anchorId }: { children: ReactNode; anchorI
       viewport?.removeEventListener("resize", schedule);
       viewport?.removeEventListener("scroll", schedule);
       root.style.scrollPaddingBottom = originalPadding;
-      if (originalClearance) root.style.setProperty("--forum-reply-clearance", originalClearance);
+      if (originalClearance)
+        root.style.setProperty("--forum-reply-clearance", originalClearance);
       else root.style.removeProperty("--forum-reply-clearance");
     };
   }, [anchorId]);

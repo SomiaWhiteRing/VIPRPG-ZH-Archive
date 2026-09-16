@@ -1,9 +1,8 @@
-"use client";
 import { buttonVariants } from "@/app/components/ui/button";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import Link from "next/link";
-import { Download, ExternalLink, Play } from "lucide-react";
 import { formatBytes } from "@/lib/format";
+import { Download, ExternalLink, Play } from "lucide-react";
+import { Link } from "react-router";
 
 type Props = {
   workId: number;
@@ -37,7 +36,7 @@ export function WorkActionBar({
             </Rm2kButton>
             <Link
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
-              href={archive.downloadHref}
+              to={archive.downloadHref}
               onClick={() => {
                 if (isAuthenticated) {
                   void fetch(`/api/works/${workId}/played`, {
@@ -50,7 +49,9 @@ export function WorkActionBar({
             >
               <Download aria-hidden />
               下载 ZIP
-              <span className="text-xs text-muted">{formatBytes(archive.totalSizeBytes)}</span>
+              <span className="text-xs text-muted">
+                {formatBytes(archive.totalSizeBytes)}
+              </span>
             </Link>
           </div>
         </>
@@ -66,7 +67,9 @@ export function WorkActionBar({
           前往下载页
         </a>
       ) : (
-        <span className="font-mono text-xs leading-[1.6] text-muted">该作品目前暂无可下载的当前快照。</span>
+        <span className="font-mono text-xs leading-[1.6] text-muted">
+          该作品目前暂无可下载的当前快照。
+        </span>
       )}
     </div>
   );

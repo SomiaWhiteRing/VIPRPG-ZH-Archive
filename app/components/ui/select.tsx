@@ -1,15 +1,8 @@
-"use client";
-
-import { Select as SelectPrimitive } from "radix-ui";
-import {
-  Fragment,
-  forwardRef,
-  useState,
-  type ComponentPropsWithoutRef,
-  type ComponentRef,
-} from "react";
-import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Select as SelectPrimitive } from "radix-ui";
+import type { ComponentPropsWithoutRef, ComponentRef } from "react";
+import { Fragment, forwardRef, useState } from "react";
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
@@ -95,7 +88,14 @@ export type SelectFieldOption = {
 
 type SelectFieldProps = Omit<
   ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>,
-  "children" | "className" | "defaultValue" | "disabled" | "form" | "name" | "required" | "value"
+  | "children"
+  | "className"
+  | "defaultValue"
+  | "disabled"
+  | "form"
+  | "name"
+  | "required"
+  | "value"
 > & {
   name?: string;
   form?: string;

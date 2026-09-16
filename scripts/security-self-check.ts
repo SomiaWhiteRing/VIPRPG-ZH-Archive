@@ -1,4 +1,9 @@
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import assert from "node:assert/strict";
+import { sanitizeRedirectPath } from "../app/.server/auth/redirect";
+import { canManageUser } from "../app/.server/db/permissions";
+import { canDeleteArchiveVersion } from "../lib/authz/archive-permissions";
+import type { PermissionKey } from "../lib/authz/permissions";
 import {
   PERMISSION_LIST,
   SYSTEM_ROLE_PERMISSIONS,
@@ -7,11 +12,6 @@ import {
   parsePermissionKeys,
 } from "../lib/authz/permissions";
 import { isCustomRolePriority } from "../lib/authz/roles";
-import { canManageUser } from "../lib/server/db/permissions";
-import { canDeleteArchiveVersion } from "../lib/server/db/archive-maintenance";
-import { sanitizeRedirectPath } from "../lib/server/auth/redirect";
-import type { PermissionKey } from "../lib/authz/permissions";
-import type { ArchiveUser } from "../lib/server/db/users";
 
 assert.equal(
   new Set(PERMISSION_LIST.map((permission) => permission.key)).size,

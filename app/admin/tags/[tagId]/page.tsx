@@ -1,55 +1,54 @@
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-import { Notice } from "@/app/components/ui/notice";
-import { Input } from "@/app/components/ui/input";
-import { SelectField } from "@/app/components/ui/select";
-import { Button, buttonVariants } from "@/app/components/ui/button";
-import { ConfirmingForm } from "@/app/components/ui/confirming-form";
-import { Textarea } from "@/app/components/ui/textarea";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { BackLink } from "@/app/components/ui/back-link";
-import { FormField } from "@/app/components/ui/form-field";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { Pane } from "@/app/components/ui/pane";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
 import {
   getTagForAdminEdit,
   listTagsForAdmin,
-} from "@/lib/server/db/taxonomy-library";
+} from "@/app/.server/db/taxonomy-library";
+import { throwNotFound } from "@/app/.server/http/page-response";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
+import { BackLink } from "@/app/components/ui/back-link";
+import { Button, buttonVariants } from "@/app/components/ui/button";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
+import { FormField } from "@/app/components/ui/form-field";
+import { Input } from "@/app/components/ui/input";
+import { Notice } from "@/app/components/ui/notice";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { Pane } from "@/app/components/ui/pane";
+import { SelectField } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
+import { Link } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params, searchParams } = routeInput(args);
 
-type AdminTagEditPageProps = {
-  params: Promise<{
-    tagId: string;
-  }>;
-  searchParams: Promise<{
-    error?: string | string[];
-  }>;
-};
-
-export default async function AdminTagEditPage({
-  params,
-  searchParams,
-}: AdminTagEditPageProps) {
   const { tagId: rawTagId } = await params;
   const query = await searchParams;
   const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const tagId = parseId(rawTagId);
   await requirePagePermission(
+    runtime,
     `/admin/tags/${tagId}`,
     "tag.metadata.update_any",
   );
   const [tag, candidates] = await Promise.all([
-    getTagForAdminEdit(tagId),
-    listTagsForAdmin(),
+    getTagForAdminEdit(runtime, tagId),
+    listTagsForAdmin(runtime),
   ]);
 
   if (!tag) {
-    notFound();
+    throwNotFound();
   }
 
+  return { formError, tag, candidates };
+}
+
+export default function AdminTagEditPage() {
+  const { formError, tag, candidates } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -61,7 +60,7 @@ export default async function AdminTagEditPage({
             {tag.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
-                href={`/games?tag=${tag.id}`}
+                to={`/games?tag=${tag.id}`}
               >
                 查看作品
               </Link>
@@ -71,10 +70,7 @@ export default async function AdminTagEditPage({
       />
 
       {formError ? (
-        <Notice tone="error"
-          className="mb-4 border p-3 text-sm"
-          role="alert"
-        >
+        <Notice tone="error" className="mb-4 border p-3 text-sm" role="alert">
           {formError}
         </Notice>
       ) : null}
@@ -92,10 +88,16 @@ export default async function AdminTagEditPage({
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
             <FormField controlId="admin-tags-tagId--field-1" label="名称">
-              <Input id="admin-tags-tagId--field-1" defaultValue={tag.name} name="name" required />
+              <Input
+                id="admin-tags-tagId--field-1"
+                defaultValue={tag.name}
+                name="name"
+                required
+              />
             </FormField>
             <FormField controlId="admin-tags-tagId--field-2" label="命名空间">
-              <SelectField id="admin-tags-tagId--field-2"
+              <SelectField
+                id="admin-tags-tagId--field-2"
                 aria-label="命名空间"
                 defaultValue={tag.namespace}
                 name="namespace"
@@ -110,7 +112,8 @@ export default async function AdminTagEditPage({
               />
             </FormField>
             <FormField controlId="admin-tags-tagId--field-3" label="描述" wide>
-              <Textarea id="admin-tags-tagId--field-3"
+              <Textarea
+                id="admin-tags-tagId--field-3"
                 defaultValue={tag.description ?? ""}
                 name="description"
                 rows={6}
@@ -120,12 +123,14 @@ export default async function AdminTagEditPage({
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField controlId="admin-tags-tagId--field-4"
+          <FormField
+            controlId="admin-tags-tagId--field-4"
             hint="提交后，游戏关联会移至目标标签，当前标签会被删除。"
             hintId="tag-merge-target-hint"
             label="目标标签"
           >
-            <SelectField id="admin-tags-tagId--field-4"
+            <SelectField
+              id="admin-tags-tagId--field-4"
               aria-describedby="tag-merge-target-hint"
               aria-label="目标标签"
               name="merge_target_id"
@@ -154,7 +159,7 @@ function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
 
   if (!Number.isSafeInteger(id) || id <= 0) {
-    notFound();
+    throwNotFound();
   }
 
   return id;

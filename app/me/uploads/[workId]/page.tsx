@@ -1,35 +1,42 @@
-import { isExtraStaffRole } from "@/lib/staff-credits";
-import { hasPermission } from "@/lib/authz/permissions";
-import { notFound } from "next/navigation";
-import { ConfirmingForm } from "@/app/components/ui/confirming-form";
-import { Button } from "@/app/components/ui/button";
+import { requireAccountUser } from "@/app/.server/auth/account-user";
+import { getOwnedWorkForEdit } from "@/app/.server/db/game-library";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { loadUploadSuggestions } from "@/app/.server/upload-suggestions";
 import { BackLink } from "@/app/components/ui/back-link";
+import { Button } from "@/app/components/ui/button";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { requireAccountUser } from "@/lib/server/auth/account-user";
-import {
-  getOwnedWorkForEdit,
-  type UploaderWorkEdit,
-} from "@/lib/server/db/game-library";
-import { loadUploadSuggestions } from "@/app/upload/upload-suggestions";
-import {
-  UploadClient,
-  type UploadInitialWork,
-} from "@/app/upload/upload-client";
+import type { UploadInitialWork } from "@/app/upload/upload-client";
+import { UploadClient } from "@/app/upload/upload-client";
+import { hasPermission } from "@/lib/authz/permissions";
+import type { UploaderWorkEdit } from "@/lib/dto/db/game-library";
+import { isExtraStaffRole } from "@/lib/staff-credits";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-export default async function UploadedWorkPage({
-  params,
-}: {
-  params: Promise<{ workId: string }>;
-}) {
   const workId = parseId((await params).workId);
-  const user = await requireAccountUser(`/me/uploads/${workId}`);
-  if (!hasPermission(user, "work.update_own")) notFound();
-  const work = await getOwnedWorkForEdit(workId, user);
-  if (!work) notFound();
-  const suggestions = await loadUploadSuggestions();
+  const user = await requireAccountUser(runtime, `/me/uploads/${workId}`);
+  if (!hasPermission(user, "work.update_own")) throwNotFound();
+  const work = await getOwnedWorkForEdit(runtime, workId, user);
+  if (!work) throwNotFound();
+  const suggestions = await loadUploadSuggestions(runtime);
 
+  return {
+    user: pickPageFields(user, ["id", "displayName", "permissionKeys"]),
+    work,
+    suggestions,
+  };
+}
+
+export default function UploadedWorkPage() {
+  const { user, work, suggestions } = useLoaderData<typeof loader>();
   return (
     <div data-account-full-width>
       <PageHeader
@@ -142,7 +149,7 @@ function staffCredits(
 
 function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0) notFound();
+  if (!Number.isSafeInteger(id) || id <= 0) throwNotFound();
   return id;
 }
 

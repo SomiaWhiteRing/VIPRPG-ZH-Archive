@@ -1,23 +1,36 @@
-"use client";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 
-import { useState } from "react";
-import Image from "next/image";
-import Download from "yet-another-react-lightbox/plugins/download";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { CHARACTER_MATERIAL_CATEGORIES, type CharacterMaterial } from "@/lib/character-materials";
+import type { CharacterMaterial } from "@/lib/character-materials";
+import { CHARACTER_MATERIAL_CATEGORIES } from "@/lib/character-materials";
+import { useState } from "react";
+import Download from "yet-another-react-lightbox/plugins/download";
 
-
-export function CharacterMaterials({ materials, name }: { materials: CharacterMaterial[]; name: string }) {
+export function CharacterMaterials({
+  materials,
+  name,
+}: {
+  materials: CharacterMaterial[];
+  name: string;
+}) {
   const [active, setActive] = useState(-1);
-  const groups = new Map(CHARACTER_MATERIAL_CATEGORIES
-    .map(({ kind, label }) => [label, materials.filter((material) => material.kind === kind)] as const)
-    .filter(([, items]) => items.length));
+  const groups = new Map(
+    CHARACTER_MATERIAL_CATEGORIES.map(
+      ({ kind, label }) =>
+        [
+          label,
+          materials.filter((material) => material.kind === kind),
+        ] as const,
+    ).filter(([, items]) => items.length),
+  );
   const ordered = [...groups.values()].flat();
-  const indices = new Map(ordered.map((material, index) => [material.id, index]));
+  const indices = new Map(
+    ordered.map((material, index) => [material.id, index]),
+  );
 
-  if (!materials.length) return <EmptyState title="暂无公开素材。" variant="plain" />;
+  if (!materials.length)
+    return <EmptyState title="暂无公开素材。" variant="plain" />;
 
   return (
     <>
@@ -39,7 +52,14 @@ export function CharacterMaterials({ materials, name }: { materials: CharacterMa
                       type="button"
                       variant="ghost"
                     >
-                      <Image alt={label} className="block h-auto max-w-full [image-rendering:pixelated]" height={material.height} src={src} unoptimized width={material.width} />
+                      <img
+                        alt={label}
+                        className="block h-auto max-w-full [image-rendering:pixelated]"
+                        height={material.height}
+                        src={src}
+                        width={material.width}
+                        loading="lazy"
+                      />
                     </Button>
                   </li>
                 );
@@ -53,7 +73,12 @@ export function CharacterMaterials({ materials, name }: { materials: CharacterMa
           open
           close={() => setActive(-1)}
           index={active}
-          slides={ordered.map((material) => ({ src: `/api/media/blobs/${material.blobSha256}`, width: material.width, height: material.height, alt: name }))}
+          slides={ordered.map((material) => ({
+            src: `/api/media/blobs/${material.blobSha256}`,
+            width: material.width,
+            height: material.height,
+            alt: name,
+          }))}
           plugins={[Download]}
           pixelated
           labels={{ Download: "下载原图" }}

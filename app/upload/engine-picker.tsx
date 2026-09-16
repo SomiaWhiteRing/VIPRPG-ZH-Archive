@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@/app/components/ui/button";
 import { ENGINE_OPTIONS } from "@/lib/labels";
 import { cn } from "@/lib/ui/cn";
@@ -37,10 +35,13 @@ export function EnginePicker({
             ) : null}
             <Button
               aria-checked={selected}
-              aria-label={reason ? `${option.label}（${reason}）` : option.label}
+              aria-label={
+                reason ? `${option.label}（${reason}）` : option.label
+              }
               className={cn(
                 "min-h-8 rounded-full px-3 font-mono text-xs shadow-none",
-                selected && "border-primary bg-primary text-primary-foreground hover:text-primary-foreground",
+                selected &&
+                  "border-primary bg-primary text-primary-foreground hover:text-primary-foreground",
               )}
               disabled={optionDisabled}
               onClick={() => onValueChange(option.value)}

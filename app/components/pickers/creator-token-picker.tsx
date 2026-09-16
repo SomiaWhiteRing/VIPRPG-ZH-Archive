@@ -1,19 +1,36 @@
-"use client";
-import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
+import {
+  ComboboxOption,
+  ComboboxOptions,
+  handleComboboxNavigation,
+} from "@/app/components/ui/combobox";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import * as Dialog from "@/app/components/ui/dialog";
+import {
+  CreatorPicker,
+  creatorOptions,
+} from "@/app/components/pickers/creator-picker";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import { CreatorPicker, creatorOptions } from "@/app/components/pickers/creator-picker";
 import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
-import { creatorNameKey, creatorSelectionKey, type CreatorSelection, type CreatorSuggestion } from "@/lib/creator-names";
+import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
+import { creatorNameKey, creatorSelectionKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { cn } from "@/lib/ui/cn";
+import type { KeyboardEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type CreatorTokenOption = { selection: CreatorSelection; meta: string };
 
-export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = false, label, onChange, suggestions, values }: {
+export function CreatorTokenPicker({
+  disabled = false,
+  errorId,
+  id,
+  invalid = false,
+  label,
+  onChange,
+  suggestions,
+  values,
+}: {
   disabled?: boolean;
   errorId?: string;
   id: string;
@@ -26,12 +43,20 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [editing, setEditing] = useState<{ index: number; selection: CreatorSelection | null } | null>(null);
+  const [editing, setEditing] = useState<{
+    index: number;
+    selection: CreatorSelection | null;
+  } | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const selectedKeys = useMemo(() => new Set(values.map(creatorSelectionKey)), [values]);
+  const selectedKeys = useMemo(
+    () => new Set(values.map(creatorSelectionKey)),
+    [values],
+  );
   const options = useMemo<CreatorTokenOption[]>(() => {
     const matches: CreatorTokenOption[] = creatorOptions(
-      suggestions.filter((creator) => !selectedKeys.has(`existing:${creator.id}`)),
+      suggestions.filter(
+        (creator) => !selectedKeys.has(`existing:${creator.id}`),
+      ),
       query,
     ).map((option) => ({
       selection: {
@@ -43,12 +68,22 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
       meta: `${option.creator.workCount} 部作品`,
     }));
     const name = normalizeEntityName(query);
-    const selection: CreatorSelection = { kind: "new", name, displayName: name };
+    const selection: CreatorSelection = {
+      kind: "new",
+      name,
+      displayName: name,
+    };
     const nameKey = creatorNameKey(name);
-    const exactMatch = suggestions.some((creator) =>
-      creatorNameKey(creator.name) === nameKey || creator.aliases.some((alias) => creatorNameKey(alias.name) === nameKey),
+    const exactMatch = suggestions.some(
+      (creator) =>
+        creatorNameKey(creator.name) === nameKey ||
+        creator.aliases.some((alias) => creatorNameKey(alias.name) === nameKey),
     );
-    if (name && !exactMatch && !selectedKeys.has(creatorSelectionKey(selection))) {
+    if (
+      name &&
+      !exactMatch &&
+      !selectedKeys.has(creatorSelectionKey(selection))
+    ) {
       matches.push({ selection, meta: "新建" });
     }
     return matches;
@@ -56,9 +91,13 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
   const menuId = `${id}-options`;
   const menuOpen = open && !disabled && options.length > 0;
   const editingSelection = editing?.selection;
-  const duplicateEdit = editingSelection && values.some((value, index) =>
-    index !== editing?.index && creatorSelectionKey(value) === creatorSelectionKey(editingSelection),
-  );
+  const duplicateEdit =
+    editingSelection &&
+    values.some(
+      (value, index) =>
+        index !== editing?.index &&
+        creatorSelectionKey(value) === creatorSelectionKey(editingSelection),
+    );
 
   function add(selection: CreatorSelection) {
     if (selectedKeys.has(creatorSelectionKey(selection))) return;
@@ -69,10 +108,23 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
+    if (
+      handleComboboxNavigation(event, {
+        count: options.length,
+        open: menuOpen,
+        activeIndex,
+        setOpen,
+        setActiveIndex,
+      })
+    )
+      return;
     if (event.key === "Enter") {
       event.preventDefault();
-      const active = menuOpen ? options[activeIndex] : query.trim() ? options[0] : null;
+      const active = menuOpen
+        ? options[activeIndex]
+        : query.trim()
+          ? options[0]
+          : null;
       if (active) add(active.selection);
     } else if (event.key === "Backspace" && !query && values.length) {
       onChange(values.slice(0, -1));
@@ -87,7 +139,11 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
       displayName: normalizeEntityName(editing.selection.displayName),
     };
     if (!selection.name || !selection.displayName) return;
-    onChange(values.map((value, index) => index === editing.index ? selection : value));
+    onChange(
+      values.map((value, index) =>
+        index === editing.index ? selection : value,
+      ),
+    );
     setEditing(null);
   }
 
@@ -96,7 +152,11 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
       <div className={cn("grid gap-2", disabled && "opacity-60")}>
         <div className="relative">
           <TokenInput
-            aria-activedescendant={menuOpen && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
+            aria-activedescendant={
+              menuOpen && options[activeIndex]
+                ? `${menuId}-${activeIndex}`
+                : undefined
+            }
             aria-autocomplete="list"
             aria-controls={menuId}
             aria-describedby={errorId}
@@ -117,8 +177,14 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
             value={query}
           >
             {values.map((value, index) => (
-              <TokenChip disabled={disabled} key={`${creatorSelectionKey(value)}:${index}`} label={value.displayName}
-                onRemove={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
+              <TokenChip
+                disabled={disabled}
+                key={`${creatorSelectionKey(value)}:${index}`}
+                label={value.displayName}
+                onRemove={() =>
+                  onChange(values.filter((_, itemIndex) => itemIndex !== index))
+                }
+              >
                 <Button
                   aria-controls={`${id}-edit-dialog`}
                   aria-haspopup="dialog"
@@ -131,7 +197,11 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
                     setEditing({ index, selection: value });
                   }}
                   size="sm"
-                  title={value.kind === "existing" ? `已关联：${value.name}` : value.name}
+                  title={
+                    value.kind === "existing"
+                      ? `已关联：${value.name}`
+                      : value.name
+                  }
                   type="button"
                   variant="ghost"
                 >
@@ -143,15 +213,23 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
           {menuOpen ? (
             <ComboboxOptions id={menuId} activeIndex={activeIndex}>
               {options.map((option, index) => (
-                <ComboboxOption selected={index === activeIndex}
+                <ComboboxOption
+                  selected={index === activeIndex}
                   id={`${menuId}-${index}`}
                   key={`${creatorSelectionKey(option.selection)}:${option.selection.displayName}`}
-                  onClick={() => add(option.selection)}>
+                  onClick={() => add(option.selection)}
+                >
                   <span>
                     {option.selection.displayName}
-                    {option.selection.displayName !== option.selection.name ? <span className="block text-xs text-muted">身份：{option.selection.name}</span> : null}
+                    {option.selection.displayName !== option.selection.name ? (
+                      <span className="block text-xs text-muted">
+                        身份：{option.selection.name}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-muted">{option.meta}</span>
+                  <span className="shrink-0 text-xs text-muted">
+                    {option.meta}
+                  </span>
                 </ComboboxOption>
               ))}
             </ComboboxOptions>
@@ -160,7 +238,10 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
         <span className="text-xs text-muted">输入后按 Enter 添加</span>
       </div>
 
-      <Dialog.Root open={editing !== null} onOpenChange={(nextOpen) => !nextOpen && setEditing(null)}>
+      <Dialog.Root
+        open={editing !== null}
+        onOpenChange={(nextOpen) => !nextOpen && setEditing(null)}
+      >
         <Dialog.Portal>
           <Dialog.Overlay />
           <Dialog.Content
@@ -168,27 +249,54 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
             id={`${id}-edit-dialog`}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              const target = returnFocusRef.current?.isConnected ? returnFocusRef.current : document.getElementById(id);
+              const target = returnFocusRef.current?.isConnected
+                ? returnFocusRef.current
+                : document.getElementById(id);
               target?.focus();
             }}
           >
             <Dialog.Title>编辑{label}</Dialog.Title>
-            <Dialog.Description className="sr-only">修改{label}署名或关联人物。</Dialog.Description>
+            <Dialog.Description className="sr-only">
+              修改{label}署名或关联人物。
+            </Dialog.Description>
             <div className="grid gap-2">
               <Label htmlFor={`${id}-edit-name`}>{label}署名</Label>
               <CreatorPicker
                 disabled={disabled}
                 id={`${id}-edit-name`}
-                onChange={(selection) => setEditing((current) => current ? { ...current, selection } : null)}
+                onChange={(selection) =>
+                  setEditing((current) =>
+                    current ? { ...current, selection } : null,
+                  )
+                }
                 placeholder={`搜索或新建${label}`}
                 suggestions={suggestions}
                 value={editing?.selection ?? null}
               />
             </div>
-            {duplicateEdit ? <p className="text-sm text-red-700" role="alert">该{label}已添加。</p> : null}
+            {duplicateEdit ? (
+              <p className="text-sm text-red-700" role="alert">
+                该{label}已添加。
+              </p>
+            ) : null}
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild><Button type="button" variant="outline">取消</Button></Dialog.Close>
-              <Button disabled={disabled || !editing?.selection?.name.trim() || !editing.selection.displayName.trim() || Boolean(duplicateEdit)} onClick={saveEdit} type="button">保存</Button>
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">
+                  取消
+                </Button>
+              </Dialog.Close>
+              <Button
+                disabled={
+                  disabled ||
+                  !editing?.selection?.name.trim() ||
+                  !editing.selection.displayName.trim() ||
+                  Boolean(duplicateEdit)
+                }
+                onClick={saveEdit}
+                type="button"
+              >
+                保存
+              </Button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

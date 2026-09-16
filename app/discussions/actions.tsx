@@ -1,23 +1,19 @@
-"use client";
-import { useState } from "react";
-import { Ellipsis } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
-import { Button } from "@/app/components/ui/button";
-import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
-import { SelectField } from "@/app/components/ui/select";
 import {
   AlertDialog,
-  AlertDialogContent,
-  AlertDialogTitle,
-  AlertDialogDescription,
   AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
-import {
-  FORUM_REPORT_REASONS,
-  type ForumAction,
-  type ForumTarget,
-} from "@/lib/forum";
+import { Button } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
+import { SelectField } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
+import type { ForumAction, ForumTarget } from "@/lib/forum";
+import { FORUM_REPORT_REASONS } from "@/lib/forum";
+import { Ellipsis } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useState } from "react";
 import { ForumTagEditor, forumRequest } from "./shared";
 export type ForumMenuItem = {
   label: string;
