@@ -16,7 +16,7 @@ import {
   useState,
 } from "react";
 import { Check, Link as LinkIcon } from "lucide-react";
-import { LanguageField } from "@/app/admin/works/language-field";
+import { LanguageField } from "@/app/components/work/language-field";
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
@@ -25,8 +25,8 @@ import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { EnginePicker } from "@/app/upload/engine-picker";
-import { CharacterPicker } from "@/app/upload/character-picker";
-import { CreatorTokenPicker } from "@/app/upload/creator-token-picker";
+import { CharacterPicker } from "@/app/components/characters/character-picker";
+import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
 import { StaffEditor, staffRows, staffRowErrors, extraStaffCredits, type StaffRow } from "@/app/upload/staff-editor";
 import { WorkMoreInfoEditor, moreInfoRows, type MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 import { moreInfoItemError, normalizeWorkMoreInfo, type WorkMoreInfo } from "@/lib/work-more-info";
@@ -40,8 +40,8 @@ import {
 import {
   CoverPicker,
   PreviewPicker,
-} from "@/app/upload/media-picker";
-import { TokenPicker } from "@/app/upload/token-picker";
+} from "@/app/components/media/media-picker";
+import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { useUploadController } from "@/app/upload/upload-controller";
 import type {
   BrowserUploadTaskSnapshot,

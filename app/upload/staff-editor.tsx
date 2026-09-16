@@ -4,7 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
-import { CreatorPicker } from "@/app/upload/creator-picker";
+import { CreatorPicker } from "@/app/components/pickers/creator-picker";
 import { creatorSelectionKey, type CreatorSelection, type CreatorSuggestion } from "@/lib/creator-names";
 import { EXTRA_STAFF_ROLES, isExtraStaffRole, type StaffCredit } from "@/lib/staff-credits";
 

@@ -5,7 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
-import { CharacterPicker } from "@/app/upload/character-picker";
+import { CharacterPicker } from "@/app/components/characters/character-picker";
 import type {
   CharacterCreditSelection,
   CharacterSuggestion,

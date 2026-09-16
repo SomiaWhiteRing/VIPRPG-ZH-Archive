@@ -3,7 +3,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { GameCard } from "@/app/components/home/game-card";
 import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
 import { searchUserWorks } from "@/lib/server/db/game-library";
-import { AccountEmpty } from "../account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 export const dynamic = "force-dynamic";
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
   const page = parseAccountPage((await searchParams).page); const user = await requireAccountUser(`/me/history${page > 1 ? `?page=${page}` : ""}`); const result = await searchUserWorks({ userId: user.id, kind: "played", page, pageSize: 20 });

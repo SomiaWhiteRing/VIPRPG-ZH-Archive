@@ -2,7 +2,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
 import { searchUserWorks } from "@/lib/server/db/game-library";
-import { AccountEmpty } from "../account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 import { FavoriteGrid } from "../favorite-grid";
 export const dynamic = "force-dynamic";
 export default async function FavoritesPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {

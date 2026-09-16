@@ -4,9 +4,9 @@ import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
 import { searchUserComments } from "@/lib/server/db/work-community";
 import { getForumRuntime } from "@/lib/server/forum/next";
 import { publicUserDiscussions } from "@/lib/server/forum/user-discussions";
-import { DiscussionList } from "@/app/me/discussion-list";
+import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { formatDate } from "@/lib/format";
-import { AccountEmpty, AccountSection, AccountWorkGrid } from "@/app/me/account-content";
+import { AccountEmpty, AccountSection, AccountWorkGrid } from "@/app/components/profile/account-content";
 import { requirePublicUser } from "./public-user";
 
 export const dynamic = "force-dynamic";

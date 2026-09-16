@@ -14,7 +14,7 @@ import { getWorkForAdminEdit } from "@/lib/server/db/game-library";
 import { listCharacterSuggestions } from "@/lib/server/db/taxonomy-library";
 import { getRelationEditorCapabilities, canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
-import { AdminLanguageField } from "../language-field";
+import { AdminLanguageField } from "@/app/components/work/language-field";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { StructuredWorkFields } from "../structured-work-fields";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";

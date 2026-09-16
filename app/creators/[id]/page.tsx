@@ -7,7 +7,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Card } from "@/app/components/ui/card";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import { DetailPageLayout, DetailPageShell } from "@/app/components/ui/detail-page-layout";
-import { CommentPanel } from "@/app/games/[id]/work-community-panel";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
 import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";

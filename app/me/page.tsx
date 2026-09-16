@@ -12,7 +12,7 @@ import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
 import { searchUserComments } from "@/lib/server/db/work-community";
 import { getForumRuntime } from "@/lib/server/forum/next";
 import { ownUserDiscussions } from "@/lib/server/forum/user-discussions";
-import { DiscussionList } from "./discussion-list";
+import { DiscussionList } from "@/app/components/profile/discussion-list";
 import {
   canAccessOwnWorks,
   canPublishWork,
@@ -23,7 +23,7 @@ import {
   AccountEmpty,
   AccountSection,
   AccountWorkGrid,
-} from "./account-content";
+} from "@/app/components/profile/account-content";
 import { UploadAccess } from "./upload-access";
 
 export const dynamic = "force-dynamic";

@@ -18,7 +18,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import {
   CoverPicker,
   type CoverPickerCandidate,
-} from "@/app/upload/media-picker";
+} from "@/app/components/media/media-picker";
 import type { CatalogDetail, CatalogSummary } from "@/lib/server/db/catalogs";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";

@@ -34,7 +34,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WorkActionBar } from "./work-action-bar";
-import { CommentPanel } from "./work-community-panel";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import {
   CatalogAddDialog,
   WorkEngagementActions,
