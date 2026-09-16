@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -36,7 +38,7 @@ export default async function AdminImportJobPage({
           <StatusBadge kind="import-task" value={job.status} />
           {job.failedStage ? <span className="text-sm text-muted">{importTaskStageLabel(job.failedStage)}</span> : null}
         </div>
-        {job.errorMessage ? <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900">{job.errorMessage}</p> : null}
+        {job.errorMessage ? <Notice tone="error" className="border p-3 text-sm">{job.errorMessage}</Notice> : null}
         <StatList columns={3} items={[
           { label: "创建", value: formatDate(job.createdAt) },
           { label: "更新", value: formatDate(job.updatedAt) },

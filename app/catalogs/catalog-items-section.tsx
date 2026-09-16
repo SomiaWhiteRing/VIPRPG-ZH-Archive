@@ -3,7 +3,8 @@
 import { EllipsisVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Dialog, DropdownMenu } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
+import { DropdownMenu } from "radix-ui";
 import { WorkListItem } from "@/app/components/work/work-list-item";
 import {
   AlertDialog,
@@ -294,17 +295,17 @@ export function CatalogItemsSection({
 
       <Dialog.Root open={addOpen} onOpenChange={changeAddOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
             aria-describedby="catalog-add-game-description"
-            className="fixed left-1/2 top-1/2 z-50 grid h-[min(85dvh,640px)] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-surface"
+            className="left-1/2 top-1/2 grid h-[min(85dvh,640px)] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg p-5"
             id="catalog-add-game-dialog"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               addButtonRef.current?.focus();
             }}
           >
-            <Dialog.Title className="m-0 text-lg font-bold">添加游戏</Dialog.Title>
+            <Dialog.Title>添加游戏</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-add-game-description">
               搜索并以默认排序值 0 将一个游戏加入目录。
             </Dialog.Description>
@@ -367,17 +368,17 @@ export function CatalogItemsSection({
         onOpenChange={(open) => { if (!open && !saving) setSelectedWorkId(null); }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
             aria-describedby="catalog-item-edit-description"
-            className="fixed left-1/2 top-1/2 z-50 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-surface"
+            className="left-1/2 top-1/2 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
             id="catalog-edit-item-dialog"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               if (editReturnFocusRef.current?.isConnected) editReturnFocusRef.current.focus();
             }}
           >
-            <Dialog.Title className="m-0 text-lg font-bold">编辑条目</Dialog.Title>
+            <Dialog.Title>编辑条目</Dialog.Title>
             <Dialog.Description className="sr-only" id="catalog-item-edit-description">
               修改所选游戏在目录中的备注和排序值。
             </Dialog.Description>

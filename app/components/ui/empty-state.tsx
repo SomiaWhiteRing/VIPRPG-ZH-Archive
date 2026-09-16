@@ -1,11 +1,11 @@
 import Link from "next/link";
-import type { AriaRole } from "react";
+import type { AriaRole, ReactNode } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 
 type EmptyStateProps = {
-  title: string;
+  title: ReactNode;
   variant?: "card" | "plain";
   className?: string;
   role?: AriaRole;

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { InfoRow } from "@/app/components/ui/info-row";
 import Link from "next/link";
 import { formatBytes, formatNumber } from "@/lib/format";
 import { creatorRoleLabel, engineLabel, languageLabel } from "@/lib/labels";
@@ -61,23 +61,6 @@ export function WorkSidebarInfo({
           </InfoRow>
         ))}
       </dl>
-    </div>
-  );
-}
-
-function InfoRow({
-  children,
-  label,
-  mono = false,
-}: {
-  children: ReactNode;
-  label: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline gap-3 border-b border-dashed border-border py-1.75 text-sm last:border-b-0">
-      <dt className="w-17 shrink-0 text-xs text-muted wrap-anywhere">{label}</dt>
-      <dd className={`m-0 min-w-0 wrap-anywhere ${mono ? "font-mono" : ""}`}>{children}</dd>
     </div>
   );
 }

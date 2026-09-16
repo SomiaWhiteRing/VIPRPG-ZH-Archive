@@ -3,7 +3,8 @@
 import { EllipsisVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Dialog, DropdownMenu } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
+import { DropdownMenu } from "radix-ui";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -231,17 +232,17 @@ export function RelationCreateDialog({
         <Button ref={triggerRef} type="button">添加关联</Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+        <Dialog.Overlay />
         <Dialog.Content
           aria-describedby="relation-create-description"
-          className="fixed left-1/2 top-1/2 z-50 grid h-[min(85dvh,680px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-surface"
+          className="left-1/2 top-1/2 grid h-[min(85dvh,680px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg p-5"
           id="relation-create-dialog"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             triggerRef.current?.focus();
           }}
         >
-          <Dialog.Title className="m-0 text-lg font-bold">添加关联</Dialog.Title>
+          <Dialog.Title>添加关联</Dialog.Title>
           <Dialog.Description className="sr-only" id="relation-create-description">
             选择关联类型，查找关联对象并建立关联。
           </Dialog.Description>

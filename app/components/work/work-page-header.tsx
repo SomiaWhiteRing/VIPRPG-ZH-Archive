@@ -1,3 +1,4 @@
+import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -55,24 +56,7 @@ export function WorkPageHeader({
         </span>
       </div>
 
-      <nav aria-label="页面分区" className="mt-4 overflow-x-auto border-b border-border">
-        <ul className="m-0 flex min-w-max list-none gap-0.5 p-0">
-          {tabs.map((tab) => (
-            <li key={`${tab.href}-${tab.label}`}>
-              <Link
-                aria-current={tab.active ? "page" : undefined}
-                className={`inline-flex min-h-10.5 items-center gap-1.5 border-b-2 border-transparent px-3.25 text-sm whitespace-nowrap text-muted hover:border-border hover:text-foreground ${
-                  tab.active ? "border-primary font-semibold text-[#1f6f67]" : ""
-                }`}
-                href={tab.href}
-              >
-                {tab.label}
-                {tab.count !== undefined ? <span className="font-mono text-xs text-muted">{tab.count}</span> : null}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <SectionNavigation items={tabs} />
     </header>
   );
 }

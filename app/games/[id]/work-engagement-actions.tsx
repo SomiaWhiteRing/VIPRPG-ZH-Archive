@@ -9,7 +9,7 @@ import type { CatalogSummary } from "@/lib/server/db/catalogs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Dialog } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
 
 export function WorkEngagementActions({
   currentUserId,
@@ -85,12 +85,12 @@ export function CatalogAddDialog({
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+        <Dialog.Overlay />
         <Dialog.Content
           aria-describedby="catalog-add-work-description"
-          className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 shadow-surface"
+          className="left-1/2 top-1/2 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
         >
-          <Dialog.Title className="m-0 text-lg font-bold">
+          <Dialog.Title>
             添加到目录
           </Dialog.Title>
           <Dialog.Description

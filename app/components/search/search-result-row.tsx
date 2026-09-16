@@ -1,3 +1,4 @@
+import { Badge } from "@/app/components/ui/badge";
 import Image from "next/image";
 import Link from "next/link";
 import type { GameWorkSummary } from "@/lib/server/db/game-library";
@@ -32,32 +33,32 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
         </div>
         <p>{publicCopy(work.description) || "暂无简介。"}</p>
         <div className="mt-auto flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+          <Badge variant="subtle">
             {engineLabel(work.engineFamily)}
-          </span>
+          </Badge>
           {work.creators.filter((creator) => creator.roleKey === "author").slice(0, 1).map((creator) => (
-            <span
-              className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
+            <Badge
+              variant="subtle"
               key={creator.id}
             >
               {creator.displayName}
-            </span>
+            </Badge>
           ))}
           {work.characters.slice(0, 1).map((character) => (
-            <span
-              className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
+            <Badge
+              variant="subtle"
               key={character.id}
             >
               {character.displayName}
-            </span>
+            </Badge>
           ))}
           {work.tags.slice(0, 2).map((tag) => (
-            <span
-              className="inline-flex min-h-6 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
+            <Badge
+              variant="subtle"
               key={tag.id}
             >
               {tag.name}
-            </span>
+            </Badge>
           ))}
         </div>
       </div>

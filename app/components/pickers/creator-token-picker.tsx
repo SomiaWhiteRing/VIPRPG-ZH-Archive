@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Dialog } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { CreatorPicker, creatorOptions } from "@/app/components/pickers/creator-picker";
@@ -181,9 +181,9 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
 
       <Dialog.Root open={editing !== null} onOpenChange={(nextOpen) => !nextOpen && setEditing(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-surface"
+            className="left-1/2 top-1/2 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
             id={`${id}-edit-dialog`}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
@@ -191,7 +191,7 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
               target?.focus();
             }}
           >
-            <Dialog.Title className="m-0 text-lg font-bold">编辑{label}</Dialog.Title>
+            <Dialog.Title>编辑{label}</Dialog.Title>
             <Dialog.Description className="sr-only">修改{label}署名或关联人物。</Dialog.Description>
             <div className="grid gap-2">
               <Label htmlFor={`${id}-edit-name`}>{label}署名</Label>

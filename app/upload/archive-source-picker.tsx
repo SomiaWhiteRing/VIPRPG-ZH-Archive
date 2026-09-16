@@ -1,5 +1,7 @@
 "use client";
 
+import { Notice } from "@/app/components/ui/notice";
+
 import Link from "next/link";
 import {
   type ChangeEvent,
@@ -268,12 +270,12 @@ function UploadTaskCard({
           <strong>{progressLabel}</strong>
           {task?.progress.currentPath ? <span className="max-w-full truncate font-mono">{task.progress.currentPath}</span> : null}
         </div>
-        {task?.error ? <p className="mt-3 border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">{task.error}</p> : null}
+        {task?.error ? <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">{task.error}</Notice> : null}
         {task?.result ? (
-          <p className="mt-3 border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <Notice tone="success" className="mt-3 border p-3 text-sm">
             上传完成。
             <Link className="font-semibold underline" href={`/games/${task.result.workId}`}>查看作品</Link>
-          </p>
+          </Notice>
         ) : null}
       </div>
       {showCancel || canRestart ? (

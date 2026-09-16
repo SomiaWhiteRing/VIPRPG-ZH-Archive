@@ -1,3 +1,4 @@
+import { EmptyState } from "@/app/components/ui/empty-state";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { GameCard } from "@/app/components/home/game-card";
@@ -43,5 +44,5 @@ export function AccountWorkGrid({ items }: { items: UserWorkListItem[] }) {
 }
 
 export function AccountEmpty({ children }: { children: ReactNode }) {
-  return <p className="rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted">{children}</p>;
+  return <EmptyState title={children} variant="plain" className="rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted" />;
 }

@@ -1,5 +1,7 @@
+import { Badge } from "@/app/components/ui/badge";
+import { SectionNavigation } from "@/app/components/ui/section-navigation";
+import { InfoRow } from "@/app/components/ui/info-row";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -40,13 +42,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
         {creator.aliases.length ? (
           <p className="mt-1.5 text-sm text-muted">别名：<span className="font-mono text-foreground">{creator.aliases.join(" · ")}</span></p>
         ) : null}
-        <nav aria-label="页面分区" className="mt-4 overflow-x-auto border-b border-border">
-          <ul className="m-0 flex min-w-max list-none gap-0.5 p-0">
-            <CreatorTab active href="#sec-intro" label="概览" />
-            <CreatorTab count={works.length} href="#sec-works" label="参与作品" />
-            <CreatorTab href="#sec-comments" label="评论" />
-          </ul>
-        </nav>
+        <SectionNavigation items={[{ href: "#sec-intro", label: "概览", active: true }, { href: "#sec-works", label: "参与作品", count: works.length }, { href: "#sec-comments", label: "评论" }]} />
       </header>
 
       <DetailPageLayout
@@ -85,9 +81,9 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
                         {work.workTitle !== work.workOriginalTitle ? <span className="block text-sm text-muted wrap-anywhere">{work.workOriginalTitle}</span> : null}
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {work.credits.map((credit) => (
-                            <span className="inline-flex rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs text-[#1f6f67]" key={`${credit.roleKey}-${credit.displayName}`}>
+                            <Badge variant="credit" key={`${credit.roleKey}-${credit.displayName}`}>
                               {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
-                            </span>
+                            </Badge>
                           ))}
                         </div>
                         {work.credits.some((credit) => credit.displayName !== creator.name) ? (
@@ -127,9 +123,9 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
             <CreatorPortrait avatarBlobSha256={creator.avatarBlobSha256} className="mx-auto size-52 max-w-full" name={creator.name} />
             <h2 className="mt-4 text-center font-serif text-xl font-bold">{creator.name}</h2>
             <dl className="mt-4">
-              <CreatorInfoRow label="作品">{formatNumber(works.length)} 部</CreatorInfoRow>
-              <CreatorInfoRow label="最近参与">{creator.latestWorkCreditAt?.slice(0, 10) ?? "暂无"}</CreatorInfoRow>
-              {creator.aliases.length ? <CreatorInfoRow label="别名">{creator.aliases.join("、")}</CreatorInfoRow> : null}
+              <InfoRow label="作品">{formatNumber(works.length)} 部</InfoRow>
+              <InfoRow label="最近参与">{creator.latestWorkCreditAt?.slice(0, 10) ?? "暂无"}</InfoRow>
+              {creator.aliases.length ? <InfoRow label="别名">{creator.aliases.join("、")}</InfoRow> : null}
             </dl>
             {creator.websiteUrl ? (
               <a className="mt-3 inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-[#1f6f67] hover:underline" href={creator.websiteUrl} rel="noreferrer" target="_blank">
@@ -141,26 +137,6 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
         }
       />
     </DetailPageShell>
-  );
-}
-
-function CreatorTab({ active = false, count, href, label }: { active?: boolean; count?: number; href: string; label: string }) {
-  return (
-    <li>
-      <Link aria-current={active ? "page" : undefined} className={`inline-flex min-h-10.5 items-center gap-1.5 border-b-2 border-transparent px-3.25 text-sm whitespace-nowrap text-muted hover:border-border hover:text-foreground ${active ? "border-primary font-semibold text-[#1f6f67]" : ""}`} href={href}>
-        {label}
-        {count !== undefined ? <span className="font-mono text-xs text-muted">{count}</span> : null}
-      </Link>
-    </li>
-  );
-}
-
-function CreatorInfoRow({ children, label }: { children: ReactNode; label: string }) {
-  return (
-    <div className="flex items-baseline gap-3 border-b border-dashed border-border py-1.75 text-sm last:border-b-0">
-      <dt className="w-17 shrink-0 text-xs text-muted">{label}</dt>
-      <dd className="m-0 min-w-0 wrap-anywhere">{children}</dd>
-    </div>
   );
 }
 

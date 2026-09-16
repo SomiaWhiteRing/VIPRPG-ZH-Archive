@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
 import { Button, buttonVariants } from "@/app/components/ui/button";
@@ -69,12 +71,12 @@ export default async function AdminTagEditPage({
       />
 
       {formError ? (
-        <p
-          className="mb-4 border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+        <Notice tone="error"
+          className="mb-4 border p-3 text-sm"
           role="alert"
         >
           {formError}
-        </p>
+        </Notice>
       ) : null}
 
       <ConfirmingForm
