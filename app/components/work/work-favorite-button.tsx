@@ -2,15 +2,26 @@ import { Button } from "@/app/components/ui/button";
 import { Heart } from "lucide-react";
 import { useState } from "react";
 
-export function WorkFavoriteButton({
-  currentUserId,
-  initialFavorited,
-  workId,
-}: {
+type Props = {
   currentUserId: number | null;
   initialFavorited: boolean;
   workId: number;
-}) {
+};
+
+export function WorkFavoriteButton(props: Props) {
+  return (
+    <WorkFavoriteButtonContent
+      key={`${props.workId}:${props.currentUserId}`}
+      {...props}
+    />
+  );
+}
+
+function WorkFavoriteButtonContent({
+  currentUserId,
+  initialFavorited,
+  workId,
+}: Props) {
   const [favorited, setFavorited] = useState(initialFavorited);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

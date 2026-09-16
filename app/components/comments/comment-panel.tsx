@@ -24,7 +24,16 @@ type Props = {
   emojis: CustomEmojiDto[];
 };
 
-export function CommentPanel({
+export function CommentPanel(props: Props) {
+  return (
+    <CommentPanelContent
+      key={`${props.target.kind}:${props.target.id}:${props.currentUserId}`}
+      {...props}
+    />
+  );
+}
+
+function CommentPanelContent({
   target,
   placeholder = "写下你的游玩感受、攻略提示或考证……",
   currentUserId,
