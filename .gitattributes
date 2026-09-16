@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Seed objects are original R2 bytes, including extensionless JSON/text files.
+data/local-seed/objects/* -text
+data/local-seed/*.gz -text

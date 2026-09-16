@@ -1,31 +1,35 @@
 # 本地展示数据
 
-这组数据用于日常开发时查看功能，全部人物、作品、外链和互动内容均为虚构资料。
+当前种子是 2026-09-16 本地数据库与 R2 的固定快照。它包含已审核的角色分类、真实来源素材，以及日常开发使用的虚构作品、账号和互动场景。
 
-## 更新方式
+## 固定快照
 
-已有基础开发数据时，在仓库根目录运行：
+`data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。
+
+首次初始化空环境：
 
 ```powershell
-npm run db:local:seed:update
+npm run db:local:seed
 ```
 
-也可直接执行 `node --import tsx scripts/dev-seed.mjs --update`。不要使用 `--reset` 更新已有数据。空环境仍按 README 先运行 `db:local:reset`、`db:local:seed`，完整 seed 会自动包含扩展场景。
+恢复前停止本地服务器。脚本先校验快照和全部对象，再写入本地 R2，通过 SQLite backup 恢复 D1，并自动应用仓库中尚未执行的 migration。已有业务数据时拒绝覆盖；只有明确要重建开发库时，才在自行备份后运行 `npm run db:local:reset`，再恢复种子。已有开发库后续新增的 migration 通过 `npm run db:local:migrate` 应用。
 
-脚本固定使用 `wrangler.jsonc` 的本地 binding 和 `.wrangler/state`，关闭远程 binding。更新前通过 SQLite 在线备份保存包含 WAL 已提交内容的快照，再在副本中检查 SQL 和外键，最后以一个 D1 batch 事务写入。证据保存在被 Git 忽略的 `output/dev-seed/<时间>/`：
+以后需要将新的人工审核结果作为种子时，暂停编辑和上传，再运行：
 
-- `before.sqlite`：更新前的数据库。
-- `candidate.sqlite`：已在副本中插入场景的数据库。
-- `scenarios.sql`：本次生成的插入语句。
-- `result.json`：实际写入行数和备份路径。
+```powershell
+npm run db:local:seed:capture
+npm run db:local:seed:verify
+```
 
-扩展记录使用固定编号；在各表中保留 10001–12053 段供这些场景使用。重复执行时，已存在的主键记录保持原样，因此后续编辑、审核和隐私设置不会被重置。名称等其他唯一键冲突会报错，需先核对占用记录；脚本不会合并或覆盖它们。
+capture 只读当前本地数据库和 R2，通过 SQLite 在线备份纳入 WAL 中已提交的内容，覆盖种子文件，保留全部当前记录（包括本地账号、审核状态和会话表）。它不会更新正在使用的数据库。只在本地开发环境使用这份种子。
 
-前提是基础 seed 的四个账号、角色词典和预览素材仍存在，并且开发库已应用当前 migration（包括论坛读取模型的 0005；已有论坛先按离线转换流程升级）。此更新入口不负责修复旧数据库结构或同步已修改过的初始 migration。
+脚本使用 `wrangler.jsonc` 的本地 binding，关闭远程 binding，默认状态目录为 `.wrangler/state`。可通过 `--persist-to <目录>` 选择隔离的 Wrangler 状态目录，例如 `node scripts/dev-seed.mjs --persist-to output/seed-restore`。capture 读取当前 Miniflare 的本地存储结构，恢复通过 R2 API 和 SQLite backup 完成。每次操作的快照与校验报告保存在被 Git 忽略的 `output/local-seed/<时间>/`。
+
+自动演示生成器与 `db:local:seed:update` 已移除。词典、分类 bootstrap 和素材导入清单仍供显式整理工具使用，但日常 seed 不再调用这些导入器或重新匹配名称。提交种子时，应一并提交 manifest 引用的新增素材文件。
 
 ## 账号
 
-以下可登录账号的密码均为 `dev123456789`，只用于本地开发。原有四个账号及密码保持不变。
+以下可登录账号的密码均为 `dev123456789`，只用于本地开发。
 
 | 邮箱 | 展示用途 |
 | --- | --- |
@@ -59,7 +63,7 @@ npm run db:local:seed:update
 | 作品与作者评论 | `/games/10001`、`/creators/10001`：评论、回复、点赞、隐藏和已删除记录、已注销作者历史内容 |
 | 自定义表情 | `:dev_wave:` 可选；`dev_quiet` 不出现在选择器；`dev_retired` 已停用。图片复用基础 seed 的占位头像 |
 | 申请、通知和授权记录 | `/inbox`、`/admin/users`、`/admin/permissions`：按上述账号登录查看 |
-| 论坛列表与分页 | `/discussions`：36 个主题，12 个 TAG，包含精品、已锁定和已隐藏主题 |
+| 论坛列表与分页 | `/discussions`：38 个主题，12 个 TAG，包含精品、已锁定和已隐藏主题 |
 | 长标题、多 TAG、多页楼层及楼中楼 | `/discussions/10100`：5 个 TAG、32 个楼层，两组各 27 条楼中楼，另有点赞和表情 |
 | 锁定、本人编辑、隐藏审核 | `/discussions/10102` 锁定；10103 属于普通用户；10104 隐藏，管理员可查看 |
 | TAG 状态 | `/admin/discussion-tags`：启用、停用、隐藏 TAG；10105 主题关联了状态不同的 TAG |
@@ -70,6 +74,6 @@ npm run db:local:seed:update
 
 ## 数据来源
 
-论坛内容来自 [data/dev/forum.json](../data/dev/forum.json)，由 [dev-seed-scenarios.mjs](../scripts/dev-seed-scenarios.mjs) 映射到开发账号和固定编号。数据不包含审阅环境的账号、密码、登录会话或浏览器操作后的状态；角色及脸图使用当前词典与素材清单。
+当前初始化来源为 [固定种子清单](../data/local-seed/manifest.json)，以实际数据库为准，保留后续人工编辑结果。论坛最初的演示内容来自 [data/dev/forum.json](../data/dev/forum.json)，该文件仅保留为来源记录，不再参与 seed。角色素材来源及分类决定见各素材清单和采集文档。
 
 一次性迁移范围与当次验收陈述保存在[2026 年 9 月本地开发记录](./audit/2026-09-forum-local-development.md)，不作为初始化或更新步骤。

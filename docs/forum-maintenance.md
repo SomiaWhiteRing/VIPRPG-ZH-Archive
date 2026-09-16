@@ -26,7 +26,7 @@ npm run forum:offline -- --input backup.sql --output output/forum-conversion --c
 
 转换与服务切换期间禁止业务写入。失败时使用已留存的整库备份和对应 Worker 版本恢复，不能只回退代码而保留不兼容 schema。工具拒绝再次转换已有统一搜索映射的库。
 
-演示数据使用 `npm run db:local:seed:update` 增量补齐，不用 reset 覆盖手工修改，详见[本地展示数据](./local-demo-data.md)。
+本地初始化使用 `npm run db:local:seed` 恢复固定快照；已有数据时拒绝覆盖。人工编辑后的数据可用 `npm run db:local:seed:capture` 固化为新版种子，详见[本地展示数据](./local-demo-data.md)。
 
 ## 离线导出
 

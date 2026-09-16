@@ -11,8 +11,9 @@
     "deploy:staging": "node scripts/open-next.mjs build && node scripts/open-next.mjs deploy --env staging",
     "db:local:migrate": "wrangler d1 migrations apply viprpg-archive-prod --local",
     "db:local:reset": "node scripts/local-d1-reset.mjs",
-    "db:local:seed": "node --import tsx scripts/dev-seed.mjs",
-    "db:local:seed:update": "node --import tsx scripts/dev-seed.mjs --update",
+    "db:local:seed": "node scripts/dev-seed.mjs",
+    "db:local:seed:capture": "node scripts/dev-seed.mjs --capture",
+    "db:local:seed:verify": "node scripts/dev-seed.mjs --verify",
     "db:local:character-index": "node scripts/import-character-index.mjs",
     "db:local:character-materials": "node scripts/import-character-materials.mjs",
     "forum:offline": "tsx scripts/forum-offline.ts",
@@ -68,6 +69,6 @@
     "wrangler": "latest"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": "^22.16.0 || >=24.0.0"
   }
 }
