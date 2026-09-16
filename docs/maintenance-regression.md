@@ -49,3 +49,15 @@
 - `npm run build` 只在构建配置、路由边界、部署链路变化，或预生产验收时运行；预生产完整入口是 `npm run verify:preprod`。
 - 失败后先分类为产品、测试夹具、环境或调度问题；夹具和环境失败不能作为改造产品代码的依据。有状态 D1、API、Worker 和浏览器检查必须串行运行。
 - 新增测试代码或执行人工 UI 测试仍需用户明确授权。
+
+### EasyRPG 官方游戏回归
+
+真实游戏验收使用 [EasyRPG 官方 TestGame](https://github.com/EasyRPG/TestGame) 的 `TestGame-EasyRPG`，下载脚本锁定提交 `4bbedb73492c80b79d8290e0b06ea86875b0bdc8` 并逐文件校验 Git blob 哈希。只下载当前归档策略支持的游戏数据，不运行仓库内可执行文件；ZIP、来源/许可证清单和回归记录保存在忽略的 `output/easyrpg/`。
+
+```text
+npx tsx scripts/fetch-easyrpg-testgame.ts
+npm run build
+npx tsx scripts/system-self-check.ts flow --game output/easyrpg/testgame.zip
+```
+
+此可选流程沿用独立临时 D1/R2，串行完成上传恢复、归档、原生下载、OPFS 安装，以及真实游戏菜单存档、IDBFS 持久化、离页/返回、读档、启动中离页、安装中离页确认与重装。`regression.json`、`runtime.log` 和截图记录实际结果。它不默认引入 CI 下载依赖，也不替代触屏及移动设备全屏验收。新增浏览器操作授权沿用本文的任务授权规则。

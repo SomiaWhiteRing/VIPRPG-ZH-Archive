@@ -9,3 +9,9 @@
 
 /play/sw.js
   Cache-Control: no-store
+
+/play/player
+  Cache-Control: no-store
+
+/play/player.html
+  Cache-Control: no-store

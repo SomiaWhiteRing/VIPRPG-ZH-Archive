@@ -19,6 +19,7 @@ import { chromium } from "playwright";
 import { hashSessionToken } from "../app/.server/auth/session";
 import { downloadZipBuilderVersion } from "../lib/archive/download";
 import { runWrangler } from "./run-wrangler.mjs";
+import { verifyEasyRpgGame } from "./easyrpg-flow-check";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-system-test-"));
@@ -32,6 +33,13 @@ const wranglerCli = resolve(
   "node_modules/wrangler/wrangler-dist/cli.js",
 );
 const testMode = process.argv[2] ?? "contract";
+const gameIndex = process.argv.indexOf("--game");
+const gamePath = gameIndex >= 0 ? process.argv[gameIndex + 1] : undefined;
+if (gameIndex >= 0)
+  assert.ok(
+    testMode === "flow" && gamePath,
+    "--game requires flow and a ZIP path",
+  );
 assert.ok(
   testMode === "contract" || testMode === "flow",
   "usage: tsx scripts/system-self-check.ts [contract|flow]",
@@ -46,10 +54,12 @@ const coverBytes = new Uint8Array(
     "base64",
   ),
 );
-const sourceFiles = {
-  "RPG_RT.lmt": new TextEncoder().encode("system-test-map-tree"),
-  "Picture/system-test.png": coverBytes,
-};
+const sourceFiles = gamePath
+  ? unzipSync(readFileSync(gamePath))
+  : {
+      "RPG_RT.lmt": new TextEncoder().encode("system-test-map-tree"),
+      "Picture/system-test.png": coverBytes,
+    };
 const sourceZip = zipSync(sourceFiles, { level: 0 });
 const catalogWorkIds = [101, 102] as const;
 const managedChildren = new Set<ChildProcess>();
@@ -72,7 +82,7 @@ let page: Page | null = null;
 let passed = false;
 const browserErrors: string[] = [];
 
-const watchdogSeconds = testMode === "contract" ? 90 : 180;
+const watchdogSeconds = testMode === "contract" ? 90 : gamePath ? 360 : 180;
 const watchdog = setTimeout(() => {
   console.error(
     `[system:${testMode}] exceeded ${watchdogSeconds} seconds; artifacts preserved at ${tempDir}`,
@@ -281,6 +291,7 @@ async function run(): Promise<void> {
 
   browser = await chromium.launch({ headless: true });
   await verifyEditorNavigation(browser, origin, adminCookie);
+  await verifyPermissionHistory(browser, origin);
   stage("recover a real browser upload");
   context = await browser.newContext();
   page = await context.newPage();
@@ -374,7 +385,7 @@ async function run(): Promise<void> {
   };
   const { workId, archiveVersionId } = commitPayload.result;
   assert.ok(workId > 0 && archiveVersionId > 0);
-  assert.equal(commitPayload.result.fileCount, 2);
+  assert.equal(commitPayload.result.fileCount, Object.keys(sourceFiles).length);
   await waitForNoUploadDrafts(page);
 
   stage("verify cancel-on-leave releases the upload draft");
@@ -388,12 +399,14 @@ async function run(): Promise<void> {
     });
   await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor();
   const canceledJob = await waitForUploadDraft(page);
-  const dismissUploadLeave = (dialog: import("playwright").Dialog) => void dialog.dismiss();
+  const dismissUploadLeave = (dialog: import("playwright").Dialog) =>
+    void dialog.dismiss();
   page.on("dialog", dismissUploadLeave);
   await page.locator('a[href="/games"]').first().click();
   assert.equal(new URL(page.url()).pathname, "/upload");
   page.off("dialog", dismissUploadLeave);
-  const acceptUploadLeave = (dialog: import("playwright").Dialog) => void dialog.accept();
+  const acceptUploadLeave = (dialog: import("playwright").Dialog) =>
+    void dialog.accept();
   page.on("dialog", acceptUploadLeave);
   await page.locator('a[href="/games"]').first().click();
   page.off("dialog", acceptUploadLeave);
@@ -510,7 +523,7 @@ async function run(): Promise<void> {
   ]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
   const virtualFiles = await page.evaluate(
-    async ({ playKey }) => {
+    async ({ playKey, workId }) => {
       const prefix = `/play/runtime/easyrpg/0.8.1.1/games/${playKey}`;
       const valid = await fetch(prefix + "/RPG_RT.lmt");
       const other = await fetch(
@@ -519,7 +532,9 @@ async function run(): Promise<void> {
       const wasm = await fetch("/play/runtime/easyrpg/0.8.1.1/index.wasm");
       const wasmMime = wasm.headers.get("content-type");
       await WebAssembly.compileStreaming(wasm);
+      const pageData = await fetch(`/games/${workId}.data`);
       return {
+        pageData: pageData.status,
         valid: valid.status,
         body: await valid.text(),
         other: other.status,
@@ -527,10 +542,14 @@ async function run(): Promise<void> {
         scope: (await navigator.serviceWorker.getRegistration())?.scope,
       };
     },
-    { playKey: webPlay.playKey },
+    { playKey: webPlay.playKey, workId },
   );
   assert.equal(virtualFiles.valid, 200);
-  assert.equal(virtualFiles.body, "system-test-map-tree");
+  assert.equal(virtualFiles.pageData, 200, "play SW must leave Router page data to the server");
+  assert.equal(
+    virtualFiles.body,
+    new TextDecoder().decode(sourceFiles["RPG_RT.lmt"]),
+  );
   assert.equal(
     virtualFiles.other,
     404,
@@ -555,6 +574,17 @@ async function run(): Promise<void> {
     [],
     "hydration and browser Workers have no uncaught errors",
   );
+  if (gamePath) {
+    stage(
+      "run the official EasyRPG game, save/load, and verify player/installer lifetimes",
+    );
+    await verifyEasyRpgGame(page, origin, workId, archiveVersionId);
+    assert.deepEqual(
+      browserErrors,
+      [],
+      "real-game flow has no uncaught browser errors",
+    );
+  }
 }
 
 async function verifyEditorNavigation(
@@ -624,7 +654,9 @@ async function verifyEditorNavigation(
           await editor.locator('input[name="archive_version_id"]').inputValue(),
           "202",
         );
-        const form = editor.locator('form:has(input[name="archive_version_id"])');
+        const form = editor.locator(
+          'form:has(input[name="archive_version_id"])',
+        );
         assert.equal(
           await form.getAttribute("action"),
           "/api/admin/archive-versions/202/update",
@@ -646,11 +678,137 @@ async function verifyEditorNavigation(
       );
     }
     await verifyCatalogEditorNavigation(editor, origin, adminCookie);
+    await verifyWorkDialogs(editor, origin, adminCookie);
   } catch (error) {
     await captureFailure(editor);
     throw error;
   } finally {
     await editorContext.close();
+  }
+}
+
+async function verifyWorkDialogs(
+  editor: Page,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("verify hydrated game views and work dialog identity");
+  await editor.goto(origin + "/games", { waitUntil: "networkidle" });
+  await editor.locator('a[href="/games/101"]').first().waitFor();
+  for (const view of ["网格视图", "列表视图"]) {
+    await editor.getByRole("link", { name: view, exact: true }).click();
+    await editor.waitForLoadState("networkidle");
+    assert.ok(await editor.locator('a[href="/games/101"]').count());
+  }
+  await expectStatus(
+    "related navigation fixture",
+    origin,
+    "/api/works/101/relations",
+    jsonMutation(origin, adminCookie, {
+      targetWorkId: 102,
+      relationType: "same_setting",
+    }),
+    201,
+  );
+  const catalog = await jsonResponse<{ catalog: { id: number } }>(
+    "dialog catalog",
+    origin,
+    "/api/catalogs",
+    jsonMutation(origin, adminCookie, { title: "Dialog destination" }),
+    201,
+  );
+  await editor.goto(origin + "/games/101", { waitUntil: "networkidle" });
+  await editor.locator('a[href="/games/102"]').first().click();
+  await editor.waitForURL(origin + "/games/102");
+  await editor.getByRole("button", { name: "添加到目录", exact: true }).click();
+  await editor.getByRole("combobox", { name: "目录", exact: true }).click();
+  await editor
+    .getByRole("option", { name: "Dialog destination", exact: true })
+    .click();
+  // Successful revalidation of this same work preserves the open dialog and its selection.
+  const saved = editor.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/api/catalogs/${catalog.catalog.id}/items`) &&
+      r.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "添加", exact: true }).click();
+  assert.equal((await saved).status(), 200);
+  await editor.waitForLoadState("networkidle");
+  assert.equal(await editor.getByRole("dialog").count(), 1);
+  await editor.goBack();
+  await editor.waitForURL(origin + "/games/101");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+
+  await editor.goto(origin + "/games/102/relations", {
+    waitUntil: "networkidle",
+  });
+  for (const path of ["/games/102", "/games/101", "/games/101/relations"]) {
+    await editor.locator(`a[href="${path}"]`).first().click();
+    await editor.waitForURL(origin + path);
+  }
+  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
+  await editor
+    .getByRole("textbox", { name: "查找关联对象" })
+    .fill("Relation target C");
+  await editor.getByRole("button", { name: "查找", exact: true }).click();
+  await editor.getByRole("button", { name: "选择", exact: true }).click();
+  await editor.evaluate(() => history.go(-3));
+  await editor.waitForURL(origin + "/games/102/relations");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
+  assert.equal(
+    await editor.getByRole("textbox", { name: "查找关联对象" }).inputValue(),
+    "",
+  );
+  assert.equal(
+    await editor
+      .getByRole("button", { name: "建立关联", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await editor.getByRole("button", { name: "取消", exact: true }).click();
+}
+
+async function verifyPermissionHistory(
+  currentBrowser: Browser,
+  origin: string,
+) {
+  stage("protect permission drafts without the Navigation API");
+  const rootCookie = await login(origin, "root@example.test");
+  const rootContext = await currentBrowser.newContext();
+  try {
+    await rootContext.addCookies([
+      { name: "viprpg_session", value: rootCookie.split("=")[1], url: origin },
+    ]);
+    await rootContext.addInitScript(() =>
+      Object.defineProperty(window, "navigation", {
+        value: undefined,
+        configurable: true,
+      }),
+    );
+    const matrix = await rootContext.newPage();
+    await matrix.goto(origin + "/admin", { waitUntil: "networkidle" });
+    await matrix.locator('a[href="/admin/permissions"]').first().click();
+    await matrix.waitForURL(origin + "/admin/permissions");
+    await matrix
+      .locator("summary")
+      .filter({ hasText: "新建自定义角色" })
+      .click();
+    const field = matrix.locator('details input[name="name"]');
+    await field.fill("Unsaved role");
+    let accept = false;
+    matrix.on(
+      "dialog",
+      (dialog) => void (accept ? dialog.accept() : dialog.dismiss()),
+    );
+    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    await matrix.waitForURL(origin + "/admin/permissions");
+    assert.equal(await field.inputValue(), "Unsaved role");
+    accept = true;
+    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    await matrix.waitForURL(origin + "/admin");
+  } finally {
+    await rootContext.close();
   }
 }
 
@@ -662,7 +820,9 @@ async function verifyCatalogEditorNavigation(
   stage("prevent catalog drafts from being submitted to another catalog");
   const catalogs: Array<{ id: number; title: string }> = [];
   for (const title of ["Editor catalog A", "Editor catalog B"]) {
-    const result = await jsonResponse<{ catalog: { id: number; title: string } }>(
+    const result = await jsonResponse<{
+      catalog: { id: number; title: string };
+    }>(
       "create editor catalog",
       origin,
       "/api/catalogs",
@@ -836,6 +996,15 @@ async function verifyPageContracts(origin: string, adminCookie: string) {
   assert.equal(await head.text(), "");
 
   const memberCookie = await login(origin, "user@example.test");
+  for (const path of ["/me", "/me/discussions"]) {
+    await expectStatus(
+      "own discussion history",
+      origin,
+      path,
+      { headers: { cookie: memberCookie } },
+      200,
+    );
+  }
   for (const path of [
     "/admin/users",
     "/admin/users.data?_routes=admin/users/page",
@@ -892,6 +1061,11 @@ async function verifyPageContracts(origin: string, adminCookie: string) {
   const sw = await fetch(`${origin}/play/sw.js`);
   assert.equal(sw.status, 200);
   assert.match(sw.headers.get("cache-control") ?? "", /no-store/);
+  const player = await fetch(`${origin}/play/player.html`);
+  assert.equal(player.status, 200);
+  assert.match(player.headers.get("content-type") ?? "", /text\/html/);
+  assert.match(player.headers.get("cache-control") ?? "", /no-store/);
+  assert.ok(!(await player.text()).includes("__reactRouter"));
 }
 
 function writeTestFiles(origin: string): void {
@@ -1001,7 +1175,11 @@ VALUES (${catalogWorkIds[0]}, 'Download', 'https://example.test/a', 'download_pa
        (${catalogWorkIds[1]}, 'Download', 'https://example.test/b', 'download_page');
 INSERT INTO work_uploaders (work_id, user_id)
 VALUES (${catalogWorkIds[0]}, 2), (${catalogWorkIds[1]}, 2);
-${testMode === "flow" ? `
+${
+  testMode === "flow"
+    ? `
+INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
+VALUES (103, 'Relation target C', 'published', 2, CURRENT_TIMESTAMP);
 INSERT INTO works (id, original_title, status, created_by_user_id)
 VALUES (201, 'Editor Archive Work A', 'hidden', 2),
        (202, 'Editor Archive Work B', 'hidden', 2);
@@ -1011,7 +1189,9 @@ VALUES (201, 201, 'Editor Archive A', 'https://example.test/editor-a',
   '${"a".repeat(64)}', '1', '1', 'browser_zip', 'published'),
        (202, 202, 'Editor Archive B', 'https://example.test/editor-b',
   '${"b".repeat(64)}', '1', '1', 'browser_zip', 'hidden');
-` : ""}
+`
+    : ""
+}
 `;
 }
 

@@ -13,6 +13,9 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Progress } from "@/app/components/ui/progress";
+import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import { createPlayerSession } from "./web-play-player";
+import type { PlayerSession } from "./web-play-player";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   deleteWebPlayInstallation,
@@ -47,10 +50,6 @@ type WebPlayLog = {
   createdAt: string;
 };
 
-type EasyRpgModule = {
-  initApi?: () => void;
-};
-
 type DisplayOrientation = "landscape" | "portrait";
 
 type LockableScreenOrientation = ScreenOrientation & {
@@ -67,14 +66,6 @@ type WebPlayClientProps = {
   secondary: ReactNode;
   stats: ReactNode;
 };
-
-declare global {
-  interface Window {
-    createEasyRpgPlayer?: (
-      options: Record<string, unknown>,
-    ) => Promise<EasyRpgModule>;
-  }
-}
 
 export function WebPlayClient({
   comments,
@@ -104,7 +95,10 @@ export function WebPlayClient({
   const [viewportPortrait, setViewportPortrait] = useState(false);
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const moduleRef = useRef<EasyRpgModule | null>(null);
+  const playerHostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<PlayerSession | null>(null);
+  const lifetimeRef = useRef<AbortController | null>(null);
+  const startingRef = useRef(false);
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
@@ -127,6 +121,23 @@ export function WebPlayClient({
       ].slice(0, 80),
     );
   }, []);
+
+  useEffect(() => {
+    const lifetime = new AbortController();
+    lifetimeRef.current = lifetime;
+    return () => {
+      lifetime.abort();
+      playerRef.current?.dispose();
+      playerRef.current = null;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      unlockScreenOrientation();
+    };
+  }, []);
+
+  useNavigationGuard(installSessionActive, () =>
+    window.confirm("游戏安装尚未完成，确定离开并中断安装吗？"),
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -188,23 +199,6 @@ export function WebPlayClient({
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [addLog, metadata.playKey]);
-
-  useEffect(() => {
-    if (!activeInstalling) {
-      return;
-    }
-
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    window.addEventListener("beforeunload", onBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-    };
-  }, [activeInstalling]);
 
   useEffect(() => {
     const frame = document.getElementById("web-player-frame");
@@ -278,6 +272,7 @@ export function WebPlayClient({
   }, [addLog]);
 
   const startInstall = useCallback(async () => {
+    const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
     try {
@@ -287,7 +282,9 @@ export function WebPlayClient({
 
       setInstallSessionActive(true);
       const storageSnapshot = await requestBrowserStorage();
-      await registerPlayServiceWorker();
+      signal.throwIfAborted();
+      await registerPlayServiceWorker(signal);
+      signal.throwIfAborted();
       const worker = ensureWorker();
 
       worker.postMessage({
@@ -297,6 +294,7 @@ export function WebPlayClient({
       } satisfies WebPlayInstallWorkerInput);
       addLog("info", "开始下载并安装到浏览器本地。");
     } catch (error) {
+      if (signal.aborted) return;
       setInstallSessionActive(false);
       const message = error instanceof Error ? error.message : "启动安装失败。";
       setOperationError(message);
@@ -333,36 +331,30 @@ export function WebPlayClient({
   }, [addLog, metadata.playKey, playerBusy]);
 
   const startPlayer = useCallback(async (): Promise<boolean> => {
+    if (running) return true;
+    if (startingRef.current) return false;
+    const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
     try {
-      if (running) return true;
-      if (playerStarting) return false;
-
       if (!installed) {
         throw new Error("需要先完成本地安装。");
       }
 
+      startingRef.current = true;
       setPlayerStarting(true);
-      await registerPlayServiceWorker();
-      await loadEasyRpgRuntime(metadata.runtimeBasePath);
-
-      if (!window.createEasyRpgPlayer) {
-        throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
-      }
-
-      setRunning(true);
+      await registerPlayServiceWorker(signal);
+      signal.throwIfAborted();
+      if (!playerHostRef.current) return false;
       addLog("info", "游戏运行组件已加载，正在启动游戏。");
-      const playerModule = await window.createEasyRpgPlayer({
-        game: metadata.playKey,
-        workId: metadata.workId,
-        locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
-      });
-
-      playerModule.initApi?.();
-      moduleRef.current = playerModule;
+      const player = createPlayerSession(playerHostRef.current, metadata);
+      playerRef.current = player;
+      await player.ready;
+      signal.throwIfAborted();
+      setRunning(true);
       focusPlayerCanvas();
       await markWebPlayLastPlayed(metadata.playKey);
+      signal.throwIfAborted();
       if (isAuthenticated) {
         void fetch(`/api/works/${metadata.workId}/played`, {
           method: "POST",
@@ -373,6 +365,9 @@ export function WebPlayClient({
       addLog("info", "游戏已启动。");
       return true;
     } catch (error) {
+      if (signal.aborted) return false;
+      playerRef.current?.dispose();
+      playerRef.current = null;
       const message =
         error instanceof Error ? error.message : "启动在线游玩失败。";
       setOperationError(message);
@@ -380,18 +375,10 @@ export function WebPlayClient({
       setRunning(false);
       return false;
     } finally {
-      setPlayerStarting(false);
+      startingRef.current = false;
+      if (!signal.aborted) setPlayerStarting(false);
     }
-  }, [
-    addLog,
-    installed,
-    isAuthenticated,
-    metadata.playKey,
-    metadata.runtimeBasePath,
-    metadata.workId,
-    playerStarting,
-    running,
-  ]);
+  }, [addLog, installed, isAuthenticated, metadata, running]);
 
   const lockOrientation = useCallback(
     async (next: DisplayOrientation): Promise<boolean> => {
@@ -471,6 +458,7 @@ export function WebPlayClient({
       const entered = await enterImmersive(next);
       if (!entered) return;
       const started = running || (await startPlayer());
+      if (lifetimeRef.current?.signal.aborted) return;
       if (!started) await exitImmersive();
     },
     [enterImmersive, exitImmersive, running, startPlayer],
@@ -566,10 +554,10 @@ export function WebPlayClient({
                   id="web-player-surface"
                 >
                   <div className="relative aspect-4/3 w-[min(100cqw,133.333333cqh)] overflow-hidden bg-black">
-                    <canvas
-                      className="h-full w-full [image-rendering:pixelated]"
-                      id="canvas"
-                      tabIndex={0}
+                    <div
+                      className="h-full w-full"
+                      id="web-player-host"
+                      ref={playerHostRef}
                     />
                     {!running ? (
                       <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
@@ -989,7 +977,8 @@ function unlockScreenOrientation(): void {
   orientation?.unlock?.();
 }
 
-async function registerPlayServiceWorker(): Promise<void> {
+async function registerPlayServiceWorker(signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
   if (!("serviceWorker" in navigator)) {
     throw new Error("当前浏览器不支持在线游玩所需的后台功能。");
   }
@@ -998,6 +987,7 @@ async function registerPlayServiceWorker(): Promise<void> {
     scope: "/play/",
   });
   await registration.update().catch(() => undefined);
+  signal.throwIfAborted();
   // Play links load a document inside /play/. SPA navigation from another scope
   // cannot give that document control, even when the registration is active.
   const scriptUrl = new URL("/play/sw.js", window.location.origin).href;
@@ -1008,24 +998,35 @@ async function registerPlayServiceWorker(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     function cleanup() {
       window.clearTimeout(timer);
-      navigator.serviceWorker.removeEventListener("controllerchange", onControl);
+      navigator.serviceWorker.removeEventListener(
+        "controllerchange",
+        onControl,
+      );
+      signal.removeEventListener("abort", onAbort);
     }
     function onControl() {
       if (!controlled()) return;
       cleanup();
       resolve();
     }
+    function onAbort() {
+      cleanup();
+      reject(signal.reason);
+    }
     const timer = window.setTimeout(() => {
       cleanup();
       reject(new Error("在线游玩初始化超时，请刷新页面后重试。"));
     }, 10_000);
     navigator.serviceWorker.addEventListener("controllerchange", onControl);
+    signal.addEventListener("abort", onAbort, { once: true });
     onControl();
   });
 }
 
 function focusPlayerCanvas(): void {
-  const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
+  const canvas = document
+    .querySelector<HTMLIFrameElement>("#web-player-host iframe")
+    ?.contentDocument?.querySelector<HTMLCanvasElement>("#canvas");
 
   canvas?.focus({ preventScroll: true });
 }
@@ -1060,41 +1061,6 @@ async function requestBrowserStorage(): Promise<WebPlayStorageSnapshot> {
     storageQuotaBytes: estimate?.quota ?? null,
     storageUsageBytes: estimate?.usage ?? null,
   };
-}
-
-async function loadEasyRpgRuntime(runtimeBasePath: string): Promise<void> {
-  if (window.createEasyRpgPlayer) {
-    return;
-  }
-
-  const src = `${runtimeBasePath}/index.js`;
-  const existing = Array.from(
-    document.querySelectorAll<HTMLScriptElement>(
-      "script[data-easyrpg-runtime]",
-    ),
-  ).find((script) => script.dataset.easyrpgRuntime === src);
-
-  if (existing?.dataset.loaded === "true") {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = existing ?? document.createElement("script");
-
-    script.dataset.easyrpgRuntime = src;
-    script.async = true;
-    script.src = src;
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () =>
-      reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
-
-    if (!existing) {
-      document.head.appendChild(script);
-    }
-  });
 }
 
 function percent(done: number, total: number): number {

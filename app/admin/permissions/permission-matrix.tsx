@@ -7,6 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Table } from "@/app/components/ui/table";
 import { Textarea } from "@/app/components/ui/textarea";
+import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import type { PermissionCategory } from "@/lib/authz/permissions";
 import {
   PERMISSION_CATEGORIES,
@@ -18,7 +19,7 @@ import { ROLE_TEMPLATES, roleEditSnapshot } from "@/lib/authz/roles";
 import type { Permission, RoleSummary } from "@/lib/dto/db/permissions";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FormEvent } from "react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 
 const categories = Object.entries(PERMISSION_CATEGORIES).map(
   ([key, definition]) => ({
@@ -100,72 +101,9 @@ export function PermissionMatrix({
     }))
     .filter((group) => group.categories.length > 0);
 
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    function beforeUnload(event: BeforeUnloadEvent) {
-      event.preventDefault();
-    }
-    function navigate(event: NavigateEvent) {
-      if (
-        event.navigationType !== "traverse" ||
-        !event.cancelable ||
-        !event.destination.sameDocument ||
-        event.hashChange
-      )
-        return;
-      const next = new URL(event.destination.url);
-      if (
-        next.pathname === location.pathname &&
-        next.search === location.search
-      )
-        return;
-      if (
-        !window.confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？")
-      )
-        event.preventDefault();
-    }
-    function click(event: MouseEvent) {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const link =
-        event.target instanceof Element
-          ? event.target.closest<HTMLAnchorElement>("a[href]")
-          : null;
-      if (
-        !link ||
-        link.hasAttribute("download") ||
-        (link.target && link.target !== "_self")
-      )
-        return;
-      const next = new URL(link.href, location.href);
-      if (
-        next.origin !== location.origin ||
-        (next.pathname === location.pathname && next.search === location.search)
-      )
-        return;
-      if (
-        !window.confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？")
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    }
-    window.addEventListener("beforeunload", beforeUnload);
-    window.navigation?.addEventListener("navigate", navigate);
-    document.addEventListener("click", click, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      window.navigation?.removeEventListener("navigate", navigate);
-      document.removeEventListener("click", click, true);
-    };
-  }, [hasUnsavedChanges]);
+  useNavigationGuard(hasUnsavedChanges, () =>
+    window.confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？"),
+  );
 
   async function request(url: string, init: RequestInit) {
     setError(null);

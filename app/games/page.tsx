@@ -79,7 +79,6 @@ export async function loader(args: LoaderFunctionArgs) {
     view: view !== "list" ? view : undefined,
   };
   const isListView = view === "list";
-  const WorkCard = isListView ? GameLibraryListRow : GameCard;
   const hasFilters =
     engine !== "all" || Boolean(tag || character || language || original);
 
@@ -99,7 +98,6 @@ export async function loader(args: LoaderFunctionArgs) {
     popularTags,
     activeParams,
     isListView,
-    WorkCard,
     hasFilters,
   };
 }
@@ -121,9 +119,9 @@ export default function GamesPage() {
     popularTags,
     activeParams,
     isListView,
-    WorkCard,
     hasFilters,
   } = useLoaderData<typeof loader>();
+  const WorkCard = isListView ? GameLibraryListRow : GameCard;
   return (
     <PageContainer>
       <PageHeader

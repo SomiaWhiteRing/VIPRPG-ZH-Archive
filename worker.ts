@@ -28,7 +28,11 @@ app.all(
 );
 app.route("/", api);
 app.all("*", async (c) => {
-  if (/^\/(?:assets\/|icon\/|play\/runtime\/|play\/sw\.js$)/.test(c.req.path))
+  if (
+    /^\/(?:assets\/|icon\/|play\/runtime\/|play\/sw\.js$|play\/player(?:\.html)?$)/.test(
+      c.req.path,
+    )
+  )
     return c.env.ASSETS.fetch(c.req.raw);
   const context = new RouterContextProvider();
   context.set(runtimeContext, c.get("runtime"));

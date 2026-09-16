@@ -21,6 +21,10 @@ import { readForumJson, requireForumUser } from "../app/.server/forum/request";
 import type { ForumRuntime } from "../app/.server/forum/runtime";
 import { userSearchVisibilityStatement } from "../app/.server/forum/search-index";
 import {
+  ownUserDiscussions,
+  publicUserDiscussions,
+} from "../app/.server/forum/user-discussions";
+import {
   forumSearchPhrase,
   forumSearchTokens,
 } from "../lib/forum-search-index";
@@ -462,7 +466,85 @@ assert.equal(
   "Saved body",
 );
 assert.deepEqual(sqlite.prepare("PRAGMA foreign_key_check").all(), []);
+await verifyDiscussionHistory();
 sqlite.close();
 console.log(
   "Forum contracts passed: indexing, IDs, idempotency, rollback, numbering, editing and deletion.",
 );
+
+async function verifyDiscussionHistory() {
+  sqlite.exec(
+    "INSERT INTO users(id,external_auth_id,email,display_name,email_verified_at,profile_show_discussions) VALUES(3,'history-contract','history@example.test','History',CURRENT_TIMESTAMP,0)",
+  );
+  const user = { ...actor, id: 3 };
+  assert.equal((await ownUserDiscussions(ctx, user)).total, 0);
+  const topic = await publishForum(ctx, user, {
+    kind: "topic",
+    title: "History fixture",
+    body: "Topic body",
+    tags: [],
+    requestKey: "history-contract-topic",
+  });
+  const post = await publishForum(ctx, user, {
+    kind: "post",
+    topicId: topic.target.id,
+    body: "Reply body",
+    requestKey: "history-contract-post",
+  });
+  const comment = await publishForum(ctx, user, {
+    kind: "comment",
+    postId: post.target.id,
+    body: "Comment body",
+    requestKey: "history-contract-comment",
+  });
+  sqlite
+    .prepare(
+      "UPDATE forum_posts SET created_at='2020-01-01 00:00:00' WHERE topic_id=?",
+    )
+    .run(topic.target.id);
+  sqlite
+    .prepare(
+      "UPDATE forum_post_comments SET created_at='2020-01-02 00:00:00' WHERE id=?",
+    )
+    .run(comment.target.id);
+  const own = await ownUserDiscussions(ctx, user, { pageSize: 2 });
+  assert.equal(own.total, 3);
+  assert.deepEqual(
+    own.items.map((item) => item.kind),
+    ["comment", "post"],
+  );
+  assert.equal(
+    own.items[0].href,
+    `/discussions/${topic.target.id}/comments/${comment.target.id}`,
+  );
+  assert.equal(own.items[1].href, `/discussions/${topic.target.id}/posts/2`);
+  const last = await ownUserDiscussions(ctx, user, { page: 100, pageSize: 2 });
+  assert.equal(last.page, 2);
+  assert.equal(last.items[0].kind, "topic");
+  assert.equal((await publicUserDiscussions(ctx, user.id)).total, 0);
+  sqlite.exec("UPDATE users SET profile_show_discussions=1 WHERE id=3");
+  assert.equal((await publicUserDiscussions(ctx, user.id)).total, 3);
+  sqlite
+    .prepare("UPDATE forum_posts SET status='hidden' WHERE id=?")
+    .run(post.target.id);
+  assert.equal((await ownUserDiscussions(ctx, user)).total, 1);
+  sqlite
+    .prepare("UPDATE forum_posts SET status='deleted' WHERE id=?")
+    .run(post.target.id);
+  assert.equal((await publicUserDiscussions(ctx, user.id)).total, 2);
+  sqlite
+    .prepare("UPDATE forum_post_comments SET status='deleted' WHERE id=?")
+    .run(comment.target.id);
+  assert.equal((await publicUserDiscussions(ctx, user.id)).total, 1);
+  sqlite.exec("UPDATE users SET status='disabled' WHERE id=3");
+  assert.equal(
+    (await ownUserDiscussions(ctx, { ...user, status: "disabled" })).total,
+    0,
+  );
+  assert.equal((await publicUserDiscussions(ctx, user.id)).total, 0);
+  sqlite.exec("UPDATE users SET status='active' WHERE id=3");
+  sqlite
+    .prepare("UPDATE forum_topics SET status='hidden' WHERE id=?")
+    .run(topic.target.id);
+  assert.equal((await ownUserDiscussions(ctx, user)).total, 0);
+}
