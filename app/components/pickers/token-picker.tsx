@@ -2,11 +2,11 @@
 
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
-import { TokenChip, TokenInput } from "@/app/upload/token-input";
-import type { UploadTaxonomySuggestion } from "@/app/upload/upload-types";
+import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
+export type TokenSuggestion = { value: string; meta: string };
 import { cn } from "@/lib/ui/cn";
 
-type TokenOption = UploadTaxonomySuggestion & { kind: "existing" | "create" };
+type TokenOption = TokenSuggestion & { kind: "existing" | "create" };
 
 export function TokenPicker({
   disabled = false,
@@ -33,7 +33,7 @@ export function TokenPicker({
   recommendationLabel?: string;
   showRecommendations?: boolean;
   showSelectionCount?: boolean;
-  suggestions: UploadTaxonomySuggestion[];
+  suggestions: TokenSuggestion[];
   values: string[];
   maxValues?: number;
   normalizeValue?: (value: string) => string;

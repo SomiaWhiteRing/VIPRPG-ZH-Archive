@@ -23,7 +23,7 @@ import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
-import { TokenChip, TokenInput } from "@/app/upload/token-input";
+import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
 import type {
   CharacterCreditSelection,
   CharacterFaceSheet,

@@ -3,7 +3,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
 import { getForumRuntime } from "@/lib/server/forum/next";
 import { ownUserDiscussions } from "@/lib/server/forum/user-discussions";
-import { DiscussionList } from "../discussion-list";
+import { DiscussionList } from "@/app/components/profile/discussion-list";
 
 export const dynamic = "force-dynamic";
 

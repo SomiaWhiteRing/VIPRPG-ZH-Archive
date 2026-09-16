@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
-import { CreatorPicker } from "@/app/upload/creator-picker";
+import { CreatorPicker } from "@/app/components/pickers/creator-picker";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { EXTRA_STAFF_ROLES, type StaffCredit } from "@/lib/staff-credits";
 

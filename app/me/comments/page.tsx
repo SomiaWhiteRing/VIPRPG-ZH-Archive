@@ -5,7 +5,7 @@ import { StatusBadge } from "@/app/components/ui/status-badge";
 import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
 import { searchUserComments } from "@/lib/server/db/work-community";
 import { formatDate } from "@/lib/format";
-import { AccountEmpty } from "../account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 export const dynamic = "force-dynamic";
 export default async function CommentsPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
   const page = parseAccountPage((await searchParams).page); const user = await requireAccountUser(`/me/comments${page > 1 ? `?page=${page}` : ""}`); const result = await searchUserComments({ userId: user.id, page, pageSize: 20 });

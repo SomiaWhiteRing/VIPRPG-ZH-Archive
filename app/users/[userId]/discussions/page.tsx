@@ -1,5 +1,5 @@
 import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { DiscussionList } from "@/app/me/discussion-list";
+import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { parseAccountPage } from "@/lib/server/auth/account-user";
 import { getForumRuntime } from "@/lib/server/forum/next";
 import { publicUserDiscussions } from "@/lib/server/forum/user-discussions";

@@ -16,7 +16,7 @@ import {
 import { searchUploadedWorks } from "@/lib/server/db/game-library";
 import { engineLabel, languageLabel } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { AccountEmpty } from "../account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 
 export const dynamic = "force-dynamic";
 

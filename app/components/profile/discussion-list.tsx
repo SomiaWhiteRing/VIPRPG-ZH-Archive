@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatDate } from "@/lib/format";
 import type { UserDiscussionItem } from "@/lib/server/forum/user-discussions";
-import { AccountEmpty } from "./account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 
 const activityLabels = { topic: "发帖", post: "回帖", comment: "楼中楼回复" };
 

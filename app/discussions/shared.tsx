@@ -13,7 +13,7 @@ import { Dialog } from "radix-ui";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
-import { TokenPicker } from "@/app/upload/token-picker";
+import { TokenPicker } from "@/app/components/pickers/token-picker";
 import {
   FORUM_TAG_LIMIT,
   forumHref,

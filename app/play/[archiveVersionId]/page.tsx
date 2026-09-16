@@ -6,7 +6,7 @@ import { WorkPageHeader, WorkPageNotice } from "@/app/components/work/work-page-
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { CommentPanel } from "@/app/games/[id]/work-community-panel";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
   buildArchiveDownloadUrl,

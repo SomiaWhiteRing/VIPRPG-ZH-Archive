@@ -5,7 +5,7 @@ import { CatalogCreateForm } from "@/app/catalogs/catalog-manager";
 import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
 import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
 import { formatDate } from "@/lib/format";
-import { AccountEmpty } from "../account-content";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 
 export const dynamic = "force-dynamic";
 export default async function MyCatalogsPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
