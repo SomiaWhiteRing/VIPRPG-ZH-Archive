@@ -2,7 +2,6 @@ import { buttonVariants } from "@/app/components/ui/button";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { formatBytes } from "@/lib/format";
 import { Download, ExternalLink, Play } from "lucide-react";
-import { Link } from "react-router";
 
 type Props = {
   workId: number;
@@ -34,9 +33,9 @@ export function WorkActionBar({
             >
               在线游玩
             </Rm2kButton>
-            <Link
+            <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
-              to={archive.downloadHref}
+              href={archive.downloadHref}
               onClick={() => {
                 if (isAuthenticated) {
                   void fetch(`/api/works/${workId}/played`, {
@@ -52,7 +51,7 @@ export function WorkActionBar({
               <span className="text-xs text-muted">
                 {formatBytes(archive.totalSizeBytes)}
               </span>
-            </Link>
+            </a>
           </div>
         </>
       ) : externalDownload ? (

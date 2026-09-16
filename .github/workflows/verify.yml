@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Use isolated local configuration
-        run: node -e "require('node:fs').copyFileSync('wrangler.example.jsonc', 'wrangler.jsonc')"
+        run: node scripts/prepare-verification-config.mjs
       - run: npm run check
       - run: npm run test:forum
       - run: npx playwright install --with-deps chromium

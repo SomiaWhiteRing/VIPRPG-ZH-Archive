@@ -79,7 +79,7 @@ export default function AdminWorkEditPage() {
     relationCapabilities,
   } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={work.id}>
       <PageHeader
         compact
         title={work.chineseTitle || work.originalTitle}

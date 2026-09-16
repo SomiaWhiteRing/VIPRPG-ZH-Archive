@@ -46,7 +46,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export default function AdminCreatorEditPage() {
   const { adminUser, creator } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={creator.id}>
       <PageHeader
         compact
         title={creator.name}
