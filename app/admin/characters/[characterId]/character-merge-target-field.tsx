@@ -1,17 +1,15 @@
 "use client";
+import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
 
 import { EmptyState } from "@/app/components/ui/empty-state";
 import {
-  useEffect,
   useId,
   useMemo,
-  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { cn } from "@/lib/ui/cn";
 
 type MergeCandidate = {
   id: number;
@@ -40,13 +38,9 @@ export function CharacterMergeTargetField({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selected, setSelected] = useState<MergeCandidate | null>(null);
-  const activeOptionRef = useRef<HTMLButtonElement>(null);
   const matches = useMemo(() => matchCandidates(candidates, query), [candidates, query]);
   const menuOpen = open && Boolean(normalizeSearch(query));
 
-  useEffect(() => {
-    if (menuOpen) activeOptionRef.current?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, menuOpen]);
 
   function choose(candidate: MergeCandidate) {
     setSelected(candidate);
@@ -63,29 +57,11 @@ export function CharacterMergeTargetField({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "ArrowDown" && matches.items.length) {
-      event.preventDefault();
-      setActiveIndex((current) => open ? (current + 1) % matches.items.length : 0);
-      setOpen(true);
-      return;
-    }
-    if (event.key === "ArrowUp" && matches.items.length) {
-      event.preventDefault();
-      setActiveIndex((current) => open
-        ? (current - 1 + matches.items.length) % matches.items.length
-        : matches.items.length - 1);
-      setOpen(true);
-      return;
-    }
+    if (handleComboboxNavigation(event, { count: matches.items.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
     if (event.key === "Enter" && normalizeSearch(query)) {
       event.preventDefault();
       if (open && matches.items[activeIndex]) choose(matches.items[activeIndex]);
       else setOpen(true);
-      return;
-    }
-    if (event.key === "Escape" && open) {
-      event.preventDefault();
-      setOpen(false);
     }
   }
 
@@ -110,31 +86,15 @@ export function CharacterMergeTargetField({
           value={query}
         />
         {menuOpen ? (
-          <div
-            className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-72 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
-            id={listId}
-            role="listbox"
-          >
+          <ComboboxOptions id={listId} activeIndex={activeIndex} className="max-h-72">
             {matches.items.length ? matches.items.map((candidate, index) => (
-              <Button
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex min-h-11 w-full justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm font-normal",
-                  index === activeIndex && "bg-primary/10 text-primary",
-                )}
-                id={`${listId}-${candidate.id}`}
-                key={candidate.id}
-                onClick={() => choose(candidate)}
-                onMouseDown={(event) => event.preventDefault()}
-                ref={index === activeIndex ? activeOptionRef : undefined}
-                role="option"
-                tabIndex={-1}
-                type="button"
-                variant="ghost"
-              >
+              <ComboboxOption selected={index === activeIndex} className="min-h-11"
+                  id={`${listId}-${candidate.id}`}
+                  key={candidate.id}
+                  onClick={() => choose(candidate)}>
                 <span className="min-w-0 truncate">{candidate.originalName} · {candidate.primaryName}</span>
                 <span className="shrink-0 text-xs text-muted">#{candidate.id} · {candidate.workCount} 部作品</span>
-              </Button>
+              </ComboboxOption>
             )) : (
               <EmptyState title="没有匹配角色" variant="plain" className="px-2.5 py-2" role="status" />
             )}
@@ -143,7 +103,7 @@ export function CharacterMergeTargetField({
                 匹配 {matches.total} 个，显示前 {RESULT_LIMIT} 个
               </p>
             ) : null}
-          </div>
+          </ComboboxOptions>
         ) : null}
       </div>
       {selected ? (

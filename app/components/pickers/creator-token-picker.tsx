@@ -1,4 +1,5 @@
 "use client";
+import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -68,23 +69,13 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "ArrowDown" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current + 1) % options.length);
-    } else if (event.key === "ArrowUp" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current - 1 + options.length) % options.length);
-    } else if (event.key === "Enter") {
+    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
+    if (event.key === "Enter") {
       event.preventDefault();
       const active = menuOpen ? options[activeIndex] : query.trim() ? options[0] : null;
       if (active) add(active.selection);
     } else if (event.key === "Backspace" && !query && values.length) {
       onChange(values.slice(0, -1));
-    } else if (event.key === "Escape") {
-      setOpen(false);
     }
   }
 
@@ -150,30 +141,20 @@ export function CreatorTokenPicker({ disabled = false, errorId, id, invalid = fa
             ))}
           </TokenInput>
           {menuOpen ? (
-            <div className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
-              id={menuId} role="listbox">
+            <ComboboxOptions id={menuId} activeIndex={activeIndex}>
               {options.map((option, index) => (
-                <Button
-                  aria-selected={index === activeIndex}
-                  className={cn("flex min-h-9 w-full items-center justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm font-normal", index === activeIndex && "bg-primary/10 text-primary")}
+                <ComboboxOption selected={index === activeIndex}
                   id={`${menuId}-${index}`}
                   key={`${creatorSelectionKey(option.selection)}:${option.selection.displayName}`}
-                  onClick={() => add(option.selection)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  role="option"
-                  size="sm"
-                  tabIndex={-1}
-                  type="button"
-                  variant="ghost"
-                >
+                  onClick={() => add(option.selection)}>
                   <span>
                     {option.selection.displayName}
                     {option.selection.displayName !== option.selection.name ? <span className="block text-xs text-muted">身份：{option.selection.name}</span> : null}
                   </span>
                   <span className="shrink-0 text-xs text-muted">{option.meta}</span>
-                </Button>
+                </ComboboxOption>
               ))}
-            </div>
+            </ComboboxOptions>
           ) : null}
         </div>
         <span className="text-xs text-muted">输入后按 Enter 添加</span>

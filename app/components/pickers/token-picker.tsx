@@ -1,4 +1,5 @@
 "use client";
+import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -87,30 +88,14 @@ export function TokenPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "ArrowDown" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current + 1) % options.length);
-      return;
-    }
-    if (event.key === "ArrowUp" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current - 1 + options.length) % options.length);
-      return;
-    }
+    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
     if (event.key === "Enter") {
       event.preventDefault();
       const active = menuOpen ? options[activeIndex] : null;
       add(active?.value ?? query);
-      return;
-    }
-    if (event.key === "Backspace" && !query && values.length) {
+    } else if (event.key === "Backspace" && !query && values.length) {
       remove(values[values.length - 1]);
-      return;
     }
-    if (event.key === "Escape") setOpen(false);
   }
 
   return (
@@ -147,34 +132,18 @@ export function TokenPicker({
           ))}
         </TokenInput>
         {menuOpen ? (
-          <div
-            className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
-            id={menuId}
-            role="listbox"
-          >
+          <ComboboxOptions id={menuId} activeIndex={activeIndex}>
             {options.map((option, index) => (
-              <Button
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex min-h-9 w-full items-center justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm font-normal",
-                  index === activeIndex && "bg-primary/10 text-primary",
-                )}
-                id={`${menuId}-${index}`}
-                key={`${option.kind}-${tokenKey(option.value)}`}
-                onClick={() => add(option.value)}
-                disabled={atLimit}
-                onMouseDown={(event) => event.preventDefault()}
-                role="option"
-                size="sm"
-                tabIndex={-1}
-                type="button"
-                variant="ghost"
-              >
+              <ComboboxOption selected={index === activeIndex}
+                  id={`${menuId}-${index}`}
+                  key={`${option.kind}-${tokenKey(option.value)}`}
+                  onClick={() => add(option.value)}
+                  disabled={atLimit}>
                 <span>{option.value}</span>
                 <span className="shrink-0 text-xs text-muted">{option.meta}</span>
-              </Button>
+              </ComboboxOption>
             ))}
-          </div>
+          </ComboboxOptions>
         ) : null}
       </div>
       {error || atLimit ? <p className="text-sm text-destructive" id={`${id}-feedback`} role="status">{error ?? `最多选择 ${maxValues} 项`}</p> : null}

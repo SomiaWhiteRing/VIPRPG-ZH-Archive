@@ -1,4 +1,5 @@
 "use client";
+import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -81,20 +82,11 @@ export function CreatorPicker({
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (identityLocked) return;
-    if (event.key === "ArrowDown" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current + 1) % options.length);
-    } else if (event.key === "ArrowUp" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current - 1 + options.length) % options.length);
-    } else if (event.key === "Enter") {
+    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
+    if (event.key === "Enter") {
       event.preventDefault();
       if (menuOpen && options[activeIndex]) choose(options[activeIndex]);
       else setOpen(false);
-    } else if (event.key === "Escape") {
-      setOpen(false);
     }
   }
 
@@ -128,28 +120,12 @@ export function CreatorPicker({
             onClick={unlockIdentity} size="sm" type="button" variant="ghost">更换</Button>
         ) : null}
         {menuOpen ? (
-          <div
-            className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
-            id={menuId}
-            role="listbox"
-          >
+          <ComboboxOptions id={menuId} activeIndex={activeIndex}>
             {options.map((option, index) => (
-              <Button
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex min-h-10 w-full items-center justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm font-normal",
-                  index === activeIndex && "bg-primary/10 text-primary",
-                )}
-                id={`${menuId}-${index}`}
-                key={`${option.creator.id}-${creatorNameKey(option.matchedName)}`}
-                onClick={() => choose(option)}
-                onMouseDown={(event) => event.preventDefault()}
-                role="option"
-                size="sm"
-                tabIndex={-1}
-                type="button"
-                variant="ghost"
-              >
+              <ComboboxOption selected={index === activeIndex} className="min-h-10"
+                  id={`${menuId}-${index}`}
+                  key={`${option.creator.id}-${creatorNameKey(option.matchedName)}`}
+                  onClick={() => choose(option)}>
                 <span>
                   <strong>{option.matchedName}</strong>
                   {option.matchedName !== option.creator.name ? (
@@ -157,9 +133,9 @@ export function CreatorPicker({
                   ) : null}
                 </span>
                 <span className="shrink-0 text-xs text-muted">{option.creator.workCount} 部作品</span>
-              </Button>
+              </ComboboxOption>
             ))}
-          </div>
+          </ComboboxOptions>
         ) : null}
       </div>
       {!compact ? <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs text-muted">
