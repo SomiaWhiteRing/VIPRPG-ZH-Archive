@@ -15,6 +15,6 @@ export function ForumLightbox({images,active,setActive}:{images:ForumImage[];act
           alt: `图片 ${index + 1}`,
         }))}
         plugins={[Counter]}
-        
+
       />
 );}

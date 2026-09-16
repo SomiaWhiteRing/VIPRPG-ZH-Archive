@@ -32,16 +32,16 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   return (
     <AuthPageShell title="注册" subtitle="注册后需要管理员批准才可以上传游戏。" footer={<><Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link></>}>
-          {params.error ? (
-            <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
-          ) : null}
-          {params.sent ? (
-            <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
-          ) : (
-            <RegisterStartForm nextPath={nextPath} />
-          )}
-          
-        </AuthPageShell>
+      {params.error ? (
+        <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
+      ) : null}
+      {params.sent ? (
+        <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
+      ) : (
+        <RegisterStartForm nextPath={nextPath} />
+      )}
+
+    </AuthPageShell>
   );
 }
 
