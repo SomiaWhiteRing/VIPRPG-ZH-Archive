@@ -1,5 +1,5 @@
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { Badge } from "@/app/components/ui/badge";
-import Image from "next/image";
 import Link from "next/link";
 import type { GameWorkSummary } from "@/lib/server/db/game-library";
 import { engineLabel } from "@/lib/labels";
@@ -13,18 +13,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
       href={`/games/${work.id}`}
     >
       <div className="grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
-        {work.previewBlobSha256 ? (
-          <Image
-            alt=""
-            className="h-auto w-full object-cover"
-            height={111}
-            src={`/api/media/blobs/${work.previewBlobSha256}`}
-            unoptimized
-            width={148}
-          />
-        ) : (
-          <span>{engineLabel(work.engineFamily)}</span>
-        )}
+        <WorkThumbnail blobSha256={work.previewBlobSha256} alt="" width={148} height={111} imageClassName="h-auto w-full object-cover" fallback={engineLabel(work.engineFamily)} />
       </div>
       <div className="grid min-w-0 gap-2">
         <div className="flex flex-wrap items-baseline gap-2">
