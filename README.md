@@ -5,7 +5,7 @@
 ## 环境要求
 
 - Windows、macOS 或 Linux
-- Node.js `>=22`
+- Node.js 22 LTS（`>=22.16.0`）或 24 及以上版本
 - npm（随 Node.js 安装）
 
 ## 本地启动
@@ -19,14 +19,13 @@ Copy-Item .env.example .env.local
 
 如果已经有自己的 `.env.local`，不要覆盖它；只需确认至少设置了 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。
 
-首次使用时，初始化本地 D1 和 R2（reset 会清空现有本地数据库）：
+首次使用时，从已审核的固定种子恢复本地 D1 和 R2：
 
 ```powershell
-npm run db:local:reset
 npm run db:local:seed
 ```
 
-这两个命令只操作 Wrangler 的本地资源，不会修改 Cloudflare 远端数据库或对象存储。演示账号密码均为 `dev123456789`：
+此命令只操作 Wrangler 的本地资源，不会修改 Cloudflare 远端数据库或对象存储；已有业务数据时会拒绝覆盖。恢复种子后会自动应用尚未执行的 migration，不必先运行 reset 或 migrate。演示账号密码均为 `dev123456789`：
 
 | 账号 | 角色 |
 | --- | --- |
@@ -35,13 +34,14 @@ npm run db:local:seed
 | `uploader@dev.local` | uploader |
 | `user@dev.local` | user |
 
-已有开发数据时，补充近期功能的展示场景：
+将后续整理完成的本地数据库和 R2 固化为新版种子：
 
 ```powershell
-npm run db:local:seed:update
+npm run db:local:seed:capture
+npm run db:local:seed:verify
 ```
 
-更新前自动备份数据库，只插入缺失的场景记录，保留已有数据和手工编辑。完整 seed 也包含这些场景。新增账号、作品及论坛入口见[本地展示数据](docs/local-demo-data.md)。
+种子位于 `data/local-seed/`，直接保留角色 ID、人工分类、头像格子及素材绑定，不再从词典或演示生成器重建。导出前暂停编辑和上传；恢复前停止本地服务器。导出、恢复及演示账号详情见[本地展示数据](docs/local-demo-data.md)。
 
 启动开发服务器：
 

@@ -49,10 +49,9 @@ Copy-Item .env.example .env.local
 
 至少设置本地 `AUTH_SECRET` 和与开发地址一致的 `APP_ORIGIN`。本地认证邮件限流 binding 不可用时自动跳过；远程环境缺少 binding 时请求失败。
 
-初始化本地 D1/R2 演示状态：
+从固定快照初始化空的本地 D1/R2 环境（已有业务数据时拒绝覆盖）：
 
 ```powershell
-npm run db:local:reset
 npm run db:local:seed
 ```
 
