@@ -3,9 +3,9 @@
   "capturedAt": "2026-09-16T03:31:22.093Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "3eae1f55401fd8232b3a523cb674651319e17a9cc8375962e061f039aa4d2c9d",
-    "size": 10985472,
-    "gzipSha256": "698bb85e058ecd8e044ca055d8493f4557b8c6ee169ea45903a7f096260c7aef",
+    "sha256": "f6a7ebe042cdd9e09abb2c661cd24ef97c0285ffcd17f26af564e310982e25cb",
+    "size": 11284480,
+    "gzipSha256": "90a9a348cba3babe49e391cdfc5fab0443eb4db343100f8ebd2e74a5096ea76a",
     "tables": {
       "_cf_METADATA": 1,
       "archive_version_blob_refs": 0,
@@ -31,7 +31,7 @@
       "creator_aliases": 6,
       "creators": 6,
       "custom_emojis": 3,
-      "d1_migrations": 12,
+      "d1_migrations": 1,
       "download_builds": 2,
       "email_verification_challenges": 0,
       "face_sheets": 5207,

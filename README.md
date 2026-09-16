@@ -96,7 +96,7 @@ npm run verify:preprod
 
 - `app/`：Next.js App Router 页面和 API
 - `lib/`：归档、数据库、认证和 Cloudflare 运行时逻辑
-- `migrations/`：D1 schema migration
+- `migrations/`：D1 统一初始化（上线前仅维护 `0001_init_archive_schema.sql`）
 - `public/play/`：EasyRPG Web Player 运行时
 - `scripts/`：本地数据库、种子数据、构建和 smoke test 脚本
 - `docs/`：产品、领域、存储、部署和运行手册

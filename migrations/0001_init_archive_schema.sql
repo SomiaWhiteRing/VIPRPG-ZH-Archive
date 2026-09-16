@@ -1,3 +1,6 @@
+-- Pre-launch baseline: initialize an empty database directly with the current model.
+-- Built-in roles and permissions are included; development content lives in data/local-seed/.
+
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   external_auth_id TEXT NOT NULL UNIQUE,
@@ -12,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   profile_show_history INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_history IN (0, 1)),
   profile_show_catalogs INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_catalogs IN (0, 1)),
   profile_show_comments INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_comments IN (0, 1)),
+  profile_show_discussions INTEGER NOT NULL DEFAULT 0 CHECK (profile_show_discussions IN (0, 1)),
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled', 'deleted')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
@@ -67,7 +71,7 @@ SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.u
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","custom_emoji.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.read_private","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","custom_emoji.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run","forum.content.moderate_any","forum.topic.feature_any","forum.tag.manage","character.admin.read","character.create","character.merge_any","character.portrait.manage_any","character.portrait.upload","character_category.create","character_category.update","character_category.delete","character_membership.create","character_membership.update","character_membership.delete","character_index.reorder","character.sources.update_any"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -177,14 +181,10 @@ CREATE TABLE IF NOT EXISTS auth_audit_logs (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS inbox_items (
+CREATE TABLE inbox_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT NOT NULL CHECK (
-    type IN ('role_change_request', 'role_change_notice', 'system_notice')
-  ),
-  status TEXT NOT NULL CHECK (
-    status IN ('open', 'pending', 'approved', 'rejected', 'archived')
-  ) DEFAULT 'open',
+  type TEXT NOT NULL CHECK(type IN ('role_change_request','role_change_notice','system_notice','forum_reply','forum_like')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','pending','approved','rejected','archived')),
   sender_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   recipient_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   required_permission_key TEXT,
@@ -199,24 +199,24 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   body TEXT NOT NULL,
   metadata_json TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CHECK (recipient_user_id IS NOT NULL OR required_permission_key IS NOT NULL)
+  event_key TEXT UNIQUE,
+  forum_topic_id INTEGER REFERENCES forum_topics(id),
+  forum_post_id INTEGER,
+  forum_comment_id INTEGER,
+  FOREIGN KEY(forum_post_id,forum_topic_id) REFERENCES forum_posts(id,topic_id),
+  FOREIGN KEY(forum_comment_id,forum_post_id) REFERENCES forum_post_comments(id,post_id),
+  CHECK(recipient_user_id IS NOT NULL OR required_permission_key IS NOT NULL),
+  CHECK(type NOT IN ('forum_reply','forum_like') OR
+    (recipient_user_id IS NOT NULL AND required_permission_key IS NULL AND event_key IS NOT NULL
+      AND forum_topic_id IS NOT NULL AND forum_post_id IS NOT NULL AND status='open')),
+  CHECK(type <> 'forum_like' OR forum_comment_id IS NULL)
 );
 
-CREATE INDEX IF NOT EXISTS idx_inbox_items_recipient
-  ON inbox_items(recipient_user_id, created_at);
-
-CREATE INDEX IF NOT EXISTS idx_inbox_items_permission
-  ON inbox_items(required_permission_key, status, created_at);
-
-CREATE INDEX IF NOT EXISTS idx_inbox_items_target
-  ON inbox_items(target_user_id, type, status);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_pending_role_request
-  ON inbox_items(target_user_id, requested_role_id)
-  WHERE type = 'role_change_request'
-    AND status = 'pending'
-    AND target_user_id IS NOT NULL
-    AND requested_role_id IS NOT NULL;
+CREATE INDEX idx_inbox_items_recipient ON inbox_items(recipient_user_id,created_at DESC,id DESC);
+CREATE INDEX idx_inbox_items_permission ON inbox_items(required_permission_key,status,created_at DESC,id DESC);
+CREATE INDEX idx_inbox_items_target ON inbox_items(target_user_id,type,status);
+CREATE UNIQUE INDEX idx_inbox_pending_role_request ON inbox_items(target_user_id,requested_role_id)
+  WHERE type='role_change_request' AND status='pending' AND target_user_id IS NOT NULL AND requested_role_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS inbox_item_reads (
   item_id INTEGER NOT NULL REFERENCES inbox_items(id) ON DELETE CASCADE,
@@ -305,10 +305,11 @@ CREATE INDEX IF NOT EXISTS idx_user_work_entries_favorites
   ON user_work_entries(user_id, favorited_at DESC, work_id)
   WHERE favorited_at IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS comments (
+CREATE TABLE comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER REFERENCES works(id) ON DELETE CASCADE,
   creator_id INTEGER REFERENCES creators(id) ON DELETE CASCADE,
+  character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   root_comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
   reply_to_comment_id INTEGER REFERENCES comments(id) ON DELETE SET NULL,
@@ -322,7 +323,7 @@ CREATE TABLE IF NOT EXISTS comments (
     (status = 'deleted' AND body IS NULL)
     OR (status <> 'deleted' AND body IS NOT NULL AND length(trim(body)) > 0)
   ),
-  CHECK ((work_id IS NOT NULL) <> (creator_id IS NOT NULL)),
+  CHECK ((work_id IS NOT NULL) + (creator_id IS NOT NULL) + (character_id IS NOT NULL) = 1),
   CHECK (root_comment_id IS NULL OR root_comment_id <> id),
   CHECK (reply_to_comment_id IS NULL OR reply_to_comment_id <> id)
 );
@@ -342,6 +343,9 @@ CREATE INDEX IF NOT EXISTS idx_comments_replies
 CREATE INDEX IF NOT EXISTS idx_comments_author
   ON comments(user_id, updated_at DESC, id);
 
+CREATE INDEX idx_comments_character_public_roots ON comments(character_id,created_at,id)
+  WHERE character_id IS NOT NULL AND root_comment_id IS NULL AND status='published';
+
 CREATE TABLE IF NOT EXISTS comment_likes (
   comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -358,6 +362,7 @@ WHEN NEW.root_comment_id IS NOT NULL
       AND root.root_comment_id IS NULL
       AND root.work_id IS NEW.work_id
       AND root.creator_id IS NEW.creator_id
+      AND root.character_id IS NEW.character_id
   )
 BEGIN
   SELECT RAISE(ABORT, 'comment root must use the same target');
@@ -371,6 +376,7 @@ WHEN NEW.reply_to_comment_id IS NOT NULL
     WHERE target.id = NEW.reply_to_comment_id
       AND target.work_id IS NEW.work_id
       AND target.creator_id IS NEW.creator_id
+      AND target.character_id IS NEW.character_id
       AND COALESCE(target.root_comment_id, target.id) = NEW.root_comment_id
   )
 BEGIN
@@ -822,6 +828,66 @@ BEGIN
   SELECT RAISE(ABORT, 'character alias already belongs to an original name');
 END;
 
+CREATE TABLE character_categories (
+  id TEXT PRIMARY KEY NOT NULL,
+  parent_id TEXT REFERENCES character_categories(id) ON DELETE RESTRICT,
+  label TEXT NOT NULL CHECK (length(trim(label)) BETWEEN 1 AND 160),
+  original_name TEXT,
+  source_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  CHECK (parent_id IS NOT id)
+);
+CREATE INDEX idx_character_categories_parent_order ON character_categories(parent_id,sort_order,id);
+
+CREATE TABLE character_category_memberships (
+  category_id TEXT NOT NULL REFERENCES character_categories(id) ON DELETE RESTRICT,
+  character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  display_name TEXT CHECK (display_name IS NULL OR length(trim(display_name)) BETWEEN 1 AND 160),
+  original_name TEXT CHECK (original_name IS NULL OR length(trim(original_name)) BETWEEN 1 AND 160),
+  PRIMARY KEY (category_id,character_id)
+);
+CREATE INDEX idx_character_memberships_character ON character_category_memberships(character_id);
+CREATE INDEX idx_character_memberships_order ON character_category_memberships(category_id,sort_order,character_id);
+
+CREATE TABLE character_sources (
+  character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (character_id,url)
+);
+
+CREATE TABLE character_materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
+  kind TEXT NOT NULL CHECK (kind IN ('charset','monster','other')),
+  width_px INTEGER NOT NULL CHECK (width_px > 0),
+  height_px INTEGER NOT NULL CHECK (height_px > 0),
+  UNIQUE (blob_sha256,kind)
+);
+
+CREATE TABLE character_material_bindings (
+  character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  material_id INTEGER NOT NULL REFERENCES character_materials(id) ON DELETE CASCADE,
+  sort_order INTEGER CHECK (sort_order >= 0),
+  PRIMARY KEY (character_id,material_id)
+);
+CREATE INDEX idx_character_material_bindings_material ON character_material_bindings(material_id);
+
+CREATE TRIGGER character_materials_require_active_blob_insert
+BEFORE INSERT ON character_materials
+WHEN NOT EXISTS (SELECT 1 FROM blobs WHERE sha256=NEW.blob_sha256 AND status='active')
+BEGIN
+  SELECT RAISE(ABORT, 'character material blob must be active');
+END;
+
+CREATE TRIGGER character_materials_require_active_blob_update
+BEFORE UPDATE OF blob_sha256 ON character_materials
+WHEN NOT EXISTS (SELECT 1 FROM blobs WHERE sha256=NEW.blob_sha256 AND status='active')
+BEGIN
+  SELECT RAISE(ABORT, 'character material blob must be active');
+END;
+
 CREATE TABLE IF NOT EXISTS face_sheets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   blob_sha256 TEXT NOT NULL UNIQUE REFERENCES blobs(sha256),
@@ -1080,38 +1146,17 @@ CREATE TABLE IF NOT EXISTS work_media_assets (
   PRIMARY KEY (work_id, media_asset_id)
 );
 
-CREATE TRIGGER IF NOT EXISTS blobs_purge_requires_unreferenced
+CREATE TRIGGER blobs_purge_requires_unreferenced
 BEFORE UPDATE OF status ON blobs
-WHEN NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM archive_version_blob_refs
-    WHERE blob_sha256 = OLD.sha256
-  )
-  OR NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM media_assets
-    WHERE blob_sha256 = OLD.sha256
-  )
-  OR NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM custom_emojis
-    WHERE image_blob_sha256 = OLD.sha256
-  )
-  OR NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM users
-    WHERE avatar_blob_sha256 = OLD.sha256
-  )
-  OR NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM creators
-    WHERE avatar_blob_sha256 = OLD.sha256
-  )
-  OR NEW.status IN ('purging', 'purged')
-  AND EXISTS (
-    SELECT 1 FROM face_sheets
-    WHERE blob_sha256 = OLD.sha256
-  )
+WHEN NEW.status IN ('purging','purged') AND (
+  EXISTS (SELECT 1 FROM archive_version_blob_refs WHERE blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM media_assets WHERE blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM custom_emojis WHERE image_blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM users WHERE avatar_blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM creators WHERE avatar_blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM face_sheets WHERE blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM character_materials WHERE blob_sha256=OLD.sha256)
+)
 BEGIN
   SELECT RAISE(ABORT, 'referenced blob cannot be purged');
 END;
@@ -1233,3 +1278,172 @@ CREATE INDEX IF NOT EXISTS idx_download_builds_archive_version
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_download_builds_cache_key
   ON download_builds(cache_key);
+
+CREATE TABLE forum_topics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL CHECK(status='deleted' OR length(title) BETWEEN 1 AND 160),
+  status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('published','hidden','deleted')),
+  locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0,1)),
+  featured_at TEXT,
+  featured_by INTEGER REFERENCES users(id),
+  view_count INTEGER NOT NULL DEFAULT 0 CHECK(view_count >= 0),
+  next_post_number INTEGER NOT NULL DEFAULT 2 CHECK(next_post_number >= 2),
+  revision TEXT NOT NULL,
+  write_token TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reply_count INTEGER NOT NULL DEFAULT 0 CHECK(reply_count >= 0),
+  last_activity_at TEXT NOT NULL DEFAULT '1970-01-01 00:00:00',
+  last_post_id INTEGER REFERENCES forum_posts(id),
+  last_comment_id INTEGER REFERENCES forum_post_comments(id),
+  UNIQUE(user_id,request_key)
+);
+CREATE TABLE forum_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic_id INTEGER NOT NULL REFERENCES forum_topics(id),
+  post_number INTEGER NOT NULL CHECK(post_number > 0),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('published','hidden','deleted')),
+  revision TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  edited_at TEXT,
+  next_comment_number INTEGER NOT NULL DEFAULT 1 CHECK(next_comment_number > 0),
+  UNIQUE(topic_id,post_number),
+  UNIQUE(user_id,request_key),
+  UNIQUE(id,topic_id)
+);
+CREATE TABLE forum_post_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER NOT NULL REFERENCES forum_posts(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  reply_to_id INTEGER,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('published','hidden','deleted')),
+  revision TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  edited_at TEXT,
+  comment_number INTEGER NOT NULL DEFAULT 1 CHECK(comment_number > 0),
+  UNIQUE(id,post_id),
+  UNIQUE(user_id,request_key),
+  FOREIGN KEY(reply_to_id,post_id) REFERENCES forum_post_comments(id,post_id)
+);
+CREATE TABLE forum_tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','disabled','hidden')),
+  revision TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE forum_topic_tags (
+  topic_id INTEGER NOT NULL REFERENCES forum_topics(id),
+  tag_id INTEGER NOT NULL REFERENCES forum_tags(id),
+  position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 4),
+  PRIMARY KEY(topic_id,tag_id),
+  UNIQUE(topic_id,position)
+);
+CREATE TABLE forum_post_likes (
+  post_id INTEGER NOT NULL REFERENCES forum_posts(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY(post_id,user_id)
+);
+CREATE TABLE forum_content_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  topic_id INTEGER NOT NULL REFERENCES forum_topics(id),
+  post_id INTEGER REFERENCES forum_posts(id),
+  comment_id INTEGER REFERENCES forum_post_comments(id),
+  target_kind TEXT NOT NULL CHECK(target_kind IN ('topic','post','comment')),
+  target_id INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  explanation TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','resolved','dismissed')),
+  note TEXT NOT NULL DEFAULT '',
+  resolved_by INTEGER REFERENCES users(id),
+  resolved_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK((target_kind='topic' AND target_id=topic_id AND post_id IS NULL AND comment_id IS NULL)
+    OR (target_kind='post' AND post_id IS NOT NULL AND target_id=post_id AND comment_id IS NULL)
+    OR (target_kind='comment' AND comment_id IS NOT NULL AND target_id=comment_id AND post_id IS NOT NULL)),
+  FOREIGN KEY(post_id,topic_id) REFERENCES forum_posts(id,topic_id),
+  FOREIGN KEY(comment_id,post_id) REFERENCES forum_post_comments(id,post_id)
+);
+CREATE UNIQUE INDEX forum_pending_report ON forum_content_reports(user_id,target_kind,target_id) WHERE status='pending';
+CREATE INDEX forum_posts_author_time ON forum_posts(user_id,created_at);
+CREATE INDEX forum_comments_author_time ON forum_post_comments(user_id,created_at);
+CREATE INDEX forum_comments_order ON forum_post_comments(post_id,created_at,id);
+CREATE INDEX forum_tags_topics ON forum_topic_tags(tag_id,topic_id);
+CREATE INDEX forum_reports_queue ON forum_content_reports(status,created_at,id);
+CREATE INDEX forum_reports_author_time ON forum_content_reports(user_id,created_at);
+
+-- Public projections are views of current source rows, never stale search copies.
+CREATE VIEW forum_public_topics AS
+SELECT t.* FROM forum_topics t JOIN users u ON u.id=t.user_id
+WHERE t.status='published' AND u.status IN ('active','deleted');
+CREATE VIEW forum_public_posts AS
+SELECT p.* FROM forum_posts p JOIN forum_public_topics t ON t.id=p.topic_id JOIN users u ON u.id=p.user_id
+WHERE p.status='published' AND u.status IN ('active','deleted');
+CREATE VIEW forum_public_comments AS
+SELECT c.*,p.topic_id,p.post_number FROM forum_post_comments c
+JOIN forum_posts p ON p.id=c.post_id JOIN forum_public_topics t ON t.id=p.topic_id
+JOIN users u ON u.id=c.user_id JOIN users parent_user ON parent_user.id=p.user_id
+WHERE c.status='published' AND u.status IN ('active','deleted')
+  AND p.status IN ('published','deleted') AND parent_user.status IN ('active','deleted');
+
+CREATE TABLE forum_images (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  client_id TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('uploading','ready','failed','uncertain','cleanup','cleaned')),
+  object_key TEXT NOT NULL UNIQUE CHECK(object_key = 'forum-images/' || id),
+  format TEXT NOT NULL CHECK(format IN ('png','jpeg','webp','gif')),
+  size INTEGER NOT NULL CHECK(size BETWEEN 1 AND 2097152),
+  width INTEGER NOT NULL CHECK(typeof(width)='integer' AND width>0),
+  height INTEGER NOT NULL CHECK(typeof(height)='integer' AND height>0),
+  post_id INTEGER REFERENCES forum_posts(id),
+  position INTEGER CHECK(typeof(position)='integer' AND position>=0 OR position IS NULL),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  body_offset INTEGER NOT NULL DEFAULT 0 CHECK(body_offset BETWEEN 0 AND 20000),
+  UNIQUE(user_id,client_id),
+  CHECK((post_id IS NULL) = (position IS NULL))
+);
+CREATE INDEX forum_images_post ON forum_images(post_id,position);
+CREATE INDEX forum_images_uploads ON forum_images(user_id,created_at);
+
+CREATE UNIQUE INDEX forum_comment_numbers ON forum_post_comments(post_id,comment_number);
+CREATE INDEX forum_posts_writer_revision ON forum_posts(user_id,revision);
+CREATE INDEX forum_comments_writer_revision ON forum_post_comments(user_id,revision);
+CREATE INDEX forum_topics_activity ON forum_topics(last_activity_at DESC,id DESC);
+CREATE INDEX forum_topics_featured ON forum_topics(featured_at DESC,id DESC) WHERE featured_at IS NOT NULL;
+
+-- Document IDs are publication order, not source IDs. Keep them on deletion.
+CREATE TABLE forum_search_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER UNIQUE REFERENCES forum_posts(id),
+  comment_id INTEGER UNIQUE REFERENCES forum_post_comments(id),
+  CHECK((post_id IS NOT NULL)+(comment_id IS NOT NULL)=1)
+);
+
+CREATE VIRTUAL TABLE forum_search_index USING fts5(title,body,scope);
+
+CREATE INDEX idx_character_materials_kind_id ON character_materials(kind,id);
+
+CREATE INDEX idx_face_sheets_library_order ON face_sheets(
+  CASE library_status WHEN 'approved' THEN 0 ELSE 1 END,
+  source_order IS NULL,source_order,id
+) WHERE library_status!='rejected';
+
+CREATE INDEX idx_comments_character_public ON comments(character_id)
+  WHERE character_id IS NOT NULL AND status='published';

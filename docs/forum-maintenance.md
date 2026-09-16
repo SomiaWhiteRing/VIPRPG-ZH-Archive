@@ -10,21 +10,9 @@
 
 性能调整以保留页面体验和权限正确性为前提。测量时区分数据库等待、请求总耗时与 Worker CPU，不将单项指标作为替换框架或删减功能的依据。
 
-## 备份与数据转换
+## 初始化与备份
 
-新空库顺序安装 migration。已有 0001–0004 论坛库先停止写入、备份整个 D1，再执行离线转换；不要先单独安装 0005，以免留下未填充的全文索引。
-
-```powershell
-npm run forum:offline -- --input backup.sql --output output/forum-conversion --convert
-```
-
-输入可以是完整 SQL 导出或 SQLite 快照，输出目录必须不存在。输出包含 `before.sqlite`、`converted.sqlite`、`conversion.sql` 和 `verification.json`。转换检查外键、连续楼号与正文限额，分配楼内编号，初始化统计、搜索映射和全文索引；索引的 `scope` 只保存当前公开性。
-
-转换保留源 ID、正文、互动和图片引用，移除被替代的 `title_search`、`body_search` 派生字段，并核对源记录、楼内编号、回复计数、搜索映射和索引内容。任一不一致会停止转换。
-
-停止本地开发服务后，可对实际 `.sqlite` 使用新输出目录和 `--apply`；工具先通过 SQLite 在线备份接口保存包含已提交 WAL 的快照。远端只应用已在最新备份副本上验证通过的 `conversion.sql`，不能把 SQL 导出作为 `--apply` 输入。
-
-转换与服务切换期间禁止业务写入。失败时使用已留存的整库备份和对应 Worker 版本恢复，不能只回退代码而保留不兼容 schema。工具拒绝再次转换已有统一搜索映射的库。
+空库由 `migrations/0001_init_archive_schema.sql` 一次创建当前论坛结构、图片位置、楼内编号、统计字段和 FTS 索引。旧论坛模型的离线转换已移除。旧开发库按[本地展示数据](./local-demo-data.md) 的备份与重建流程处理；Wrangler 不会重新应用已经登记的同名初始化文件。
 
 本地初始化使用 `npm run db:local:seed` 恢复固定快照；已有数据时拒绝覆盖。人工编辑后的数据可用 `npm run db:local:seed:capture` 固化为新版种子，详见[本地展示数据](./local-demo-data.md)。
 
@@ -34,4 +22,4 @@ npm run forum:offline -- --input backup.sql --output output/forum-conversion --c
 npm run forum:offline -- --input backup.sqlite --output output/forum-export --export
 ```
 
-输出源论坛表的 JSONL 和数量清单，不包含可重建的 FTS 内部表。图片元数据包含 R2 对象键与指纹，图片字节需另行备份。图片清理由有权限的管理人员按现行规则执行。
+输入可以是完整 SQL 导出或 SQLite 快照，输出目录必须不存在。工具只读源库；SQL 导出在内存中加载。输出源论坛表的 JSONL 和数量清单，不包含可重建的 FTS 内部表。图片元数据包含 R2 对象键与指纹，图片字节需另行备份。图片清理由有权限的管理人员按现行规则执行。

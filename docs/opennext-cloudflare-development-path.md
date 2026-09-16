@@ -90,7 +90,7 @@ npm run preview
 
 ## 5. D1
 
-- schema 只由 `migrations/` 发布；当前项目未上线且没有需保留的生产数据时，直接推进唯一当前 migration 模型。
+- schema 只由 `migrations/` 发布；上线前统一维护 `0001_init_archive_schema.sql`，直接创建当前表、索引、视图、触发器及内置角色权限，不累积内部模型演进的迁移链。上线并需要保护持久数据后，再新增增量 migration。
 - 本地 reset/seed 脚本是开发基线，不作为生产迁移工具。
 - migration 与同一目标环境的部署必须串行执行；本地、staging 和 production 各自维护状态，不能用一个环境的成功结果推断另一个环境已经迁移。
 - D1 只保存可查询的资料、状态、统计和对象引用；归档内文件路径只存在于 manifest。
@@ -102,6 +102,8 @@ npm run db:local:migrate
 npx wrangler d1 migrations apply DB --env staging --remote
 npx wrangler d1 migrations apply DB --remote
 ```
+
+归一后的初始化面向空库。Wrangler 按文件名判断迁移是否执行；已登记旧版 `0001_init_archive_schema.sql` 的库不会因文件内容更新而自动升级。本地旧库需要明确决定并备份后重建，再按需恢复已对齐的固定种子，见[本地展示数据](./local-demo-data.md)。远端旧库的保留或重建需在对应环境单独处理，不能直接重放初始化 SQL。
 
 production migration 具有外部副作用，只能在明确的生产发布流程中运行。
 
