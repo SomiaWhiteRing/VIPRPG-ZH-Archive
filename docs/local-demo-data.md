@@ -4,7 +4,7 @@
 
 ## 固定快照
 
-`data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。
+`data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。快照已对齐统一初始化 `migrations/0001_init_archive_schema.sql`，包含当前索引，迁移账本仅保留这一条；原有业务记录、审核结果和素材引用保持原值。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。
 
 首次初始化空环境：
 
@@ -12,7 +12,7 @@
 npm run db:local:seed
 ```
 
-恢复前停止本地服务器。脚本先校验快照和全部对象，再写入本地 R2，通过 SQLite backup 恢复 D1，并自动应用仓库中尚未执行的 migration。已有业务数据时拒绝覆盖；只有明确要重建开发库时，才在自行备份后运行 `npm run db:local:reset`，再恢复种子。已有开发库后续新增的 migration 通过 `npm run db:local:migrate` 应用。
+恢复前停止本地服务器。脚本先校验快照和全部对象，再写入本地 R2，通过 SQLite backup 恢复 D1，并自动应用仓库中尚未执行的 migration。已有业务数据时拒绝覆盖；只有明确要重建开发库时，才在自行备份后运行 `npm run db:local:reset`，再恢复种子。空库仅需 schema 时运行 `npm run db:local:migrate`。上线前直接修改统一初始化时，已有旧库不会被该命令升级；需要明确决定并备份后重建。未来新增的增量 migration 才通过该命令应用。
 
 以后需要将新的人工审核结果作为种子时，暂停编辑和上传，再运行：
 
