@@ -3,7 +3,8 @@
 import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
 import Cropper, { type Area } from "react-easy-crop";
-import { Dialog, Slider } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Slider } from "radix-ui";
 import { ImagePlus, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
 import {
   useEffect,
@@ -257,11 +258,11 @@ export function CoverPicker({
         </Dialog.Trigger>
 
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 grid h-[min(92vh,720px)] w-[min(calc(100vw-1rem),960px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-card shadow-surface">
+          <Dialog.Overlay className="bg-black/60" />
+          <Dialog.Content className="left-1/2 top-1/2 grid h-[min(92vh,720px)] w-[min(calc(100vw-1rem),960px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg">
             <header className="flex min-h-14 items-center justify-between border-b border-border px-4">
               <div>
-                <Dialog.Title className="m-0 text-lg font-bold">设置封面</Dialog.Title>
+                <Dialog.Title>设置封面</Dialog.Title>
                 <Dialog.Description className="sr-only">
                   从候选封面中选择或上传图片，然后拖动和缩放图片完成裁剪。
                 </Dialog.Description>

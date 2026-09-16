@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
@@ -36,7 +38,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       <div className="mx-auto mt-5 max-w-md">
         <Pane>
           {params.error ? (
-            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">{params.error}</p>
+            <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
           ) : null}
           {params.sent ? (
             <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
@@ -77,9 +79,9 @@ function RegisterStartForm({ nextPath }: { nextPath: string }) {
 function VerificationForm({ email, nextPath }: { email: string; nextPath: string }) {
   return (
     <form action="/api/auth/register/verify" method="post" className="grid gap-4">
-      <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-800">
+      <Notice tone="success" className="mb-4 rounded-md border p-3">
         {VERIFICATION_EMAIL_HINT.replace("{email}", email)}
-      </p>
+      </Notice>
       <input type="hidden" name="next" value={nextPath} />
       <input type="hidden" name="email" value={email} />
       <FormField label="验证码">

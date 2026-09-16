@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import Link from "next/link";
@@ -35,12 +37,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="mx-auto mt-5 max-w-md">
         <Pane>
           {params.reset ? (
-            <p className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-emerald-800">
+            <Notice tone="success" className="mb-4 rounded-md border p-3">
               密码已更新，请重新登录。
-            </p>
+            </Notice>
           ) : null}
           {params.error ? (
-            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">{params.error}</p>
+            <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
           ) : null}
           <form action="/api/auth/login" method="post" className="grid gap-4">
             <input type="hidden" name="next" value={nextPath} />

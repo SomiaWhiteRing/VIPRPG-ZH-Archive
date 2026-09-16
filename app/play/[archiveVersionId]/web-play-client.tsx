@@ -1,5 +1,7 @@
 "use client";
 
+import { Notice } from "@/app/components/ui/notice";
+
 import { EmptyState } from "@/app/components/ui/empty-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -590,14 +592,14 @@ export function WebPlayClient({
                 </div>
 
                 {interruptedInstalling ? (
-                  <p className="m-0 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                  <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">
                     上次安装没有正常结束。请清理并重新安装。
-                  </p>
+                  </Notice>
                 ) : null}
                 {operationError ? (
-                  <p className="m-0 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                  <Notice tone="error" className="m-0 rounded-md border p-3 text-sm" role="alert">
                     {operationError}
-                  </p>
+                  </Notice>
                 ) : null}
 
                 {activeInstalling && installation ? <InstallProgress installation={installation} /> : null}
@@ -788,7 +790,7 @@ function InstallProgress({
       </div>
       <Progress aria-label="安装进度" value={extractPercent} />
       {installation.error ? (
-        <p className="m-0 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{installation.error}</p>
+        <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">{installation.error}</Notice>
       ) : null}
     </div>
   );

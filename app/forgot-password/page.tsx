@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
@@ -27,7 +29,7 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
       <div className="mx-auto mt-5 max-w-md">
         <Pane>
           {params.error ? (
-            <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800">{params.error}</p>
+            <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
           ) : null}
           <form action="/api/auth/password-reset/start" method="post" className="grid gap-4">
             <input type="hidden" name="next" value={nextPath} />

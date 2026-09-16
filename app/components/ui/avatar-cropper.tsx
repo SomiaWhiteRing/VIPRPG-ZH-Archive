@@ -1,7 +1,8 @@
 "use client";
 
 import Cropper, { type Area } from "react-easy-crop";
-import { Dialog, Slider } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Slider } from "radix-ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -129,17 +130,17 @@ export function AvatarCropper({
       </div>
       <Dialog.Root open={Boolean(source)} onOpenChange={(open) => { if (!open && !busy) setSource(null); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
+          <Dialog.Overlay className="bg-black/55" />
           <Dialog.Content
             aria-describedby={`${dialogId}-description`}
-            className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-4 shadow-surface"
+            className="left-1/2 top-1/2 grid w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-4"
             id={dialogId}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               editButtonRef.current?.focus();
             }}
           >
-            <Dialog.Title className="m-0 text-lg font-bold">裁剪头像</Dialog.Title>
+            <Dialog.Title>裁剪头像</Dialog.Title>
             <Dialog.Description className="m-0 text-sm text-muted" id={`${dialogId}-description`}>
               拖动图片并缩放，裁剪区域是最终显示范围。
             </Dialog.Description>

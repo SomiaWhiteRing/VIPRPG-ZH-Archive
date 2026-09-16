@@ -5,6 +5,8 @@ import { cn } from "@/lib/ui/cn";
 export const badgeVariants = cva("inline-flex min-h-6 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", {
   variants: {
     variant: {
+      subtle: "bg-primary/10 text-primary",
+      credit: "border border-primary/30 bg-primary/5 text-primary",
       default: "bg-primary text-primary-foreground",
       secondary: "bg-muted/15 text-foreground",
       outline: "border border-border bg-card text-foreground",
@@ -24,6 +26,6 @@ export function Badge({
   className,
   variant,
   ...props
-}: HTMLAttributes<HTMLDivElement> & VariantProps<typeof badgeVariants>) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+}: HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>) {
+  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
 }

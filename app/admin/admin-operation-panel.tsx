@@ -1,4 +1,6 @@
 "use client";
+
+import { Notice } from "@/app/components/ui/notice";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -178,7 +180,7 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
       )}
       {state.loading ? <p className="text-sm text-muted">检查运行中</p> : null}
       {state.error ? (
-        <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">{state.error}</p>
+        <Notice tone="error" className="mb-4 rounded-md border p-3 text-sm">{state.error}</Notice>
       ) : null}
       {state.result ? (
         <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs">

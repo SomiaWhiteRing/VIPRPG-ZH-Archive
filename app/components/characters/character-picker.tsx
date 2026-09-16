@@ -11,7 +11,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Pencil, X } from "lucide-react";
-import { Dialog } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
 import {
   CharacterCreateDialog,
   type CharacterNameInput,
@@ -467,9 +467,9 @@ export function CharacterPicker({
 
       <Dialog.Root open={aliasEdit !== null} onOpenChange={(nextOpen) => !nextOpen && setAliasEdit(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-surface"
+            className="left-1/2 top-1/2 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
             id={`${id}-alias-dialog`}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
@@ -479,7 +479,7 @@ export function CharacterPicker({
               returnFocus?.focus();
             }}
           >
-            <Dialog.Title className="m-0 text-lg font-bold">编辑详细信息</Dialog.Title>
+            <Dialog.Title>编辑详细信息</Dialog.Title>
             <Dialog.Description className="sr-only">设置角色在本作品中的别名和身份，随作品保存。</Dialog.Description>
             <form className="grid gap-4" onSubmit={saveAlias}>
               <div className="grid gap-2">
@@ -526,9 +526,9 @@ export function CharacterPicker({
 
       <Dialog.Root open={Boolean(activeCredit)} onOpenChange={(nextOpen) => !nextOpen && setPortraitIndex(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-50 grid h-[min(720px,calc(100vh-2rem))] w-[min(96vw,72rem)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-surface"
+            className="left-1/2 top-1/2 grid h-[min(720px,calc(100vh-2rem))] w-[min(96vw,72rem)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg"
             id={`${id}-portrait-dialog`}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
@@ -540,7 +540,7 @@ export function CharacterPicker({
           >
             <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
               <div>
-                <Dialog.Title className="m-0 text-lg font-bold">选择本作头像</Dialog.Title>
+                <Dialog.Title>选择本作头像</Dialog.Title>
                 <Dialog.Description className="mt-0.5 text-sm text-muted">
                   {activeCredit?.selection.displayName ?? ""} · 左侧选素材表，右侧选格子
                 </Dialog.Description>

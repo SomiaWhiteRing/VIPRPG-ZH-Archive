@@ -22,7 +22,7 @@ import {
 import type { CatalogDetail, CatalogSummary } from "@/lib/server/db/catalogs";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { Dialog } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
 
 export function CatalogCreateForm() {
   const router = useRouter();
@@ -76,17 +76,17 @@ export function CatalogCreateForm() {
         </Rm2kButton>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
+        <Dialog.Overlay className="bg-black/55" />
         <Dialog.Content
           aria-describedby="catalog-create-description"
-          className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-5 shadow-surface"
+          className="left-1/2 top-1/2 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
           id="catalog-create-dialog"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (createButtonRef.current?.isConnected) createButtonRef.current.focus();
           }}
         >
-          <Dialog.Title className="m-0 text-lg font-bold">创建目录</Dialog.Title>
+          <Dialog.Title>创建目录</Dialog.Title>
           <Dialog.Description className="sr-only" id="catalog-create-description">
             填写目录标题和说明。
           </Dialog.Description>
@@ -198,12 +198,12 @@ export function CatalogSummaryEditor({
         <Button size="sm" type="button" variant="outline">{canEdit ? "编辑资料" : "管理目录"}</Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+        <Dialog.Overlay />
         <Dialog.Content
           aria-describedby="catalog-summary-edit-description"
-          className="fixed left-1/2 top-1/2 z-50 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-surface"
+          className="left-1/2 top-1/2 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
         >
-          <Dialog.Title className="m-0 text-lg font-bold">编辑目录资料</Dialog.Title>
+          <Dialog.Title>编辑目录资料</Dialog.Title>
           <Dialog.Description className="sr-only" id="catalog-summary-edit-description">
             修改目录封面、标题和说明，或删除目录。
           </Dialog.Description>

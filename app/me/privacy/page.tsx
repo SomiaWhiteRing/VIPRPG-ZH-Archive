@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
@@ -25,8 +27,8 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader title="隐私" subtitle="选择哪些内容显示在你的个人主页。" />
-      {params.privacyUpdated ? <p className="mb-4 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">隐私设置已更新。</p> : null}
-      {params.error ? <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{params.error}</p> : null}
+      {params.privacyUpdated ? <Notice tone="success" className="mb-4 rounded-md px-4 py-3 text-sm" role="status">隐私设置已更新。</Notice> : null}
+      {params.error ? <Notice tone="error" className="mb-4 rounded-md px-4 py-3 text-sm" role="alert">{params.error}</Notice> : null}
       <form action="/api/account/privacy" method="post">
         <div className="divide-y divide-border border-y border-border">
           {settings.map((setting) => (

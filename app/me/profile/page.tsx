@@ -1,3 +1,5 @@
+
+import { Notice } from "@/app/components/ui/notice";
 import Link from "next/link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
@@ -23,8 +25,8 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader title="个人资料" />
-      {params.profileUpdated ? <p className="mb-4 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">个人资料已更新。</p> : null}
-      {params.error ? <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{params.error}</p> : null}
+      {params.profileUpdated ? <Notice tone="success" className="mb-4 rounded-md px-4 py-3 text-sm" role="status">个人资料已更新。</Notice> : null}
+      {params.error ? <Notice tone="error" className="mb-4 rounded-md px-4 py-3 text-sm" role="alert">{params.error}</Notice> : null}
       <form action="/api/account/profile" method="post">
         <div className="divide-y divide-border border-y border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">

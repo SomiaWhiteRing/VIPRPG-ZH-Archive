@@ -1,5 +1,7 @@
 "use client";
 
+import { Notice } from "@/app/components/ui/notice";
+
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
 
 import type { ConfirmedCreatorSelection } from "@/lib/creator-names";
@@ -639,9 +641,9 @@ export function UploadClient({
       ) : null}
 
       {upload.controllerError ? (
-        <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+        <Notice tone="error" className="border p-3 text-sm" role="alert">
           {upload.controllerError}
-        </p>
+        </Notice>
       ) : null}
 
       <form onSubmit={onSubmit}>
@@ -814,14 +816,14 @@ export function UploadClient({
 
                 <div className="grid gap-3 p-4">
                   {submitError ? (
-                    <p className="border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+                    <Notice tone="error" className="border p-3 text-sm" role="alert">
                       {submitError}
-                    </p>
+                    </Notice>
                   ) : null}
                   {submitSuccess ? (
-                    <p className="border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+                    <Notice tone="success" className="border p-3 text-sm" role="status">
                       {submitSuccess}
-                    </p>
+                    </Notice>
                   ) : null}
                   {upload.task?.commitStarted && !upload.task.result ? (
                     <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

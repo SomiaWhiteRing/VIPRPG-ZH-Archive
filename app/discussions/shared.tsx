@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type KeyboardEventHandler,
 } from "react";
-import { Dialog } from "radix-ui";
+import * as Dialog from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Badge } from "@/app/components/ui/badge";
@@ -293,7 +293,7 @@ export function ForumModal({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
+        <Dialog.Overlay className="bg-black/40" />
         <Dialog.Content
           onKeyDown={onKeyDown}
           aria-describedby={undefined}
