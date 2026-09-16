@@ -20,7 +20,7 @@ production 只允许显式选择 `target=production` 的手动发布；该 job �
 
 `CLOUDFLARE_API_TOKEN` 不要写入仓库。Cloudflare 官方文档也建议在 CI/CD 平台中通过 secrets 保存 API token。
 
-`wrangler.jsonc` 是被 Git 忽略的本地配置。`WRANGLER_CONFIG_JSONC` 必须保存目标仓库所需的完整配置文本；workflow 会在检查和部署前恢复该文件，缺失时直接失败。
+`wrangler.jsonc` 是被 Git 忽略的本地配置。`WRANGLER_CONFIG_JSONC` 保存 production 与 staging 所需的资源配置；workflow 调用 `scripts/prepare-wrangler-config.mjs`，从该 secret 提取资源字段并与仓库模板合成配置，缺失时直接失败。Worker 入口与静态资源路由以 `wrangler.example.jsonc` 为准。
 
 API token 至少需要能部署 Worker，并能对本项目使用到的 D1、R2、Email、Rate Limiting 等绑定执行 Wrangler 部署所需操作。权限应尽量限定到当前 Cloudflare account。
 
@@ -42,9 +42,13 @@ npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
 
 精确顺序以 `.github/workflows/deploy.yml` 为准。staging 与 production job 都会安装依赖、恢复 Wrangler 配置、执行静态检查、安装 Chromium、运行 `npm run test:flow`，然后才对目标环境应用 D1 migration 并部署。staging 部署后另运行最小 smoke test；production 不自动复用 staging 的检查结果。
 
-`npm run deploy:staging` 和 `npm run deploy` 自身负责 目标环境的 Vite/SSR Worker 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。
+`npm run deploy:staging` 和 `npm run deploy` 自身负责目标环境的 Vite/SSR Worker 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。
 
 Cloudflare D1 文档说明，在 CI/CD 等非交互环境中执行 migration apply 时会跳过确认提示，但仍会捕获备份；失败的 migration 会回滚。
+
+## Pull request 检查
+
+[verify.yml](../.github/workflows/verify.yml)在 pull request 或手动触发时使用 `scripts/prepare-verification-config.mjs` 生成隔离的本地配置，依次运行 `check`、`test:forum`、安装 Chromium 和 `test:flow`。它不依赖部署 secret，也不执行远端 migration 或部署；通过检查不代表已上线。
 
 ## 参考
 

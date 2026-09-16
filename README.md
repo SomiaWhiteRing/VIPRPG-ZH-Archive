@@ -2,6 +2,8 @@
 
 基于 Hono、React Router SSR 和 Cloudflare Workers/D1/R2 的 VIPRPG 游戏归档站。
 
+[文档入口](docs/README.md)包含现行产品与架构、运行手册、研究资料及历史归档。
+
 ## 环境要求
 
 - Windows、macOS 或 Linux
@@ -10,15 +12,15 @@
 
 ## 本地启动
 
-在仓库根目录执行：
+在仓库根目录安装依赖；两个配置文件仅在尚不存在时从示例复制：
 
 ```powershell
 npm ci
-Copy-Item wrangler.example.jsonc wrangler.jsonc
-Copy-Item .env.example .env.local
+if (!(Test-Path wrangler.jsonc)) { Copy-Item wrangler.example.jsonc wrangler.jsonc }
+if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
 ```
 
-如果已经有自己的 `.env.local`，不要覆盖它；只需确认至少设置了 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。
+在 `.env.local` 中设置 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。macOS／Linux 使用相应的 shell 复制命令，同样保留已有配置。
 
 首次使用时，从已审核的固定种子恢复本地 D1 和 R2：
 
@@ -26,23 +28,9 @@ Copy-Item .env.example .env.local
 npm run db:local:seed
 ```
 
-此命令只操作 Wrangler 的本地资源，不会修改 Cloudflare 远端数据库或对象存储；已有业务数据时会拒绝覆盖。恢复种子后会自动应用尚未执行的 migration，不必先运行 reset 或 migrate。演示账号密码均为 `dev123456789`：
+此命令只操作 Wrangler 本地 D1 和 R2，已有业务数据时拒绝覆盖。种子包含当前 schema、审核后的角色分类、头像格子及素材绑定，不必先运行 reset 或 migrate。恢复前停止本地服务器。
 
-| 账号 | 角色 |
-| --- | --- |
-| `super@dev.local` | super_admin |
-| `admin@dev.local` | admin |
-| `uploader@dev.local` | uploader |
-| `user@dev.local` | user |
-
-将后续整理完成的本地数据库和 R2 固化为新版种子：
-
-```powershell
-npm run db:local:seed:capture
-npm run db:local:seed:verify
-```
-
-种子位于 `data/local-seed/`，直接保留角色 ID、人工分类、头像格子及素材绑定，不再从词典或演示生成器重建。导出前暂停编辑和上传；恢复前停止本地服务器。导出、恢复及演示账号详情见[本地展示数据](docs/local-demo-data.md)。
+可使用 `super@dev.local` 或 `user@dev.local` 登录，密码均为 `dev123456789`。完整演示账号、场景、快照捕获及备份恢复步骤见[本地展示数据](docs/local-demo-data.md)。
 
 启动开发服务器：
 
@@ -61,27 +49,21 @@ npm run dev -- --port 3001
 ```powershell
 npm run check           # 类型、lint、静态架构和安全规则
 npm test                # 隔离 D1/API 的持久契约，不启动浏览器
-npm run regression      # 串行运行 check + test，并保留回归报告
+npm run regression      # 需要回归时串行运行 check + test，保留报告
 npm run test:flow       # 预生产关键流程：Chromium、Worker、R2/OPFS
-npm run verify:preprod  # check + test:flow + production build
+npm run verify:preprod  # check + test:flow（流程入口含构建）
 npm run smoke:staging   # 已部署 staging 的最小健康检查
 npm run build           # Vite 浏览器资源与 SSR Worker 构建
-npm run preview         # 构建后在 workerd 中预览生产产物
+npm run preview         # 自动构建并在 workerd 中预览生产产物
 ```
 
-敏捷开发默认运行 `npm run regression`，或按改动选择 `npm run check` / `npm test`；流程测试不作为每项功能的完成条件。首次运行 `npm run test:flow` 或 `npm run verify:preprod` 前执行 `npx playwright install chromium`。回归入口会串行执行有状态检查，并在 `output/regression/` 保留报告和阶段日志；失败分类与停止条件见 [`docs/maintenance-regression.md`](docs/maintenance-regression.md)。
+日常开发按改动选择最小既有检查；明确进行回归时使用 `npm run regression`。新增测试和浏览器操作遵守任务授权边界。运行已授权的浏览器流程前，先执行 `npx playwright install chromium` 安装驱动。检查范围、串行规则、报告与失败处理统一见[维护与回归手册](docs/maintenance-regression.md)。
 
 `npm run dev` 用于主站和论坛开发；开发环境即运行于 workerd；验证生产产物使用 `npm run preview`。
 
 论坛图片复用 `ARCHIVE_BUCKET`，无需额外图床密钥。原始文件单张最多 2 MiB，浏览器同格式处理后在发布时上传；读取权限和人工清理规则见[论坛设计文档](docs/forum-discussion-design.md#图片存储与清理)。
 
-唯一根账户只能通过受审计运维命令轮换。远程环境还必须提供与目标邮箱相同的 `--confirm`：
-
-```powershell
-node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --local
-node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --staging --confirm admin@example.com
-node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production --confirm admin@example.com
-```
+账户、维基人模板与根账户轮换规则见[认证与权限](docs/authentication-authorization.md)。
 
 ## Cloudflare 部署
 

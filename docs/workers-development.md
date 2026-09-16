@@ -14,7 +14,7 @@
 
 首次安装 Node 24 后执行 npm ci，将 wrangler.example.jsonc 复制为 wrangler.jsonc，将 .env.example 复制为 .env.local。已有配置不覆盖。填写本地 AUTH_SECRET、APP_ORIGIN=http://localhost:3000；远程资源 ID 只存本地配置或 CI secret。
 
-空的本地数据库可按本地展示数据手册执行 npm run db:local:seed。已有数据不因框架切换重建；D1 schema、R2 key、manifest 和浏览器数据库保持原协议。
+空的本地数据库按[本地展示数据](./local-demo-data.md)执行 `npm run db:local:seed`。schema 初始化、固定快照恢复及已有开发库的备份与重建都以该手册为准。
 
 | 命令 | 职责 |
 | --- | --- |
@@ -35,13 +35,13 @@ DB 提供 D1，ARCHIVE_BUCKET 保存 canonical 对象，ASSETS 提供构建后�
 
 修改配置后运行 npm run cf-typegen。cloudflare-env.d.ts 为生成文件。CI 使用 scripts/prepare-wrangler-config.mjs 从 WRANGLER_CONFIG_JSONC 提取环境资源配置，Worker 入口与资源路由由仓库模板决定。
 
-D1 初始化仍统一维护 migrations/0001_init_archive_schema.sql。框架迁移不修改 schema、不重建数据库。ARCHIVE_BUCKET 中的 blobs、core-packs、manifests 通过 app/.server/storage/archive-keys.ts 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件继续调用 worker/archive-gc.mjs。
+D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `app/.server/storage/archive-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。
 
 ## 发布和回滚
 
-先完成 npm run verify:preprod。合并 main 会触发现有 staging 部署；合并属于发布步骤。按完整新版本部署 staging、健康及关键路径 smoke、production 切换的顺序执行，并核对目标域名、bindings、邮件、限流与 secrets。
+发布前完成 `npm run verify:preprod`，核对目标域名、bindings、邮件、限流与 secrets。推送到 `main` 会自动发布 staging；production 需手动选择。具体门禁与顺序见[GitHub Actions 自动部署](./github-actions-deployment.md)。
 
-保留切换前 Worker 版本及对应静态资源，回滚时恢复完整应用版本。不得为回滚增加双套路由或改变对象格式。远程 migration 与部署必须按目标环境串行运行，不因本次迁移执行数据库 reset。
+保留切换前 Worker 版本及对应静态资源，回滚时恢复完整应用版本，并确认该版本与目标数据库结构兼容。远程 migration 与部署按目标环境串行执行；数据库备份、重建和恢复属于独立运维操作，不随应用发布或回滚自动执行。
 
 ## 故障定位
 

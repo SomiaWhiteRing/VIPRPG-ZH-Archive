@@ -1,8 +1,8 @@
-# RPG Maker 2000/2003 去重存储架构
+# RPG Maker 2000/2003 归档存储架构
 
 本文定义归档文件进入 R2、D1、下载流和垃圾回收时必须保持的稳定边界。作品资料和 ArchiveVersion 关系见[游戏领域架构](./game-domain-architecture.md)，在线游玩本地安装见[EasyRPG 架构](./easyrpg-web-play-architecture.md)，Cloudflare 环境操作见[Workers 与 React Router 运行手册](./workers-development.md)。
 
-认证、角色和授权只以[认证与权限基线](./authentication-authorization-baseline-plan.md)为准；本文不复制 permission key 或端点清单。
+认证、角色和授权只以[认证与权限基线](./authentication-authorization.md)为准；本文不复制 permission key 或端点清单。
 
 ## 1. 目标与非目标
 

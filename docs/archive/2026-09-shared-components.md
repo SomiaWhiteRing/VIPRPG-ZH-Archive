@@ -1,12 +1,12 @@
 # 公共组件整理记录
 
-## 隔离与集成
+历史记录：下文只说明整理发生时的范围、分支和检查结果。当前组件以 `app/components/` 为准，不按历史分支重放集成。
+
+## 当时的工作范围
 
 - 分支：`codex/shared-components`。工作树：`VIPRPG-ZH-Archive-components`，与开发中的 `VIPRPG-ZH-Archive` 分开。
 - 快照基线：`383cbcb907a0bdb1cb3a86e53425767bb02773de`，父提交 `08b891416fe5215d8b8aa60f59eb49fc78cafbe3`。快照包含审阅时尚未提交的角色页面、索引、权限、数据等内容，不属于公共组件重构。
 - 原工作区的文件、分支和暂存区未被本次重构写入。没有推送、合并或部署。
-- 后续集成应先保存并核对原工作区的业务变更，再按顺序选取快照基线之后的提交。不要把整个分支直接当作仅含重构的 PR；它包含上述业务快照。
-- 可在任一工作树用 `git log --reverse --oneline 383cbcb9..codex/shared-components` 查看提交顺序，用 `git diff 383cbcb9..codex/shared-components -- app lib` 审阅纯重构结果。
 
 ## 已完成范围
 
