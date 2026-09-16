@@ -279,8 +279,9 @@ async function run(): Promise<void> {
     200,
   );
 
-  stage("recover a real browser upload");
   browser = await chromium.launch({ headless: true });
+  await verifyEditorNavigation(browser, origin, adminCookie);
+  stage("recover a real browser upload");
   context = await browser.newContext();
   page = await context.newPage();
   page.on("pageerror", (error) => browserErrors.push(error.message));
@@ -542,6 +543,102 @@ async function run(): Promise<void> {
     [],
     "hydration and browser Workers have no uncaught errors",
   );
+}
+
+async function verifyEditorNavigation(
+  currentBrowser: Browser,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("verify editor state follows the entity through browser history");
+  const editorContext = await currentBrowser.newContext();
+  const editor = await editorContext.newPage();
+  try {
+    await editorContext.addCookies([
+      { name: "viprpg_session", value: adminCookie.split("=")[1], url: origin },
+    ]);
+    editor.on("pageerror", (error) => browserErrors.push(error.message));
+    editor.setDefaultTimeout(10_000);
+    const cases = [
+      {
+        paths: ["/admin/archive-versions/201", "/admin/archive-versions/202"],
+        field: 'input[name="source_name"]',
+        values: ["Editor Archive A", "Editor Archive B"],
+        targets: [201, 202].map(
+          (id) => `form[action="/api/admin/archive-versions/${id}/update"]`,
+        ),
+      },
+      {
+        paths: catalogWorkIds.map((id) => `/me/uploads/${id}`),
+        field: "#upload-original-title",
+        values: ["Contract Work A", "Contract Work B"],
+        targets: catalogWorkIds.map(
+          (id) => `form[action="/api/works/${id}/delete"]`,
+        ),
+      },
+    ];
+    for (const { paths, field, values, targets } of cases) {
+      await editor.goto(origin + paths[0]);
+      await editor.locator(field).waitFor();
+      assert.equal(await editor.locator(field).inputValue(), values[0]);
+      // Add a same-document history entry, then traverse it with native Back/Forward.
+      // No router globals or test-only product routes are needed.
+      await editor.evaluate((path) => {
+        history.pushState(
+          { ...history.state, idx: history.state.idx + 1 },
+          "",
+          path,
+        );
+      }, paths[1]);
+      await editor.goBack();
+      await editor.waitForURL(origin + paths[0]);
+      await editor.locator(field).fill("Unsaved value from A");
+      const originalDocument = await editor.locator("body").elementHandle();
+      await editor.goForward();
+      await editor.waitForURL(origin + paths[1]);
+      await editor.locator(targets[1]).waitFor({ state: "attached" });
+      assert.equal(
+        await originalDocument!.evaluate((body) => body === document.body),
+        true,
+        "history traversal must keep the document alive",
+      );
+      assert.equal(
+        await editor.locator(field).inputValue(),
+        values[1],
+        `${paths[1]} loaded its submission target but retained another entity's field value`,
+      );
+      if (paths[1].startsWith("/admin/archive-versions/")) {
+        assert.equal(
+          await editor.locator('input[name="archive_version_id"]').inputValue(),
+          "202",
+        );
+        const form = editor.locator('form:has(input[name="archive_version_id"])');
+        assert.equal(
+          await form.getAttribute("action"),
+          "/api/admin/archive-versions/202/update",
+        );
+        const submitted = await form.evaluate((element) =>
+          Object.fromEntries(new FormData(element as HTMLFormElement)),
+        );
+        assert.equal(submitted.status, "hidden");
+        assert.equal(submitted.source_url, "https://example.test/editor-b");
+      }
+      await editor.locator(field).fill("Unsaved value from B");
+      await editor.goBack();
+      await editor.waitForURL(origin + paths[0]);
+      await editor.locator(targets[0]).waitFor({ state: "attached" });
+      assert.equal(
+        await editor.locator(field).inputValue(),
+        values[0],
+        `${paths[0]} must restore its own data on Back navigation`,
+      );
+    }
+  } catch (error) {
+    await captureFailure(editor);
+    throw error;
+  } finally {
+    await editorContext.close();
+  }
 }
 
 async function verifyForumNavigation(currentPage: Page, origin: string) {
@@ -838,6 +935,19 @@ UPDATE works SET engine_family='rpg_maker_mv' WHERE id IN (${catalogWorkIds.join
 INSERT INTO work_external_links (work_id, label, url, link_type)
 VALUES (${catalogWorkIds[0]}, 'Download', 'https://example.test/a', 'download_page'),
        (${catalogWorkIds[1]}, 'Download', 'https://example.test/b', 'download_page');
+INSERT INTO work_uploaders (work_id, user_id)
+VALUES (${catalogWorkIds[0]}, 2), (${catalogWorkIds[1]}, 2);
+${testMode === "flow" ? `
+INSERT INTO works (id, original_title, status, created_by_user_id)
+VALUES (201, 'Editor Archive Work A', 'hidden', 2),
+       (202, 'Editor Archive Work B', 'hidden', 2);
+INSERT INTO archive_versions (id, work_id, source_name, source_url,
+  manifest_sha256, file_policy_version, packer_version, source_type, status)
+VALUES (201, 201, 'Editor Archive A', 'https://example.test/editor-a',
+  '${"a".repeat(64)}', '1', '1', 'browser_zip', 'published'),
+       (202, 202, 'Editor Archive B', 'https://example.test/editor-b',
+  '${"b".repeat(64)}', '1', '1', 'browser_zip', 'hidden');
+` : ""}
 `;
 }
 

@@ -38,7 +38,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export default function UploadedWorkPage() {
   const { user, work, suggestions } = useLoaderData<typeof loader>();
   return (
-    <div data-account-full-width>
+    <div key={`${user.id}:${work.id}`} data-account-full-width>
       <PageHeader
         actions={<BackLink href="/me/uploads" label="返回我的上传" />}
         title={`编辑作品：${work.chineseTitle || work.originalTitle}`}
