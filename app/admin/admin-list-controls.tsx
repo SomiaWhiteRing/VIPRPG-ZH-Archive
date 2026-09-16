@@ -28,6 +28,7 @@ export function AdminListControls(props: {
       aria-label={props.noun + "工具栏"}
     >
       <form
+        key={JSON.stringify([props.action, props.query, props.status, props.sort])}
         action={props.action}
         className="flex min-w-0 flex-1 flex-wrap items-end gap-2"
         method="get"

@@ -495,7 +495,9 @@ async function run(): Promise<void> {
   stage("install the native archive into Chromium OPFS and reload it");
   app = startApp(appPort, origin, "app-2.log");
   await waitForHttp(`${origin}/api/health`, app);
-  await page.goto(`${origin}/play/${archiveVersionId}`);
+  await page.goto(`${origin}/games/${workId}`);
+  await page.locator(`a[href="/play/${archiveVersionId}"]`).first().click();
+  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
   await page.locator('[data-web-play-action="install"]').click();
   await page
     .locator('[data-web-play-status="ready"]')
@@ -507,8 +509,6 @@ async function run(): Promise<void> {
     "packs",
   ]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
-  await page.reload();
-  await page.locator('[data-web-play-status="ready"]').waitFor();
   const virtualFiles = await page.evaluate(
     async ({ playKey }) => {
       const prefix = `/play/runtime/easyrpg/0.8.1.1/games/${playKey}`;
@@ -538,6 +538,18 @@ async function run(): Promise<void> {
   );
   assert.match(virtualFiles.wasmMime ?? "", /application\/wasm/);
   assert.equal(virtualFiles.scope, origin + "/play/");
+  await page.reload();
+  await page.locator('[data-web-play-status="ready"]').waitFor();
+  // Exercise the action button as well as the tab, from a document outside /play/.
+  await page.goto(`${origin}/games/${workId}`);
+  await page.locator(`a[href="/play/${archiveVersionId}"]`).last().click();
+  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
+  await page.locator('[data-web-play-status="ready"]').waitFor();
+  assert.equal(
+    await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL),
+    origin + "/play/sw.js",
+    "both play entry points must load a document controlled by the play worker",
+  );
   assert.deepEqual(
     browserErrors,
     [],
@@ -633,12 +645,64 @@ async function verifyEditorNavigation(
         `${paths[0]} must restore its own data on Back navigation`,
       );
     }
+    await verifyCatalogEditorNavigation(editor, origin, adminCookie);
   } catch (error) {
     await captureFailure(editor);
     throw error;
   } finally {
     await editorContext.close();
   }
+}
+
+async function verifyCatalogEditorNavigation(
+  editor: Page,
+  origin: string,
+  adminCookie: string,
+) {
+  stage("prevent catalog drafts from being submitted to another catalog");
+  const catalogs: Array<{ id: number; title: string }> = [];
+  for (const title of ["Editor catalog A", "Editor catalog B"]) {
+    const result = await jsonResponse<{ catalog: { id: number; title: string } }>(
+      "create editor catalog",
+      origin,
+      "/api/catalogs",
+      jsonMutation(origin, adminCookie, { title }),
+      201,
+    );
+    catalogs.push(result.catalog);
+  }
+  const [a, b] = catalogs;
+  await editor.goto(`${origin}/catalogs/${b.id}`);
+  await editor.locator(`a[href="/catalogs/${a.id}"]`).click();
+  await editor.waitForURL(`${origin}/catalogs/${a.id}`);
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  await editor.locator("#catalog-title").fill("Unsaved catalog A");
+  await editor.goBack();
+  await editor.waitForURL(`${origin}/catalogs/${b.id}`);
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  assert.equal(await editor.locator("#catalog-title").inputValue(), b.title);
+  await editor.locator("#catalog-title").fill("Updated catalog B");
+  const [saved] = await Promise.all([
+    editor.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        new URL(response.url()).pathname === `/api/catalogs/${b.id}`,
+    ),
+    editor.getByRole("button", { name: "保存资料", exact: true }).click(),
+  ]);
+  assert.equal(saved.status(), 200);
+  const result = (await saved.json()) as {
+    catalog: { id: number; title: string };
+  };
+  assert.equal(result.catalog.id, b.id);
+  assert.equal(result.catalog.title, "Updated catalog B");
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.goForward();
+  await editor.waitForURL(`${origin}/catalogs/${a.id}`);
+  await editor.getByRole("heading", { name: a.title, exact: true }).waitFor();
+  await editor.getByRole("button", { name: "编辑资料", exact: true }).click();
+  assert.equal(await editor.locator("#catalog-title").inputValue(), a.title);
 }
 
 async function verifyForumNavigation(currentPage: Page, origin: string) {

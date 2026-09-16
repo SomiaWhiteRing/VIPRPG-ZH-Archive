@@ -11,6 +11,7 @@ type Rm2kButtonProps = {
   children: ReactNode;
   icon?: ReactNode;
   href?: string;
+  reloadDocument?: boolean;
   className?: string;
   type?: ComponentPropsWithoutRef<"button">["type"];
   disabled?: boolean;
@@ -28,6 +29,7 @@ export function Rm2kButton({
   children,
   icon,
   href,
+  reloadDocument,
   className,
   type = "button",
   disabled = false,
@@ -70,6 +72,7 @@ export function Rm2kButton({
           aria-haspopup={ariaHasPopup}
           aria-selected={ariaSelected}
           to={href}
+          reloadDocument={reloadDocument}
           onClick={
             disabled || onClick
               ? (event) => {
