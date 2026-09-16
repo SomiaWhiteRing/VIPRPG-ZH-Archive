@@ -17,7 +17,9 @@
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
+- 同时接受 runtime 相对路径 `/play/runtime/easyrpg/{version}/games/{playKey}/...`；只拦截这些同源路径，其他请求（包括 `/games/{id}.data`）由站点正常处理。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
+- EasyRPG 在同源 `/play/player.html` iframe 内运行，文档、全局输入、音频和 WASM 循环归属于该 iframe。离开页面或切换 playKey/账户时销毁文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。安装中的站内导航使用 Router blocker，刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
@@ -48,6 +50,7 @@
 
 ```text
 GET /play/{archiveVersionId}
+GET /play/player.html
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.wasm
 GET /play/games/{playKey}/index.json

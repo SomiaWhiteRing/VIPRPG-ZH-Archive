@@ -43,7 +43,10 @@ export default function WorkRelationsPage() {
   const { workId, user, work, capabilities, title, canCreate } =
     useLoaderData<typeof loader>();
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
+    <main
+      key={`${work.id}:${user.id}`}
+      className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8"
+    >
       <PageHeader
         actions={
           <>

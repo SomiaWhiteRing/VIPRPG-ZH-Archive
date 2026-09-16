@@ -36,7 +36,11 @@ export function getEmailFrom(runtime: AppRuntime): string {
 }
 
 export function getAppOrigin(runtime: AppRuntime): string {
-  const value = readRuntimeVariable(runtime, "APP_ORIGIN");
+  return runtime.origin;
+}
+
+export function normalizeAppOrigin(input: string | undefined): string {
+  const value = input?.trim();
 
   if (!value) {
     throw new Error("APP_ORIGIN is not configured");

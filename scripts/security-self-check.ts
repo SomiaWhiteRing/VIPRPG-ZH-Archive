@@ -1,6 +1,10 @@
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import assert from "node:assert/strict";
 import { sanitizeRedirectPath } from "../app/.server/auth/redirect";
+import { getAppOrigin, normalizeAppOrigin } from "../app/.server/auth/config";
+import { assertSameOrigin } from "../app/.server/auth/origin";
+import { assertForumOrigin } from "../app/.server/forum/request";
+import { createRuntime } from "../app/.server/runtime";
 import { canManageUser } from "../app/.server/db/permissions";
 import { canDeleteArchiveVersion } from "../lib/authz/archive-permissions";
 import type { PermissionKey } from "../lib/authz/permissions";
@@ -73,6 +77,39 @@ assert.equal(canDeleteArchiveVersion(actor, lowerUser.id), true);
 assert.equal(sanitizeRedirectPath("/safe/path?next=1"), "/safe/path?next=1");
 assert.equal(sanitizeRedirectPath("/\\evil.com"), "/");
 assert.equal(sanitizeRedirectPath("/\u0000bad"), "/");
+
+for (const configured of [
+  "https://example.test",
+  "https://example.test/",
+  "  https://example.test/  ",
+]) {
+  const request = new Request("https://example.test/api/discussions", {
+    method: "POST",
+    headers: { origin: "https://example.test" },
+  });
+  const runtime = createRuntime(
+    request,
+    { APP_ORIGIN: configured } as CloudflareEnv,
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+  assert.equal(getAppOrigin(runtime), "https://example.test");
+  assertSameOrigin(runtime, request);
+  assertForumOrigin(runtime, request);
+  const crossOrigin = new Request(request, {
+    headers: { origin: "https://elsewhere.test" },
+  });
+  assert.throws(() => assertSameOrigin(runtime, crossOrigin));
+  assert.throws(() => assertForumOrigin(runtime, crossOrigin), { status: 403 });
+}
+assert.equal(
+  normalizeAppOrigin("http://localhost:3000/"),
+  "http://localhost:3000",
+);
+assert.throws(() => normalizeAppOrigin("http://example.test"));
+assert.throws(() => normalizeAppOrigin(" "));
 
 console.log("security self-check passed");
 

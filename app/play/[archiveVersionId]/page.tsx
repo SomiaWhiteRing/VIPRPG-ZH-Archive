@@ -132,7 +132,9 @@ export default function WebPlayPage() {
     metadata,
   } = useLoaderData<typeof loader>();
   return (
-    <DetailPageShell>
+    <DetailPageShell
+      key={`${metadata.playKey}:${currentUser?.id ?? "anonymous"}`}
+    >
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         aliases={work.aliases}

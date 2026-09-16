@@ -38,7 +38,11 @@ async function userDiscussions(
   input: DiscussionPageInput,
 ): Promise<ForumPage<UserDiscussionItem>> {
   const pageSize = Math.min(50, forumPage(input.pageSize ?? 20));
-  const source = `FROM forum_public_content c
+  const source = `FROM (
+    SELECT 'post' AS kind,id,topic_id,post_number,user_id,body,created_at FROM forum_public_posts
+    UNION ALL
+    SELECT 'comment' AS kind,id,topic_id,post_number,user_id,body,created_at FROM forum_public_comments
+  ) c
     JOIN forum_public_topics t ON t.id=c.topic_id
     JOIN users u ON u.id=c.user_id
     WHERE c.user_id=? AND u.status='active' AND (?=1 OR u.profile_show_discussions=1)`;

@@ -1,3 +1,5 @@
+import { normalizeAppOrigin } from "./auth/config";
+
 export type AppRuntime = {
   request: Request;
   env: CloudflareEnv;
@@ -19,7 +21,7 @@ export function createRuntime(
     execution,
     db: env.DB,
     bucket: env.ARCHIVE_BUCKET,
-    origin: env.APP_ORIGIN,
+    origin: normalizeAppOrigin(env.APP_ORIGIN),
     memo: new Map(),
   };
 }

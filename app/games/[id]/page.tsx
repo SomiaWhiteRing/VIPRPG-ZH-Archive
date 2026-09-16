@@ -169,7 +169,7 @@ export default function GameDetailPage() {
     externalLinks,
   } = useLoaderData<typeof loader>();
   return (
-    <DetailPageShell>
+    <DetailPageShell key={`${work.id}:${currentUser?.id ?? "anonymous"}`}>
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         aliases={work.aliases}
@@ -180,11 +180,13 @@ export default function GameDetailPage() {
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
           ...(current
-            ? [{
-                href: `/play/${current.id}`,
-                label: "在线游玩",
-                reloadDocument: true,
-              }]
+            ? [
+                {
+                  href: `/play/${current.id}`,
+                  label: "在线游玩",
+                  reloadDocument: true,
+                },
+              ]
             : []),
           ...(media.length
             ? [{ href: "#sec-gallery", label: "预览图", count: media.length }]
