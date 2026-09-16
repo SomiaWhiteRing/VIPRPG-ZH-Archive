@@ -1,35 +1,35 @@
-import { EmptyState } from "@/app/components/ui/empty-state";
-import Image from "next/image";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
-import { CatalogItemsSection } from "@/app/catalogs/catalog-items-section";
-import { BackLink } from "@/app/components/ui/back-link";
-import { hasPermission } from "@/lib/authz/permissions";
-import { formatDate, formatNumber } from "@/lib/format";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   getCatalogById,
   searchCatalogsForOwner,
-} from "@/lib/server/db/catalogs";
-import { parsePositiveId } from "@/lib/server/http/request";
+} from "@/app/.server/db/catalogs";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { parsePositiveId } from "@/app/.server/http/request";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { CatalogItemsSection } from "@/app/catalogs/catalog-items-section";
+import { BackLink } from "@/app/components/ui/back-link";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { hasPermission } from "@/lib/authz/permissions";
+import { formatDate, formatNumber } from "@/lib/format";
+import type { ReactNode } from "react";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { CatalogSummaryEditor } from "../catalog-manager";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-export default async function CatalogPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
   const id = parsePositiveId((await params).id, "catalog id");
   const [catalog, currentUser] = await Promise.all([
-    getCatalogById(id),
-    getCurrentUserFromCookies(),
+    getCatalogById(runtime, id),
+    getCurrentUser(runtime),
   ]);
-  if (!catalog) notFound();
+  if (!catalog) throwNotFound();
 
-  const ownerCatalogs = await searchCatalogsForOwner({
+  const ownerCatalogs = await searchCatalogsForOwner(runtime, {
     userId: catalog.ownerUserId,
     pageSize: 6,
   });
@@ -52,6 +52,25 @@ export default async function CatalogPage({
     canManageAny ||
     Boolean(ownsCatalog && hasPermission(currentUser, "catalog.reorder_own"));
 
+  return {
+    catalog,
+    currentUser: pickPageFields(currentUser, ["id"]),
+    otherCatalogs,
+    canEditSummary,
+    canDelete,
+    canEditItems,
+  };
+}
+
+export default function CatalogPage() {
+  const {
+    catalog,
+    currentUser,
+    otherCatalogs,
+    canEditSummary,
+    canDelete,
+    canEditItems,
+  } = useLoaderData<typeof loader>();
   return (
     <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
       <BackLink href="/catalogs" label="返回目录" />
@@ -67,13 +86,13 @@ export default async function CatalogPage({
             <div className="flex flex-col gap-4 sm:flex-row">
               <div className="relative flex aspect-4/3 w-full shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-card font-mono text-xs text-muted sm:w-52">
                 {catalog.coverBlobSha256 ? (
-                  <Image
+                  <img
                     alt=""
                     className="h-full w-full object-cover"
                     height={156}
                     src={`/api/media/blobs/${catalog.coverBlobSha256}`}
-                    unoptimized
                     width={208}
+                    loading="lazy"
                   />
                 ) : (
                   <span>暂无封面</span>
@@ -90,7 +109,7 @@ export default async function CatalogPage({
                 创建者{" "}
                 <Link
                   className="font-semibold text-primary hover:underline"
-                  href={`/users/${catalog.ownerUserId}`}
+                  to={`/users/${catalog.ownerUserId}`}
                 >
                   {catalog.ownerName}
                 </Link>
@@ -145,7 +164,7 @@ export default async function CatalogPage({
               <dd className="m-0 min-w-0">
                 <Link
                   className="font-semibold text-primary hover:underline"
-                  href={`/users/${catalog.ownerUserId}`}
+                  to={`/users/${catalog.ownerUserId}`}
                 >
                   {catalog.ownerName}
                 </Link>
@@ -172,7 +191,7 @@ export default async function CatalogPage({
                   <li className="py-2.5 first:pt-0 last:pb-0" key={item.id}>
                     <Link
                       className="block text-sm font-semibold leading-5 hover:text-primary hover:underline"
-                      href={`/catalogs/${item.id}`}
+                      to={`/catalogs/${item.id}`}
                     >
                       {item.title}
                     </Link>
@@ -183,12 +202,16 @@ export default async function CatalogPage({
                 ))}
               </ul>
             ) : (
-              <EmptyState title="这位用户还没有其他公开目录。" variant="plain" className="leading-6" />
+              <EmptyState
+                title="这位用户还没有其他公开目录。"
+                variant="plain"
+                className="leading-6"
+              />
             )}
             {catalog.ownerProfileShowsCatalogs ? (
               <Link
                 className="mt-3 block border-t border-border pt-3 text-xs font-semibold text-primary hover:underline"
-                href={`/users/${catalog.ownerUserId}/catalogs`}
+                to={`/users/${catalog.ownerUserId}/catalogs`}
               >
                 查看作者的全部目录
               </Link>
@@ -199,21 +222,27 @@ export default async function CatalogPage({
             <nav aria-label="目录相关页面">
               <ul className="m-0 list-none divide-y divide-border p-0 text-sm">
                 <li>
-                  <Link className="block py-2 first:pt-0 hover:text-primary" href="/catalogs">
+                  <Link
+                    className="block py-2 first:pt-0 hover:text-primary"
+                    to="/catalogs"
+                  >
                     浏览全部目录
                   </Link>
                 </li>
                 <li>
                   <Link
                     className="block py-2 hover:text-primary"
-                    href={`/users/${catalog.ownerUserId}`}
+                    to={`/users/${catalog.ownerUserId}`}
                   >
                     查看作者主页
                   </Link>
                 </li>
                 {currentUser && currentUser.id !== catalog.ownerUserId ? (
                   <li>
-                    <Link className="block py-2 last:pb-0 hover:text-primary" href="/me/catalogs">
+                    <Link
+                      className="block py-2 last:pb-0 hover:text-primary"
+                      to="/me/catalogs"
+                    >
                       管理我的目录
                     </Link>
                   </li>

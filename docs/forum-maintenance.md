@@ -1,10 +1,10 @@
 # 论坛开发与数据维护
 
-页面行为、数据不变量与权限边界见[论坛设计](./forum-discussion-design.md)。论坛使用 Next App Router、共享根布局和 Route Handler；数据服务负责全文索引、批量读取、连续编号与维护统计。
+页面行为、数据不变量与权限边界见[论坛设计](./forum-discussion-design.md)。论坛使用 React Router SSR、共享根布局和 Hono API；数据服务负责全文索引、批量读取、连续编号与维护统计。
 
 ## 开发与检查
 
-主站和论坛日常开发使用 `npm run dev`，通过 OpenNext 开发配置访问本地 D1/R2。`npm run preview` 验证打包后的 Worker、binding 与原生下载链路。构建和部署沿用 `scripts/open-next.mjs`。
+主站和论坛日常开发使用 `npm run dev`，通过 Cloudflare Vite 插件访问本地 D1/R2。`npm run preview` 验证打包后的 Worker、binding 与原生下载链路。构建和部署统一使用 `scripts/app.mjs`。
 
 现有论坛持久契约入口是 `npm run test:forum`，覆盖编号、幂等、失败回滚、版本冲突、搜索同步和权限边界。检查选择与执行顺序遵循[维护手册](./maintenance-regression.md)。
 

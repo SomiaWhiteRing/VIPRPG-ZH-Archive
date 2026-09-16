@@ -1,7 +1,5 @@
-"use client";
-
-import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { useLocation } from "react-router";
 import { forumRequest } from "./shared";
 
 let viewedTopic: number | null = null;
@@ -9,7 +7,7 @@ let viewedTopic: number | null = null;
 // The root layout survives pagination. Leaving a topic starts a new visit;
 // reloading the document also starts fresh because this state is in memory.
 export function DiscussionVisitBoundary() {
-  const pathname = usePathname();
+  const pathname = useLocation().pathname;
   useEffect(() => {
     if (viewedTopic !== null && pathname !== `/discussions/${viewedTopic}`)
       viewedTopic = null;

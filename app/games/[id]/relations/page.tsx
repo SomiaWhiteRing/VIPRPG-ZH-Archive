@@ -1,32 +1,47 @@
-import { notFound, redirect } from "next/navigation";
+import { requireAccountUser } from "@/app/.server/auth/account-user";
+import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
+import { parsePositiveId } from "@/app/.server/http/request";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { requireAccountUser } from "@/lib/server/auth/account-user";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
-import { getGameWorkDetail } from "@/lib/server/db/game-library";
-import { parsePositiveId } from "@/lib/server/http/request";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 import { RelationCreateDialog, RelationManager } from "../relation-editor";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-export default async function WorkRelationsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
   const workId = parsePositiveId((await params).id, "work id");
-  const user = await requireAccountUser(`/games/${workId}/relations`);
-  const work = await getGameWorkDetail(workId);
-  if (!work) notFound();
+  const user = await requireAccountUser(runtime, `/games/${workId}/relations`);
+  const work = await getGameWorkDetail(runtime, workId);
+  if (!work) throwNotFound();
 
   const capabilities = getRelationEditorCapabilities(user);
   const canManage = Object.values(capabilities).some(Boolean);
-  if (!canManage) redirect(`/games/${workId}`);
+  if (!canManage) redirectPage(`/games/${workId}`);
 
   const title = work.chineseTitle || work.originalTitle;
   const canCreate =
     capabilities.canCreateRelation || capabilities.canCreateTranslation;
 
+  return {
+    workId,
+    user: pickPageFields(user, ["id"]),
+    work,
+    capabilities,
+    title,
+    canCreate,
+  };
+}
+
+export default function WorkRelationsPage() {
+  const { workId, user, work, capabilities, title, canCreate } =
+    useLoaderData<typeof loader>();
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
       <PageHeader

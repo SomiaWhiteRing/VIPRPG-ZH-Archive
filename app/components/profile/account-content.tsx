@@ -1,8 +1,8 @@
-import { EmptyState } from "@/app/components/ui/empty-state";
-import Link from "next/link";
-import type { ReactNode } from "react";
 import { GameCard } from "@/app/components/home/game-card";
-import type { UserWorkListItem } from "@/lib/server/db/game-library";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import type { UserWorkListItem } from "@/lib/dto/db/game-library";
+import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 export function AccountSection({
   title,
@@ -22,7 +22,10 @@ export function AccountSection({
           <h2 className="m-0 text-lg font-bold">{title}</h2>
           {status}
         </div>
-        <Link className="shrink-0 text-sm font-semibold text-primary hover:underline" href={href}>
+        <Link
+          className="shrink-0 text-sm font-semibold text-primary hover:underline"
+          to={href}
+        >
           更多 →
         </Link>
       </header>
@@ -35,7 +38,10 @@ export function AccountWorkGrid({ items }: { items: UserWorkListItem[] }) {
   return (
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {items.map((item, index) => (
-        <li className={index >= 2 ? "hidden sm:block" : undefined} key={item.work.id}>
+        <li
+          className={index >= 2 ? "hidden sm:block" : undefined}
+          key={item.work.id}
+        >
           <GameCard work={item.work} />
         </li>
       ))}
@@ -44,5 +50,11 @@ export function AccountWorkGrid({ items }: { items: UserWorkListItem[] }) {
 }
 
 export function AccountEmpty({ children }: { children: ReactNode }) {
-  return <EmptyState title={children} variant="plain" className="rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted" />;
+  return (
+    <EmptyState
+      title={children}
+      variant="plain"
+      className="rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted"
+    />
+  );
 }

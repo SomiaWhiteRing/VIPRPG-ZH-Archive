@@ -1,14 +1,25 @@
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { runtimeContext } from "@/app/.server/router-context";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
+import type { LoaderFunctionArgs } from "react-router";
 import { EmojiAdminPanel } from "./panel";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
 
-export default async function AdminEmojiPage() {
-  await requirePagePermission("/admin/emojis", "custom_emoji.manage");
+  await requirePagePermission(runtime, "/admin/emojis", "custom_emoji.manage");
+
+  return {};
+}
+
+export default function AdminEmojiPage() {
   return (
     <main>
-      <PageHeader compact title="站点表情" subtitle="上传表情并管理其公开状态。" />
+      <PageHeader
+        compact
+        title="站点表情"
+        subtitle="上传表情并管理其公开状态。"
+      />
       <EmojiAdminPanel />
     </main>
   );

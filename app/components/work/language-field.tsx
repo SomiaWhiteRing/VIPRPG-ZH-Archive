@@ -1,9 +1,7 @@
-"use client";
-
-import { LANGUAGE_OPTIONS } from "@/lib/labels";
 import { Label } from "@/app/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import { SelectField } from "@/app/components/ui/select";
+import { LANGUAGE_OPTIONS } from "@/lib/labels";
 import { useState } from "react";
 
 const primaryOptions = [

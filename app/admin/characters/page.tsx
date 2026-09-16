@@ -1,30 +1,37 @@
-import { buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { TableWrap } from "@/app/components/ui/table-wrap";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
+import { searchCharactersForAdmin } from "@/app/.server/db/taxonomy-library";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import {
   AdminListControls,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
-import { requireAnyPagePermission } from "@/lib/server/auth/authorize";
-import { CHARACTER_ADMIN_PERMISSIONS, CHARACTER_DETAIL_PERMISSIONS, CHARACTER_INDEX_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
-import { searchCharactersForAdmin } from "@/lib/server/db/taxonomy-library";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { buttonVariants } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { TableWrap } from "@/app/components/ui/table-wrap";
+import {
+  CHARACTER_ADMIN_PERMISSIONS,
+  CHARACTER_DETAIL_PERMISSIONS,
+  CHARACTER_INDEX_PERMISSIONS,
+  hasPermission,
+} from "@/lib/authz/permissions";
 import { formatNumber } from "@/lib/format";
-
-export const dynamic = "force-dynamic";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
-export default async function AdminCharactersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const adminUser = await requireAnyPagePermission(
+    runtime,
     "/admin/characters",
     CHARACTER_ADMIN_PERMISSIONS,
   );
@@ -36,13 +43,25 @@ export default async function AdminCharactersPage({
     "default",
   );
   const page = parseAdminPage(params.page);
-  const result = await searchCharactersForAdmin({
+  const result = await searchCharactersForAdmin(runtime, {
     query,
     sort,
     page,
     pageSize: PAGE_SIZE,
   });
 
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    query,
+    sort,
+    page,
+    result,
+  };
+}
+
+export default function AdminCharactersPage() {
+  const { adminUser, query, sort, page, result } =
+    useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -51,11 +70,23 @@ export default async function AdminCharactersPage({
         subtitle="维护角色名称、说明和作品关联。"
         actions={
           <>
-            {hasPermission(adminUser, "character.admin.read") || CHARACTER_INDEX_PERMISSIONS.some((key) => hasPermission(adminUser, key)) ? <Link className={buttonVariants({ variant: "outline" })} href="/admin/characters/index">角色分类</Link> : null}
-            {hasPermission(adminUser, "character.create") ? <CharacterCreateButton /> : null}
+            {hasPermission(adminUser, "character.admin.read") ||
+            CHARACTER_INDEX_PERMISSIONS.some((key) =>
+              hasPermission(adminUser, key),
+            ) ? (
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                to="/admin/characters/index"
+              >
+                角色分类
+              </Link>
+            ) : null}
+            {hasPermission(adminUser, "character.create") ? (
+              <CharacterCreateButton />
+            ) : null}
             <Link
               className={buttonVariants({ variant: "outline" })}
-              href="/characters"
+              to="/characters"
             >
               查看公开列表
             </Link>
@@ -98,10 +129,12 @@ export default async function AdminCharactersPage({
                 <td>{formatNumber(character.workCount)}</td>
                 <td>{character.updatedAt}</td>
                 <td>
-                  {CHARACTER_DETAIL_PERMISSIONS.some((key) => hasPermission(adminUser, key)) ? (
+                  {CHARACTER_DETAIL_PERMISSIONS.some((key) =>
+                    hasPermission(adminUser, key),
+                  ) ? (
                     <Link
                       className={buttonVariants()}
-                      href={`/admin/characters/${character.id}`}
+                      to={`/admin/characters/${character.id}`}
                     >
                       查看与维护
                     </Link>

@@ -1,31 +1,33 @@
-import { buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { ChipList } from "@/app/components/ui/chip-list";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { StatusBadge } from "@/app/components/ui/status-badge";
-import { TableWrap } from "@/app/components/ui/table-wrap";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { searchEditableWorksForAdmin } from "@/app/.server/db/game-library";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import {
   AdminListControls,
   parseAdminPage,
   searchParam,
 } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { buttonVariants } from "@/app/components/ui/button";
+import { ChipList } from "@/app/components/ui/chip-list";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { searchEditableWorksForAdmin } from "@/lib/server/db/game-library";
-import { formatNumber, formatBytes } from "@/lib/format";
-
-export const dynamic = "force-dynamic";
+import { formatBytes, formatNumber } from "@/lib/format";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
-export default async function AdminWorksPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const adminUser = await requirePagePermission(
+    runtime,
     "/admin/works",
     "work.read_private",
   );
@@ -42,7 +44,7 @@ export default async function AdminWorksPage({
     "default",
   );
   const page = parseAdminPage(params.page);
-  const result = await searchEditableWorksForAdmin({
+  const result = await searchEditableWorksForAdmin(runtime, {
     query,
     status,
     sort: sort === "default" ? "id" : sort,
@@ -50,6 +52,19 @@ export default async function AdminWorksPage({
     pageSize: PAGE_SIZE,
   });
 
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    query,
+    status,
+    sort,
+    page,
+    result,
+  };
+}
+
+export default function AdminWorksPage() {
+  const { adminUser, query, status, sort, page, result } =
+    useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -128,10 +143,12 @@ export default async function AdminWorksPage({
                   )}
                 </td>
                 <td>
-                  {hasPermission(adminUser, "work.metadata.update_any") && (work.status !== "deleted" || hasPermission(adminUser, "work.status.update_any")) ? (
+                  {hasPermission(adminUser, "work.metadata.update_any") &&
+                  (work.status !== "deleted" ||
+                    hasPermission(adminUser, "work.status.update_any")) ? (
                     <Link
                       className={buttonVariants()}
-                      href={`/admin/works/${work.id}`}
+                      to={`/admin/works/${work.id}`}
                     >
                       编辑
                     </Link>

@@ -1,8 +1,3 @@
-"use client";
-
-import { Notice } from "@/app/components/ui/notice";
-import { Input } from "@/app/components/ui/input";
-import { Button } from "@/app/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,10 +7,17 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
+import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Notice } from "@/app/components/ui/notice";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
-import { gcDefaultGraceDays, gcDefaultSweepLimitPerType, gcManualSweepGraceDays } from "@/lib/archive/gc-policy";
+import {
+  gcDefaultGraceDays,
+  gcDefaultSweepLimitPerType,
+  gcManualSweepGraceDays,
+} from "@/lib/archive/gc-policy";
 import { useRef, useState } from "react";
 
 type OperationKind = "consistency" | "gc" | "sweep";
@@ -34,7 +36,11 @@ type ApiPayload = {
   report?: unknown;
 };
 
-export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup: boolean }) {
+export function AdminOperationPanel({
+  canRunFinalCleanup,
+}: {
+  canRunFinalCleanup: boolean;
+}) {
   const sweepButtonRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<OperationState>({
     kind: null,
@@ -44,7 +50,9 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
   });
   const [sweepConfirm, setSweepConfirm] = useState("");
   const [sweepDialogOpen, setSweepDialogOpen] = useState(false);
-  const [sweepGraceDays, setSweepGraceDays] = useState(String(gcManualSweepGraceDays));
+  const [sweepGraceDays, setSweepGraceDays] = useState(
+    String(gcManualSweepGraceDays),
+  );
 
   async function run(kind: OperationKind): Promise<void> {
     const url = operationUrl(kind);
@@ -67,7 +75,10 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
               },
               body: JSON.stringify({
                 confirm: sweepConfirm,
-                graceDays: parseIntegerInput(sweepGraceDays, gcManualSweepGraceDays),
+                graceDays: parseIntegerInput(
+                  sweepGraceDays,
+                  gcManualSweepGraceDays,
+                ),
                 limitPerType: gcDefaultSweepLimitPerType,
               }),
             })
@@ -77,7 +88,11 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
       const payload = (await response.json()) as ApiPayload;
 
       if (!response.ok || payload.ok === false) {
-        throw new Error(payload.detail ?? payload.error ?? `Request failed: ${response.status}`);
+        throw new Error(
+          payload.detail ??
+            payload.error ??
+            `Request failed: ${response.status}`,
+        );
       }
 
       setState({
@@ -100,10 +115,19 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
     <div className="mt-5">
       <SectionHeading level={3} title="运维检查" />
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={state.loading} onClick={() => run("consistency")} type="button">
+        <Button
+          disabled={state.loading}
+          onClick={() => run("consistency")}
+          type="button"
+        >
           运行一致性检查
         </Button>
-        <Button variant="outline" disabled={state.loading} onClick={() => run("gc")} type="button">
+        <Button
+          variant="outline"
+          disabled={state.loading}
+          onClick={() => run("gc")}
+          type="button"
+        >
           运行清理预演
         </Button>
       </div>
@@ -112,8 +136,9 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
           <Label htmlFor="gc-sweep-confirm">
             最终清理
             <span className="text-sm text-muted">
-              此操作会永久删除且不可恢复。 自动任务最终清理超过 {gcDefaultGraceDays} 天的回收站版本和零引用对象；
-              手动可填 0 立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
+              此操作会永久删除且不可恢复。 自动任务最终清理超过{" "}
+              {gcDefaultGraceDays} 天的回收站版本和零引用对象； 手动可填 0
+              立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
             </span>
           </Label>
           <Input
@@ -152,7 +177,8 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
             >
               <AlertDialogTitle>确认执行最终清理</AlertDialogTitle>
               <AlertDialogDescription>
-                此操作会永久删除回收站版本的文件引用和零引用 R2 对象，不能恢复。只有在确认清理范围正确后继续。
+                此操作会永久删除回收站版本的文件引用和零引用 R2
+                对象，不能恢复。只有在确认清理范围正确后继续。
               </AlertDialogDescription>
               <AlertDialogFooter>
                 <AlertDialogCancel asChild>
@@ -175,12 +201,15 @@ export function AdminOperationPanel({ canRunFinalCleanup }: { canRunFinalCleanup
         </div>
       ) : (
         <p className="text-sm text-muted">
-          最终清理会永久删除回收站版本的文件引用和零引用 R2 对象，只有超级管理员可手动执行。
+          最终清理会永久删除回收站版本的文件引用和零引用 R2
+          对象，只有超级管理员可手动执行。
         </p>
       )}
       {state.loading ? <p className="text-sm text-muted">检查运行中</p> : null}
       {state.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3 text-sm">{state.error}</Notice>
+        <Notice tone="error" className="mb-4 rounded-md border p-3 text-sm">
+          {state.error}
+        </Notice>
       ) : null}
       {state.result ? (
         <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs">

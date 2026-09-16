@@ -1,46 +1,55 @@
-"use client";
-import Link from "next/link";
-import Form from "next/form";
-import dynamic from "next/dynamic";
-import { interactiveContent } from "@/lib/forum-state";
-import type { PublicForumContent } from "@/lib/forum-public";
-import { ThumbsUp, MessageSquare } from "lucide-react";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import {
-  ForumImages,
-  existingDraftImages,
-  uploadDraftImages,
-} from "./images";
-import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { ClientOnly } from "@/app/components/ui/client-only";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogCancel,
-} from "@/app/components/ui/alert-dialog";
-import {
-  FORUM_PREVIEW_SIZE,
-  forumHref,
-  forumTargetHref,
-  type ForumContent,
-  type ForumDetail,
-  type ForumFloor,
-  type ForumPage,
-  type ForumTag,
-  type ForumTarget,
-  type ForumTopic,
-  type ForumViewer,
+import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type {
+  ForumContent,
+  ForumDetail,
+  ForumFloor,
+  ForumPage,
+  ForumTag,
+  ForumTarget,
+  ForumTopic,
+  ForumViewer,
 } from "@/lib/forum";
-import type { CustomEmojiDto } from "@/lib/server/db/work-community";
+import { FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
+import type { PublicForumContent } from "@/lib/forum-public";
+import { interactiveContent } from "@/lib/forum-state";
+import { MessageSquare, ThumbsUp } from "lucide-react";
+import {
+  Fragment,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import { Form, Link, useNavigate, useRevalidator } from "react-router";
+import type { ForumDialogAction, ForumMenuItem } from "./actions";
+import { ForumActionDialog, ForumMenu } from "./actions";
+import type { ForumDraft } from "./draft";
+import {
+  ForumReplyBar,
+  draftSnapshot,
+  draftValue,
+  forumReplyLauncherClass,
+} from "./draft";
+import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
 import {
   ForumAuthorName,
   ForumBody,
@@ -54,21 +63,10 @@ import {
   readForumEditVersion,
   referencedForumEmojis,
 } from "./shared";
-import {
-  ForumReplyBar,
-  forumReplyLauncherClass,
-  draftValue,
-  draftSnapshot,
-  type ForumDraft,
-} from "./draft";
-const ForumEditor = dynamic(() => import("./editor").then((module) => module.ForumEditor));
-import {
-  ForumActionDialog,
-  ForumMenu,
-  type ForumDialogAction,
-  type ForumMenuItem,
-} from "./actions";
 import { useDiscussionVisit } from "./visit";
+const ForumEditor = lazy(() =>
+  import("./editor").then((module) => ({ default: module.ForumEditor })),
+);
 
 type Props = {
   viewer: ForumViewer;
@@ -115,8 +113,12 @@ export function DiscussionWorkspace({
   returnTo,
   initialReply,
 }: Props) {
-  const router = useRouter();
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [currentEmojis, setCurrentEmojis] = useState(emojis);
+  useEffect(() => {
+    setCurrentEmojis(emojis);
+  }, [emojis]);
   const [pending, startTransition] = useTransition();
   useDiscussionVisit(initialDetail?.topic.id);
   const [detail, setDetail] = useState(initialDetail),
@@ -144,12 +146,10 @@ export function DiscussionWorkspace({
     [searchOpen, setSearchOpen] = useState(false),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
-  const locationCheckpoint = useRef<{ url: string; state: unknown } | null>(
-    null,
-  );
-  const rememberLocation = useCallback(() => {
-    locationCheckpoint.current = { url: location.href, state: history.state };
-  }, []);
+  useEffect(() => {
+    setDetail(initialDetail);
+    setUnavailable(false);
+  }, [initialDetail]);
   const [uploadProgress, setUploadProgress] = useState("");
   const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
   const listHref = forumHref("/discussions", {
@@ -166,95 +166,14 @@ export function DiscussionWorkspace({
     () => new Promise<boolean>((resolve) => setConfirm({ resolve })),
     [],
   );
-  useEffect(() => {
-    function beforeUnload(event: BeforeUnloadEvent) {
-      if (protectedRef.current.dirty || protectedRef.current.busy) {
-        event.preventDefault();
-        event.returnValue = "";
-      }
-    }
-    function click(event: MouseEvent) {
-      const link = (event.target as Element).closest?.("a");
-      if (
-        !link ||
-        link.target === "_blank" ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      if (!(protectedRef.current.dirty || protectedRef.current.busy)) return;
-      const url = new URL(link.href);
-      if (
-        url.pathname === location.pathname &&
-        url.search === location.search &&
-        url.hash
-      )
-        return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (protectedRef.current.busy) return;
-      void ask().then((ok) => {
-        if (ok) {
-          protectedRef.current.dirty = false;
-          setDraft(null);
-          if (url.origin === location.origin) router.push(url.pathname + url.search + url.hash);
-          else window.location.assign(link.href);
-        }
-      });
-    }
-    function submit(event: SubmitEvent) {
-      const form = event.target as HTMLFormElement;
-      if (
-        form.closest("[data-forum-editor]") ||
-        !(protectedRef.current.dirty || protectedRef.current.busy)
-      )
-        return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (protectedRef.current.busy) return;
-      void ask().then((ok) => {
-        if (ok) {
-          protectedRef.current.dirty = false;
-          form.requestSubmit();
-        }
-      });
-    }
-    rememberLocation();
-    function pop(event: PopStateEvent) {
-      if (!(protectedRef.current.dirty || protectedRef.current.busy)) {
-        rememberLocation();
-        router.refresh();
-        return;
-      }
-      const destination = location.href;
-      event.stopImmediatePropagation();
-      history.pushState(
-        locationCheckpoint.current?.state,
-        "",
-        locationCheckpoint.current?.url,
-      );
-      if (protectedRef.current.busy) return;
-      void ask().then((ok) => {
-        if (ok) {
-          protectedRef.current.dirty = false;
-          setDraft(null);
-          router.push(destination);
-        }
-      });
-    }
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", click, true);
-    document.addEventListener("submit", submit, true);
-    window.addEventListener("popstate", pop, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", click, true);
-      document.removeEventListener("submit", submit, true);
-      window.removeEventListener("popstate", pop, true);
-    };
-  }, [ask, router, rememberLocation]);
+  const navigateAccepted = useNavigationGuard(dirty || busy, async () => {
+    if (protectedRef.current.busy) return false;
+    if (!protectedRef.current.dirty) return true;
+    if (!(await ask())) return false;
+    protectedRef.current.dirty = false;
+    setDraft(null);
+    return true;
+  });
   useEffect(() => {
     if (!detail) return;
     const targetId = detail.comment
@@ -285,17 +204,15 @@ export function DiscussionWorkspace({
     if (initialReply) {
       const url = new URL(location.href);
       url.searchParams.delete("reply");
-      history.replaceState(
-        history.state,
-        "",
-        url.pathname + url.search + url.hash,
-      );
-      rememberLocation();
+      void navigateAccepted(url.pathname + url.search + url.hash, {
+        replace: true,
+        preventScrollReset: true,
+      });
     }
-  }, [detail, initialReply, rememberLocation]);
+  }, [detail, initialReply, navigateAccepted]);
   async function refreshDetail(removed?: ForumTarget, hidden = false) {
     if (!detail) {
-      startTransition(() => router.refresh());
+      startTransition(() => revalidator.revalidate());
       return;
     }
     try {
@@ -306,14 +223,15 @@ export function DiscussionWorkspace({
           params.delete("floor");
           params.delete("commentPage");
         }
-        history.replaceState(
-          history.state,
-          "",
+        await navigateAccepted(
           location.pathname + (params.size ? `?${params}` : ""),
+          { replace: true, preventScrollReset: true },
         );
-        rememberLocation();
       }
-      const result = await forumRequest<{ detail: ForumDetail; emojis: CustomEmojiDto[] }>(
+      const result = await forumRequest<{
+        detail: ForumDetail;
+        emojis: CustomEmojiDto[];
+      }>(
         forumHref("/api/discussions", {
           op: "detail",
           topicId: detail.topic.id,
@@ -438,11 +356,13 @@ export function DiscussionWorkspace({
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
       if (detail?.topic.id === result.topicId) {
-        history.pushState(null, "", destination.pathname + destination.search + destination.hash);
-        rememberLocation();
+        await navigateAccepted(
+          destination.pathname + destination.search + destination.hash,
+          { preventScrollReset: true },
+        );
         await refreshDetail();
       } else {
-        router.push(destination.pathname + destination.search + destination.hash);
+        navigate(destination.pathname + destination.search + destination.hash);
       }
     } catch (e) {
       setError(
@@ -610,81 +530,84 @@ export function DiscussionWorkspace({
       ]
     : [];
   const editor = draft ? (
-    <ForumEditor
-      key={draft.editorId}
-      draft={draft}
-      viewer={viewer}
-      onChange={(next) => {
-        if (draftValue(next) !== draftValue(draft))
-          next.requestKey = crypto.randomUUID();
-        setDraft(next);
-      }}
-      onBusyChange={(value) => {
-        protectedRef.current.busy = value;
-        setBusy(value);
-      }}
-      onError={setError}
-      onCancel={() => void switchDraft(null)}
-      onSubmit={() => void submitDraft()}
-      onReload={() => void reloadEditor()}
-      busy={busy}
-      error={error}
-      progress={uploadProgress}
-      loginExpired={requestError?.status === 401}
-      conflict={!!draft.target && requestError?.code === "forum_conflict"}
-      emojis={currentEmojis}
-    />
+    <ClientOnly>
+      <ForumEditor
+        key={draft.editorId}
+        draft={draft}
+        viewer={viewer}
+        onChange={(next) => {
+          if (draftValue(next) !== draftValue(draft))
+            next.requestKey = crypto.randomUUID();
+          setDraft(next);
+        }}
+        onBusyChange={(value) => {
+          protectedRef.current.busy = value;
+          setBusy(value);
+        }}
+        onError={setError}
+        onCancel={() => void switchDraft(null)}
+        onSubmit={() => void submitDraft()}
+        onReload={() => void reloadEditor()}
+        busy={busy}
+        error={error}
+        progress={uploadProgress}
+        loginExpired={requestError?.status === 401}
+        conflict={!!draft.target && requestError?.code === "forum_conflict"}
+        emojis={currentEmojis}
+      />
+    </ClientOnly>
   ) : null;
-  const replyBar = detail && !unavailable && draft?.mode !== "topic" ? (
-    draft?.mode === "post" ? (
-      editor
-    ) : (
-      <ForumReplyBar viewer={viewer}>
-        {detail.topic.locked ? (
-          <p className="py-2 text-sm text-muted">
-            主题已锁定，不能继续回复。
-          </p>
-        ) : viewer ? (
-          <Button
-            variant="ghost"
-            className={forumReplyLauncherClass}
-            onClick={() => newDraft("post")}
-            type="button"
-            disabled={busy || !detail.topic.capabilities.reply}
-          >
-            {detail.topic.capabilities.reply
-              ? "回复主题……"
-              : "当前主题不可回复"}
-          </Button>
-        ) : (
-          <Link
-            className={forumReplyLauncherClass}
-            href={`/login?next=${encodeURIComponent(
-              forumHref(`/discussions/${detail.topic.id}`, {
-                page: detail.posts.page,
-                floor: detail.floor,
-                commentPage: detail.posts.items.find(
-                  (post) => post.postNumber === detail.floor,
-                )?.comments.page,
-                comment: detail.comment,
-                from: returnTo,
-                reply: "topic",
-              }),
-            )}`}
-          >
-            登录后发表回复
-          </Link>
-        )}
-      </ForumReplyBar>
-    )
-  ) : null;
+  const replyBar =
+    detail && !unavailable && draft?.mode !== "topic" ? (
+      draft?.mode === "post" ? (
+        editor
+      ) : (
+        <ForumReplyBar viewer={viewer}>
+          {detail.topic.locked ? (
+            <p className="py-2 text-sm text-muted">
+              主题已锁定，不能继续回复。
+            </p>
+          ) : viewer ? (
+            <Button
+              variant="ghost"
+              className={forumReplyLauncherClass}
+              onClick={() => newDraft("post")}
+              type="button"
+              disabled={busy || !detail.topic.capabilities.reply}
+            >
+              {detail.topic.capabilities.reply
+                ? "回复主题……"
+                : "当前主题不可回复"}
+            </Button>
+          ) : (
+            <Link
+              className={forumReplyLauncherClass}
+              to={`/login?next=${encodeURIComponent(
+                forumHref(`/discussions/${detail.topic.id}`, {
+                  page: detail.posts.page,
+                  floor: detail.floor,
+                  commentPage: detail.posts.items.find(
+                    (post) => post.postNumber === detail.floor,
+                  )?.comments.page,
+                  comment: detail.comment,
+                  from: returnTo,
+                  reply: "topic",
+                }),
+              )}`}
+            >
+              登录后发表回复
+            </Link>
+          )}
+        </ForumReplyBar>
+      )
+    ) : null;
   async function listNavigate(nextFeatured: boolean, tags: ForumTag[]) {
     if (busy) return;
     if (dirty && !(await ask())) return;
     protectedRef.current.dirty = false;
     setDraft(null);
     startTransition(() =>
-      router.push(
+      navigate(
         forumHref("/discussions", {
           view: nextFeatured ? "featured" : null,
           tag: tags.map((t) => t.id).sort((a, b) => a - b),
@@ -695,18 +618,22 @@ export function DiscussionWorkspace({
   const Container = detail || unavailable ? "main" : PageContainer;
   return (
     <Container
-      className={detail || unavailable ? "mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]" : undefined}
+      className={
+        detail || unavailable
+          ? "mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]"
+          : undefined
+      }
     >
       {unavailable ? (
         <>
           <PageHeader compact title="内容不可用" />
-          <Link href={returnTo ?? "/discussions"}>返回讨论版</Link>
+          <Link to={returnTo ?? "/discussions"}>返回讨论版</Link>
         </>
       ) : detail ? (
         <>
           <Link
             className="mb-4 inline-block text-sm text-primary"
-            href={returnTo ?? "/discussions"}
+            to={returnTo ?? "/discussions"}
           >
             ← 返回讨论版
           </Link>
@@ -733,17 +660,21 @@ export function DiscussionWorkspace({
             {detail.posts.items.map((post, index) => (
               <Fragment key={post.id}>
                 <ForumFloorView
-                  key={`${post.id}-${detail.topic.revision}`}
+                  key={post.id}
                   post={post}
                   topic={detail.topic}
                   emojis={currentEmojis}
                   viewer={viewer}
                   page={detail.posts.page}
                   returnTo={returnTo}
-                  onLocationChange={rememberLocation}
+                  onLocationChange={(href, replace) => {
+                    void navigate(href, { replace, preventScrollReset: true });
+                  }}
                   initialExpanded={detail.floor === post.postNumber}
                   menu={menu}
-                  onReply={(parent, reply) => newDraft("comment", parent, reply)}
+                  onReply={(parent, reply) =>
+                    newDraft("comment", parent, reply)
+                  }
                   editor={
                     draft?.mode === "comment" && draft.postId === post.id
                       ? editor
@@ -773,7 +704,7 @@ export function DiscussionWorkspace({
                   key={String(value)}
                   className={`rounded-md px-3 py-2 ${featured === value ? "bg-primary/10 font-bold text-primary" : ""}`}
                   aria-current={featured === value ? "page" : undefined}
-                  href={forumHref("/discussions", {
+                  to={forumHref("/discussions", {
                     view: value ? "featured" : null,
                     tag: selected.map((t) => t.id),
                   })}
@@ -786,7 +717,12 @@ export function DiscussionWorkspace({
             <PopularTagFilter
               popular={popular}
               selected={selected}
-              hrefForTags={(tags) => forumHref("/discussions", { view: featured ? "featured" : null, tag: tags.map((tag) => tag.id).sort((a, b) => a - b) })}
+              hrefForTags={(tags) =>
+                forumHref("/discussions", {
+                  view: featured ? "featured" : null,
+                  tag: tags.map((tag) => tag.id).sort((a, b) => a - b),
+                })
+              }
               onChange={(tags) => listNavigate(featured, tags)}
               disabled={pending}
             />
@@ -828,7 +764,7 @@ export function DiscussionWorkspace({
                       发布主题
                     </Button>
                   ) : (
-                    <Link href="/login?next=%2Fdiscussions">登录后发布</Link>
+                    <Link to="/login?next=%2Fdiscussions">登录后发布</Link>
                   )}
                 </>
               }
@@ -851,7 +787,12 @@ export function DiscussionWorkspace({
               <PopularTagFilter
                 popular={popular}
                 selected={selected}
-                hrefForTags={(tags) => forumHref("/discussions", { view: featured ? "featured" : null, tag: tags.map((tag) => tag.id).sort((a, b) => a - b) })}
+                hrefForTags={(tags) =>
+                  forumHref("/discussions", {
+                    view: featured ? "featured" : null,
+                    tag: tags.map((tag) => tag.id).sort((a, b) => a - b),
+                  })
+                }
                 onChange={(tags) => listNavigate(featured, tags)}
                 disabled={pending}
               />
@@ -901,7 +842,7 @@ export function DiscussionWorkspace({
                       ) : null}
                       <Link
                         className="line-clamp-2 break-words font-bold text-foreground hover:text-primary"
-                        href={forumHref(`/discussions/${item.id}`, {
+                        to={forumHref(`/discussions/${item.id}`, {
                           from: listHref === "/discussions" ? null : listHref,
                         })}
                       >
@@ -1062,7 +1003,7 @@ function ForumFloorView({
   menu: (content: ForumContent) => ForumMenuItem[];
   onReply: (parent: ForumContent, reply?: ForumContent) => void;
   editor: React.ReactNode;
-  onLocationChange: () => void;
+  onLocationChange: (href: string, replace?: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(initialExpanded),
     [commentEmojis, setCommentEmojis] = useState(emojis),
@@ -1073,23 +1014,38 @@ function ForumFloorView({
     [liked, setLiked] = useState(post.liked),
     [likes, setLikes] = useState(post.likes),
     [liking, setLiking] = useState(false);
+  useEffect(() => {
+    setComments(post.comments);
+    setPreview(post.commentPreview);
+    setLiked(post.liked);
+    setLikes(post.likes);
+    setCommentEmojis(emojis);
+    if (initialExpanded) setExpanded(true);
+  }, [post, emojis, initialExpanded]);
   async function load(page: number) {
     setLoading(true);
     setError("");
     try {
-      const result = await forumRequest<{ comments: ForumPage<PublicForumContent> }>(
+      const result = await forumRequest<{
+        comments: ForumPage<PublicForumContent>;
+      }>(
         forumHref("/api/discussions", {
           op: "comments",
           postId: post.id,
           page,
         }),
       );
-      const mapped = { ...result.comments, items: result.comments.items.map((item) => {
-        const content = interactiveContent(item, topic, viewer);
-        content.capabilities.reply &&= post.state === "published";
-        return content;
-      }) };
-      setCommentEmojis(await referencedForumEmojis(mapped.items.map((item) => item.body)));
+      const mapped = {
+        ...result.comments,
+        items: result.comments.items.map((item) => {
+          const content = interactiveContent(item, topic, viewer);
+          content.capabilities.reply &&= post.state === "published";
+          return content;
+        }),
+      };
+      setCommentEmojis(
+        await referencedForumEmojis(mapped.items.map((item) => item.body)),
+      );
       setComments(mapped);
       if (result.comments.page === 1)
         setPreview(mapped.items.slice(0, FORUM_PREVIEW_SIZE));
@@ -1099,8 +1055,7 @@ function ForumFloorView({
       params.delete("comment");
       if (result.comments.page === 1) params.delete("commentPage");
       else params.set("commentPage", String(result.comments.page));
-      history.pushState(null, "", `${location.pathname}?${params}`);
-      onLocationChange();
+      onLocationChange(`${location.pathname}?${params}`);
       setTimeout(
         () =>
           document
@@ -1178,7 +1133,7 @@ function ForumFloorView({
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted">
           <span className="flex flex-wrap items-center gap-1">
             <Link
-              href={forumTargetHref(
+              to={forumTargetHref(
                 { kind: "post", id: post.id },
                 topic.id,
                 post.postNumber,
@@ -1230,7 +1185,7 @@ function ForumFloorView({
             {!viewer && post.body !== null && !topic.locked ? (
               <Link
                 className="p-2 text-sm text-primary"
-                href={`/login?next=${encodeURIComponent(
+                to={`/login?next=${encodeURIComponent(
                   forumHref(`/discussions/${topic.id}`, {
                     page,
                     floor: post.postNumber,
@@ -1275,7 +1230,11 @@ function ForumFloorView({
                         </>
                       ) : null}
                       ：
-                      <ForumBody body={comment.body!} emojis={commentEmojis} inline />
+                      <ForumBody
+                        body={comment.body!}
+                        emojis={commentEmojis}
+                        inline
+                      />
                     </>
                   ) : (
                     <span className="text-muted">
@@ -1323,12 +1282,10 @@ function ForumFloorView({
                       p.delete("floor");
                       p.delete("commentPage");
                       p.delete("comment");
-                      history.replaceState(
-                        null,
-                        "",
+                      onLocationChange(
                         location.pathname + (p.size ? `?${p}` : ""),
+                        true,
                       );
-                      onLocationChange();
                     }
                   } else void load(comments.page);
                 }}

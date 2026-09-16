@@ -1,20 +1,29 @@
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { forumViewer, resolveTags } from "@/lib/server/forum/queries";
-import { publicTopicList } from "@/lib/server/forum/public-queries";
-import { getForumRequestRuntime } from "@/lib/server/forum/next";
-import { forumTagHeat } from "@/lib/server/forum/tag-heat";
-import { interactiveTopic } from "@/lib/forum-state";
-import { HttpError } from "@/lib/server/http/json";
-import { DiscussionWorkspace } from "./workspace";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { getForumRequestRuntime } from "@/app/.server/forum/context";
+import { publicTopicList } from "@/app/.server/forum/public-queries";
+import { forumViewer, resolveTags } from "@/app/.server/forum/queries";
+import { forumTagHeat } from "@/app/.server/forum/tag-heat";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { forumPage } from "@/lib/forum";
+import { interactiveTopic } from "@/lib/forum-state";
+import { HttpError } from "@/lib/http";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
+import { DiscussionWorkspace } from "./workspace";
 
-export default async function DiscussionsPage({ searchParams }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const params = await searchParams;
-  const ctx = getForumRequestRuntime();
-  const viewer = forumViewer(await getCurrentUserFromCookies());
-  const rawTags = params.tag ? Array.isArray(params.tag) ? params.tag : [params.tag] : [];
+  const ctx = getForumRequestRuntime(runtime);
+  const viewer = forumViewer(await getCurrentUser(runtime));
+  const rawTags = params.tag
+    ? Array.isArray(params.tag)
+      ? params.tag
+      : [params.tag]
+    : [];
   const featured = params.view === "featured";
   const page = forumPage(params.page);
   let selected: Awaited<ReturnType<typeof resolveTags>> = [];
@@ -22,12 +31,38 @@ export default async function DiscussionsPage({ searchParams }: {
   let filterError;
   try {
     selected = await resolveTags(ctx, rawTags);
-    const result = await publicTopicList(ctx, { tags: selected.map((tag) => tag.id), featured, page });
-    topics = { ...result, items: result.items.map((topic) => interactiveTopic(topic, viewer)) };
+    const result = await publicTopicList(ctx, {
+      tags: selected.map((tag) => tag.id),
+      featured,
+      page,
+    });
+    topics = {
+      ...result,
+      items: result.items.map((topic) => interactiveTopic(topic, viewer)),
+    };
   } catch (error) {
     if (!(error instanceof HttpError) || error.status !== 400) throw error;
     filterError = error.message;
   }
-  return <DiscussionWorkspace viewer={viewer} emojis={[]} topics={topics}
-    selected={selected} popular={(await forumTagHeat(ctx)).tags} featured={featured} filterError={filterError} />;
+  const renderData0 = await forumTagHeat(ctx);
+
+  return { viewer, featured, selected, topics, filterError, renderData0 };
 }
+
+export default function DiscussionsPage() {
+  const { viewer, featured, selected, topics, filterError, renderData0 } =
+    useLoaderData<typeof loader>();
+  return (
+    <DiscussionWorkspace
+      viewer={viewer}
+      emojis={[]}
+      topics={topics}
+      selected={selected}
+      popular={renderData0.tags}
+      featured={featured}
+      filterError={filterError}
+    />
+  );
+}
+
+export { default as ErrorBoundary } from "@/app/discussions/error";

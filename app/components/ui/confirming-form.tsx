@@ -1,6 +1,3 @@
-"use client";
-
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,12 +8,15 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
-import {
-  apiConfirmationFromError,
-  requestJson,
-  type ApiConfirmation,
-  type ApiResponsePayload,
+import type {
+  ApiConfirmation,
+  ApiResponsePayload,
 } from "@/lib/ui/api-response";
+import { apiConfirmationFromError, requestJson } from "@/lib/ui/api-response";
+import type { FormEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
+
+import { useNavigate, useRevalidator } from "react-router";
 
 type ConfirmingFormProps = {
   action: string;
@@ -43,12 +43,15 @@ export function ConfirmingForm({
   title,
   description,
 }: ConfirmingFormProps) {
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const formRef = useRef<HTMLFormElement>(null);
   const submitterRef = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [retryConfirmation, setRetryConfirmation] = useState<ApiConfirmation | null>(null);
+  const [retryConfirmation, setRetryConfirmation] =
+    useState<ApiConfirmation | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -75,14 +78,29 @@ export function ConfirmingForm({
     setRetryConfirmation(null);
     try {
       const formData = new FormData(form);
-      if (confirmation) formData.set(confirmation.fieldName, confirmation.fieldValue);
+      if (confirmation)
+        formData.set(confirmation.fieldName, confirmation.fieldValue);
       const request = formRequest(form, formData);
-      const payload = await requestJson<ApiResponsePayload>(request.url, request.init, errorTitle);
-      const target = new URL(payload.redirectTo ?? window.location.href, window.location.href);
+      const payload = await requestJson<ApiResponsePayload>(
+        request.url,
+        request.init,
+        errorTitle,
+      );
+      const target = new URL(
+        payload.redirectTo ?? window.location.href,
+        window.location.href,
+      );
       if (target.origin !== window.location.origin) {
-        throw new Error(`${errorTitle}：服务器返回了不安全的跳转地址，请刷新页面后重试。`);
+        throw new Error(
+          `${errorTitle}：服务器返回了不安全的跳转地址，请刷新页面后重试。`,
+        );
       }
-      window.location.assign(target.href);
+      setOpen(false);
+      setRetryConfirmation(null);
+      if (target.href === window.location.href) await revalidator.revalidate();
+      else await navigate(target.pathname + target.search + target.hash);
+      submittingRef.current = false;
+      setSubmitting(false);
     } catch (error) {
       submittingRef.current = false;
       setSubmitting(false);
@@ -92,7 +110,9 @@ export function ConfirmingForm({
         setRetryConfirmation(nextConfirmation);
         return;
       }
-      setErrorMessage(error instanceof Error ? error.message : `${errorTitle}，请稍后重试。`);
+      setErrorMessage(
+        error instanceof Error ? error.message : `${errorTitle}，请稍后重试。`,
+      );
     }
   }
 
@@ -124,7 +144,11 @@ export function ConfirmingForm({
               <Button variant="outline">取消</Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
-              <Button disabled={submitting} onClick={() => void submit(formRef.current)} variant="destructive">
+              <Button
+                disabled={submitting}
+                onClick={() => void submit(formRef.current)}
+                variant="destructive"
+              >
                 {submitting ? "提交中…" : "确认继续"}
               </Button>
             </AlertDialogAction>
@@ -144,7 +168,9 @@ export function ConfirmingForm({
           }}
         >
           <AlertDialogTitle>{retryConfirmation?.title}</AlertDialogTitle>
-          <AlertDialogDescription>{retryConfirmation?.description}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {retryConfirmation?.description}
+          </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button variant="outline">取消</Button>
@@ -186,7 +212,10 @@ export function ConfirmingForm({
   );
 }
 
-function formRequest(form: HTMLFormElement, formData: FormData): {
+function formRequest(
+  form: HTMLFormElement,
+  formData: FormData,
+): {
   url: string;
   init: RequestInit;
 } {

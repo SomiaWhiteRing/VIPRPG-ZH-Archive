@@ -1,32 +1,26 @@
-"use client";
-import Image from "next/image";
-import Link from "next/link";
-import {
-  Fragment,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type KeyboardEventHandler,
-} from "react";
-import * as Dialog from "@/app/components/ui/dialog";
-import { Button } from "@/app/components/ui/button";
-import { Label } from "@/app/components/ui/label";
-import { Badge } from "@/app/components/ui/badge";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
+import { Badge } from "@/app/components/ui/badge";
+import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
+import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type {
+  ForumAuthor,
+  ForumEditVersion,
+  ForumTag,
+  ForumTarget,
+  ForumTopic,
+} from "@/lib/forum";
 import {
   FORUM_TAG_LIMIT,
   forumHref,
   forumTagError,
   normalizeForumTag,
-  type ForumAuthor,
-  type ForumEditVersion,
-  type ForumTag,
-  type ForumTarget,
-  type ForumTopic,
 } from "@/lib/forum";
-import type { CustomEmojiDto } from "@/lib/server/db/work-community";
 import { forumSearchMatches } from "@/lib/forum-search";
+import type { KeyboardEventHandler, ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 
 export class ForumRequestError extends Error {
   constructor(
@@ -79,11 +73,29 @@ export function readForumEditVersion(target: ForumTarget) {
     forumHref("/api/discussions", { op: "edit", ...target }),
   );
 }
-export async function referencedForumEmojis(bodies:(string|null)[],signal?:AbortSignal) {
-  const codes=[...new Set(bodies.flatMap((body)=>[...(body??"").matchAll(/:([A-Za-z0-9_+\-]{1,64}):/g)].map((m)=>m[1])))];
-  const emojis:CustomEmojiDto[]=[];
-  for(let start=0;start<codes.length;start+=100){
-    const data=await forumRequest<{emojis:CustomEmojiDto[]}>(forumHref("/api/discussions",{op:"emojis",shortcode:codes.slice(start,start+100)}),undefined,signal);
+export async function referencedForumEmojis(
+  bodies: (string | null)[],
+  signal?: AbortSignal,
+) {
+  const codes = [
+    ...new Set(
+      bodies.flatMap((body) =>
+        [...(body ?? "").matchAll(/:([A-Za-z0-9_+-]{1,64}):/g)].map(
+          (m) => m[1],
+        ),
+      ),
+    ),
+  ];
+  const emojis: CustomEmojiDto[] = [];
+  for (let start = 0; start < codes.length; start += 100) {
+    const data = await forumRequest<{ emojis: CustomEmojiDto[] }>(
+      forumHref("/api/discussions", {
+        op: "emojis",
+        shortcode: codes.slice(start, start + 100),
+      }),
+      undefined,
+      signal,
+    );
     emojis.push(...data.emojis);
   }
   return emojis;
@@ -96,9 +108,10 @@ export function ForumAuthorName({
   query?: string;
 }) {
   return author.profile ? (
-    <Link prefetch={false}
+    <Link
+      prefetch="none"
       className="break-all text-primary hover:underline"
-      href={`/users/${author.id}`}
+      to={`/users/${author.id}`}
     >
       <Highlight text={author.name} query={query} />
     </Link>
@@ -116,9 +129,10 @@ export function DiscussionTagLink({
   query?: string;
 }) {
   return (
-    <Link prefetch={false}
+    <Link
+      prefetch="none"
       className="break-words text-primary hover:bg-primary/5 hover:underline focus-visible:ring-2 focus-visible:ring-primary"
-      href={forumHref("/discussions", { tag: tag.id })}
+      to={forumHref("/discussions", { tag: tag.id })}
     >
       [<Highlight text={tag.name} query={query} />]
     </Link>
@@ -153,7 +167,11 @@ export function TopicStatus({
     </div>
   );
 }
-const forumDateFormatter=new Intl.DateTimeFormat("zh-CN",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Hong_Kong"});
+const forumDateFormatter = new Intl.DateTimeFormat("zh-CN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Hong_Kong",
+});
 export function ForumTime({
   value,
   relative = false,
@@ -198,17 +216,21 @@ export function Highlight({ text, query }: { text: string; query: string }) {
   for (const match of forumSearchMatches(text, query)) {
     if (match.end <= cursor) continue;
     const start = Math.max(cursor, match.start);
-    parts.push(text.slice(cursor, start), (
-      <mark key={`${start}-${match.end}`} className="bg-accent/20 text-foreground">
+    parts.push(
+      text.slice(cursor, start),
+      <mark
+        key={`${start}-${match.end}`}
+        className="bg-accent/20 text-foreground"
+      >
         {text.slice(start, match.end)}
-      </mark>
-    ));
+      </mark>,
+    );
     cursor = match.end;
   }
   parts.push(text.slice(cursor));
   return <>{parts}</>;
 }
-const emojiMaps=new WeakMap<CustomEmojiDto[],Map<string,CustomEmojiDto>>();
+const emojiMaps = new WeakMap<CustomEmojiDto[], Map<string, CustomEmojiDto>>();
 export function ForumBody({
   body,
   emojis,
@@ -218,27 +240,28 @@ export function ForumBody({
   emojis: CustomEmojiDto[];
   inline?: boolean;
 }) {
-  let emojiMap=emojiMaps.get(emojis);
-  if(!emojiMap){emojiMap=new Map(emojis.map((e)=>[`:${e.shortcode}:`,e]));emojiMaps.set(emojis,emojiMap);}
-  const segments = body.split(/(https?:\/\/[^\s<>]+|:[A-Za-z0-9_+\-]{1,64}:)/g);
+  let emojiMap = emojiMaps.get(emojis);
+  if (!emojiMap) {
+    emojiMap = new Map(emojis.map((e) => [`:${e.shortcode}:`, e]));
+    emojiMaps.set(emojis, emojiMap);
+  }
+  const segments = body.split(/(https?:\/\/[^\s<>]+|:[A-Za-z0-9_+-]{1,64}:)/g);
   return (
     <span
       className={`${inline ? "text-sm" : "block max-w-[76ch] text-base"} whitespace-pre-wrap break-words leading-[1.7] [overflow-wrap:anywhere]`}
     >
       {segments.map((part, index) => {
-        const emoji = part.startsWith(":")
-          ? emojiMap.get(part)
-          : null;
+        const emoji = part.startsWith(":") ? emojiMap.get(part) : null;
         if (emoji)
           return (
-            <Image
+            <img
               alt={`:${emoji.shortcode}:`}
               className="mx-0.5 inline-block size-6 align-text-bottom"
               height={24}
               width={24}
               src={emoji.imageUrl}
-              unoptimized
               key={index}
+              loading="lazy"
             />
           );
         if (/^https?:\/\//.test(part)) {
@@ -348,25 +371,34 @@ export function ForumTagEditor({
   id: string;
 }) {
   const [query, setQuery] = useState("");
-  const [submitted,setSubmitted]=useState("");
-  const [cursor,setCursor]=useState<string|null>(null);
+  const [submitted, setSubmitted] = useState("");
+  const [cursor, setCursor] = useState<string | null>(null);
   useEffect(() => {
-    const timer = setTimeout(() => { setSubmitted(query); setCursor(null); }, 250);
+    const timer = setTimeout(() => {
+      setSubmitted(query);
+      setCursor(null);
+    }, 250);
     return () => clearTimeout(timer);
   }, [query]);
-  const [nextCursor,setNextCursor]=useState<string|null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [tags, setTags] = useState<ForumTag[]>([]);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void forumRequest<{ tags: ForumTag[];nextCursor:string|null }>(
-      forumHref("/api/discussions", { op: "tags", mode: "suggest", q: submitted, cursor }),
+    void forumRequest<{ tags: ForumTag[]; nextCursor: string | null }>(
+      forumHref("/api/discussions", {
+        op: "tags",
+        mode: "suggest",
+        q: submitted,
+        cursor,
+      }),
       undefined,
       controller.signal,
     )
       .then((result) => {
-        setTags((old)=>cursor?[...old,...result.tags]:result.tags);setNextCursor(result.nextCursor);
+        setTags((old) => (cursor ? [...old, ...result.tags] : result.tags));
+        setNextCursor(result.nextCursor);
         setError("");
       })
       .catch((e) => {
@@ -381,11 +413,12 @@ export function ForumTagEditor({
         id={id}
         values={values}
         onChange={onChange}
-        suggestions={tags.filter((t)=>t.name.toLowerCase().includes(query.toLowerCase())).map((t) => ({
-          value: t.name,
-          meta: "",
-
-        }))}
+        suggestions={tags
+          .filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
+          .map((t) => ({
+            value: t.name,
+            meta: "",
+          }))}
         placeholder="选择或创建 TAG"
         disabled={disabled}
         maxValues={5}
@@ -395,7 +428,16 @@ export function ForumTagEditor({
         sortable
         showRecommendations={false}
       />
-{nextCursor ? <Button type="button" variant="ghost" size="sm" onClick={() => setCursor(nextCursor)}>加载更多</Button> : null}
+      {nextCursor ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setCursor(nextCursor)}
+        >
+          加载更多
+        </Button>
+      ) : null}
       {error ? (
         <p className="text-sm text-destructive" role="status">
           {error}
@@ -426,39 +468,44 @@ export function PopularTagFilter({
   disabled?: boolean;
 }) {
   return (
-    <div role="group" aria-label="常用 TAG" className="flex min-w-0 gap-2 overflow-x-auto py-1 lg:grid lg:overflow-visible lg:py-0">
+    <div
+      role="group"
+      aria-label="常用 TAG"
+      className="flex min-w-0 gap-2 overflow-x-auto py-1 lg:grid lg:overflow-visible lg:py-0"
+    >
       {popular.map((tag) => {
         const active = selected.some((item) => item.id === tag.id);
         const nextTags = active
           ? selected.filter((item) => item.id !== tag.id)
           : [...selected, tag];
-        const unavailable = disabled || (!active && selected.length >= FORUM_TAG_LIMIT);
+        const unavailable =
+          disabled || (!active && selected.length >= FORUM_TAG_LIMIT);
         return (
           <Fragment key={tag.id}>
-          <Link
-            className="hidden text-sm text-primary hover:underline lg:block"
-            href={hrefForTags(unavailable ? selected : nextTags)}
-            aria-current={active ? "true" : undefined}
-            aria-disabled={unavailable || undefined}
-            onNavigate={(event) => {
-              event.preventDefault();
-              if (!unavailable) onChange(nextTags);
-            }}
-          >
-            {tag.name}
-          </Link>
-          <Button
-            type="button"
-            size="sm"
-            variant={active ? "default" : "outline"}
-            className="shrink-0 lg:hidden"
-            aria-pressed={active}
-            disabled={unavailable}
-            onClick={() => onChange(nextTags)}
-          >
-            {active ? <span aria-hidden="true">✓</span> : null}
-            {tag.name}
-          </Button>
+            <Link
+              className="hidden text-sm text-primary hover:underline lg:block"
+              to={hrefForTags(unavailable ? selected : nextTags)}
+              aria-current={active ? "true" : undefined}
+              aria-disabled={unavailable || undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!unavailable) onChange(nextTags);
+              }}
+            >
+              {tag.name}
+            </Link>
+            <Button
+              type="button"
+              size="sm"
+              variant={active ? "default" : "outline"}
+              className="shrink-0 lg:hidden"
+              aria-pressed={active}
+              disabled={unavailable}
+              onClick={() => onChange(nextTags)}
+            >
+              {active ? <span aria-hidden="true">✓</span> : null}
+              {tag.name}
+            </Button>
           </Fragment>
         );
       })}

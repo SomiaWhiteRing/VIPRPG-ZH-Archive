@@ -1,22 +1,14 @@
-"use client";
-
-import { EmptyState } from "@/app/components/ui/empty-state";
-import Image from "next/image";
-import Cropper, { type Area } from "react-easy-crop";
-import * as Dialog from "@/app/components/ui/dialog";
-import { Slider } from "radix-ui";
-import { ImagePlus, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from "react";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/ui/cn";
+import { ImagePlus, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
+import { Slider } from "radix-ui";
+import type { ChangeEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { Area } from "react-easy-crop";
+import Cropper from "react-easy-crop";
 
 const COVER_ASPECT = 4 / 3;
 const WHEEL_ZOOM_STEP = 0.2;
@@ -65,7 +57,8 @@ export function CoverPicker({
   const suppliedCandidates = providedCandidates ?? EMPTY_CANDIDATES;
   const fileUrl = useFileUrl(file);
   const candidateFileUrls = useFileUrls(files);
-  const [uploadedSource, setUploadedSource] = useState<CoverPickerCandidate | null>(null);
+  const [uploadedSource, setUploadedSource] =
+    useState<CoverPickerCandidate | null>(null);
   const [open, setOpen] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -121,9 +114,13 @@ export function CoverPicker({
   ]);
 
   const activeCandidate =
-    candidates.find((candidate) => candidate.key === activeKey) ?? candidates[0] ?? null;
+    candidates.find((candidate) => candidate.key === activeKey) ??
+    candidates[0] ??
+    null;
   const triggerSrc =
-    fileUrl || currentImageSrc || (blobSha256s[0] ? "/api/media/blobs/" + blobSha256s[0] : null);
+    fileUrl ||
+    currentImageSrc ||
+    (blobSha256s[0] ? "/api/media/blobs/" + blobSha256s[0] : null);
 
   useEffect(
     () => () => {
@@ -151,7 +148,8 @@ export function CoverPicker({
     if (event.deltaY === 0) return false;
     setZoom((current) => {
       const snapped = Math.round(current / WHEEL_ZOOM_STEP) * WHEEL_ZOOM_STEP;
-      const next = snapped + (event.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP);
+      const next =
+        snapped + (event.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP);
       return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(1))));
     });
     return false;
@@ -195,13 +193,13 @@ export function CoverPicker({
       const originalFile = activeCandidate.originalFile;
       const cover =
         originalFile && zoom === MIN_ZOOM && crop.x === 0 && crop.y === 0
-        ? originalFile
-        : await cropCoverToFile(
-            activeCandidate.src,
-            activeCandidate.label,
-            activeCandidate.fileType,
-            area,
-          );
+          ? originalFile
+          : await cropCoverToFile(
+              activeCandidate.src,
+              activeCandidate.label,
+              activeCandidate.fileType,
+              area,
+            );
       onChange(cover);
       setOpen(false);
     } catch (error) {
@@ -240,13 +238,12 @@ export function CoverPicker({
             variant="ghost"
           >
             {triggerSrc ? (
-              <Image
+              <img
                 alt={file?.name ?? "当前封面"}
-                className="object-cover"
-                fill
+                className={"absolute inset-0 h-full w-full " + "object-cover"}
                 sizes="(max-width: 1024px) 100vw, 300px"
                 src={triggerSrc}
-                unoptimized
+                loading="lazy"
               />
             ) : (
               <span className="grid justify-items-center gap-1.5 text-xs font-semibold">
@@ -284,7 +281,9 @@ export function CoverPicker({
               <aside className="order-2 flex min-h-0 flex-col border-t border-border bg-background/55 md:order-1 md:border-r md:border-t-0">
                 <div className="flex items-baseline justify-between px-3 py-2.5">
                   <strong className="text-sm">候选封面</strong>
-                  <span className="text-xs text-muted">{candidates.length} 张</span>
+                  <span className="text-xs text-muted">
+                    {candidates.length} 张
+                  </span>
                 </div>
                 {candidates.length ? (
                   <div className="flex gap-2 overflow-x-auto px-3 pb-3 md:grid md:flex-1 md:grid-cols-2 md:content-start md:overflow-x-hidden md:overflow-y-auto md:pt-0">
@@ -304,19 +303,24 @@ export function CoverPicker({
                         type="button"
                         variant="ghost"
                       >
-                        <Image
+                        <img
                           alt=""
-                          className="object-cover"
-                          fill
+                          className={
+                            "absolute inset-0 h-full w-full " + "object-cover"
+                          }
                           sizes="(max-width: 767px) 80px, 150px"
                           src={candidate.src}
-                          unoptimized
+                          loading="lazy"
                         />
                       </Button>
                     ))}
                   </div>
                 ) : (
-                  <EmptyState title="暂无候选图" variant="plain" className="px-3 pb-3 text-xs" />
+                  <EmptyState
+                    title="暂无候选图"
+                    variant="plain"
+                    className="px-3 pb-3 text-xs"
+                  />
                 )}
               </aside>
 
@@ -361,7 +365,9 @@ export function CoverPicker({
                       <div className="grid justify-items-center gap-2">
                         <ImagePlus className="size-8 text-primary" />
                         <div>
-                          <strong className="block text-sm">还没有封面图片</strong>
+                          <strong className="block text-sm">
+                            还没有封面图片
+                          </strong>
                           <span className="mt-1 block text-xs text-muted">
                             上传一张图片开始裁剪
                           </span>
@@ -397,7 +403,10 @@ export function CoverPicker({
                       <Slider.Track className="relative h-1 grow rounded-full bg-muted/30">
                         <Slider.Range className="absolute h-full rounded-full bg-primary" />
                       </Slider.Track>
-                      <Slider.Thumb aria-label="缩放封面" className="block size-4 cursor-grab rounded-full border border-primary bg-card shadow-sm active:cursor-grabbing data-[disabled]:cursor-not-allowed" />
+                      <Slider.Thumb
+                        aria-label="缩放封面"
+                        className="block size-4 cursor-grab rounded-full border border-primary bg-card shadow-sm active:cursor-grabbing data-[disabled]:cursor-not-allowed"
+                      />
                     </Slider.Root>
                     <span className="w-9 text-right text-muted">
                       {Math.round(zoom * 100)}%
@@ -498,7 +507,9 @@ export function PreviewPicker({
         <ImagePlus className="size-6 shrink-0 text-primary" />
         <span>
           <strong className="block text-sm">上传预览图</strong>
-          <span className="mt-0.5 block text-xs font-normal text-muted">{status}</span>
+          <span className="mt-0.5 block text-xs font-normal text-muted">
+            {status}
+          </span>
         </span>
       </Label>
       <input
@@ -518,7 +529,9 @@ export function PreviewPicker({
 }
 
 function useFileUrl(file: File | null): string | null {
-  const [preview, setPreview] = useState<{ file: File; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ file: File; url: string } | null>(
+    null,
+  );
   useEffect(() => {
     if (!file) return;
     const reader = new FileReader();
@@ -546,7 +559,10 @@ function useFileUrls(files: File[]): { file: File; url: string }[] {
         if (typeof reader.result === "string") {
           next[index] = { file: files[index], url: reader.result };
         }
-        if (completed === files.length && next.every((entry) => entry !== null)) {
+        if (
+          completed === files.length &&
+          next.every((entry) => entry !== null)
+        ) {
           setPreviews(next);
         }
       });
@@ -620,7 +636,11 @@ async function renderCroppedCover(
       ? sourceType
       : "image/png";
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, outputType, outputType === "image/png" ? undefined : 0.92),
+    canvas.toBlob(
+      resolve,
+      outputType,
+      outputType === "image/png" ? undefined : 0.92,
+    ),
   );
   if (!blob) {
     throw new Error("无法导出裁剪后的封面，请更换图片后重试。");
@@ -633,7 +653,10 @@ async function renderCroppedCover(
         ? "webp"
         : "png";
   const baseName =
-    sourceName.replace(/\.[^.]+$/, "").replace(/-cover$/, "").trim() || "cover";
+    sourceName
+      .replace(/\.[^.]+$/, "")
+      .replace(/-cover$/, "")
+      .trim() || "cover";
   return new File([blob], baseName + "-cover." + extension, {
     lastModified: Date.now(),
     type: outputType,

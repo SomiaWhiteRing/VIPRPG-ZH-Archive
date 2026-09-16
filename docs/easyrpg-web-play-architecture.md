@@ -5,7 +5,7 @@
 相关主文档：
 
 - [RPG Maker 2000/2003 去重存储架构](./rpg-maker-2000-2003-deduplicated-storage-plan.md)
-- [OpenNext 与 Cloudflare 运行手册](./opennext-cloudflare-development-path.md)
+- [Workers 与 React Router 运行手册](./workers-development.md)
 
 ## 1. 固定结论
 
@@ -270,7 +270,7 @@ public/play/runtime/easyrpg/{version}/index.wasm
 - runtime 文件使用长期 immutable 缓存；升级时新增 `{version}` 目录。
 - 页面直接加载同源 runtime，不使用跨域 iframe。
 - React 页面直接挂载 canvas 并调用 `createEasyRpgPlayer(...)`，不使用 iframe。
-- CSP 需要允许同源 WASM 执行；具体指令在实现时以当前浏览器和 OpenNext 输出验证为准。
+- CSP 需要允许同源 WASM 执行；具体指令在实现时以当前浏览器和 Vite 输出验证为准。
 
 ## 12. 存档策略
 

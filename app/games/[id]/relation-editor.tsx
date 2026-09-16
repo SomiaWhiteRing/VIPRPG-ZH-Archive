@@ -1,10 +1,3 @@
-"use client";
-
-import { EllipsisVertical } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import * as Dialog from "@/app/components/ui/dialog";
-import { DropdownMenu } from "radix-ui";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -14,23 +7,26 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
-import {
-  WorkListItem,
-  type WorkListItemData,
-} from "@/app/components/work/work-list-item";
-import {
-  WORK_RELATION_TYPES,
-  TRANSLATION_ROLE_LABELS,
-  relationLabel,
-} from "@/lib/labels";
+import type { WorkListItemData } from "@/app/components/work/work-list-item";
+import { WorkListItem } from "@/app/components/work/work-list-item";
 import type {
   GameTranslationRelation,
   GameWorkRelation,
-} from "@/lib/server/db/game-library";
+} from "@/lib/dto/db/game-library";
+import {
+  TRANSLATION_ROLE_LABELS,
+  WORK_RELATION_TYPES,
+  relationLabel,
+} from "@/lib/labels";
+import { EllipsisVertical } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useRef, useState } from "react";
+import { useRevalidator } from "react-router";
 
 type Candidate = WorkListItemData & {
   id: number;
@@ -98,7 +94,7 @@ export function RelationCreateDialog({
   canCreateRelation,
   canCreateTranslation,
 }: RelationCreateDialogProps) {
-  const router = useRouter();
+  const revalidator = useRevalidator();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -109,7 +105,10 @@ export function RelationCreateDialog({
   );
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: "empty" | "feedback"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    kind: "empty" | "feedback";
+    text: string;
+  } | null>(null);
 
   function changeOpen(nextOpen: boolean) {
     if (busy) return;
@@ -149,9 +148,13 @@ export function RelationCreateDialog({
           title: candidate.chineseTitle || candidate.originalTitle,
         }));
       setCandidates(works);
-      if (!works.length) setMessage({ kind: "empty", text: "没有找到可关联的游戏。" });
+      if (!works.length)
+        setMessage({ kind: "empty", text: "没有找到可关联的游戏。" });
     } catch {
-      setMessage({ kind: "feedback", text: "网络请求失败，请检查连接后重试。" });
+      setMessage({
+        kind: "feedback",
+        text: "网络请求失败，请检查连接后重试。",
+      });
     } finally {
       setSearching(false);
     }
@@ -162,13 +165,18 @@ export function RelationCreateDialog({
       setMessage({ kind: "feedback", text: "请先查找并选择关联对象。" });
       return;
     }
-    if (relationChoice.startsWith("translation:") && selected.language === language) {
+    if (
+      relationChoice.startsWith("translation:") &&
+      selected.language === language
+    ) {
       setMessage({ kind: "feedback", text: "原版和译版语言必须不同。" });
       return;
     }
 
     const translationRole = relationChoice.startsWith("translation:")
-      ? (relationChoice.slice("translation:".length) as keyof typeof TRANSLATION_ROLE_LABELS)
+      ? (relationChoice.slice(
+          "translation:".length,
+        ) as keyof typeof TRANSLATION_ROLE_LABELS)
       : null;
     const path = translationRole
       ? `/api/works/${workId}/translation-relations`
@@ -176,7 +184,8 @@ export function RelationCreateDialog({
     const payload = translationRole
       ? {
           targetWorkId: selected.id,
-          targetRole: translationRole === "original" ? "translation" : "original",
+          targetRole:
+            translationRole === "original" ? "translation" : "original",
         }
       : {
           targetWorkId: selected.id,
@@ -198,9 +207,12 @@ export function RelationCreateDialog({
         return;
       }
       setOpen(false);
-      router.refresh();
+      revalidator.revalidate();
     } catch {
-      setMessage({ kind: "feedback", text: "网络请求失败，请检查连接后重试。" });
+      setMessage({
+        kind: "feedback",
+        text: "网络请求失败，请检查连接后重试。",
+      });
     } finally {
       setBusy(false);
     }
@@ -229,7 +241,9 @@ export function RelationCreateDialog({
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
-        <Button ref={triggerRef} type="button">添加关联</Button>
+        <Button ref={triggerRef} type="button">
+          添加关联
+        </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay />
@@ -243,7 +257,10 @@ export function RelationCreateDialog({
           }}
         >
           <Dialog.Title>添加关联</Dialog.Title>
-          <Dialog.Description className="sr-only" id="relation-create-description">
+          <Dialog.Description
+            className="sr-only"
+            id="relation-create-description"
+          >
             选择关联类型，查找关联对象并建立关联。
           </Dialog.Description>
           <div className="grid gap-2 text-sm font-semibold">
@@ -285,7 +302,10 @@ export function RelationCreateDialog({
           </form>
           <div className="min-h-0 overflow-y-auto">
             {candidates.length ? (
-              <ol aria-label="查找结果" className="divide-y divide-border border-y border-border">
+              <ol
+                aria-label="查找结果"
+                className="divide-y divide-border border-y border-border"
+              >
                 {candidates.map((candidate, index) => (
                   <WorkListItem
                     index={index}
@@ -300,7 +320,9 @@ export function RelationCreateDialog({
                         }}
                         size="sm"
                         type="button"
-                        variant={selected?.id === candidate.id ? "default" : "outline"}
+                        variant={
+                          selected?.id === candidate.id ? "default" : "outline"
+                        }
                       >
                         {selected?.id === candidate.id ? "已选择" : "选择"}
                       </Button>
@@ -310,16 +332,26 @@ export function RelationCreateDialog({
               </ol>
             ) : null}
             {message?.kind === "empty" ? (
-              <EmptyState title={message.text} variant="plain" className="py-3 font-normal" role="status" />
+              <EmptyState
+                title={message.text}
+                variant="plain"
+                className="py-3 font-normal"
+                role="status"
+              />
             ) : message ? (
-              <p className="m-0 py-3 text-sm font-normal text-muted" role="status">
+              <p
+                className="m-0 py-3 text-sm font-normal text-muted"
+                role="status"
+              >
                 {message.text}
               </p>
             ) : null}
           </div>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Dialog.Close asChild>
-              <Button disabled={busy} type="button" variant="outline">取消</Button>
+              <Button disabled={busy} type="button" variant="outline">
+                取消
+              </Button>
             </Dialog.Close>
             <Button
               disabled={busy || searching || !selected}
@@ -347,11 +379,13 @@ export function RelationManager({
   canManageRelationsAny,
   canManageTranslationsAny,
 }: RelationEditorProps) {
-  const router = useRouter();
+  const revalidator = useRevalidator();
   const removalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
+    null,
+  );
 
   const allTranslations = [
     ...translations,
@@ -360,7 +394,8 @@ export function RelationManager({
         item.workId !== workId &&
         !translations.some((direct) => direct.workId === item.workId) &&
         !parallelTranslations.some(
-          (candidate) => candidate.workId === item.workId && candidate.id < item.id,
+          (candidate) =>
+            candidate.workId === item.workId && candidate.id < item.id,
         ),
     ),
   ].sort(compareTranslations);
@@ -384,9 +419,10 @@ export function RelationManager({
 
   async function removePending() {
     if (!pendingRemoval) return;
-    const path = pendingRemoval.kind === "work"
-      ? `/api/work-relations/${pendingRemoval.id}`
-      : `/api/translation-relations/${pendingRemoval.id}`;
+    const path =
+      pendingRemoval.kind === "work"
+        ? `/api/work-relations/${pendingRemoval.id}`
+        : `/api/translation-relations/${pendingRemoval.id}`;
     const removed = await mutate(
       path,
       "DELETE",
@@ -397,7 +433,10 @@ export function RelationManager({
     if (removed) setPendingRemoval(null);
   }
 
-  function requestRemoval(removal: PendingRemoval, returnFocus: HTMLElement | null) {
+  function requestRemoval(
+    removal: PendingRemoval,
+    returnFocus: HTMLElement | null,
+  ) {
     removalReturnFocusRef.current = returnFocus;
     setMessage(null);
     setPendingRemoval(removal);
@@ -429,7 +468,7 @@ export function RelationManager({
         return false;
       }
       setMessage(successMessage);
-      router.refresh();
+      revalidator.revalidate();
       return true;
     } catch {
       setMessage("网络请求失败，请检查连接后重试。");
@@ -445,7 +484,11 @@ export function RelationManager({
 
   return (
     <div className="grid gap-7">
-      {message ? <p className="m-0 text-sm text-muted" role="status">{message}</p> : null}
+      {message ? (
+        <p className="m-0 text-sm text-muted" role="status">
+          {message}
+        </p>
+      ) : null}
 
       {allTranslations.length ? (
         <section aria-labelledby="translation-relations-heading">
@@ -457,7 +500,8 @@ export function RelationManager({
           <ol className="divide-y divide-border border-b border-border">
             {allTranslations.map((translation, index) => {
               const ownsRelation =
-                translation.createdByUserId === currentUserId || canManageTranslationsAny;
+                translation.createdByUserId === currentUserId ||
+                canManageTranslationsAny;
               return (
                 <WorkListItem
                   index={index}
@@ -489,7 +533,10 @@ export function RelationManager({
       ) : null}
 
       {relationGroups.map((group) => (
-        <section aria-labelledby={`work-relations-${group.type}`} key={group.type}>
+        <section
+          aria-labelledby={`work-relations-${group.type}`}
+          key={group.type}
+        >
           <RelationSectionHeader
             count={group.items.length}
             id={`work-relations-${group.type}`}
@@ -498,7 +545,8 @@ export function RelationManager({
           <ol className="divide-y divide-border border-b border-border">
             {group.items.map((relation, index) => {
               const ownsRelation =
-                relation.createdByUserId === currentUserId || canManageRelationsAny;
+                relation.createdByUserId === currentUserId ||
+                canManageRelationsAny;
               return (
                 <WorkListItem
                   index={index}
@@ -509,7 +557,9 @@ export function RelationManager({
                       busy={busy}
                       canDelete={canDeleteRelation && ownsRelation}
                       canEdit={canUpdate && ownsRelation}
-                      onChangeType={(relationType) => void changeType(relation, relationType)}
+                      onChangeType={(relationType) =>
+                        void changeType(relation, relationType)
+                      }
                       onDelete={(returnFocus) =>
                         requestRemoval(
                           {
@@ -552,10 +602,16 @@ export function RelationManager({
           <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
             对向关系也会同时删除。
           </AlertDialogDescription>
-          {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
+          {message ? (
+            <p className="m-0 text-sm text-red-700" role="status">
+              {message}
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button disabled={busy} type="button" variant="outline">取消</Button>
+              <Button disabled={busy} type="button" variant="outline">
+                取消
+              </Button>
             </AlertDialogCancel>
             <Button
               disabled={busy || !pendingRemoval}
@@ -572,10 +628,20 @@ export function RelationManager({
   );
 }
 
-function RelationSectionHeader({ count, id, title }: { count: number; id: string; title: string }) {
+function RelationSectionHeader({
+  count,
+  id,
+  title,
+}: {
+  count: number;
+  id: string;
+  title: string;
+}) {
   return (
     <header className="flex items-baseline gap-3 border-b border-border pb-3">
-      <h2 className="m-0 font-display text-xl font-bold" id={id}>{title}</h2>
+      <h2 className="m-0 font-display text-xl font-bold" id={id}>
+        {title}
+      </h2>
       <span className="font-mono text-xs text-muted">共 {count} 个</span>
     </header>
   );
@@ -601,7 +667,9 @@ function WorkRelationActions({
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   if (!canEdit && !canDelete) {
-    return <span className="text-sm text-muted">{relationLabel(relationType)}</span>;
+    return (
+      <span className="text-sm text-muted">{relationLabel(relationType)}</span>
+    );
   }
 
   return (
@@ -620,7 +688,9 @@ function WorkRelationActions({
             value={relationType}
           />
         ) : (
-          <span className="px-2 text-sm text-muted">{relationLabel(relationType)}</span>
+          <span className="px-2 text-sm text-muted">
+            {relationLabel(relationType)}
+          </span>
         )}
         {canDelete ? (
           <Button
@@ -662,16 +732,25 @@ function WorkRelationActions({
                 <DropdownMenu.Label className="px-2.5 py-1.5 text-xs font-semibold text-muted">
                   关联类型
                 </DropdownMenu.Label>
-                <DropdownMenu.RadioGroup value={relationType} onValueChange={onChangeType}>
+                <DropdownMenu.RadioGroup
+                  value={relationType}
+                  onValueChange={onChangeType}
+                >
                   {WORK_RELATION_TYPES.map((value) => (
-                    <DropdownMenu.RadioItem className={menuItemClass} key={value} value={value}>
+                    <DropdownMenu.RadioItem
+                      className={menuItemClass}
+                      key={value}
+                      value={value}
+                    >
                       {relationLabel(value)}
                     </DropdownMenu.RadioItem>
                   ))}
                 </DropdownMenu.RadioGroup>
               </>
             ) : null}
-            {canEdit && canDelete ? <DropdownMenu.Separator className="my-1 h-px bg-border" /> : null}
+            {canEdit && canDelete ? (
+              <DropdownMenu.Separator className="my-1 h-px bg-border" />
+            ) : null}
             {canDelete ? (
               <DropdownMenu.Item
                 aria-controls="relation-remove-dialog"
@@ -759,14 +838,24 @@ function TranslationRelationActions({
   );
 }
 
-function compareRelatedWorks(left: GameWorkRelation, right: GameWorkRelation): number {
-  return left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
+function compareRelatedWorks(
+  left: GameWorkRelation,
+  right: GameWorkRelation,
+): number {
+  return (
+    left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId
+  );
 }
 
 function compareTranslations(
   left: GameTranslationRelation,
   right: GameTranslationRelation,
 ): number {
-  const roleOrder = Number(left.role === "translation") - Number(right.role === "translation");
-  return roleOrder || left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
+  const roleOrder =
+    Number(left.role === "translation") - Number(right.role === "translation");
+  return (
+    roleOrder ||
+    left.title.localeCompare(right.title, "zh-CN") ||
+    left.workId - right.workId
+  );
 }

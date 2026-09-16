@@ -1,17 +1,34 @@
-import { PageContainer } from "@/app/components/ui/page-container";
+import { listCatalogs } from "@/app/.server/db/catalogs";
+import { runtimeContext } from "@/app/.server/router-context";
 import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { listCatalogs } from "@/lib/server/db/catalogs";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
-export default async function CatalogsPage() {
-  const catalogs = await listCatalogs();
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+
+  const catalogs = await listCatalogs(runtime);
+
+  return { catalogs };
+}
+
+export default function CatalogsPage() {
+  const { catalogs } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
-      <PageHeader compact title="目录" subtitle="玩家创建的游戏整理与阅读顺序。" />
+      <PageHeader
+        compact
+        title="目录"
+        subtitle="玩家创建的游戏整理与阅读顺序。"
+      />
       {catalogs.length ? (
-        <section aria-label="目录列表" className="mt-5 divide-y divide-border border-y border-border">
+        <section
+          aria-label="目录列表"
+          className="mt-5 divide-y divide-border border-y border-border"
+        >
           {catalogs.map((catalog) => (
             <CatalogListRow catalog={catalog} key={catalog.id} />
           ))}

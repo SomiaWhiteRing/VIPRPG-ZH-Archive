@@ -1,5 +1,5 @@
-"use client";
-
+import type { CoverPickerCandidate } from "@/app/components/media/media-picker";
+import { CoverPicker } from "@/app/components/media/media-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,21 +11,19 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import * as Dialog from "@/app/components/ui/dialog";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
-import {
-  CoverPicker,
-  type CoverPickerCandidate,
-} from "@/app/components/media/media-picker";
-import type { CatalogDetail, CatalogSummary } from "@/lib/server/db/catalogs";
-import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent } from "react";
-import * as Dialog from "@/app/components/ui/dialog";
+import type { CatalogDetail, CatalogSummary } from "@/lib/dto/db/catalogs";
+import type { FormEvent } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useNavigate, useRevalidator } from "react-router";
 
 export function CatalogCreateForm() {
-  const router = useRouter();
+  const navigate = useNavigate();
+
   const createButtonRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -52,7 +50,7 @@ export function CatalogCreateForm() {
         setMessage(body.detail ?? "目录创建失败。");
         return;
       }
-      router.push(`/catalogs/${body.catalog.id}`);
+      navigate(`/catalogs/${body.catalog.id}`);
     } catch {
       setMessage("网络请求失败。");
     } finally {
@@ -60,7 +58,12 @@ export function CatalogCreateForm() {
     }
   }
   return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!busy) setOpen(nextOpen); }}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!busy) setOpen(nextOpen);
+      }}
+    >
       <div>
         <Rm2kButton
           aria-controls="catalog-create-dialog"
@@ -83,24 +86,50 @@ export function CatalogCreateForm() {
           id="catalog-create-dialog"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            if (createButtonRef.current?.isConnected) createButtonRef.current.focus();
+            if (createButtonRef.current?.isConnected)
+              createButtonRef.current.focus();
           }}
         >
           <Dialog.Title>创建目录</Dialog.Title>
-          <Dialog.Description className="sr-only" id="catalog-create-description">
+          <Dialog.Description
+            className="sr-only"
+            id="catalog-create-description"
+          >
             填写目录标题和说明。
           </Dialog.Description>
           <form className="grid gap-4" onSubmit={submit}>
             <FormField controlId="catalogs-field-1" label="标题">
-              <Input id="catalogs-field-1" required value={title} onChange={(event) => setTitle(event.target.value)} />
+              <Input
+                id="catalogs-field-1"
+                required
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
             </FormField>
             <FormField controlId="catalogs-field-2" label="说明">
-              <Textarea id="catalogs-field-2" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
+              <Textarea
+                id="catalogs-field-2"
+                rows={3}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
             </FormField>
-            {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
+            {message ? (
+              <p className="m-0 text-sm text-red-700" role="status">
+                {message}
+              </p>
+            ) : null}
             <div className="flex justify-end gap-2">
-              <Rm2kButton disabled={busy} onClick={() => setOpen(false)} type="button">取消</Rm2kButton>
-              <Rm2kButton disabled={busy || !title.trim()} type="submit">{busy ? "正在创建…" : "创建目录"}</Rm2kButton>
+              <Rm2kButton
+                disabled={busy}
+                onClick={() => setOpen(false)}
+                type="button"
+              >
+                取消
+              </Rm2kButton>
+              <Rm2kButton disabled={busy || !title.trim()} type="submit">
+                {busy ? "正在创建…" : "创建目录"}
+              </Rm2kButton>
             </div>
           </form>
         </Dialog.Content>
@@ -117,7 +146,8 @@ export function CatalogSummaryEditor({
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(catalog.title);
   const [description, setDescription] = useState(catalog.description ?? "");
@@ -125,15 +155,18 @@ export function CatalogSummaryEditor({
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const coverCandidates = useMemo<CoverPickerCandidate[]>(
-    () => catalog.items.flatMap((item) =>
-      item.previewBlobSha256
-        ? [{
-            key: `catalog-work-${item.workId}`,
-            label: item.title,
-            src: `/api/media/blobs/${item.previewBlobSha256}`,
-          }]
-        : [],
-    ),
+    () =>
+      catalog.items.flatMap((item) =>
+        item.previewBlobSha256
+          ? [
+              {
+                key: `catalog-work-${item.workId}`,
+                label: item.title,
+                src: `/api/media/blobs/${item.previewBlobSha256}`,
+              },
+            ]
+          : [],
+      ),
     [catalog.items],
   );
   function changeOpen(nextOpen: boolean) {
@@ -165,7 +198,7 @@ export function CatalogSummaryEditor({
         return;
       }
       setOpen(false);
-      router.refresh();
+      revalidator.revalidate();
     } catch {
       setMessage("网络请求失败。");
     } finally {
@@ -185,7 +218,7 @@ export function CatalogSummaryEditor({
         setMessage(body.detail ?? "目录删除失败。");
         return;
       }
-      router.push("/catalogs");
+      navigate("/catalogs");
     } catch {
       setMessage("网络请求失败。");
     } finally {
@@ -195,7 +228,9 @@ export function CatalogSummaryEditor({
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
-        <Button size="sm" type="button" variant="outline">{canEdit ? "编辑资料" : "管理目录"}</Button>
+        <Button size="sm" type="button" variant="outline">
+          {canEdit ? "编辑资料" : "管理目录"}
+        </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay />
@@ -204,7 +239,10 @@ export function CatalogSummaryEditor({
           className="left-1/2 top-1/2 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
         >
           <Dialog.Title>编辑目录资料</Dialog.Title>
-          <Dialog.Description className="sr-only" id="catalog-summary-edit-description">
+          <Dialog.Description
+            className="sr-only"
+            id="catalog-summary-edit-description"
+          >
             修改目录封面、标题和说明，或删除目录。
           </Dialog.Description>
           <div className="grid gap-4">
@@ -212,13 +250,17 @@ export function CatalogSummaryEditor({
               <div className="w-full max-w-52">
                 <CoverPicker
                   candidates={coverCandidates}
-                  currentImageSrc={catalog.coverBlobSha256
-                    ? `/api/media/blobs/${catalog.coverBlobSha256}`
-                    : null}
+                  currentImageSrc={
+                    catalog.coverBlobSha256
+                      ? `/api/media/blobs/${catalog.coverBlobSha256}`
+                      : null
+                  }
                   disabled={busy}
-                  existingBlobSha256s={catalog.customCoverBlobSha256
-                    ? [catalog.customCoverBlobSha256]
-                    : undefined}
+                  existingBlobSha256s={
+                    catalog.customCoverBlobSha256
+                      ? [catalog.customCoverBlobSha256]
+                      : undefined
+                  }
                   file={cover}
                   onChange={setCover}
                 />
@@ -242,24 +284,39 @@ export function CatalogSummaryEditor({
               />
             </FormField>
           </div>
-          {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
+          {message ? (
+            <p className="m-0 text-sm text-red-700" role="status">
+              {message}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             {canDelete ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button disabled={busy} type="button" variant="destructive">删除目录</Button>
+                  <Button disabled={busy} type="button" variant="destructive">
+                    删除目录
+                  </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="z-[60]">
-                  <AlertDialogTitle className="m-0 text-lg font-bold">删除这个目录？</AlertDialogTitle>
+                  <AlertDialogTitle className="m-0 text-lg font-bold">
+                    删除这个目录？
+                  </AlertDialogTitle>
                   <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
                     删除后，目录及其中的收录关系将不再公开显示。
                   </AlertDialogDescription>
                   <AlertDialogFooter>
                     <AlertDialogCancel asChild>
-                      <Button type="button" variant="outline">取消</Button>
+                      <Button type="button" variant="outline">
+                        取消
+                      </Button>
                     </AlertDialogCancel>
                     <AlertDialogAction asChild>
-                      <Button disabled={busy} onClick={() => void remove()} type="button" variant="destructive">
+                      <Button
+                        disabled={busy}
+                        onClick={() => void remove()}
+                        type="button"
+                        variant="destructive"
+                      >
                         确认删除
                       </Button>
                     </AlertDialogAction>
@@ -269,10 +326,16 @@ export function CatalogSummaryEditor({
             ) : null}
             <div className="ml-auto flex gap-2">
               <Dialog.Close asChild>
-                <Button disabled={busy} type="button" variant="outline">取消</Button>
+                <Button disabled={busy} type="button" variant="outline">
+                  取消
+                </Button>
               </Dialog.Close>
               {canEdit ? (
-                <Button disabled={busy || !title.trim()} onClick={() => void save()} type="button">
+                <Button
+                  disabled={busy || !title.trim()}
+                  onClick={() => void save()}
+                  type="button"
+                >
                   {busy ? "正在保存…" : "保存资料"}
                 </Button>
               ) : null}

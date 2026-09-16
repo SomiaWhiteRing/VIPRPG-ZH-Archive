@@ -1,9 +1,9 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
+import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 type Option = { value: string; label: string };
 
@@ -23,34 +23,69 @@ export function AdminListControls(props: {
       (props.sort && props.sort !== "default"),
   );
   return (
-    <div className="flex flex-wrap items-end gap-2 border-b border-border pb-3" aria-label={props.noun + "工具栏"}>
-      <form action={props.action} className="flex min-w-0 flex-1 flex-wrap items-end gap-2" method="get">
+    <div
+      className="flex flex-wrap items-end gap-2 border-b border-border pb-3"
+      aria-label={props.noun + "工具栏"}
+    >
+      <form
+        action={props.action}
+        className="flex min-w-0 flex-1 flex-wrap items-end gap-2"
+        method="get"
+      >
         <Label className="grid min-w-48 flex-1 gap-1 text-xs font-semibold text-muted">
           搜索
-          <Input defaultValue={props.query} name="q" placeholder={"搜索" + props.noun} type="search" />
+          <Input
+            defaultValue={props.query}
+            name="q"
+            placeholder={"搜索" + props.noun}
+            type="search"
+          />
         </Label>
         {props.statusOptions ? (
           <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
             状态
-            <SelectField aria-label="状态" defaultValue={props.status ?? "all"} name="status" options={props.statusOptions} />
+            <SelectField
+              aria-label="状态"
+              defaultValue={props.status ?? "all"}
+              name="status"
+              options={props.statusOptions}
+            />
           </Label>
         ) : null}
         {props.sortOptions ? (
           <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
             排序
-            <SelectField aria-label="排序" defaultValue={props.sort ?? "default"} name="sort" options={props.sortOptions} />
+            <SelectField
+              aria-label="排序"
+              defaultValue={props.sort ?? "default"}
+              name="sort"
+              options={props.sortOptions}
+            />
           </Label>
         ) : null}
         <Button type="submit">应用</Button>
-        {filtered ? <Link className={buttonVariants({ variant: "ghost" })} href={props.action}>清除</Link> : null}
+        {filtered ? (
+          <Link
+            className={buttonVariants({ variant: "ghost" })}
+            to={props.action}
+          >
+            清除
+          </Link>
+        ) : null}
       </form>
-      <span className="pb-2 font-mono text-xs text-muted">共 {props.total.toLocaleString("zh-CN")} 个{props.noun}</span>
+      <span className="pb-2 font-mono text-xs text-muted">
+        共 {props.total.toLocaleString("zh-CN")} 个{props.noun}
+      </span>
     </div>
   );
 }
 
 export function StickySaveBar({ children }: { children: ReactNode }) {
-  return <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-[0_-8px_20px_rgb(23_33_43/8%)] backdrop-blur">{children}</div>;
+  return (
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-[0_-8px_20px_rgb(23_33_43/8%)] backdrop-blur">
+      {children}
+    </div>
+  );
 }
 
 export function parseAdminPage(value: string | string[] | undefined): number {

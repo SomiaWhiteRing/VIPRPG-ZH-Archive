@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { Table } from "@/app/components/ui/table";
+import type { ReactNode } from "react";
 
 type TableWrapProps = {
   minWidth?: number;
@@ -8,8 +8,22 @@ type TableWrapProps = {
   children: ReactNode;
 };
 
-export function TableWrap({ minWidth = 820, compact = false, label, children }: TableWrapProps) {
-  const minWidthClass = minWidth === 760 ? "min-w-190" : minWidth === 900 ? "min-w-225" : minWidth === 980 ? "min-w-245" : minWidth === 1040 ? "min-w-260" : "min-w-205";
+export function TableWrap({
+  minWidth = 820,
+  compact = false,
+  label,
+  children,
+}: TableWrapProps) {
+  const minWidthClass =
+    minWidth === 760
+      ? "min-w-190"
+      : minWidth === 900
+        ? "min-w-225"
+        : minWidth === 980
+          ? "min-w-245"
+          : minWidth === 1040
+            ? "min-w-260"
+            : "min-w-205";
 
   return (
     <div className={`w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>

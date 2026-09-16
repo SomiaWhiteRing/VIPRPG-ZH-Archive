@@ -1,10 +1,17 @@
-"use client";
-import type { PublicSearchPage } from "@/lib/server/forum/public-queries";
-import Link from "next/link";
+import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { ForumAuthorName, ForumTime, Highlight } from "@/app/discussions/shared";
+import {
+  ForumAuthorName,
+  ForumTime,
+  Highlight,
+} from "@/app/discussions/shared";
+import { Link } from "react-router";
 
-export function DiscussionSearch({ query, result, error }: {
+export function DiscussionSearch({
+  query,
+  result,
+  error,
+}: {
   query: string;
   result: PublicSearchPage;
   error?: string;
@@ -29,7 +36,10 @@ export function DiscussionSearch({ query, result, error }: {
               key={`${hit.kind}-${hit.id}`}
               className="border-b border-border py-4"
             >
-              <Link className="mt-1 block break-words font-bold text-primary" href={hit.href}>
+              <Link
+                className="mt-1 block break-words font-bold text-primary"
+                to={hit.href}
+              >
                 <Highlight text={hit.title} query={query} />
               </Link>
               <p className="my-2 line-clamp-2 break-words text-sm [overflow-wrap:anywhere]">
@@ -39,7 +49,8 @@ export function DiscussionSearch({ query, result, error }: {
                 {hit.author ? (
                   <ForumAuthorName author={hit.author} query={query} />
                 ) : null}{" "}
-                · {hit.kind === "comment" ? "楼中楼回复" : "主楼"} · <ForumTime value={hit.createdAt} />
+                · {hit.kind === "comment" ? "楼中楼回复" : "主楼"} ·{" "}
+                <ForumTime value={hit.createdAt} />
               </div>
             </article>
           ))}

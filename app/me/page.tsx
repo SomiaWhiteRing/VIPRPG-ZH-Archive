@@ -1,48 +1,96 @@
-import { commentTargetHref } from "@/lib/comment-target";
-import Link from "next/link";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { UserAvatar } from "@/app/components/ui/user-avatar";
-import { StatusBadge } from "@/app/components/ui/status-badge";
-import { Badge } from "@/app/components/ui/badge";
-import { requireAccountUser } from "@/lib/server/auth/account-user";
+import { requireAccountUser } from "@/app/.server/auth/account-user";
+import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import {
   searchUploadedWorks,
   searchUserWorks,
-} from "@/lib/server/db/game-library";
-import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
-import { searchUserComments } from "@/lib/server/db/work-community";
-import { getForumRuntime } from "@/lib/server/forum/next";
-import { ownUserDiscussions } from "@/lib/server/forum/user-discussions";
-import { DiscussionList } from "@/app/components/profile/discussion-list";
-import {
-  canAccessOwnWorks,
-  canPublishWork,
-  hasPermission,
-} from "@/lib/authz/permissions";
-import { formatDate } from "@/lib/format";
+} from "@/app/.server/db/game-library";
+import { latestUploaderRequest } from "@/app/.server/db/permissions";
+import { searchUserComments } from "@/app/.server/db/work-community";
+import { getForumRuntime } from "@/app/.server/forum/context";
+import { ownUserDiscussions } from "@/app/.server/forum/user-discussions";
+import { pickPageFields } from "@/app/.server/page-data";
+import { runtimeContext } from "@/app/.server/router-context";
 import {
   AccountEmpty,
   AccountSection,
   AccountWorkGrid,
 } from "@/app/components/profile/account-content";
+import { DiscussionList } from "@/app/components/profile/discussion-list";
+import { Badge } from "@/app/components/ui/badge";
+import { PageHeader } from "@/app/components/ui/page-header";
+import { StatusBadge } from "@/app/components/ui/status-badge";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
+import {
+  canAccessOwnWorks,
+  canPublishWork,
+  hasPermission,
+  hasUploaderAccess,
+} from "@/lib/authz/permissions";
+import { commentTargetHref } from "@/lib/comment-target";
+import { formatDate } from "@/lib/format";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { UploadAccess } from "./upload-access";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
 
-export default async function MePage() {
-  const user = await requireAccountUser("/me");
+  const user = await requireAccountUser(runtime, "/me");
   const showUploads = canAccessOwnWorks(user);
-  const [played, favorites, catalogs, comments, uploads, discussions] = await Promise.all([
-    searchUserWorks({ userId: user.id, kind: "played", pageSize: 4 }),
-    searchUserWorks({ userId: user.id, kind: "favorite", pageSize: 4 }),
-    searchCatalogsForOwner({ userId: user.id, pageSize: 3 }),
-    searchUserComments({ userId: user.id, pageSize: 3 }),
-    showUploads
-      ? searchUploadedWorks({ userId: user.id, pageSize: 3 })
-      : Promise.resolve(null),
-    ownUserDiscussions(getForumRuntime(), user, { pageSize: 3 }),
-  ]);
+  const [played, favorites, catalogs, comments, uploads, discussions] =
+    await Promise.all([
+      searchUserWorks(runtime, {
+        userId: user.id,
+        kind: "played",
+        pageSize: 4,
+      }),
+      searchUserWorks(runtime, {
+        userId: user.id,
+        kind: "favorite",
+        pageSize: 4,
+      }),
+      searchCatalogsForOwner(runtime, { userId: user.id, pageSize: 3 }),
+      searchUserComments(runtime, { userId: user.id, pageSize: 3 }),
+      showUploads
+        ? searchUploadedWorks(runtime, { userId: user.id, pageSize: 3 })
+        : Promise.resolve(null),
+      ownUserDiscussions(getForumRuntime(runtime), user, { pageSize: 3 }),
+    ]);
 
+  const uploadRequest = hasUploaderAccess(user)
+    ? null
+    : await latestUploaderRequest(runtime, user.id);
+  return {
+    uploadRequest,
+    user: pickPageFields(user, [
+      "profileVisibility",
+      "avatarBlobSha256",
+      "displayName",
+      "bio",
+      "id",
+      "status",
+      "permissionKeys",
+    ]),
+    played,
+    favorites,
+    catalogs,
+    comments,
+    uploads,
+    discussions,
+  };
+}
+
+export default function MePage() {
+  const {
+    uploadRequest,
+    user,
+    played,
+    favorites,
+    catalogs,
+    comments,
+    uploads,
+    discussions,
+  } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-7">
       <PageHeader
@@ -50,7 +98,7 @@ export default async function MePage() {
         title="个人中心"
         subtitle="从这里继续最近的游戏、收藏和内容维护。"
       />
-      <UploadAccess user={user} />
+      <UploadAccess user={user} request={uploadRequest} />
       <AccountSection
         href="/me/profile"
         status={
@@ -90,7 +138,7 @@ export default async function MePage() {
           <AccountWorkGrid items={played.items} />
         ) : (
           <AccountEmpty>
-            <Link href="/games">前往游戏库</Link>开始游玩。
+            <Link to="/games">前往游戏库</Link>开始游玩。
           </AccountEmpty>
         )}
       </AccountSection>
@@ -107,7 +155,7 @@ export default async function MePage() {
           <AccountWorkGrid items={favorites.items} />
         ) : (
           <AccountEmpty>
-            <Link href="/games">前往游戏库</Link>收藏感兴趣的作品。
+            <Link to="/games">前往游戏库</Link>收藏感兴趣的作品。
           </AccountEmpty>
         )}
       </AccountSection>
@@ -127,10 +175,7 @@ export default async function MePage() {
                 className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`}
                 key={catalog.id}
               >
-                <Link
-                  className="font-semibold"
-                  href={`/catalogs/${catalog.id}`}
-                >
+                <Link className="font-semibold" to={`/catalogs/${catalog.id}`}>
                   {catalog.title}
                 </Link>
                 <p className="mt-1 text-sm text-muted">
@@ -162,7 +207,7 @@ export default async function MePage() {
               >
                 <Link
                   className="font-semibold"
-                  href={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
+                  to={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
                 >
                   {comment.targetTitle}
                 </Link>
@@ -178,7 +223,11 @@ export default async function MePage() {
       </AccountSection>
       <AccountSection
         href="/me/discussions"
-        status={!user.profileVisibility.discussions ? <Badge variant="outline">未在个人主页展示</Badge> : undefined}
+        status={
+          !user.profileVisibility.discussions ? (
+            <Badge variant="outline">未在个人主页展示</Badge>
+          ) : undefined
+        }
         title="最近讨论"
       >
         <DiscussionList items={discussions.items} compact />
@@ -195,7 +244,7 @@ export default async function MePage() {
                   <div className="min-w-0">
                     <Link
                       className="block truncate font-semibold"
-                      href={
+                      to={
                         hasPermission(user, "work.update_own")
                           ? `/me/uploads/${work.id}`
                           : `/games/${work.id}`
@@ -217,7 +266,7 @@ export default async function MePage() {
             <AccountEmpty>
               {canPublishWork(user) ? (
                 <>
-                  <Link href="/upload">发布</Link>第一部作品。
+                  <Link to="/upload">发布</Link>第一部作品。
                 </>
               ) : (
                 "还没有负责维护的作品。"

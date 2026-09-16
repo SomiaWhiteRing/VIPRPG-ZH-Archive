@@ -1,8 +1,6 @@
-"use client";
-
-import { useState } from "react";
-import { Heart } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { Heart } from "lucide-react";
+import { useState } from "react";
 
 export function WorkFavoriteButton({
   currentUserId,
@@ -55,7 +53,11 @@ export function WorkFavoriteButton({
         <Heart aria-hidden />
         {favorited ? "已收藏" : "收藏"}
       </Button>
-      {message ? <p className="m-0 text-xs text-muted" role="status">{message}</p> : null}
+      {message ? (
+        <p className="m-0 text-xs text-muted" role="status">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

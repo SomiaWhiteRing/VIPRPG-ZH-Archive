@@ -40,7 +40,13 @@ export const FORUM_REPORT_REASONS = [
 export type ForumState = "published" | "hidden" | "deleted";
 export type ForumTarget = { kind: "topic" | "post" | "comment"; id: number };
 export type ForumAction =
-  "hide" | "restore" | "lock" | "unlock" | "feature" | "unfeature" | "tags";
+  | "hide"
+  | "restore"
+  | "lock"
+  | "unlock"
+  | "feature"
+  | "unfeature"
+  | "tags";
 export type ForumTag = {
   id: number;
   name: string;
@@ -152,7 +158,7 @@ export function forumTagError(value: string): string | null {
   const name = normalizeForumTag(value);
   if (
     /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value.replace(/\u200d/gu, "")) ||
-    /[\[\]]/u.test(name)
+    /[[\]]/u.test(name)
   )
     return "TAG 不能包含方括号、控制字符或换行。";
   const length = Array.from(
@@ -208,6 +214,7 @@ export function forumListReturn(value: unknown): string | undefined {
   if (
     typeof value !== "string" ||
     !/^\/discussions(?:\?|$)/.test(value) ||
+    // eslint-disable-next-line no-control-regex -- Reject controls in untrusted return URLs.
     /[\\\u0000-\u001f\u007f]/.test(value)
   )
     return undefined;
@@ -217,7 +224,9 @@ export function forumListReturn(value: unknown): string | undefined {
   const tags = [...new Set(url.searchParams.getAll("tag"))];
   if (
     tags.length > 5 ||
-    tags.some((tag) => !/^[1-9]\d*$/.test(tag) || !Number.isSafeInteger(Number(tag)))
+    tags.some(
+      (tag) => !/^[1-9]\d*$/.test(tag) || !Number.isSafeInteger(Number(tag)),
+    )
   )
     return undefined;
   return forumHref("/discussions", {

@@ -1,47 +1,54 @@
-import { EmptyState } from "@/app/components/ui/empty-state";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import {
+  listCatalogs,
+  listCatalogsContainingWork,
+} from "@/app/.server/db/catalogs";
+import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import {
+  getWorkCommunitySummary,
+  listPickerEmojis,
+  listRootComments,
+} from "@/app/.server/db/work-community";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { parsePositiveId } from "@/app/.server/http/request";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
+import {
+  DetailPageLayout,
+  DetailPageShell,
+} from "@/app/components/ui/detail-page-layout";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
-import { DetailPageLayout, DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
+import type {
+  GameTranslationRelation,
+  GameWorkRelation,
+} from "@/lib/dto/db/game-library";
 import { formatNumber } from "@/lib/format";
 import {
   WORK_RELATION_TYPES,
   languageLabel,
   relationLabel,
 } from "@/lib/labels";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { listCatalogs, listCatalogsContainingWork } from "@/lib/server/db/catalogs";
-import {
-  getGameWorkDetail,
-  type GameTranslationRelation,
-  type GameWorkRelation,
-} from "@/lib/server/db/game-library";
-import {
-  getWorkCommunitySummary,
-  listPickerEmojis,
-  listRootComments,
-} from "@/lib/server/db/work-community";
-import { parsePositiveId } from "@/lib/server/http/request";
 import { publicCopy } from "@/lib/public-copy";
 import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { WorkActionBar } from "./work-action-bar";
-import { CommentPanel } from "@/app/components/comments/comment-panel";
 import {
   CatalogAddDialog,
   WorkEngagementActions,
 } from "./work-engagement-actions";
 import { WorkMediaGallery } from "./work-media-gallery";
-
-export const dynamic = "force-dynamic";
 
 const CHARACTER_ROLE_LABELS: Record<string, string> = {
   main: "主角",
@@ -51,21 +58,21 @@ const CHARACTER_ROLE_LABELS: Record<string, string> = {
   other: "其他",
 };
 
-export default async function GameDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const id = parsePositiveId((await params).id, "work id");
-  const work = await getGameWorkDetail(id);
-  if (!work) notFound();
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-  const currentUser = await getCurrentUserFromCookies();
+  const id = parsePositiveId((await params).id, "work id");
+  const work = await getGameWorkDetail(runtime, id);
+  if (!work) throwNotFound();
+
+  const currentUser = await getCurrentUser(runtime);
   const relationCapabilities = getRelationEditorCapabilities(currentUser);
   const title = work.chineseTitle || work.originalTitle;
   const current = work.archiveVersions[0] ?? null;
   const externalDownload =
-    work.externalLinks.find((link) => link.linkType === "download_page") ?? null;
+    work.externalLinks.find((link) => link.linkType === "download_page") ??
+    null;
   const primaryMedia =
     work.media.find((media) => media.isPrimary)?.blobSha256 ??
     work.previewBlobSha256;
@@ -75,13 +82,19 @@ export default async function GameDetailPage({
     return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   });
 
-  const [community, comments, emojis, catalogs, containingCatalogs] = await Promise.all([
-    getWorkCommunitySummary(work.id, currentUser?.id ?? null),
-    listRootComments({ kind: "work", id: work.id }, currentUser?.id ?? null, null),
-    listPickerEmojis(),
-    currentUser ? listCatalogs() : Promise.resolve([]),
-    listCatalogsContainingWork(work.id),
-  ]);
+  const [community, comments, emojis, catalogs, containingCatalogs] =
+    await Promise.all([
+      getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
+      listRootComments(
+        runtime,
+        { kind: "work", id: work.id },
+        currentUser?.id ?? null,
+        null,
+      ),
+      listPickerEmojis(runtime),
+      currentUser ? listCatalogs(runtime) : Promise.resolve([]),
+      listCatalogsContainingWork(runtime, work.id),
+    ]);
   const userCatalogs = currentUser
     ? catalogs.filter((catalog) => catalog.ownerUserId === currentUser.id)
     : [];
@@ -120,6 +133,41 @@ export default async function GameDetailPage({
     (link) => link.linkType !== "download_page",
   );
 
+  return {
+    work,
+    currentUser: pickPageFields(currentUser, ["id"]),
+    title,
+    current,
+    externalDownload,
+    media,
+    community,
+    comments,
+    emojis,
+    containingCatalogs,
+    userCatalogs,
+    relationCards,
+    showRelationEditor,
+    externalLinks,
+  };
+}
+
+export default function GameDetailPage() {
+  const {
+    work,
+    currentUser,
+    title,
+    current,
+    externalDownload,
+    media,
+    community,
+    comments,
+    emojis,
+    containingCatalogs,
+    userCatalogs,
+    relationCards,
+    showRelationEditor,
+    externalLinks,
+  } = useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <WorkViewTracker workId={work.id} />
@@ -131,11 +179,35 @@ export default async function GameDetailPage({
         originalTitle={work.originalTitle}
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
-          ...(current ? [{ href: `/play/${current.id}`, label: "在线游玩" }] : []),
-          ...(media.length ? [{ href: "#sec-gallery", label: "预览图", count: media.length }] : []),
-          ...(work.characters.length ? [{ href: "#sec-cast", label: "角色", count: work.characters.length }] : []),
-          ...(relationCards.length ? [{ href: "#sec-relations", label: "关联", count: relationCards.length }] : []),
-          { href: "#sec-comments", label: "评论", count: community.commentCount },
+          ...(current
+            ? [{ href: `/play/${current.id}`, label: "在线游玩" }]
+            : []),
+          ...(media.length
+            ? [{ href: "#sec-gallery", label: "预览图", count: media.length }]
+            : []),
+          ...(work.characters.length
+            ? [
+                {
+                  href: "#sec-cast",
+                  label: "角色",
+                  count: work.characters.length,
+                },
+              ]
+            : []),
+          ...(relationCards.length
+            ? [
+                {
+                  href: "#sec-relations",
+                  label: "关联",
+                  count: relationCards.length,
+                },
+              ]
+            : []),
+          {
+            href: "#sec-comments",
+            label: "评论",
+            count: community.commentCount,
+          },
         ]}
       />
 
@@ -143,131 +215,196 @@ export default async function GameDetailPage({
         sidebarLabel="作品操作与资料"
         main={
           <>
-          <section aria-labelledby="intro-title" className="scroll-mt-20 py-4.5" id="sec-intro">
-            <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-              <h2 className="m-0 text-base font-bold" id="intro-title">简介</h2>
-            </div>
-            {work.engineFamily === "rpg_maker_2003_maniac" ? (
-              <div className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]" role="note">
-                <AlertTriangle aria-hidden className="mt-0.5 shrink-0" size={16} />
-                <span>该游戏使用 Maniac，可能无法用 EasyRPG 正常游玩。</span>
-              </div>
-            ) : null}
-            {work.description ? (
-              <p className="m-0 leading-[1.85] wrap-anywhere">
-                {publicCopy(work.description)}
-              </p>
-            ) : (
-              <p className="text-sm text-muted">暂无简介。</p>
-            )}
-            {work.tags.length ? (
-              <div aria-label="标签" className="mt-4 flex flex-wrap gap-2">
-                {work.tags.map((tag) => (
-                  <Link
-                    className="inline-flex min-h-7.5 items-center rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-[#1f6f67] hover:border-primary hover:bg-primary/10"
-                    href={`/games?tag=${tag.id}`}
-                    key={tag.id}
-                  >
-                    {tag.name}
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          {media.length ? (
-            <section aria-labelledby="gallery-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-gallery">
+            <section
+              aria-labelledby="intro-title"
+              className="scroll-mt-20 py-4.5"
+              id="sec-intro"
+            >
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="gallery-title">预览图</h2>
-                <span className="font-mono text-xs text-muted max-[560px]:text-left">{media.length} 张 · 点击放大</span>
+                <h2 className="m-0 text-base font-bold" id="intro-title">
+                  简介
+                </h2>
               </div>
-              <WorkMediaGallery items={media} title={title} />
-            </section>
-          ) : null}
-
-          {work.characters.length ? (
-            <section aria-labelledby="cast-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-cast">
-              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="cast-title">登场角色</h2>
-                <span className="font-mono text-xs text-muted max-[560px]:text-left">{work.characters.length} 项</span>
-              </div>
-              <div aria-label="角色列表" className="flex gap-2.5 overflow-x-auto pb-1.5 [scroll-snap-type:x_proximity] scrollbar-thin">
-                {work.characters.map((character, index) => (
-                  <Link
-                    className="group grid basis-29 shrink-0 content-start gap-1 text-foreground max-[560px]:basis-27"
-                    href={`/characters/${character.id}`}
-                    key={`${character.id}:${index}`}
-                  >
-                    <CharacterPortrait
-                      className="w-full text-2xl transition-shadow duration-150 group-hover:shadow-[0_3px_10px_rgb(23_33_43/14%)]"
-                      displayName={character.displayName}
-                      portrait={character.portrait}
-                      size={116}
-                      toneKey={index}
-                    />
-                    <span className="text-sm font-semibold wrap-anywhere">{character.displayName}</span>
-                    <span className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-[#1f6f67]" : ""}`}>
-                      {CHARACTER_ROLE_LABELS[character.roleKey] ?? "其他"}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {relationCards.length ? (
-            <section aria-labelledby="relations-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-relations">
-              <span aria-hidden="true" className="sr-only" id="relations" />
-              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="relations-title">关联作品</h2>
-                {relationCards.length ? (
-                  <span className="font-mono text-xs text-muted max-[560px]:text-left">{relationCards.length} 项</span>
-                ) : null}
-              </div>
-              {relationCards.length ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-3 gap-y-4">
-                  {relationCards.map((relation) => (
-                    <Link className="group grid min-w-0 content-start gap-1.5" href={relation.href} key={relation.key}>
-                      <span className="font-mono text-xs tracking-[0.04em] text-muted">{relation.type}</span>
-                      <span className="relative block aspect-4/3 overflow-hidden rounded-lg border border-border bg-[#e7ebe6] group-hover:border-primary group-hover:shadow-[0_2px_8px_rgb(23_33_43/10%)]">
-                        {relation.previewBlobSha256 ? (
-                          <Image
-                            alt=""
-                            className="object-cover"
-                            fill
-                            sizes="(max-width: 560px) 78vw, 180px"
-                            src={`/api/media/blobs/${relation.previewBlobSha256}`}
-                            unoptimized
-                          />
-                        ) : (
-                          <span className="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white" aria-hidden="true">
-                            {relation.title.slice(0, 1)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-sm font-semibold leading-[1.45] text-[#1f6f67] wrap-anywhere group-hover:underline">{relation.title}</span>
+              {work.engineFamily === "rpg_maker_2003_maniac" ? (
+                <div
+                  className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]"
+                  role="note"
+                >
+                  <AlertTriangle
+                    aria-hidden
+                    className="mt-0.5 shrink-0"
+                    size={16}
+                  />
+                  <span>该游戏使用 Maniac，可能无法用 EasyRPG 正常游玩。</span>
+                </div>
+              ) : null}
+              {work.description ? (
+                <p className="m-0 leading-[1.85] wrap-anywhere">
+                  {publicCopy(work.description)}
+                </p>
+              ) : (
+                <p className="text-sm text-muted">暂无简介。</p>
+              )}
+              {work.tags.length ? (
+                <div aria-label="标签" className="mt-4 flex flex-wrap gap-2">
+                  {work.tags.map((tag) => (
+                    <Link
+                      className="inline-flex min-h-7.5 items-center rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-[#1f6f67] hover:border-primary hover:bg-primary/10"
+                      to={`/games?tag=${tag.id}`}
+                      key={tag.id}
+                    >
+                      {tag.name}
                     </Link>
                   ))}
                 </div>
-              ) : (
-                <EmptyState title="暂无公开关联作品。" variant="plain" />
-              )}
+              ) : null}
             </section>
-          ) : null}
 
-          <section aria-labelledby="comments-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-comments">
-            <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-              <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
-              <span className="font-mono text-xs text-muted max-[560px]:text-left">按发帖时间排序</span>
-            </div>
-            <CommentPanel
-              currentUserId={currentUser?.id ?? null}
-              emojis={emojis}
-              initialComments={comments.items}
-              initialNextCursor={comments.nextCursor}
-              target={{ kind: "work", id: work.id }}
-            />
-          </section>
+            {media.length ? (
+              <section
+                aria-labelledby="gallery-title"
+                className="scroll-mt-20 border-t border-border py-4.5"
+                id="sec-gallery"
+              >
+                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                  <h2 className="m-0 text-base font-bold" id="gallery-title">
+                    预览图
+                  </h2>
+                  <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                    {media.length} 张 · 点击放大
+                  </span>
+                </div>
+                <WorkMediaGallery items={media} title={title} />
+              </section>
+            ) : null}
+
+            {work.characters.length ? (
+              <section
+                aria-labelledby="cast-title"
+                className="scroll-mt-20 border-t border-border py-4.5"
+                id="sec-cast"
+              >
+                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                  <h2 className="m-0 text-base font-bold" id="cast-title">
+                    登场角色
+                  </h2>
+                  <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                    {work.characters.length} 项
+                  </span>
+                </div>
+                <div
+                  aria-label="角色列表"
+                  className="flex gap-2.5 overflow-x-auto pb-1.5 [scroll-snap-type:x_proximity] scrollbar-thin"
+                >
+                  {work.characters.map((character, index) => (
+                    <Link
+                      className="group grid basis-29 shrink-0 content-start gap-1 text-foreground max-[560px]:basis-27"
+                      to={`/characters/${character.id}`}
+                      key={`${character.id}:${index}`}
+                    >
+                      <CharacterPortrait
+                        className="w-full text-2xl transition-shadow duration-150 group-hover:shadow-[0_3px_10px_rgb(23_33_43/14%)]"
+                        displayName={character.displayName}
+                        portrait={character.portrait}
+                        size={116}
+                        toneKey={index}
+                      />
+                      <span className="text-sm font-semibold wrap-anywhere">
+                        {character.displayName}
+                      </span>
+                      <span
+                        className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-[#1f6f67]" : ""}`}
+                      >
+                        {CHARACTER_ROLE_LABELS[character.roleKey] ?? "其他"}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {relationCards.length ? (
+              <section
+                aria-labelledby="relations-title"
+                className="scroll-mt-20 border-t border-border py-4.5"
+                id="sec-relations"
+              >
+                <span aria-hidden="true" className="sr-only" id="relations" />
+                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                  <h2 className="m-0 text-base font-bold" id="relations-title">
+                    关联作品
+                  </h2>
+                  {relationCards.length ? (
+                    <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                      {relationCards.length} 项
+                    </span>
+                  ) : null}
+                </div>
+                {relationCards.length ? (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-3 gap-y-4">
+                    {relationCards.map((relation) => (
+                      <Link
+                        className="group grid min-w-0 content-start gap-1.5"
+                        to={relation.href}
+                        key={relation.key}
+                      >
+                        <span className="font-mono text-xs tracking-[0.04em] text-muted">
+                          {relation.type}
+                        </span>
+                        <span className="relative block aspect-4/3 overflow-hidden rounded-lg border border-border bg-[#e7ebe6] group-hover:border-primary group-hover:shadow-[0_2px_8px_rgb(23_33_43/10%)]">
+                          {relation.previewBlobSha256 ? (
+                            <img
+                              alt=""
+                              className={
+                                "absolute inset-0 h-full w-full " +
+                                "object-cover"
+                              }
+                              sizes="(max-width: 560px) 78vw, 180px"
+                              src={`/api/media/blobs/${relation.previewBlobSha256}`}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span
+                              className="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white"
+                              aria-hidden="true"
+                            >
+                              {relation.title.slice(0, 1)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-sm font-semibold leading-[1.45] text-[#1f6f67] wrap-anywhere group-hover:underline">
+                          {relation.title}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState title="暂无公开关联作品。" variant="plain" />
+                )}
+              </section>
+            ) : null}
+
+            <section
+              aria-labelledby="comments-title"
+              className="scroll-mt-20 border-t border-border py-4.5"
+              id="sec-comments"
+            >
+              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <h2 className="m-0 text-base font-bold" id="comments-title">
+                  评论
+                </h2>
+                <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                  按发帖时间排序
+                </span>
+              </div>
+              <CommentPanel
+                currentUserId={currentUser?.id ?? null}
+                emojis={emojis}
+                initialComments={comments.items}
+                initialNextCursor={comments.nextCursor}
+                target={{ kind: "work", id: work.id }}
+              />
+            </section>
           </>
         }
         sidebar={
@@ -282,37 +419,65 @@ export default async function GameDetailPage({
             extras={
               <>
                 {currentUser ? (
-                  <div aria-label="条目补充操作" className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full">
+                  <div
+                    aria-label="条目补充操作"
+                    className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full"
+                  >
                     {showRelationEditor ? (
                       <Link
                         className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-[#1f6f67] hover:underline"
-                        href={`/games/${work.id}/relations`}
+                        to={`/games/${work.id}/relations`}
                       >
                         编辑关联
                       </Link>
                     ) : null}
-                    <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
+                    <CatalogAddDialog
+                      catalogs={userCatalogs}
+                      workId={work.id}
+                    />
                   </div>
                 ) : null}
 
                 {containingCatalogs.length ? (
-                  <Card className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full" id="catalog-card">
-                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">收录了本条目的目录</p>
+                  <Card
+                    className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
+                    id="catalog-card"
+                  >
+                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">
+                      收录了本条目的目录
+                    </p>
                     {containingCatalogs.map((catalog) => (
-                      <div className="flex items-baseline gap-2.5 border-b border-dashed border-border py-1.75 last:border-b-0" key={catalog.id}>
+                      <div
+                        className="flex items-baseline gap-2.5 border-b border-dashed border-border py-1.75 last:border-b-0"
+                        key={catalog.id}
+                      >
                         <div className="min-w-0">
-                          <Link className="text-sm font-semibold text-[#1f6f67] wrap-anywhere hover:underline" href={`/catalogs/${catalog.id}`}>{catalog.title}</Link>
-                          <span className="mt-0.5 block text-xs text-muted">{catalog.ownerName}</span>
+                          <Link
+                            className="text-sm font-semibold text-[#1f6f67] wrap-anywhere hover:underline"
+                            to={`/catalogs/${catalog.id}`}
+                          >
+                            {catalog.title}
+                          </Link>
+                          <span className="mt-0.5 block text-xs text-muted">
+                            {catalog.ownerName}
+                          </span>
                         </div>
-                        <span className="ml-auto shrink-0 font-mono text-xs text-muted">{formatNumber(catalog.itemCount)} 部</span>
+                        <span className="ml-auto shrink-0 font-mono text-xs text-muted">
+                          {formatNumber(catalog.itemCount)} 部
+                        </span>
                       </div>
                     ))}
                   </Card>
                 ) : null}
 
                 {externalLinks.length ? (
-                  <Card className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full" id="links-card">
-                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">外部链接</p>
+                  <Card
+                    className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
+                    id="links-card"
+                  >
+                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">
+                      外部链接
+                    </p>
                     <div className="grid gap-0.5">
                       {externalLinks.map((link) => (
                         <a
@@ -322,7 +487,11 @@ export default async function GameDetailPage({
                           rel="noreferrer"
                           target="_blank"
                         >
-                          {link.linkType === "official" ? <Link2 aria-hidden size={14} /> : <ExternalLink aria-hidden size={14} />}
+                          {link.linkType === "official" ? (
+                            <Link2 aria-hidden size={14} />
+                          ) : (
+                            <ExternalLink aria-hidden size={14} />
+                          )}
                           {link.label}
                         </a>
                       ))}
@@ -334,13 +503,19 @@ export default async function GameDetailPage({
             mobilePrimaryFirst
             primary={
               <WorkActionBar
-                archive={current ? {
-                  id: current.id,
-                  downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
-                  totalFiles: current.totalFiles,
-                  totalSizeBytes: current.totalSizeBytes,
-                } : null}
-                externalDownload={externalDownload ? { url: externalDownload.url } : null}
+                archive={
+                  current
+                    ? {
+                        id: current.id,
+                        downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
+                        totalFiles: current.totalFiles,
+                        totalSizeBytes: current.totalSizeBytes,
+                      }
+                    : null
+                }
+                externalDownload={
+                  externalDownload ? { url: externalDownload.url } : null
+                }
                 isAuthenticated={Boolean(currentUser)}
                 workId={work.id}
               />
@@ -360,7 +535,9 @@ export default async function GameDetailPage({
   );
 }
 
-function dedupeTranslations(items: GameTranslationRelation[]): GameTranslationRelation[] {
+function dedupeTranslations(
+  items: GameTranslationRelation[],
+): GameTranslationRelation[] {
   const seen = new Set<number>();
   return items.filter((item) => {
     if (seen.has(item.workId)) return false;
@@ -369,14 +546,24 @@ function dedupeTranslations(items: GameTranslationRelation[]): GameTranslationRe
   });
 }
 
-function compareRelatedWorks(left: GameWorkRelation, right: GameWorkRelation): number {
-  return left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
+function compareRelatedWorks(
+  left: GameWorkRelation,
+  right: GameWorkRelation,
+): number {
+  return (
+    left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId
+  );
 }
 
 function compareTranslations(
   left: GameTranslationRelation,
   right: GameTranslationRelation,
 ): number {
-  const roleOrder = Number(left.role === "translation") - Number(right.role === "translation");
-  return roleOrder || left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId;
+  const roleOrder =
+    Number(left.role === "translation") - Number(right.role === "translation");
+  return (
+    roleOrder ||
+    left.title.localeCompare(right.title, "zh-CN") ||
+    left.workId - right.workId
+  );
 }

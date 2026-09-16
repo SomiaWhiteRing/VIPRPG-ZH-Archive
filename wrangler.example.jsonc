@@ -1,27 +1,22 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "viprpg-zh-archive",
-  "main": "worker.mjs",
+  "main": "worker.ts",
   "compatibility_date": "2026-04-30",
   "compatibility_flags": [
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
   "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "html_handling": "none"
   },
   "triggers": {
     "crons": [
       "17 19 * * *"
     ]
   },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "<production-worker-name>"
-    }
-  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -70,12 +65,6 @@
           "17 19 * * *"
         ]
       },
-      "services": [
-        {
-          "binding": "WORKER_SELF_REFERENCE",
-          "service": "<staging-worker-name>"
-        }
-      ],
       "d1_databases": [
         {
           "binding": "DB",

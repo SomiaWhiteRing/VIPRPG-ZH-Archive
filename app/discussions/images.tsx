@@ -1,17 +1,14 @@
-"use client";
-import Image from "next/image";
-import { inspectForumImage } from "@/lib/forum-image-format";
-import { useState } from "react";
-import dynamic from "next/dynamic";
-const ForumLightbox=dynamic(()=>import("./lightbox").then((m)=>m.ForumLightbox),{ssr:false});
-import { ForumBody } from "./shared";
-import type { CustomEmojiDto } from "@/lib/server/db/work-community";
 import { Button } from "@/app/components/ui/button";
-import {
-  FORUM_IMAGE_BYTES,
-  type ForumImage,
-} from "@/lib/forum";
-import { ForumRequestError } from "./shared";
+import { ClientOnly } from "@/app/components/ui/client-only";
+import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { ForumImage } from "@/lib/forum";
+import { FORUM_IMAGE_BYTES } from "@/lib/forum";
+import { inspectForumImage } from "@/lib/forum-image-format";
+import { lazy, useState } from "react";
+import { ForumBody, ForumRequestError } from "./shared";
+const ForumLightbox = lazy(() =>
+  import("./lightbox").then((m) => ({ default: m.ForumLightbox })),
+);
 
 export type DraftImage = {
   key: string;
@@ -31,13 +28,22 @@ export const existingDraftImages = (images: ForumImage[]): DraftImage[] =>
     uploaded: image,
   }));
 export function draftImageFromFile(file: File): DraftImage {
-  return { key: crypto.randomUUID(), offset: 0, preview: URL.createObjectURL(file), file, size: file.size };
+  return {
+    key: crypto.randomUUID(),
+    offset: 0,
+    preview: URL.createObjectURL(file),
+    file,
+    size: file.size,
+  };
 }
 export async function cloneDraftImage(file: File) {
   inspectForumImage(await file.arrayBuffer());
   return draftImageFromFile(file);
 }
-export async function selectDraftImages(files: File[], process: (file: File) => Promise<File>) {
+export async function selectDraftImages(
+  files: File[],
+  process: (file: File) => Promise<File>,
+) {
   if (files.some((file) => !file.size || file.size > FORUM_IMAGE_BYTES))
     throw new Error("每张图片必须非空且不能超过 2 MiB。");
   const processed: File[] = [];
@@ -109,7 +115,10 @@ export function ForumImages({
     <>
       <div className="grid min-w-0 gap-3">
         {images.map((image, index) => {
-          const text = body.slice(index ? images[index-1].offset : 0, image.offset);
+          const text = body.slice(
+            index ? images[index - 1].offset : 0,
+            image.offset,
+          );
           return (
             <div
               key={image.id}
@@ -123,12 +132,11 @@ export function ForumImages({
                 aria-label={`查看图片 ${index + 1}`}
                 onClick={() => setActive(index)}
               >
-                <Image
+                <img
                   src={image.url}
                   alt={`图片 ${index + 1}`}
                   width={image.width}
                   height={image.height}
-                  unoptimized
                   loading="lazy"
                   className="h-auto max-h-[560px] w-auto max-w-full object-contain"
                 />
@@ -140,7 +148,15 @@ export function ForumImages({
           <ForumBody body={body.slice(lastOffset)} emojis={emojis} />
         ) : null}
       </div>
-      {active>=0?<ForumLightbox images={images} active={active} setActive={setActive}/>:null}
+      {active >= 0 ? (
+        <ClientOnly>
+          <ForumLightbox
+            images={images}
+            active={active}
+            setActive={setActive}
+          />
+        </ClientOnly>
+      ) : null}
     </>
   );
 }

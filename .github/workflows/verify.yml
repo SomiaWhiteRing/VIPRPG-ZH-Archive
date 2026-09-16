@@ -1,0 +1,30 @@
+name: Verify migration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Use isolated local configuration
+        run: node -e "require('node:fs').copyFileSync('wrangler.example.jsonc', 'wrangler.jsonc')"
+      - run: npm run check
+      - run: npm run test:forum
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:flow

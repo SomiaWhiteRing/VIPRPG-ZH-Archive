@@ -45,27 +45,27 @@
 - `user_role_events` 每行只记录一次 `assigned | removed`，并保存 actor、target、role snapshot、原因和可选的来源 inbox item。
 - 角色分配、移除、申请审批和账户状态更新在写入批次内重新核对操作者权限、双方当前层级及目标状态；审计、角色事件、申请状态和通知与操作一起提交。审批申请同时需要 `inbox.role_request.resolve` 和 `user.role.assign`。
 
-角色读取和写入集中在 `lib/server/db/permissions.ts`；页面、提醒和用户 API 不应各自实现角色状态转换。
+角色读取和写入集中在 `app/.server/db/permissions.ts`；页面、提醒和用户 API 不应各自实现角色状态转换。
 
 ## 3. Session 与认证
 
 - session cookie 只保存随机 opaque token；D1 的 `user_sessions` 只保存 token SHA-256。
-- session 使用固定绝对有效期，不滑动延期。当前数值由 `lib/server/auth/session.ts` 的 `SESSION_TTL_SECONDS` 决定。
+- session 使用固定绝对有效期，不滑动延期。当前数值由 `app/.server/auth/session.ts` 的 `SESSION_TTL_SECONDS` 决定。
 - 每次读取 session 都检查到期、撤销和用户状态。
 - 登录与注册验证成功后创建 session；退出撤销当前 session；密码重置和账户禁用撤销该用户全部 session。
 - 注册与密码重置验证码只能原子消费一次；登录失败计数必须原子更新。
-- 密码格式、PBKDF2 参数和透明升级规则以 `lib/server/auth/password.ts` 为准。参数调整先运行 `npm run auth:calibrate-password`，再更新代码和开发 seed。
+- 密码格式、PBKDF2 参数和透明升级规则以 `app/.server/auth/password.ts` 为准。参数调整先运行 `npm run auth:calibrate-password`，再更新代码和开发 seed。
 - `BOOTSTRAP_ADMIN_EMAIL` 只在系统尚无 bootstrap admin 时用于首次授予，不是持续同步配置。
 
 ## 4. 请求边界
 
 ### 身份加载
 
-`AuthContext` 包含 session、用户、角色、permission key、最高 priority 和 bootstrap 身份。请求与 Server Component 分别通过 `lib/server/auth/current-user.ts` 中的 loader 获取同一语义的 context。
+`AuthContext` 包含 session、用户、角色、permission key、最高 priority 和 bootstrap 身份。请求与 Server Component 分别通过 `app/.server/auth/current-user.ts` 中的 loader 获取同一语义的 context。
 
 ### 同源保护
 
-- 使用 session cookie 的 `POST | PUT | PATCH | DELETE` 必须先通过 `lib/server/auth/origin.ts` 的 `assertSameOrigin`。
+- 使用 session cookie 的 `POST | PUT | PATCH | DELETE` 必须先通过 `app/.server/auth/origin.ts` 的 `assertSameOrigin`。
 - Origin 缺失、格式错误或不等于 `APP_ORIGIN` 时拒绝；不使用 Referer 降级。
 - 身份失败返回 401，身份有效但缺少能力返回 403；对象不可见时由领域服务按资源语义返回 403 或 404。
 

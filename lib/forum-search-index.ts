@@ -1,4 +1,4 @@
-import { HttpError } from "./server/http/json";
+import { HttpError } from "./http";
 
 export const FORUM_SEARCH_PAGE_SIZE = 20;
 export const FORUM_SEARCH_QUERY_LENGTH = 64;
@@ -9,7 +9,8 @@ export function forumSearchTokens(value: string): string {
     point.codePointAt(0)!.toString(16).padStart(6, "0"),
   );
   const tokens = new Array<string>(Math.max(0, points.length - 1));
-  for (let i = 0; i < tokens.length; i++) tokens[i] = `x${points[i]}${points[i + 1]}`;
+  for (let i = 0; i < tokens.length; i++)
+    tokens[i] = `x${points[i]}${points[i + 1]}`;
   return tokens.join(" ");
 }
 

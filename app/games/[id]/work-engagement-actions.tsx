@@ -1,15 +1,12 @@
-"use client";
-
-import { EmptyState } from "@/app/components/ui/empty-state";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { FormField } from "@/app/components/ui/form-field";
 import { SelectField } from "@/app/components/ui/select";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
-import type { CatalogSummary } from "@/lib/server/db/catalogs";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { useState } from "react";
-import * as Dialog from "@/app/components/ui/dialog";
+import { Link, useRevalidator } from "react-router";
 
 export function WorkEngagementActions({
   currentUserId,
@@ -36,7 +33,7 @@ export function CatalogAddDialog({
   catalogs: CatalogSummary[];
   workId: number;
 }) {
-  const router = useRouter();
+  const revalidator = useRevalidator();
   const [open, setOpen] = useState(false);
   const [catalogId, setCatalogId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,7 +61,7 @@ export function CatalogAddDialog({
         return;
       }
       setMessage("已添加到目录。");
-      router.refresh();
+      revalidator.revalidate();
     } catch {
       setMessage("网络请求失败，请检查连接后重试。");
     } finally {
@@ -90,9 +87,7 @@ export function CatalogAddDialog({
           aria-describedby="catalog-add-work-description"
           className="left-1/2 top-1/2 grid w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
         >
-          <Dialog.Title>
-            添加到目录
-          </Dialog.Title>
+          <Dialog.Title>添加到目录</Dialog.Title>
           <Dialog.Description
             className="sr-only"
             id="catalog-add-work-description"
@@ -102,7 +97,8 @@ export function CatalogAddDialog({
           {catalogs.length ? (
             <>
               <FormField controlId="games-id--field-1" label="目录">
-                <SelectField id="games-id--field-1"
+                <SelectField
+                  id="games-id--field-1"
                   aria-label="目录"
                   disabled={busy}
                   onValueChange={setCatalogId}
@@ -144,7 +140,7 @@ export function CatalogAddDialog({
                   </Button>
                 </Dialog.Close>
                 <Button asChild>
-                  <Link href="/me/catalogs">管理我的目录</Link>
+                  <Link to="/me/catalogs">管理我的目录</Link>
                 </Button>
               </div>
             </>

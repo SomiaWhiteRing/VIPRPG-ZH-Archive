@@ -1,5 +1,3 @@
-"use client";
-
 import { Info } from "lucide-react";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 import type { ReactNode } from "react";

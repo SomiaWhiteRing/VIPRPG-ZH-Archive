@@ -1,22 +1,14 @@
-"use client";
-
 import { Notice } from "@/app/components/ui/notice";
 
-import Link from "next/link";
-import {
-  type ChangeEvent,
-  type DragEvent,
-  type RefObject,
-  useId,
-  useRef,
-  useState,
-} from "react";
-import { FileArchive, FolderOpen, LoaderCircle, Upload } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Progress } from "@/app/components/ui/progress";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
+import { FileArchive, FolderOpen, LoaderCircle, Upload } from "lucide-react";
+import type { ChangeEvent, DragEvent, RefObject } from "react";
+import { useId, useRef, useState } from "react";
+import { Link } from "react-router";
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceFile,
@@ -95,18 +87,28 @@ export function ArchiveSourcePicker({
         <div
           aria-describedby={instructionsId}
           aria-disabled={disabled || undefined}
-          aria-label={fileDragActive ? "松开以上传游戏文件" : "拖入游戏文件夹或 ZIP 压缩包"}
+          aria-label={
+            fileDragActive
+              ? "松开以上传游戏文件"
+              : "拖入游戏文件夹或 ZIP 压缩包"
+          }
           className={cn(
             "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             disabled
               ? "cursor-not-allowed opacity-60"
               : "cursor-pointer hover:border-primary hover:bg-primary/5",
-            fileDragActive && !disabled && "border-primary bg-primary/10 ring-2 ring-primary/20",
+            fileDragActive &&
+              !disabled &&
+              "border-primary bg-primary/10 ring-2 ring-primary/20",
           )}
           data-file-drag-active={fileDragActive || undefined}
           onClick={(event) => {
             const target = event.target;
-            if (target instanceof Element && target.closest("[data-upload-picker]")) return;
+            if (
+              target instanceof Element &&
+              target.closest("[data-upload-picker]")
+            )
+              return;
             openZipPicker();
           }}
           onDragEnter={(event) => {
@@ -132,7 +134,11 @@ export function ArchiveSourcePicker({
             if (!disabled && hasFiles) void onDrop(event);
           }}
           onKeyDown={(event) => {
-            if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+            if (
+              event.target !== event.currentTarget ||
+              (event.key !== "Enter" && event.key !== " ")
+            )
+              return;
             event.preventDefault();
             openZipPicker();
           }}
@@ -170,7 +176,10 @@ export function ArchiveSourcePicker({
                   const files = Array.from(event.target.files ?? []);
                   onModeChange("folder");
                   onFolder(
-                    files.map((file) => ({ file, relativePath: webkitPath(file) })),
+                    files.map((file) => ({
+                      file,
+                      relativePath: webkitPath(file),
+                    })),
                     folderNameFromPicker(files),
                   );
                 }}
@@ -200,12 +209,17 @@ function ExistingArchiveCard({
           <span className="min-w-0">
             <strong className="block truncate">{source.name}</strong>
             <span className="mt-0.5 block text-xs text-muted">
-              本站归档 · {source.fileCount.toLocaleString("zh-CN")} 个文件 · {formatBytes(source.sizeBytes)}
+              本站归档 · {source.fileCount.toLocaleString("zh-CN")} 个文件 ·{" "}
+              {formatBytes(source.sizeBytes)}
             </span>
           </span>
           <strong className="font-mono text-lg">100%</strong>
         </div>
-        <Progress aria-label="现有游戏文件已就绪" className="mt-4" value={100} />
+        <Progress
+          aria-label="现有游戏文件已就绪"
+          className="mt-4"
+          value={100}
+        />
         <div className="mt-2 text-xs text-muted">
           <strong>游戏文件已就绪</strong>
         </div>
@@ -243,11 +257,15 @@ function UploadTaskCard({
       ? uploadPhaseLabel(task.phase)
       : "准备上传";
   const canCancel = Boolean(
-    task && ["running", "waiting"].includes(task.status) && task.phase !== "committing",
+    task &&
+      ["running", "waiting"].includes(task.status) &&
+      task.phase !== "committing",
   );
   const showCancel = canceling || canCancel;
   const canRestart = Boolean(
-    !canceling && task && (["failed", "canceled"].includes(task.status) || task.result),
+    !canceling &&
+      task &&
+      (["failed", "canceled"].includes(task.status) || task.result),
   );
 
   return (
@@ -255,34 +273,66 @@ function UploadTaskCard({
       <div className="p-4">
         <div className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3">
           <span className="grid size-10 place-items-center rounded-md bg-primary/10 text-primary">
-            {mode === "folder" ? <FolderOpen className="size-5" /> : <FileArchive className="size-5" />}
+            {mode === "folder" ? (
+              <FolderOpen className="size-5" />
+            ) : (
+              <FileArchive className="size-5" />
+            )}
           </span>
           <span className="min-w-0">
             <strong className="block truncate">{sourceSummary.name}</strong>
             <span className="mt-0.5 block text-xs text-muted">
-              {mode === "folder" ? "文件夹" : "ZIP 压缩包"} · {sourceSummary.fileCount.toLocaleString("zh-CN")} 个文件 · {formatBytes(sourceSummary.sizeBytes)}
+              {mode === "folder" ? "文件夹" : "ZIP 压缩包"} ·{" "}
+              {sourceSummary.fileCount.toLocaleString("zh-CN")} 个文件 ·{" "}
+              {formatBytes(sourceSummary.sizeBytes)}
             </span>
           </span>
           <strong className="font-mono text-lg">{Math.round(progress)}%</strong>
         </div>
-        <Progress aria-label="游戏文件处理、上传与校验进度" className="mt-4" value={progress} />
+        <Progress
+          aria-label="游戏文件处理、上传与校验进度"
+          className="mt-4"
+          value={progress}
+        />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <strong>{progressLabel}</strong>
-          {task?.progress.currentPath ? <span className="max-w-full truncate font-mono">{task.progress.currentPath}</span> : null}
+          {task?.progress.currentPath ? (
+            <span className="max-w-full truncate font-mono">
+              {task.progress.currentPath}
+            </span>
+          ) : null}
         </div>
-        {task?.error ? <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">{task.error}</Notice> : null}
+        {task?.error ? (
+          <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">
+            {task.error}
+          </Notice>
+        ) : null}
         {task?.result ? (
           <Notice tone="success" className="mt-3 border p-3 text-sm">
             上传完成。
-            <Link className="font-semibold underline" href={`/games/${task.result.workId}`}>查看作品</Link>
+            <Link
+              className="font-semibold underline"
+              to={`/games/${task.result.workId}`}
+            >
+              查看作品
+            </Link>
           </Notice>
         ) : null}
       </div>
       {showCancel || canRestart ? (
         <footer className="flex justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
           {showCancel ? (
-            <Button aria-busy={canceling} disabled={canceling} onClick={onCancel} size="sm" type="button" variant="outline">
-              {canceling ? <LoaderCircle aria-hidden className="animate-spin" /> : null}
+            <Button
+              aria-busy={canceling}
+              disabled={canceling}
+              onClick={onCancel}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {canceling ? (
+                <LoaderCircle aria-hidden className="animate-spin" />
+              ) : null}
               {canceling ? "取消中" : "取消上传"}
             </Button>
           ) : null}
@@ -352,7 +402,10 @@ function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
 }
 
-export function normalizeFolderSource(rawFiles: UploadSourceFile[], suggestedName: string) {
+export function normalizeFolderSource(
+  rawFiles: UploadSourceFile[],
+  suggestedName: string,
+) {
   if (!rawFiles.length) throw new Error("文件夹中没有可读取的文件。");
   const normalized = rawFiles.map((item) => ({
     ...item,
@@ -360,10 +413,14 @@ export function normalizeFolderSource(rawFiles: UploadSourceFile[], suggestedNam
   }));
   const firstParts = normalized[0].relativePath.split("/");
   const commonRoot = firstParts.length > 1 ? firstParts[0] : null;
-  const strip = commonRoot && normalized.every((item) => item.relativePath.startsWith(`${commonRoot}/`));
+  const strip =
+    commonRoot &&
+    normalized.every((item) => item.relativePath.startsWith(`${commonRoot}/`));
   const files = normalized.map((item) => ({
     ...item,
-    relativePath: strip ? item.relativePath.split("/").slice(1).join("/") : item.relativePath,
+    relativePath: strip
+      ? item.relativePath.split("/").slice(1).join("/")
+      : item.relativePath,
   }));
   return { sourceName: suggestedName || commonRoot || "local-folder", files };
 }
@@ -373,7 +430,9 @@ export async function readDroppedFolder(
 ): Promise<{ sourceName: string; files: UploadSourceFile[] }> {
   const entries = Array.from(dataTransfer.items)
     .map((item): DroppedEntry | null => {
-      const getEntry = (item as unknown as { webkitGetAsEntry?: () => DroppedEntry | null }).webkitGetAsEntry;
+      const getEntry = (
+        item as unknown as { webkitGetAsEntry?: () => DroppedEntry | null }
+      ).webkitGetAsEntry;
       return getEntry?.call(item) ?? null;
     })
     .filter((entry): entry is DroppedEntry => entry !== null);
@@ -385,10 +444,16 @@ export async function readDroppedFolder(
     file,
     relativePath: webkitPath(file),
   }));
-  return { sourceName: folderNameFromPicker(Array.from(dataTransfer.files)), files };
+  return {
+    sourceName: folderNameFromPicker(Array.from(dataTransfer.files)),
+    files,
+  };
 }
 
-async function readDroppedEntry(entry: DroppedEntry, path: string): Promise<UploadSourceFile[]> {
+async function readDroppedEntry(
+  entry: DroppedEntry,
+  path: string,
+): Promise<UploadSourceFile[]> {
   if (entry.isFile) {
     const file = await new Promise<File>((resolve, reject) =>
       (entry as DroppedFileEntry).file(resolve, reject),
@@ -412,7 +477,10 @@ async function readDroppedEntry(entry: DroppedEntry, path: string): Promise<Uplo
 
 type DroppedEntry = { isFile: boolean; isDirectory: boolean; name: string };
 type DroppedFileEntry = DroppedEntry & {
-  file: (resolve: (file: File) => void, reject: (error: DOMException) => void) => void;
+  file: (
+    resolve: (file: File) => void,
+    reject: (error: DOMException) => void,
+  ) => void;
 };
 type DroppedDirectoryEntry = DroppedEntry & {
   createReader: () => {
@@ -424,7 +492,10 @@ type DroppedDirectoryEntry = DroppedEntry & {
 };
 
 function webkitPath(file: File): string {
-  return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+  return (
+    (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+    file.name
+  );
 }
 
 function folderNameFromPicker(files: File[]): string {

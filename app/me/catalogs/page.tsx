@@ -1,15 +1,53 @@
+import {
+  parseAccountPage,
+  requireAccountUser,
+} from "@/app/.server/auth/account-user";
+import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { CatalogCreateForm } from "@/app/catalogs/catalog-manager";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { CatalogCreateForm } from "@/app/catalogs/catalog-manager";
-import { requireAccountUser, parseAccountPage } from "@/lib/server/auth/account-user";
-import { searchCatalogsForOwner } from "@/lib/server/db/catalogs";
-import { AccountEmpty } from "@/app/components/profile/account-content";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
-export default async function MyCatalogsPage({ searchParams }: { searchParams: Promise<{ page?: string | string[] }> }) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const page = parseAccountPage((await searchParams).page);
-  const user = await requireAccountUser(`/me/catalogs${page > 1 ? `?page=${page}` : ""}`);
-  const result = await searchCatalogsForOwner({ userId: user.id, page, pageSize: 20 });
-  return <div className="grid gap-6"><PageHeader title="我的目录" subtitle={`共 ${result.total} 个公开目录`} /><CatalogCreateForm />{result.items.length ? <CatalogSummaryList items={result.items} showDescription /> : <AccountEmpty>还没有目录，可以在上方创建。</AccountEmpty>}<PaginationLinks basePath="/me/catalogs" page={page} pageSize={result.pageSize} total={result.total} /></div>;
+  const user = await requireAccountUser(
+    runtime,
+    `/me/catalogs${page > 1 ? `?page=${page}` : ""}`,
+  );
+  const result = await searchCatalogsForOwner(runtime, {
+    userId: user.id,
+    page,
+    pageSize: 20,
+  });
+
+  return { page, result };
+}
+
+export default function MyCatalogsPage() {
+  const { page, result } = useLoaderData<typeof loader>();
+  return (
+    <div className="grid gap-6">
+      <PageHeader title="我的目录" subtitle={`共 ${result.total} 个公开目录`} />
+      <CatalogCreateForm />
+      {result.items.length ? (
+        <CatalogSummaryList items={result.items} showDescription />
+      ) : (
+        <AccountEmpty>还没有目录，可以在上方创建。</AccountEmpty>
+      )}
+      <PaginationLinks
+        basePath="/me/catalogs"
+        page={page}
+        pageSize={result.pageSize}
+        total={result.total}
+      />
+    </div>
+  );
 }

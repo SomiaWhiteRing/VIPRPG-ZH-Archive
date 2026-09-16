@@ -1,20 +1,22 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import {
-  CharacterCreateDialog,
-  type CharacterNameInput,
-} from "@/app/components/characters/character-create-dialog";
+import type { CharacterNameInput } from "@/app/components/characters/character-create-dialog";
+import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
 import { Button } from "@/app/components/ui/button";
-import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
+import type { ApiResponsePayload } from "@/lib/ui/api-response";
+import { requestJson } from "@/lib/ui/api-response";
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router";
 
 type CharacterCreateResponse = ApiResponsePayload & {
   character?: { id: number };
 };
 
-export function CharacterCreateButton({ disabled = false }: { disabled?: boolean }) {
-  const router = useRouter();
+export function CharacterCreateButton({
+  disabled = false,
+}: {
+  disabled?: boolean;
+}) {
+  const navigate = useNavigate();
+
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -34,14 +36,21 @@ export function CharacterCreateButton({ disabled = false }: { disabled?: boolean
     );
     const characterId = payload.character?.id;
     if (!Number.isSafeInteger(characterId) || Number(characterId) <= 0) {
-      throw new Error("角色已创建，但服务器没有返回角色 ID。请刷新列表后查找该角色。");
+      throw new Error(
+        "角色已创建，但服务器没有返回角色 ID。请刷新列表后查找该角色。",
+      );
     }
-    router.push(`/admin/characters/${characterId}`);
+    navigate(`/admin/characters/${characterId}`);
   }
 
   return (
     <>
-      <Button disabled={disabled} onClick={() => setOpen(true)} ref={triggerRef} type="button">
+      <Button
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        ref={triggerRef}
+        type="button"
+      >
         创建角色
       </Button>
       <CharacterCreateDialog

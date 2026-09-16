@@ -23,7 +23,7 @@
 ## 失败分类
 
 - `scheduling`：出现 `SQLITE_BUSY` 或 database lock；停止并行 D1/Worker 检查，串行重跑一次。
-- `test-harness`：出现 watchdog timeout、Next.js dev overlay、Playwright locator 或浏览器驱动问题；不能据此重设计产品。若一个 HTTP 请求没有自己的超时，先把它视为测试可观测性缺口。
+- `test-harness`：出现 watchdog timeout、Vite 开发错误覆盖层、Playwright locator 或浏览器驱动问题；不能据此重设计产品。若一个 HTTP 请求没有自己的超时，先把它视为测试可观测性缺口。
 - `environment`：出现权限、文件不存在、命令不存在或本机依赖问题；先补运行环境。
 - `unknown-product-or-harness`：脚本只表明失败，不能直接断言是产品缺陷；结合失败阶段、最小复现和日志分类。
 
