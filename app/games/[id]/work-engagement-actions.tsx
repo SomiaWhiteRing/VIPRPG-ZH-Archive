@@ -101,8 +101,8 @@ export function CatalogAddDialog({
           </Dialog.Description>
           {catalogs.length ? (
             <>
-              <FormField label="目录">
-                <SelectField
+              <FormField controlId="games-id--field-1" label="目录">
+                <SelectField id="games-id--field-1"
                   aria-label="目录"
                   disabled={busy}
                   onValueChange={setCatalogId}

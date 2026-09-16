@@ -1,3 +1,4 @@
+import { VerificationCodeInput, EmailInput, PasswordInput } from "@/app/components/auth/auth-input";
 
 import { Notice } from "@/app/components/ui/notice";
 import { AccountField } from "@/app/components/profile/account-field";
@@ -35,17 +36,17 @@ export default async function EmailPage({ searchParams }: { searchParams: Promis
                 <Input disabled id="email-change-new" value={params.newEmail} />
               </AccountField>
               <AccountField htmlFor="email-change-code" label="验证码">
-                <Input autoComplete="one-time-code" id="email-change-code" inputMode="numeric" maxLength={6} name="code" required />
+                <VerificationCodeInput id="email-change-code" name="code" required />
               </AccountField>
               <div className="md:pl-[174px]"><Rm2kButton type="submit">确认修改邮箱</Rm2kButton></div>
             </form>
           ) : (
             <form action="/api/account/email/start" className="grid gap-4" method="post">
               <AccountField htmlFor="email-change-address" label="新邮箱">
-                <Input autoComplete="email" defaultValue={params.newEmail} id="email-change-address" name="newEmail" required type="email" />
+                <EmailInput defaultValue={params.newEmail} id="email-change-address" name="newEmail" required />
               </AccountField>
               <AccountField htmlFor="email-change-password" label="当前密码">
-                <Input autoComplete="current-password" id="email-change-password" name="currentPassword" required type="password" />
+                <PasswordInput id="email-change-password" name="currentPassword" required />
               </AccountField>
               <div className="md:pl-[174px]"><Rm2kButton type="submit">发送验证码</Rm2kButton></div>
             </form>

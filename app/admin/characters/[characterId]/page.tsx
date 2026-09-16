@@ -115,29 +115,29 @@ export default async function AdminCharacterEditPage({
 
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="名称">
-              <Input
+            <FormField controlId="admin-characters-characterId--field-1" label="名称">
+              <Input id="admin-characters-characterId--field-1"
                 defaultValue={character.primaryName}
                 name="primary_name"
                 required
               />
             </FormField>
-            <FormField label="原名">
-              <Input
+            <FormField controlId="admin-characters-characterId--field-2" label="原名">
+              <Input id="admin-characters-characterId--field-2"
                 defaultValue={character.originalName}
                 name="original_name"
                 required
               />
             </FormField>
-            <FormField label="简介" wide>
-              <Textarea
+            <FormField controlId="admin-characters-characterId--description" label="简介" wide>
+              <Textarea id="admin-characters-characterId--description"
                 defaultValue={character.description ?? ""}
                 name="description"
                 rows={6}
               />
             </FormField>
-            <FormField hint="每行一个；可添加、修改或删除。" label="日文别名">
-              <Textarea
+            <FormField controlId="admin-characters-characterId--field-3" hint="每行一个；可添加、修改或删除。" label="日文别名">
+              <Textarea aria-describedby="admin-characters-characterId--field-3-hint" id="admin-characters-characterId--field-3"
                 defaultValue={character.aliases
                   .filter((alias) => alias.language === "ja")
                   .map((alias) => alias.name)
@@ -146,11 +146,11 @@ export default async function AdminCharacterEditPage({
                 rows={5}
               />
             </FormField>
-            <FormField
+            <FormField controlId="admin-characters-characterId--field-4"
               hint="每行一个；角色名称本身不必重复填写。"
               label="中文别名"
             >
-              <Textarea
+              <Textarea aria-describedby="admin-characters-characterId--field-4-hint" id="admin-characters-characterId--field-4"
                 defaultValue={character.aliases
                   .filter((alias) => alias.language === "zh")
                   .map((alias) => alias.name)
@@ -163,12 +163,12 @@ export default async function AdminCharacterEditPage({
         </Pane>
 
         <Pane heading="合并重复角色" tone="danger">
-          <FormField
+          <FormField controlId="admin-characters-characterId--field-5"
             hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
             hintId="character-merge-target-hint"
             label="目标角色"
           >
-            <CharacterMergeTargetField
+            <CharacterMergeTargetField id="admin-characters-characterId--field-5"
               candidates={candidates
                 .filter((candidate) => candidate.id !== character.id)
                 .map((candidate) => ({

@@ -91,11 +91,11 @@ export function CatalogCreateForm() {
             填写目录标题和说明。
           </Dialog.Description>
           <form className="grid gap-4" onSubmit={submit}>
-            <FormField label="标题">
-              <Input required value={title} onChange={(event) => setTitle(event.target.value)} />
+            <FormField controlId="catalogs-field-1" label="标题">
+              <Input id="catalogs-field-1" required value={title} onChange={(event) => setTitle(event.target.value)} />
             </FormField>
-            <FormField label="说明">
-              <Textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
+            <FormField controlId="catalogs-field-2" label="说明">
+              <Textarea id="catalogs-field-2" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
             </FormField>
             {message ? <p className="m-0 text-sm text-red-700" role="status">{message}</p> : null}
             <div className="flex justify-end gap-2">

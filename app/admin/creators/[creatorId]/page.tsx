@@ -76,34 +76,34 @@ export default async function AdminCreatorEditPage({
 
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="名称">
-              <Input
+            <FormField controlId="admin-creators-creatorId--field-1" label="名称">
+              <Input id="admin-creators-creatorId--field-1"
                 defaultValue={creator.name}
                 name="name"
                 required
                 type="text"
               />
             </FormField>
-            <FormField
+            <FormField controlId="admin-creators-creatorId--field-2"
               hint="每行一个；规范名称不必重复填写。"
               label="别名"
               wide
             >
-              <Textarea
+              <Textarea aria-describedby="admin-creators-creatorId--field-2-hint" id="admin-creators-creatorId--field-2"
                 defaultValue={creator.aliases.join("\n")}
                 name="aliases"
                 rows={5}
               />
             </FormField>
-            <FormField label="个人链接">
-              <Input
+            <FormField controlId="admin-creators-creatorId--field-3" label="个人链接">
+              <Input id="admin-creators-creatorId--field-3"
                 defaultValue={creator.websiteUrl ?? ""}
                 name="website_url"
                 type="url"
               />
             </FormField>
-            <FormField label="简介" wide>
-              <Textarea defaultValue={creator.bio ?? ""} name="bio" rows={6} />
+            <FormField controlId="admin-creators-creatorId--field-4" label="简介" wide>
+              <Textarea id="admin-creators-creatorId--field-4" defaultValue={creator.bio ?? ""} name="bio" rows={6} />
             </FormField>
           </div>
         </Pane>
@@ -119,8 +119,8 @@ export default async function AdminCreatorEditPage({
           title="确认合并人物？"
           description="保留目标人物资料，将署名、别名和评论转移至目标，删除当前人物条目。此操作无法撤销。"
         >
-          <FormField label="目标人物 ID">
-            <Input name="target_id" type="number" min={1} required />
+          <FormField controlId="admin-creators-creatorId--field-5" label="目标人物 ID">
+            <Input id="admin-creators-creatorId--field-5" name="target_id" type="number" min={1} required />
           </FormField>
           <Button className="mt-3" type="submit" variant="destructive">
             合并到目标人物

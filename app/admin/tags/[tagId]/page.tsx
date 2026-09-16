@@ -91,11 +91,11 @@ export default async function AdminTagEditPage({
         <input name="tag_id" type="hidden" value={tag.id} />
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="名称">
-              <Input defaultValue={tag.name} name="name" required />
+            <FormField controlId="admin-tags-tagId--field-1" label="名称">
+              <Input id="admin-tags-tagId--field-1" defaultValue={tag.name} name="name" required />
             </FormField>
-            <FormField label="命名空间">
-              <SelectField
+            <FormField controlId="admin-tags-tagId--field-2" label="命名空间">
+              <SelectField id="admin-tags-tagId--field-2"
                 aria-label="命名空间"
                 defaultValue={tag.namespace}
                 name="namespace"
@@ -109,8 +109,8 @@ export default async function AdminTagEditPage({
                 ]}
               />
             </FormField>
-            <FormField label="描述" wide>
-              <Textarea
+            <FormField controlId="admin-tags-tagId--field-3" label="描述" wide>
+              <Textarea id="admin-tags-tagId--field-3"
                 defaultValue={tag.description ?? ""}
                 name="description"
                 rows={6}
@@ -120,12 +120,12 @@ export default async function AdminTagEditPage({
         </Pane>
 
         <Pane heading="合并重复标签" tone="danger">
-          <FormField
+          <FormField controlId="admin-tags-tagId--field-4"
             hint="提交后，游戏关联会移至目标标签，当前标签会被删除。"
             hintId="tag-merge-target-hint"
             label="目标标签"
           >
-            <SelectField
+            <SelectField id="admin-tags-tagId--field-4"
               aria-describedby="tag-merge-target-hint"
               aria-label="目标标签"
               name="merge_target_id"
