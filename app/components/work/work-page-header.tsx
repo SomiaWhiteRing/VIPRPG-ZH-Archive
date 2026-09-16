@@ -1,15 +1,11 @@
-import { SectionNavigation } from "@/app/components/ui/section-navigation";
+import {
+  SectionNavigation,
+  type SectionLink,
+} from "@/app/components/ui/section-navigation";
 import { engineLabel, languageLabel } from "@/lib/labels";
 import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-
-type WorkPageTab = {
-  href: string;
-  label: string;
-  active?: boolean;
-  count?: number;
-};
 
 export function WorkPageHeader({
   aliases,
@@ -24,7 +20,7 @@ export function WorkPageHeader({
   engineFamily: string;
   language: string;
   originalTitle: string;
-  tabs: WorkPageTab[];
+  tabs: SectionLink[];
 }) {
   const title = chineseTitle || originalTitle;
 

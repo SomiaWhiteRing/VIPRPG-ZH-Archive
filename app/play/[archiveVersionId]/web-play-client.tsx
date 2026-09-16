@@ -998,23 +998,30 @@ async function registerPlayServiceWorker(): Promise<void> {
     scope: "/play/",
   });
   await registration.update().catch(() => undefined);
-  await navigator.serviceWorker.ready;
+  // Play links load a document inside /play/. SPA navigation from another scope
+  // cannot give that document control, even when the registration is active.
+  const scriptUrl = new URL("/play/sw.js", window.location.origin).href;
+  const controlled = () =>
+    navigator.serviceWorker.controller?.scriptURL === scriptUrl;
+  if (controlled()) return;
 
-  if (!navigator.serviceWorker.controller) {
-    await new Promise<void>((resolve) => {
-      const timer = window.setTimeout(resolve, 1500);
-
-      navigator.serviceWorker.addEventListener(
-        "controllerchange",
-        () => {
-          window.clearTimeout(timer);
-          resolve();
-        },
-        { once: true },
-      );
-      registration.update().catch(() => undefined);
-    });
-  }
+  await new Promise<void>((resolve, reject) => {
+    function cleanup() {
+      window.clearTimeout(timer);
+      navigator.serviceWorker.removeEventListener("controllerchange", onControl);
+    }
+    function onControl() {
+      if (!controlled()) return;
+      cleanup();
+      resolve();
+    }
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("在线游玩初始化超时，请刷新页面后重试。"));
+    }, 10_000);
+    navigator.serviceWorker.addEventListener("controllerchange", onControl);
+    onControl();
+  });
 }
 
 function focusPlayerCanvas(): void {

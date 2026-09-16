@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 export type SectionLink = {
   href: string;
+  reloadDocument?: boolean;
   label: string;
   active?: boolean;
   count?: number;
@@ -30,6 +31,7 @@ export function SectionNavigation({ items }: { items: SectionLink[] }) {
                 item.active && "border-primary font-semibold text-[#1f6f67]",
               )}
               to={item.href}
+              reloadDocument={item.reloadDocument}
             >
               {item.label}
               {item.count !== undefined ? (

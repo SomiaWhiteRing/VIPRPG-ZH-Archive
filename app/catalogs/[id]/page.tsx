@@ -72,7 +72,10 @@ export default function CatalogPage() {
     canEditItems,
   } = useLoaderData<typeof loader>();
   return (
-    <main className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8">
+    <main
+      key={`${catalog.id}:${currentUser?.id ?? "anonymous"}`}
+      className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8"
+    >
       <BackLink href="/catalogs" label="返回目录" />
       <div className="mt-5 flex flex-col gap-8 min-[981px]:flex-row">
         <div className="min-w-0 flex-1">

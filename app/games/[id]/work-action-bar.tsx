@@ -29,6 +29,7 @@ export function WorkActionBar({
             <Rm2kButton
               className="min-h-12.5 w-full text-base"
               href={`/play/${archive.id}`}
+              reloadDocument
               icon={<Play aria-hidden />}
             >
               在线游玩
