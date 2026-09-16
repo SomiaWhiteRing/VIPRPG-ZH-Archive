@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import Link from "next/link";
 import type { GameWorkSummary } from "@/lib/server/db/game-library";
 import { engineLabel, engineShortLabel, languageLabel } from "@/lib/labels";
@@ -28,18 +28,7 @@ export function GameCard({ work }: { work: GameWorkSummary }) {
       href={`/games/${work.id}`}
     >
       <div className="relative grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 font-mono text-xs font-bold text-muted">
-        {work.previewBlobSha256 ? (
-          <Image
-            alt=""
-            className="h-full w-full object-cover"
-            height={315}
-            src={`/api/media/blobs/${work.previewBlobSha256}`}
-            unoptimized
-            width={420}
-          />
-        ) : (
-          <span>{engineLabel(work.engineFamily)}</span>
-        )}
+        <WorkThumbnail blobSha256={work.previewBlobSha256} alt="" width={420} height={315} imageClassName="h-full w-full object-cover" fallback={engineLabel(work.engineFamily)} />
         {size ? (
           <span className="absolute right-1.5 bottom-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white max-[640px]:hidden">
             {size}

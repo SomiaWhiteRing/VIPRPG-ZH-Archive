@@ -1,8 +1,8 @@
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { Badge } from "@/app/components/ui/badge";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import { InfoRow } from "@/app/components/ui/info-row";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
@@ -70,11 +70,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
                   {works.map((work) => (
                     <li className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 py-4 max-[480px]:grid-cols-[5rem_minmax(0,1fr)]" key={work.workId}>
                       <Link className="relative aspect-4/3 overflow-hidden rounded-md border border-border bg-muted/15" href={`/games/${work.workId}`}>
-                        {work.previewBlobSha256 ? (
-                          <Image alt="" className="object-cover" fill sizes="112px" src={`/api/media/blobs/${work.previewBlobSha256}`} unoptimized />
-                        ) : (
-                          <span aria-hidden className="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white">作</span>
-                        )}
+                        <WorkThumbnail blobSha256={work.previewBlobSha256} alt="" sizes="112px" imageClassName="object-cover" fallbackClassName="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white" fallback="作" />
                       </Link>
                       <div className="min-w-0 self-center">
                         <Link className="font-bold text-[#1f6f67] wrap-anywhere hover:underline" href={`/games/${work.workId}`}>{work.workTitle}</Link>

@@ -1,7 +1,8 @@
-import Image from "next/image";
+import { WorkListSummary } from "@/app/components/work/work-list-summary";
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { engineLabel, languageLabel } from "@/lib/labels";
+import { engineLabel } from "@/lib/labels";
 
 export type WorkListItemData = {
   workId: number;
@@ -26,11 +27,6 @@ export function WorkListItem({
   note?: string | null;
 }) {
   const href = `/games/${item.workId}`;
-  const metadata = [
-    item.originalReleaseDate,
-    engineLabel(item.engineFamily),
-    languageLabel(item.language),
-  ].filter(Boolean);
 
   return (
     <li className="flex items-start gap-3 py-4 sm:gap-4">
@@ -42,41 +38,13 @@ export function WorkListItem({
         className="group relative block aspect-4/3 w-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
         href={href}
       >
-        {item.previewBlobSha256 ? (
-          <Image
-            alt=""
-            className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-            height={96}
-            src={`/api/media/blobs/${item.previewBlobSha256}`}
-            unoptimized
-            width={128}
-          />
-        ) : (
-          <span className="flex h-full items-center justify-center px-1 text-center font-mono text-[10px] text-muted">
-            {engineLabel(item.engineFamily)}
-          </span>
-        )}
+        <WorkThumbnail blobSha256={item.previewBlobSha256} alt="" width={128} height={96} imageClassName="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" fallbackClassName="flex h-full items-center justify-center px-1 text-center font-mono text-[10px] text-muted" fallback={engineLabel(item.engineFamily)} />
       </Link>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-start gap-2">
-          <Link
-            className="min-w-0 flex-1 text-[15.5px] font-bold leading-[1.45] hover:text-primary hover:underline hover:underline-offset-3"
-            href={href}
-          >
-            {item.title}
-          </Link>
-          {management ? <div className="shrink-0">{management}</div> : null}
-        </div>
-        {item.chineseTitle ? (
-          <p className="mt-0.5 text-[12.5px] text-muted">{item.originalTitle}</p>
-        ) : null}
-        <p className="mt-1 font-mono text-xs text-muted">{metadata.join(" / ")}</p>
-        {note ? (
+      <WorkListSummary href={href} title={item.title} originalTitle={item.chineseTitle ? item.originalTitle : null} releaseDate={item.originalReleaseDate} engineFamily={item.engineFamily} language={item.language} management={management}>{note ? (
           <p className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-muted/5 px-3 py-2 text-[13px] leading-[1.6]">
             {note}
           </p>
-        ) : null}
-      </div>
+        ) : null}</WorkListSummary>
     </li>
   );
 }
