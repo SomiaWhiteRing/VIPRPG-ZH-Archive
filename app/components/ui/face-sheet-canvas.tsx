@@ -1,10 +1,19 @@
-"use client";
-
-import Image from "next/image";
 import { cn } from "@/lib/ui/cn";
 
-const GRID_COLUMNS = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4"];
-const GRID_ROWS = ["", "grid-rows-1", "grid-rows-2", "grid-rows-3", "grid-rows-4"];
+const GRID_COLUMNS = [
+  "",
+  "grid-cols-1",
+  "grid-cols-2",
+  "grid-cols-3",
+  "grid-cols-4",
+];
+const GRID_ROWS = [
+  "",
+  "grid-rows-1",
+  "grid-rows-2",
+  "grid-rows-3",
+  "grid-rows-4",
+];
 
 export function FaceSheetCanvas({
   blobSha256,
@@ -35,14 +44,14 @@ export function FaceSheetCanvas({
       role="group"
       style={{ height: height * scale, width: width * scale }}
     >
-      <Image
+      <img
         alt=""
         className="block h-full w-full select-none"
         draggable={false}
         height={height}
         src={src ?? `/api/media/blobs/${blobSha256}`}
-        unoptimized
         width={width}
+        loading="lazy"
       />
       <div
         className={cn(
@@ -54,7 +63,8 @@ export function FaceSheetCanvas({
         {Array.from({ length: rows * columns }, (_, index) => {
           const row = Math.floor(index / columns);
           const column = index % columns;
-          const selected = selectedCell?.row === row && selectedCell.column === column;
+          const selected =
+            selectedCell?.row === row && selectedCell.column === column;
           return (
             <button
               aria-label={`第 ${row + 1} 行，第 ${column + 1} 列`}

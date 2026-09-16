@@ -1,7 +1,6 @@
-import Image from "next/image";
-import type { CSSProperties } from "react";
 import type { CharacterPortrait as CharacterPortraitValue } from "@/lib/character-names";
 import { cn } from "@/lib/ui/cn";
+import type { CSSProperties } from "react";
 
 const CHARACTER_TONES = [
   "bg-[#7d5ba6]",
@@ -43,15 +42,15 @@ export function CharacterPortrait({
         )}
         style={{ height: size, width: size }}
       >
-        <Image
+        <img
           alt=""
           className="absolute select-none"
           draggable={false}
           height={portrait.height}
           src={previewSrc ?? `/api/media/blobs/${portrait.blobSha256}`}
           style={imageStyle}
-          unoptimized
           width={portrait.width}
+          loading="lazy"
         />
       </span>
     );
@@ -59,7 +58,7 @@ export function CharacterPortrait({
 
   if (previewSrc) {
     return (
-      <Image
+      <img
         alt=""
         aria-hidden="true"
         className={cn(
@@ -68,8 +67,8 @@ export function CharacterPortrait({
         )}
         height={size}
         src={previewSrc}
-        unoptimized
         width={size}
+        loading="lazy"
       />
     );
   }
@@ -89,7 +88,8 @@ export function CharacterPortrait({
 }
 
 function toneIndex(value: number | string): number {
-  if (typeof value === "number") return Math.abs(value) % CHARACTER_TONES.length;
+  if (typeof value === "number")
+    return Math.abs(value) % CHARACTER_TONES.length;
   let total = 0;
   for (const character of value) total += character.codePointAt(0) ?? 0;
   return total % CHARACTER_TONES.length;

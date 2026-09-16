@@ -1,37 +1,51 @@
-import { Input } from "@/app/components/ui/input";
-import { SelectField } from "@/app/components/ui/select";
-import { Button, buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { getArchiveVersionForAdminEdit } from "@/app/.server/db/game-library";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { BackLink } from "@/app/components/ui/back-link";
+import { Button, buttonVariants } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
+import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { SectionHeading } from "@/app/components/ui/section-heading";
+import { SelectField } from "@/app/components/ui/select";
 import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { hasPermission } from "@/lib/authz/permissions";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { getArchiveVersionForAdminEdit } from "@/lib/server/db/game-library";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
-import { StickySaveBar } from "@/app/admin/admin-list-controls";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-export default async function AdminArchiveVersionEditPage({
-  params,
-}: {
-  params: Promise<{ archiveVersionId: string }>;
-}) {
   const archiveVersionId = parseId((await params).archiveVersionId);
   const adminUser = await requirePagePermission(
+    runtime,
     `/admin/archive-versions/${archiveVersionId}`,
     "archive_version.update",
   );
-  const archiveVersion = await getArchiveVersionForAdminEdit(archiveVersionId);
-  if (!archiveVersion) notFound();
+  const archiveVersion = await getArchiveVersionForAdminEdit(
+    runtime,
+    archiveVersionId,
+  );
+  if (!archiveVersion) throwNotFound();
+
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    archiveVersion,
+  };
+}
+
+export default function AdminArchiveVersionEditPage() {
+  const { adminUser, archiveVersion } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={archiveVersion.id}>
       <PageHeader
         compact
         eyebrow="编辑归档快照"
@@ -43,14 +57,14 @@ export default async function AdminArchiveVersionEditPage({
             {hasPermission(adminUser, "work.metadata.update_any") ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
-                href={`/admin/works/${archiveVersion.workId}`}
+                to={`/admin/works/${archiveVersion.workId}`}
               >
                 编辑游戏
               </Link>
             ) : null}
             <Link
               className={buttonVariants({ variant: "outline" })}
-              href={`/games/${archiveVersion.workId}`}
+              to={`/games/${archiveVersion.workId}`}
             >
               查看公开页
             </Link>
@@ -70,8 +84,12 @@ export default async function AdminArchiveVersionEditPage({
         <Pane heading="快照资料">
           <SectionHeading title="只修改归档事实，不改变游戏关系" />
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField controlId="admin-archive-versions-archiveVersionId--field-1" label="状态">
-              <SelectField id="admin-archive-versions-archiveVersionId--field-1"
+            <FormField
+              controlId="admin-archive-versions-archiveVersionId--field-1"
+              label="状态"
+            >
+              <SelectField
+                id="admin-archive-versions-archiveVersionId--field-1"
                 aria-label="状态"
                 defaultValue={archiveVersion.status}
                 name="status"
@@ -81,14 +99,22 @@ export default async function AdminArchiveVersionEditPage({
                 ]}
               />
             </FormField>
-            <FormField controlId="admin-archive-versions-archiveVersionId--field-2" label="来源名称">
-              <Input id="admin-archive-versions-archiveVersionId--field-2"
+            <FormField
+              controlId="admin-archive-versions-archiveVersionId--field-2"
+              label="来源名称"
+            >
+              <Input
+                id="admin-archive-versions-archiveVersionId--field-2"
                 defaultValue={archiveVersion.sourceName ?? ""}
                 name="source_name"
               />
             </FormField>
-            <FormField controlId="admin-archive-versions-archiveVersionId--field-3" label="来源网址">
-              <Input id="admin-archive-versions-archiveVersionId--field-3"
+            <FormField
+              controlId="admin-archive-versions-archiveVersionId--field-3"
+              label="来源网址"
+            >
+              <Input
+                id="admin-archive-versions-archiveVersionId--field-3"
                 defaultValue={archiveVersion.sourceUrl ?? ""}
                 name="source_url"
                 type="url"
@@ -189,6 +215,6 @@ export default async function AdminArchiveVersionEditPage({
 
 function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0) notFound();
+  if (!Number.isSafeInteger(id) || id <= 0) throwNotFound();
   return id;
 }

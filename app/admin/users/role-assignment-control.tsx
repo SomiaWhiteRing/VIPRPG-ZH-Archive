@@ -1,10 +1,8 @@
-"use client";
-
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { SelectField } from "@/app/components/ui/select";
-import type { RoleSummary } from "@/lib/server/db/permissions";
+import type { RoleSummary } from "@/lib/dto/db/permissions";
+import { useState, useTransition } from "react";
+import { useRevalidator } from "react-router";
 
 export function RoleAssignmentControl({
   userId,
@@ -16,14 +14,19 @@ export function RoleAssignmentControl({
   roles: RoleSummary[];
 }) {
   const roleIds = initialRoleIds;
-  const router = useRouter();
+
+  const revalidator = useRevalidator();
   const [refreshing, startTransition] = useTransition();
   const [selectedRoleId, setSelectedRoleId] = useState(roles[0]?.id ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const assigned = roles.filter((role) => roleIds.includes(role.id));
-  const available = roles.filter((role) => role.status === "active" && !roleIds.includes(role.id));
-  const effectiveSelectedRoleId = available.some((role) => role.id === selectedRoleId)
+  const available = roles.filter(
+    (role) => role.status === "active" && !roleIds.includes(role.id),
+  );
+  const effectiveSelectedRoleId = available.some(
+    (role) => role.id === selectedRoleId,
+  )
     ? selectedRoleId
     : (available[0]?.id ?? 0);
 
@@ -37,8 +40,9 @@ export function RoleAssignmentControl({
         error?: string;
         detail?: string;
       };
-      if (!response.ok || !payload.ok) throw new Error(payload.detail ?? payload.error ?? "操作失败");
-      startTransition(() => router.refresh());
+      if (!response.ok || !payload.ok)
+        throw new Error(payload.detail ?? payload.error ?? "操作失败");
+      startTransition(() => revalidator.revalidate());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "操作失败");
       throw cause;
@@ -75,8 +79,17 @@ export function RoleAssignmentControl({
     <div className="grid min-w-56 gap-2">
       {assigned.map((role) => (
         <div className="flex items-center justify-between gap-2" key={role.id}>
-          <span className="text-sm">{role.name}{role.status === "disabled" ? "（已停用）" : ""}</span>
-          <Button disabled={saving || refreshing} onClick={() => remove(role.id)} size="sm" type="button" variant="outline">
+          <span className="text-sm">
+            {role.name}
+            {role.status === "disabled" ? "（已停用）" : ""}
+          </span>
+          <Button
+            disabled={saving || refreshing}
+            onClick={() => remove(role.id)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             移除
           </Button>
         </div>
@@ -93,7 +106,12 @@ export function RoleAssignmentControl({
             }))}
             value={String(effectiveSelectedRoleId)}
           />
-          <Button disabled={saving || refreshing} onClick={assign} size="sm" type="button">
+          <Button
+            disabled={saving || refreshing}
+            onClick={assign}
+            size="sm"
+            type="button"
+          >
             分配
           </Button>
         </div>

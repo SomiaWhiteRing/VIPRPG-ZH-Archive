@@ -1,25 +1,27 @@
-import { EmptyState } from "@/app/components/ui/empty-state";
-import Link from "next/link";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { getD1 } from "@/lib/server/db/d1";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { getD1 } from "@/app/.server/db/d1";
+import { forumImageCleanupSql } from "@/app/.server/forum/image-storage";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { Button } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { forumPage } from "@/lib/forum";
-import { forumImageCleanupSql } from "@/lib/server/forum/image-storage";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { ImageCleanupButton } from "./cleanup-button";
-export const dynamic = "force-dynamic";
-export default async function ForumImageCleanup({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   await requirePagePermission(
+    runtime,
     "/admin/discussions/images",
     "forum.content.moderate_any",
   );
   const page = forumPage((await searchParams).page);
-  const rows = await getD1()
+  const rows = await getD1(runtime)
     .prepare(
       `SELECT i.id,i.status,i.created_at,u.display_name AS author,p.topic_id,p.post_number FROM forum_images i JOIN users u ON u.id=i.user_id LEFT JOIN forum_posts p ON p.id=i.post_id WHERE i.status IN('ready','failed','cleanup','uncertain','uploading') AND ${forumImageCleanupSql} ORDER BY i.created_at DESC,i.id LIMIT 51 OFFSET ?`,
     )
@@ -32,10 +34,16 @@ export default async function ForumImageCleanup({
       topic_id: number | null;
       post_number: number | null;
     }>();
+
+  return { page, rows };
+}
+
+export default function ForumImageCleanup() {
+  const { page, rows } = useLoaderData<typeof loader>();
   return (
     <main className="mx-auto grid w-[min(1180px,calc(100%-2rem))] gap-4 py-6">
       <PageHeader title="讨论图片清理" />
-      <Link href="/admin/discussions" className="text-sm text-primary">
+      <Link to="/admin/discussions" className="text-sm text-primary">
         返回讨论管理
       </Link>
       <p className="text-sm text-muted">
@@ -64,7 +72,9 @@ export default async function ForumImageCleanup({
               <form action="/api/admin/discussions/images" method="post">
                 <Input type="hidden" name="id" value={row.id} />
                 <Input type="hidden" name="op" value="reconcile" />
-                <Button type="submit" variant="outline">核对上传状态</Button>
+                <Button type="submit" variant="outline">
+                  核对上传状态
+                </Button>
               </form>
             ) : (
               <ImageCleanupButton
@@ -78,16 +88,14 @@ export default async function ForumImageCleanup({
           </li>
         ))}
       </ul>
-      {!rows.results.length ? (
-        <EmptyState title="暂无待清理图片。" />
-      ) : null}
+      {!rows.results.length ? <EmptyState title="暂无待清理图片。" /> : null}
       <nav
         className="flex gap-4 text-sm text-primary"
         aria-label="图片清理分页"
       >
-        {page > 1 ? <Link href={`?page=${page - 1}`}>上一页</Link> : null}
+        {page > 1 ? <Link to={`?page=${page - 1}`}>上一页</Link> : null}
         {rows.results.length > 50 ? (
-          <Link href={`?page=${page + 1}`}>下一页</Link>
+          <Link to={`?page=${page + 1}`}>下一页</Link>
         ) : null}
       </nav>
     </main>

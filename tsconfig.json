@@ -1,12 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "es2022"
-    ],
-    "allowJs": false,
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -20,26 +16,23 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "rootDirs": [".", "./.react-router/types"],
+    "types": ["node", "vite/client"]
   },
   "include": [
-    "next-env.d.ts",
-    "cloudflare-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "app/**/*.ts",
+    "app/.server/**/*.ts",
+    "app/**/*.tsx",
+    "lib/**/*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.mjs",
+    "tools/**/*.ts",
+    "worker/**/*.mjs",
+    "*.ts",
+    "*.mjs",
+    ".react-router/types/**/*"
   ],
-  "exclude": [
-    "node_modules",
-    "output"
-  ]
+  "exclude": ["node_modules", "output", "build", ".wrangler"]
 }

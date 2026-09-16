@@ -1,24 +1,43 @@
-import { PageContainer } from "@/app/components/ui/page-container";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { redirectPage } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { runtimeContext } from "@/app/.server/router-context";
+import { loadUploadSuggestions } from "@/app/.server/upload-suggestions";
 import { buttonVariants } from "@/app/components/ui/button";
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { canPublishWork } from "@/lib/authz/permissions";
-import { UploadClient } from "@/app/upload/upload-client";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
-import { loadUploadSuggestions } from "@/app/upload/upload-suggestions";
+import { UploadClient } from "@/app/upload/upload-client";
+import { canPublishWork } from "@/lib/authz/permissions";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
 
-export default async function UploadPage() {
-  const currentUser = await getCurrentUserFromCookies();
+  const currentUser = await getCurrentUser(runtime);
 
   if (!currentUser) {
-    redirect("/login?next=/upload");
+    redirectPage("/login?next=/upload");
   }
 
-  if (!canPublishWork(currentUser)) {
+  const suggestions = canPublishWork(currentUser)
+    ? await loadUploadSuggestions(runtime)
+    : null;
+
+  return {
+    currentUser: pickPageFields(currentUser, [
+      "id",
+      "displayName",
+      "permissionKeys",
+    ]),
+    suggestions,
+  };
+}
+
+export default function UploadPage() {
+  const { currentUser, suggestions } = useLoaderData<typeof loader>();
+  if (!suggestions) {
     return (
       <PageContainer className="space-y-5">
         <PageHeader compact title="需要上传者权限" />
@@ -26,7 +45,7 @@ export default async function UploadPage() {
         <Pane>
           <p>上传需要上传者权限，可在「我的账户」申请。</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Link className={buttonVariants()} href="/me#upload-access">
+            <Link className={buttonVariants()} to="/me#upload-access">
               前往我的账户
             </Link>
           </div>
@@ -34,9 +53,6 @@ export default async function UploadPage() {
       </PageContainer>
     );
   }
-
-  const suggestions = await loadUploadSuggestions();
-
   return (
     <PageContainer className="space-y-5">
       <PageHeader compact title="上传游戏" />

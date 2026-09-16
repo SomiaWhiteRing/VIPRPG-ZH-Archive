@@ -1,24 +1,23 @@
-"use client";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { ForumImages } from "@/app/discussions/images";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
-import { SelectField } from "@/app/components/ui/select";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { SelectField } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
+import { ForumImages } from "@/app/discussions/images";
 import {
   ForumModal,
   ForumTagEditor,
   ForumTime,
   forumRequest,
 } from "@/app/discussions/shared";
-import { forumHref, type ForumPage, type ForumViewer } from "@/lib/forum";
-import type { ForumAdminDetail, ForumAdminRow } from "@/lib/server/forum/admin";
+import type { ForumAdminDetail, ForumAdminRow } from "@/lib/dto/forum/admin";
+import type { ForumPage, ForumViewer } from "@/lib/forum";
+import { forumHref } from "@/lib/forum";
+import { useState } from "react";
+import { Link, useRevalidator } from "react-router";
 export function AdminDiscussions({
   data,
   view,
@@ -38,7 +37,8 @@ export function AdminDiscussions({
     } | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const router = useRouter();
+
+  const revalidator = useRevalidator();
   async function open(row: ForumAdminRow) {
     setBusy(true);
     setError("");
@@ -59,10 +59,7 @@ export function AdminDiscussions({
   }
   return (
     <main>
-      <PageHeader
-        compact
-        title="讨论管理"
-      />
+      <PageHeader compact title="讨论管理" />
       <nav className="flex flex-wrap gap-4 text-sm" aria-label="讨论管理视图">
         {(viewer.moderate
           ? [
@@ -76,13 +73,13 @@ export function AdminDiscussions({
             key={value}
             className={view === value ? "font-bold text-primary underline" : ""}
             aria-current={view === value ? "page" : undefined}
-            href={forumHref("/admin/discussions", { view: value })}
+            to={forumHref("/admin/discussions", { view: value })}
           >
             {label}
           </Link>
         ))}
         {viewer.moderate ? (
-          <Link href="/admin/discussions/images" className="text-primary">
+          <Link to="/admin/discussions/images" className="text-primary">
             图片清理
           </Link>
         ) : null}
@@ -195,7 +192,11 @@ export function AdminDiscussions({
           </tbody>
         </table>
         {!data.items.length ? (
-          <EmptyState title="没有匹配的记录。" variant="plain" className="p-4" />
+          <EmptyState
+            title="没有匹配的记录。"
+            variant="plain"
+            className="p-4"
+          />
         ) : null}
       </div>
       <PaginationLinks
@@ -214,7 +215,7 @@ export function AdminDiscussions({
           onClose={() => setSelected(null)}
           onSaved={() => {
             setSelected(null);
-            router.refresh();
+            revalidator.revalidate();
           }}
         />
       ) : null}

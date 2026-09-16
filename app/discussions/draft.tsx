@@ -1,9 +1,8 @@
-"use client";
-import type {ReactNode} from 'react';
-import {BottomBar} from '@/app/components/ui/bottom-bar';
-import {UserAvatar} from '@/app/components/ui/user-avatar';
-import type {ForumEditVersion,ForumTarget,ForumViewer} from '@/lib/forum';
-import type {DraftImage} from './images';
+import { BottomBar } from "@/app/components/ui/bottom-bar";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
+import type { ForumEditVersion, ForumTarget, ForumViewer } from "@/lib/forum";
+import type { ReactNode } from "react";
+import type { DraftImage } from "./images";
 
 export type ForumDraft = {
   editorId: string;
@@ -68,7 +67,6 @@ export function ForumReplyBar({
     </BottomBar>
   );
 }
-
 
 export const forumReplyLauncherClass =
   "flex min-h-10 w-full items-center justify-start gap-2 font-normal rounded-md border border-border bg-muted/10 px-3 py-2 text-left text-sm text-muted hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-50";

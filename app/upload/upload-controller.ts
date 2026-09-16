@@ -1,26 +1,25 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { rememberPublishedTranslators } from "@/app/upload/translation-preference";
+import type { DraftLock } from "@/app/upload/upload-drafts";
 import {
   acquireDraftLock,
   deleteUploadDraft,
   listUploadDrafts,
   putUploadDraft,
   sourceObjectReferences,
-  type DraftLock,
 } from "@/app/upload/upload-drafts";
-import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
 import type {
   BrowserUploadTaskSnapshot,
-  UploadTaskCommitResult,
   MetadataBlobUpload,
   UploadRecoveryDraft,
   UploadSourceFile,
   UploadSourceKind,
+  UploadTaskCommitResult,
   UploadWorkerInput,
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
+import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
+import { useEffect, useRef, useState } from "react";
 
 type PendingCancel = {
   promise: Promise<boolean>;
@@ -44,7 +43,8 @@ export function useUploadController(accountId: number) {
   const [drafts, setDrafts] = useState<UploadRecoveryDraft[]>([]);
   const [committingDraftIds, setCommittingDraftIds] = useState<number[]>([]);
   const [controllerError, setControllerError] = useState<string | null>(null);
-  const [pendingMetadataConfirmed, setPendingMetadataConfirmed] = useState(false);
+  const [pendingMetadataConfirmed, setPendingMetadataConfirmed] =
+    useState(false);
   const [starting, setStarting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -55,7 +55,10 @@ export function useUploadController(accountId: number) {
     metadataBlobs: MetadataBlobUpload[];
   } | null>(null);
   const draftLockRef = useRef<{ jobId: number; lock: DraftLock } | null>(null);
-  const lockRequestRef = useRef<{ jobId: number; promise: Promise<DraftLock | null> } | null>(null);
+  const lockRequestRef = useRef<{
+    jobId: number;
+    promise: Promise<DraftLock | null>;
+  } | null>(null);
   const pendingCancelRef = useRef<PendingCancel | null>(null);
   const disposedRef = useRef(false);
 
@@ -78,7 +81,10 @@ export function useUploadController(accountId: number) {
         pendingLocalTaskIdRef.current = message.task.localTaskId;
         updateTask(message.task);
         if (message.task.status === "completed" && message.task.result) {
-          rememberPublishedTranslators(accountId, message.task.result.translators);
+          rememberPublishedTranslators(
+            accountId,
+            message.task.result.translators,
+          );
         }
         const pendingMetadata = pendingMetadataRef.current;
         if (
@@ -93,7 +99,10 @@ export function useUploadController(accountId: number) {
             ...pendingMetadata,
           } satisfies UploadWorkerInput);
         }
-        if (message.task.serverImportJobId && !isTerminalTaskStatus(message.task.status)) {
+        if (
+          message.task.serverImportJobId &&
+          !isTerminalTaskStatus(message.task.status)
+        ) {
           beginTaskLock(worker, message.task);
         }
         return;
@@ -119,31 +128,39 @@ export function useUploadController(accountId: number) {
 
   function beginTaskLock(worker: Worker, nextTask: BrowserUploadTaskSnapshot) {
     const jobId = nextTask.serverImportJobId;
-    if (!jobId || draftLockRef.current?.jobId === jobId || lockRequestRef.current?.jobId === jobId) {
+    if (
+      !jobId ||
+      draftLockRef.current?.jobId === jobId ||
+      lockRequestRef.current?.jobId === jobId
+    ) {
       return;
     }
     const promise = acquireDraftLock(accountId, jobId);
     lockRequestRef.current = { jobId, promise };
-    void promise.then(async (draftLock) => {
-      if (lockRequestRef.current?.promise === promise) lockRequestRef.current = null;
-      if (
-        draftLock &&
-        workerRef.current === worker &&
-        taskRef.current?.serverImportJobId === jobId
-      ) {
-        draftLockRef.current = { jobId, lock: draftLock };
-        return;
-      }
-      await draftLock?.release();
-      if (workerRef.current !== worker) return;
-      setControllerError("这个上传任务正在另一个标签页中处理。");
-      void cancelTask(false);
-    }).catch((error: unknown) => {
-      if (lockRequestRef.current?.promise === promise) lockRequestRef.current = null;
-      if (workerRef.current !== worker) return;
-      setControllerError(draftLockErrorMessage(error));
-      void cancelTask(false);
-    });
+    void promise
+      .then(async (draftLock) => {
+        if (lockRequestRef.current?.promise === promise)
+          lockRequestRef.current = null;
+        if (
+          draftLock &&
+          workerRef.current === worker &&
+          taskRef.current?.serverImportJobId === jobId
+        ) {
+          draftLockRef.current = { jobId, lock: draftLock };
+          return;
+        }
+        await draftLock?.release();
+        if (workerRef.current !== worker) return;
+        setControllerError("这个上传任务正在另一个标签页中处理。");
+        void cancelTask(false);
+      })
+      .catch((error: unknown) => {
+        if (lockRequestRef.current?.promise === promise)
+          lockRequestRef.current = null;
+        if (workerRef.current !== worker) return;
+        setControllerError(draftLockErrorMessage(error));
+        void cancelTask(false);
+      });
   }
 
   async function finalizeWorker(
@@ -160,18 +177,24 @@ export function useUploadController(accountId: number) {
     }
     const jobId = message.task.serverImportJobId;
     if (jobId) {
-      setDrafts((current) => current.filter((draft) => draft.serverImportJobId !== jobId));
+      setDrafts((current) =>
+        current.filter((draft) => draft.serverImportJobId !== jobId),
+      );
       setCommittingDraftIds((current) => current.filter((id) => id !== jobId));
     }
     try {
       await releaseCurrentDraftLock(jobId);
     } catch {
-      setControllerError("任务已结束，但上传草稿锁释放失败；关闭此标签页后浏览器会自动释放。");
+      setControllerError(
+        "任务已结束，但上传草稿锁释放失败；关闭此标签页后浏览器会自动释放。",
+      );
     } finally {
       resolvePendingCancel(true);
     }
     if (jobId && !message.draftRemoved) {
-      setControllerError("任务已结束，但本地恢复草稿未能清除；重新打开页面后会再次清理。");
+      setControllerError(
+        "任务已结束，但本地恢复草稿未能清除；重新打开页面后会再次清理。",
+      );
     }
   }
 
@@ -191,53 +214,43 @@ export function useUploadController(accountId: number) {
 
   useEffect(() => {
     let stopped = false;
-    void listUploadDrafts(accountId).then(async (stored) => {
-      const visible: UploadRecoveryDraft[] = [];
-      const committing: number[] = [];
-      for (const draft of stored) {
-        const state = await inspectDraftServerState(draft.serverImportJobId, draft.accountId);
-        if (state.kind === "invalid") {
-          await deleteUploadDraft(draft.accountId, draft.serverImportJobId).catch(() => undefined);
-          continue;
+    void listUploadDrafts(accountId)
+      .then(async (stored) => {
+        const visible: UploadRecoveryDraft[] = [];
+        const committing: number[] = [];
+        for (const draft of stored) {
+          const state = await inspectDraftServerState(
+            draft.serverImportJobId,
+            draft.accountId,
+          );
+          if (state.kind === "invalid") {
+            await deleteUploadDraft(
+              draft.accountId,
+              draft.serverImportJobId,
+            ).catch(() => undefined);
+            continue;
+          }
+          visible.push(draft);
+          if (state.kind === "committing")
+            committing.push(draft.serverImportJobId);
         }
-        visible.push(draft);
-        if (state.kind === "committing") committing.push(draft.serverImportJobId);
-      }
-      if (!stopped) {
-        setDrafts(visible);
-        setCommittingDraftIds(committing);
-      }
-    }).catch(() => {
-      if (!stopped) setControllerError("无法读取本地上传草稿。");
-    });
-    return () => { stopped = true; };
+        if (!stopped) {
+          setDrafts(visible);
+          setCommittingDraftIds(committing);
+        }
+      })
+      .catch(() => {
+        if (!stopped) setControllerError("无法读取本地上传草稿。");
+      });
+    return () => {
+      stopped = true;
+    };
   }, [accountId]);
 
   const active = starting || workerRef.current !== null;
-  useEffect(() => {
-    if (!active) return;
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    const click = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
-      if (!anchor || anchor.target === "_blank" || anchor.download) return;
-      const target = new URL(anchor.href, window.location.href);
-      if (target.origin !== window.location.origin || target.href === window.location.href) return;
-      event.preventDefault();
-      if (!window.confirm("离开此页将取消当前上传。是否继续？")) return;
-      void cancelTask().then((canceled) => {
-        if (canceled) window.location.assign(target.href);
-      });
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", click, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", click, true);
-    };
+  useNavigationGuard(active, async () => {
+    if (!window.confirm("离开此页将取消当前上传。是否继续？")) return false;
+    return cancelTask();
   });
 
   useEffect(() => {
@@ -325,11 +338,19 @@ export function useUploadController(accountId: number) {
     const result = await resumeDraftOnServer(draft);
     if (result.kind !== "ready") {
       if (result.kind === "invalid") {
-        await deleteUploadDraft(accountId, draft.serverImportJobId).catch(() => undefined);
-        setDrafts((current) => current.filter((item) => item.key !== draft.key));
-        setCommittingDraftIds((current) => current.filter((id) => id !== draft.serverImportJobId));
+        await deleteUploadDraft(accountId, draft.serverImportJobId).catch(
+          () => undefined,
+        );
+        setDrafts((current) =>
+          current.filter((item) => item.key !== draft.key),
+        );
+        setCommittingDraftIds((current) =>
+          current.filter((id) => id !== draft.serverImportJobId),
+        );
       } else if (result.kind === "committing") {
-        setCommittingDraftIds((current) => uniqueNumbers([...current, draft.serverImportJobId]));
+        setCommittingDraftIds((current) =>
+          uniqueNumbers([...current, draft.serverImportJobId]),
+        );
       }
       await draftLock.release();
       setControllerError(result.message);
@@ -357,13 +378,21 @@ export function useUploadController(accountId: number) {
     }
 
     setDrafts((current) => upsertDraft(current, restoredDraft));
-    setCommittingDraftIds((current) => current.filter((id) => id !== draft.serverImportJobId));
+    setCommittingDraftIds((current) =>
+      current.filter((id) => id !== draft.serverImportJobId),
+    );
     draftLockRef.current = { jobId: draft.serverImportJobId, lock: draftLock };
     pendingMetadataRef.current = restoredDraft.metadata
-      ? { metadata: restoredDraft.metadata, metadataBlobs: restoredDraft.metadataBlobs }
+      ? {
+          metadata: restoredDraft.metadata,
+          metadataBlobs: restoredDraft.metadataBlobs,
+        }
       : null;
     setPendingMetadataConfirmed(restoredDraft.metadataConfirmed);
-    createTaskWorker().postMessage({ type: "restore", draft: restoredDraft } satisfies UploadWorkerInput);
+    createTaskWorker().postMessage({
+      type: "restore",
+      draft: restoredDraft,
+    } satisfies UploadWorkerInput);
     return true;
   }
 
@@ -391,7 +420,9 @@ export function useUploadController(accountId: number) {
       }
       await deleteUploadDraft(accountId, draft.serverImportJobId);
       setDrafts((current) => current.filter((item) => item.key !== draft.key));
-      setCommittingDraftIds((current) => current.filter((id) => id !== draft.serverImportJobId));
+      setCommittingDraftIds((current) =>
+        current.filter((id) => id !== draft.serverImportJobId),
+      );
     } finally {
       await draftLock.release();
     }
@@ -406,11 +437,14 @@ export function useUploadController(accountId: number) {
     }
     if (!workerRef.current) return Promise.resolve(true);
     if (pendingCancelRef.current) return pendingCancelRef.current.promise;
-    const localTaskId = currentTask?.localTaskId ?? pendingLocalTaskIdRef.current;
+    const localTaskId =
+      currentTask?.localTaskId ?? pendingLocalTaskIdRef.current;
     if (!localTaskId) return Promise.resolve(false);
 
     let resolve!: (canceled: boolean) => void;
-    const promise = new Promise<boolean>((done) => { resolve = done; });
+    const promise = new Promise<boolean>((done) => {
+      resolve = done;
+    });
     pendingCancelRef.current = { promise, resolve };
     setCanceling(true);
     workerRef.current.postMessage({
@@ -447,19 +481,30 @@ export function useUploadController(accountId: number) {
   };
 }
 
-async function inspectDraftServerState(importJobId: number, accountId?: number): Promise<DraftServerState> {
+async function inspectDraftServerState(
+  importJobId: number,
+  accountId?: number,
+): Promise<DraftServerState> {
   const response = await fetch(`/api/imports/${importJobId}`, {
     credentials: "same-origin",
   }).catch(() => null);
   if (!response) return { kind: "unknown" };
   if ([400, 403, 404].includes(response.status)) return { kind: "invalid" };
   if (!response.ok) return { kind: "unknown" };
-  const payload = (await response.json().catch(() => null)) as
-    | { ok: true; importJob: { status: string; result: UploadTaskCommitResult | null } }
-    | null;
+  const payload = (await response.json().catch(() => null)) as {
+    ok: true;
+    importJob: { status: string; result: UploadTaskCommitResult | null };
+  } | null;
   const status = payload?.ok ? payload.importJob.status : null;
-  if (status === "completed" && payload?.importJob.result && accountId !== undefined) {
-    rememberPublishedTranslators(accountId, payload.importJob.result.translators);
+  if (
+    status === "completed" &&
+    payload?.importJob.result &&
+    accountId !== undefined
+  ) {
+    rememberPublishedTranslators(
+      accountId,
+      payload.importJob.result.translators,
+    );
   }
   if (status === "awaiting_metadata" || status === "uploading_metadata") {
     return { kind: "recoverable" };
@@ -468,15 +513,23 @@ async function inspectDraftServerState(importJobId: number, accountId?: number):
   return status ? { kind: "invalid" } : { kind: "unknown" };
 }
 
-async function resumeDraftOnServer(draft: UploadRecoveryDraft): Promise<ResumeDraftResult> {
-  const response = await fetch(`/api/imports/${draft.serverImportJobId}/resume`, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(sourceObjectReferences(draft.preparedSource)),
-  }).catch(() => null);
+async function resumeDraftOnServer(
+  draft: UploadRecoveryDraft,
+): Promise<ResumeDraftResult> {
+  const response = await fetch(
+    `/api/imports/${draft.serverImportJobId}/resume`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(sourceObjectReferences(draft.preparedSource)),
+    },
+  ).catch(() => null);
   if (!response) {
-    return { kind: "unknown", message: "无法连接服务器，上传草稿已保留，请稍后重试。" };
+    return {
+      kind: "unknown",
+      message: "无法连接服务器，上传草稿已保留，请稍后重试。",
+    };
   }
   const payload = (await response.json().catch(() => null)) as
     | {
@@ -499,11 +552,18 @@ async function resumeDraftOnServer(draft: UploadRecoveryDraft): Promise<ResumeDr
     payload && !payload.ok ? payload : null,
     "上传草稿无法继续，请重新上传。",
   );
-  if ([400, 403, 404].includes(response.status)) return { kind: "invalid", message };
+  if ([400, 403, 404].includes(response.status))
+    return { kind: "invalid", message };
   if (response.status !== 409) return { kind: "unknown", message };
-  const state = await inspectDraftServerState(draft.serverImportJobId, draft.accountId);
+  const state = await inspectDraftServerState(
+    draft.serverImportJobId,
+    draft.accountId,
+  );
   if (state.kind === "committing") {
-    return { kind: "committing", message: "这个上传任务正在提交，暂时不能继续编辑。" };
+    return {
+      kind: "committing",
+      message: "这个上传任务正在提交，暂时不能继续编辑。",
+    };
   }
   if (state.kind === "unknown") return { kind: "unknown", message };
   return { kind: "invalid", message };
@@ -519,7 +579,9 @@ async function cancelOwnedImportJob(importJobId: number): Promise<boolean> {
   return state.kind === "invalid";
 }
 
-function isTerminalTaskStatus(status: BrowserUploadTaskSnapshot["status"]): boolean {
+function isTerminalTaskStatus(
+  status: BrowserUploadTaskSnapshot["status"],
+): boolean {
   return status === "completed" || status === "failed" || status === "canceled";
 }
 

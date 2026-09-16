@@ -47,7 +47,7 @@ capture 只读当前本地数据库和 R2，通过 SQLite 在线备份纳入 WAL
 
 ## 展示入口
 
-主站和论坛开发使用 `npm run dev`（默认 `http://localhost:3000`）；验证 OpenNext、真实 Worker binding 和原生下载链路时使用 `npm run preview`（默认 `http://localhost:8787`）。以下均为相对路径。
+主站和论坛开发使用 `npm run dev`（默认 `http://localhost:3000`）；验证生产 Worker 构建产物时使用 `npm run preview`（默认 `http://localhost:4173`）。以下均为相对路径。
 
 | 功能 | 入口与场景 |
 | --- | --- |

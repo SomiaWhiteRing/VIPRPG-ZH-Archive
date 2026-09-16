@@ -1,12 +1,31 @@
-import { AlertTriangle } from "lucide-react";
-import { notFound } from "next/navigation";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import {
+  getPublishedArchiveDownloadRecord,
+  getWebPlayInstallTargetTotals,
+  parseArchiveVersionId,
+} from "@/app/.server/db/archive-downloads";
+import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import {
+  getWorkCommunitySummary,
+  listPickerEmojis,
+  listRootComments,
+} from "@/app/.server/db/work-community";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
-import { WorkPageHeader, WorkPageNotice } from "@/app/components/work/work-page-header";
-import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
+import {
+  WorkPageHeader,
+  WorkPageNotice,
+} from "@/app/components/work/work-page-header";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
+import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
   buildArchiveDownloadUrl,
@@ -15,61 +34,54 @@ import {
   easyRpgRuntimeVersion,
   webPlayInstallerVersion,
 } from "@/lib/archive/web-play";
-import {
-  getPublishedArchiveDownloadRecord,
-  getWebPlayInstallTargetTotals,
-  parseArchiveVersionId,
-} from "@/lib/server/db/archive-downloads";
-import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
-import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { getGameWorkDetail } from "@/lib/server/db/game-library";
-import {
-  getWorkCommunitySummary,
-  listPickerEmojis,
-  listRootComments,
-} from "@/lib/server/db/work-community";
+import { AlertTriangle } from "lucide-react";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-type PageProps = {
-  params: Promise<{
-    archiveVersionId: string;
-  }>;
-};
-
-export default async function WebPlayPage({ params }: PageProps) {
   const { archiveVersionId: rawArchiveVersionId } = await params;
   let archiveVersionId: number;
 
   try {
     archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
   } catch {
-    notFound();
+    throwNotFound();
   }
 
-  const record = await getPublishedArchiveDownloadRecord(archiveVersionId);
+  const record = await getPublishedArchiveDownloadRecord(
+    runtime,
+    archiveVersionId,
+  );
 
   if (!record) {
-    notFound();
+    throwNotFound();
   }
 
   const [installTarget, currentUser, work] = await Promise.all([
-    getWebPlayInstallTargetTotals(record.id),
-    getCurrentUserFromCookies(),
-    getGameWorkDetail(record.workId),
+    getWebPlayInstallTargetTotals(runtime, record.id),
+    getCurrentUser(runtime),
+    getGameWorkDetail(runtime, record.workId),
   ]);
 
   if (!work) {
-    notFound();
+    throwNotFound();
   }
 
   const [community, comments, emojis] = await Promise.all([
-    getWorkCommunitySummary(work.id, currentUser?.id ?? null),
-    listRootComments({ kind: "work", id: work.id }, currentUser?.id ?? null, null),
-    listPickerEmojis(),
+    getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
+    listRootComments(
+      runtime,
+      { kind: "work", id: work.id },
+      currentUser?.id ?? null,
+      null,
+    ),
+    listPickerEmojis(runtime),
   ]);
-  const current = work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
+  const current =
+    work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
 
   const metadata: WebPlayMetadata = {
     ok: true,
@@ -96,8 +108,33 @@ export default async function WebPlayPage({ params }: PageProps) {
     engineFamily: record.engineFamily,
   };
 
+  return {
+    record,
+    currentUser: pickPageFields(currentUser, ["id"]),
+    work,
+    community,
+    comments,
+    emojis,
+    current,
+    metadata,
+  };
+}
+
+export default function WebPlayPage() {
+  const {
+    record,
+    currentUser,
+    work,
+    community,
+    comments,
+    emojis,
+    current,
+    metadata,
+  } = useLoaderData<typeof loader>();
   return (
-    <DetailPageShell>
+    <DetailPageShell
+      key={`${metadata.playKey}:${currentUser?.id ?? "anonymous"}`}
+    >
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         aliases={work.aliases}
@@ -108,7 +145,11 @@ export default async function WebPlayPage({ params }: PageProps) {
         tabs={[
           { href: `/games/${work.id}`, label: "详情" },
           { href: `/play/${record.id}`, label: "在线游玩", active: true },
-          { href: "#sec-comments", label: "评论", count: community.commentCount },
+          {
+            href: "#sec-comments",
+            label: "评论",
+            count: community.commentCount,
+          },
         ]}
       />
       <WebPlayClient
@@ -130,12 +171,18 @@ export default async function WebPlayPage({ params }: PageProps) {
         }
         isAuthenticated={Boolean(currentUser)}
         metadata={metadata}
-        notice={metadata.engineFamily === "rpg_maker_2003_maniac" ? (
-          <WorkPageNotice>
-            <AlertTriangle aria-hidden className="mt-0.5 shrink-0" size={16} />
-            <span>该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。</span>
-          </WorkPageNotice>
-        ) : null}
+        notice={
+          metadata.engineFamily === "rpg_maker_2003_maniac" ? (
+            <WorkPageNotice>
+              <AlertTriangle
+                aria-hidden
+                className="mt-0.5 shrink-0"
+                size={16}
+              />
+              <span>该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。</span>
+            </WorkPageNotice>
+          ) : null
+        }
         secondary={<WorkSidebarInfo current={current} work={work} />}
         stats={
           <WorkCommunityStats

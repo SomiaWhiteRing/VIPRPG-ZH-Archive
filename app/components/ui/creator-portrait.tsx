@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { cn } from "@/lib/ui/cn";
 
 export function CreatorPortrait({
@@ -14,13 +13,16 @@ export function CreatorPortrait({
 }) {
   const initial = [...name.trim()][0] ?? "作";
   return avatarBlobSha256 ? (
-    <Image
+    <img
       alt={`${name}的头像`}
-      className={cn("aspect-square rounded-md border border-border object-cover", className)}
+      className={cn(
+        "aspect-square rounded-md border border-border object-cover",
+        className,
+      )}
       height={size}
       src={`/api/media/blobs/${avatarBlobSha256}`}
-      unoptimized
       width={size}
+      loading="lazy"
     />
   ) : (
     <span

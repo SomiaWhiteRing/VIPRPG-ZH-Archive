@@ -1,9 +1,6 @@
-"use client";
-
 import { Button } from "@/app/components/ui/button";
-import type { GameMediaAsset } from "@/lib/server/db/game-library";
+import type { GameMediaAsset } from "@/lib/dto/db/game-library";
 import { Maximize2, X } from "lucide-react";
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 const MEDIA_LABELS: Record<string, string> = {
@@ -53,13 +50,12 @@ export function WorkMediaGallery({
               variant="ghost"
             >
               <span className="relative block aspect-4/3 overflow-hidden bg-[#e7ebe6]">
-                <Image
+                <img
                   alt={item.altText ?? `${title} ${label}`}
-                  className="object-cover"
-                  fill
+                  className={"absolute inset-0 h-full w-full " + "object-cover"}
                   sizes="(max-width: 560px) 78vw, 300px"
                   src={`/api/media/blobs/${item.blobSha256}`}
-                  unoptimized
+                  loading="lazy"
                 />
               </span>
               <span className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted">
@@ -81,17 +77,20 @@ export function WorkMediaGallery({
         {selected ? (
           <>
             <div className="relative min-h-48 aspect-4/3 bg-[#e7ebe6]">
-              <Image
+              <img
                 alt={selected.altText ?? title}
-                className="object-contain"
-                fill
+                className={"absolute inset-0 h-full w-full " + "object-contain"}
                 sizes="(max-width: 900px) calc(100vw - 2rem), 880px"
                 src={`/api/media/blobs/${selected.blobSha256}`}
-                unoptimized
+                loading="lazy"
               />
             </div>
             <div className="flex items-center justify-between gap-4 border-t border-border px-3 py-2">
-              <strong>{selected.title?.trim() || MEDIA_LABELS[selected.kind] || "媒体"}</strong>
+              <strong>
+                {selected.title?.trim() ||
+                  MEDIA_LABELS[selected.kind] ||
+                  "媒体"}
+              </strong>
               <Button
                 aria-label="关闭预览图"
                 onClick={() => dialogRef.current?.close()}

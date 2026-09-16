@@ -1,30 +1,34 @@
-import { PageHeader } from "@/app/components/ui/page-header";
-import { PageContainer } from "@/app/components/ui/page-container";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
-import Link from "next/link";
-import { EmptyState } from "@/app/components/ui/empty-state";
+import { searchCatalogs } from "@/app/.server/db/catalogs";
+import { readCharacterCounts } from "@/app/.server/db/character-index";
+import { listPublicCreators } from "@/app/.server/db/creator-library";
+import { searchGameWorks } from "@/app/.server/db/game-library";
+import {
+  listPublicTags,
+  searchPublicCharacters,
+} from "@/app/.server/db/taxonomy-library";
+import { loadDiscussionSearch } from "@/app/.server/forum/search-page";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import type { AppRuntime } from "@/app/.server/runtime";
+import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
+import { CharacterCard } from "@/app/components/characters/character-card";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
-import { CharacterCard } from "@/app/components/characters/character-card";
-import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
-import type { CharacterIndexEntry } from "@/lib/character-index";
-import { readCharacterCounts } from "@/lib/server/db/character-index";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { PageContainer } from "@/app/components/ui/page-container";
+import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { searchPublicCharacters, listPublicTags } from "@/lib/server/db/taxonomy-library";
-import { listPublicCreators } from "@/lib/server/db/creator-library";
-import { searchGameWorks } from "@/lib/server/db/game-library";
-import { formatNumber } from "@/lib/format";
-import { stringParam } from "@/lib/params";
-import { searchCatalogs, type CatalogSummary } from "@/lib/server/db/catalogs";
-import Form from "next/form";
 import { DiscussionSearchResults } from "@/app/discussions/search/results";
+import type { CharacterIndexEntry } from "@/lib/character-index";
+import type { CatalogSummary } from "@/lib/dto/db/catalogs";
+import { formatNumber } from "@/lib/format";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
+import { stringParam } from "@/lib/params";
+import type { LoaderFunctionArgs } from "react-router";
+import { Form, Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
-type SearchPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
 const SCOPES = [
   ["works", "作品"],
   ["discussions", "讨论版"],
@@ -34,21 +38,57 @@ const SCOPES = [
   ["catalogs", "目录"],
 ] as const;
 
-export default async function SearchPage({ searchParams }: SearchPageProps) {
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
   const params = await searchParams;
   const query = stringParam(params.q).trim();
   const requestedScope = stringParam(params.scope);
-  const scope = SCOPES.some(([value]) => value === requestedScope) ? requestedScope : "works";
-  const page = Math.max(1, Number.parseInt(stringParam(params.page) || "1", 10) || 1);
+  const scope = SCOPES.some(([value]) => value === requestedScope)
+    ? requestedScope
+    : "works";
+  const page = Math.max(
+    1,
+    Number.parseInt(stringParam(params.page) || "1", 10) || 1,
+  );
   const scopeLabel = SCOPES.find(([value]) => value === scope)?.[1] ?? "作品";
-  const result = query && scope === "works" ? await searchGameWorks({ query, page }) : null;
-  const directory = query && scope !== "works" && scope !== "discussions" ? await listDirectory(scope, query, page) : null;
+  const result =
+    query && scope === "works"
+      ? await searchGameWorks(runtime, { query, page })
+      : null;
+  const directory =
+    query && scope !== "works" && scope !== "discussions"
+      ? await listDirectory(runtime, scope, query, page)
+      : null;
 
+  const discussions =
+    scope === "discussions"
+      ? await loadDiscussionSearch(runtime, { params })
+      : null;
+  return {
+    discussions,
+    params,
+    query,
+    scope,
+    page,
+    scopeLabel,
+    result,
+    directory,
+  };
+}
 
+export default function SearchPage() {
+  const { discussions, query, scope, page, scopeLabel, result, directory } =
+    useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader compact title="搜索站内内容" />
-      <Form key={`${scope}:${query}`} className="my-6 flex gap-2" action="/search">
+      <Form
+        key={`${scope}:${query}`}
+        className="my-6 flex gap-2"
+        action="/search"
+      >
         <Label className="sr-only" htmlFor="search-query">
           搜索关键词
         </Label>
@@ -59,7 +99,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           defaultValue={query}
           placeholder="输入关键词"
           type="search"
-          maxLength={scope === "discussions" ? FORUM_SEARCH_QUERY_LENGTH : undefined}
+          maxLength={
+            scope === "discussions" ? FORUM_SEARCH_QUERY_LENGTH : undefined
+          }
         />
         <input name="scope" type="hidden" value={scope} />
         <Rm2kButton type="submit">搜索</Rm2kButton>
@@ -70,15 +112,21 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       >
         {SCOPES.map(([value, label]) => (
           <Link
-            className={scope === value ? "text-primary underline decoration-2 underline-offset-4" : undefined}
-            href={searchHref(query, value)}
+            className={
+              scope === value
+                ? "text-primary underline decoration-2 underline-offset-4"
+                : undefined
+            }
+            to={searchHref(query, value)}
             key={value}
           >
             {label}
           </Link>
         ))}
       </nav>
-      {scope === "discussions" ? <DiscussionSearchResults params={params} /> : !query ? (
+      {scope === "discussions" ? (
+        discussions && <DiscussionSearchResults {...discussions} />
+      ) : !query ? (
         <EmptyState title="输入关键词开始搜索。" />
       ) : result ? (
         <>
@@ -105,28 +153,49 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       ) : (
         <>
           <p className="my-6 text-sm text-muted">
-            “{query}”在{scopeLabel}中找到 {formatNumber(directory?.total ?? 0)} 个结果
+            “{query}”在{scopeLabel}中找到 {formatNumber(directory?.total ?? 0)}{" "}
+            个结果
           </p>
           {directory && directory.items.length > 0 ? (
             <section
-              className={scope === "characters" ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" : scope === "catalogs" ? "divide-y divide-border border-y border-border" : "grid gap-2.5"}
-              aria-label={scope === "characters" ? "角色搜索结果" : scope === "catalogs" ? "目录搜索结果" : "分类搜索结果"}
+              className={
+                scope === "characters"
+                  ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                  : scope === "catalogs"
+                    ? "divide-y divide-border border-y border-border"
+                    : "grid gap-2.5"
+              }
+              aria-label={
+                scope === "characters"
+                  ? "角色搜索结果"
+                  : scope === "catalogs"
+                    ? "目录搜索结果"
+                    : "分类搜索结果"
+              }
             >
-              {directory.items.map((item) => item.character ? (
-                <CharacterCard character={item.character} displayName={item.title} originalName={item.subtitle ?? item.title} headingLevel={2} key={item.href} />
-              ) : item.catalog ? (
-                <CatalogListRow catalog={item.catalog} key={item.href} />
-              ) : (
-                <Link
-                  className="grid gap-1 border-b border-border p-4 text-foreground no-underline hover:bg-primary/5 md:grid-cols-[minmax(0,1fr)_auto]"
-                  href={item.href}
-                  key={item.href}
-                >
-                  <strong>{item.title}</strong>
-                  {item.subtitle ? <span>{item.subtitle}</span> : null}
-                  <small>{item.meta}</small>
-                </Link>
-              ))}
+              {directory.items.map((item) =>
+                item.character ? (
+                  <CharacterCard
+                    character={item.character}
+                    displayName={item.title}
+                    originalName={item.subtitle ?? item.title}
+                    headingLevel={2}
+                    key={item.href}
+                  />
+                ) : item.catalog ? (
+                  <CatalogListRow catalog={item.catalog} key={item.href} />
+                ) : (
+                  <Link
+                    className="grid gap-1 border-b border-border p-4 text-foreground no-underline hover:bg-primary/5 md:grid-cols-[minmax(0,1fr)_auto]"
+                    to={item.href}
+                    key={item.href}
+                  >
+                    <strong>{item.title}</strong>
+                    {item.subtitle ? <span>{item.subtitle}</span> : null}
+                    <small>{item.meta}</small>
+                  </Link>
+                ),
+              )}
             </section>
           ) : (
             <EmptyState title={`没有找到匹配的${scopeLabel}。`} />
@@ -146,43 +215,74 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   );
 }
 
-async function listDirectory(scope: string, query: string, page: number) {
+async function listDirectory(
+  runtime: AppRuntime,
+  scope: string,
+  query: string,
+  page: number,
+) {
   const pageSize = 20;
-  let items: Array<{ href: string; title: string; subtitle: string | null; meta: string; character?: Pick<CharacterIndexEntry, "id" | "portrait" | "workCount" | "commentCount" | "materialCount">; catalog?: CatalogSummary }>;
+  let items: Array<{
+    href: string;
+    title: string;
+    subtitle: string | null;
+    meta: string;
+    character?: Pick<
+      CharacterIndexEntry,
+      "id" | "portrait" | "workCount" | "commentCount" | "materialCount"
+    >;
+    catalog?: CatalogSummary;
+  }>;
   if (scope === "creators")
-    items = (await listPublicCreators({ query, limit: 300 })).map((item) => ({
-      href: `/creators/${item.id}`,
-      title: item.name,
-      subtitle: null,
-      meta: `${item.workCreditCount} 个作品`,
-    }));
+    items = (await listPublicCreators(runtime, { query, limit: 300 })).map(
+      (item) => ({
+        href: `/creators/${item.id}`,
+        title: item.name,
+        subtitle: null,
+        meta: `${item.workCreditCount} 个作品`,
+      }),
+    );
   else if (scope === "characters") {
-    const characters = await searchPublicCharacters({ query, page, pageSize });
+    const characters = await searchPublicCharacters(runtime, {
+      query,
+      page,
+      pageSize,
+    });
     const visibleCharacters = characters.items;
     const { commentCounts, materialCounts } = visibleCharacters.length
-      ? await readCharacterCounts(visibleCharacters.map((character) => character.id))
-      : { commentCounts: new Map<number, number>(), materialCounts: new Map<number, number>() };
+      ? await readCharacterCounts(
+          runtime,
+          visibleCharacters.map((character) => character.id),
+        )
+      : {
+          commentCounts: new Map<number, number>(),
+          materialCounts: new Map<number, number>(),
+        };
     items = visibleCharacters.map((item) => ({
       href: `/characters/${item.id}`,
       title: item.primaryName,
       subtitle: item.originalName,
       meta: `${item.workCount} 个作品`,
       character: {
-        id: item.id, portrait: item.defaultPortrait, workCount: item.workCount,
-        commentCount: commentCounts.get(item.id) ?? 0, materialCount: materialCounts.get(item.id) ?? 0,
+        id: item.id,
+        portrait: item.defaultPortrait,
+        workCount: item.workCount,
+        commentCount: commentCounts.get(item.id) ?? 0,
+        materialCount: materialCounts.get(item.id) ?? 0,
       },
     }));
     return { items, pageSize, total: characters.total };
-  }
-  else if (scope === "tags")
-    items = (await listPublicTags({ query, limit: 300 })).map((item) => ({
-      href: `/games?tag=${item.id}`,
-      title: item.name,
-      subtitle: null,
-      meta: `${item.workCount} 个作品`,
-    }));
+  } else if (scope === "tags")
+    items = (await listPublicTags(runtime, { query, limit: 300 })).map(
+      (item) => ({
+        href: `/games?tag=${item.id}`,
+        title: item.name,
+        subtitle: null,
+        meta: `${item.workCount} 个作品`,
+      }),
+    );
   else if (scope === "catalogs")
-    items = (await searchCatalogs(query, 300)).map((item) => ({
+    items = (await searchCatalogs(runtime, query, 300)).map((item) => ({
       href: `/catalogs/${item.id}`,
       title: item.title,
       subtitle: null,

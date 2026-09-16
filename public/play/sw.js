@@ -72,17 +72,19 @@ async function handleGameRequest(gameRequest) {
 
 function parseGameRequest(rawUrl) {
   const url = new URL(rawUrl);
-  const marker = "/games/";
-  const markerIndex = url.pathname.indexOf(marker);
-
-  if (markerIndex < 0) {
+  // The controlling document can make requests outside /play/. In particular,
+  // React Router's /games/:id.data is an application request, not an OPFS file.
+  const prefix = url.pathname.match(
+    /^\/play\/(?:games\/|runtime\/easyrpg\/[^/]+\/games\/)/,
+  );
+  if (url.origin !== self.location.origin || !prefix) {
     return null;
   }
 
   let rest;
 
   try {
-    rest = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+    rest = decodeURIComponent(url.pathname.slice(prefix[0].length));
   } catch {
     return {
       error: "Invalid encoded game path",

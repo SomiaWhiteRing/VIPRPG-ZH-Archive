@@ -1,15 +1,36 @@
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { listArchiveVersionsForAdmin } from "@/app/.server/db/archive-maintenance";
+import { pickPageFields } from "@/app/.server/page-data";
+import { runtimeContext } from "@/app/.server/router-context";
 import { ArchiveVersionTable } from "@/app/admin/archive-versions/archive-version-table";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { listArchiveVersionsForAdmin } from "@/lib/server/db/archive-maintenance";
+import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
 
-export default async function AdminArchiveVersionTrashPage() {
-  const adminUser = await requirePagePermission("/admin/archive-versions/trash", "archive_version.restore");
-  const archiveVersions = await listArchiveVersionsForAdmin(150, "trash", adminUser);
+  const adminUser = await requirePagePermission(
+    runtime,
+    "/admin/archive-versions/trash",
+    "archive_version.restore",
+  );
+  const archiveVersions = await listArchiveVersionsForAdmin(
+    runtime,
+    150,
+    "trash",
+    adminUser,
+  );
 
+  return {
+    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    archiveVersions,
+  };
+}
+
+export default function AdminArchiveVersionTrashPage() {
+  const { adminUser, archiveVersions } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -20,7 +41,11 @@ export default async function AdminArchiveVersionTrashPage() {
         }
       />
 
-      <ArchiveVersionTable actor={adminUser} archiveVersions={archiveVersions} mode="trash" />
+      <ArchiveVersionTable
+        actor={adminUser}
+        archiveVersions={archiveVersions}
+        mode="trash"
+      />
     </main>
   );
 }

@@ -1,6 +1,6 @@
 # GitHub Actions 自动部署
 
-本仓库使用 OpenNext Cloudflare adapter 和 Wrangler 构建 Cloudflare Workers 部署。自动部署的唯一步骤定义位于 `.github/workflows/deploy.yml`；本文只说明触发方式和前置配置，不记录某次环境是否已经上线。
+本仓库使用 Cloudflare Vite 插件、React Router SSR 和 Wrangler 构建 Cloudflare Workers 部署。自动部署的唯一步骤定义位于 `.github/workflows/deploy.yml`；本文只说明触发方式和前置配置，不记录某次环境是否已经上线。
 
 ## 当前策略
 
@@ -42,13 +42,13 @@ npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
 
 精确顺序以 `.github/workflows/deploy.yml` 为准。staging 与 production job 都会安装依赖、恢复 Wrangler 配置、执行静态检查、安装 Chromium、运行 `npm run test:flow`，然后才对目标环境应用 D1 migration 并部署。staging 部署后另运行最小 smoke test；production 不自动复用 staging 的检查结果。
 
-`npm run deploy:staging` 和 `npm run deploy` 自身负责 OpenNext 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。
+`npm run deploy:staging` 和 `npm run deploy` 自身负责 目标环境的 Vite/SSR Worker 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。
 
 Cloudflare D1 文档说明，在 CI/CD 等非交互环境中执行 migration apply 时会跳过确认提示，但仍会捕获备份；失败的 migration 会回滚。
 
 ## 参考
 
 - Cloudflare Workers GitHub Actions: https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
-- OpenNext Cloudflare CLI: https://opennext.js.org/cloudflare/cli
+- Cloudflare React Router: https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/
 - Cloudflare D1 Wrangler commands: https://developers.cloudflare.com/d1/wrangler-commands/
 - GitHub workflow_dispatch inputs: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow

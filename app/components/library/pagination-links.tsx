@@ -1,9 +1,13 @@
-import Link from "next/link";
-import Form from "next/form";
-import { ChevronFirst, ChevronLast, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { Input } from "@/app/components/ui/input";
 import { buttonVariants } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
 import { cn } from "@/lib/ui/cn";
+import {
+  ChevronFirst,
+  ChevronLast,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
+import { Form, Link } from "react-router";
 
 const DESKTOP_PAGE_COUNT = 10;
 const MOBILE_PAGE_COUNT = 5;
@@ -14,7 +18,6 @@ export function PaginationLinks({
   pageSize,
   params,
   total,
-  prefetch,
 }: {
   basePath: string;
   page: number;
@@ -30,21 +33,36 @@ export function PaginationLinks({
   const makeHref = (nextPage: number) => {
     const query = new URLSearchParams();
     Object.entries(params ?? {}).forEach(([key, value]) => {
-      if (value) for (const item of typeof value === "string" ? [value] : value) query.append(key, item);
+      if (value)
+        for (const item of typeof value === "string" ? [value] : value)
+          query.append(key, item);
     });
     query.delete("page");
     if (nextPage > 1) query.set("page", String(nextPage));
     return `${basePath}${query.size ? `?${query.toString()}` : ""}`;
   };
   return (
-    <nav className="my-8 flex flex-wrap items-center justify-start gap-2" aria-label="分页">
+    <nav
+      className="my-8 flex flex-wrap items-center justify-start gap-2"
+      aria-label="分页"
+    >
       <div className="flex max-w-full items-center justify-center gap-1.5">
         {page > 1 ? (
           <>
-            <Link prefetch={prefetch} aria-label="首页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(1)}>
+            <Link
+              prefetch="none"
+              aria-label="首页"
+              className={cn(paginationItem, "hidden sm:inline-flex")}
+              to={makeHref(1)}
+            >
               <ChevronFirst aria-hidden />
             </Link>
-            <Link prefetch={prefetch} aria-label="上一页" className={paginationItem} href={makeHref(page - 1)}>
+            <Link
+              prefetch="none"
+              aria-label="上一页"
+              className={paginationItem}
+              to={makeHref(page - 1)}
+            >
               <ChevronsLeft aria-hidden />
             </Link>
           </>
@@ -53,16 +71,24 @@ export function PaginationLinks({
           pageNumber === page ? (
             <span
               aria-current="page"
-              className={cn(paginationItem, activePaginationItem, !mobilePages.has(pageNumber) && "hidden sm:inline-flex")}
+              className={cn(
+                paginationItem,
+                activePaginationItem,
+                !mobilePages.has(pageNumber) && "hidden sm:inline-flex",
+              )}
               key={pageNumber}
             >
               {pageNumber}
             </span>
           ) : (
-            <Link prefetch={prefetch}
+            <Link
+              prefetch="none"
               aria-label={`第 ${pageNumber} 页`}
-              className={cn(paginationItem, !mobilePages.has(pageNumber) && "hidden sm:inline-flex")}
-              href={makeHref(pageNumber)}
+              className={cn(
+                paginationItem,
+                !mobilePages.has(pageNumber) && "hidden sm:inline-flex",
+              )}
+              to={makeHref(pageNumber)}
               key={pageNumber}
             >
               {pageNumber}
@@ -71,19 +97,40 @@ export function PaginationLinks({
         )}
         {page < totalPages ? (
           <>
-            <Link prefetch={prefetch} aria-label="下一页" className={paginationItem} href={makeHref(page + 1)}>
+            <Link
+              prefetch="none"
+              aria-label="下一页"
+              className={paginationItem}
+              to={makeHref(page + 1)}
+            >
               <ChevronsRight aria-hidden />
             </Link>
-            <Link prefetch={prefetch} aria-label="末页" className={cn(paginationItem, "hidden sm:inline-flex")} href={makeHref(totalPages)}>
+            <Link
+              prefetch="none"
+              aria-label="末页"
+              className={cn(paginationItem, "hidden sm:inline-flex")}
+              to={makeHref(totalPages)}
+            >
               <ChevronLast aria-hidden />
             </Link>
           </>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Form prefetch={prefetch} action={basePath} className="contents">
+        <Form action={basePath} className="contents">
           {Object.entries(params ?? {}).flatMap(([key, value]) =>
-            value && key !== "page" ? (typeof value === "string" ? [value] : value).map((item,index) => <input key={`${key}-${index}`} name={key} type="hidden" value={item} />) : [],
+            value && key !== "page"
+              ? (typeof value === "string" ? [value] : value).map(
+                  (item, index) => (
+                    <input
+                      key={`${key}-${index}`}
+                      name={key}
+                      type="hidden"
+                      value={item}
+                    />
+                  ),
+                )
+              : [],
           )}
           <Input
             aria-label={`跳转页码，范围 1 到 ${totalPages}`}
@@ -112,11 +159,15 @@ const paginationItem = cn(
   buttonVariants({ size: "icon", variant: "secondary" }),
   "h-8 w-auto min-w-8 rounded-md px-2 py-0 text-xs tabular-nums sm:text-sm",
 );
-const activePaginationItem = "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground";
+const activePaginationItem =
+  "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground";
 
 function pageWindow(page: number, totalPages: number, size: number): number[] {
   const count = Math.min(size, totalPages);
   const maxStart = totalPages - count + 1;
-  const start = Math.min(Math.max(1, page - Math.floor((count - 1) / 2)), maxStart);
+  const start = Math.min(
+    Math.max(1, page - Math.floor((count - 1) / 2)),
+    maxStart,
+  );
   return Array.from({ length: count }, (_, index) => start + index);
 }

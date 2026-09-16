@@ -1,17 +1,17 @@
-"use client";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
-import { SelectField } from "@/app/components/ui/select";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { SelectField } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
 import { ForumModal, ForumTime, forumRequest } from "@/app/discussions/shared";
-import { forumHref, type ForumPage } from "@/lib/forum";
-import type { AdminForumTag } from "@/lib/server/forum/admin";
+import type { AdminForumTag } from "@/lib/dto/forum/admin";
+import type { ForumPage } from "@/lib/forum";
+import { forumHref } from "@/lib/forum";
+import { useEffect, useState } from "react";
+import { useRevalidator } from "react-router";
 export function AdminDiscussionTags({
   data,
   query,
@@ -22,7 +22,7 @@ export function AdminDiscussionTags({
   state: string;
 }) {
   const [selected, setSelected] = useState<AdminForumTag | null>(null),
-    router = useRouter();
+    revalidator = useRevalidator();
   return (
     <main>
       <PageHeader compact title="讨论 TAG" />
@@ -68,10 +68,17 @@ export function AdminDiscussionTags({
                 <td className="break-words p-3">
                   {tag.id} · {tag.name}
                   <p className="mt-1 text-xs text-muted md:hidden">
-                    {{ active: "启用", disabled: "停用", hidden: "隐藏" }[tag.state]} · {tag.count} 个公开主题
+                    {
+                      { active: "启用", disabled: "停用", hidden: "隐藏" }[
+                        tag.state
+                      ]
+                    }{" "}
+                    · {tag.count} 个公开主题
                   </p>
                 </td>
-                <td className="hidden p-3 font-mono md:table-cell">{tag.count}</td>
+                <td className="hidden p-3 font-mono md:table-cell">
+                  {tag.count}
+                </td>
                 <td className="hidden p-3 md:table-cell">
                   {
                     { active: "启用", disabled: "停用", hidden: "隐藏" }[
@@ -97,7 +104,13 @@ export function AdminDiscussionTags({
             ))}
           </tbody>
         </table>
-        {!data.items.length ? <EmptyState title="没有匹配的 TAG。" variant="plain" className="p-4" /> : null}
+        {!data.items.length ? (
+          <EmptyState
+            title="没有匹配的 TAG。"
+            variant="plain"
+            className="p-4"
+          />
+        ) : null}
       </div>
       <PaginationLinks
         basePath="/admin/discussion-tags"
@@ -113,7 +126,7 @@ export function AdminDiscussionTags({
           onClose={() => setSelected(null)}
           onSaved={() => {
             setSelected(null);
-            router.refresh();
+            revalidator.revalidate();
           }}
         />
       ) : null}
@@ -199,7 +212,10 @@ function ManageTag({
           ID {tag.id} · {tag.count} 个公开主题
         </p>
         <p className="break-words text-sm">创建者：{tag.creator}</p>
-        <p className="text-xs text-muted">更新时间：<ForumTime value={tag.updatedAt} /></p>
+        <p className="text-xs text-muted">
+          更新时间：
+          <ForumTime value={tag.updatedAt} />
+        </p>
         <div>
           <Label htmlFor="tag-action">操作</Label>
           <SelectField

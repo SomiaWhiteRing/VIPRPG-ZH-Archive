@@ -1,47 +1,94 @@
-import { PageContainer } from "@/app/components/ui/page-container";
-import type { Metadata } from "next";
-import Link from "next/link";
-import { FolderPen } from "lucide-react";
-import { buttonVariants } from "@/app/components/ui/button";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { readCharacterIndex } from "@/app/.server/db/character-index";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { CharacterIndexBrowser } from "@/app/characters/character-index-browser";
-import { readCharacterIndex } from "@/lib/server/db/character-index";
+import { buttonVariants } from "@/app/components/ui/button";
+import { PageContainer } from "@/app/components/ui/page-container";
+import { PageHeader } from "@/app/components/ui/page-header";
+import {
+  CHARACTER_EDIT_PERMISSIONS,
+  CHARACTER_INDEX_PERMISSIONS,
+  hasPermission,
+} from "@/lib/authz/permissions";
 import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { CHARACTER_EDIT_PERMISSIONS, CHARACTER_INDEX_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
+import type { PageMetadata } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { FolderPen } from "lucide-react";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
+const metadata: PageMetadata = {
   title: "角色索引 · VIPRPG.org",
-  description: "按阵营与角色群浏览 VIPRPG 角色，查找中日文名称、别名、Wiki 资料与登场作品。",
+  description:
+    "按阵营与角色群浏览 VIPRPG 角色，查找中日文名称、别名、Wiki 资料与登场作品。",
 };
 
-type CharactersPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
 
-export default async function CharactersPage({ searchParams }: CharactersPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q).trim();
-  const [data, currentUser] = await Promise.all([readCharacterIndex(), getCurrentUserFromCookies()]);
-  const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) => hasPermission(currentUser, permission));
-  const canEditIndex = CHARACTER_INDEX_PERMISSIONS.some((permission) => hasPermission(currentUser, permission));
+  const [data, currentUser] = await Promise.all([
+    readCharacterIndex(runtime),
+    getCurrentUser(runtime),
+  ]);
+  const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) =>
+    hasPermission(currentUser, permission),
+  );
+  const canEditIndex = CHARACTER_INDEX_PERMISSIONS.some((permission) =>
+    hasPermission(currentUser, permission),
+  );
 
+  return { query, data, canEdit, canEditIndex };
+}
+
+export default function CharactersPage() {
+  const { query, data, canEdit, canEditIndex } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
         compact
         title="角色索引"
-        actions={<>
-          <span className="text-sm text-muted">收录 <strong className="tabular-nums text-foreground">{formatNumber(data.characters.length)}</strong> 位角色</span>
-          {canEditIndex ? <Link aria-label="编辑角色索引" className={buttonVariants({ variant: "ghost", size: "icon" })} href="/admin/characters/index" prefetch={false} title="编辑角色索引"><FolderPen aria-hidden /></Link> : null}
-        </>}
+        actions={
+          <>
+            <span className="text-sm text-muted">
+              收录{" "}
+              <strong className="tabular-nums text-foreground">
+                {formatNumber(data.characters.length)}
+              </strong>{" "}
+              位角色
+            </span>
+            {canEditIndex ? (
+              <Link
+                aria-label="编辑角色索引"
+                className={buttonVariants({ variant: "ghost", size: "icon" })}
+                to="/admin/characters/index"
+                prefetch="none"
+                title="编辑角色索引"
+              >
+                <FolderPen aria-hidden />
+              </Link>
+            ) : null}
+          </>
+        }
       />
 
       <div className="mt-5">
-        <CharacterIndexBrowser canEdit={canEdit} canEditIndex={canEditIndex} data={data} initialQuery={query} key={query} />
+        <CharacterIndexBrowser
+          canEdit={canEdit}
+          canEditIndex={canEditIndex}
+          data={data}
+          initialQuery={query}
+          key={query}
+        />
       </div>
     </PageContainer>
   );
+}
+
+export function meta() {
+  return pageMetaDescriptors(metadata);
 }

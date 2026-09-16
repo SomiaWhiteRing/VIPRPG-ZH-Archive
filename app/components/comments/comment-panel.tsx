@@ -1,16 +1,19 @@
-"use client";
 import { EmojiGrid } from "@/app/components/comments/emoji-grid";
 
-import { EmptyState } from "@/app/components/ui/empty-state";
+import type { CommentTarget } from "@/app/.server/db/work-community";
 import { Button } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { CommentBodySegment, CommentDto, CommentTarget, CustomEmojiDto } from "@/lib/server/db/work-community";
+import type {
+  CommentBodySegment,
+  CommentDto,
+  CustomEmojiDto,
+} from "@/lib/dto/db/work-community";
 import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
 import { useRef, useState } from "react";
+import { Link } from "react-router";
 
 type Props = {
   target: CommentTarget;
@@ -21,7 +24,16 @@ type Props = {
   emojis: CustomEmojiDto[];
 };
 
-export function CommentPanel({
+export function CommentPanel(props: Props) {
+  return (
+    <CommentPanelContent
+      key={`${props.target.kind}:${props.target.id}:${props.currentUserId}`}
+      {...props}
+    />
+  );
+}
+
+function CommentPanelContent({
   target,
   placeholder = "写下你的游玩感受、攻略提示或考证……",
   currentUserId,
@@ -63,11 +75,13 @@ export function CommentPanel({
       }
       setBody("");
       if (replyTarget) {
-        setComments((current) => current.map((comment) =>
-          comment.id === (replyTarget.rootCommentId ?? replyTarget.id)
-            ? { ...comment, replyCount: (comment.replyCount ?? 0) + 1 }
-            : comment,
-        ));
+        setComments((current) =>
+          current.map((comment) =>
+            comment.id === (replyTarget.rootCommentId ?? replyTarget.id)
+              ? { ...comment, replyCount: (comment.replyCount ?? 0) + 1 }
+              : comment,
+          ),
+        );
       } else {
         setComments((current) => [...current, result.comment!]);
       }
@@ -83,14 +97,17 @@ export function CommentPanel({
   async function toggleLike(comment: CommentDto) {
     if (!currentUserId || busy || comment.status !== "published") return;
     const nextLiked = !comment.likedByMe;
-    setComments((current) => current.map((entry) => entry.id === comment.id
-      ? {
-          ...entry,
-          likedByMe: nextLiked,
-          likeCount: Math.max(0, entry.likeCount + (nextLiked ? 1 : -1)),
-        }
-      : entry,
-    ));
+    setComments((current) =>
+      current.map((entry) =>
+        entry.id === comment.id
+          ? {
+              ...entry,
+              likedByMe: nextLiked,
+              likeCount: Math.max(0, entry.likeCount + (nextLiked ? 1 : -1)),
+            }
+          : entry,
+      ),
+    );
     try {
       const response = await fetch(`/api/comments/${comment.id}/like`, {
         method: nextLiked ? "PUT" : "DELETE",
@@ -98,10 +115,17 @@ export function CommentPanel({
       });
       if (!response.ok) throw new Error();
     } catch {
-      setComments((current) => current.map((entry) => entry.id === comment.id
-        ? { ...entry, likedByMe: comment.likedByMe, likeCount: comment.likeCount }
-        : entry,
-      ));
+      setComments((current) =>
+        current.map((entry) =>
+          entry.id === comment.id
+            ? {
+                ...entry,
+                likedByMe: comment.likedByMe,
+                likeCount: comment.likeCount,
+              }
+            : entry,
+        ),
+      );
       setMessage("点赞操作失败。");
     }
   }
@@ -111,14 +135,17 @@ export function CommentPanel({
       !currentUserId ||
       comment.author?.id !== currentUserId ||
       !window.confirm("确定删除这条评论吗？")
-    ) return;
+    )
+      return;
     try {
       const response = await fetch(`/api/comments/${comment.id}`, {
         method: "DELETE",
         credentials: "same-origin",
       });
       if (!response.ok) throw new Error();
-      setComments((current) => current.filter((entry) => entry.id !== comment.id));
+      setComments((current) =>
+        current.filter((entry) => entry.id !== comment.id),
+      );
     } catch {
       setMessage("评论删除失败。");
     }
@@ -161,7 +188,9 @@ export function CommentPanel({
     }
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    setBody((current) => `${current.slice(0, start)}${token}${current.slice(end)}`);
+    setBody(
+      (current) => `${current.slice(0, start)}${token}${current.slice(end)}`,
+    );
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(start + token.length, start + token.length);
@@ -174,13 +203,23 @@ export function CommentPanel({
         <div className="grid gap-2">
           {replyTarget ? (
             <div className="flex items-center justify-between gap-2 text-sm text-muted">
-              <span>回复 @{replyTarget.author?.displayName ?? "已删除用户"}</span>
-              <Button onClick={() => setReplyTarget(null)} size="sm" type="button" variant="ghost">
+              <span>
+                回复 @{replyTarget.author?.displayName ?? "已删除用户"}
+              </span>
+              <Button
+                onClick={() => setReplyTarget(null)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
                 取消
               </Button>
             </div>
           ) : null}
-          <Label className="font-mono text-xs text-muted" htmlFor="comment-input">
+          <Label
+            className="font-mono text-xs text-muted"
+            htmlFor="comment-input"
+          >
             发表评论
           </Label>
           <Textarea
@@ -194,7 +233,11 @@ export function CommentPanel({
           />
           <div className="flex items-center justify-between gap-3">
             <EmojiPicker emojis={emojis} onSelect={insertEmoji} />
-            <Button disabled={busy || !body.trim()} onClick={() => void submitComment()} type="button">
+            <Button
+              disabled={busy || !body.trim()}
+              onClick={() => void submitComment()}
+              type="button"
+            >
               <Send aria-hidden />
               发布评论
             </Button>
@@ -205,25 +248,38 @@ export function CommentPanel({
       )}
 
       <div className="grid">
-        {comments.length ? comments.map((comment) => (
-          <CommentCard
-            comment={comment}
-            currentUserId={currentUserId}
-            key={comment.id}
-            onDelete={removeComment}
-            onLike={toggleLike}
-            onReply={startReply}
-          />
-        )) : <EmptyState title="还没有评论。" variant="plain" />}
+        {comments.length ? (
+          comments.map((comment) => (
+            <CommentCard
+              comment={comment}
+              currentUserId={currentUserId}
+              key={comment.id}
+              onDelete={removeComment}
+              onLike={toggleLike}
+              onReply={startReply}
+            />
+          ))
+        ) : (
+          <EmptyState title="还没有评论。" variant="plain" />
+        )}
       </div>
       {nextCursor ? (
         <div>
-          <Button disabled={busy} onClick={() => void loadMore()} type="button" variant="outline">
+          <Button
+            disabled={busy}
+            onClick={() => void loadMore()}
+            type="button"
+            variant="outline"
+          >
             加载更多评论
           </Button>
         </div>
       ) : null}
-      {message ? <p className="text-sm text-muted" role="status">{message}</p> : null}
+      {message ? (
+        <p className="text-sm text-muted" role="status">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -256,7 +312,10 @@ function CommentCard({
       const response = await fetch(`/api/comments/${comment.id}/replies`, {
         credentials: "same-origin",
       });
-      const result = (await response.json()) as { ok?: boolean; items?: CommentDto[] };
+      const result = (await response.json()) as {
+        ok?: boolean;
+        items?: CommentDto[];
+      };
       if (!response.ok || !result.ok) throw new Error();
       setReplies(result.items ?? []);
     } finally {
@@ -269,7 +328,25 @@ function CommentCard({
       className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0 @max-[320px]/comments:grid-cols-[32px_minmax(0,1fr)] @max-[320px]/comments:gap-2"
       id={`comment-${comment.id}`}
     >
-      {comment.author ? <Link aria-label={`查看${comment.author.displayName}的主页`} href={`/users/${comment.author.id}`}><UserAvatar avatarBlobSha256={comment.author.avatarBlobSha256} className="size-9.5" displayName={comment.author.displayName} size={38} /></Link> : <UserAvatar className="size-9.5 opacity-60" displayName="已删除用户" size={38} />}
+      {comment.author ? (
+        <Link
+          aria-label={`查看${comment.author.displayName}的主页`}
+          to={`/users/${comment.author.id}`}
+        >
+          <UserAvatar
+            avatarBlobSha256={comment.author.avatarBlobSha256}
+            className="size-9.5"
+            displayName={comment.author.displayName}
+            size={38}
+          />
+        </Link>
+      ) : (
+        <UserAvatar
+          className="size-9.5 opacity-60"
+          displayName="已删除用户"
+          size={38}
+        />
+      )}
       <div className="min-w-0">
         <CommentLine comment={comment} />
         <CommentControls
@@ -282,7 +359,11 @@ function CommentCard({
         {(comment.replyCount ?? 0) > 0 ? (
           <div className="mt-2.5 grid gap-2.5 border-l-2 border-border pl-3 @max-[320px]/comments:pl-2">
             {replies?.map((reply) => (
-              <div className="min-w-0" id={`comment-${reply.id}`} key={reply.id}>
+              <div
+                className="min-w-0"
+                id={`comment-${reply.id}`}
+                key={reply.id}
+              >
                 <CommentLine comment={reply} />
                 <CommentControls
                   comment={reply}
@@ -294,7 +375,13 @@ function CommentCard({
               </div>
             ))}
             {!replies ? (
-              <Button disabled={loading} onClick={() => void loadReplies()} size="sm" type="button" variant="ghost">
+              <Button
+                disabled={loading}
+                onClick={() => void loadReplies()}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
                 {loading ? "加载中" : `查看 ${comment.replyCount} 条回复`}
               </Button>
             ) : null}
@@ -309,14 +396,35 @@ function CommentLine({ comment }: { comment: CommentDto }) {
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        {comment.author ? <Link className="text-sm font-bold hover:underline" href={`/users/${comment.author.id}`}>{comment.author.displayName}</Link> : <strong className="text-sm">已删除用户</strong>}
-        <span className="font-mono text-xs text-muted">{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
-        {comment.editedAt ? <span className="font-mono text-xs text-muted">已编辑</span> : null}
-        {comment.status === "deleted" ? <span className="font-mono text-xs text-muted">已删除</span> : null}
-        <span className="ml-auto font-mono text-xs text-muted">#{comment.id}</span>
+        {comment.author ? (
+          <Link
+            className="text-sm font-bold hover:underline"
+            to={`/users/${comment.author.id}`}
+          >
+            {comment.author.displayName}
+          </Link>
+        ) : (
+          <strong className="text-sm">已删除用户</strong>
+        )}
+        <span className="font-mono text-xs text-muted">
+          {new Date(comment.createdAt).toLocaleString("zh-CN")}
+        </span>
+        {comment.editedAt ? (
+          <span className="font-mono text-xs text-muted">已编辑</span>
+        ) : null}
+        {comment.status === "deleted" ? (
+          <span className="font-mono text-xs text-muted">已删除</span>
+        ) : null}
+        <span className="ml-auto font-mono text-xs text-muted">
+          #{comment.id}
+        </span>
       </div>
       <p className="m-0 mt-1 text-sm leading-[1.7] wrap-anywhere whitespace-pre-wrap">
-        {comment.replyTo ? <span className="text-muted">回复 @{comment.replyTo.displayName ?? "已删除用户"}：</span> : null}
+        {comment.replyTo ? (
+          <span className="text-muted">
+            回复 @{comment.replyTo.displayName ?? "已删除用户"}：
+          </span>
+        ) : null}
         <CommentBody body={comment.body} />
       </p>
     </div>
@@ -324,17 +432,21 @@ function CommentLine({ comment }: { comment: CommentDto }) {
 }
 
 function CommentBody({ body }: { body: CommentBodySegment[] }) {
-  return body.map((segment, index) => segment.type === "text"
-    ? <span key={index}>{segment.text}</span>
-    : <Image
+  return body.map((segment, index) =>
+    segment.type === "text" ? (
+      <span key={index}>{segment.text}</span>
+    ) : (
+      <img
         alt={segment.alt}
         className="mx-0.5 inline-block h-6 w-6 align-text-bottom"
         height={24}
         key={`${segment.shortcode}-${index}`}
         src={segment.imageUrl}
-        unoptimized
         width={24}
-      />);
+        loading="lazy"
+      />
+    ),
+  );
 }
 
 function CommentControls({
@@ -354,7 +466,13 @@ function CommentControls({
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {currentUserId ? (
-        <Button className="text-xs text-muted" onClick={() => onReply(comment)} size="sm" type="button" variant="ghost">
+        <Button
+          className="text-xs text-muted"
+          onClick={() => onReply(comment)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           <MessageCircle aria-hidden />
           回复
         </Button>
@@ -375,7 +493,13 @@ function CommentControls({
         <span className="px-2 text-xs text-muted">{comment.likeCount} 赞</span>
       )}
       {currentUserId === comment.author?.id ? (
-        <Button className="text-xs text-muted" onClick={() => onDelete(comment)} size="sm" type="button" variant="ghost">
+        <Button
+          className="text-xs text-muted"
+          onClick={() => onDelete(comment)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           <Trash2 aria-hidden />
           删除
         </Button>
@@ -384,17 +508,36 @@ function CommentControls({
   );
 }
 
-function EmojiPicker({ emojis, onSelect }: { emojis: CustomEmojiDto[]; onSelect: (shortcode: string) => void }) {
+function EmojiPicker({
+  emojis,
+  onSelect,
+}: {
+  emojis: CustomEmojiDto[];
+  onSelect: (shortcode: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <Button aria-expanded={open} onClick={() => setOpen((value) => !value)} size="sm" type="button" variant="ghost">
+      <Button
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
         <Smile aria-hidden />
         表情
       </Button>
       {open ? (
         <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-[min(20rem,calc(100vw-3rem))] overflow-hidden rounded-md border border-border bg-card p-2 shadow-lg">
-          <EmojiGrid compact emojis={emojis} onSelect={(shortcode) => { onSelect(shortcode); setOpen(false); }} />
+          <EmojiGrid
+            compact
+            emojis={emojis}
+            onSelect={(shortcode) => {
+              onSelect(shortcode);
+              setOpen(false);
+            }}
+          />
         </div>
       ) : null}
     </div>

@@ -1,32 +1,50 @@
-import { EmptyState } from "@/app/components/ui/empty-state";
+import { requirePagePermission } from "@/app/.server/auth/authorize";
+import {
+  listAdminRoleEvents,
+  searchAdminAuditLogs,
+} from "@/app/.server/db/admin-audit";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import { parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button, buttonVariants } from "@/app/components/ui/button";
+import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import Link from "next/link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { requirePagePermission } from "@/lib/server/auth/authorize";
-import { listAdminRoleEvents, searchAdminAuditLogs } from "@/lib/server/db/admin-audit";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { formatDate } from "@/lib/format";
-
-export const dynamic = "force-dynamic";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
-export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await requirePagePermission("/admin/audit", "audit.read");
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
+
+  await requirePagePermission(runtime, "/admin/audit", "audit.read");
   const params = await searchParams;
   const query = searchParam(params.q);
   const eventType = searchParam(params.action);
   const page = parseAdminPage(params.page);
   const [auditResult, roleEvents] = await Promise.all([
-    searchAdminAuditLogs({ query, eventType, page, pageSize: PAGE_SIZE }),
-    listAdminRoleEvents(100),
+    searchAdminAuditLogs(runtime, {
+      query,
+      eventType,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    listAdminRoleEvents(runtime, 100),
   ]);
 
+  return { query, eventType, page, auditResult, roleEvents };
+}
+
+export default function AdminAuditPage() {
+  const { query, eventType, page, auditResult, roleEvents } =
+    useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
@@ -35,12 +53,39 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
         subtitle="登录、版本维护与权限调整的审计日志。"
       />
 
-      <form action="/admin/audit" className="flex flex-wrap items-end gap-2 border-b border-border pb-3" method="get">
-        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">操作者<Input defaultValue={query} name="q" placeholder="名称、邮箱或用户 ID" /></Label>
-        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">动作<Input defaultValue={eventType} name="action" placeholder="事件类型" /></Label>
+      <form
+        action="/admin/audit"
+        className="flex flex-wrap items-end gap-2 border-b border-border pb-3"
+        method="get"
+      >
+        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">
+          操作者
+          <Input
+            defaultValue={query}
+            name="q"
+            placeholder="名称、邮箱或用户 ID"
+          />
+        </Label>
+        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">
+          动作
+          <Input
+            defaultValue={eventType}
+            name="action"
+            placeholder="事件类型"
+          />
+        </Label>
         <Button type="submit">应用</Button>
-        {query || eventType ? <Link className={buttonVariants({ variant: "ghost" })} href="/admin/audit">清除</Link> : null}
-        <span className="pb-2 font-mono text-xs text-muted">共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志</span>
+        {query || eventType ? (
+          <Link
+            className={buttonVariants({ variant: "ghost" })}
+            to="/admin/audit"
+          >
+            清除
+          </Link>
+        ) : null}
+        <span className="pb-2 font-mono text-xs text-muted">
+          共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
+        </span>
       </form>
 
       <Pane heading="用户角色事件">
@@ -62,20 +107,29 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
                   <td>
                     {event.actorName ?? "系统"}
                     {event.actorUserId ? (
-                      <span className="font-mono text-sm text-muted">#{event.actorUserId}</span>
+                      <span className="font-mono text-sm text-muted">
+                        #{event.actorUserId}
+                      </span>
                     ) : null}
                   </td>
                   <td>
                     {event.targetName ?? "未知用户"}
-                    <span className="font-mono text-sm text-muted">#{event.targetUserId}</span>
+                    <span className="font-mono text-sm text-muted">
+                      #{event.targetUserId}
+                    </span>
                   </td>
                   <td>
-                    {event.action === "assigned" ? "分配" : "移除"} {event.role.name}
-                    {event.reason ? <span className="text-sm text-muted">{event.reason}</span> : null}
+                    {event.action === "assigned" ? "分配" : "移除"}{" "}
+                    {event.role.name}
+                    {event.reason ? (
+                      <span className="text-sm text-muted">{event.reason}</span>
+                    ) : null}
                   </td>
                   <td>
                     {event.sourceInboxItemId ? (
-                      <span className="font-mono text-sm text-primary">提醒 #{event.sourceInboxItemId}</span>
+                      <span className="font-mono text-sm text-primary">
+                        提醒 #{event.sourceInboxItemId}
+                      </span>
                     ) : (
                       "直接调整"
                     )}
@@ -105,13 +159,23 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
                 <tr key={log.id}>
                   <td>{formatDate(log.createdAt)}</td>
                   <td>
-                    <span className="font-mono text-sm text-primary">{log.eventType}</span>
-                    <span className="font-mono text-sm text-muted">#{log.id}</span>
+                    <span className="font-mono text-sm text-primary">
+                      {log.eventType}
+                    </span>
+                    <span className="font-mono text-sm text-muted">
+                      #{log.id}
+                    </span>
                   </td>
                   <td>
                     {log.actorName ?? log.email ?? "系统"}
-                    {log.userId ? <span className="font-mono text-sm text-muted">#{log.userId}</span> : null}
-                    {log.email ? <span className="text-sm text-muted">{log.email}</span> : null}
+                    {log.userId ? (
+                      <span className="font-mono text-sm text-muted">
+                        #{log.userId}
+                      </span>
+                    ) : null}
+                    {log.email ? (
+                      <span className="text-sm text-muted">{log.email}</span>
+                    ) : null}
                   </td>
                   <td>
                     <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs grid gap-4">
@@ -126,7 +190,13 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
           <EmptyState title="暂无系统审计日志。" />
         )}
       </Pane>
-      <PaginationLinks basePath="/admin/audit" page={page} pageSize={PAGE_SIZE} total={auditResult.total} params={{ q: query || undefined, action: eventType || undefined }} />
+      <PaginationLinks
+        basePath="/admin/audit"
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={auditResult.total}
+        params={{ q: query || undefined, action: eventType || undefined }}
+      />
     </main>
   );
 }

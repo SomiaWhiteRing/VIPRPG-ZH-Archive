@@ -1,92 +1,196 @@
-import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { getPublicCharacterDetail } from "@/app/.server/db/character-detail";
+import {
+  listPickerEmojis,
+  listRootComments,
+} from "@/app/.server/db/work-community";
+import { throwNotFound } from "@/app/.server/http/page-response";
+import { pickPageFields } from "@/app/.server/page-data";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
+import type { AppRuntime } from "@/app/.server/runtime";
+import { CharacterContentTabs } from "@/app/characters/[id]/character-content-tabs";
+import { CharacterMaterials } from "@/app/characters/[id]/character-materials";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { Badge } from "@/app/components/ui/badge";
-import { InfoRow } from "@/app/components/ui/info-row";
-import type { Metadata } from "next";
-import { cache } from "react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
-import { Card } from "@/app/components/ui/card";
 import { buttonVariants } from "@/app/components/ui/button";
+import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { CommentPanel } from "@/app/components/comments/comment-panel";
-import { CharacterContentTabs } from "@/app/characters/[id]/character-content-tabs";
-import { CharacterMaterials } from "@/app/characters/[id]/character-materials";
+import { InfoRow } from "@/app/components/ui/info-row";
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import {
+  CHARACTER_EDIT_PERMISSIONS,
+  hasPermission,
+} from "@/lib/authz/permissions";
 import { CHARACTER_ROLE_LABELS } from "@/lib/character-names";
+import type {
+  CharacterWork,
+  CharacterWorkCredit,
+} from "@/lib/dto/db/character-detail";
 import { formatNumber } from "@/lib/format";
-import { getCurrentUserFromCookies } from "@/lib/server/auth/current-user";
-import { getPublicCharacterDetail, type CharacterWork, type CharacterWorkCredit } from "@/lib/server/db/character-detail";
-import { listPickerEmojis, listRootComments } from "@/lib/server/db/work-community";
-import { CHARACTER_EDIT_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
-
-const readCharacter = cache(async (rawId: string) => {
+const readCharacter = async (runtime: AppRuntime, rawId: string) => {
   const id = Number(rawId);
-  if (!/^\d+$/.test(rawId) || !Number.isSafeInteger(id) || id <= 0) notFound();
-  const character = await getPublicCharacterDetail(id);
-  if (!character) notFound();
+  if (!/^\d+$/.test(rawId) || !Number.isSafeInteger(id) || id <= 0)
+    throwNotFound();
+  const character = await getPublicCharacterDetail(runtime, id);
+  if (!character) throwNotFound();
   return character;
-});
+};
 
-type Props = { params: Promise<{ id: string }> };
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { params } = routeInput(args);
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const character = await readCharacter((await params).id);
-  return { title: `${character.primaryName} · VIPRPG.org` };
-}
-
-export default async function CharacterDetailPage({ params }: Props) {
-  const character = await readCharacter((await params).id);
-  const user = await getCurrentUserFromCookies();
-  const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) => hasPermission(user, permission));
+  const character = await readCharacter(runtime, (await params).id);
+  const user = await getCurrentUser(runtime);
+  const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) =>
+    hasPermission(user, permission),
+  );
   const [comments, emojis] = await Promise.all([
-    listRootComments({ kind: "character", id: character.id }, user?.id ?? null, null),
-    listPickerEmojis(),
+    listRootComments(
+      runtime,
+      { kind: "character", id: character.id },
+      user?.id ?? null,
+      null,
+    ),
+    listPickerEmojis(runtime),
   ]);
 
+  const pageMetadata = { title: `${character.primaryName} · VIPRPG.org` };
+  return {
+    character,
+    user: pickPageFields(user, ["id"]),
+    canEdit,
+    comments,
+    emojis,
+    pageMetadata,
+  };
+}
+
+export default function CharacterDetailPage() {
+  const { character, user, canEdit, comments, emojis } =
+    useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <header className="pb-4 pt-4">
-        <Link className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-primary" href="/characters">
-          <ArrowLeft aria-hidden size={15} />角色索引
+        <Link
+          className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-primary"
+          to="/characters"
+        >
+          <ArrowLeft aria-hidden size={15} />
+          角色索引
         </Link>
         <div className="mt-2 flex items-start gap-2">
-          <h1 className="min-w-0 break-words font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">{character.primaryName}</h1>
-          {canEdit ? <Link aria-label={`编辑 ${character.primaryName}`} className={buttonVariants({ variant: "ghost", size: "icon" })} href={`/admin/characters/${character.id}`} prefetch={false} title="编辑角色"><Pencil aria-hidden /></Link> : null}
+          <h1 className="min-w-0 break-words font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
+            {character.primaryName}
+          </h1>
+          {canEdit ? (
+            <Link
+              aria-label={`编辑 ${character.primaryName}`}
+              className={buttonVariants({ variant: "ghost", size: "icon" })}
+              to={`/admin/characters/${character.id}`}
+              prefetch="none"
+              title="编辑角色"
+            >
+              <Pencil aria-hidden />
+            </Link>
+          ) : null}
         </div>
-        <p className="mt-1.5 text-sm text-muted" lang="ja">{character.originalName}</p>
+        <p className="mt-1.5 text-sm text-muted" lang="ja">
+          {character.originalName}
+        </p>
       </header>
       <CharacterContentTabs
         workCount={character.works.length}
         materialCount={character.materials.length}
         works={<CharacterWorks works={character.works} />}
-        materials={<CharacterMaterials materials={character.materials} name={character.primaryName} />}
+        materials={
+          <CharacterMaterials
+            materials={character.materials}
+            name={character.primaryName}
+          />
+        }
         sidebar={
           <Card className="rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full">
-            <CharacterPortrait className="mx-auto size-48 rounded-md" displayName={character.primaryName} portrait={character.portrait} size={192} />
-            <h2 className="mt-4 text-center font-serif text-xl font-bold">{character.primaryName}</h2>
+            <CharacterPortrait
+              className="mx-auto size-48 rounded-md"
+              displayName={character.primaryName}
+              portrait={character.portrait}
+              size={192}
+            />
+            <h2 className="mt-4 text-center font-serif text-xl font-bold">
+              {character.primaryName}
+            </h2>
             <dl className="mt-4">
-              <InfoRow label="日文名"><span lang="ja">{character.originalName}</span></InfoRow>
+              <InfoRow label="日文名">
+                <span lang="ja">{character.originalName}</span>
+              </InfoRow>
               {(["zh", "ja"] as const).map((language) => {
-                const names = character.aliases.filter((alias) => alias.language === language).map((alias) => alias.name);
-                return names.length ? <InfoRow key={language} label={language === "zh" ? "中文别名" : "日文别名"}><span lang={language}>{names.join("、")}</span></InfoRow> : null;
+                const names = character.aliases
+                  .filter((alias) => alias.language === language)
+                  .map((alias) => alias.name);
+                return names.length ? (
+                  <InfoRow
+                    key={language}
+                    label={language === "zh" ? "中文别名" : "日文别名"}
+                  >
+                    <span lang={language}>{names.join("、")}</span>
+                  </InfoRow>
+                ) : null;
               })}
-              <InfoRow label="登场作品">{formatNumber(character.works.length)} 部</InfoRow>
-              <InfoRow label="素材">{formatNumber(character.materials.length)} 张</InfoRow>
-              {character.categories.length ? <InfoRow label="所属分类"><ul className="m-0 grid list-none gap-2 p-0">{character.categories.map((category) => <li key={category.id}>{category.path}</li>)}</ul></InfoRow> : null}
+              <InfoRow label="登场作品">
+                {formatNumber(character.works.length)} 部
+              </InfoRow>
+              <InfoRow label="素材">
+                {formatNumber(character.materials.length)} 张
+              </InfoRow>
+              {character.categories.length ? (
+                <InfoRow label="所属分类">
+                  <ul className="m-0 grid list-none gap-2 p-0">
+                    {character.categories.map((category) => (
+                      <li key={category.id}>{category.path}</li>
+                    ))}
+                  </ul>
+                </InfoRow>
+              ) : null}
             </dl>
-            {character.sourceUrls.length ? <ul className="m-0 mt-3 grid list-none gap-1 p-0">{character.sourceUrls.map((url, index) => (
-              <li key={url}><a className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-primary hover:underline" href={url} rel="noreferrer" target="_blank">来源资料{character.sourceUrls.length > 1 ? ` ${index + 1}` : ""}<ExternalLink aria-hidden size={14} /></a></li>
-            ))}</ul> : null}
+            {character.sourceUrls.length ? (
+              <ul className="m-0 mt-3 grid list-none gap-1 p-0">
+                {character.sourceUrls.map((url, index) => (
+                  <li key={url}>
+                    <a
+                      className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                      href={url}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      来源资料
+                      {character.sourceUrls.length > 1 ? ` ${index + 1}` : ""}
+                      <ExternalLink aria-hidden size={14} />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </Card>
         }
       >
-        <section aria-labelledby="comments-title" className="scroll-mt-20 border-t border-border py-4.5" id="sec-comments">
+        <section
+          aria-labelledby="comments-title"
+          className="scroll-mt-20 border-t border-border py-4.5"
+          id="sec-comments"
+        >
           <div className="mb-3.5 flex items-baseline justify-between gap-4">
-            <h2 className="m-0 text-base font-bold" id="comments-title">评论</h2>
+            <h2 className="m-0 text-base font-bold" id="comments-title">
+              评论
+            </h2>
             <span className="font-mono text-xs text-muted">按发帖时间排序</span>
           </div>
           <CommentPanel
@@ -104,19 +208,61 @@ export default async function CharacterDetailPage({ params }: Props) {
 }
 
 function CharacterWorks({ works }: { works: CharacterWork[] }) {
-  if (!works.length) return <EmptyState title="暂无登场作品。" variant="plain" />;
+  if (!works.length)
+    return <EmptyState title="暂无登场作品。" variant="plain" />;
   return (
     <ul className="m-0 list-none divide-y divide-border p-0">
       {works.map((work) => (
-        <li className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 py-4 first:pt-0 max-[480px]:grid-cols-[5rem_minmax(0,1fr)]" key={work.id}>
-          <Link aria-label={work.title} className="relative aspect-4/3 self-start overflow-hidden rounded-md border border-border bg-muted/15" href={`/games/${work.id}`}>
-            {<WorkThumbnail blobSha256={work.previewBlobSha256} alt="" sizes="112px" imageClassName="object-cover" fallbackClassName="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white" fallback="作" />}
+        <li
+          className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 py-4 first:pt-0 max-[480px]:grid-cols-[5rem_minmax(0,1fr)]"
+          key={work.id}
+        >
+          <Link
+            aria-label={work.title}
+            className="relative aspect-4/3 self-start overflow-hidden rounded-md border border-border bg-muted/15"
+            to={`/games/${work.id}`}
+          >
+            {
+              <WorkThumbnail
+                blobSha256={work.previewBlobSha256}
+                alt=""
+                sizes="112px"
+                imageClassName="object-cover"
+                fallbackClassName="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white"
+                fallback="作"
+              />
+            }
           </Link>
           <div className="min-w-0 self-center">
-            <Link className="font-bold text-primary wrap-anywhere hover:underline" href={`/games/${work.id}`}>{work.title}</Link>
-            {work.title !== work.originalTitle ? <span className="block text-sm text-muted wrap-anywhere" lang="ja">{work.originalTitle}</span> : null}
-            {work.credits.map((credit) => credit.spoilerLevel > 0 ? <details className="mt-1.5 text-sm" key={credit.creditId}><summary className="cursor-pointer text-muted">登场信息（含剧透）</summary><CharacterCredit work={credit} /></details> : <CharacterCredit key={credit.creditId} work={credit} />)}
-            <span className="mt-1 block font-mono text-xs text-muted">{work.releaseDate ?? "日期未知"}</span>
+            <Link
+              className="font-bold text-primary wrap-anywhere hover:underline"
+              to={`/games/${work.id}`}
+            >
+              {work.title}
+            </Link>
+            {work.title !== work.originalTitle ? (
+              <span
+                className="block text-sm text-muted wrap-anywhere"
+                lang="ja"
+              >
+                {work.originalTitle}
+              </span>
+            ) : null}
+            {work.credits.map((credit) =>
+              credit.spoilerLevel > 0 ? (
+                <details className="mt-1.5 text-sm" key={credit.creditId}>
+                  <summary className="cursor-pointer text-muted">
+                    登场信息（含剧透）
+                  </summary>
+                  <CharacterCredit work={credit} />
+                </details>
+              ) : (
+                <CharacterCredit key={credit.creditId} work={credit} />
+              ),
+            )}
+            <span className="mt-1 block font-mono text-xs text-muted">
+              {work.releaseDate ?? "日期未知"}
+            </span>
           </div>
         </li>
       ))}
@@ -125,5 +271,21 @@ function CharacterWorks({ works }: { works: CharacterWork[] }) {
 }
 
 function CharacterCredit({ work }: { work: CharacterWorkCredit }) {
-  return <div className="mt-1.5 text-sm"><Badge variant="credit">{CHARACTER_ROLE_LABELS[work.roleKey]}</Badge><span className="ml-2 text-muted">{work.displayName}</span>{work.notes ? <p className="m-0 mt-1 text-muted wrap-anywhere">{work.notes}</p> : null}</div>;
+  return (
+    <div className="mt-1.5 text-sm">
+      <Badge variant="credit">{CHARACTER_ROLE_LABELS[work.roleKey]}</Badge>
+      <span className="ml-2 text-muted">{work.displayName}</span>
+      {work.notes ? (
+        <p className="m-0 mt-1 text-muted wrap-anywhere">{work.notes}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function meta({
+  data,
+}: {
+  data: Awaited<ReturnType<typeof loader>> | undefined;
+}) {
+  return pageMetaDescriptors(data?.pageMetadata);
 }

@@ -1,8 +1,7 @@
-"use client";
-
-import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
-import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from "react";
 import { cn } from "@/lib/ui/cn";
+import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
+import type { ComponentPropsWithoutRef, ComponentRef } from "react";
+import { forwardRef } from "react";
 
 export const AlertDialog = AlertDialogPrimitive.Root;
 export const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
@@ -28,6 +27,14 @@ export const AlertDialogContent = forwardRef<
 });
 export const AlertDialogTitle = AlertDialogPrimitive.Title;
 export const AlertDialogDescription = AlertDialogPrimitive.Description;
-export function AlertDialogFooter({ className, ...props }: ComponentPropsWithoutRef<"div">) {
-  return <div className={cn("flex flex-wrap justify-end gap-2", className)} {...props} />;
+export function AlertDialogFooter({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"div">) {
+  return (
+    <div
+      className={cn("flex flex-wrap justify-end gap-2", className)}
+      {...props}
+    />
+  );
 }

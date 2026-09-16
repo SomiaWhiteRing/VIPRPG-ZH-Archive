@@ -1,12 +1,17 @@
-import Link from "next/link";
-import type { ComponentPropsWithoutRef, MouseEventHandler, ReactNode } from "react";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/ui/cn";
+import type {
+  ComponentPropsWithoutRef,
+  MouseEventHandler,
+  ReactNode,
+} from "react";
+import { Link } from "react-router";
 
 type Rm2kButtonProps = {
   children: ReactNode;
   icon?: ReactNode;
   href?: string;
+  reloadDocument?: boolean;
   className?: string;
   type?: ComponentPropsWithoutRef<"button">["type"];
   disabled?: boolean;
@@ -24,6 +29,7 @@ export function Rm2kButton({
   children,
   icon,
   href,
+  reloadDocument,
   className,
   type = "button",
   disabled = false,
@@ -37,25 +43,36 @@ export function Rm2kButton({
   size = "default",
 }: Rm2kButtonProps) {
   const buttonClassName = cn(
-    size === "large" && "min-h-14 justify-start gap-1.5 px-2 text-sm sm:min-h-20 sm:gap-4 sm:px-4 sm:text-xl",
+    size === "large" &&
+      "min-h-14 justify-start gap-1.5 px-2 text-sm sm:min-h-20 sm:gap-4 sm:px-4 sm:text-xl",
     className,
   );
   const content = (
     <>
-      {icon && iconPosition === "start" ? <span aria-hidden="true">{icon}</span> : null}
+      {icon && iconPosition === "start" ? (
+        <span aria-hidden="true">{icon}</span>
+      ) : null}
       {children}
-      {icon && iconPosition === "end" ? <span aria-hidden="true">{icon}</span> : null}
+      {icon && iconPosition === "end" ? (
+        <span aria-hidden="true">{icon}</span>
+      ) : null}
     </>
   );
   if (href) {
     return (
-      <Button asChild aria-disabled={disabled || undefined} className={buttonClassName} variant="rm2k">
+      <Button
+        asChild
+        aria-disabled={disabled || undefined}
+        className={buttonClassName}
+        variant="rm2k"
+      >
         <Link
           aria-controls={ariaControls}
           aria-expanded={ariaExpanded}
           aria-haspopup={ariaHasPopup}
           aria-selected={ariaSelected}
-          href={href}
+          to={href}
+          reloadDocument={reloadDocument}
           onClick={
             disabled || onClick
               ? (event) => {

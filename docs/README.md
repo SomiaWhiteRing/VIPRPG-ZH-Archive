@@ -14,5 +14,5 @@
 
 ## 运行手册
 
-- [OpenNext 与 Cloudflare](./opennext-cloudflare-development-path.md)：本地运行、binding、构建、部署和故障定位
+- [Workers 与 React Router](./workers-development.md)：本地运行、binding、构建、部署和故障定位
 - [GitHub Actions 自动部署](./github-actions-deployment.md)：CI 前置配置、触发方式和发布边界

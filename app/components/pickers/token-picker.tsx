@@ -1,11 +1,15 @@
-"use client";
-import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
+import {
+  ComboboxOption,
+  ComboboxOptions,
+  handleComboboxNavigation,
+} from "@/app/components/ui/combobox";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
 import { Button } from "@/app/components/ui/button";
 import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
-export type TokenSuggestion = { value: string; meta: string };
 import { cn } from "@/lib/ui/cn";
+import type { KeyboardEvent } from "react";
+import { useMemo, useState } from "react";
+export type TokenSuggestion = { value: string; meta: string };
 
 type TokenOption = TokenSuggestion & { kind: "existing" | "create" };
 
@@ -47,22 +51,34 @@ export function TokenPicker({
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const atLimit = maxValues !== undefined && values.length >= maxValues;
-  const selectedKeys = useMemo(() => new Set(values.map(value => tokenKey(normalizeValue(value)))), [values,normalizeValue]);
+  const selectedKeys = useMemo(
+    () => new Set(values.map((value) => tokenKey(normalizeValue(value)))),
+    [values, normalizeValue],
+  );
   const options = useMemo<TokenOption[]>(() => {
     const normalizedQuery = tokenKey(normalizeValue(query));
     if (!normalizedQuery) return [];
     const matches: TokenOption[] = suggestions
       .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
-      .filter((item) => tokenKey(normalizeValue(item.value)).includes(normalizedQuery))
+      .filter((item) =>
+        tokenKey(normalizeValue(item.value)).includes(normalizedQuery),
+      )
       .slice(0, 8)
       .map((item) => ({ ...item, kind: "existing" as const }));
     const normalizedValue = normalizeValue(query);
-    const exactMatch = suggestions.some((item) => tokenKey(normalizeValue(item.value)) === tokenKey(normalizedValue));
-    if (normalizedValue && !exactMatch && !selectedKeys.has(tokenKey(normalizedValue))) {
+    const exactMatch = suggestions.some(
+      (item) =>
+        tokenKey(normalizeValue(item.value)) === tokenKey(normalizedValue),
+    );
+    if (
+      normalizedValue &&
+      !exactMatch &&
+      !selectedKeys.has(tokenKey(normalizedValue))
+    ) {
       matches.push({ value: normalizedValue, meta: "新建", kind: "create" });
     }
     return matches;
-  }, [query, selectedKeys, suggestions,normalizeValue]);
+  }, [query, selectedKeys, suggestions, normalizeValue]);
   const recommended = suggestions
     .filter((item) => !selectedKeys.has(tokenKey(item.value)))
     .slice(0, 6);
@@ -71,8 +87,12 @@ export function TokenPicker({
 
   function add(rawValue: string) {
     if (disabled || atLimit) return;
-    const validation = (query ? validateValue?.(query) : null) ?? validateValue?.(rawValue);
-    if (validation) { setError(validation); return; }
+    const validation =
+      (query ? validateValue?.(query) : null) ?? validateValue?.(rawValue);
+    if (validation) {
+      setError(validation);
+      return;
+    }
     const value = normalizeValue(rawValue);
     if (!value || selectedKeys.has(tokenKey(value))) return;
     onChange([...values, value]);
@@ -88,7 +108,16 @@ export function TokenPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
+    if (
+      handleComboboxNavigation(event, {
+        count: options.length,
+        open: menuOpen,
+        activeIndex,
+        setOpen,
+        setActiveIndex,
+      })
+    )
+      return;
     if (event.key === "Enter") {
       event.preventDefault();
       const active = menuOpen ? options[activeIndex] : null;
@@ -100,10 +129,16 @@ export function TokenPicker({
 
   return (
     <div className={cn("grid gap-2", disabled && "opacity-60")}>
-      {name ? <input name={name} readOnly type="hidden" value={values.join("\n")} /> : null}
+      {name ? (
+        <input name={name} readOnly type="hidden" value={values.join("\n")} />
+      ) : null}
       <div className="relative">
         <TokenInput
-          aria-activedescendant={menuOpen && options[activeIndex] ? `${menuId}-${activeIndex}` : undefined}
+          aria-activedescendant={
+            menuOpen && options[activeIndex]
+              ? `${menuId}-${activeIndex}`
+              : undefined
+          }
           aria-autocomplete="list"
           aria-controls={menuId}
           aria-expanded={menuOpen}
@@ -126,7 +161,12 @@ export function TokenPicker({
           value={query}
         >
           {values.map((value) => (
-            <TokenChip disabled={disabled} key={tokenKey(value)} label={value} onRemove={() => remove(value)}>
+            <TokenChip
+              disabled={disabled}
+              key={tokenKey(value)}
+              label={value}
+              onRemove={() => remove(value)}
+            >
               {value}
             </TokenChip>
           ))}
@@ -134,22 +174,53 @@ export function TokenPicker({
         {menuOpen ? (
           <ComboboxOptions id={menuId} activeIndex={activeIndex}>
             {options.map((option, index) => (
-              <ComboboxOption selected={index === activeIndex}
-                  id={`${menuId}-${index}`}
-                  key={`${option.kind}-${tokenKey(option.value)}`}
-                  onClick={() => add(option.value)}
-                  disabled={atLimit}>
+              <ComboboxOption
+                selected={index === activeIndex}
+                id={`${menuId}-${index}`}
+                key={`${option.kind}-${tokenKey(option.value)}`}
+                onClick={() => add(option.value)}
+                disabled={atLimit}
+              >
                 <span>{option.value}</span>
-                <span className="shrink-0 text-xs text-muted">{option.meta}</span>
+                <span className="shrink-0 text-xs text-muted">
+                  {option.meta}
+                </span>
               </ComboboxOption>
             ))}
           </ComboboxOptions>
         ) : null}
       </div>
-      {error || atLimit ? <p className="text-sm text-destructive" id={`${id}-feedback`} role="status">{error ?? `最多选择 ${maxValues} 项`}</p> : null}
-      {sortable && values.length > 1 ? <div className="flex flex-wrap gap-1" aria-label="TAG 顺序">
-        {values.map((value,index) => <Button className="min-h-9 text-xs" disabled={disabled || index===0} key={value} size="sm" type="button" variant="ghost" aria-label={`将 ${value} 前移`} onClick={()=>{const next=[...values];[next[index-1],next[index]]=[next[index],next[index-1]];onChange(next);}}>{value} ↑</Button>)}
-      </div> : null}
+      {error || atLimit ? (
+        <p
+          className="text-sm text-destructive"
+          id={`${id}-feedback`}
+          role="status"
+        >
+          {error ?? `最多选择 ${maxValues} 项`}
+        </p>
+      ) : null}
+      {sortable && values.length > 1 ? (
+        <div className="flex flex-wrap gap-1" aria-label="TAG 顺序">
+          {values.map((value, index) => (
+            <Button
+              className="min-h-9 text-xs"
+              disabled={disabled || index === 0}
+              key={value}
+              size="sm"
+              type="button"
+              variant="ghost"
+              aria-label={`将 ${value} 前移`}
+              onClick={() => {
+                const next = [...values];
+                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                onChange(next);
+              }}
+            >
+              {value} ↑
+            </Button>
+          ))}
+        </div>
+      ) : null}
       <div
         className={cn(
           "flex flex-wrap items-center gap-2 text-xs text-muted",
@@ -162,7 +233,9 @@ export function TokenPicker({
       {showRecommendations && recommended.length ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {recommendationLabel ? (
-            <span className="mr-1 text-xs text-muted">{recommendationLabel}</span>
+            <span className="mr-1 text-xs text-muted">
+              {recommendationLabel}
+            </span>
           ) : null}
           {recommended.map((item) => (
             <Button

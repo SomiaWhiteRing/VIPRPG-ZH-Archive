@@ -1,8 +1,13 @@
-"use client";
 import { EmojiGrid } from "@/app/components/comments/emoji-grid";
-import {ForumReplyBar,draftSnapshot,draftValue,forumReplyLauncherClass,type ForumDraft} from "./draft";
-import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ImagePlus, Smile } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { ForumDraft } from "./draft";
+import {
+  ForumReplyBar,
+  draftSnapshot,
+  draftValue,
+  forumReplyLauncherClass,
+} from "./draft";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -11,11 +16,18 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 
-import { FORUM_BODY_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_TITLE_LENGTH, type ForumViewer } from "@/lib/forum";
-import type { CustomEmojiDto } from "@/lib/server/db/work-community";
-import { ForumTagEditor, ForumModal, forumRequest } from "./shared";
+import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { ForumViewer } from "@/lib/forum";
+import {
+  FORUM_BODY_LENGTH,
+  FORUM_COMMENT_LENGTH,
+  FORUM_POST_BODY_LENGTH,
+  FORUM_TITLE_LENGTH,
+} from "@/lib/forum";
 import { ForumImages, existingDraftImages } from "./images";
-import { MixedEditor, type MixedEditorHandle } from "./mixed-editor";
+import type { MixedEditorHandle } from "./mixed-editor";
+import { MixedEditor } from "./mixed-editor";
+import { ForumModal, ForumTagEditor, forumRequest } from "./shared";
 
 export function ForumEditor({
   draft,
@@ -50,12 +62,21 @@ export function ForumEditor({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [catalogue,setCatalogue]=useState<CustomEmojiDto[]|null>(null);
-  async function openEmojis(){
-    try{
-      if(!catalogue)setCatalogue((await forumRequest<{emojis:CustomEmojiDto[]}>("/api/discussions?op=emojis")).emojis);
+  const [catalogue, setCatalogue] = useState<CustomEmojiDto[] | null>(null);
+  async function openEmojis() {
+    try {
+      if (!catalogue)
+        setCatalogue(
+          (
+            await forumRequest<{ emojis: CustomEmojiDto[] }>(
+              "/api/discussions?op=emojis",
+            )
+          ).emojis,
+        );
       setEmojiOpen(true);
-    }catch(error){onError(error instanceof Error?error.message:"表情加载失败。");}
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "表情加载失败。");
+    }
   }
   const picker = useRef<HTMLInputElement>(null);
   const mixed = useRef<MixedEditorHandle>(null);
@@ -65,7 +86,11 @@ export function ForumEditor({
   const topic = draft.mode === "topic";
   const inline = draft.mode === "comment";
   const isCollapsed = collapsed && !error && !draft.currentVersion;
-  const limit = inline ? FORUM_COMMENT_LENGTH : topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH;
+  const limit = inline
+    ? FORUM_COMMENT_LENGTH
+    : topic
+      ? FORUM_BODY_LENGTH
+      : FORUM_POST_BODY_LENGTH;
   const label = draft.target
     ? "保存修改"
     : topic
@@ -150,278 +175,287 @@ export function ForumEditor({
           ) : null}
         </Button>
       ) : null}
-        <form
-          className={isCollapsed ? "hidden" : "flex min-h-0 flex-1 flex-col gap-2"}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!busy && !conflict && !draft.currentVersion) onSubmit();
-          }}
+      <form
+        className={
+          isCollapsed ? "hidden" : "flex min-h-0 flex-1 flex-col gap-2"
+        }
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!busy && !conflict && !draft.currentVersion) onSubmit();
+        }}
+      >
+        <div
+          className={
+            topic
+              ? "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2"
+              : "flex max-h-[min(50dvh,calc(var(--reply-viewport,100dvh)-10rem))] flex-col gap-2 overflow-y-auto"
+          }
         >
-          <div
-            className={
-              topic
-                ? "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2"
-                : "flex max-h-[min(50dvh,calc(var(--reply-viewport,100dvh)-10rem))] flex-col gap-2 overflow-y-auto"
-            }
-          >
-            {draft.currentVersion ? (
-              <ForumConflictResolver
-                key={`${draft.currentVersion.revision}-${draft.currentVersion.topic.revision}`}
-                draft={draft}
-                current={draft.currentVersion}
-                onChange={onChange}
-              />
-            ) : null}
-            {topic ? (
-              <>
-                <div>
-                  <Label htmlFor="forum-title">标题</Label>
-                  <Input
-                    autoFocus
-                    id="forum-title"
-                    value={draft.title}
-                    maxLength={FORUM_TITLE_LENGTH}
-                    required
-                    disabled={busy}
-                    onChange={(event) =>
-                      onChange({ ...draft, title: event.target.value })
-                    }
-                  />
-                </div>
-                <ForumTagEditor
-                  id="forum-editor-tags"
-                  disabled={busy}
-                  values={draft.tags}
-                  onChange={(tags) => onChange({ ...draft, tags })}
-                />
-                {draft.target ? (
-                  <p className="text-xs text-muted">
-                    修改并保存 TAG 时会移除已不可见的标签关联。
-                  </p>
-                ) : null}
-              </>
-            ) : draft.target || inline ? (
-              <p className="text-xs font-semibold text-muted">{context}</p>
-            ) : null}
-            {draft.replyToId ? (
-              <div className="flex items-center gap-2 text-sm">
-                回复 {draft.replyName}
-                <Button
-                  disabled={busy}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    onChange({
-                      ...draft,
-                      replyToId: undefined,
-                      replyName: undefined,
-                    })
-                  }
-                >
-                  取消定向回复
-                </Button>
-              </div>
-            ) : null}
-            <div
-              className={
-                topic ? "flex min-h-48 shrink-0 flex-col gap-1" : "min-w-0"
-              }
-            >
-              <Label
-                className={topic ? undefined : "sr-only"}
-                htmlFor="forum-body"
-              >
-                正文
-              </Label>
-              {!inline ? (
-                <MixedEditor
-                  ref={mixed}
-                  body={draft.body}
-                  images={draft.images}
-                  busy={busy}
-                  topic={topic}
-                  onBusyChange={onBusyChange}
-                  onError={onError}
-                  onCompositionChange={(value) => { composing.current = value; }}
-                  onChange={(body, images) =>
-                    onChange({ ...draft, body, images })
-                  }
-                />
-              ) : (
-                <Textarea
-                  ref={ref}
+          {draft.currentVersion ? (
+            <ForumConflictResolver
+              key={`${draft.currentVersion.revision}-${draft.currentVersion.topic.revision}`}
+              draft={draft}
+              current={draft.currentVersion}
+              onChange={onChange}
+            />
+          ) : null}
+          {topic ? (
+            <>
+              <div>
+                <Label htmlFor="forum-title">标题</Label>
+                <Input
                   autoFocus
-                  id="forum-body"
-                  rows={2}
-                  placeholder={
-                    draft.replyToId
-                      ? `回复 ${draft.replyName}……`
-                      : `回复 #${draft.postNumber}……`
-                  }
-                  className="min-h-16 max-h-[min(32dvh,calc(var(--reply-viewport,100dvh)-12rem))] shrink-0 resize-none text-base leading-relaxed"
-                  aria-describedby={error ? "forum-editor-error" : undefined}
-                  maxLength={limit}
-                  value={draft.body}
+                  id="forum-title"
+                  value={draft.title}
+                  maxLength={FORUM_TITLE_LENGTH}
                   required
                   disabled={busy}
-                  onCompositionStart={() => {
-                    composing.current = true;
-                  }}
-                  onCompositionEnd={() => {
-                    composing.current = false;
-                  }}
                   onChange={(event) =>
-                    onChange({ ...draft, body: event.target.value })
+                    onChange({ ...draft, title: event.target.value })
                   }
                 />
-              )}
-            </div>
-            {progress ? (
-              <p role="status" className="text-sm text-muted">
-                {progress}
-              </p>
-            ) : null}
-            {error ? (
-              <div
-                id="forum-editor-error"
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                <p>{error}</p>
-                {loginExpired ? (
-                  <a
-                    className="underline"
-                    href="/login?next=%2Fdiscussions"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    在新标签页重新登录
-                  </a>
-                ) : null}
-                {conflict ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={onReload}
-                  >
-                    读取当前版本
-                  </Button>
-                ) : null}
               </div>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="站点表情"
-              title="站点表情"
-              disabled={busy}
-              onClick={() => void openEmojis()}
-            >
-              <Smile />
-            </Button>
-            {!inline ? (
-              <>
-                <Input
-                  ref={picker}
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  aria-label="选择图片"
-                  disabled={busy}
-                  onChange={(event) => {
-                    mixed.current?.insertFiles(Array.from(event.target.files ?? []));
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="添加图片"
-                  title="添加图片"
-                  disabled={busy}
-                  onClick={() => picker.current?.click()}
-                >
-                  <ImagePlus />
-                </Button>
-              </>
-            ) : null}
-            <span className="font-mono text-xs text-muted">
-              <span className="sr-only">正文字数：</span>
-              {draft.body.length}
-              <span className="hidden sm:inline"> / {limit}</span>
-            </span>
-            <div className="ml-auto flex items-center gap-1">
-              {!topic && !inline ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="收起回复"
-                  title="收起回复"
-                  disabled={busy || !!error || !!draft.currentVersion}
-                  onClick={() => {
-                    setCollapsed(true);
-                    requestAnimationFrame(() =>
-                      section.current
-                        ?.querySelector<HTMLButtonElement>("button")
-                        ?.focus({ preventScroll: true }),
-                    );
-                  }}
-                >
-                  <ChevronDown />
-                </Button>
+              <ForumTagEditor
+                id="forum-editor-tags"
+                disabled={busy}
+                values={draft.tags}
+                onChange={(tags) => onChange({ ...draft, tags })}
+              />
+              {draft.target ? (
+                <p className="text-xs text-muted">
+                  修改并保存 TAG 时会移除已不可见的标签关联。
+                </p>
               ) : null}
-              {!topic ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={onCancel}
-                >
-                  取消
-                </Button>
-              ) : null}
+            </>
+          ) : draft.target || inline ? (
+            <p className="text-xs font-semibold text-muted">{context}</p>
+          ) : null}
+          {draft.replyToId ? (
+            <div className="flex items-center gap-2 text-sm">
+              回复 {draft.replyName}
               <Button
-                disabled={busy || conflict || !!draft.currentVersion}
-                type="submit"
-              >
-                {busy ? "正在保存…" : label}
-              </Button>
-            </div>
-          </div>
-        </form>
-      <ForumModal open={emojiOpen} onOpenChange={setEmojiOpen} title="站点表情">
-        <EmojiGrid emojis={catalogue ?? emojis} onSelect={(shortcode) => {
-                  if (!inline) {
-                    mixed.current?.insertText(`:${shortcode}:`);
-                    setEmojiOpen(false);
-                    return;
-                  }
-                  const start = ref.current?.selectionStart ?? draft.body.length;
-                  const end = ref.current?.selectionEnd ?? start;
-                  const body =
-                    draft.body.slice(0, start) +
-                    `:${shortcode}:` +
-                    draft.body.slice(end);
-                  if (body.length > limit) return;
+                disabled={busy}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
                   onChange({
                     ...draft,
-                    body,
-                  });
-                  setEmojiOpen(false);
-                  requestAnimationFrame(() => {
-                    ref.current?.focus();
-                    const caret = start + shortcode.length + 2;
-                    ref.current?.setSelectionRange(caret, caret);
-                  });
-                }} />
+                    replyToId: undefined,
+                    replyName: undefined,
+                  })
+                }
+              >
+                取消定向回复
+              </Button>
+            </div>
+          ) : null}
+          <div
+            className={
+              topic ? "flex min-h-48 shrink-0 flex-col gap-1" : "min-w-0"
+            }
+          >
+            <Label
+              className={topic ? undefined : "sr-only"}
+              htmlFor="forum-body"
+            >
+              正文
+            </Label>
+            {!inline ? (
+              <MixedEditor
+                ref={mixed}
+                body={draft.body}
+                images={draft.images}
+                busy={busy}
+                topic={topic}
+                onBusyChange={onBusyChange}
+                onError={onError}
+                onCompositionChange={(value) => {
+                  composing.current = value;
+                }}
+                onChange={(body, images) =>
+                  onChange({ ...draft, body, images })
+                }
+              />
+            ) : (
+              <Textarea
+                ref={ref}
+                autoFocus
+                id="forum-body"
+                rows={2}
+                placeholder={
+                  draft.replyToId
+                    ? `回复 ${draft.replyName}……`
+                    : `回复 #${draft.postNumber}……`
+                }
+                className="min-h-16 max-h-[min(32dvh,calc(var(--reply-viewport,100dvh)-12rem))] shrink-0 resize-none text-base leading-relaxed"
+                aria-describedby={error ? "forum-editor-error" : undefined}
+                maxLength={limit}
+                value={draft.body}
+                required
+                disabled={busy}
+                onCompositionStart={() => {
+                  composing.current = true;
+                }}
+                onCompositionEnd={() => {
+                  composing.current = false;
+                }}
+                onChange={(event) =>
+                  onChange({ ...draft, body: event.target.value })
+                }
+              />
+            )}
+          </div>
+          {progress ? (
+            <p role="status" className="text-sm text-muted">
+              {progress}
+            </p>
+          ) : null}
+          {error ? (
+            <div
+              id="forum-editor-error"
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              <p>{error}</p>
+              {loginExpired ? (
+                <a
+                  className="underline"
+                  href="/login?next=%2Fdiscussions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  在新标签页重新登录
+                </a>
+              ) : null}
+              {conflict ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={onReload}
+                >
+                  读取当前版本
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="站点表情"
+            title="站点表情"
+            disabled={busy}
+            onClick={() => void openEmojis()}
+          >
+            <Smile />
+          </Button>
+          {!inline ? (
+            <>
+              <Input
+                ref={picker}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                aria-label="选择图片"
+                disabled={busy}
+                onChange={(event) => {
+                  mixed.current?.insertFiles(
+                    Array.from(event.target.files ?? []),
+                  );
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="添加图片"
+                title="添加图片"
+                disabled={busy}
+                onClick={() => picker.current?.click()}
+              >
+                <ImagePlus />
+              </Button>
+            </>
+          ) : null}
+          <span className="font-mono text-xs text-muted">
+            <span className="sr-only">正文字数：</span>
+            {draft.body.length}
+            <span className="hidden sm:inline"> / {limit}</span>
+          </span>
+          <div className="ml-auto flex items-center gap-1">
+            {!topic && !inline ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="收起回复"
+                title="收起回复"
+                disabled={busy || !!error || !!draft.currentVersion}
+                onClick={() => {
+                  setCollapsed(true);
+                  requestAnimationFrame(() =>
+                    section.current
+                      ?.querySelector<HTMLButtonElement>("button")
+                      ?.focus({ preventScroll: true }),
+                  );
+                }}
+              >
+                <ChevronDown />
+              </Button>
+            ) : null}
+            {!topic ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={onCancel}
+              >
+                取消
+              </Button>
+            ) : null}
+            <Button
+              disabled={busy || conflict || !!draft.currentVersion}
+              type="submit"
+            >
+              {busy ? "正在保存…" : label}
+            </Button>
+          </div>
+        </div>
+      </form>
+      <ForumModal open={emojiOpen} onOpenChange={setEmojiOpen} title="站点表情">
+        <EmojiGrid
+          emojis={catalogue ?? emojis}
+          onSelect={(shortcode) => {
+            if (!inline) {
+              mixed.current?.insertText(`:${shortcode}:`);
+              setEmojiOpen(false);
+              return;
+            }
+            const start = ref.current?.selectionStart ?? draft.body.length;
+            const end = ref.current?.selectionEnd ?? start;
+            const body =
+              draft.body.slice(0, start) +
+              `:${shortcode}:` +
+              draft.body.slice(end);
+            if (body.length > limit) return;
+            onChange({
+              ...draft,
+              body,
+            });
+            setEmojiOpen(false);
+            requestAnimationFrame(() => {
+              ref.current?.focus();
+              const caret = start + shortcode.length + 2;
+              ref.current?.setSelectionRange(caret, caret);
+            });
+          }}
+        />
       </ForumModal>
     </section>
   );

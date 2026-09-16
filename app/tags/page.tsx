@@ -1,27 +1,33 @@
-import { PageContainer } from "@/app/components/ui/page-container";
-import { Input } from "@/app/components/ui/input";
+import { listPublicTags } from "@/app/.server/db/taxonomy-library";
+import { routeInput } from "@/app/.server/route-input";
+import { runtimeContext } from "@/app/.server/router-context";
 import { Button, buttonVariants } from "@/app/components/ui/button";
-import { Label } from "@/app/components/ui/label";
-import Link from "next/link";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatList } from "@/app/components/ui/stat-list";
-import { listPublicTags, type PublicTagSummary } from "@/lib/server/db/taxonomy-library";
+import type { PublicTagSummary } from "@/lib/dto/db/taxonomy-library";
 import { formatNumber } from "@/lib/format";
 import { namespaceLabel } from "@/lib/labels";
 import { stringParam } from "@/lib/params";
+import type { LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
-export const dynamic = "force-dynamic";
+export async function loader(args: LoaderFunctionArgs) {
+  const runtime = args.context.get(runtimeContext);
+  const { searchParams } = routeInput(args);
 
-type TagsPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export default async function TagsPage({ searchParams }: TagsPageProps) {
   const params = await searchParams;
   const query = stringParam(params.q);
-  const tags = await listPublicTags({ query });
+  const tags = await listPublicTags(runtime, { query });
 
+  return { query, tags };
+}
+
+export default function TagsPage() {
+  const { query, tags } = useLoaderData<typeof loader>();
   return (
     <PageContainer className="space-y-5">
       <PageHeader compact title="标签" />
@@ -33,11 +39,16 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       >
         <Label>
           <span>搜索</span>
-          <Input defaultValue={query} name="q" placeholder="标签名" type="search" />
+          <Input
+            defaultValue={query}
+            name="q"
+            placeholder="标签名"
+            type="search"
+          />
         </Label>
         <Button type="submit">筛选</Button>
         {query ? (
-          <Link className={buttonVariants({ variant: "outline" })} href="/tags">
+          <Link className={buttonVariants({ variant: "outline" })} to="/tags">
             清除
           </Link>
         ) : null}
@@ -50,7 +61,10 @@ export default async function TagsPage({ searchParams }: TagsPageProps) {
       </section>
 
       {tags.length > 0 ? (
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="标签列表">
+        <section
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          aria-label="标签列表"
+        >
           {tags.map((tag) => (
             <TagCard key={tag.id} tag={tag} />
           ))}
@@ -68,7 +82,7 @@ function TagCard({ tag }: { tag: PublicTagSummary }) {
       <div>
         <Link
           className="text-lg font-bold text-primary hover:text-accent"
-          href={`/games?tag=${tag.id}`}
+          to={`/games?tag=${tag.id}`}
         >
           {tag.name}
         </Link>
