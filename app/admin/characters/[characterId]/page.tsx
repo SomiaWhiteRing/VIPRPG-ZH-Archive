@@ -96,7 +96,7 @@ export default function AdminCharacterEditPage() {
     characterIndex,
   } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={character.id}>
       <PageHeader
         compact
         title={character.primaryName}

@@ -50,7 +50,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export default function AdminTagEditPage() {
   const { formError, tag, candidates } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={tag.id}>
       <PageHeader
         compact
         title={tag.name}

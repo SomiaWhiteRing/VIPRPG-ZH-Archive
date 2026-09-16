@@ -12,7 +12,7 @@ export function SiteFooter() {
         </p>
         <nav aria-label="页脚导航" className="flex flex-wrap gap-4">
           <Link to="/about">关于</Link>
-          <Link to="/api/health">运行状态</Link>
+          <a href="/api/health">运行状态</a>
           <a
             href="https://github.com/SomiaWhiteRing/VIPRPG-ZH-Archive/issues"
             rel="noreferrer"
