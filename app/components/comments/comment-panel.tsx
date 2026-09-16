@@ -1,4 +1,5 @@
 "use client";
+import { EmojiGrid } from "@/app/components/comments/emoji-grid";
 
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Button } from "@/app/components/ui/button";
@@ -394,21 +395,7 @@ function EmojiPicker({ emojis, onSelect }: { emojis: CustomEmojiDto[]; onSelect:
       </Button>
       {open ? (
         <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-[min(20rem,calc(100vw-3rem))] overflow-hidden rounded-md border border-border bg-card p-2 shadow-lg">
-          <div className="grid max-h-56 grid-cols-6 gap-1 overflow-y-auto">
-            {emojis.length ? emojis.map((emoji) => (
-              <Button
-                aria-label={`插入 :${emoji.shortcode}:`}
-                className="grid h-9 w-9 p-0"
-                key={emoji.shortcode}
-                onClick={() => { onSelect(emoji.shortcode); setOpen(false); }}
-                title={`:${emoji.shortcode}:`}
-                type="button"
-                variant="ghost"
-              >
-                <Image alt={emoji.name} height={24} src={emoji.imageUrl} unoptimized width={24} />
-              </Button>
-            )) : <EmptyState title="暂无站点表情。" variant="plain" className="col-span-6 p-2" />}
-          </div>
+          <EmojiGrid compact emojis={emojis} onSelect={(shortcode) => { onSelect(shortcode); setOpen(false); }} />
         </div>
       ) : null}
     </div>

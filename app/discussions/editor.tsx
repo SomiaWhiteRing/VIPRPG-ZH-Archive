@@ -1,10 +1,9 @@
 "use client";
-import { EmptyState } from "@/app/components/ui/empty-state";
+import { EmojiGrid } from "@/app/components/comments/emoji-grid";
 import {ForumReplyBar,draftSnapshot,draftValue,forumReplyLauncherClass,type ForumDraft} from "./draft";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ImagePlus, Smile } from "lucide-react";
 
-import Image from "next/image";
 import { Button } from "@/app/components/ui/button";
 
 import { Input } from "@/app/components/ui/input";
@@ -399,22 +398,9 @@ export function ForumEditor({
           </div>
         </form>
       <ForumModal open={emojiOpen} onOpenChange={setEmojiOpen} title="站点表情">
-        <div className="grid grid-cols-6 gap-2">
-          {(catalogue??emojis)
-            .filter(
-              (emoji) => emoji.status === "active" && emoji.visibleInPicker,
-            )
-            .map((emoji) => (
-              <Button
-                className="h-12"
-                variant="ghost"
-                type="button"
-                key={emoji.id}
-                aria-label={emoji.name}
-                title={emoji.name}
-                onClick={() => {
+        <EmojiGrid emojis={catalogue ?? emojis} onSelect={(shortcode) => {
                   if (!inline) {
-                    mixed.current?.insertText(`:${emoji.shortcode}:`);
+                    mixed.current?.insertText(`:${shortcode}:`);
                     setEmojiOpen(false);
                     return;
                   }
@@ -422,7 +408,7 @@ export function ForumEditor({
                   const end = ref.current?.selectionEnd ?? start;
                   const body =
                     draft.body.slice(0, start) +
-                    `:${emoji.shortcode}:` +
+                    `:${shortcode}:` +
                     draft.body.slice(end);
                   if (body.length > limit) return;
                   onChange({
@@ -432,22 +418,10 @@ export function ForumEditor({
                   setEmojiOpen(false);
                   requestAnimationFrame(() => {
                     ref.current?.focus();
-                    const caret = start + emoji.shortcode.length + 2;
+                    const caret = start + shortcode.length + 2;
                     ref.current?.setSelectionRange(caret, caret);
                   });
-                }}
-              >
-                <Image
-                  alt={emoji.name}
-                  width={24}
-                  height={24}
-                  src={emoji.imageUrl}
-                  unoptimized
-                />
-              </Button>
-            ))}
-        </div>
-        {catalogue?.length===0 ? <EmptyState title="还没有可用的表情。" variant="plain" /> : null}
+                }} />
       </ForumModal>
     </section>
   );
