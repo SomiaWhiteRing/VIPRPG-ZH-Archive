@@ -1,4 +1,5 @@
 "use client";
+import { ComboboxOption, ComboboxOptions, handleComboboxNavigation } from "@/app/components/ui/combobox";
 
 import { EmptyState } from "@/app/components/ui/empty-state";
 import Image from "next/image";
@@ -256,32 +257,16 @@ export function CharacterPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "ArrowDown" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current + 1) % options.length);
-      return;
-    }
-    if (event.key === "ArrowUp" && options.length) {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((current) => (current - 1 + options.length) % options.length);
-      return;
-    }
+    if (handleComboboxNavigation(event, { count: options.length, open: menuOpen, activeIndex, setOpen, setActiveIndex })) return;
     if (event.key === "Enter") {
       event.preventDefault();
       const active = menuOpen ? options[activeIndex] : options[0];
       if (!active) return;
       if (active.kind === "create") startCreate(active.query);
       else addExisting(active.selection);
-      return;
-    }
-    if (event.key === "Backspace" && !query && values.length) {
+    } else if (event.key === "Backspace" && !query && values.length) {
       remove(values.length - 1);
-      return;
     }
-    if (event.key === "Escape") setOpen(false);
   }
 
   return (
@@ -383,29 +368,14 @@ export function CharacterPicker({
             })}
           </TokenInput>
           {menuOpen ? (
-            <div
-              className="absolute inset-x-0 top-[calc(100%+0.25rem)] z-30 max-h-72 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-surface"
-              id={menuId}
-              role="listbox"
-            >
+            <ComboboxOptions id={menuId} activeIndex={activeIndex} className="max-h-72">
               {options.map((option, index) => (
-                <Button
+                <ComboboxOption selected={index === activeIndex} className="min-h-12"
                   aria-controls={option.kind === "create" ? `${id}-create-dialog` : undefined}
                   aria-haspopup={option.kind === "create" ? "dialog" : undefined}
-                  aria-selected={index === activeIndex}
-                  className={cn(
-                    "flex min-h-12 w-full items-center justify-between gap-3 rounded-sm px-2.5 py-1.5 text-left text-sm font-normal",
-                    index === activeIndex && "bg-primary/10 text-primary",
-                  )}
                   id={`${menuId}-${index}`}
                   key={option.kind === "create" ? `create:${option.query}` : option.selection.characterId}
-                  onClick={() => option.kind === "create" ? startCreate(option.query) : addExisting(option.selection)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  role="option"
-                  tabIndex={-1}
-                  type="button"
-                  variant="ghost"
-                >
+                  onClick={() => option.kind === "create" ? startCreate(option.query) : addExisting(option.selection)}>
                   {option.kind === "create" ? (
                     <>
                       <span>新增角色“{option.query}”</span>
@@ -426,9 +396,9 @@ export function CharacterPicker({
                       <span className="shrink-0 text-xs text-muted">{option.meta}</span>
                     </>
                   )}
-                </Button>
+                </ComboboxOption>
               ))}
-            </div>
+            </ComboboxOptions>
           ) : null}
         </div>
 
