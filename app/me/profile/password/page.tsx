@@ -1,8 +1,8 @@
+import { PasswordInput } from "@/app/components/auth/auth-input";
 
 import { Notice } from "@/app/components/ui/notice";
 import { AccountField } from "@/app/components/profile/account-field";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { Input } from "@/app/components/ui/input";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { requireAccountUser } from "@/lib/server/auth/account-user";
 
@@ -24,13 +24,13 @@ export default async function PasswordPage({ searchParams }: { searchParams: Pro
       {params.error ? <Notice tone="error" className="mb-4 rounded-md px-4 py-3 text-sm" role="alert">{params.error}</Notice> : null}
       <form action="/api/account/password" className="grid gap-4" method="post">
         <AccountField htmlFor="password-current" label="当前密码">
-          <Input autoComplete="current-password" id="password-current" name="currentPassword" required type="password" />
+          <PasswordInput id="password-current" name="currentPassword" required />
         </AccountField>
         <AccountField htmlFor="password-new" label="新密码">
-          <Input autoComplete="new-password" id="password-new" minLength={12} name="newPassword" required type="password" />
+          <PasswordInput purpose="new" id="password-new" name="newPassword" required />
         </AccountField>
         <AccountField htmlFor="password-confirm" label="再次输入新密码">
-          <Input autoComplete="new-password" id="password-confirm" minLength={12} name="confirmPassword" required type="password" />
+          <PasswordInput purpose="new" id="password-confirm" name="confirmPassword" required />
         </AccountField>
         <p className="m-0 text-xs text-muted md:pl-[174px]">新密码长度为 12 至 256 个字符。</p>
         <div className="md:pl-[174px]"><Rm2kButton type="submit">修改密码</Rm2kButton></div>

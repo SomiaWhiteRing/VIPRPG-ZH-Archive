@@ -1,12 +1,10 @@
+import { EmailInput } from "@/app/components/auth/auth-input";
+import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
 
 import { Notice } from "@/app/components/ui/notice";
-import { PageContainer } from "@/app/components/ui/page-container";
-import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import Link from "next/link";
 import { FormField } from "@/app/components/ui/form-field";
-import { PageHeader } from "@/app/components/ui/page-header";
-import { Pane } from "@/app/components/ui/pane";
 import { sanitizeRedirectPath } from "@/lib/server/auth/redirect";
 
 export const dynamic = "force-dynamic";
@@ -24,33 +22,18 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
   const nextPath = sanitizeRedirectPath(params.next, "/login");
 
   return (
-    <PageContainer>
-      <PageHeader compact title="找回密码" subtitle="通过邮箱验证码设置新密码。" />
-      <div className="mx-auto mt-5 max-w-md">
-        <Pane>
+    <AuthPageShell title="找回密码" subtitle="通过邮箱验证码设置新密码。" footer={<><Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link></>}>
           {params.error ? (
             <Notice tone="error" className="mb-4 rounded-md border p-3">{params.error}</Notice>
           ) : null}
           <form action="/api/auth/password-reset/start" method="post" className="grid gap-4">
             <input type="hidden" name="next" value={nextPath} />
-            <FormField label="邮箱">
-              <Input
-                autoComplete="email"
-                defaultValue={params.email ?? ""}
-                inputMode="email"
-                name="email"
-                placeholder="name@example.com"
-                required
-                type="email"
-              />
+            <FormField controlId="forgot-password-field-1" label="邮箱">
+              <EmailInput id="forgot-password-field-1" defaultValue={params.email ?? ""} name="email" placeholder="name@example.com" required />
             </FormField>
             <Button type="submit">发送验证码</Button>
           </form>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-primary">
-            <Link href={`/login?next=${encodeURIComponent(nextPath)}`}>返回登录</Link>
-          </div>
-        </Pane>
-      </div>
-    </PageContainer>
+          
+        </AuthPageShell>
   );
 }

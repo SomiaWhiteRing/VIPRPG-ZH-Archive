@@ -23,15 +23,18 @@ type MergeCandidate = {
 const RESULT_LIMIT = 50;
 
 export function CharacterMergeTargetField({
+  id: providedId,
   candidates,
   descriptionId,
   name,
 }: {
+  id?: string;
   candidates: MergeCandidate[];
   descriptionId?: string;
   name: string;
 }) {
-  const id = useId();
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
   const listId = `${id}-matches`;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -90,7 +93,7 @@ export function CharacterMergeTargetField({
     <div className="grid gap-2">
       <input name={name} readOnly type="hidden" value={selected?.id ?? ""} />
       <div className="relative">
-        <Input
+        <Input id={id}
           aria-activedescendant={menuOpen && matches.items[activeIndex] ? `${listId}-${matches.items[activeIndex].id}` : undefined}
           aria-autocomplete="list"
           aria-controls={listId}

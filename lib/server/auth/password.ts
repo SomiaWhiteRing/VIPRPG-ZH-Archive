@@ -1,3 +1,4 @@
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "@/lib/auth/password-rules";
 import { timingSafeEqualString } from "@/lib/server/crypto/sha256";
 import passwordPolicy from "./password-policy.json";
 import {
@@ -13,12 +14,12 @@ const SALT_BYTES = 16;
 const DERIVED_KEY_BITS = 256;
 
 export function validatePasswordStrength(password: string): void {
-  if (password.length < 12) {
-    throw new Error("密码长度至少需要 12 位");
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    throw new Error(`密码长度至少需要 ${PASSWORD_MIN_LENGTH} 位`);
   }
 
-  if (password.length > 256) {
-    throw new Error("密码长度不能超过 256 位");
+  if (password.length > PASSWORD_MAX_LENGTH) {
+    throw new Error(`密码长度不能超过 ${PASSWORD_MAX_LENGTH} 位`);
   }
 
 }

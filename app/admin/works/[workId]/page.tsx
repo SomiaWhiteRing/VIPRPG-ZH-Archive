@@ -63,24 +63,24 @@ export default async function AdminWorkEditPage({
         <input name="work_id" type="hidden" value={work.id} />
         <Pane heading="游戏资料">
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="不可修改" label="原名">
-              <Input readOnly value={work.originalTitle} />
+            <FormField controlId="admin-works-workId--field-1" hint="不可修改" label="原名">
+              <Input aria-describedby="admin-works-workId--field-1-hint" id="admin-works-workId--field-1" readOnly value={work.originalTitle} />
             </FormField>
-            <FormField label="中文名">
-              <Input
+            <FormField controlId="admin-works-workId--field-2" label="中文名">
+              <Input id="admin-works-workId--field-2"
                 defaultValue={work.chineseTitle ?? ""}
                 name="chinese_title"
               />
             </FormField>
-            <FormField label="原作发布日期">
-              <Input
+            <FormField controlId="admin-works-workId--field-3" label="原作发布日期">
+              <Input id="admin-works-workId--field-3"
                 defaultValue={work.originalReleaseDate ?? ""}
                 name="original_release_date"
                 placeholder="YYYY-MM-DD / YYYY-MM / YYYY"
               />
             </FormField>
-            <FormField label="日期精度">
-              <SelectField
+            <FormField controlId="admin-works-workId--field-4" label="日期精度">
+              <SelectField id="admin-works-workId--field-4"
                 aria-label="日期精度"
                 defaultValue={work.originalReleasePrecision}
                 name="original_release_precision"
@@ -98,8 +98,8 @@ export default async function AdminWorkEditPage({
               label="本站原创"
               name="is_original"
             />
-            <FormField label="引擎">
-              <SelectField
+            <FormField controlId="admin-works-workId--field-5" label="引擎">
+              <SelectField id="admin-works-workId--field-5"
                 aria-label="引擎"
                 defaultValue={work.engineFamily}
                 name="engine_family"
@@ -117,8 +117,8 @@ export default async function AdminWorkEditPage({
                 ]}
               />
             </FormField>
-            {canUpdateStatus ? <FormField label="状态">
-              <SelectField
+            {canUpdateStatus ? <FormField controlId="admin-works-workId--field-6" label="状态">
+              <SelectField id="admin-works-workId--field-6"
                 aria-label="状态"
                 defaultValue={work.status}
                 name="status"
@@ -130,8 +130,8 @@ export default async function AdminWorkEditPage({
               />
             </FormField> : null}
             <CheckboxField defaultChecked={work.isTranslation} label="本站翻译" name="is_translation" />
-            <FormField label="简介" wide>
-              <Textarea
+            <FormField controlId="admin-works-workId--field-7" label="简介" wide>
+              <Textarea id="admin-works-workId--field-7"
                 defaultValue={work.description ?? ""}
                 name="description"
                 rows={6}
@@ -145,8 +145,8 @@ export default async function AdminWorkEditPage({
             roleKey: creator.roleKey as StaffCredit["roleKey"], roleLabel: creator.roleLabel, notes: creator.notes,
           }))} /></div>
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField hint="每行一个别名。" label="别名">
-              <Textarea
+            <FormField controlId="admin-works-workId--field-8" hint="每行一个别名。" label="别名">
+              <Textarea aria-describedby="admin-works-workId--field-8-hint" id="admin-works-workId--field-8"
                 defaultValue={work.aliases.join("\n")}
                 name="aliases"
                 rows={5}
@@ -197,14 +197,14 @@ export default async function AdminWorkEditPage({
         </ul>
         <ConfirmingForm action={`/api/admin/works/${workId}/maintainers`} className="mt-4 flex items-end gap-3" confirmField="confirm"
           title="添加维护者" description="该账户将获得此作品的维护权限。">
-          <FormField label="维护者邮箱" hint="账户需有“管理自己维护的作品”权限。"><Input name="email" type="email" required /></FormField>
+          <FormField controlId="admin-works-workId--field-9" label="维护者邮箱" hint="账户需有“管理自己维护的作品”权限。"><Input aria-describedby="admin-works-workId--field-9-hint" id="admin-works-workId--field-9" name="email" type="email" required /></FormField>
           <Button type="submit">添加</Button>
         </ConfirmingForm>
       </Pane> : null}
       {canMergeWorks(adminUser) ? <Pane heading="合并重复作品" tone="danger">
         <ConfirmingForm action={`/api/admin/works/${workId}/merge`} confirmField="target_id" title="确认合并作品？"
           description="保留目标作品资料和下载入口，将归档、评论、收藏与关联转移至目标，当前作品设为已删除。此操作无法撤销；浏览器存档仍按原 Work ID 保存，不会自动转移。">
-          <FormField label="目标作品 ID"><Input name="target_id" type="number" min={1} required /></FormField>
+          <FormField controlId="admin-works-workId--field-10" label="目标作品 ID"><Input id="admin-works-workId--field-10" name="target_id" type="number" min={1} required /></FormField>
           <Button className="mt-3" type="submit" variant="destructive">合并到目标作品</Button>
         </ConfirmingForm>
       </Pane> : null}

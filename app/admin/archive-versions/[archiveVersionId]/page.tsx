@@ -70,8 +70,8 @@ export default async function AdminArchiveVersionEditPage({
         <Pane heading="快照资料">
           <SectionHeading title="只修改归档事实，不改变游戏关系" />
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="状态">
-              <SelectField
+            <FormField controlId="admin-archive-versions-archiveVersionId--field-1" label="状态">
+              <SelectField id="admin-archive-versions-archiveVersionId--field-1"
                 aria-label="状态"
                 defaultValue={archiveVersion.status}
                 name="status"
@@ -81,14 +81,14 @@ export default async function AdminArchiveVersionEditPage({
                 ]}
               />
             </FormField>
-            <FormField label="来源名称">
-              <Input
+            <FormField controlId="admin-archive-versions-archiveVersionId--field-2" label="来源名称">
+              <Input id="admin-archive-versions-archiveVersionId--field-2"
                 defaultValue={archiveVersion.sourceName ?? ""}
                 name="source_name"
               />
             </FormField>
-            <FormField label="来源网址">
-              <Input
+            <FormField controlId="admin-archive-versions-archiveVersionId--field-3" label="来源网址">
+              <Input id="admin-archive-versions-archiveVersionId--field-3"
                 defaultValue={archiveVersion.sourceUrl ?? ""}
                 name="source_url"
                 type="url"
