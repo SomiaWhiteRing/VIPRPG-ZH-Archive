@@ -45,7 +45,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export default function AdminArchiveVersionEditPage() {
   const { adminUser, archiveVersion } = useLoaderData<typeof loader>();
   return (
-    <main>
+    <main key={archiveVersion.id}>
       <PageHeader
         compact
         eyebrow="编辑归档快照"
