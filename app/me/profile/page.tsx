@@ -81,15 +81,13 @@ export default function ProfilePage() {
                 maxLength={500}
                 name="bio"
                 rows={5}
-              />
-              <p className="mb-0 mt-1 text-xs text-muted">
-                纯文本，最多 500 个字符。
-              </p>
+              />=
             </div>
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-start">
             <span className="text-sm font-semibold">头像</span>
             <AvatarCropper
+              alignActions="end"
               avatarBlobSha256={user.avatarBlobSha256}
               displayName={user.displayName}
             />
@@ -117,7 +115,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-        <div className="mt-5">
+        <div className="mt-5 flex justify-end">
           <Rm2kButton type="submit">保存资料</Rm2kButton>
         </div>
       </form>
@@ -139,9 +137,11 @@ export default function ProfilePage() {
               type="password"
               required
             />
-            <Button className="mt-3" type="submit" variant="destructive">
-              注销账户
-            </Button>
+            <div className="mt-3 flex justify-end">
+              <Button type="submit" variant="destructive">
+                注销账户
+              </Button>
+            </div>
           </ConfirmingForm>
         </section>
       ) : null}

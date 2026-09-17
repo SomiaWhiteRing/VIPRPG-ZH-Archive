@@ -67,10 +67,7 @@ export default function PasswordPage() {
             required
           />
         </AccountField>
-        <p className="m-0 text-xs text-muted md:pl-[174px]">
-          新密码长度为 12 至 256 个字符。
-        </p>
-        <div className="md:pl-[174px]">
+        <div className="flex justify-end">
           <Rm2kButton type="submit">修改密码</Rm2kButton>
         </div>
       </form>

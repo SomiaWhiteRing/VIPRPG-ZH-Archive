@@ -3,6 +3,7 @@ import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
+import { cn } from "@/lib/ui/cn";
 import { Slider } from "radix-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Area } from "react-easy-crop";
@@ -17,12 +18,14 @@ export function AvatarCropper({
   endpoint = "/api/account/avatar",
   shape = "round",
   allowDelete = false,
+  alignActions = "start",
 }: {
   avatarBlobSha256: string | null;
   displayName: string;
   endpoint?: string;
   shape?: "round" | "square";
   allowDelete?: boolean;
+  alignActions?: "start" | "end";
 }) {
   const revalidator = useRevalidator();
   const dialogId = useId();
@@ -120,7 +123,12 @@ export function AvatarCropper({
           size={96}
         />
       )}
-      <div className="grid gap-2">
+      <div
+        className={cn(
+          "grid gap-2",
+          alignActions === "end" && "ml-auto justify-items-end",
+        )}
+      >
         <input
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
@@ -128,7 +136,12 @@ export function AvatarCropper({
           ref={fileInputRef}
           type="file"
         />
-        <div className="flex flex-wrap gap-2">
+        <div
+          className={cn(
+            "flex flex-wrap gap-2",
+            alignActions === "end" && "justify-end",
+          )}
+        >
           <Button
             aria-controls={dialogId}
             aria-expanded={Boolean(source)}
@@ -182,7 +195,7 @@ export function AvatarCropper({
               className="m-0 text-sm text-muted"
               id={`${dialogId}-description`}
             >
-              拖动图片并缩放，裁剪区域是最终显示范围。
+              拖动、缩放以裁剪
             </Dialog.Description>
             <div className="relative h-[min(55vh,380px)] overflow-hidden rounded-md bg-black">
               {source ? (
