@@ -17,7 +17,10 @@ const app = new Hono<{
 }>();
 
 app.use("*", async (c, next) => {
-  c.set("runtime", createRuntime(c.req.raw, c.env, c.executionCtx));
+  c.set(
+    "runtime",
+    createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV),
+  );
   await next();
 });
 app.all(

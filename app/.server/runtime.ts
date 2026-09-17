@@ -14,6 +14,7 @@ export function createRuntime(
   request: Request,
   env: CloudflareEnv,
   execution: AppRuntime["execution"],
+  development = false,
 ): AppRuntime {
   return {
     request,
@@ -21,7 +22,7 @@ export function createRuntime(
     execution,
     db: env.DB,
     bucket: env.ARCHIVE_BUCKET,
-    origin: normalizeAppOrigin(env.APP_ORIGIN),
+    origin: normalizeAppOrigin(development ? request.url : env.APP_ORIGIN),
     memo: new Map(),
   };
 }

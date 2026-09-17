@@ -11,5 +11,13 @@ export default defineConfig({
     reactRouter(),
   ],
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
-  server: { host: "127.0.0.1", port: 3000, strictPort: true },
+  server: {
+    host: "127.0.0.1",
+    port: 3000,
+    strictPort: false,
+    watch: {
+      // Offline seeds and local artifacts can contain tens of thousands of files.
+      ignored: ["**/output/**", "**/.wrangler/**", "**/data/**"],
+    },
+  },
 });
