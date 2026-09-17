@@ -19,10 +19,12 @@ import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxCategory, inboxHref } from "@/lib/inbox";
 import { Bell, Heart, MessageCircle, ShieldCheck } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "./actions";
 import { InboxControls, InboxFeedback } from "./controls";
+import { useInboxAutoRead } from "./use-auto-read";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -57,6 +59,26 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function InboxPage() {
   const { category, unread, canResolve, result } =
     useLoaderData<typeof loader>();
+  const [autoRead, setAutoRead] = useState({ result, ids: new Set<number>() });
+  const onRead = useCallback(
+    (itemId: number) => {
+      setAutoRead((previous) => ({
+        result,
+        ids: new Set(previous.result === result ? previous.ids : []).add(itemId),
+      }));
+    },
+    [result],
+  );
+  const unreadCount = Math.max(
+    0,
+    result.unread -
+      result.items.filter(
+        (item) =>
+          !item.readAt &&
+          autoRead.result === result &&
+          autoRead.ids.has(item.id),
+      ).length,
+  );
   return (
     <PageContainer>
       <PageHeader
@@ -64,14 +86,18 @@ export default function InboxPage() {
         title={
           <span>
             提醒
-            {result.unread > 0 ? (
+            {unreadCount > 0 ? (
               <span className="ml-3 align-middle font-sans text-sm font-normal text-muted">
-                {formatUnreadCount(result.unread)} 未读
+                {formatUnreadCount(unreadCount)} 未读
               </span>
             ) : null}
           </span>
         }
-        actions={result.unread > 0 ? <InboxActions all /> : null}
+        actions={
+          <div className="min-h-9">
+            {unreadCount > 0 ? <InboxActions all /> : null}
+          </div>
+        }
       />
       <InboxControls
         category={category}
@@ -86,7 +112,7 @@ export default function InboxPage() {
           className="divide-y divide-border border-b border-border"
         >
           {result.items.map((item) => (
-            <InboxRow key={item.id} item={item} />
+            <InboxRow key={item.id} item={item} onRead={onRead} />
           ))}
         </ul>
       ) : (
@@ -107,7 +133,15 @@ export default function InboxPage() {
   );
 }
 
-function InboxRow({ item }: { item: InboxItem }) {
+function InboxRow({
+  item,
+  onRead,
+}: {
+  item: InboxItem;
+  onRead: (itemId: number) => void;
+}) {
+  const rowRef = useRef<HTMLLIElement>(null);
+  const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
   const Icon =
     item.type === "forum_like"
@@ -126,7 +160,8 @@ function InboxRow({ item }: { item: InboxItem }) {
   };
   return (
     <li
-      className={`grid min-w-0 grid-cols-[36px_minmax(0,1fr)] gap-x-3 gap-y-2 px-2 py-4 hover:bg-primary/5 focus-within:bg-primary/5 sm:grid-cols-[36px_minmax(0,1fr)_auto] sm:px-3 ${item.readAt ? "" : "bg-primary/[0.03]"}`}
+      ref={rowRef}
+      className={`grid min-w-0 grid-cols-[36px_minmax(0,1fr)] gap-x-3 gap-y-2 px-2 py-4 hover:bg-primary/5 focus-within:bg-primary/5 sm:grid-cols-[36px_minmax(0,1fr)_auto] sm:px-3 ${readAt ? "" : "bg-primary/[0.03]"}`}
     >
       <div className="relative row-span-2 self-start">
         {interaction ? (
@@ -141,7 +176,7 @@ function InboxRow({ item }: { item: InboxItem }) {
             <Icon className="size-4 text-muted" aria-hidden />
           </span>
         )}
-        {!item.readAt ? (
+        {!readAt ? (
           <span className="absolute -left-1 -top-1 size-2 rounded-full bg-primary">
             <span className="sr-only">未读</span>
           </span>
@@ -150,7 +185,7 @@ function InboxRow({ item }: { item: InboxItem }) {
       <div className="min-w-0 break-words [overflow-wrap:anywhere]">
         {interaction ? (
           <>
-            <p className={`text-sm ${item.readAt ? "" : "font-semibold"}`}>
+            <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
               {interaction.actorHref ? (
                 <Link
                   className="hover:underline focus-visible:outline-2 focus-visible:outline-primary"
@@ -184,7 +219,7 @@ function InboxRow({ item }: { item: InboxItem }) {
           </>
         ) : (
           <>
-            <p className={`text-sm ${item.readAt ? "" : "font-semibold"}`}>
+            <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
               {item.title}
             </p>
             {item.type === "role_change_request" ? (
@@ -208,15 +243,20 @@ function InboxRow({ item }: { item: InboxItem }) {
       >
         {relativeTime(item.createdAt)}
       </time>
-      <div className="col-start-2 sm:col-start-3 sm:row-start-2">
+      <div className="col-start-2 min-h-9 sm:col-start-3 sm:row-start-2">
         <InboxActions
           item={{
             id: item.id,
-            readAt: item.readAt,
+            readAt,
             canApprove: item.canApprove,
             canReject: item.canReject,
           }}
         />
+        {error ? (
+          <p role="alert" className="mt-2 text-sm text-destructive">
+            自动标记已读失败，请手动标记已读。
+          </p>
+        ) : null}
       </div>
     </li>
   );

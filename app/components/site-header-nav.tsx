@@ -303,18 +303,26 @@ function UserMenu({
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
-            aria-label={`${session.displayName} 用户菜单`}
+            aria-label={`${session.displayName} 用户菜单${session.unread > 0 ? `，${session.unread} 条未读提醒` : ""}`}
             className="max-w-44 gap-1.5 px-2.5"
             size="sm"
             type="button"
             variant="ghost"
           >
-            <UserAvatar
-              avatarBlobSha256={session.avatarBlobSha256}
-              className="size-6"
-              displayName={session.displayName}
-              size={24}
-            />
+            <span className="relative inline-flex size-6 shrink-0">
+              <UserAvatar
+                avatarBlobSha256={session.avatarBlobSha256}
+                className="size-6"
+                displayName={session.displayName}
+                size={24}
+              />
+              {session.unread > 0 ? (
+                <span
+                  aria-hidden
+                  className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-background"
+                />
+              ) : null}
+            </span>
             <span className="hidden max-w-28 truncate sm:inline">
               {session.displayName}
             </span>
