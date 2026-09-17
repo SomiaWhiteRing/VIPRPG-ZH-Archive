@@ -13,10 +13,15 @@
         overflow: hidden;
         background: black;
       }
+      body {
+        display: grid;
+        place-items: center;
+      }
       canvas {
         display: block;
-        width: 100%;
-        height: 100%;
+        /* SDL3 writes fixed inline dimensions; the host controls display size. */
+        width: min(100vw, 133.333333vh) !important;
+        height: min(100vh, 75vw) !important;
         image-rendering: pixelated;
         outline: none;
       }

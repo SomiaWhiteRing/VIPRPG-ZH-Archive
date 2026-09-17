@@ -1,0 +1,28 @@
+{
+  "repository": "https://github.com/SomiaWhiteRing/Player",
+  "revision": "b3101682f5cf0b193a01f915f32a6da04f4818b6",
+  "version": "0.8.1.1-kai-b3101682f",
+  "build": "https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515",
+  "artifact": "nightly-web/EasyRPG-Player-Kai-nightly-web.zip",
+  "archiveSha256": "895942acbda5e8c28f64af769e46cb6bf14e089548ce43314966d594f4ccd079",
+  "source": "https://github.com/SomiaWhiteRing/Player/tree/b3101682f5cf0b193a01f915f32a6da04f4818b6",
+  "license": "https://github.com/SomiaWhiteRing/Player/blob/b3101682f5cf0b193a01f915f32a6da04f4818b6/COPYING",
+  "patches": [
+    "Work-based IDBFS saves",
+    "WASM filename: index.wasm"
+  ],
+  "files": {
+    "index.js": {
+      "size": 245553,
+      "sha256": "b3791fc9cdc97f86ecd995bea61798fc6905bba69af1c5fb9ca9630644464d75"
+    },
+    "index.wasm": {
+      "size": 10502118,
+      "sha256": "b153acc77da8e810a3fa1d9065bc2e8a8269ca83a2aea6bec8e45f50b1c5b74a"
+    },
+    "easyrpg-player.data": {
+      "size": 7557598,
+      "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
+    }
+  }
+}

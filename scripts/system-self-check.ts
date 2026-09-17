@@ -18,6 +18,7 @@ import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
 import { hashSessionToken } from "../app/.server/auth/session";
 import { downloadZipBuilderVersion } from "../lib/archive/download";
+import { easyRpgRuntimeBasePath } from "../lib/archive/web-play";
 import { runWrangler } from "./run-wrangler.mjs";
 import { verifyEasyRpgGame } from "./easyrpg-flow-check";
 
@@ -523,13 +524,13 @@ async function run(): Promise<void> {
   ]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
   const virtualFiles = await page.evaluate(
-    async ({ playKey, workId }) => {
-      const prefix = `/play/runtime/easyrpg/0.8.1.1/games/${playKey}`;
+    async ({ playKey, workId, runtimeBasePath }) => {
+      const prefix = `${runtimeBasePath}/games/${playKey}`;
       const valid = await fetch(prefix + "/RPG_RT.lmt");
       const other = await fetch(
         prefix.replace(playKey, playKey + "-other") + "/RPG_RT.lmt",
       );
-      const wasm = await fetch("/play/runtime/easyrpg/0.8.1.1/index.wasm");
+      const wasm = await fetch(`${runtimeBasePath}/index.wasm`);
       const wasmMime = wasm.headers.get("content-type");
       await WebAssembly.compileStreaming(wasm);
       const pageData = await fetch(`/games/${workId}.data`);
@@ -542,7 +543,7 @@ async function run(): Promise<void> {
         scope: (await navigator.serviceWorker.getRegistration())?.scope,
       };
     },
-    { playKey: webPlay.playKey, workId },
+    { playKey: webPlay.playKey, workId, runtimeBasePath: easyRpgRuntimeBasePath },
   );
   assert.equal(virtualFiles.valid, 200);
   assert.equal(virtualFiles.pageData, 200, "play SW must leave Router page data to the server");

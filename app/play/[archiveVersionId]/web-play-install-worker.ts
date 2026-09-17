@@ -469,7 +469,9 @@ async function streamZipToPacks(input: {
 
       currentPath = normalizedPath;
       queueProgress();
-      addToEasyRpgIndex(input.indexRoot, normalizedPath);
+      addToEasyRpgIndex(input.indexRoot, normalizedPath, (message) => {
+        postLog(input.metadata.playKey, "warning", message);
+      });
       const location = await packWriter.beginEntry(entry.uncompressedSize);
       const lookupKey = packLookupKey(normalizedPath);
 
@@ -831,17 +833,21 @@ async function persistAndPost(
   return installation;
 }
 
-function addToEasyRpgIndex(root: EasyRpgCacheNode, path: string): void {
+function addToEasyRpgIndex(
+  root: EasyRpgCacheNode,
+  path: string,
+  onCollision: (message: string) => void,
+): void {
   const parts = path.split("/");
   const fileName = parts.at(-1) ?? "";
   const parentParts = parts.slice(0, -1);
 
-  addEasyRpgIndexEntry(root, parts, path, fileName, true);
+  addEasyRpgIndexEntry(root, parts, path, fileName, true, onCollision);
 
   const alias = easyRpgResourceAliasForFile(fileName);
 
   if (alias) {
-    addEasyRpgIndexEntry(root, [...parentParts, alias], path, fileName, false);
+    addEasyRpgIndexEntry(root, [...parentParts, alias], path, fileName, false, onCollision);
   }
 }
 
@@ -851,20 +857,40 @@ function addEasyRpgIndexEntry(
   sourcePath: string,
   fileName: string,
   strict: boolean,
+  onCollision: (message: string) => void,
 ): void {
   let node = root;
 
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
-    const folded = part.toLowerCase();
+    // Match liblcf ReaderUtil::Normalize: lowercase first, then NFKC.
+    // Keep the original names in values so pack lookups still use real paths.
+    const folded = part.toLowerCase().normalize("NFKC");
     const isFile = index === parts.length - 1;
 
     if (isFile) {
       const existing = node[folded];
 
       if (existing !== undefined) {
+        if (
+          typeof existing === "string" &&
+          existing.toLowerCase() !== fileName.toLowerCase() &&
+          existing.toLowerCase().normalize("NFKC") ===
+            fileName.toLowerCase().normalize("NFKC")
+        ) {
+          // Like EasyRPG gencache, the later entry wins a normalized name.
+          // Both originals stay in the pack; update the extensionless alias too.
+          node[folded] = fileName;
+          if (strict) {
+            const previousPath = [...parts.slice(0, -1), existing].join("/");
+            onCollision(
+              `游戏资源名规范化后重名：${previousPath} / ${sourcePath}；EasyRPG 使用后者，原文件均保留。`,
+            );
+          }
+          return;
+        }
         if (strict) {
-          throw new Error(`游戏文件名大小写冲突：${sourcePath}`);
+          throw new Error(`游戏文件名规范化后冲突：${sourcePath}`);
         }
 
         return;
@@ -888,7 +914,7 @@ function addEasyRpgIndexEntry(
     }
 
     if (existing._dirname !== part) {
-      throw new Error(`游戏目录名大小写冲突：${sourcePath}`);
+      throw new Error(`游戏目录名规范化后冲突：${sourcePath}`);
     }
 
     node = existing;

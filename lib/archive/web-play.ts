@@ -1,7 +1,7 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 
-export const webPlayInstallerVersion = "opfs-v8-stream-pack-index";
-export const easyRpgRuntimeVersion = "0.8.1.1";
+export const webPlayInstallerVersion = "opfs-v9-nfkc-resource-index";
+export const easyRpgRuntimeVersion = "0.8.1.1-kai-b3101682f";
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 
 export function buildArchiveDownloadUrl(archiveVersionId: number): string {
