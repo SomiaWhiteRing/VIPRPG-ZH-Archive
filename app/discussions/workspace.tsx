@@ -27,27 +27,35 @@ import type {
 import { FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
 import type { PublicForumContent } from "@/lib/forum-public";
 import { interactiveContent } from "@/lib/forum-state";
+import { cn } from "@/lib/ui/cn";
 import { MessageSquare, ThumbsUp } from "lucide-react";
 import {
   Fragment,
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
 } from "react";
-import { Link, useNavigate, useRevalidator } from "react-router";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useRevalidator,
+} from "react-router";
 import type { ForumDialogAction, ForumMenuItem } from "./actions";
 import { ForumActionDialog, ForumMenu } from "./actions";
 import type { ForumDraft } from "./draft";
 import {
-  ForumReplyBar,
   draftSnapshot,
   draftValue,
   forumReplyLauncherClass,
 } from "./draft";
 import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
+import { ForumReplyBar } from "./reply-bar";
 import {
   ForumAuthorName,
   ForumBody,
@@ -77,6 +85,11 @@ type Props = {
   returnTo?: string;
   initialReply?: "topic" | number;
 };
+function normalizedLocation(href: string) {
+  const url = new URL(href, "https://forum.invalid");
+  url.searchParams.sort();
+  return url.pathname + url.search + url.hash;
+}
 function createDraft(
   mode: ForumDraft["mode"],
   title: string,
@@ -110,6 +123,8 @@ export function DiscussionWorkspace({
   returnTo,
   initialReply,
 }: Props) {
+  const location = useLocation();
+  const navigationType = useNavigationType();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const [currentEmojis, setCurrentEmojis] = useState(emojis);
@@ -142,10 +157,34 @@ export function DiscussionWorkspace({
     } | null>(null),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
-  useEffect(() => {
+  const pageRef = useRef<HTMLElement>(null);
+  const handledNavigation = useRef<string | null>(null);
+  const localNavigation = useRef<{
+    href: string;
+    targetId: string | null;
+  } | null>(null);
+  const removalFocus = useRef<{ targetId: string | null } | null>(null);
+  const [replyOccupancy, setReplyOccupancy] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!page || replyOccupancy === null) return;
+    // The discussion page owns document scrolling and its own bottom clearance.
+    const root = document.documentElement;
+    const originalPadding = root.style.scrollPaddingBottom;
+    page.style.setProperty("--forum-reply-clearance", `${replyOccupancy}px`);
+    root.style.scrollPaddingBottom = `${replyOccupancy + 16}px`;
+    return () => {
+      root.style.scrollPaddingBottom = originalPadding;
+      page.style.removeProperty("--forum-reply-clearance");
+    };
+  }, [replyOccupancy]);
+  const [detailSource, setDetailSource] = useState(initialDetail);
+  // Render new route data together with its URL, before any focus effect runs.
+  if (detailSource !== initialDetail) {
+    setDetailSource(initialDetail);
     setDetail(initialDetail);
     setUnavailable(false);
-  }, [initialDetail]);
+  }
   const [uploadProgress, setUploadProgress] = useState("");
   const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
   const listHref = forumHref("/discussions", {
@@ -171,25 +210,53 @@ export function DiscussionWorkspace({
     return true;
   });
   useEffect(() => {
-    if (!detail) return;
-    const targetId = detail.comment
-      ? `comment-${detail.comment}`
-      : detail.floor
-        ? `post-${detail.floor}`
-        : location.hash.slice(1);
-    const replyEditor = initialReply
-      ? document.querySelector<HTMLElement>(
-          '[data-forum-editor] textarea, [data-forum-editor] [contenteditable="true"]',
-        )
-      : null;
-    const element =
-      replyEditor ??
-      (targetId
-        ? document.getElementById(targetId)
-        : document.querySelector<HTMLElement>("[data-forum-post]"));
+    const page = pageRef.current;
+    if (!detail || !page || handledNavigation.current === location.key) return;
+    const firstNavigation = handledNavigation.current === null;
+    if (initialReply) {
+      handledNavigation.current = location.key;
+      const params = new URLSearchParams(location.search);
+      params.delete("reply");
+      const href =
+        location.pathname + (params.size ? `?${params}` : "") + location.hash;
+      // URL housekeeping must not steal focus from the lazy reply editor.
+      localNavigation.current = { href: normalizedLocation(href), targetId: null };
+      void navigateAccepted(href, { replace: true, preventScrollReset: true });
+      return;
+    }
+    const href = normalizedLocation(
+      location.pathname + location.search + location.hash,
+    );
+    const local =
+      localNavigation.current?.href === href ? localNavigation.current : null;
+    if (local && !local.targetId) {
+      handledNavigation.current = location.key;
+      localNavigation.current = null;
+      return;
+    }
+    const targetId = local
+      ? local.targetId
+      : location.hash.slice(1) ||
+        (detail.comment
+          ? `comment-${detail.comment}`
+          : detail.floor
+            ? `post-${detail.floor}`
+            : "");
+    const element = targetId
+      ? page.querySelector<HTMLElement>(`#${CSS.escape(targetId)}`)
+      : page.querySelector<HTMLElement>("[data-forum-post]");
     if (element) {
+      handledNavigation.current = location.key;
+      localNavigation.current = null;
       element.focus({ preventScroll: true });
-      if (targetId || replyEditor)
+      // Hash scrolling belongs to ScrollRestoration. Only query-based targets
+      // need an explicit scroll; local comment pagination keeps its position.
+      if (
+        targetId &&
+        !local &&
+        !location.hash &&
+        (firstNavigation || navigationType !== "POP")
+      )
         element.scrollIntoView({
           block: "center",
           behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -197,15 +264,19 @@ export function DiscussionWorkspace({
             : "smooth",
         });
     }
-    if (initialReply) {
-      const url = new URL(location.href);
-      url.searchParams.delete("reply");
-      void navigateAccepted(url.pathname + url.search + url.hash, {
-        replace: true,
-        preventScrollReset: true,
-      });
-    }
-  }, [detail, initialReply, navigateAccepted]);
+  }, [detail, initialReply, location, navigateAccepted, navigationType]);
+  useEffect(() => {
+    const request = removalFocus.current;
+    const page = pageRef.current;
+    if (!request || !page) return;
+    removalFocus.current = null;
+    // Restore a useful focus only if the removed control left it on the body.
+    if (document.activeElement !== document.body) return;
+    const parent = request.targetId
+      ? page.querySelector<HTMLElement>(`#${request.targetId}`)
+      : null;
+    (parent ?? page).focus({ preventScroll: true });
+  }, [detail, unavailable]);
   async function refreshDetail(removed?: ForumTarget, hidden = false) {
     if (!detail) {
       startTransition(() => revalidator.revalidate());
@@ -219,10 +290,12 @@ export function DiscussionWorkspace({
           params.delete("floor");
           params.delete("commentPage");
         }
-        await navigateAccepted(
-          location.pathname + (params.size ? `?${params}` : ""),
-          { replace: true, preventScrollReset: true },
-        );
+        const href = location.pathname + (params.size ? `?${params}` : "");
+        localNavigation.current = {
+          href: normalizedLocation(href),
+          targetId: null,
+        };
+        await navigateAccepted(href, { replace: true, preventScrollReset: true });
       }
       const result = await forumRequest<{
         detail: ForumDetail;
@@ -237,12 +310,25 @@ export function DiscussionWorkspace({
           comment: params.get("comment"),
         }),
       );
+      if (removed) {
+        const parent = detail.posts.items.find((post) =>
+          removed.kind === "comment"
+            ? [...post.comments.items, ...post.commentPreview].some(
+                (comment) => comment.id === removed.id,
+              )
+            : post.id === removed.id,
+        );
+        removalFocus.current = {
+          targetId: parent ? `post-${parent.postNumber}` : null,
+        };
+      }
       setCurrentEmojis(result.emojis);
       setDetail(result.detail);
     } catch (e) {
-      if (e instanceof ForumRequestError && e.status === 404)
+      if (e instanceof ForumRequestError && e.status === 404) {
+        if (removed) removalFocus.current = { targetId: null };
         setUnavailable(true);
-      else setMessage(e instanceof Error ? e.message : "加载失败。");
+      } else setMessage(e instanceof Error ? e.message : "加载失败。");
     }
   }
   async function switchDraft(next: ForumDraft | null) {
@@ -348,7 +434,7 @@ export function DiscussionWorkspace({
       protectedRef.current = { dirty: false, busy: false };
       setDraft(null);
       setMessage("已保存。");
-      const destination = new URL(result.href, location.origin);
+      const destination = new URL(result.href, window.location.origin);
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
       if (detail?.topic.id === result.topicId) {
@@ -356,7 +442,6 @@ export function DiscussionWorkspace({
           destination.pathname + destination.search + destination.hash,
           { preventScrollReset: true },
         );
-        await refreshDetail();
       } else {
         navigate(destination.pathname + destination.search + destination.hash);
       }
@@ -525,12 +610,13 @@ export function DiscussionWorkspace({
           : []),
       ]
     : [];
-  const editor = draft ? (
+  // Let the router finish removing the reply parameter before the editor mounts
+  // and takes focus through its own textarea/Tiptap lifecycle.
+  const editor = draft && !initialReply ? (
     <ClientOnly>
       <ForumEditor
         key={draft.editorId}
         draft={draft}
-        viewer={viewer}
         onChange={(next) => {
           if (draftValue(next) !== draftValue(draft))
             next.requestKey = crypto.randomUUID();
@@ -555,47 +641,45 @@ export function DiscussionWorkspace({
   ) : null;
   const replyBar =
     detail && !unavailable && draft?.mode !== "topic" ? (
-      draft?.mode === "post" ? (
-        editor
-      ) : (
-        <ForumReplyBar viewer={viewer}>
-          {detail.topic.locked ? (
-            <p className="py-2 text-sm text-muted">
-              主题已锁定，不能继续回复。
-            </p>
-          ) : viewer ? (
-            <Button
-              variant="ghost"
-              className={forumReplyLauncherClass}
-              onClick={() => newDraft("post")}
-              type="button"
-              disabled={busy || !detail.topic.capabilities.reply}
-            >
-              {detail.topic.capabilities.reply
-                ? "回复主题……"
-                : "当前主题不可回复"}
-            </Button>
-          ) : (
-            <Link
-              className={forumReplyLauncherClass}
-              to={`/login?next=${encodeURIComponent(
-                forumHref(`/discussions/${detail.topic.id}`, {
-                  page: detail.posts.page,
-                  floor: detail.floor,
-                  commentPage: detail.posts.items.find(
-                    (post) => post.postNumber === detail.floor,
-                  )?.comments.page,
-                  comment: detail.comment,
-                  from: returnTo,
-                  reply: "topic",
-                }),
-              )}`}
-            >
-              登录后发表回复
-            </Link>
-          )}
-        </ForumReplyBar>
-      )
+      <ForumReplyBar viewer={viewer} onOccupancyChange={setReplyOccupancy}>
+        {draft?.mode === "post" ? (
+          editor
+        ) : detail.topic.locked ? (
+          <p className="py-2 text-sm text-muted">
+            主题已锁定，不能继续回复。
+          </p>
+        ) : viewer ? (
+          <Button
+            variant="ghost"
+            className={forumReplyLauncherClass}
+            onClick={() => newDraft("post")}
+            type="button"
+            disabled={busy || !detail.topic.capabilities.reply}
+          >
+            {detail.topic.capabilities.reply
+              ? "回复主题……"
+              : "当前主题不可回复"}
+          </Button>
+        ) : (
+          <Link
+            className={forumReplyLauncherClass}
+            to={`/login?next=${encodeURIComponent(
+              forumHref(`/discussions/${detail.topic.id}`, {
+                page: detail.posts.page,
+                floor: detail.floor,
+                commentPage: detail.posts.items.find(
+                  (post) => post.postNumber === detail.floor,
+                )?.comments.page,
+                comment: detail.comment,
+                from: returnTo,
+                reply: "topic",
+              }),
+            )}`}
+          >
+            登录后发表回复
+          </Link>
+        )}
+      </ForumReplyBar>
     ) : null;
   async function listNavigate(nextFeatured: boolean, tags: ForumTag[]) {
     if (busy) return;
@@ -614,6 +698,9 @@ export function DiscussionWorkspace({
   const Container = detail || unavailable ? "main" : PageContainer;
   return (
     <Container
+      ref={pageRef}
+      data-forum-page
+      tabIndex={-1}
       className={
         detail || unavailable
           ? "mx-auto w-[min(1180px,calc(100vw-2rem))] pt-4 pb-[calc(1rem+var(--forum-reply-clearance,0px))]"
@@ -663,7 +750,11 @@ export function DiscussionWorkspace({
                   viewer={viewer}
                   page={detail.posts.page}
                   returnTo={returnTo}
-                  onLocationChange={(href, replace) => {
+                  onLocationChange={(href, replace, targetId) => {
+                    localNavigation.current = {
+                      href: normalizedLocation(href),
+                      targetId: targetId ?? null,
+                    };
                     void navigate(href, { replace, preventScrollReset: true });
                   }}
                   initialExpanded={detail.floor === post.postNumber}
@@ -952,8 +1043,9 @@ function ForumFloorView({
   menu: (content: ForumContent) => ForumMenuItem[];
   onReply: (parent: ForumContent, reply?: ForumContent) => void;
   editor: React.ReactNode;
-  onLocationChange: (href: string, replace?: boolean) => void;
+  onLocationChange: (href: string, replace?: boolean, targetId?: string) => void;
 }) {
+  const location = useLocation();
   const [expanded, setExpanded] = useState(initialExpanded),
     [commentEmojis, setCommentEmojis] = useState(emojis),
     [comments, setComments] = useState(post.comments),
@@ -963,14 +1055,25 @@ function ForumFloorView({
     [liked, setLiked] = useState(post.liked),
     [likes, setLikes] = useState(post.likes),
     [liking, setLiking] = useState(false);
-  useEffect(() => {
+  const [contentSource, setContentSource] = useState({
+    post,
+    emojis,
+    initialExpanded,
+  });
+  // Commit the requested comment page before the router restores hash scrolling.
+  if (
+    contentSource.post !== post ||
+    contentSource.emojis !== emojis ||
+    contentSource.initialExpanded !== initialExpanded
+  ) {
+    setContentSource({ post, emojis, initialExpanded });
     setComments(post.comments);
     setPreview(post.commentPreview);
     setLiked(post.liked);
     setLikes(post.likes);
     setCommentEmojis(emojis);
     if (initialExpanded) setExpanded(true);
-  }, [post, emojis, initialExpanded]);
+  }
   async function load(page: number) {
     setLoading(true);
     setError("");
@@ -1004,13 +1107,10 @@ function ForumFloorView({
       params.delete("comment");
       if (result.comments.page === 1) params.delete("commentPage");
       else params.set("commentPage", String(result.comments.page));
-      onLocationChange(`${location.pathname}?${params}`);
-      setTimeout(
-        () =>
-          document
-            .getElementById(`comment-${result.comments.items[0]?.id}`)
-            ?.focus({ preventScroll: true }),
-        0,
+      onLocationChange(
+        `${location.pathname}?${params}`,
+        false,
+        `floor-comments-${post.id}`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败。");
@@ -1096,13 +1196,16 @@ function ForumFloorView({
             {post.editedAt ? " · 已编辑" : ""}
           </span>
           <div className="ml-auto flex items-center gap-0">
-            {post.capabilities.like ? (
+            {post.capabilities.like || post.body !== null ? (
               <Button
-                className="min-h-10 px-2"
+                className={cn(
+                  "min-h-10 px-2",
+                  !post.capabilities.like && "disabled:opacity-100",
+                )}
                 size="sm"
                 variant="ghost"
                 type="button"
-                disabled={liking}
+                disabled={!post.capabilities.like || liking}
                 aria-label={
                   liked ? `取消赞，${likes} 个赞` : `赞，${likes} 个赞`
                 }
@@ -1110,14 +1213,13 @@ function ForumFloorView({
                 onClick={() => void toggleLike()}
               >
                 <ThumbsUp
+                  aria-hidden
                   className={liked ? "size-4 text-primary" : "size-4"}
                 />
                 <span className={liked ? "text-primary" : undefined}>
                   {likes || "赞"}
                 </span>
               </Button>
-            ) : post.body !== null ? (
-              <span className="p-2 text-xs text-muted">{likes} 赞</span>
             ) : null}
             {post.capabilities.reply ? (
               <Button
@@ -1154,7 +1256,8 @@ function ForumFloorView({
           <section
             id={`floor-comments-${post.id}`}
             aria-label={`#${post.postNumber}的回复`}
-            className="mt-3 border-l-2 border-border bg-muted/10 p-2 sm:p-3"
+            tabIndex={-1}
+            className="mt-3 border-l-2 border-border bg-muted/10 p-2 focus-visible:outline focus-visible:outline-primary sm:p-3"
           >
             {visibleComments.map((comment) => (
               <article

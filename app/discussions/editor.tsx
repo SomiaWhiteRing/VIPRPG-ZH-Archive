@@ -3,7 +3,6 @@ import { ChevronDown, ImagePlus, Smile } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
 import {
-  ForumReplyBar,
   draftSnapshot,
   draftValue,
   forumReplyLauncherClass,
@@ -17,7 +16,6 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 
 import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
-import type { ForumViewer } from "@/lib/forum";
 import {
   FORUM_BODY_LENGTH,
   FORUM_COMMENT_LENGTH,
@@ -31,7 +29,6 @@ import { ForumModal, ForumTagEditor, forumRequest } from "./shared";
 
 export function ForumEditor({
   draft,
-  viewer,
   onChange,
   onBusyChange,
   onError,
@@ -46,7 +43,6 @@ export function ForumEditor({
   emojis,
 }: {
   draft: ForumDraft;
-  viewer: ForumViewer;
   onChange: (draft: ForumDraft) => void;
   onBusyChange: (value: boolean) => void;
   onError: (message: string) => void;
@@ -126,6 +122,10 @@ export function ForumEditor({
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [topic, inline, isCollapsed, busy, emojiOpen]);
+
+  useEffect(() => {
+    if (inline && !isCollapsed) ref.current?.focus();
+  }, [inline, isCollapsed]);
 
   useEffect(() => {
     const input = ref.current;
@@ -280,7 +280,6 @@ export function ForumEditor({
             ) : (
               <Textarea
                 ref={ref}
-                autoFocus
                 id="forum-body"
                 rows={2}
                 placeholder={
@@ -473,7 +472,7 @@ export function ForumEditor({
         {form}
       </ForumModal>
     );
-  return inline ? form : <ForumReplyBar viewer={viewer}>{form}</ForumReplyBar>;
+  return form;
 }
 
 function ForumConflictResolver({
