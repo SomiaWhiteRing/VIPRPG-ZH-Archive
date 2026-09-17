@@ -9,8 +9,6 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { ClientOnly } from "@/app/components/ui/client-only";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
@@ -39,7 +37,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import { Form, Link, useNavigate, useRevalidator } from "react-router";
+import { Link, useNavigate, useRevalidator } from "react-router";
 import type { ForumDialogAction, ForumMenuItem } from "./actions";
 import { ForumActionDialog, ForumMenu } from "./actions";
 import type { ForumDraft } from "./draft";
@@ -53,7 +51,6 @@ import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
 import {
   ForumAuthorName,
   ForumBody,
-  ForumModal,
   ForumRequestError,
   ForumTime,
   PopularTagFilter,
@@ -143,7 +140,6 @@ export function DiscussionWorkspace({
     [confirm, setConfirm] = useState<{
       resolve: (value: boolean) => void;
     } | null>(null),
-    [searchOpen, setSearchOpen] = useState(false),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -732,41 +728,13 @@ export function DiscussionWorkspace({
               compact
               title="讨论版"
               actions={
-                <>
-                  <Form
-                    className="hidden items-center gap-2 md:flex"
-                    action="/search"
-                  >
-                    <input type="hidden" name="scope" value="discussions" />
-                    <Label className="sr-only" htmlFor="discussion-search">
-                      搜索讨论
-                    </Label>
-                    <Input
-                      id="discussion-search"
-                      name="q"
-                      placeholder="搜索讨论"
-                      type="search"
-                    />
-                    <Button type="submit" variant="outline">
-                      搜索
-                    </Button>
-                  </Form>
-                  <Button
-                    className="md:hidden"
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setSearchOpen(true)}
-                  >
-                    搜索
+                viewer ? (
+                  <Button type="button" onClick={() => newDraft("topic")}>
+                    发布主题
                   </Button>
-                  {viewer ? (
-                    <Button type="button" onClick={() => newDraft("topic")}>
-                      发布主题
-                    </Button>
-                  ) : (
-                    <Link to="/login?next=%2Fdiscussions">登录后发布</Link>
-                  )}
-                </>
+                ) : (
+                  <Link to="/login?next=%2Fdiscussions">登录后发布</Link>
+                )
               }
             />
             <div className="my-3 flex flex-wrap items-center gap-2 lg:hidden">
@@ -957,25 +925,6 @@ export function DiscussionWorkspace({
           </div>
         </AlertDialogContent>
       </AlertDialog>
-      <ForumModal
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        title="搜索讨论"
-      >
-        <Form action="/search" className="flex gap-2">
-          <input type="hidden" name="scope" value="discussions" />
-          <Label className="sr-only" htmlFor="discussion-mobile-search">
-            搜索讨论
-          </Label>
-          <Input
-            autoFocus
-            id="discussion-mobile-search"
-            name="q"
-            type="search"
-          />
-          <Button type="submit">搜索</Button>
-        </Form>
-      </ForumModal>
     </Container>
   );
 }
