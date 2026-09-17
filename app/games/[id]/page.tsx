@@ -172,7 +172,6 @@ export default function GameDetailPage() {
     <DetailPageShell key={`${work.id}:${currentUser?.id ?? "anonymous"}`}>
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
-        aliases={work.aliases}
         chineseTitle={work.chineseTitle}
         engineFamily={work.engineFamily}
         language={work.language}

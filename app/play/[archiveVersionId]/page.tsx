@@ -137,7 +137,6 @@ export default function WebPlayPage() {
     >
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
-        aliases={work.aliases}
         chineseTitle={work.chineseTitle}
         engineFamily={work.engineFamily}
         language={work.language}

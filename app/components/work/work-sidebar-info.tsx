@@ -14,10 +14,9 @@ export function WorkSidebarInfo({
   current: GameArchiveVersionDetail | null;
   work: Pick<
     GameWorkDetail,
+    | "aliases"
     | "creators"
-    | "distribution"
     | "engineFamily"
-    | "isOriginal"
     | "language"
     | "moreInfo"
     | "originalReleaseDate"
@@ -27,32 +26,53 @@ export function WorkSidebarInfo({
   return (
     <div>
       <dl className="m-0">
+        {work.aliases.length ? (
+          <InfoRow label="别名">{work.aliases.join(" · ")}</InfoRow>
+        ) : null}
         <InfoRow label="引擎">{engineLabel(work.engineFamily)}</InfoRow>
         <InfoRow label="语言">{languageLabel(work.language)}</InfoRow>
-        <InfoRow label="首发" mono>
+        <InfoRow label="发布日期" mono>
           {formatDateish(
             work.originalReleaseDate,
             work.originalReleasePrecision,
           )}
         </InfoRow>
-        <InfoRow label="类型">
-          {work.isOriginal ? "本站原创" : "社区收录"}
-        </InfoRow>
-        <InfoRow label="分发">
-          <span
-            className={`inline-flex min-h-[1.6rem] items-center rounded-full border bg-card px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] ${work.distribution === "external" ? "border-accent/45 text-[#a7471e]" : "border-primary/40 text-[#1f6f67]"}`}
-          >
-            {distributionLabel(work.distribution)}
-          </span>
-        </InfoRow>
       </dl>
 
-      {current ? (
+      {work.creators.length || work.moreInfo.length ? (
         <>
           <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
-            当前快照
+            制作名单
           </p>
           <dl className="m-0">
+            {work.creators.map((creator) => (
+              <InfoRow
+                key={`${creator.id}-${creator.roleKey}`}
+                label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
+              >
+                <Link
+                  className="font-medium text-[#1f6f67] hover:underline"
+                  to={`/creators/${creator.id}`}
+                >
+                  {creator.displayName}
+                </Link>
+              </InfoRow>
+            ))}
+            {work.moreInfo.map((item, index) => (
+              <InfoRow key={`more-info-${index}`} label={item.title}>
+                <span className="whitespace-pre-wrap">{item.body}</span>
+              </InfoRow>
+            ))}
+          </dl>
+        </>
+      ) : null}
+
+      {current ? (
+        <details className="mt-[0.65rem]">
+          <summary className="cursor-pointer py-1 font-mono text-xs tracking-[0.08em] text-muted hover:text-foreground">
+            文件信息
+          </summary>
+          <dl className="m-0 mt-[0.35rem]">
             <InfoRow label="文件" mono>
               {formatNumber(current.totalFiles)} 个
             </InfoRow>
@@ -60,7 +80,7 @@ export function WorkSidebarInfo({
               {formatBytes(current.totalSizeBytes)}
             </InfoRow>
             {current.uploaderName ? (
-              <InfoRow label="上传">{current.uploaderName}</InfoRow>
+              <InfoRow label="上传者">{current.uploaderName}</InfoRow>
             ) : null}
             {current.publishedAt ? (
               <InfoRow label="收录" mono>
@@ -68,43 +88,10 @@ export function WorkSidebarInfo({
               </InfoRow>
             ) : null}
           </dl>
-        </>
+        </details>
       ) : null}
-
-      <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
-        制作名单
-      </p>
-      <dl className="m-0">
-        {work.creators.map((creator) => (
-          <InfoRow
-            key={`${creator.id}-${creator.roleKey}`}
-            label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
-          >
-            <Link
-              className="font-medium text-[#1f6f67] hover:underline"
-              to={`/creators/${creator.id}`}
-            >
-              {creator.displayName}
-            </Link>
-          </InfoRow>
-        ))}
-        {!work.creators.length ? <InfoRow label="记录">暂无</InfoRow> : null}
-        {work.moreInfo.map((item, index) => (
-          <InfoRow key={`more-info-${index}`} label={item.title}>
-            <span className="whitespace-pre-wrap">{item.body}</span>
-          </InfoRow>
-        ))}
-      </dl>
     </div>
   );
-}
-
-function distributionLabel(value: string): string {
-  return value === "archive"
-    ? "本站归档"
-    : value === "external"
-      ? "外部发布"
-      : "来源待整理";
 }
 
 function formatDateish(value: string | null, precision: string): string {
