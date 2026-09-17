@@ -1,7 +1,4 @@
-import { BottomBar } from "@/app/components/ui/bottom-bar";
-import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { ForumEditVersion, ForumTarget, ForumViewer } from "@/lib/forum";
-import type { ReactNode } from "react";
+import type { ForumEditVersion, ForumTarget } from "@/lib/forum";
 import type { DraftImage } from "./images";
 
 export type ForumDraft = {
@@ -43,29 +40,6 @@ export function draftSnapshot(draft: ForumDraftSnapshot): ForumDraftSnapshot {
 
 export function draftValue(draft: ForumDraftSnapshot) {
   return JSON.stringify(draftSnapshot(draft));
-}
-
-export function ForumReplyBar({
-  children,
-  viewer,
-}: {
-  children: ReactNode;
-  viewer: ForumViewer;
-}) {
-  return (
-    <BottomBar anchorId="post-1">
-      <div className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3">
-        {viewer ? (
-          <UserAvatar
-            displayName={viewer.name}
-            avatarBlobSha256={viewer.avatar}
-            className="size-8 sm:size-10"
-          />
-        ) : null}
-        <div className="min-w-0 flex-1">{children}</div>
-      </div>
-    </BottomBar>
-  );
 }
 
 export const forumReplyLauncherClass =

@@ -1,32 +1,32 @@
+import { UserAvatar } from "@/app/components/ui/user-avatar";
+import type { ForumViewer } from "@/lib/forum";
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 
 // Measure the occupied viewport so content and scroll targets clear the bottom bar.
-export function BottomBar({
+export function ForumReplyBar({
   children,
-  anchorId,
+  viewer,
+  onOccupancyChange,
 }: {
   children: ReactNode;
-  anchorId?: string;
+  viewer: ForumViewer;
+  onOccupancyChange: (occupied: number | null) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const bar = ref.current;
     const placeholder = slot.current;
-    if (!bar || !placeholder) return;
+    const page = placeholder?.closest("[data-forum-page]");
+    if (!bar || !placeholder || !page) return;
     let anchor: HTMLElement | null = null;
-    const header = document.querySelector("header");
+    const header = document.getElementById("site-header");
     const viewport = window.visualViewport;
-    const root = document.documentElement;
-    const originalPadding = root.style.scrollPaddingBottom;
-    const originalClearance = root.style.getPropertyValue(
-      "--forum-reply-clearance",
-    );
     let frame = 0;
     function measure() {
       if (!bar || !placeholder) return;
-      const currentAnchor = anchorId ? document.getElementById(anchorId) : null;
+      const currentAnchor = page?.querySelector<HTMLElement>("#post-1") ?? null;
       if (currentAnchor !== anchor) {
         if (anchor) observer.unobserve(anchor);
         anchor = currentAnchor;
@@ -53,11 +53,7 @@ export function BottomBar({
       const height = Math.ceil(bar.getBoundingClientRect().height);
       // Keep the same document slot when docking, so scrolling cannot oscillate.
       placeholder.style.height = anchor ? `${height}px` : "0px";
-      const occupied = docked ? height + bottom : 0;
-      root.style.scrollPaddingBottom = docked
-        ? `${occupied + 16}px`
-        : originalPadding;
-      root.style.setProperty("--forum-reply-clearance", `${occupied}px`);
+      onOccupancyChange(docked ? height + bottom : null);
     }
     function schedule() {
       cancelAnimationFrame(frame);
@@ -79,12 +75,9 @@ export function BottomBar({
       window.removeEventListener("resize", schedule);
       viewport?.removeEventListener("resize", schedule);
       viewport?.removeEventListener("scroll", schedule);
-      root.style.scrollPaddingBottom = originalPadding;
-      if (originalClearance)
-        root.style.setProperty("--forum-reply-clearance", originalClearance);
-      else root.style.removeProperty("--forum-reply-clearance");
+      onOccupancyChange(null);
     };
-  }, [anchorId]);
+  }, [onOccupancyChange]);
   return (
     <div ref={slot}>
       <div
@@ -92,7 +85,16 @@ export function BottomBar({
         data-forum-reply-bar
         className="border-b border-border bg-card data-[docked=true]:fixed data-[docked=true]:inset-x-0 data-[docked=true]:bottom-0 data-[docked=true]:z-40 data-[docked=true]:border-t data-[docked=true]:pb-[env(safe-area-inset-bottom)] data-[docked=true]:shadow-surface"
       >
-        {children}
+        <div className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3">
+          {viewer ? (
+            <UserAvatar
+              displayName={viewer.name}
+              avatarBlobSha256={viewer.avatar}
+              className="size-8 sm:size-10"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
       </div>
     </div>
   );
