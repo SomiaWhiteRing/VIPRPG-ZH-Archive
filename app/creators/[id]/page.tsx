@@ -73,14 +73,6 @@ export default function CreatorDetailPage() {
         <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
           {creator.name}
         </h1>
-        {creator.aliases.length ? (
-          <p className="mt-1.5 text-sm text-muted">
-            别名：
-            <span className="font-mono text-foreground">
-              {creator.aliases.join(" · ")}
-            </span>
-          </p>
-        ) : null}
         <SectionNavigation
           items={[
             { href: "#sec-intro", label: "概览", active: true },
