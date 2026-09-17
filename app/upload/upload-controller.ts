@@ -43,17 +43,12 @@ export function useUploadController(accountId: number) {
   const [drafts, setDrafts] = useState<UploadRecoveryDraft[]>([]);
   const [committingDraftIds, setCommittingDraftIds] = useState<number[]>([]);
   const [controllerError, setControllerError] = useState<string | null>(null);
-  const [pendingMetadataConfirmed, setPendingMetadataConfirmed] =
-    useState(false);
+  const [metadataConfirmed, setMetadataConfirmed] = useState(false);
   const [starting, setStarting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const taskRef = useRef<BrowserUploadTaskSnapshot | null>(null);
   const pendingLocalTaskIdRef = useRef<string | null>(null);
-  const pendingMetadataRef = useRef<{
-    metadata: ArchiveCommitMetadata;
-    metadataBlobs: MetadataBlobUpload[];
-  } | null>(null);
   const draftLockRef = useRef<{ jobId: number; lock: DraftLock } | null>(null);
   const lockRequestRef = useRef<{
     jobId: number;
@@ -85,19 +80,6 @@ export function useUploadController(accountId: number) {
             accountId,
             message.task.result.translators,
           );
-        }
-        const pendingMetadata = pendingMetadataRef.current;
-        if (
-          pendingMetadata &&
-          !message.task.metadataConfirmed &&
-          !message.task.commitStarted &&
-          !isTerminalTaskStatus(message.task.status)
-        ) {
-          worker.postMessage({
-            type: "confirm_metadata",
-            localTaskId: message.task.localTaskId,
-            ...pendingMetadata,
-          } satisfies UploadWorkerInput);
         }
         if (
           message.task.serverImportJobId &&
@@ -288,13 +270,14 @@ export function useUploadController(accountId: number) {
     metadataBlobs: MetadataBlobUpload[],
   ) {
     if (taskRef.current?.commitStarted) return;
-    pendingMetadataRef.current = { metadata, metadataBlobs };
-    setPendingMetadataConfirmed(true);
-    const currentTask = taskRef.current;
-    if (!currentTask || !workerRef.current) return;
+    const localTaskId =
+      taskRef.current?.localTaskId ?? pendingLocalTaskIdRef.current;
+    if (!localTaskId || !workerRef.current) return;
+    // Keep the user's choice stable while earlier progress messages arrive.
+    setMetadataConfirmed(true);
     workerRef.current.postMessage({
       type: "confirm_metadata",
-      localTaskId: currentTask.localTaskId,
+      localTaskId,
       metadata,
       metadataBlobs,
     } satisfies UploadWorkerInput);
@@ -302,13 +285,13 @@ export function useUploadController(accountId: number) {
 
   function revokeMetadata() {
     if (taskRef.current?.commitStarted) return;
-    pendingMetadataRef.current = null;
-    setPendingMetadataConfirmed(false);
-    const currentTask = taskRef.current;
-    if (!currentTask || !workerRef.current) return;
+    setMetadataConfirmed(false);
+    const localTaskId =
+      taskRef.current?.localTaskId ?? pendingLocalTaskIdRef.current;
+    if (!localTaskId || !workerRef.current) return;
     workerRef.current.postMessage({
       type: "revoke_metadata",
-      localTaskId: currentTask.localTaskId,
+      localTaskId,
     } satisfies UploadWorkerInput);
   }
 
@@ -382,13 +365,8 @@ export function useUploadController(accountId: number) {
       current.filter((id) => id !== draft.serverImportJobId),
     );
     draftLockRef.current = { jobId: draft.serverImportJobId, lock: draftLock };
-    pendingMetadataRef.current = restoredDraft.metadata
-      ? {
-          metadata: restoredDraft.metadata,
-          metadataBlobs: restoredDraft.metadataBlobs,
-        }
-      : null;
-    setPendingMetadataConfirmed(restoredDraft.metadataConfirmed);
+    pendingLocalTaskIdRef.current = restoredDraft.localTaskId;
+    setMetadataConfirmed(restoredDraft.metadataConfirmed);
     createTaskWorker().postMessage({
       type: "restore",
       draft: restoredDraft,
@@ -461,7 +439,7 @@ export function useUploadController(accountId: number) {
     active,
     canceling,
     controllerError,
-    metadataConfirmed: task?.metadataConfirmed ?? pendingMetadataConfirmed,
+    metadataConfirmed: metadataConfirmed || Boolean(task?.commitStarted),
     startSource,
     confirmMetadata,
     revokeMetadata,
@@ -474,8 +452,7 @@ export function useUploadController(accountId: number) {
       setStarting(false);
       setCanceling(false);
       pendingLocalTaskIdRef.current = null;
-      pendingMetadataRef.current = null;
-      setPendingMetadataConfirmed(false);
+      setMetadataConfirmed(false);
       setControllerError(null);
     },
   };

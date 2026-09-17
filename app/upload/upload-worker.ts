@@ -1391,6 +1391,13 @@ function emitTask(
   task: BrowserUploadTaskSnapshot,
   force = false,
 ): BrowserUploadTaskSnapshot {
+  const runtime = runtimeFor(task.localTaskId);
+  if (runtime) {
+    if (runtime.settled && !isTerminal(task.status)) return runtime.task;
+    // File-processing snapshots may predate a metadata confirmation or revocation.
+    task = { ...task, metadataConfirmed: runtime.metadata !== null };
+    runtime.task = task;
+  }
   const now = Date.now();
 
   if (!force && now - lastEmitAt < 250) {
