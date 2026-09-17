@@ -27,17 +27,9 @@ import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { formatNumber } from "@/lib/format";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
 import { stringParam } from "@/lib/params";
+import { getSearchScope, SEARCH_SCOPES } from "@/lib/search";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
-
-const SCOPES = [
-  ["works", "作品"],
-  ["discussions", "讨论版"],
-  ["creators", "作者"],
-  ["characters", "角色"],
-  ["tags", "标签"],
-  ["catalogs", "目录"],
-] as const;
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -45,15 +37,11 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const params = await searchParams;
   const query = stringParam(params.q).trim();
-  const requestedScope = stringParam(params.scope);
-  const scope = SCOPES.some(([value]) => value === requestedScope)
-    ? requestedScope
-    : "works";
+  const [scope, scopeLabel] = getSearchScope(stringParam(params.scope));
   const page = Math.max(
     1,
     Number.parseInt(stringParam(params.page) || "1", 10) || 1,
   );
-  const scopeLabel = SCOPES.find(([value]) => value === scope)?.[1] ?? "作品";
   const result =
     query && scope === "works"
       ? await searchGameWorks(runtime, { query, page })
@@ -123,7 +111,7 @@ export default function SearchPage() {
         className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border pb-4 text-sm font-bold"
         aria-label="搜索范围"
       >
-        {SCOPES.map(([value, label]) => (
+        {SEARCH_SCOPES.map(([value, label]) => (
           <Link
             className={
               scope === value

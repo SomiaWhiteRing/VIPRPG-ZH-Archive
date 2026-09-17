@@ -7,6 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { formatUnreadCount } from "@/lib/format";
+import { getPageSearchScope } from "@/lib/search";
 
 import type { PermissionKey } from "@/lib/authz/permissions";
 import {
@@ -118,7 +119,10 @@ function getAdminLinks(session: Session | null) {
 }
 
 export function SiteHeaderNav({ session, loginLink }: Props) {
-  const pathname = useLocation().pathname ?? "/";
+  const { pathname, search } = useLocation();
+  const [searchScope, searchLabel] = getPageSearchScope(pathname, search);
+  const searchPlaceholder =
+    searchScope === "discussions" ? "搜索讨论" : `搜索${searchLabel}`;
   const inAdmin = pathname.startsWith("/admin");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -177,14 +181,15 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             method="get"
             role="search"
           >
+            <input name="scope" type="hidden" value={searchScope} />
             <Label className="sr-only" htmlFor="header-search">
-              搜索作品
+              {searchPlaceholder}
             </Label>
             <Input
               className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-sm shadow-none outline-none placeholder:text-muted focus-visible:ring-0"
               id="header-search"
               name="q"
-              placeholder="搜索作品"
+              placeholder={searchPlaceholder}
               type="search"
             />
             <Button
@@ -199,6 +204,20 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
         ) : null}
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          {/* 移动端搜索按钮 */}
+          {!inAdmin ? (
+            <Button
+              className="md:hidden"
+              size="icon"
+              variant="ghost"
+              type="button"
+              onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+              aria-label={searchPlaceholder}
+              aria-expanded={mobileSearchOpen}
+            >
+              <Search size={20} />
+            </Button>
+          ) : null}
           {session ? (
             <Suspense
               fallback={<UserMenu inAdmin={inAdmin} session={session} />}
@@ -214,21 +233,6 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             </Suspense>
           ) : (
             <>
-              {/* 移动端搜索按钮 - 放在登录注册按钮左边 */}
-              {!inAdmin ? (
-                <Button
-                  className="md:hidden"
-                  size="icon"
-                  variant="ghost"
-                  type="button"
-                  onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                  aria-label="搜索"
-                  aria-expanded={mobileSearchOpen}
-                >
-                  <Search size={20} />
-                </Button>
-              ) : null}
-
               <Link
                 className="inline-flex min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15"
                 to="/register"
@@ -251,14 +255,15 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
               method="get"
               role="search"
             >
+              <input name="scope" type="hidden" value={searchScope} />
               <Label className="sr-only" htmlFor="mobile-search">
-                搜索作品
+                {searchPlaceholder}
               </Label>
               <Input
                 className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-sm shadow-none outline-none placeholder:text-muted focus-visible:ring-0"
                 id="mobile-search"
                 name="q"
-                placeholder="搜索作品"
+                placeholder={searchPlaceholder}
                 type="search"
                 autoFocus
               />
