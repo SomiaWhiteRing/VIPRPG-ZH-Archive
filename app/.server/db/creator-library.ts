@@ -7,6 +7,7 @@ import type {
   AdminCreatorEdit,
   CreatorWorkCredit,
   PublicCreatorDetail,
+  PublicCreatorListItem,
   PublicCreatorSummary,
 } from "@/lib/dto/db/creator-library";
 import { normalizeEntityName } from "@/lib/entity-name";
@@ -40,25 +41,92 @@ export async function listPublicCreators(
   runtime: AppRuntime,
   input: { query?: string; limit?: number } = {},
 ): Promise<PublicCreatorSummary[]> {
-  const binds: Array<string | number> = [];
-  const where = [
-    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.status='published')`,
-  ];
-  if (input.query?.trim()) {
-    const q = `%${input.query.trim()}%`;
-    where.push(
-      "(c.name LIKE ? OR EXISTS(SELECT 1 FROM creator_aliases ca WHERE ca.creator_id=c.id AND ca.name LIKE ?))",
-    );
-    binds.push(q, q);
-  }
+  const { where, binds } = publicCreatorFilter(input.query);
   const rows = await getD1(runtime)
     .prepare(
-      `${summarySql()} FROM creators c WHERE ${where.join(" AND ")} ORDER BY latest_work_credit_at DESC,c.name ASC LIMIT ?`,
+      `${summarySql()} FROM creators c WHERE ${where} ORDER BY latest_work_credit_at DESC,c.name ASC LIMIT ?`,
     )
     .bind(...binds, limitValue(input.limit ?? 120, 300))
     .all<CreatorRow>();
   return (rows.results ?? []).map(mapSummary);
 }
+
+export async function browsePublicCreators(
+  runtime: AppRuntime,
+  input: {
+    query?: string;
+    sort: "name" | "works";
+    page: number;
+    pageSize: number;
+  },
+): Promise<{
+  items: PublicCreatorListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  const database = getD1(runtime);
+  const { where, binds } = publicCreatorFilter(input.query);
+  const count = await database
+    .prepare(`SELECT COUNT(*) AS total FROM creators c WHERE ${where}`)
+    .bind(...binds)
+    .first<{ total: number }>();
+  const total = Number(count?.total ?? 0);
+  const pageSize = limitValue(input.pageSize, 50);
+  const page = limitValue(input.page, Math.max(1, Math.ceil(total / pageSize)));
+  if (!total) return { items: [], total, page, pageSize };
+
+  const order = input.sort === "works" ? "work_credit_count DESC," : "";
+  const rows = await database
+    .prepare(
+      `${summarySql()} FROM creators c WHERE ${where}
+       ORDER BY ${order} c.name COLLATE NOCASE ASC,c.id ASC LIMIT ? OFFSET ?`,
+    )
+    .bind(...binds, pageSize, (page - 1) * pageSize)
+    .all<CreatorRow>();
+  const items = (rows.results ?? []).map(
+    (row): PublicCreatorListItem => ({
+      id: row.id,
+      name: row.name,
+      avatarBlobSha256: row.avatar_blob_sha256,
+      bio: bio(row.extra_json),
+      workCreditCount: row.work_credit_count,
+      aliases: [],
+    }),
+  );
+  if (!items.length) return { items, total, page, pageSize };
+
+  const ids = items.map((item) => item.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const aliasesResult = await database
+    .prepare(
+      `SELECT creator_id,name FROM creator_aliases WHERE creator_id IN (${placeholders})
+       ORDER BY creator_id,CASE WHEN name LIKE ? THEN 0 ELSE 1 END,name COLLATE NOCASE,name`,
+    )
+    .bind(...ids, `%${input.query?.trim() ?? ""}%`)
+    .all<{ creator_id: number; name: string }>();
+  const byId = new Map(items.map((item) => [item.id, item]));
+  for (const alias of aliasesResult.results ?? []) {
+    byId.get(alias.creator_id)?.aliases.push(alias.name);
+  }
+  return { items, total, page, pageSize };
+}
+
+function publicCreatorFilter(query?: string): { where: string; binds: string[] } {
+  const where = [
+    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.status='published')`,
+  ];
+  const binds: string[] = [];
+  if (query?.trim()) {
+    const q = `%${query.trim()}%`;
+    where.push(
+      "(c.name LIKE ? OR EXISTS(SELECT 1 FROM creator_aliases ca WHERE ca.creator_id=c.id AND ca.name LIKE ?))",
+    );
+    binds.push(q, q);
+  }
+  return { where: where.join(" AND "), binds };
+}
+
 export async function getPublicCreatorDetail(
   runtime: AppRuntime,
   id: number,

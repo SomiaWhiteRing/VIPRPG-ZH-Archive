@@ -26,6 +26,13 @@ export type PublicCreatorDetail = PublicCreatorSummary & {
   workCredits: CreatorWorkCredit[];
 };
 
+export type PublicCreatorListItem = Pick<
+  PublicCreatorSummary,
+  "id" | "name" | "avatarBlobSha256" | "bio" | "workCreditCount"
+> & {
+  aliases: string[];
+};
+
 export type AdminCreatorEdit = PublicCreatorSummary & {
   aliases: string[];
   createdAt: string;
