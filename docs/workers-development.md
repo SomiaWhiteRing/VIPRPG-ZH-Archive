@@ -12,7 +12,9 @@
 
 ## 本地运行
 
-首次安装 Node 24 后执行 npm ci，将 wrangler.example.jsonc 复制为 wrangler.jsonc，将 .env.example 复制为 .env.local。已有配置不覆盖。填写本地 AUTH_SECRET、APP_ORIGIN=http://localhost:3000；远程资源 ID 只存本地配置或 CI secret。
+首次安装 Node 24 后执行 npm ci，将 wrangler.example.jsonc 复制为 wrangler.jsonc，将 .env.example 复制为 .env.local。已有配置不覆盖。填写本地 AUTH_SECRET；远程资源 ID 只存本地配置或 CI secret。
+
+`npm run dev` 由 Vite 的开发标志启用请求地址推导：`AppRuntime.origin` 取当前请求 URL 的 origin，同源校验和邮件回调链接随主机名、端口自动变化，无需配置本地 `APP_ORIGIN`。生产构建和 `npm run preview` 仍使用对应环境的 `APP_ORIGIN`；开发模式也不接受缺失或不匹配的 Origin 请求头。
 
 空的本地数据库按[本地展示数据](./local-demo-data.md)执行 `npm run db:local:seed`。schema 初始化、固定快照恢复及已有开发库的备份与重建都以该手册为准。
 
@@ -28,6 +30,10 @@
 | npm run deploy | 构建 production，然后部署该产物 |
 
 scripts/app.mjs 在 Windows 和 Linux 使用同一 Node 启动路径，通过 CLOUDFLARE_ENV 选择构建环境。不要将已按一个环境生成的产物改用另一个环境部署。preview 使用 Vite 预览端口；可通过 --port 指定。
+
+Vite 热更新监听排除 `output/`、`.wrangler/` 和 `data/`：这些目录保存诊断产物、本地数据库与对象存储、离线导入素材及种子，可能包含数万文件。Vite 不会自动按 `.gitignore` 排除它们，在 Windows 上逐个建立监听会让启动长时间停在依赖优化日志附近。`data/` 的更新通过对应导入或种子命令生效。
+
+`app/globals.css` 将 Tailwind 类名扫描限定在 `app/` 与 `lib/`，避免首次页面请求编译样式时再遍历整个仓库。若将包含 Tailwind 类名的前端源码移到其他目录，需要同步添加 `@source`。
 
 ## Binding 与存储
 
@@ -45,6 +51,6 @@ D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`。`ARCHIVE_BUCK
 
 ## 故障定位
 
-binding 缺失先检查 Wrangler 目标环境；同源拒绝先核对 APP_ORIGIN；资源 404 先检查 build/client 与 Vite Worker/WASM 路径；浏览器收到服务端模块时检查 .server 边界与 loader 返回字段。D1/R2/浏览器检查串行执行，测试状态与开发状态分离。完整规则见 [维护与回归](./maintenance-regression.md)。
+binding 缺失先检查 Wrangler 目标环境；同源拒绝时，开发模式核对请求 URL 与 Origin 请求头，生产及预览模式核对 APP_ORIGIN；资源 404 先检查 build/client 与 Vite Worker/WASM 路径；浏览器收到服务端模块时检查 .server 边界与 loader 返回字段。D1/R2/浏览器检查串行执行，测试状态与开发状态分离。完整规则见 [维护与回归](./maintenance-regression.md)。
 
 参考：[Cloudflare React Router](https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/)、[Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)。

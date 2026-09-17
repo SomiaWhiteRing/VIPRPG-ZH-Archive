@@ -20,7 +20,7 @@ if (!(Test-Path wrangler.jsonc)) { Copy-Item wrangler.example.jsonc wrangler.jso
 if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
 ```
 
-在 `.env.local` 中设置 `AUTH_SECRET`、`APP_ORIGIN=http://localhost:3000`。macOS／Linux 使用相应的 shell 复制命令，同样保留已有配置。
+在 `.env.local` 中设置 `AUTH_SECRET`。`npm run dev` 自动使用当前请求的主机名和端口，无需设置 `APP_ORIGIN`。macOS／Linux 使用相应的 shell 复制命令，同样保留已有配置。
 
 首次使用时，从已审核的固定种子恢复本地 D1 和 R2：
 
@@ -38,11 +38,13 @@ npm run db:local:seed
 npm run dev
 ```
 
-然后打开 <http://localhost:3000>。如果 3000 端口已被占用，可以指定其他端口：
+默认使用 3000 端口；被占用时自动尝试 3001、3002 等后续端口，请打开终端输出的 `Local` 地址。也可以指定起始端口：
 
 ```powershell
 npm run dev -- --port 3001
 ```
+
+开发模式下，同源校验和邮件回调链接会自动跟随实际访问地址，切换端口无需修改 `.env.local`。生产构建及 `npm run preview` 仍使用配置的 `APP_ORIGIN`，应将其设为对应环境的访问地址。
 
 ## 常用命令
 

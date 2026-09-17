@@ -78,7 +78,8 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 ### 同源保护
 
 - 使用 session cookie 的 `POST | PUT | PATCH | DELETE` 必须先通过 `app/.server/auth/origin.ts` 的 `assertSameOrigin`。
-- Origin 缺失、格式错误或不等于 `APP_ORIGIN` 时拒绝；不使用 Referer 降级。
+- Origin 缺失、格式错误或不等于 `AppRuntime.origin` 时拒绝；不使用 Referer 降级。
+- `npm run dev` 通过 Vite 开发标志将 `AppRuntime.origin` 设为当前请求 URL 的 origin，自动跟随实际主机名和端口；生产构建及预览使用配置的 `APP_ORIGIN`。可信 origin 不从 Origin 或转发请求头推导，邮件回调链接复用同一地址。
 - 身份失败返回 401，身份有效但缺少能力返回 403；对象不可见时由领域服务按资源语义返回 403 或 404。
 
 ### 对象级授权
