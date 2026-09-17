@@ -33,12 +33,21 @@ export type CommentDto = {
   likeCount: number;
   likedByMe: boolean;
   replyCount?: number;
+  replyPreview?: CommentDto[];
   rootDeleted?: boolean;
 };
 
 export type CommentPage = {
   items: CommentDto[];
   nextCursor: string | null;
+};
+
+export type CommentReplyPage = {
+  items: CommentDto[];
+  preview: CommentDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 export type UserCommentSummary = {

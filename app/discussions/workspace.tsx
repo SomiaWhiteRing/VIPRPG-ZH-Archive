@@ -1297,7 +1297,7 @@ function ForumFloorView({
                     : `查看全部 ${post.comments.total} 条回复`}
               </Button>
             ) : null}
-            {expanded && comments.total > 20 ? (
+            {expanded && comments.total > comments.pageSize ? (
               <nav
                 aria-label={`#${post.postNumber}楼中楼分页`}
                 className="my-2 flex items-center gap-2"
@@ -1312,14 +1312,15 @@ function ForumFloorView({
                   上一页
                 </Button>
                 <span className="text-xs">
-                  {comments.page} / {Math.ceil(comments.total / 20)}
+                  {comments.page} / {Math.ceil(comments.total / comments.pageSize)}
                 </span>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   disabled={
-                    loading || comments.page >= Math.ceil(comments.total / 20)
+                    loading ||
+                    comments.page >= Math.ceil(comments.total / comments.pageSize)
                   }
                   onClick={() => void load(comments.page + 1)}
                 >

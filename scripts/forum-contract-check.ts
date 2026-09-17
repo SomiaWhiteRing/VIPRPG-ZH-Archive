@@ -363,7 +363,7 @@ assert.equal(preview[0].comments.total, 26);
 assert.equal(preview[0].comments.items.length, 5);
 assert.equal(
   (await publicCommentPage(ctx, Number(root.id), 2)).items.length,
-  6,
+  10,
 );
 const lastComment = Number(
   sqlite
@@ -374,19 +374,19 @@ const lastComment = Number(
 );
 assert.equal(
   (await forumLocation(ctx, topicId, { commentId: lastComment })).commentPage,
-  2,
+  3,
 );
 sqlite
   .prepare("UPDATE forum_posts SET status='deleted' WHERE id=?")
   .run(root.id);
 assert.equal(
-  (await publicCommentPage(ctx, Number(root.id), 2)).items.length,
+  (await publicCommentPage(ctx, Number(root.id), 3)).items.length,
   6,
 );
 sqlite
   .prepare("UPDATE forum_posts SET status='hidden' WHERE id=?")
   .run(root.id);
-await assert.rejects(publicCommentPage(ctx, Number(root.id), 2));
+await assert.rejects(publicCommentPage(ctx, Number(root.id), 3));
 assert.equal(
   (await forumPreviews(ctx, topicId, [Number(root.id)]))[0].available,
   false,

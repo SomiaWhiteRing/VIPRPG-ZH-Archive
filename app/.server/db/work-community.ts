@@ -1,12 +1,17 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { memoizeRequest } from "@/app/.server/runtime";
+import {
+  COMMENT_REPLY_PAGE_SIZE,
+  COMMENT_REPLY_PREVIEW_SIZE,
+} from "@/lib/comment-pagination";
 import type { CommentTarget } from "@/lib/comment-target";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type {
   CommentBodySegment,
   CommentDto,
   CommentPage,
+  CommentReplyPage,
   CustomEmojiDto,
   UserCommentSummary,
 } from "@/lib/dto/db/work-community";
@@ -308,7 +313,8 @@ export async function listRootComments(
         `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
-          (SELECT COUNT(*) FROM comments r WHERE r.root_comment_id=c.id AND r.status <> 'hidden') AS reply_count,
+          (SELECT COUNT(*) FROM comments r LEFT JOIN users ru ON ru.id=r.user_id
+           WHERE r.root_comment_id=c.id AND ${visibleReplySql("r", "ru")}) AS reply_count,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c JOIN users u ON u.id=c.user_id
@@ -330,35 +336,43 @@ export async function listRootComments(
           ? "作者不存在"
           : "角色不存在",
     );
-  return pageFromRows(
+  const page = await pageFromRows(
     runtime,
     (rowsResult.results ?? []) as CommentRow[],
     size,
     currentUserId,
   );
+  const rootsWithReplies = page.items.filter((comment) => comment.replyCount);
+  if (rootsWithReplies.length) {
+    const previews = await database.batch(
+      rootsWithReplies.map((comment) =>
+        replyRowsStatement(
+          database,
+          comment.id,
+          currentUserId,
+          COMMENT_REPLY_PREVIEW_SIZE,
+        ),
+      ),
+    );
+    const emojis = await emojiMap(runtime);
+    rootsWithReplies.forEach((comment, index) => {
+      comment.replyPreview = (previews[index].results as CommentRow[]).map(
+        (row) => mapComment(row, currentUserId, emojis),
+      );
+    });
+  }
+  return page;
 }
 
 export async function listReplies(
   runtime: AppRuntime,
   rootCommentId: number,
   currentUserId: number | null,
-  cursor: string | null,
-  limit = 20,
-): Promise<CommentPage> {
-  const parsed = decodeCursor(cursor);
-  const size = clampPageSize(limit);
-  const clauses = [
-    "c.root_comment_id = ?",
-    "c.status IN ('published','deleted')",
-    "(c.status='deleted' OR u.status IN ('active','deleted'))",
-  ];
-  const binds: Array<string | number> = [rootCommentId];
-  if (parsed) {
-    clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
-    binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
-  }
+  requestedPage = 1,
+  commentId?: number,
+): Promise<CommentReplyPage> {
   const database = getD1(runtime);
-  const [rootResult, rowsResult] = await database.batch([
+  const [rootResult, countResult, positionResult] = await database.batch([
     database
       .prepare(
         `SELECT c.id
@@ -371,7 +385,79 @@ export async function listReplies(
       .bind(rootCommentId),
     database
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+        `SELECT COUNT(*) AS total FROM comments c LEFT JOIN users u ON u.id=c.user_id
+         WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}`,
+      )
+      .bind(rootCommentId),
+    database
+      .prepare(
+        `SELECT COUNT(*) AS position FROM comments c LEFT JOIN users u ON u.id=c.user_id
+         JOIN comments selected ON selected.id=? AND selected.root_comment_id=c.root_comment_id
+         WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}
+           AND (c.created_at < selected.created_at OR (c.created_at=selected.created_at AND c.id <= selected.id))`,
+      )
+      .bind(commentId ?? 0, rootCommentId),
+  ]);
+  if (!rootResult.results?.length) throw new HttpError(404, "主楼不存在");
+  const total = (countResult.results as { total: number }[])[0]?.total ?? 0;
+  const position =
+    (positionResult.results as { position: number }[])[0]?.position ?? 0;
+  const desiredPage =
+    position > 0
+      ? Math.ceil(position / COMMENT_REPLY_PAGE_SIZE)
+      : Number.isSafeInteger(requestedPage) && requestedPage > 0
+        ? requestedPage
+        : 1;
+  const page = Math.min(
+    desiredPage,
+    Math.max(1, Math.ceil(total / COMMENT_REPLY_PAGE_SIZE)),
+  );
+  const statements = [
+    replyRowsStatement(
+      database,
+      rootCommentId,
+      currentUserId,
+      COMMENT_REPLY_PAGE_SIZE,
+      (page - 1) * COMMENT_REPLY_PAGE_SIZE,
+    ),
+  ];
+  if (page > 1)
+    statements.push(
+      replyRowsStatement(
+        database,
+        rootCommentId,
+        currentUserId,
+        COMMENT_REPLY_PREVIEW_SIZE,
+      ),
+    );
+  const results = await database.batch(statements);
+  const emojis = await emojiMap(runtime);
+  const items = (results[0].results as CommentRow[]).map((row) =>
+    mapComment(row, currentUserId, emojis),
+  );
+  const preview =
+    page === 1
+      ? items.slice(0, COMMENT_REPLY_PREVIEW_SIZE)
+      : (results[1].results as CommentRow[]).map((row) =>
+          mapComment(row, currentUserId, emojis),
+        );
+  return { items, preview, total, page, pageSize: COMMENT_REPLY_PAGE_SIZE };
+}
+
+function visibleReplySql(comment: string, user: string): string {
+  return `${comment}.status IN ('published','deleted') AND (${comment}.status='deleted' OR ${user}.status IN ('active','deleted'))`;
+}
+
+function replyRowsStatement(
+  database: D1Database,
+  rootCommentId: number,
+  currentUserId: number | null,
+  limit: number,
+  offset = 0,
+): D1PreparedStatement {
+  return database
+    .prepare(
+      `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           0 AS reply_count,
@@ -381,22 +467,14 @@ export async function listReplies(
        LEFT JOIN users u ON u.id=c.user_id AND u.status IN ('active','deleted')
        LEFT JOIN comments target_comment ON target_comment.id=c.reply_to_comment_id
        LEFT JOIN users target ON target.id=target_comment.user_id
-       WHERE ${clauses.join(" AND ")}
-       ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
-      )
-      .bind(
-        ...(currentUserId
-          ? [currentUserId, ...binds, size + 1]
-          : [...binds, size + 1]),
-      ),
-  ]);
-  if (!rootResult.results?.length) throw new HttpError(404, "主楼不存在");
-  return pageFromRows(
-    runtime,
-    (rowsResult.results ?? []) as CommentRow[],
-    size,
-    currentUserId,
-  );
+       WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}
+       ORDER BY c.created_at ASC,c.id ASC LIMIT ? OFFSET ?`,
+    )
+    .bind(
+      ...(currentUserId
+        ? [currentUserId, rootCommentId, limit, offset]
+        : [rootCommentId, limit, offset]),
+    );
 }
 
 export async function searchUserComments(
