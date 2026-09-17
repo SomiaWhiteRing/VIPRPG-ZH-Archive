@@ -39,6 +39,8 @@ Vite 热更新监听排除 `output/`、`.wrangler/` 和 `data/`：这些目录�
 
 DB 提供 D1，ARCHIVE_BUCKET 保存 canonical 对象，ASSETS 提供构建后的静态资源，EMAIL 与 AUTH_EMAIL_RATE_LIMITER 提供邮件和限流。顶层与 staging 必须各自完整配置；敏感值使用 Wrangler secrets。本地 dotenv 由 Cloudflare 插件加载，不进入浏览器 bundle；build 目录和其中开发变量不得提交。
 
+认证邮件限流在本地与线上使用相同失败语义：达到限额则拒绝，绑定缺失或调用异常则记录原始错误并报告服务不可用，不因 localhost 放行。隔离运行配置也必须声明 `AUTH_EMAIL_RATE_LIMITER`。`scripts/run-wrangler.mjs` 只按正常退出码 `0` 判定成功，不解析成功日志或强杀后报成功；若调用方超时或中断，写入结果仍须另行核实，不能直接重试远程写入。
+
 修改配置后运行 npm run cf-typegen。cloudflare-env.d.ts 为生成文件。CI 使用 scripts/prepare-wrangler-config.mjs 从 WRANGLER_CONFIG_JSONC 提取环境资源配置，Worker 入口与资源路由由仓库模板决定。
 
 D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `app/.server/storage/archive-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。

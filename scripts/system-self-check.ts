@@ -1124,6 +1124,13 @@ export default {
           APP_ORIGIN: origin,
           EMAIL_FROM: "system@example.test",
         },
+        ratelimits: [
+          {
+            name: "AUTH_EMAIL_RATE_LIMITER",
+            namespace_id: "1",
+            simple: { limit: 5, period: 60 },
+          },
+        ],
       },
       null,
       2,
