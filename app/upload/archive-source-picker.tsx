@@ -8,7 +8,6 @@ import { cn } from "@/lib/ui/cn";
 import { FileArchive, FolderOpen, LoaderCircle, Upload } from "lucide-react";
 import type { ChangeEvent, DragEvent, RefObject } from "react";
 import { useId, useRef, useState } from "react";
-import { Link } from "react-router";
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceFile,
@@ -265,7 +264,7 @@ function UploadTaskCard({
   const canRestart = Boolean(
     !canceling &&
       task &&
-      (["failed", "canceled"].includes(task.status) || task.result),
+      ["failed", "canceled"].includes(task.status),
   );
 
   return (
@@ -307,17 +306,6 @@ function UploadTaskCard({
             {task.error}
           </Notice>
         ) : null}
-        {task?.result ? (
-          <Notice tone="success" className="mt-3 border p-3 text-sm">
-            上传完成。
-            <Link
-              className="font-semibold underline"
-              to={`/games/${task.result.workId}`}
-            >
-              查看作品
-            </Link>
-          </Notice>
-        ) : null}
       </div>
       {showCancel || canRestart ? (
         <footer className="flex justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
@@ -338,7 +326,7 @@ function UploadTaskCard({
           ) : null}
           {canRestart ? (
             <Button onClick={onRestart} size="sm" type="button">
-              {task?.result ? "上传其他版本" : "重新开始"}
+              重新开始
             </Button>
           ) : null}
         </footer>

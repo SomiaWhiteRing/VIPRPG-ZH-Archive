@@ -75,7 +75,7 @@ import { moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
 import { Check, Link as LinkIcon } from "lucide-react";
 import type { Dispatch, DragEvent, FormEvent, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useRevalidator } from "react-router";
+import { Link, useNavigate, useRevalidator } from "react-router";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
@@ -216,6 +216,7 @@ export function UploadClient({
     [imageSelections.browsingImages, sourceCoverCandidates],
   );
   const archiveMode = isArchiveEngineFamily(form.engineFamily);
+  const uploadResult = upload.task?.result;
   const metadataLocked =
     upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
   const formDisabled = preparing || metadataLocked;
@@ -845,16 +846,25 @@ export function UploadClient({
               </section>
 
               <section className="p-4 sm:p-5">
-                {upload.metadataConfirmed ? (
+                {uploadResult || upload.metadataConfirmed ? (
                   <div className="grid min-h-44 place-items-center text-center">
                     <div>
                       <span className="mx-auto mb-3 grid size-11 place-items-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700">
                         <Check className="size-5" />
                       </span>
-                      <h2 className="m-0 text-lg font-bold">作品资料已确认</h2>
+                      <h2 aria-live="polite" className="m-0 text-lg font-bold">
+                        {uploadResult ? "上传完成" : "作品资料已确认"}
+                      </h2>
                       <p className="mt-1 text-sm text-muted">
                         {form.chineseTitle.trim() || form.originalTitle.trim()}
                       </p>
+                      {uploadResult ? (
+                        <Button asChild className="mt-4" variant="rm2k">
+                          <Link to={`/games/${uploadResult.workId}`}>
+                            查看作品
+                          </Link>
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 ) : (
@@ -982,7 +992,16 @@ export function UploadClient({
                       正在提交，资料已锁定，当前不能取消或离开页面。
                     </p>
                   ) : null}
-                  {archiveMode && upload.metadataConfirmed ? (
+                  {uploadResult ? (
+                    <Button
+                      className="min-h-12 w-full"
+                      disabled
+                      type="button"
+                      variant="rm2k"
+                    >
+                      上传完成
+                    </Button>
+                  ) : archiveMode && upload.metadataConfirmed ? (
                     <Button
                       className="min-h-12 w-full"
                       disabled={Boolean(upload.task?.commitStarted)}
