@@ -97,11 +97,7 @@ export default function MePage() {
   } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-7">
-      <PageHeader
-        compact
-        title="个人中心"
-        subtitle="从这里继续最近的游戏、收藏和内容维护。"
-      />
+      <PageHeader compact title="个人中心" />
       <UploadAccess user={user} request={uploadRequest} />
       <AccountSection
         href="/me/profile"
@@ -142,7 +138,7 @@ export default function MePage() {
           <AccountWorkGrid items={played.items} />
         ) : (
           <AccountEmpty>
-            <Link to="/games">前往游戏库</Link>开始游玩。
+            暂无游玩记录 · <Link to="/games">作品库</Link>
           </AccountEmpty>
         )}
       </AccountSection>
@@ -159,7 +155,7 @@ export default function MePage() {
           <AccountWorkGrid items={favorites.items} />
         ) : (
           <AccountEmpty>
-            <Link to="/games">前往游戏库</Link>收藏感兴趣的作品。
+            暂无收藏 · <Link to="/games">作品库</Link>
           </AccountEmpty>
         )}
       </AccountSection>
@@ -190,7 +186,7 @@ export default function MePage() {
             ))}
           </ul>
         ) : (
-          <AccountEmpty>创建目录，把作品整理成便于分享的清单。</AccountEmpty>
+          <AccountEmpty>暂无目录</AccountEmpty>
         )}
       </AccountSection>
       <AccountSection
@@ -270,7 +266,7 @@ export default function MePage() {
             <AccountEmpty>
               {canPublishWork(user) ? (
                 <>
-                  <Link to="/upload">发布</Link>第一部作品。
+                  暂无上传 · <Link to="/upload">发布作品</Link>
                 </>
               ) : (
                 "还没有负责维护的作品。"

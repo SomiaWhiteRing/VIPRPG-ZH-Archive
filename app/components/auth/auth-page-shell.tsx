@@ -10,7 +10,7 @@ export function AuthPageShell({
   footer,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: ReactNode;
   footer: ReactNode;
 }) {

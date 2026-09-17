@@ -280,7 +280,7 @@ export default function GameDetailPage() {
                     预览图
                   </h2>
                   <span className="font-mono text-xs text-muted max-[560px]:text-left">
-                    {media.length} 张 · 点击放大
+                    {media.length} 张
                   </span>
                 </div>
                 <WorkMediaGallery items={media} title={title} />

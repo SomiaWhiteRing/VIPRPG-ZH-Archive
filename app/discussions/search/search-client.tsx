@@ -22,9 +22,7 @@ export function DiscussionSearch({
         <p role="alert" className="my-4 text-destructive">
           {error}
         </p>
-      ) : !query ? (
-        <EmptyState title="输入关键词搜索讨论。" />
-      ) : !result.items.length ? (
+      ) : !query ? null : !result.items.length ? (
         <EmptyState title={`没有找到包含‘${query}’的讨论。`} />
       ) : (
         <>

@@ -139,9 +139,7 @@ export default function SearchPage() {
       </nav>
       {scope === "discussions" ? (
         discussions && <DiscussionSearchResults {...discussions} />
-      ) : !query ? (
-        <EmptyState title="输入关键词开始搜索。" />
-      ) : result ? (
+      ) : !query ? null : result ? (
         <>
           <p className="my-6 text-sm text-muted">
             “{query}”在{scopeLabel}中找到 {formatNumber(result.total)} 个结果

@@ -45,13 +45,12 @@ export default function HomePage() {
             compact
             title="最近更新"
             titleId="recent-heading"
-            subtitle="最近更新的公开游戏。"
             actions={
               <Link
                 className="shrink-0 text-sm font-bold text-primary hover:text-accent"
                 to="/games"
               >
-                查看全部游戏 →
+                查看全部 →
               </Link>
             }
           />
@@ -76,13 +75,12 @@ export default function HomePage() {
             >
               最近原创
             </h2>
-            <p className="mt-1 text-muted">由作者亲自在本站发表的游戏。</p>
           </div>
           <Link
             className="ml-auto shrink-0 text-sm font-bold text-primary hover:text-accent min-[851px]:mt-5 min-[851px]:inline-block"
             to="/games?original=1"
           >
-            查看全部游戏 →
+            查看全部 →
           </Link>
         </div>
         <HomeWorkGrid original works={recentOriginalWorks} />
