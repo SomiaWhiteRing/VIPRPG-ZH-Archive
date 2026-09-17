@@ -8,14 +8,12 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 export function WorkPageHeader({
-  aliases,
   chineseTitle,
   engineFamily,
   language,
   originalTitle,
   tabs,
 }: {
-  aliases?: string[];
   chineseTitle: string | null;
   engineFamily: string;
   language: string;
@@ -31,7 +29,7 @@ export function WorkPageHeader({
         to="/games"
       >
         <ArrowLeft aria-hidden size={15} />
-        游戏库
+        作品库
       </Link>
       <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
         {title}
@@ -44,14 +42,6 @@ export function WorkPageHeader({
           </span>
         ) : null}
       </h1>
-      {aliases?.length ? (
-        <p className="mt-[0.4rem] text-sm text-muted">
-          又名：
-          <span className="font-mono text-foreground">
-            {aliases.join(" · ")}
-          </span>
-        </p>
-      ) : null}
       <div
         aria-label="元信息"
         className="mt-[0.7rem] flex flex-wrap items-center gap-2"
