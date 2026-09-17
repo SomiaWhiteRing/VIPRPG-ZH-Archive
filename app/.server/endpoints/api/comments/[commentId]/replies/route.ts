@@ -12,12 +12,13 @@ export async function GET(
   try {
     const user = await getCurrentUser(runtime);
     const url = new URL(request.url);
+    const replyId = url.searchParams.get("comment");
     const page = await listReplies(
       runtime,
       parsePositiveId((await context.params).commentId, "comment id"),
       user?.id ?? null,
-      url.searchParams.get("cursor"),
-      Number(url.searchParams.get("limit") ?? 20),
+      Number(url.searchParams.get("page") ?? 1),
+      replyId === null ? undefined : parsePositiveId(replyId, "reply id"),
     );
     return json({ ok: true, ...page });
   } catch (error) {

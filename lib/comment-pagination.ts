@@ -1,0 +1,2 @@
+export const COMMENT_REPLY_PREVIEW_SIZE = 5;
+export const COMMENT_REPLY_PAGE_SIZE = 10;

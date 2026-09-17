@@ -6,13 +6,15 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
+import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
 import type {
   CommentBodySegment,
   CommentDto,
+  CommentReplyPage,
   CustomEmojiDto,
 } from "@/lib/dto/db/work-community";
 import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 type Props = {
@@ -48,6 +50,11 @@ function CommentPanelContent({
   const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [newReplies, setNewReplies] = useState<Record<number, CommentDto>>({});
+  const [commentUpdates, setCommentUpdates] = useState<
+    Record<number, Partial<CommentDto>>
+  >({});
+  const pendingLikes = useRef(new Set<number>());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function submitComment() {
@@ -82,6 +89,9 @@ function CommentPanelContent({
               : comment,
           ),
         );
+        const reply = result.comment;
+        const rootId = replyTarget.rootCommentId ?? replyTarget.id;
+        setNewReplies((current) => ({ ...current, [rootId]: reply }));
       } else {
         setComments((current) => [...current, result.comment!]);
       }
@@ -95,19 +105,22 @@ function CommentPanelContent({
   }
 
   async function toggleLike(comment: CommentDto) {
-    if (!currentUserId || busy || comment.status !== "published") return;
+    if (
+      !currentUserId ||
+      busy ||
+      comment.status !== "published" ||
+      pendingLikes.current.has(comment.id)
+    ) return;
+    pendingLikes.current.add(comment.id);
     const nextLiked = !comment.likedByMe;
-    setComments((current) =>
-      current.map((entry) =>
-        entry.id === comment.id
-          ? {
-              ...entry,
-              likedByMe: nextLiked,
-              likeCount: Math.max(0, entry.likeCount + (nextLiked ? 1 : -1)),
-            }
-          : entry,
-      ),
-    );
+    setCommentUpdates((current) => ({
+      ...current,
+      [comment.id]: {
+        ...current[comment.id],
+        likedByMe: nextLiked,
+        likeCount: Math.max(0, comment.likeCount + (nextLiked ? 1 : -1)),
+      },
+    }));
     try {
       const response = await fetch(`/api/comments/${comment.id}/like`, {
         method: nextLiked ? "PUT" : "DELETE",
@@ -115,18 +128,17 @@ function CommentPanelContent({
       });
       if (!response.ok) throw new Error();
     } catch {
-      setComments((current) =>
-        current.map((entry) =>
-          entry.id === comment.id
-            ? {
-                ...entry,
-                likedByMe: comment.likedByMe,
-                likeCount: comment.likeCount,
-              }
-            : entry,
-        ),
-      );
+      setCommentUpdates((current) => ({
+        ...current,
+        [comment.id]: {
+          ...current[comment.id],
+          likedByMe: comment.likedByMe,
+          likeCount: comment.likeCount,
+        },
+      }));
       setMessage("点赞操作失败。");
+    } finally {
+      pendingLikes.current.delete(comment.id);
     }
   }
 
@@ -143,9 +155,25 @@ function CommentPanelContent({
         credentials: "same-origin",
       });
       if (!response.ok) throw new Error();
-      setComments((current) =>
-        current.filter((entry) => entry.id !== comment.id),
-      );
+      if (comment.rootCommentId) {
+        setCommentUpdates((current) => ({
+          ...current,
+          [comment.id]: {
+            ...current[comment.id],
+            status: "deleted",
+            body: [{ type: "text", text: "该评论已删除" }],
+            bodySource: null,
+          },
+        }));
+      } else {
+        setComments((current) =>
+          current.filter((entry) => entry.id !== comment.id),
+        );
+      }
+      if (
+        replyTarget?.id === comment.id ||
+        replyTarget?.rootCommentId === comment.id
+      ) setReplyTarget(null);
     } catch {
       setMessage("评论删除失败。");
     }
@@ -252,7 +280,9 @@ function CommentPanelContent({
           comments.map((comment) => (
             <CommentCard
               comment={comment}
+              commentUpdates={commentUpdates}
               currentUserId={currentUserId}
+              newReply={newReplies[comment.id] ?? null}
               key={comment.id}
               onDelete={removeComment}
               onLike={toggleLike}
@@ -291,37 +321,75 @@ function commentEndpoint(target: CommentTarget): string {
 
 function CommentCard({
   comment,
+  commentUpdates,
   currentUserId,
+  newReply,
   onReply,
   onLike,
   onDelete,
 }: {
   comment: CommentDto;
+  commentUpdates: Record<number, Partial<CommentDto>>;
   currentUserId: number | null;
+  newReply: CommentDto | null;
   onReply: (comment: CommentDto) => void;
   onLike: (comment: CommentDto) => void;
   onDelete: (comment: CommentDto) => void;
 }) {
-  const [replies, setReplies] = useState<CommentDto[] | null>(null);
+  const [replies, setReplies] = useState<CommentReplyPage | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [focusedReplyId, setFocusedReplyId] = useState<number | null>(null);
+  const requestId = useRef(0);
+  const lastRequest = useRef<{ page: number; commentId?: number }>({ page: 1 });
 
-  async function loadReplies() {
-    if (replies || loading) return;
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/comments/${comment.id}/replies`, {
-        credentials: "same-origin",
-      });
-      const result = (await response.json()) as {
-        ok?: boolean;
-        items?: CommentDto[];
-      };
-      if (!response.ok || !result.ok) throw new Error();
-      setReplies(result.items ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadReplies = useCallback(
+    async (page: number, commentId?: number) => {
+      const id = ++requestId.current;
+      lastRequest.current = { page, commentId };
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ page: String(page) });
+        if (commentId) params.set("comment", String(commentId));
+        const response = await fetch(
+          `/api/comments/${comment.id}/replies?${params}`,
+          { credentials: "same-origin" },
+        );
+        const result = (await response.json()) as CommentReplyPage & {
+          ok?: boolean;
+        };
+        if (!response.ok || !result.ok) throw new Error();
+        if (requestId.current !== id) return;
+        setReplies(result);
+        setExpanded(true);
+        setFocusedReplyId(commentId ?? null);
+      } catch {
+        if (requestId.current === id) setError("回复加载失败，请重试。");
+      } finally {
+        if (requestId.current === id) setLoading(false);
+      }
+    },
+    [comment.id],
+  );
+
+  useEffect(() => {
+    if (newReply) void loadReplies(1, newReply.id);
+    return () => {
+      requestId.current += 1;
+    };
+  }, [newReply, loadReplies]);
+
+  useEffect(() => {
+    if (focusedReplyId)
+      document.getElementById(`comment-${focusedReplyId}`)?.focus();
+  }, [focusedReplyId, replies]);
+
+  const preview = replies?.preview ?? comment.replyPreview ?? [];
+  const visibleReplies = expanded && replies ? replies.items : preview;
+  const replyCount = replies?.total ?? comment.replyCount ?? 0;
+  const currentComment = { ...comment, ...commentUpdates[comment.id] };
 
   return (
     <article
@@ -348,44 +416,116 @@ function CommentCard({
         />
       )}
       <div className="min-w-0">
-        <CommentLine comment={comment} />
+        <CommentLine comment={currentComment} />
         <CommentControls
-          comment={comment}
+          comment={currentComment}
           currentUserId={currentUserId}
           onDelete={onDelete}
           onLike={onLike}
           onReply={onReply}
         />
-        {(comment.replyCount ?? 0) > 0 ? (
-          <div className="mt-2.5 grid gap-2.5 border-l-2 border-border pl-3 @max-[320px]/comments:pl-2">
-            {replies?.map((reply) => (
-              <div
-                className="min-w-0"
-                id={`comment-${reply.id}`}
-                key={reply.id}
-              >
-                <CommentLine comment={reply} />
-                <CommentControls
-                  comment={reply}
-                  currentUserId={currentUserId}
-                  onDelete={onDelete}
-                  onLike={onLike}
-                  onReply={onReply}
-                />
-              </div>
-            ))}
-            {!replies ? (
+        {replyCount > 0 || loading || error ? (
+          <section
+            aria-label={`#${comment.id} 的回复`}
+            aria-busy={loading}
+            className="mt-2.5 grid gap-2.5 border-l-2 border-border bg-muted/10 p-3"
+            id={`comment-replies-${comment.id}`}
+          >
+            {visibleReplies.map((entry) => {
+              const reply = { ...entry, ...commentUpdates[entry.id] };
+              return (
+                <div
+                  className="min-w-0 scroll-mt-24 focus:bg-primary/5 focus-visible:outline focus-visible:outline-primary"
+                  id={`comment-${reply.id}`}
+                  key={reply.id}
+                  tabIndex={-1}
+                >
+                  <CommentLine comment={reply} />
+                  <CommentControls
+                    comment={reply}
+                    currentUserId={currentUserId}
+                    onDelete={onDelete}
+                    onLike={onLike}
+                    onReply={onReply}
+                  />
+                </div>
+              );
+            })}
+            {replyCount > COMMENT_REPLY_PREVIEW_SIZE ? (
               <Button
+                aria-controls={`comment-replies-${comment.id}`}
+                aria-expanded={expanded}
                 disabled={loading}
-                onClick={() => void loadReplies()}
+                onClick={() => {
+                  if (expanded) {
+                    setExpanded(false);
+                    setFocusedReplyId(null);
+                    setError(null);
+                  } else void loadReplies(replies?.page ?? 1);
+                }}
                 size="sm"
                 type="button"
                 variant="ghost"
               >
-                {loading ? "加载中" : `查看 ${comment.replyCount} 条回复`}
+                {loading
+                  ? "正在加载…"
+                  : expanded
+                    ? "收起回复"
+                    : `查看全部 ${replyCount} 条回复`}
               </Button>
             ) : null}
-          </div>
+            {expanded && replies && replies.total > replies.pageSize ? (
+              <nav
+                aria-label={`#${comment.id} 楼中楼分页`}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <Button
+                  disabled={loading || replies.page <= 1}
+                  onClick={() => void loadReplies(replies.page - 1)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  上一页
+                </Button>
+                <span className="text-xs">
+                  {replies.page} / {Math.ceil(replies.total / replies.pageSize)}
+                </span>
+                <Button
+                  disabled={
+                    loading ||
+                    replies.page >= Math.ceil(replies.total / replies.pageSize)
+                  }
+                  onClick={() => void loadReplies(replies.page + 1)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  下一页
+                </Button>
+              </nav>
+            ) : null}
+            {error ? (
+              <div
+                className="flex flex-wrap items-center gap-2 text-sm text-muted"
+                role="status"
+              >
+                {error}
+                <Button
+                  disabled={loading}
+                  onClick={() => void loadReplies(
+                    lastRequest.current.page,
+                    lastRequest.current.commentId,
+                  )}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  重试
+                </Button>
+              </div>
+            ) : null}
+          </section>
         ) : null}
       </div>
     </article>
@@ -477,21 +617,23 @@ function CommentControls({
           回复
         </Button>
       ) : null}
-      {currentUserId ? (
-        <Button
-          aria-pressed={comment.likedByMe}
-          className="text-xs text-muted"
-          onClick={() => onLike(comment)}
-          size="sm"
-          type="button"
-          variant={comment.likedByMe ? "outline" : "ghost"}
-        >
-          <Heart aria-hidden />
-          {comment.likeCount}
-        </Button>
-      ) : (
-        <span className="px-2 text-xs text-muted">{comment.likeCount} 赞</span>
-      )}
+      <Button
+        aria-label={
+          comment.likedByMe
+            ? `取消赞，${comment.likeCount} 个赞`
+            : `赞，${comment.likeCount} 个赞`
+        }
+        aria-pressed={comment.likedByMe}
+        className="text-xs text-muted disabled:opacity-100"
+        disabled={!currentUserId}
+        onClick={() => onLike(comment)}
+        size="sm"
+        type="button"
+        variant={comment.likedByMe ? "outline" : "ghost"}
+      >
+        <Heart aria-hidden />
+        {comment.likeCount}
+      </Button>
       {currentUserId === comment.author?.id ? (
         <Button
           className="text-xs text-muted"
