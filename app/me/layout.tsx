@@ -4,7 +4,8 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 import { AccountNavigation } from "./account-navigation";
 
@@ -24,6 +25,9 @@ export async function loader(args: LoaderFunctionArgs) {
     ]),
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "个人中心" }, error);
 
 export default function AccountLayout() {
   const { user } = useLoaderData<typeof loader>();

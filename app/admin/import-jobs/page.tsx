@@ -10,8 +10,9 @@ import { SelectField } from "@/app/components/ui/select";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { formatBytes, formatDate } from "@/lib/format";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { IMPORT_TASK_STATUS_OPTIONS } from "@/lib/labels";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const STATUS_OPTIONS = [
@@ -46,6 +47,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { page, status, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["上传任务", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminImportJobsPage() {
   const { page, status, result } = useLoaderData<typeof loader>();

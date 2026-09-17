@@ -1,4 +1,5 @@
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import {
   isRouteErrorResponse,
   Link,
@@ -18,12 +19,8 @@ import { SiteHeaderNav } from "./components/site-header-nav";
 import { DiscussionVisitBoundary } from "./discussions/visit";
 import "./globals.css";
 
-export function meta() {
-  return [
-    { title: "VIPRPG.org" },
-    { name: "description", content: "RPG Maker 作品发现、游玩与下载空间" },
-  ];
-}
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors(undefined, error);
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);

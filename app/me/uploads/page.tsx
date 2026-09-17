@@ -17,9 +17,10 @@ import {
   canPublishWork,
   hasPermission,
 } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate } from "@/lib/format";
 import { engineLabel, languageLabel } from "@/lib/labels";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -44,6 +45,9 @@ export async function loader(args: LoaderFunctionArgs) {
     result,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "我的上传", page: loaderData?.page }, error);
 
 export default function UploadsPage() {
   const { page, user, result } = useLoaderData<typeof loader>();

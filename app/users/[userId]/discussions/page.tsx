@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { publicUserDiscussions } from "@/app/.server/forum/user-discussions";
@@ -6,7 +7,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -27,6 +28,15 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { user, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [loaderData?.user.displayName || "用户", "讨论"],
+      page: loaderData?.result.page,
+    },
+    error,
+  );
 
 export default function PublicDiscussions() {
   const { user, result } = useLoaderData<typeof loader>();

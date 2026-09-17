@@ -4,7 +4,8 @@ import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { HttpError } from "@/lib/http";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { params } = routeInput(args);
@@ -31,6 +32,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {};
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "讨论版" }, error);
 
 export default function Permalink() {
   return null;

@@ -15,7 +15,8 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { formatDate } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
@@ -41,6 +42,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { query, eventType, page, auditResult, roleEvents };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["审计日志", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminAuditPage() {
   const { query, eventType, page, auditResult, roleEvents } =

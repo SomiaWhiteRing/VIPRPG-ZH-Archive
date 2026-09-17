@@ -12,9 +12,10 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import type { UploadInitialWork } from "@/app/upload/upload-client";
 import { UploadClient } from "@/app/upload/upload-client";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { UploaderWorkEdit } from "@/lib/dto/db/game-library";
 import { isExtraStaffRole } from "@/lib/staff-credits";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -34,6 +35,17 @@ export async function loader(args: LoaderFunctionArgs) {
     suggestions,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [
+        loaderData?.work.chineseTitle || loaderData?.work.originalTitle || "作品",
+        "编辑作品",
+      ],
+    },
+    error,
+  );
 
 export default function UploadedWorkPage() {
   const { user, work, suggestions } = useLoaderData<typeof loader>();

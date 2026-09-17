@@ -8,7 +8,8 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RelationCreateDialog, RelationManager } from "../relation-editor";
 
@@ -38,6 +39,9 @@ export async function loader(args: LoaderFunctionArgs) {
     canCreate,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: [loaderData?.title || "游戏", "作品关联"] }, error);
 
 export default function WorkRelationsPage() {
   const { workId, user, work, capabilities, title, canCreate } =

@@ -8,8 +8,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { StatList } from "@/app/components/ui/stat-list";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatBytes, formatNumber } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 const HEALTH_LINKS = [
@@ -75,6 +76,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { canRunFinalCleanup, gcDryRun, downloadMetrics, gcMetrics };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: ["维护与一致性", "控制台"] }, error);
 
 export default function AdminMaintenancePage() {
   const { canRunFinalCleanup, gcDryRun, downloadMetrics, gcMetrics } =

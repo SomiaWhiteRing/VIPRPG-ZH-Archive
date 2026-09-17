@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -9,7 +10,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -27,6 +28,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "我的讨论", page: loaderData?.result.page }, error);
 
 export default function DiscussionsPage() {
   const { result } = useLoaderData<typeof loader>();

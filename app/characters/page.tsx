@@ -16,11 +16,11 @@ import { stringParam } from "@/lib/params";
 import type { PageMetadata } from "@/lib/ui/page-metadata";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { FolderPen } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const metadata: PageMetadata = {
-  title: "角色索引 · VIPRPG.org",
+  title: "角色索引",
   description:
     "按阵营与角色群浏览 VIPRPG 角色，查找中日文名称、别名、Wiki 资料与登场作品。",
 };
@@ -44,6 +44,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { query, data, canEdit, canEditIndex };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors(metadata, error);
 
 export default function CharactersPage() {
   const { query, data, canEdit, canEditIndex } = useLoaderData<typeof loader>();
@@ -87,8 +90,4 @@ export default function CharactersPage() {
       </div>
     </PageContainer>
   );
-}
-
-export function meta() {
-  return pageMetaDescriptors(metadata);
 }

@@ -6,7 +6,8 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { CHARACTER_INDEX_PERMISSIONS } from "@/lib/authz/permissions";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { CharacterIndexEditor } from "./editor";
 
@@ -28,6 +29,9 @@ export async function loader(args: LoaderFunctionArgs) {
     renderData0,
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: ["角色分类", "控制台"] }, error);
 
 export default function CharacterIndexAdminPage() {
   const { user, params, renderData0 } = useLoaderData<typeof loader>();

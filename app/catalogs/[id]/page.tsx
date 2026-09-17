@@ -12,9 +12,10 @@ import { CatalogItemsSection } from "@/app/catalogs/catalog-items-section";
 import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { ReactNode } from "react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { CatalogSummaryEditor } from "../catalog-manager";
 
@@ -61,6 +62,9 @@ export async function loader(args: LoaderFunctionArgs) {
     canEditItems,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: loaderData?.catalog.title || "目录详情" }, error);
 
 export default function CatalogPage() {
   const {

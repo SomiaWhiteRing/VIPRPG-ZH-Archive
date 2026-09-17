@@ -1,10 +1,11 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { listCatalogs } from "@/app/.server/db/catalogs";
 import { runtimeContext } from "@/app/.server/router-context";
 import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -14,6 +15,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { catalogs };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "目录" }, error);
 
 export default function CatalogsPage() {
   const { catalogs } = useLoaderData<typeof loader>();

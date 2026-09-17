@@ -18,8 +18,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission, PERMISSION_LIST } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RoleAssignmentControl } from "./role-assignment-control";
 
@@ -84,6 +85,9 @@ export async function loader(args: LoaderFunctionArgs) {
     assignableRoles,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["用户与角色", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminUsersPage() {
   const {

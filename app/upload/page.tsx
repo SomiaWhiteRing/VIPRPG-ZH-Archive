@@ -9,7 +9,8 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { UploadClient } from "@/app/upload/upload-client";
 import { canPublishWork } from "@/lib/authz/permissions";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -34,6 +35,9 @@ export async function loader(args: LoaderFunctionArgs) {
     suggestions,
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "上传游戏" }, error);
 
 export default function UploadPage() {
   const { currentUser, suggestions } = useLoaderData<typeof loader>();

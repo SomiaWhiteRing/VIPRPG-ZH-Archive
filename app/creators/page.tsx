@@ -10,10 +10,11 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { CreatorCard } from "@/app/creators/creator-card";
 import { formatNumber } from "@/lib/format";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { stringParam } from "@/lib/params";
 import { cn } from "@/lib/ui/cn";
 import { Search } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 30;
@@ -35,6 +36,17 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { query, sort, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: loaderData?.query
+        ? [`“${loaderData.query}”的搜索结果`, "作者与制作人员"]
+        : "作者与制作人员",
+      page: loaderData?.result.page,
+    },
+    error,
+  );
 
 export default function CreatorsPage() {
   const { query, sort, result } = useLoaderData<typeof loader>();

@@ -1,8 +1,9 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { requirePublicUser } from "@/app/.server/public-user";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 import { PublicProfileNavigation } from "./public-profile-navigation";
 
@@ -14,6 +15,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { user };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: [loaderData?.user.displayName || "用户", "个人主页"] }, error);
 
 export default function PublicUserLayout() {
   const { user } = useLoaderData<typeof loader>();

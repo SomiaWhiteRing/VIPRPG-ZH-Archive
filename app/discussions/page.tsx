@@ -6,9 +6,10 @@ import { forumTagHeat } from "@/app/.server/forum/tag-heat";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { forumPage } from "@/lib/forum";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { interactiveTopic } from "@/lib/forum-state";
 import { HttpError } from "@/lib/http";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { DiscussionWorkspace } from "./workspace";
 
@@ -48,6 +49,17 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { viewer, featured, selected, topics, filterError, renderData0 };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: loaderData?.featured
+        ? "精华讨论"
+        : "讨论版",
+      page: loaderData?.topics?.page,
+    },
+    error,
+  );
 
 export default function DiscussionsPage() {
   const { viewer, featured, selected, topics, filterError, renderData0 } =

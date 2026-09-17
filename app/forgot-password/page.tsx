@@ -1,7 +1,8 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { EmailInput } from "@/app/components/auth/auth-input";
 import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
@@ -23,6 +24,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { params, nextPath };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "找回密码" }, error);
 
 export default function ForgotPasswordPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();

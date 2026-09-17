@@ -22,11 +22,12 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { DiscussionSearchResults } from "@/app/discussions/search/results";
 import type { CharacterIndexEntry } from "@/lib/character-index";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { formatNumber } from "@/lib/format";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
 import { stringParam } from "@/lib/params";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
 
 const SCOPES = [
@@ -77,6 +78,18 @@ export async function loader(args: LoaderFunctionArgs) {
     directory,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: loaderData?.query
+        ? [`“${loaderData.query}”的搜索结果`, loaderData.scopeLabel]
+        : "站内搜索",
+      page:
+        loaderData?.discussions?.result.page ?? (loaderData?.query ? loaderData.page : undefined),
+    },
+    error,
+  );
 
 export default function SearchPage() {
   const { discussions, query, scope, page, scopeLabel, result, directory } =

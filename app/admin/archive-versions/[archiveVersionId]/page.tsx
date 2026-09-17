@@ -16,8 +16,9 @@ import { SelectField } from "@/app/components/ui/select";
 import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -41,6 +42,18 @@ export async function loader(args: LoaderFunctionArgs) {
     archiveVersion,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [
+        loaderData?.archiveVersion.workTitle || "作品",
+        loaderData ? `归档 #${loaderData.archiveVersion.id}` : "归档维护",
+        "控制台",
+      ],
+    },
+    error,
+  );
 
 export default function AdminArchiveVersionEditPage() {
   const { adminUser, archiveVersion } = useLoaderData<typeof loader>();

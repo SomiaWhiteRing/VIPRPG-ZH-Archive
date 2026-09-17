@@ -1,7 +1,8 @@
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
@@ -81,6 +82,14 @@ export async function loader(args: LoaderFunctionArgs) {
     characterIndex,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [loaderData?.character.primaryName || "角色", "角色维护", "控制台"],
+    },
+    error,
+  );
 
 export default function AdminCharacterEditPage() {
   const {

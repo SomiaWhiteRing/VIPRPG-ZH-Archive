@@ -32,7 +32,7 @@ import type {
 import { formatNumber } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const readCharacter = async (runtime: AppRuntime, rawId: string) => {
@@ -63,7 +63,7 @@ export async function loader(args: LoaderFunctionArgs) {
     listPickerEmojis(runtime),
   ]);
 
-  const pageMetadata = { title: `${character.primaryName} · VIPRPG.org` };
+  const pageMetadata = { title: character.primaryName };
   return {
     character,
     user: pickPageFields(user, ["id"]),
@@ -73,6 +73,9 @@ export async function loader(args: LoaderFunctionArgs) {
     pageMetadata,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(loaderData?.pageMetadata, error);
 
 export default function CharacterDetailPage() {
   const { character, user, canEdit, comments, emojis } =
@@ -280,12 +283,4 @@ function CharacterCredit({ work }: { work: CharacterWorkCredit }) {
       ) : null}
     </div>
   );
-}
-
-export function meta({
-  data,
-}: {
-  data: Awaited<ReturnType<typeof loader>> | undefined;
-}) {
-  return pageMetaDescriptors(data?.pageMetadata);
 }

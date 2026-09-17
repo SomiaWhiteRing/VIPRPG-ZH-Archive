@@ -22,10 +22,11 @@ import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -56,6 +57,9 @@ export async function loader(args: LoaderFunctionArgs) {
     works,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
 
 export default function CreatorDetailPage() {
   const { currentUser, creator, comments, emojis, works } =

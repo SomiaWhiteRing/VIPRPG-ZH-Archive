@@ -1,7 +1,8 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
@@ -34,6 +35,9 @@ export async function loader(args: LoaderFunctionArgs) {
     params,
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: ["个人资料", "个人中心"] }, error);
 
 export default function ProfilePage() {
   const { user, params } = useLoaderData<typeof loader>();

@@ -26,9 +26,10 @@ import {
   hasPermission,
   hasUploaderAccess,
 } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { commentTargetHref } from "@/lib/comment-target";
 import { formatDate } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { UploadAccess } from "./upload-access";
 
@@ -79,6 +80,9 @@ export async function loader(args: LoaderFunctionArgs) {
     discussions,
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "个人中心" }, error);
 
 export default function MePage() {
   const {

@@ -5,7 +5,8 @@ import {
   VerificationCodeInput,
 } from "@/app/components/auth/auth-input";
 import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
@@ -28,6 +29,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { params, nextPath };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "重置密码" }, error);
 
 export default function ResetPasswordPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();

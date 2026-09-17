@@ -28,6 +28,7 @@ import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import type {
   GameTranslationRelation,
@@ -41,7 +42,7 @@ import {
 } from "@/lib/labels";
 import { publicCopy } from "@/lib/public-copy";
 import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { WorkActionBar } from "./work-action-bar";
 import {
@@ -150,6 +151,9 @@ export async function loader(args: LoaderFunctionArgs) {
     externalLinks,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: loaderData?.title || "游戏详情" }, error);
 
 export default function GameDetailPage() {
   const {
