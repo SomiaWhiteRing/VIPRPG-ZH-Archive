@@ -13,17 +13,16 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { InboxItem } from "@/lib/dto/db/inbox";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate, formatUnreadCount } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxCategory, inboxHref } from "@/lib/inbox";
 import { Bell, Heart, MessageCircle, ShieldCheck } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "./actions";
 import { InboxControls, InboxFeedback } from "./controls";
-
-export const metadata = { title: "提醒 - VIPRPG.org" };
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -51,6 +50,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { category, unread, canResolve, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "提醒", page: loaderData?.result.page }, error);
 
 export default function InboxPage() {
   const { category, unread, canResolve, result } =

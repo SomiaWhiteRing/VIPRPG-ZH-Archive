@@ -10,13 +10,14 @@ import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   formatBytes,
   formatNullableDuration,
   formatNumber,
 } from "@/lib/format";
 import { importTaskStageLabel } from "@/lib/labels";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -72,6 +73,9 @@ export async function loader(args: LoaderFunctionArgs) {
     totalPending,
   };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "控制台" }, error);
 
 export default function AdminPage() {
   const {

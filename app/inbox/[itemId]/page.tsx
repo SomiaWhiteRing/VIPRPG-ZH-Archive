@@ -8,15 +8,11 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { HttpError } from "@/lib/http";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "../actions";
 import { InboxFeedback } from "../controls";
-
-export const metadata = {
-  title: "提醒 - VIPRPG.org",
-  robots: { index: false, follow: false },
-};
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -44,6 +40,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { item };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "提醒" }, error);
 
 export default function InboxTargetPage() {
   const { item } = useLoaderData<typeof loader>();

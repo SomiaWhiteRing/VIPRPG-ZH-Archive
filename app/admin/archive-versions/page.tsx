@@ -13,7 +13,8 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { hasPermission } from "@/lib/authz/permissions";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
@@ -61,6 +62,9 @@ export async function loader(args: LoaderFunctionArgs) {
     canAccessTrash,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["文件版本维护", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminArchiveVersionsPage() {
   const { adminUser, query, status, sort, page, result, canAccessTrash } =

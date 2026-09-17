@@ -1,6 +1,7 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { requirePagePermission } from "@/app/.server/auth/authorize";
@@ -46,6 +47,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { formError, tag, candidates };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: [loaderData?.tag.name || "标签", "标签维护", "控制台"] }, error);
 
 export default function AdminTagEditPage() {
   const { formError, tag, candidates } = useLoaderData<typeof loader>();

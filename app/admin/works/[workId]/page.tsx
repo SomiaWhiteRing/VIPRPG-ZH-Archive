@@ -26,8 +26,9 @@ import {
   getRelationEditorCapabilities,
   hasPermission,
 } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { StaffCredit } from "@/lib/staff-credits";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { StructuredWorkFields } from "../structured-work-fields";
 import { WorkStaffFields } from "../work-staff-fields";
@@ -66,6 +67,18 @@ export async function loader(args: LoaderFunctionArgs) {
     relationCapabilities,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [
+        loaderData?.work.chineseTitle || loaderData?.work.originalTitle || "作品",
+        "作品维护",
+        "控制台",
+      ],
+    },
+    error,
+  );
 
 export default function AdminWorkEditPage() {
   const {

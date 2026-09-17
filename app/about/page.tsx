@@ -1,13 +1,14 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
+import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
 
 export const dynamic = "force-static";
 
-export const metadata = {
-  title: "关于 · VIPRPG.org",
-};
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "关于本站" }, error);
 
 export default function AboutPage() {
   return (

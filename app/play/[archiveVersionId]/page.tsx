@@ -27,6 +27,7 @@ import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   buildArchiveDownloadUrl,
   buildWebPlayKey,
@@ -35,7 +36,7 @@ import {
   webPlayInstallerVersion,
 } from "@/lib/archive/web-play";
 import { AlertTriangle } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -119,6 +120,9 @@ export async function loader(args: LoaderFunctionArgs) {
     metadata,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: [loaderData?.metadata.title || "游戏", "在线游玩"] }, error);
 
 export default function WebPlayPage() {
   const {

@@ -6,8 +6,9 @@ import { redirectPage } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { forumPage } from "@/lib/forum";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { AdminDiscussions } from "./workspace";
 export async function loader(args: LoaderFunctionArgs) {
@@ -37,6 +38,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { viewer: forumViewer(user)!, p, view, query, state, data };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["讨论管理", "控制台"], page: loaderData?.data.page }, error);
 
 export default function AdminDiscussionsPage() {
   const { viewer, p, view, query, state, data } =

@@ -8,7 +8,8 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { forumPage } from "@/lib/forum";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { ImageCleanupButton } from "./cleanup-button";
 export async function loader(args: LoaderFunctionArgs) {
@@ -37,6 +38,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { page, rows };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["讨论图片清理", "控制台"], page: loaderData?.page }, error);
 
 export default function ForumImageCleanup() {
   const { page, rows } = useLoaderData<typeof loader>();

@@ -1,8 +1,9 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { EmailInput, PasswordInput } from "@/app/components/auth/auth-input";
 import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -32,6 +33,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { params, nextPath };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "登录" }, error);
 
 export default function LoginPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();

@@ -13,8 +13,9 @@ import {
 } from "@/app/components/profile/account-content";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { commentTargetHref } from "@/lib/comment-target";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -64,6 +65,7 @@ export async function loader(args: LoaderFunctionArgs) {
     visibility.discussions;
 
   return {
+    displayName: user.displayName,
     base,
     played,
     favorites,
@@ -73,6 +75,9 @@ export async function loader(args: LoaderFunctionArgs) {
     hasVisibleSections,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: [loaderData?.displayName || "用户", "个人主页"] }, error);
 
 export default function PublicUserPage() {
   const {

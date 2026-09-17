@@ -1,7 +1,8 @@
 import { redirectPage } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { forumHref } from "@/lib/forum";
-import type { LoaderFunctionArgs } from "react-router";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const { searchParams } = routeInput(args);
@@ -17,6 +18,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {};
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors({ title: "讨论搜索" }, error);
 
 export default function DiscussionSearchPage() {
   return null;

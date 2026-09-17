@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import { requirePublicProfileSection } from "@/app/.server/public-user";
@@ -6,7 +7,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -23,8 +24,17 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
   const base = `/users/${user.id}/catalogs`;
-  return { page, result, base };
+  return { displayName: user.displayName, page, result, base };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [loaderData?.displayName || "用户", "公开目录"],
+      page: loaderData?.page,
+    },
+    error,
+  );
 
 export default function PublicCatalogs() {
   const { page, result, base } = useLoaderData<typeof loader>();

@@ -14,8 +14,9 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
@@ -52,6 +53,9 @@ export async function loader(args: LoaderFunctionArgs) {
     result,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: ["作者与制作人员维护", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminCreatorsPage() {
   const { adminUser, query, sort, page, result } =

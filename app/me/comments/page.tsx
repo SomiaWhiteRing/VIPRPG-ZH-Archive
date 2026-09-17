@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -9,7 +10,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -28,6 +29,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { page, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "我的评论", page: loaderData?.page }, error);
 
 export default function CommentsPage() {
   const { page, result } = useLoaderData<typeof loader>();

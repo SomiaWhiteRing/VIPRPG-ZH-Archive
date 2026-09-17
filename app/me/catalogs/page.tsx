@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -10,7 +11,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -30,6 +31,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { page, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "我的目录", page: loaderData?.page }, error);
 
 export default function MyCatalogsPage() {
   const { page, result } = useLoaderData<typeof loader>();

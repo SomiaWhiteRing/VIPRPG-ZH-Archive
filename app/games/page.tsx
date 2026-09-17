@@ -14,10 +14,11 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import { formatNumber } from "@/lib/format";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 import { stringParam } from "@/lib/params";
 import { LayoutGrid, List } from "lucide-react";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 const PAGE_SIZE = 20;
@@ -101,6 +102,15 @@ export async function loader(args: LoaderFunctionArgs) {
     hasFilters,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: "作品库",
+      page: loaderData?.page,
+    },
+    error,
+  );
 
 export default function GamesPage() {
   const {

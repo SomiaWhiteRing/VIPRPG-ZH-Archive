@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { listGameWorks } from "@/app/.server/db/game-library";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { publicTopicList } from "@/app/.server/forum/public-queries";
@@ -7,7 +8,7 @@ import { HomeCommunity } from "@/app/components/home/home-community";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -25,6 +26,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { recentWorks, recentOriginalWorks, topics };
 }
+
+export const meta: MetaFunction = ({ error }) =>
+  pageMetaDescriptors(undefined, error);
 
 export default function HomePage() {
   const { recentWorks, recentOriginalWorks, topics } =

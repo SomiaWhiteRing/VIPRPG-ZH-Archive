@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { searchUserComments } from "@/app/.server/db/work-community";
 import { requirePublicProfileSection } from "@/app/.server/public-user";
@@ -6,7 +7,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -24,8 +25,17 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
   const base = `/users/${user.id}/comments`;
-  return { page, result, base };
+  return { displayName: user.displayName, page, result, base };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [loaderData?.displayName || "用户", "评论"],
+      page: loaderData?.page,
+    },
+    error,
+  );
 
 export default function PublicComments() {
   const { page, result, base } = useLoaderData<typeof loader>();

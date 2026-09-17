@@ -1,3 +1,4 @@
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -9,7 +10,7 @@ import { GameCard } from "@/app/components/home/game-card";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -29,6 +30,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { page, result };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ title: "游玩历史", page: loaderData?.page }, error);
 
 export default function HistoryPage() {
   const { page, result } = useLoaderData<typeof loader>();

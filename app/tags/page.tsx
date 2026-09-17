@@ -9,10 +9,11 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatList } from "@/app/components/ui/stat-list";
 import type { PublicTagSummary } from "@/lib/dto/db/taxonomy-library";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
 import { namespaceLabel } from "@/lib/labels";
 import { stringParam } from "@/lib/params";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -25,6 +26,16 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return { query, tags };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: loaderData?.query
+        ? [`“${loaderData.query}”的搜索结果`, "标签"]
+        : "标签",
+    },
+    error,
+  );
 
 export default function TagsPage() {
   const { query, tags } = useLoaderData<typeof loader>();

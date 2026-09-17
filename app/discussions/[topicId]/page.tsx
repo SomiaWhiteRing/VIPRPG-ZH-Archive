@@ -11,7 +11,7 @@ import { InboxReadOnView } from "@/app/inbox/read-on-view";
 import { forumHref, forumListReturn, forumPage } from "@/lib/forum";
 import { HttpError } from "@/lib/http";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { DiscussionWorkspace } from "../workspace";
 
@@ -130,7 +130,8 @@ export async function loader(args: LoaderFunctionArgs) {
   );
 
   const pageMetadata = {
-    title: `${detail.topic.title} - 讨论版 - VIPRPG.org`,
+    title: [detail.topic.title, "讨论版"],
+    page: detail.posts.page,
     description:
       detail.posts.items
         .find((post) => post.postNumber === 1)
@@ -150,6 +151,9 @@ export async function loader(args: LoaderFunctionArgs) {
     pageMetadata,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(loaderData?.pageMetadata, error);
 
 export default function TopicPage() {
   const {
@@ -182,14 +186,6 @@ export default function TopicPage() {
       />
     </>
   );
-}
-
-export function meta({
-  data,
-}: {
-  data: Awaited<ReturnType<typeof loader>> | undefined;
-}) {
-  return pageMetaDescriptors(data?.pageMetadata);
 }
 
 export { default as ErrorBoundary } from "@/app/discussions/error";

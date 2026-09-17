@@ -16,8 +16,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { Textarea } from "@/app/components/ui/textarea";
 import { hasPermission } from "@/lib/authz/permissions";
+import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -42,6 +43,14 @@ export async function loader(args: LoaderFunctionArgs) {
     creator,
   };
 }
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors(
+    {
+      title: [loaderData?.creator.name || "作者", "作者维护", "控制台"],
+    },
+    error,
+  );
 
 export default function AdminCreatorEditPage() {
   const { adminUser, creator } = useLoaderData<typeof loader>();
