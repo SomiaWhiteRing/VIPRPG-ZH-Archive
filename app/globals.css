@@ -1,6 +1,17 @@
 @import "tailwindcss" source("./");
 @source "../lib";
 
+@layer base {
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
 @theme {
   --color-background: #f5f4ef;
   --color-foreground: #17212b;

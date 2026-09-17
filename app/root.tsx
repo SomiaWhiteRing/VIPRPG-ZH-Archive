@@ -44,6 +44,9 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  // Immersive Translate and other extensions can add document-root attributes
+  // before hydration. Tolerate those attributes without suppressing diagnostics
+  // inside the application tree.
   return (
     <html
       lang="zh-Hans"
