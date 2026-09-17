@@ -59,7 +59,7 @@ export default function PrivacyPage() {
   const { params, settings } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader title="隐私" subtitle="选择哪些内容显示在你的个人主页。" />
+      <PageHeader title="隐私" />
       {params.privacyUpdated ? (
         <Notice
           tone="success"

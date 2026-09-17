@@ -669,8 +669,7 @@ export function CharacterPicker({
               <div>
                 <Dialog.Title>选择本作头像</Dialog.Title>
                 <Dialog.Description className="mt-0.5 text-sm text-muted">
-                  {activeCredit?.selection.displayName ?? ""} ·
-                  左侧选素材表，右侧选格子
+                  {activeCredit?.selection.displayName ?? ""}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -1037,7 +1036,7 @@ function PortraitSelectionWorkbench({
           <strong className="text-sm">
             {selectedCell
               ? `${credit.portrait ? "本作已选" : "角色默认"}：第 ${selectedCell.row + 1} 行，第 ${selectedCell.column + 1} 列`
-              : "点击原图中的头像格子"}
+              : "未选择头像"}
           </strong>
         </footer>
       </section>

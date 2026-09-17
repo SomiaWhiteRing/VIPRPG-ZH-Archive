@@ -33,7 +33,6 @@ export default function ForgotPasswordPage() {
   return (
     <AuthPageShell
       title="找回密码"
-      subtitle="通过邮箱验证码设置新密码。"
       footer={
         <>
           <Link to={`/login?next=${encodeURIComponent(nextPath)}`}>

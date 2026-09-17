@@ -32,7 +32,7 @@ export function UploadAccess({
                   ? "上次申请未通过，可以重新申请。"
                   : request?.status === "approved"
                     ? "之前的申请已通过，当前权限不完整，可重新申请。"
-                    : "申请后可发布本站归档、外部下载作品，并维护自己的作品。"}
+                    : "审批通过后可上传和维护作品。"}
           </p>
         </div>
         {granted ? (

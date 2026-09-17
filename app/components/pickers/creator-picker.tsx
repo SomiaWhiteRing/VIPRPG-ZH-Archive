@@ -200,7 +200,7 @@ export function CreatorPicker({
           ) : value?.displayName.trim() ? (
             <span>保存时关联同名人物，未收录则新建。</span>
           ) : (
-            <span>输入名称可搜索规范名和别名。</span>
+            <span>支持别名搜索</span>
           )}
         </div>
       ) : null}

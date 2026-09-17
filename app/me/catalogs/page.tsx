@@ -44,7 +44,7 @@ export default function MyCatalogsPage() {
       {result.items.length ? (
         <CatalogSummaryList items={result.items} showDescription />
       ) : (
-        <AccountEmpty>还没有目录，可以在上方创建。</AccountEmpty>
+        <AccountEmpty>暂无目录</AccountEmpty>
       )}
       <PaginationLinks
         basePath="/me/catalogs"

@@ -42,7 +42,6 @@ export default function LoginPage() {
   return (
     <AuthPageShell
       title="登录"
-      subtitle="使用邮箱和密码进入账户。"
       footer={
         <>
           <Link to={`/register?next=${encodeURIComponent(nextPath)}`}>

@@ -38,7 +38,6 @@ export default function ResetPasswordPage() {
   return (
     <AuthPageShell
       title="重置密码"
-      subtitle="输入邮箱验证码和新密码。"
       footer={
         <>
           <Link to={`/forgot-password?next=${encodeURIComponent(nextPath)}`}>

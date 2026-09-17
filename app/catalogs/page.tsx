@@ -26,7 +26,7 @@ export default function CatalogsPage() {
       <PageHeader
         compact
         title="目录"
-        subtitle="玩家创建的游戏整理与阅读顺序。"
+        subtitle="玩家整理的作品清单"
       />
       {catalogs.length ? (
         <section

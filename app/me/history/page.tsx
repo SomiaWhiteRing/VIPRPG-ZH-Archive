@@ -40,7 +40,7 @@ export default function HistoryPage() {
     <div>
       <PageHeader
         title="游玩历史"
-        subtitle={`共 ${result.total} 部作品，每部作品只保留最近一次游玩时间。`}
+        subtitle={`共 ${result.total} 部作品 · 每部仅记录最近一次游玩`}
       />
       {result.items.length ? (
         <ul className="grid grid-cols-2 gap-4 lg:grid-cols-3">

@@ -17,7 +17,7 @@
 | 1 | 选择器基础行为 | 五个选择器共享输入法保护、上下键/Escape、选项容器、活动项滚动；Enter 的创建/关联逻辑留在领域组件 | ed3f2821 |
 | 2 | Dialog | 普通弹窗共享 Overlay、Content、Title；裁剪器、抽屉等保留定位、滚动和焦点行为 | 74d57481 |
 | 3 | Notice | 28 处提示共享成功/错误外观与默认 alert/status 语义，调用方继续管理请求状态 | 74d57481 |
-| 4 | 作品展示片段 | 六处 WorkThumbnail；游戏库/目录条目共享 WorkListSummary，下载、编号、管理、剧透保持领域组合 | 17a5088f |
+| 4 | 作品展示片段 | 六处 WorkThumbnail；作品库/目录条目共享 WorkListSummary，下载、编号、管理、剧透保持领域组合 | 17a5088f |
 | 5 | InfoRow | 作品、作者、角色详情共享定义列表的资料行 | 74d57481 |
 | 6 | ImageLightbox | 论坛/角色素材共享缩放、动画、关闭和中文标签；分别保留计数/下载插件、像素渲染 | 10d2fbdd |
 | 7 | AuthPageShell | 登录、注册、找回密码、重置密码共享页面容器 | afe27f17 |

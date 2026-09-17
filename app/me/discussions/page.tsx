@@ -38,7 +38,7 @@ export default function DiscussionsPage() {
     <div>
       <PageHeader
         title="我的讨论"
-        subtitle="按发表时间展示公开发帖和回帖，包含楼中楼回复。"
+        subtitle="公开主题与回复（含楼中楼）"
       />
       <DiscussionList items={result.items} />
       <PaginationLinks
