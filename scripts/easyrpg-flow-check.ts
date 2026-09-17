@@ -55,7 +55,7 @@ export async function verifyEasyRpgGame(
     await page.waitForTimeout(250);
   };
   const start = async () => {
-    await page.getByRole("button", { name: "窗口游玩", exact: true }).click();
+    await page.locator('[data-web-play-action="start"]').click();
     await page.waitForFunction(
       () => {
         const frame = document.querySelector<HTMLIFrameElement>(
@@ -210,7 +210,7 @@ export async function verifyEasyRpgGame(
     const wasmRequested = page.waitForRequest((request) =>
       request.url().endsWith("/index.wasm"),
     );
-    await page.getByRole("button", { name: "窗口游玩", exact: true }).click();
+    await page.locator('[data-web-play-action="start"]').click();
     await wasmRequested;
     await leavePlayer();
     await page.locator("#web-player-host").waitFor({ state: "detached" });

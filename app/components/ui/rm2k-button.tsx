@@ -8,6 +8,7 @@ import type {
 import { Link } from "react-router";
 
 type Rm2kButtonProps = {
+  [attribute: `data-${string}`]: string | number | boolean | undefined;
   children: ReactNode;
   icon?: ReactNode;
   href?: string;
@@ -41,6 +42,7 @@ export function Rm2kButton({
   "aria-selected": ariaSelected,
   iconPosition = "start",
   size = "default",
+  ...dataAttributes
 }: Rm2kButtonProps) {
   const buttonClassName = cn(
     size === "large" &&
@@ -61,6 +63,7 @@ export function Rm2kButton({
   if (href) {
     return (
       <Button
+        {...dataAttributes}
         asChild
         aria-disabled={disabled || undefined}
         className={buttonClassName}
@@ -91,6 +94,7 @@ export function Rm2kButton({
   }
   return (
     <Button
+      {...dataAttributes}
       aria-controls={ariaControls}
       aria-expanded={ariaExpanded}
       aria-haspopup={ariaHasPopup}

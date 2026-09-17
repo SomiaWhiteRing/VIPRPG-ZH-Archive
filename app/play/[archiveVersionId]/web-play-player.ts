@@ -1,29 +1,55 @@
 import type { WebPlayMetadata } from "./web-play-types";
 
 type PlayerWindow = Window & {
+  console: Console;
   createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<{
     initApi?: () => void;
   }>;
 };
 
+export type PlayerLogLevel = "debug" | "info" | "warning" | "error";
+
+type PlayerLogHandler = (level: PlayerLogLevel, message: string) => void;
+
+// Known FluidSynth Web and bundled SoundFont messages; retain other diagnostics.
+const suppressedPlayerLogs = new Set([
+  "fluidsynth: error: function fluid_stat is a stub, always returning -1",
+  ...["Piano 1", "Piano 2", "Piano 3", "Honky-tonk"].map(
+    (instrument) =>
+      `fluidsynth: warning: Instrument '${instrument}': Some invalid generators were discarded, audible glitches are to be expected! Run fluidsynth in verbose mode for detailed information.`,
+  ),
+]);
+
 export type PlayerSession = {
   ready: Promise<void>;
+  captureScreenshot: () => Promise<PlayerScreenshot>;
   dispose: () => void;
+};
+
+export type PlayerScreenshot = {
+  blob: Blob;
+  width: number;
+  height: number;
 };
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
 export function createPlayerSession(
   host: HTMLElement,
   metadata: WebPlayMetadata,
+  onLog: PlayerLogHandler,
 ): PlayerSession {
   const lifetime = new AbortController();
+  let disconnectLogs: (() => void) | undefined;
+  let captureNextFrame: (() => void) | undefined;
   const frame = document.createElement("iframe");
   frame.title = `${metadata.title} 游戏画面`;
-  frame.className = "h-full w-full border-0";
+  frame.className = "block h-full w-full border-0";
   frame.allow = "autoplay; fullscreen";
 
   function dispose() {
     lifetime.abort();
+    disconnectLogs?.();
+    disconnectLogs = undefined;
     frame.remove();
   }
 
@@ -38,6 +64,15 @@ export function createPlayerSession(
     if (!playerWindow || !playerDocument?.getElementById("canvas"))
       throw new Error("无法创建游戏画面，请刷新后重试。");
 
+    // Keep right-button input available to the game; cancel only the browser UI.
+    playerDocument.addEventListener("contextmenu", (event) => event.preventDefault(), {
+      signal: lifetime.signal,
+    });
+
+    // This runtime replaces print/printErr and also logs directly to console.
+    // Capture only its iframe, before loading the runtime, and keep DevTools output.
+    disconnectLogs = connectPlayerLogs(playerWindow, lifetime.signal, onLog);
+
     const script = playerDocument.createElement("script");
     await load(script, lifetime.signal, () => {
       script.src = `${metadata.runtimeBasePath}/index.js`;
@@ -51,15 +86,121 @@ export function createPlayerSession(
         game: metadata.playKey,
         workId: metadata.workId,
         locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
+        // Snapshot after drawing, before WebGL discards the frame buffer.
+        postMainLoop: () => captureNextFrame?.(),
       }),
       lifetime.signal,
     );
     module.initApi?.();
   })().catch((error: unknown) => {
+    // Rejected iframe errors belong to another realm and fail instanceof Error.
+    const failure = new Error(formatLogValue(error));
     dispose();
-    throw error;
+    throw failure;
   });
-  return { ready, dispose };
+  async function captureScreenshot(): Promise<PlayerScreenshot> {
+    await ready;
+    lifetime.signal.throwIfAborted();
+    if (captureNextFrame) throw new Error("正在截取图片，请稍后重试。");
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await untilAborted(
+        new Promise<PlayerScreenshot>((resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("截取图片超时，请返回游戏画面后重试。")),
+            5_000,
+          );
+          captureNextFrame = () => {
+            captureNextFrame = undefined;
+            try {
+              const canvas = frame.contentDocument?.querySelector("canvas");
+              if (!canvas?.width || !canvas.height) {
+                throw new Error("游戏画面尚未准备好，无法截取图片。");
+              }
+              const { width, height } = canvas;
+              canvas.toBlob((blob) => {
+                if (blob) resolve({ blob, width, height });
+                else reject(new Error("截取图片失败，请重试。"));
+              }, "image/png");
+            } catch (error) {
+              reject(new Error(formatLogValue(error)));
+            }
+          };
+        }),
+        lifetime.signal,
+      );
+    } finally {
+      clearTimeout(timer);
+      captureNextFrame = undefined;
+    }
+  }
+
+  return { ready, captureScreenshot, dispose };
+}
+
+function connectPlayerLogs(
+  playerWindow: PlayerWindow,
+  signal: AbortSignal,
+  onLog: PlayerLogHandler,
+): () => void {
+  const methods = {
+    debug: "debug",
+    log: "info",
+    info: "info",
+    warn: "warning",
+    error: "error",
+  } as const;
+  const restore: (() => void)[] = [];
+  const forward = (level: PlayerLogLevel, values: unknown[]) => {
+    if (signal.aborted) return;
+    const message = values
+      .map(formatLogValue)
+      .join(" ")
+      .split(/\r?\n/)
+      .filter((line) => !suppressedPlayerLogs.has(line.trim()))
+      .join("\n");
+    if (message.trim()) onLog(level, message);
+  };
+
+  for (const method of Object.keys(methods) as (keyof typeof methods)[]) {
+    const original = playerWindow.console[method];
+    playerWindow.console[method] = (...values: unknown[]) => {
+      original.apply(playerWindow.console, values);
+      forward(methods[method], values);
+    };
+    restore.push(() => {
+      playerWindow.console[method] = original;
+    });
+  }
+
+  playerWindow.addEventListener(
+    "error",
+    (event) => forward("error", [event.error ?? event.message]),
+    { signal },
+  );
+  playerWindow.addEventListener(
+    "unhandledrejection",
+    (event) => forward("error", [event.reason]),
+    { signal },
+  );
+
+  return () => restore.forEach((reset) => reset());
+}
+
+function formatLogValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    // Errors originate in another window, so instanceof Error is unreliable.
+    if ("stack" in value && typeof value.stack === "string") return value.stack;
+    if ("message" in value && typeof value.message === "string") return value.message;
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      // Console output may contain circular objects.
+    }
+  }
+  return String(value);
 }
 
 function load(

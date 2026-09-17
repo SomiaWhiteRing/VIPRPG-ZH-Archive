@@ -9,13 +9,16 @@ import {
   AlertDialogFooter,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Button } from "@/app/components/ui/button";
 import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Progress } from "@/app/components/ui/progress";
+import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { createPlayerSession } from "./web-play-player";
-import type { PlayerSession } from "./web-play-player";
+import type { PlayerLogLevel, PlayerSession } from "./web-play-player";
+import { WebPlayScreenshotGallery } from "./web-play-screenshot-gallery";
+import { useWebPlayScreenshots } from "./web-play-screenshots";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   deleteWebPlayInstallation,
@@ -33,10 +36,11 @@ import type {
 import { formatBytes } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
 import {
-  Download,
+  Camera,
   Expand,
+  Maximize,
   Minimize2,
-  MonitorPlay,
+  Play,
   RectangleHorizontal,
   RectangleVertical,
 } from "lucide-react";
@@ -45,12 +49,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type WebPlayLog = {
   id: string;
-  level: "info" | "warning" | "error";
+  level: PlayerLogLevel;
   message: string;
   createdAt: string;
 };
 
 type DisplayOrientation = "landscape" | "portrait";
+
+const mobileControlsQuery = "(hover: none) and (pointer: coarse)";
 
 type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: DisplayOrientation) => Promise<void>;
@@ -83,12 +89,16 @@ export function WebPlayClient({
   const [installSessionActive, setInstallSessionActive] = useState(false);
   const [running, setRunning] = useState(false);
   const [playerStarting, setPlayerStarting] = useState(false);
+  const [playerStopping, setPlayerStopping] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
+  const [copyingLogs, setCopyingLogs] = useState(false);
+  const [copyLogsMessage, setCopyLogsMessage] = useState<string | null>(null);
   const [nativeFullscreen, setNativeFullscreen] = useState(false);
-  const [fallbackImmersive, setFallbackImmersive] = useState(false);
+  const [pageFullscreen, setPageFullscreen] = useState(false);
+  const [mobileControls, setMobileControls] = useState(false);
   const [displayOrientation, setDisplayOrientation] =
     useState<DisplayOrientation>("landscape");
   const [orientationLockActive, setOrientationLockActive] = useState(false);
@@ -99,6 +109,13 @@ export function WebPlayClient({
   const playerRef = useRef<PlayerSession | null>(null);
   const lifetimeRef = useRef<AbortController | null>(null);
   const startingRef = useRef(false);
+  const {
+    screenshots,
+    loading: loadingScreenshots,
+    capturing,
+    message: screenshotMessage,
+    capture,
+  } = useWebPlayScreenshots(metadata.workId);
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
@@ -106,21 +123,46 @@ export function WebPlayClient({
   const interruptedInstalling = installing && !installSessionActive;
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
-  const immersive = nativeFullscreen || fallbackImmersive;
+  const immersive = nativeFullscreen || pageFullscreen;
+  const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
 
-  const addLog = useCallback((level: WebPlayLog["level"], message: string) => {
-    setLogs((current) =>
-      [
-        {
-          id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
-          level,
-          message,
-          createdAt: new Date().toISOString(),
-        },
-        ...current,
-      ].slice(0, 80),
-    );
-  }, []);
+  const captureScreenshot = useCallback(async () => {
+    const player = playerRef.current;
+    if (!player || captureDisabled) return;
+    focusPlayerCanvas();
+    await capture(player);
+    if (playerRef.current === player) focusPlayerCanvas();
+  }, [capture, captureDisabled]);
+
+  const addLog = useCallback(
+    (level: WebPlayLog["level"], message: string) => {
+      setLogs((current) =>
+        [
+          {
+            id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
+            level,
+            message: message.slice(0, 16_000),
+            createdAt: new Date().toISOString(),
+          },
+          ...current,
+        ].slice(0, 300),
+      );
+    },
+    [],
+  );
+
+  const copyLogs = useCallback(async () => {
+    setCopyingLogs(true);
+    setCopyLogsMessage(null);
+    try {
+      await navigator.clipboard.writeText(logs.map(formatLog).join("\n"));
+      setCopyLogsMessage(`已复制 ${logs.length} 条日志。`);
+    } catch {
+      setCopyLogsMessage("复制失败，请允许浏览器访问剪贴板后重试。");
+    } finally {
+      setCopyingLogs(false);
+    }
+  }, [logs]);
 
   useEffect(() => {
     const lifetime = new AbortController();
@@ -220,20 +262,28 @@ export function WebPlayClient({
 
   useEffect(() => {
     const query = window.matchMedia("(orientation: portrait)");
-    const update = () => setViewportPortrait(query.matches);
+    const mobileQuery = window.matchMedia(mobileControlsQuery);
+    const update = () => {
+      setViewportPortrait(query.matches);
+      setMobileControls(mobileQuery.matches);
+    };
     update();
     query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    mobileQuery.addEventListener("change", update);
+    return () => {
+      query.removeEventListener("change", update);
+      mobileQuery.removeEventListener("change", update);
+    };
   }, []);
 
   useEffect(() => {
-    if (!fallbackImmersive) return;
+    if (!pageFullscreen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [fallbackImmersive]);
+  }, [pageFullscreen]);
 
   const ensureWorker = useCallback(() => {
     if (workerRef.current) {
@@ -346,8 +396,7 @@ export function WebPlayClient({
       await registerPlayServiceWorker(signal);
       signal.throwIfAborted();
       if (!playerHostRef.current) return false;
-      addLog("info", "游戏运行组件已加载，正在启动游戏。");
-      const player = createPlayerSession(playerHostRef.current, metadata);
+      const player = createPlayerSession(playerHostRef.current, metadata, addLog);
       playerRef.current = player;
       await player.ready;
       signal.throwIfAborted();
@@ -362,7 +411,6 @@ export function WebPlayClient({
           keepalive: true,
         }).catch(() => undefined);
       }
-      addLog("info", "游戏已启动。");
       return true;
     } catch (error) {
       if (signal.aborted) return false;
@@ -422,8 +470,8 @@ export function WebPlayClient({
         try {
           await frame.requestFullscreen({ navigationUI: "hide" });
           setNativeFullscreen(true);
-          setFallbackImmersive(false);
-          await lockOrientation(next);
+          setPageFullscreen(false);
+          if (mobileControls) await lockOrientation(next);
           focusPlayerCanvas();
           return true;
         } catch {
@@ -432,19 +480,25 @@ export function WebPlayClient({
       }
 
       setNativeFullscreen(false);
-      setFallbackImmersive(true);
-      await lockOrientation(next);
+      setPageFullscreen(true);
+      if (mobileControls) await lockOrientation(next);
       focusPlayerCanvas();
       return true;
     },
-    [addLog, lockOrientation],
+    [addLog, lockOrientation, mobileControls],
   );
+
+  const enterPageFullscreen = useCallback(() => {
+    setPageFullscreen(true);
+    setDisplayMessage(null);
+    focusPlayerCanvas();
+  }, []);
 
   const exitImmersive = useCallback(async () => {
     if (document.fullscreenElement) {
       await document.exitFullscreen().catch(() => undefined);
     }
-    setFallbackImmersive(false);
+    setPageFullscreen(false);
     setNativeFullscreen(false);
     unlockScreenOrientation();
     setOrientationLockActive(false);
@@ -452,17 +506,27 @@ export function WebPlayClient({
     focusPlayerCanvas();
   }, []);
 
-  const startImmersivePlayer = useCallback(
-    async (next: DisplayOrientation) => {
-      setOperationError(null);
-      const entered = await enterImmersive(next);
-      if (!entered) return;
-      const started = running || (await startPlayer());
-      if (lifetimeRef.current?.signal.aborted) return;
-      if (!started) await exitImmersive();
-    },
-    [enterImmersive, exitImmersive, running, startPlayer],
-  );
+  const stopPlayer = useCallback(async () => {
+    if (startingRef.current || !playerRef.current) return;
+    setPlayerStopping(true);
+    playerRef.current.dispose();
+    playerRef.current = null;
+    await exitImmersive();
+    if (lifetimeRef.current?.signal.aborted) return;
+    setRunning(false);
+    setPlayerStopping(false);
+    addLog("info", "游戏已停止。");
+  }, [addLog, exitImmersive]);
+
+  const startDefaultPlayer = useCallback(async () => {
+    if (running || startingRef.current) return;
+    // Request fullscreen during the tap so mobile browsers retain user activation.
+    const fullscreenRequest = mobileControls ? enterImmersive("landscape") : null;
+    const started = await startPlayer();
+    await fullscreenRequest;
+    if (lifetimeRef.current?.signal.aborted) return;
+    if (!started && mobileControls) await exitImmersive();
+  }, [enterImmersive, exitImmersive, mobileControls, running, startPlayer]);
 
   const changeDisplayOrientation = useCallback(
     async (next: DisplayOrientation) => {
@@ -508,7 +572,7 @@ export function WebPlayClient({
   }, [installation]);
 
   const rotation =
-    immersive && !orientationLockActive
+    immersive && mobileControls && !orientationLockActive
       ? displayOrientation === "landscape" && viewportPortrait
         ? 90
         : displayOrientation === "portrait" && !viewportPortrait
@@ -541,19 +605,19 @@ export function WebPlayClient({
                   {running ? "运行中" : playerStarting ? "启动中" : "待机"}
                 </span>
               </div>
-              <div
-                className={
-                  immersive
-                    ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
-                    : "relative aspect-4/3 w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"
-                }
-                id="web-player-frame"
-              >
+              <div className="aspect-4/3 w-full">
                 <div
-                  className={`${playerSurfaceClass} grid place-items-center [container-type:size]`}
-                  id="web-player-surface"
+                  className={
+                    immersive
+                      ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
+                      : "relative h-full w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"
+                  }
+                  id="web-player-frame"
                 >
-                  <div className="relative aspect-4/3 w-[min(100cqw,133.333333cqh)] overflow-hidden bg-black">
+                  <div
+                    className={playerSurfaceClass}
+                    id="web-player-surface"
+                  >
                     <div
                       className="h-full w-full"
                       id="web-player-host"
@@ -567,62 +631,84 @@ export function WebPlayClient({
                             ? "正在安装游戏文件…"
                             : installed
                               ? "游戏已准备好"
-                              : "安装后可在这里游玩"}
+                              : "未安装"}
                       </div>
                     ) : null}
                   </div>
+
+                  {immersive ? (
+                    <div className="fixed right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex flex-wrap justify-end gap-2">
+                      {mobileControls && running ? (
+                        <>
+                          <Button
+                            aria-pressed={displayOrientation === "landscape"}
+                            className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                            onClick={() => void changeDisplayOrientation("landscape")}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <RectangleHorizontal aria-hidden />
+                            横屏
+                          </Button>
+                          <Button
+                            aria-pressed={displayOrientation === "portrait"}
+                            className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                            onClick={() => void changeDisplayOrientation("portrait")}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <RectangleVertical aria-hidden />
+                            竖屏
+                          </Button>
+                        </>
+                      ) : null}
+                      <Button
+                        aria-label="恢复窗口"
+                        className="border-white/30 bg-white/15 text-white shadow-lg backdrop-blur-md hover:border-white/60 hover:bg-white/25 hover:text-white"
+                        onClick={() => void exitImmersive()}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Minimize2 aria-hidden />
+                        恢复
+                      </Button>
+                      <Button
+                        aria-label={capturing ? "正在截取图片" : "截取图片"}
+                        className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                        disabled={captureDisabled}
+                        onClick={() => void captureScreenshot()}
+                        size="icon"
+                        title="截取图片"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Camera aria-hidden />
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {immersive && (displayMessage || screenshotMessage) ? (
+                    <div
+                      className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-md bg-black/75 px-3 py-2 text-center text-sm text-white"
+                      role="status"
+                    >
+                      {displayMessage}
+                      {displayMessage && screenshotMessage ? <br /> : null}
+                      {screenshotMessage}
+                    </div>
+                  ) : null}
                 </div>
-
-                {immersive ? (
-                  <div className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex flex-wrap justify-end gap-2">
-                    <Button
-                      aria-pressed={displayOrientation === "landscape"}
-                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                      onClick={() => void changeDisplayOrientation("landscape")}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <RectangleHorizontal aria-hidden />
-                      横屏
-                    </Button>
-                    <Button
-                      aria-pressed={displayOrientation === "portrait"}
-                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                      onClick={() => void changeDisplayOrientation("portrait")}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <RectangleVertical aria-hidden />
-                      竖屏
-                    </Button>
-                    <Button
-                      className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                      onClick={() => void exitImmersive()}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <Minimize2 aria-hidden />
-                      退出
-                    </Button>
-                  </div>
-                ) : null}
-
-                {immersive && displayMessage ? (
-                  <div
-                    className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-md bg-black/75 px-3 py-2 text-center text-sm text-white"
-                    role="status"
-                  >
-                    {displayMessage}
-                  </div>
-                ) : null}
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
                 <span id="status">
                   {running ? "EasyRPG 正在运行" : "未启动"}
                 </span>
+                {!immersive && screenshotMessage ? (
+                  <span role="status">{screenshotMessage}</span>
+                ) : null}
                 {!immersive && displayMessage ? (
                   <span role="status">{displayMessage}</span>
                 ) : null}
@@ -648,7 +734,7 @@ export function WebPlayClient({
         }
         sidebar={
           <WorkSidebar
-            engagement={engagement}
+            extras={<WebPlayScreenshotGallery screenshots={screenshots} title={metadata.title} />}
             mobilePrimaryFirst
             notice={notice}
             primary={
@@ -698,79 +784,73 @@ export function WebPlayClient({
                     取消安装
                   </Button>
                 ) : failed || interruptedInstalling ? (
-                  <Button
+                  <Rm2kButton
                     className="w-full"
                     data-web-play-action="install"
                     onClick={startInstall}
                     type="button"
                   >
                     清理并重装
-                  </Button>
+                  </Rm2kButton>
                 ) : installed ? (
-                  <div className="grid gap-2.5">
-                    <Button
+                  !running ? (
+                    <Rm2kButton
                       className="min-h-12.5 w-full text-base"
+                      data-web-play-action="start"
                       disabled={playerStarting}
-                      onClick={() => void startImmersivePlayer("landscape")}
+                      icon={<Play aria-hidden />}
+                      onClick={() => void startDefaultPlayer()}
                       type="button"
-                      variant="rm2k"
                     >
-                      <Expand aria-hidden />
-                      <span className="min-[981px]:hidden">横屏全屏游玩</span>
-                      <span className="max-[980px]:hidden">全屏游玩</span>
-                    </Button>
-                    <div className="grid grid-cols-1 gap-2 max-[980px]:grid-cols-2">
+                      {playerStarting ? "正在启动…" : "启动游戏"}
+                    </Rm2kButton>
+                  ) : (
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2">
                       <Button
-                        disabled={playerBusy}
-                        onClick={() => void startPlayer()}
+                        className="min-w-0 gap-1.5 px-2"
+                        disabled={playerStopping}
+                        onClick={enterPageFullscreen}
                         type="button"
                         variant="outline"
                       >
-                        <MonitorPlay aria-hidden />
-                        {running ? "窗口中运行" : "窗口游玩"}
+                        <Maximize aria-hidden />
+                        网页全屏
                       </Button>
                       <Button
-                        className="min-[981px]:hidden"
-                        disabled={playerStarting}
-                        onClick={() => void startImmersivePlayer("portrait")}
+                        className="min-w-0 gap-1.5 px-2"
+                        disabled={playerStopping}
+                        onClick={() => void enterImmersive(displayOrientation)}
                         type="button"
                         variant="outline"
                       >
-                        <RectangleVertical aria-hidden />
-                        竖屏游玩
+                        <Expand aria-hidden />
+                        全屏幕
+                      </Button>
+                      <Button
+                        aria-label={capturing ? "正在截取图片" : "截取图片"}
+                        disabled={captureDisabled}
+                        onClick={() => void captureScreenshot()}
+                        size="icon"
+                        title="截取图片"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Camera aria-hidden />
                       </Button>
                     </div>
-                  </div>
+                  )
                 ) : (
-                  <Button
+                  <Rm2kButton
                     className="w-full"
                     data-web-play-action="install"
                     onClick={startInstall}
                     type="button"
                   >
                     安装到浏览器 · {formatBytes(metadata.totalSizeBytes)}
-                  </Button>
+                  </Rm2kButton>
                 )}
 
-                <a
-                  className={`${buttonVariants({ variant: "outline" })} w-full`}
-                  href={metadata.downloadUrl}
-                  onClick={() => {
-                    if (isAuthenticated) {
-                      void fetch(`/api/works/${metadata.workId}/played`, {
-                        method: "POST",
-                        credentials: "same-origin",
-                        keepalive: true,
-                      }).catch(() => undefined);
-                    }
-                  }}
-                >
-                  <Download aria-hidden />
-                  下载 ZIP
-                  <span className="text-xs text-muted">
-                    {formatBytes(metadata.totalSizeBytes)}
-                  </span>
-                </a>
+                {engagement}
 
                 <details className="border-t border-border pt-3">
                   <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-foreground">
@@ -800,6 +880,17 @@ export function WebPlayClient({
                     ) : null}
 
                     <div className="flex flex-wrap gap-2">
+                      {running ? (
+                        <Button
+                          disabled={playerStarting || playerStopping}
+                          onClick={() => void stopPlayer()}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          {playerStopping ? "正在停止…" : "停止游戏"}
+                        </Button>
+                      ) : null}
                       {installed || failed || interruptedInstalling ? (
                         <Button
                           disabled={playerBusy}
@@ -832,28 +923,44 @@ export function WebPlayClient({
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <strong>运行日志 · {logs.length}</strong>
                         {logs.length ? (
-                          <Button
-                            onClick={() => setLogs([])}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            清空
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              disabled={copyingLogs}
+                              onClick={() => void copyLogs()}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {copyingLogs ? "复制中…" : "复制"}
+                            </Button>
+                            <Button
+                              disabled={copyingLogs}
+                              onClick={() => {
+                                setLogs([]);
+                                setCopyLogsMessage(null);
+                              }}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              清空
+                            </Button>
+                          </div>
                         ) : null}
                       </div>
+                      {copyLogsMessage ? (
+                        <p className="mb-2 text-muted" role="status">
+                          {copyLogsMessage}
+                        </p>
+                      ) : null}
                       {logs.length ? (
-                        <ol className="m-0 grid max-h-64 list-none gap-2 overflow-y-auto p-0">
+                        <ol className="m-0 grid max-h-64 list-none gap-1 overflow-y-auto p-0">
                           {logs.map((log) => (
-                            <li className={logTone(log.level)} key={log.id}>
-                              <span>
-                                {new Date(log.createdAt).toLocaleTimeString(
-                                  "zh-CN",
-                                )}
-                              </span>
-                              <p className="m-0 mt-0.5 wrap-anywhere">
-                                {log.message}
-                              </p>
+                            <li
+                              className={`${logTone(log.level)} whitespace-pre-wrap wrap-anywhere`}
+                              key={log.id}
+                            >
+                              {formatLog(log)}
                             </li>
                           ))}
                         </ol>
@@ -968,6 +1075,16 @@ function logTone(level: WebPlayLog["level"]): string {
   if (level === "error") return "text-red-700";
   if (level === "warning") return "text-amber-700";
   return "text-muted";
+}
+
+function formatLog(log: WebPlayLog): string {
+  const time = new Date(log.createdAt).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return log.message.split(/\r?\n/).map((line) => `[${time}]${line}`).join("\n");
 }
 
 function unlockScreenOrientation(): void {

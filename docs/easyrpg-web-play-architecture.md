@@ -39,7 +39,7 @@
   -> 生成 EasyRPG index.json 和 pack-index.json
   -> IndexedDB 标记 ready
   -> 注册/确认 Service Worker
-  -> 加载自托管 EasyRPG index.js/index.wasm
+  -> 加载自托管 EasyRPG Kai index.js/index.wasm/easyrpg-player.data
   -> EasyRPG 请求 /play/games/{playKey}/...
   -> Service Worker 从 OPFS pack 切片返回文件 Response
 ```
@@ -53,6 +53,7 @@ GET /play/{archiveVersionId}
 GET /play/player.html
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.wasm
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.data
 GET /play/games/{playKey}/index.json
 GET /play/games/{playKey}/{path...}
 ```
@@ -211,12 +212,13 @@ EasyRPG Web Player 需要每个游戏目录提供 `index.json`。本站不依赖
 
 生成规则：
 
-- 每一级目录和文件名使用小写键。
+- 每一级目录和文件名先转小写，再做 Unicode NFKC 规范化，与 liblcf `ReaderUtil::Normalize` 保持一致。例如 `フレイムⅡ` 的查找键为 `フレイムii`，全角括号、空格和半角假名也使用相同规则。
 - 原始目录名通过 `_dirname` 保存。
 - 值保存真实文件名。
 - 图像和音频资源需要额外写入去扩展名别名，例如 `system/sys-thin2 -> sys-thin2.png`、`music/ad astra -> Ad Astra.ogg`；EasyRPG 运行时通常用不带扩展名的资源名查询。
 - 路径必须来自 canonical ZIP entry，禁止接受 `..`、绝对路径、空路径和重复冲突路径。
-- 如果同一目录下大小写折叠后出现冲突，安装失败并提示管理员检查路径。
+- 文件名仅因 NFKC 规范化重名时，采用官方 gencache 的后项覆盖规则，同时记录警告；完整文件名键与去扩展名别名指向同一原文件，pack 中保留全部原文件。原始路径大小写冲突、文件/目录冲突或目录规范化重名仍中止安装，避免混用不同目录的内容。
+- `pack-index.json` 与 Service Worker 继续按真实路径的小写键查找，不对存储路径做 NFKC；运行索引的值已还原真实路径。安装器版本为 `opfs-v9-nfkc-resource-index`，旧安装需要重新安装以生成新索引；存档仍按 Work 保存。
 
 ## 9. Service Worker OPFS 桥
 
@@ -252,8 +254,12 @@ Service Worker scope 固定覆盖 `/play/`。
 - 未安装：显示游戏大小和安装按钮；浏览器存储用量放在诊断区。
 - 安装中：显示 ZIP 下载进度、解包进度、当前文件、已写入容量；关闭页面前用 `beforeunload` 拦截。
 - 安装失败：显示失败阶段、错误和“清理重装”。
-- 已安装：桌面端以全屏游玩为主操作；移动端明确提供横屏全屏、窗口游玩和竖屏游玩。删除本地缓存、重新安装和日志留在诊断区；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
-- 运行中：展示 EasyRPG canvas、全屏退出和横竖屏切换。全屏优先使用外层播放器容器的浏览器原生 fullscreen；浏览器拒绝时改为页面铺满，不调用 EasyRPG runtime 自带 fullscreen。
+- 已安装：游玩操作只显示“启动游戏”。桌面端默认窗口游玩；移动端（无悬停且主指针为触摸）默认横屏全屏。安装与启动统一使用 Rm2kButton。删除本地缓存、重新安装和日志留在诊断区；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
+- 运行中：原启动位置依次并列显示“网页全屏”“全屏幕”和截取图片按钮。网页全屏让 iframe 铺满浏览器视口，在右上角固定玻璃质感的恢复按钮；iframe 内的 canvas 保持 4:3 居中。全屏幕优先使用外层播放器容器的浏览器原生 fullscreen；浏览器拒绝时改为页面铺满，不调用 EasyRPG runtime 自带 fullscreen。移动端在全屏内保留横竖屏切换；恢复窗口不会重建 iframe 或重启游戏。
+- 收藏：在线游玩卡片在启动/全屏操作下显示收藏按钮，不再显示下载 ZIP 按钮；安装仍使用原 ZIP 下载接口。
+- 截图：窗口和全屏模式均提供截取图片按钮；通过 EasyRPG 的 `postMainLoop` 在绘制结束后、WebGL 清空绘图缓冲区前截取原始分辨率 PNG。截图按 Work ID 存入独立 IndexedDB `viprpg_web_play_screenshots_v1`，同一游戏的各归档版本共用，清理安装缓存不会删除截图。已有截图时，在在线游玩卡片下方显示两列截图画廊，每页 6 张，支持翻页、灯箱缩放和单张 PNG 下载；可跨页勾选截图，按所选、本页或全部范围打包为 ZIP 下载。预览的 Blob URL 随页面卸载释放。
+- 本地数据与诊断：运行中提供“停止游戏”，销毁当前 iframe 并退出全屏，回到可再次启动的已安装状态；不删除本地游戏文件或已持久化存档。启动尚未完成时禁用停止按钮。
+- 运行日志：加载 runtime 前接入播放器 iframe 的 console.debug/log/info/warn/error，同时收集未捕获错误与 Promise 拒绝，保留浏览器控制台原输出。页面与剪贴板统一逐行使用 `[HH:mm:ss]内容` 格式，警告与错误通过颜色区分，不重复输出来源和级别文字；“清空”旁提供“复制”按钮，按显示顺序复制当前日志。保留最近 300 条（每条最多 16,000 字符），停止后可继续查看。当前 runtime 会覆盖 print/printErr 并直接调用 console，因此不依赖传入 print 回调。
 - 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
 本地缓存管理并入 `/play/{archiveVersionId}`。
@@ -265,6 +271,7 @@ EasyRPG runtime 必须自托管：
 ```text
 public/play/runtime/easyrpg/{version}/index.js
 public/play/runtime/easyrpg/{version}/index.wasm
+public/play/runtime/easyrpg/{version}/easyrpg-player.data
 ```
 
 要求：
@@ -274,6 +281,14 @@ public/play/runtime/easyrpg/{version}/index.wasm
 - React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，在该文档内加载 runtime 并调用 `createEasyRpgPlayer(...)`。
 - canvas、全局输入、音频和 WASM 循环归属于 iframe。离开页面或切换 playKey／账户时销毁该文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。
 - 静态资源的缓存和 WASM 类型头由 [public/_headers](../public/_headers) 定义。调整内容安全策略时须允许同源 WASM 运行；运行兼容性仍需按受授权的浏览器验收确认。
+
+当前固定为 EasyRPG Kai `0.8.1.1-kai-b3101682f`，来源为 [Kai 构建 35185078515](https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515) 的 `nightly-web` 产物，对应提交 `b3101682f5cf0b193a01f915f32a6da04f4818b6`。不直接依赖会变化的 Nightly 下载地址；版本目录内的 `SOURCE.json` 记录来源与 SHA-256。
+
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本校验固定 ZIP 与随附 SoundFont 的摘要，保留原 WASM 和 `.data`，只在生成的 JS 中适配按 Work 挂载存档及 `index.wasm` 文件名。更新时同步修改脚本中的版本、摘要、构建来源和 `easyRpgRuntimeVersion`。
+
+当前 Kai 构建已包含 Emscripten 4 的启动顺序修复：在 `preRun` 中建立游戏目录和默认 IDBFS，挂载后等待 `FS.syncfs(true)` 完成再启动。SDL3 初始化与窗口大小变化统一通过 `SDL_GetWindowSizeInPixels` 读取像素尺寸，避免给 `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` 的像素值重复乘 DPI 倍率，造成放大后视口超出画布。引擎更新使用新版本目录和安装键，旧游戏资源需重新安装；存档身份仍按 Work 保留。启动 Promise 拒绝时，iframe 异常转换为父页面 Error 并保留错误堆栈，避免跨窗口 `instanceof Error` 丢失详情。
+
+Kai 默认启用「MIDI音效改良」和 FluidSynth，优先使用 `.data` 预加载的 `/builtin/recommended.sf2`。此音色库由播放器共用，不写入各游戏 ZIP、资源索引或 OPFS pack。启动脚本保留预加载回调，等待挂载完成后再启动；`locateFile` 同时将 WASM 和 `.data` 定位到当前 runtime 目录。此前已保存的播放器开关设置继续生效。MIDI 初始化成功后，运行日志会出现 `Fluidsynth: Using soundfont /builtin/recommended.sf2`。
 
 ## 12. 存档策略
 
@@ -326,7 +341,7 @@ const persisted = await navigator.storage.persist();
 - 缺失文件会触发前端错误和重新安装提示。
 - 运行中不能删除本地缓存或重新安装；重复点击启动不会重复加载 runtime。
 - 详情页和游玩页使用同一作品页头与侧栏；评论位于各自主栏正文末尾，游玩页评论紧接游戏画面。
-- 播放器保持 4:3；移动端突出横屏全屏入口，并在沉浸模式内提供横竖屏切换与退出。
+- 游戏画面保持 4:3；桌面端默认窗口游玩，启动后可分别进入网页全屏和全屏幕；移动端默认横屏全屏，并在沉浸模式内提供横竖屏切换与恢复窗口。
 - 不支持或拒绝原生 fullscreen、Screen Orientation Lock 的浏览器仍能页面铺满并旋转画面，同时提示用户手动旋转设备。
 
 ### 交互与兼容性核对
@@ -334,6 +349,8 @@ const persisted = await navigator.storage.persist();
 文件跳过、pack 写入和资源别名分别以第 4、7、8 节为准；这里保留运行时交互需要单独核对的边界。
 
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
+- iframe 的 canvas 尺寸由页面 CSS 以 `!important` 覆盖 SDL3 写入的固定内联宽高，按 4:3 等比放大到当前视口可容纳的最大尺寸；不修改引擎绘图缓冲区分辨率。窗口、网页全屏、原生全屏与旋转布局使用同一规则。
+- 播放器 iframe 内取消 `contextmenu` 默认行为，包括画布与黑边区域；保留鼠标按下、抬起等事件，游戏仍可接收右键。监听随播放器会话销毁，站点其他区域的右键菜单不受影响。
 - 全屏应让外层播放器容器进入浏览器原生 fullscreen。直接调用 EasyRPG/Emscripten runtime 的 fullscreen 路径会在当前 runtime 下造成 canvas 尺寸异常，表现为黑屏。
 - 移动端方向切换优先调用 Screen Orientation Lock；不可用或被拒绝时只旋转播放器画面并提示用户手动旋转设备，不能把方向锁定作为启动前提。
 - 当前兼容目标是支持 OPFS、Service Worker 和 WASM 的 Chromium 浏览器，并同时提供桌面和移动布局；不承诺 Firefox 和 Safari 的行为一致。
