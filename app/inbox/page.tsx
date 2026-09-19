@@ -8,6 +8,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Badge } from "@/app/components/ui/badge";
+import { buttonVariants } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -17,7 +18,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate, formatUnreadCount } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
-import { inboxCategory, inboxHref } from "@/lib/inbox";
+import { inboxCategory, inboxCursor, inboxHref } from "@/lib/inbox";
 import { Bell, Heart, MessageCircle, ShieldCheck } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -34,10 +35,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const category = inboxCategory(params.category);
   const unread = params.unread === "1";
   const page = forumPage(params.page);
+  const cursor = unread ? inboxCursor(params.before, params.after) : undefined;
   const currentUser = await getCurrentUser(runtime);
   if (!currentUser)
     redirectPage(
-      `/login?next=${encodeURIComponent(inboxHref(category, unread, page))}`,
+      `/login?next=${encodeURIComponent(inboxHref(category, unread, page, cursor))}`,
     );
   const canResolve = canResolveInboxRequests(currentUser);
   if (category === "pending" && !canResolve)
@@ -46,8 +48,9 @@ export async function loader(args: LoaderFunctionArgs) {
     category,
     unread,
     page,
+    cursor,
   });
-  if (page !== result.page)
+  if (!unread && page !== result.page)
     redirectPage(inboxHref(category, unread, result.page));
 
   return { category, unread, canResolve, result };
@@ -115,19 +118,45 @@ export default function InboxPage() {
           ))}
         </ul>
       ) : (
-        <EmptyState title={emptyLabel(category, unread)} />
+        <EmptyState
+          title={unread && result.total > 0 ? "本页没有未读提醒" : emptyLabel(category, unread)}
+        />
       )}
-      <PaginationLinks
-        basePath="/inbox"
-        page={result.page}
-        pageSize={result.pageSize}
-        total={result.total}
-        prefetch={false}
-        params={{
-          category: category === "all" ? undefined : category,
-          unread: unread ? "1" : undefined,
-        }}
-      />
+      {unread ? (
+        result.previousCursor || result.nextCursor ? (
+          <nav aria-label="未读提醒分页" className="my-8 flex flex-wrap gap-2">
+            {result.previousCursor ? (
+              <Link
+                className={buttonVariants({ size: "sm", variant: "secondary" })}
+                prefetch="none"
+                to={inboxHref(category, true, 1, result.previousCursor)}
+              >
+                上一页
+              </Link>
+            ) : null}
+            {result.nextCursor ? (
+              <Link
+                className={buttonVariants({ size: "sm", variant: "secondary" })}
+                prefetch="none"
+                to={inboxHref(category, true, 1, result.nextCursor)}
+              >
+                下一页
+              </Link>
+            ) : null}
+          </nav>
+        ) : null
+      ) : (
+        <PaginationLinks
+          basePath="/inbox"
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          prefetch={false}
+          params={{
+            category: category === "all" ? undefined : category,
+          }}
+        />
+      )}
     </PageContainer>
   );
 }
