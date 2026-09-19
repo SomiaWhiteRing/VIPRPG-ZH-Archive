@@ -11,7 +11,7 @@ import type {
 } from "@/lib/dto/db/inbox";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
-import type { InboxCategory } from "@/lib/inbox";
+import type { InboxCategory, InboxCursor } from "@/lib/inbox";
 import { INBOX_PAGE_SIZE } from "@/lib/inbox";
 
 type InboxItemRow = {
@@ -128,6 +128,7 @@ export async function listInboxItemsForUser(
     category: InboxCategory;
     unread: boolean;
     page: number;
+    cursor?: InboxCursor;
   },
 ) {
   const query = inboxQuery(user);
@@ -140,29 +141,61 @@ export async function listInboxItemsForUser(
     pending: "can_reject=1",
   }[input.category];
   const filter = `${categorySql} AND ${input.unread ? "read_at IS NULL" : "1"}`;
+  // Resolve the boundary from all visible items, including ones just marked read.
+  // Filtering unread rows before resolving it would lose the pagination anchor.
+  const anchor =
+    input.unread && input.cursor
+      ? await getD1(runtime)
+          .prepare(`${query.sql} SELECT id,created_at FROM actionable WHERE id=?`)
+          .bind(...query.binds, input.cursor.itemId)
+          .first<{ id: number; created_at: string }>()
+      : null;
+  const newer = !!anchor && input.cursor?.direction === "newer";
+  const comparison = newer ? ">" : "<";
+  const order = newer ? "ASC" : "DESC";
+  const boundary = anchor
+    ? ` AND (created_at ${comparison} ? OR (created_at=? AND id ${comparison} ?))`
+    : "";
+  const boundaryBinds = anchor
+    ? [anchor.created_at, anchor.created_at, anchor.id]
+    : [];
   const totals = await getD1(runtime)
     .prepare(
       `${query.sql} SELECT
     COUNT(CASE WHEN ${filter} THEN 1 END) AS total,
+    COUNT(CASE WHEN ${filter}${boundary} THEN 1 END) AS matching,
     COUNT(CASE WHEN can_reject=1 THEN 1 END) AS pending,
     COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread FROM actionable`,
     )
-    .bind(...query.binds)
-    .first<{ total: number; pending: number; unread: number }>();
+    .bind(...query.binds, ...boundaryBinds)
+    .first<{ total: number; matching: number; pending: number; unread: number }>();
   const total = totals?.total ?? 0;
-  const page = Math.max(
-    1,
-    Math.min(input.page, Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE))),
-  );
+  const matching = totals?.matching ?? 0;
+  const page = input.unread
+    ? 1
+    : Math.max(
+        1,
+        Math.min(input.page, Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE))),
+      );
   const rows = await getD1(runtime)
     .prepare(
-      `${query.sql} SELECT * FROM actionable WHERE ${filter}
-    ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`,
+      `${query.sql} SELECT * FROM actionable WHERE ${filter}${boundary}
+    ORDER BY created_at ${order},id ${order} LIMIT ? OFFSET ?`,
     )
-    .bind(...query.binds, INBOX_PAGE_SIZE, (page - 1) * INBOX_PAGE_SIZE)
+    .bind(
+      ...query.binds,
+      ...boundaryBinds,
+      INBOX_PAGE_SIZE,
+      (page - 1) * INBOX_PAGE_SIZE,
+    )
     .all<InboxItemRow>();
   const items = (rows.results ?? []).map(mapInboxItemRow);
+  if (newer) items.reverse();
   await attachInteractions(runtime, items);
+  const firstId = items[0]?.id ?? anchor?.id;
+  const lastId = items.at(-1)?.id ?? anchor?.id;
+  const hasNewer = newer ? matching > INBOX_PAGE_SIZE : total > matching;
+  const hasOlder = newer ? total > matching : matching > INBOX_PAGE_SIZE;
   return {
     items,
     total,
@@ -170,6 +203,14 @@ export async function listInboxItemsForUser(
     pageSize: INBOX_PAGE_SIZE,
     pending: totals?.pending ?? 0,
     unread: totals?.unread ?? 0,
+    previousCursor:
+      input.unread && hasNewer && firstId
+        ? { itemId: firstId, direction: "newer" as const }
+        : undefined,
+    nextCursor:
+      input.unread && hasOlder && lastId
+        ? { itemId: lastId, direction: "older" as const }
+        : undefined,
   };
 }
 
