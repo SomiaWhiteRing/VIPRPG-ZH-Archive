@@ -1,16 +1,24 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
+import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
 
-const revision = "b3101682f5cf0b193a01f915f32a6da04f4818b6";
-const version = `0.8.1.1-kai-${revision.slice(0, 9)}`;
-const archiveSha256 =
-  "895942acbda5e8c28f64af769e46cb6bf14e089548ce43314966d594f4ccd079";
-const soundfontSha256 =
-  "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6";
+const { revision, version, build, archiveSha256, soundfontSha256, licenseSha256 } = runtime;
 const root = fileURLToPath(new URL("../", import.meta.url));
+const runtimeRoot = resolve(root, "public/play/runtime/easyrpg");
+if (!/^[a-z0-9][a-z0-9.-]*$/.test(version) || !/^[a-f0-9]{40}$/.test(revision))
+  throw new Error("Invalid pinned Kai version or revision");
 const zipPath = process.argv[2];
 if (!zipPath) throw new Error("Usage: node scripts/import-easyrpg-kai.mjs <web.zip>");
 
@@ -44,23 +52,29 @@ replaceOnce(
 );
 replaceOnce('return locateFile("easyrpg-player.wasm")', 'return locateFile("index.wasm")');
 
+// The Web ZIP omits COPYING; fetch the license from the same pinned revision.
+const licenseResponse = await fetch(
+  `https://raw.githubusercontent.com/SomiaWhiteRing/Player/${revision}/COPYING`,
+  { signal: AbortSignal.timeout(30_000) },
+);
+if (!licenseResponse.ok)
+  throw new Error(`Cannot fetch Kai license: HTTP ${licenseResponse.status}`);
+const license = Buffer.from(await licenseResponse.arrayBuffer());
+if (sha256(license) !== licenseSha256)
+  throw new Error("Kai license does not match the pinned digest");
+
 const output = {
   "index.js": Buffer.from(script),
   "index.wasm": files["easyrpg-player.wasm"],
   "easyrpg-player.data": files["easyrpg-player.data"],
 };
-const directory = resolve(root, "public/play/runtime/easyrpg", version);
-mkdirSync(directory, { recursive: true });
-for (const [name, bytes] of Object.entries(output))
-  writeFileSync(resolve(directory, name), bytes);
-writeFileSync(
-  resolve(directory, "SOURCE.json"),
+const source =
   JSON.stringify(
     {
       repository: "https://github.com/SomiaWhiteRing/Player",
       revision,
       version,
-      build: "https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515",
+      build,
       artifact: "nightly-web/EasyRPG-Player-Kai-nightly-web.zip",
       archiveSha256,
       source: `https://github.com/SomiaWhiteRing/Player/tree/${revision}`,
@@ -75,6 +89,42 @@ writeFileSync(
     },
     null,
     2,
-  ) + "\n",
-);
+  ) + "\n";
+const bundle = { ...output, COPYING: license, "SOURCE.json": Buffer.from(source) };
+const directory = resolve(runtimeRoot, version);
+
+// URLs are immutable: importing different bytes requires a new version name.
+if (existsSync(directory)) {
+  const names = readdirSync(directory);
+  if (
+    names.length !== Object.keys(bundle).length ||
+    Object.entries(bundle).some(
+      ([name, bytes]) =>
+        !names.includes(name) || !readFileSync(resolve(directory, name)).equals(bytes),
+    )
+  ) throw new Error("Runtime directory differs; use a new pinned version before importing");
+} else {
+  mkdirSync(runtimeRoot, { recursive: true });
+  const stagedDirectory = mkdtempSync(resolve(runtimeRoot, ".import-"));
+  try {
+    for (const [name, bytes] of Object.entries(bundle))
+      writeFileSync(resolve(stagedDirectory, name), bytes);
+    renameSync(stagedDirectory, directory);
+  } finally {
+    removeRuntimeDirectory(stagedDirectory);
+  }
+}
+
+// A successful import leaves exactly one runtime in the next deployment.
+for (const entry of readdirSync(runtimeRoot, { withFileTypes: true })) {
+  if (entry.name === version || !entry.isDirectory()) continue;
+  removeRuntimeDirectory(resolve(runtimeRoot, entry.name));
+  console.log(`Removed obsolete runtime ${entry.name}`);
+}
 console.log(`Imported EasyRPG Kai ${revision} into ${directory}`);
+
+function removeRuntimeDirectory(path) {
+  if (dirname(path) !== runtimeRoot || path === directory)
+    throw new Error(`Refusing to remove runtime path: ${path}`);
+  rmSync(path, { recursive: true, force: true });
+}

@@ -1,0 +1,8 @@
+{
+  "version": "0.8.1.1-kai-b3101682f",
+  "revision": "b3101682f5cf0b193a01f915f32a6da04f4818b6",
+  "build": "https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515",
+  "archiveSha256": "895942acbda5e8c28f64af769e46cb6bf14e089548ce43314966d594f4ccd079",
+  "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
+  "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+}
