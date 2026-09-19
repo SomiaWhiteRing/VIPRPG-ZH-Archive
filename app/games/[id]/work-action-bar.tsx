@@ -2,10 +2,12 @@ import { buttonVariants } from "@/app/components/ui/button";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { formatBytes } from "@/lib/format";
 import { Download, ExternalLink, Play } from "lucide-react";
+import { KaiImportLink } from "./kai-import-link";
 
 type Props = {
   workId: number;
   isAuthenticated: boolean;
+  engineFamily: string;
   archive: {
     id: number;
     downloadHref: string;
@@ -20,6 +22,7 @@ export function WorkActionBar({
   externalDownload,
   workId,
   isAuthenticated,
+  engineFamily,
 }: Props) {
   return (
     <div className="grid gap-3.5" aria-label="主操作">
@@ -53,6 +56,10 @@ export function WorkActionBar({
                 {formatBytes(archive.totalSizeBytes)}
               </span>
             </a>
+            {["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
+              archive.totalSizeBytes <= 1024 ** 3 && archive.totalFiles <= 50000 ? (
+                <KaiImportLink archiveVersionId={archive.id} />
+              ) : null}
           </div>
         </>
       ) : externalDownload ? (

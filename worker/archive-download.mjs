@@ -18,16 +18,18 @@ const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 export async function maybeHandleArchiveDownload(request, env, ctx) {
   const startedAt = Date.now();
   const url = new URL(request.url);
-  const match = /^\/api\/archive-versions\/(\d+)\/download\/?$/.exec(url.pathname);
+  const match = /^\/api\/archive-versions\/(\d+)\/(download|kai-import)\/?$/.exec(url.pathname);
 
   if (!match) {
     return null;
   }
+  const importHeaders = match[2] === "kai-import" ? { "Cache-Control": "no-store" } : {};
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", {
       status: 405,
       headers: {
+        ...importHeaders,
         Allow: "GET, HEAD",
       },
     });
@@ -41,8 +43,12 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     if (!record) {
       return request.method === "HEAD"
-        ? new Response(null, { status: 404 })
-        : Response.json({ ok: false, error: "Archive version not found" }, { status: 404 });
+        ? new Response(null, { status: 404, headers: importHeaders })
+        : Response.json({ ok: false, error: "Archive version not found" }, { status: 404, headers: importHeaders });
+    }
+
+    if (match[2] === "kai-import") {
+      return await kaiImportMetadata(request, env.ARCHIVE_BUCKET, record);
     }
 
     const cacheRequest = downloadCacheRequest(request, record);
@@ -120,14 +126,14 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     console.error("Native archive download failed", error?.message ?? error);
 
     return request.method === "HEAD"
-      ? new Response(null, { status: 500 })
+      ? new Response(null, { status: 500, headers: importHeaders })
       : Response.json(
           {
             ok: false,
             error: "Archive download failed",
-            detail: error?.message ?? "Unknown error",
+            ...(match[2] === "download" ? { detail: error?.message ?? "Unknown error" } : {}),
           },
-          { status: 500 },
+          { status: 500, headers: importHeaders },
         );
   }
 }
@@ -148,7 +154,8 @@ async function getDownloadRecord(db, archiveVersionId) {
         av.estimated_r2_get_count,
         w.id AS work_id,
         w.original_title AS work_original_title,
-        w.chinese_title AS work_chinese_title
+        w.chinese_title AS work_chinese_title,
+        w.engine_family
       FROM archive_versions av
       JOIN works w ON w.id = av.work_id
       WHERE av.id = ?
@@ -172,7 +179,40 @@ async function getDownloadRecord(db, archiveVersionId) {
     estimatedR2GetCount: row.estimated_r2_get_count,
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
+    engineFamily: row.engine_family,
   };
+}
+
+async function kaiImportMetadata(request, bucket, record) {
+  const headers = { "Cache-Control": "no-store" };
+  if (!["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(record.engineFamily)) {
+    return Response.json({ error: "This engine is not supported by Kai" }, { status: 422, headers });
+  }
+  const manifest = await loadManifest(bucket, record.manifestSha256);
+  const zipSizeBytes = estimateZipStreamSize(buildZipEntries(manifest, bucket));
+  const paths = new Set(manifest.files.map((file) => file.path.toLowerCase()));
+  if (zipSizeBytes > 1024 ** 3 || manifest.files.length > 50000 ||
+      !paths.has("rpg_rt.ldb") || !paths.has("rpg_rt.lmt")) {
+    return Response.json({ error: "This archive cannot be imported by Kai" }, { status: 422, headers });
+  }
+  const downloadUrl = new URL(`/api/archive-versions/${record.id}/download`, request.url);
+  downloadUrl.searchParams.set("zip_builder", downloadZipBuilderVersion);
+  const body = JSON.stringify({
+    schema: "viprpg-kai.import.v1",
+    archiveVersionId: record.id,
+    title: record.workChineseTitle || record.workOriginalTitle,
+    engineFamily: record.engineFamily,
+    manifestSha256: record.manifestSha256,
+    downloadUrl: downloadUrl.href,
+    zipSizeBytes,
+    files: manifest.files.map(({ path, size, sha256 }) => ({ path, size, sha256 })),
+  });
+  if (textEncoder.encode(body).byteLength > 8 * 1024 ** 2) {
+    return Response.json({ error: "Import metadata is too large" }, { status: 422, headers });
+  }
+  return new Response(request.method === "HEAD" ? null : body, {
+    headers: { ...headers, "Content-Type": "application/json; charset=utf-8" },
+  });
 }
 
 async function loadManifest(bucket, manifestSha256) {

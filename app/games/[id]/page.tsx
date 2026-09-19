@@ -512,6 +512,7 @@ export default function GameDetailPage() {
             mobilePrimaryFirst
             primary={
               <WorkActionBar
+                engineFamily={work.engineFamily}
                 archive={
                   current
                     ? {

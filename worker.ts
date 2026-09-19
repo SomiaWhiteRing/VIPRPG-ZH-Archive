@@ -24,6 +24,12 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.all(
+  "/api/archive-versions/:id/kai-import",
+  async (c) =>
+    (await maybeHandleArchiveDownload(c.req.raw, c.env, c.executionCtx)) ??
+    c.notFound(),
+);
+app.all(
   "/api/archive-versions/:id/download",
   async (c) =>
     (await maybeHandleArchiveDownload(c.req.raw, c.env, c.executionCtx)) ??
