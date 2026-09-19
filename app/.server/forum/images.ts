@@ -2,6 +2,7 @@ import type { ForumRuntime } from "./runtime";
 
 import { FORUM_IMAGE_COUNT } from "@/lib/forum";
 import { HttpError } from "@/lib/http";
+import { FACE_EMOJI_PATTERN } from "@/lib/face-emojis";
 
 export const imageColumns =
   "id,('/api/discussions/images/' || id) AS url,('/api/discussions/images/' || id) AS thumb,width,height,size,format,body_offset AS offset";
@@ -34,6 +35,10 @@ export function imageOffsets(
   ids: string[],
   body: string,
 ): number[] {
+  const emojiRanges = [...body.matchAll(FACE_EMOJI_PATTERN)].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ]);
   if (
     !Array.isArray(value) ||
     value.length !== ids.length ||
@@ -42,6 +47,7 @@ export function imageOffsets(
         !Number.isSafeInteger(offset) ||
         offset < 0 ||
         offset > body.length ||
+        emojiRanges.some(([start, end]) => offset > start && offset < end) ||
         (index > 0 && offset < value[index - 1]) ||
         (offset > 0 &&
           /[\uD800-\uDBFF]/.test(body[offset - 1]) &&

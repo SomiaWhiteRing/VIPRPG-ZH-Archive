@@ -1,6 +1,6 @@
 import { Button } from "@/app/components/ui/button";
 import { ClientOnly } from "@/app/components/ui/client-only";
-import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type { ForumImage } from "@/lib/forum";
 import { FORUM_IMAGE_BYTES } from "@/lib/forum";
 import { inspectForumImage } from "@/lib/forum-image-format";
@@ -107,7 +107,7 @@ export function ForumImages({
 }: {
   images: ForumImage[];
   body?: string;
-  emojis?: CustomEmojiDto[];
+  emojis?: FaceEmoji[];
 }) {
   const [active, setActive] = useState(-1);
   const lastOffset = images.at(-1)?.offset ?? 0;

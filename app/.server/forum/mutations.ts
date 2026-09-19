@@ -1,3 +1,5 @@
+import { validateBodyEmojis } from "@/app/.server/emojis/service";
+import { bodyLength } from "@/lib/face-emojis";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import { hasPermission } from "@/lib/authz/permissions";
 import type { ForumAction, ForumTarget } from "@/lib/forum";
@@ -46,7 +48,7 @@ const rateSql = `((SELECT COUNT(*) FROM forum_posts WHERE user_id=? AND created_
   (SELECT COUNT(*) FROM forum_post_comments WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_content_reports WHERE user_id=? AND created_at>=datetime('now','-1 minute'))) < ${FORUM_WRITES_PER_MINUTE}`;
 export function forumText(value: unknown, max: number, label: string): string {
-  if (typeof value !== "string" || !value.trim() || value.trim().length > max)
+  if (typeof value !== "string" || !value.trim() || (label === "正文" ? bodyLength(value.trim()) : value.trim().length) > max)
     throw new HttpError(400, `${label}需要 1–${max} 个字符。`);
   return value.trim().replace(/\r\n?/g, "\n");
 }
@@ -62,7 +64,7 @@ function mixedBody(
         ? FORUM_POST_BODY_LENGTH
         : FORUM_COMMENT_LENGTH;
   if (!images.length) return forumText(value, limit, "正文");
-  if (typeof value !== "string" || value.length > limit || value.includes("\r"))
+  if (typeof value !== "string" || bodyLength(value) > limit || value.includes("\r"))
     throw new HttpError(400, "正文长度或换行格式无效。");
   return value;
 }
@@ -305,6 +307,7 @@ export async function publishForum(
   const images = imageIds(input.images, kind === "comment");
   const attachments = imageGuard(images, actor.id);
   const body = mixedBody(input.body, images, kind);
+  await validateBodyEmojis(ctx.db, body);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const token = crypto.randomUUID(),
     db = ctx.db;
@@ -517,6 +520,7 @@ export async function editForum(
   const images = imageIds(input.images, target.kind === "comment");
   const attachments = imageGuard(images, actor.id, row.id);
   const body = mixedBody(input.body, images, target.kind);
+  await validateBodyEmojis(ctx.db, body, row.body ?? "");
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const title =
     target.kind === "topic"

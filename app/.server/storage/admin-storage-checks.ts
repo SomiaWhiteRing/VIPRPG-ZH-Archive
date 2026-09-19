@@ -827,7 +827,7 @@ function eligibleGcSummaryStatement(
             SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
-            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -890,7 +890,7 @@ async function listEligibleGcRows(
             SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
-            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -1020,7 +1020,7 @@ async function markGcCandidatePurging(
             SELECT 1 FROM character_materials m WHERE m.blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
-            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = blobs.sha256
+            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = blobs.sha256
           )
           AND NOT EXISTS (
             SELECT 1
@@ -1120,7 +1120,7 @@ function deletedOnlyGcSummaryStatement(
               SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
-              SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+              SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
             )
             AND NOT EXISTS (
               SELECT 1
@@ -1184,7 +1184,7 @@ function gcCandidateRowsStatement(
             SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
-            SELECT 1 FROM custom_emojis ce WHERE ce.image_blob_sha256 = b.sha256
+            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
           )
           AND NOT EXISTS (
             SELECT 1

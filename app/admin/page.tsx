@@ -231,12 +231,12 @@ export default function AdminPage() {
               查看审计日志
             </Link>
           ) : null}
-          {hasPermission(adminUser, "custom_emoji.manage") ? (
+          {hasPermission(adminUser, "emoji.defaults.manage") ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to="/admin/emojis"
             >
-              站点表情
+              默认表情
             </Link>
           ) : null}
         </div>

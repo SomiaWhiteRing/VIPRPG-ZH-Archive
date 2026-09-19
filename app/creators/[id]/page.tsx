@@ -1,9 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getPublicCreatorDetail } from "@/app/.server/db/creator-library";
-import {
-  listPickerEmojis,
-  listRootComments,
-} from "@/app/.server/db/work-community";
+import { listRootComments } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -38,22 +35,19 @@ export async function loader(args: LoaderFunctionArgs) {
   const creator = await getPublicCreatorDetail(runtime, id);
   if (!creator) throwNotFound();
 
-  const [comments, emojis] = await Promise.all([
-    listRootComments(
-      runtime,
-      { kind: "creator", id },
-      currentUser?.id ?? null,
-      null,
-    ),
-    listPickerEmojis(runtime),
-  ]);
+  const comments = await listRootComments(
+    runtime,
+    { kind: "creator", id },
+    currentUser?.id ?? null,
+    null,
+  );
+
   const works = groupWorkCredits(creator.workCredits);
 
   return {
     currentUser: pickPageFields(currentUser, ["id"]),
     creator,
     comments,
-    emojis,
     works,
   };
 }
@@ -62,7 +56,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
 
 export default function CreatorDetailPage() {
-  const { currentUser, creator, comments, emojis, works } =
+  const { currentUser, creator, comments, works } =
     useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
@@ -211,7 +205,6 @@ export default function CreatorDetailPage() {
               </div>
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
-                emojis={emojis}
                 initialComments={comments.items}
                 initialNextCursor={comments.nextCursor}
                 placeholder="写下你对这位作者或其作品的看法……"

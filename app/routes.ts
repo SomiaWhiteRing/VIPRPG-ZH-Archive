@@ -75,6 +75,7 @@ export default [
     route("comments", "me/comments/page.tsx"),
     route("discussions", "me/discussions/page.tsx"),
     route("favorites", "me/favorites/page.tsx"),
+    route("emojis", "me/emojis/page.tsx"),
     route("history", "me/history/page.tsx"),
     index("me/page.tsx"),
     route("privacy", "me/privacy/page.tsx"),

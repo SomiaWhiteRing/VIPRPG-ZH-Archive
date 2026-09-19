@@ -293,7 +293,7 @@ export async function contentIdentity(
       : `${source}.id=?`;
   const row = await ctx.db
     .prepare(
-      `SELECT ${source}.id,${source}.user_id,${source}.status,${source}.revision,
+      `SELECT ${source}.body,${source}.id,${source}.user_id,${source}.status,${source}.revision,
     p.topic_id,p.post_number,p.id AS post_id,${comment ? "c.comment_number" : "0"} AS comment_number,
     '${comment ? "comment" : "post"}' AS kind,
     EXISTS(SELECT 1 FROM ${comment ? "forum_public_comments" : "forum_public_posts"} visible WHERE visible.id=${source}.id) AS public

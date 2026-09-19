@@ -1,4 +1,5 @@
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { copyFaceEmojis } from "@/app/components/emojis/client";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import {
   isRouteErrorResponse,
@@ -60,6 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <link rel="icon" href="/icon/windI.png" />
       </head>
       <body
+        onCopy={copyFaceEmojis}
         className="min-h-screen bg-background font-sans text-foreground antialiased"
         suppressHydrationWarning
       >

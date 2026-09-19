@@ -85,23 +85,6 @@ async function read(ctx: ForumRequestRuntime, request: Request) {
           query: p.get("q") ?? "",
         }),
       );
-    case "emojis": {
-      const codes = p.getAll("shortcode");
-      if (
-        codes.length > 100 ||
-        codes.some((code) => !/^[A-Za-z0-9_+-]{1,64}$/.test(code))
-      )
-        throw new HttpError(400, "表情集合无效。");
-      const rows = await ctx.db
-        .prepare(
-          `SELECT id,shortcode,name,category,('/api/media/blobs/'||image_blob_sha256) AS imageUrl,
-        visible_in_picker AS visibleInPicker,status FROM custom_emojis WHERE status IN('active','retired')
-        ${codes.length ? "AND shortcode IN(SELECT value FROM json_each(?))" : ""} ORDER BY shortcode`,
-        )
-        .bind(...(codes.length ? [JSON.stringify(codes)] : []))
-        .all();
-      return result({ emojis: rows.results });
-    }
     case "comments":
       return result({
         comments: await publicCommentPage(

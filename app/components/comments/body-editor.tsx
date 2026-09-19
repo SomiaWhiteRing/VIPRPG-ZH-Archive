@@ -1,3 +1,14 @@
+import {
+  bodyLength,
+  emojiIds,
+  emojiToken,
+  type FaceEmoji,
+} from "@/lib/face-emojis";
+import {
+  EditorEmojis,
+  FaceEmojiNode,
+} from "@/app/components/emojis/editor-node";
+import { resolveEmojis } from "@/app/components/emojis/client";
 import { Button } from "@/app/components/ui/button";
 import {
   FORUM_BODY_LENGTH,
@@ -30,15 +41,18 @@ import {
   inlineSlice,
   readDocument,
   textContent,
-} from "./editor-document";
-import { createImageProcessor } from "./image-processor";
-import type { DraftImage } from "./images";
-import { cloneDraftImage, selectDraftImages } from "./images";
-import styles from "./mixed-editor.module.css";
+} from "@/app/discussions/editor-document";
+import { createImageProcessor } from "@/app/discussions/image-processor";
+import type { DraftImage } from "@/app/discussions/images";
+import { cloneDraftImage, selectDraftImages } from "@/app/discussions/images";
+import styles from "@/app/discussions/mixed-editor.module.css";
 
-export type MixedEditorHandle = {
+const EMPTY_EMOJIS: FaceEmoji[] = [];
+
+export type BodyEditorHandle = {
   insertFiles: (files: File[]) => void;
   insertText: (text: string) => void;
+  insertEmoji: (emoji: FaceEmoji, options?: { focus?: boolean }) => void;
   focus: () => void;
 };
 
@@ -118,7 +132,7 @@ const ForumImageNode = TiptapNode.create({
   addNodeView: () => ReactNodeViewRenderer(ImageNode, { as: "span" }),
 });
 
-export function MixedEditor({
+export function BodyEditor({
   body,
   images,
   busy,
@@ -128,7 +142,19 @@ export function MixedEditor({
   onError,
   onCompositionChange,
   ref,
+  textOnly = false,
+  maxLength,
+  inputId = "forum-body",
+  placeholder = "写下正文……",
+  autoFocus = false,
+  emojis = EMPTY_EMOJIS,
 }: {
+  textOnly?: boolean;
+  maxLength?: number;
+  inputId?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  emojis?: FaceEmoji[];
   body: string;
   images: DraftImage[];
   busy: boolean;
@@ -137,8 +163,32 @@ export function MixedEditor({
   onBusyChange: (value: boolean) => void;
   onError: (message: string) => void;
   onCompositionChange: (value: boolean) => void;
-  ref?: Ref<MixedEditorHandle>;
+  ref?: Ref<BodyEditorHandle>;
 }) {
+  const limit =
+    maxLength ?? (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH);
+  const [loadedEmojis, setLoadedEmojis] = useState<FaceEmoji[]>([]);
+  const [emojiError, setEmojiError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const idsKey = JSON.stringify(emojiIds(body));
+  useEffect(() => {
+    const controller = new AbortController();
+    void resolveEmojis(JSON.parse(idsKey) as number[], controller.signal)
+      .then((items) => {
+        setLoadedEmojis(items);
+        setEmojiError("");
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setEmojiError(
+            error instanceof Error ? error.message : "表情加载失败。",
+          );
+      });
+    return () => controller.abort();
+  }, [idsKey, retry]);
+  const emojiMap = new Map(
+    [...emojis, ...loadedEmojis].map((emoji) => [emoji.id, emoji]),
+  );
   // Keep resources removed by editing alive for undo/redo until the draft ends.
   const [assets] = useState(
     () => new Map(images.map((image) => [image.key, image])),
@@ -160,10 +210,11 @@ export function MixedEditor({
       }),
       Text,
       HardBreak,
-      ForumImageNode,
+      ...(textOnly ? [] : [ForumImageNode]),
+      FaceEmojiNode,
       UndoRedo,
       Dropcursor.configure({ color: "var(--color-primary)", width: 2 }),
-      Placeholder.configure({ placeholder: "写下正文……" }),
+      Placeholder.configure({ placeholder }),
       Extension.create({
         name: "forumLimits",
         addProseMirrorPlugins() {
@@ -173,8 +224,7 @@ export function MixedEditor({
                 if (!transaction.docChanged) return true;
                 const value = readDocument(transaction.doc, assets);
                 return (
-                  value.body.length <=
-                    (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH) &&
+                  bodyLength(value.body) <= limit &&
                   value.images.length <= FORUM_IMAGE_COUNT &&
                   new Set(value.images.map((image) => image.key)).size ===
                     value.images.length
@@ -188,7 +238,7 @@ export function MixedEditor({
     content: editorDocument(body, images),
     editorProps: {
       attributes: {
-        id: "forum-body",
+        id: inputId,
         role: "textbox",
         "aria-label": "正文",
         "aria-multiline": "true",
@@ -208,10 +258,15 @@ export function MixedEditor({
         inlineSlice(slice, view.state.schema, assets),
       clipboardTextSerializer: (slice) =>
         slice.content.textBetween(0, slice.content.size, "\n", (node) =>
-          node.type.name === "hardBreak" ? "\n" : "",
+          node.type.name === "hardBreak"
+            ? "\n"
+            : node.type.name === "faceEmoji"
+              ? emojiToken(node.attrs.id)
+              : "",
         ),
       handlePaste: (_view, event, slice) => {
         if (busy || pending.current) return true;
+        if (textOnly) return false;
         const files = Array.from(event.clipboardData?.files ?? []);
         // Internal HTML represents an editable slice, even if the browser also provides a file.
         if (
@@ -224,6 +279,7 @@ export function MixedEditor({
       },
       handleDrop: (view, event, slice, moved) => {
         if (busy || pending.current) return true;
+        if (textOnly) return false;
         if (moved) return false;
         const files = Array.from(event.dataTransfer?.files ?? []);
         const point = view.posAtCoords({
@@ -285,8 +341,8 @@ export function MixedEditor({
     editor?.setEditable(!busy, false);
   }, [editor, busy]);
   useEffect(() => {
-    if (editor && !topic) editor.commands.focus("end");
-  }, [editor, topic]);
+    if (editor && autoFocus) editor.commands.focus("end");
+  }, [editor, autoFocus]);
 
   async function insert(content: (current: DraftImage[]) => Promise<Slice>) {
     if (!editor || editor.isDestroyed || busy || pending.current) return;
@@ -311,7 +367,7 @@ export function MixedEditor({
       );
       transaction.replaceSelection(slice).scrollIntoView();
       const result = readDocument(transaction.doc, assets);
-      if (result.body.length > FORUM_BODY_LENGTH)
+      if (bodyLength(result.body) > limit)
         throw new Error("正文超过单帖限制，请减少后再插入。");
       editor.view.dispatch(transaction);
       editor.view.dispatch(closeHistory(editor.state.tr));
@@ -397,7 +453,20 @@ export function MixedEditor({
   }
   useImperativeHandle(ref, () => ({
     insertFiles: (files) => {
-      void insertFiles(files);
+      if (!textOnly) void insertFiles(files);
+    },
+    insertEmoji: (emoji, options) => {
+      if (!busy && !pending.current) {
+        setLoadedEmojis((current) => [
+          ...current.filter((item) => item.id !== emoji.id),
+          emoji,
+        ]);
+        const chain = editor?.chain();
+        if (options?.focus !== false) chain?.focus();
+        chain
+          ?.insertContent({ type: "faceEmoji", attrs: { id: emoji.id } })
+          .run();
+      }
     },
     insertText: (text) => {
       if (!busy && !pending.current)
@@ -422,9 +491,23 @@ export function MixedEditor({
   }, [assets]);
 
   return (
-    <EditorContent
-      editor={editor}
-      className={`${styles.editor} ${topic ? styles.topic : ""} rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20`}
-    />
+    <EditorEmojis.Provider value={emojiMap}>
+      {emojiError ? (
+        <div role="status" className="text-sm">
+          {emojiError}
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            重试加载表情
+          </Button>
+        </div>
+      ) : null}
+      <EditorContent
+        editor={editor}
+        className={`${styles.editor} ${topic ? styles.topic : ""} rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20`}
+      />
+    </EditorEmojis.Provider>
   );
 }

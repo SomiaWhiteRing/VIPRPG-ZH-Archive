@@ -1,21 +1,27 @@
-import { EmojiGrid } from "@/app/components/comments/emoji-grid";
+import { BodyEditor, type BodyEditorHandle } from "./body-editor";
+import { EmojiPicker } from "@/app/components/emojis/picker";
+import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
+import type { DraftImage } from "@/app/discussions/images";
 
 import type { CommentTarget } from "@/app/.server/db/work-community";
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
 import type {
   CommentBodySegment,
   CommentDto,
   CommentReplyPage,
-  CustomEmojiDto,
+  FaceEmoji,
 } from "@/lib/dto/db/work-community";
-import { Heart, MessageCircle, Send, Smile, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+
+const NO_IMAGES: DraftImage[] = [];
 
 type Props = {
   target: CommentTarget;
@@ -23,7 +29,6 @@ type Props = {
   currentUserId: number | null;
   initialComments: CommentDto[];
   initialNextCursor: string | null;
-  emojis: CustomEmojiDto[];
 };
 
 export function CommentPanel(props: Props) {
@@ -41,7 +46,6 @@ function CommentPanelContent({
   currentUserId,
   initialComments,
   initialNextCursor,
-  emojis,
 }: Props) {
   const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
@@ -49,18 +53,19 @@ function CommentPanelContent({
   const [body, setBody] = useState("");
   const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [newReplies, setNewReplies] = useState<Record<number, CommentDto>>({});
   const [commentUpdates, setCommentUpdates] = useState<
     Record<number, Partial<CommentDto>>
   >({});
   const pendingLikes = useRef(new Set<number>());
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<BodyEditorHandle>(null);
 
   async function submitComment() {
     if (!currentUserId || !body.trim() || busy) return;
     setBusy(true);
-    setMessage(null);
+    setSubmitError(null);
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -77,7 +82,7 @@ function CommentPanelContent({
         detail?: string;
       };
       if (!response.ok || !result.ok || !result.comment) {
-        setMessage(result.detail ?? "评论发送失败。");
+        setSubmitError(result.detail ?? "评论发送失败。");
         return;
       }
       setBody("");
@@ -96,9 +101,9 @@ function CommentPanelContent({
         setComments((current) => [...current, result.comment!]);
       }
       setReplyTarget(null);
-      setMessage("评论已发布。");
+      toast.success("评论已发布。");
     } catch {
-      setMessage("网络请求失败。");
+      setSubmitError("网络请求失败，评论内容已保留，请重试。");
     } finally {
       setBusy(false);
     }
@@ -110,7 +115,8 @@ function CommentPanelContent({
       busy ||
       comment.status !== "published" ||
       pendingLikes.current.has(comment.id)
-    ) return;
+    )
+      return;
     pendingLikes.current.add(comment.id);
     const nextLiked = !comment.likedByMe;
     setCommentUpdates((current) => ({
@@ -136,7 +142,7 @@ function CommentPanelContent({
           likeCount: comment.likeCount,
         },
       }));
-      setMessage("点赞操作失败。");
+      toast.error("点赞操作失败。");
     } finally {
       pendingLikes.current.delete(comment.id);
     }
@@ -173,9 +179,10 @@ function CommentPanelContent({
       if (
         replyTarget?.id === comment.id ||
         replyTarget?.rootCommentId === comment.id
-      ) setReplyTarget(null);
+      )
+        setReplyTarget(null);
     } catch {
-      setMessage("评论删除失败。");
+      toast.error("评论删除失败。");
     }
   }
 
@@ -196,7 +203,7 @@ function CommentPanelContent({
       setComments((current) => [...current, ...(result.items ?? [])]);
       setNextCursor(result.nextCursor ?? null);
     } catch {
-      setMessage("评论加载失败。");
+      toast.error("评论加载失败。");
     } finally {
       setBusy(false);
     }
@@ -207,22 +214,8 @@ function CommentPanelContent({
     textareaRef.current?.focus();
   }
 
-  function insertEmoji(shortcode: string) {
-    const textarea = textareaRef.current;
-    const token = `:${shortcode}:`;
-    if (!textarea) {
-      setBody((current) => current + token);
-      return;
-    }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    setBody(
-      (current) => `${current.slice(0, start)}${token}${current.slice(end)}`,
-    );
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + token.length, start + token.length);
-    });
+  function insertEmoji(emoji: FaceEmoji, options: { focus: boolean }) {
+    textareaRef.current?.insertEmoji(emoji, options);
   }
 
   return (
@@ -250,26 +243,41 @@ function CommentPanelContent({
           >
             发表评论
           </Label>
-          <Textarea
-            id="comment-input"
+          <BodyEditor
+            textOnly
             maxLength={2000}
-            onChange={(event) => setBody(event.target.value)}
+            inputId="comment-input"
+            body={body}
+            images={NO_IMAGES}
+            busy={busy}
+            topic={false}
             placeholder={placeholder}
             ref={textareaRef}
-            rows={4}
-            value={body}
+            onChange={setBody}
+            onBusyChange={setBusy}
+            onError={setSubmitError}
+            onCompositionChange={() => {}}
           />
-          <div className="flex items-center justify-between gap-3">
-            <EmojiPicker emojis={emojis} onSelect={insertEmoji} />
-            <Button
-              disabled={busy || !body.trim()}
-              onClick={() => void submitComment()}
-              type="button"
-            >
-              <Send aria-hidden />
-              发布评论
-            </Button>
-          </div>
+          <EmojiPicker
+            disabled={busy}
+            onSelect={insertEmoji}
+            onClose={() => textareaRef.current?.focus()}
+          >
+            {(trigger) => (
+              <div className="flex items-center justify-between gap-3">
+                {trigger}
+                <Button
+                  disabled={busy || !body.trim()}
+                  onClick={() => void submitComment()}
+                  type="button"
+                >
+                  <Send aria-hidden />
+                  发布评论
+                </Button>
+              </div>
+            )}
+          </EmojiPicker>
+          {submitError ? <Notice>{submitError}</Notice> : null}
         </div>
       ) : (
         <p className="text-sm text-muted">登录后可以评论、回复和点赞。</p>
@@ -304,11 +312,6 @@ function CommentPanelContent({
             加载更多评论
           </Button>
         </div>
-      ) : null}
-      {message ? (
-        <p className="text-sm text-muted" role="status">
-          {message}
-        </p>
       ) : null}
     </div>
   );
@@ -513,10 +516,12 @@ function CommentCard({
                 {error}
                 <Button
                   disabled={loading}
-                  onClick={() => void loadReplies(
-                    lastRequest.current.page,
-                    lastRequest.current.commentId,
-                  )}
+                  onClick={() =>
+                    void loadReplies(
+                      lastRequest.current.page,
+                      lastRequest.current.commentId,
+                    )
+                  }
                   size="sm"
                   type="button"
                   variant="ghost"
@@ -576,15 +581,7 @@ function CommentBody({ body }: { body: CommentBodySegment[] }) {
     segment.type === "text" ? (
       <span key={index}>{segment.text}</span>
     ) : (
-      <img
-        alt={segment.alt}
-        className="mx-0.5 inline-block h-6 w-6 align-text-bottom"
-        height={24}
-        key={`${segment.shortcode}-${index}`}
-        src={segment.imageUrl}
-        width={24}
-        loading="lazy"
-      />
+      <FaceEmojiView emoji={segment.emoji} key={index} />
     ),
   );
 }
@@ -645,42 +642,6 @@ function CommentControls({
           <Trash2 aria-hidden />
           删除
         </Button>
-      ) : null}
-    </div>
-  );
-}
-
-function EmojiPicker({
-  emojis,
-  onSelect,
-}: {
-  emojis: CustomEmojiDto[];
-  onSelect: (shortcode: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <Button
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <Smile aria-hidden />
-        表情
-      </Button>
-      {open ? (
-        <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-[min(20rem,calc(100vw-3rem))] overflow-hidden rounded-md border border-border bg-card p-2 shadow-lg">
-          <EmojiGrid
-            compact
-            emojis={emojis}
-            onSelect={(shortcode) => {
-              onSelect(shortcode);
-              setOpen(false);
-            }}
-          />
-        </div>
       ) : null}
     </div>
   );

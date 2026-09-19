@@ -1,12 +1,9 @@
-import { EmojiGrid } from "@/app/components/comments/emoji-grid";
-import { ChevronDown, ImagePlus, Smile } from "lucide-react";
+import { EmojiPicker } from "@/app/components/emojis/picker";
+import { bodyLength } from "@/lib/face-emojis";
+import { ChevronDown, ImagePlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
-import {
-  draftSnapshot,
-  draftValue,
-  forumReplyLauncherClass,
-} from "./draft";
+import { draftSnapshot, draftValue, forumReplyLauncherClass } from "./draft";
 
 import { Button } from "@/app/components/ui/button";
 
@@ -15,7 +12,7 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 
-import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import {
   FORUM_BODY_LENGTH,
   FORUM_COMMENT_LENGTH,
@@ -23,9 +20,11 @@ import {
   FORUM_TITLE_LENGTH,
 } from "@/lib/forum";
 import { ForumImages, existingDraftImages } from "./images";
-import type { MixedEditorHandle } from "./mixed-editor";
-import { MixedEditor } from "./mixed-editor";
-import { ForumModal, ForumTagEditor, forumRequest } from "./shared";
+import {
+  BodyEditor,
+  type BodyEditorHandle,
+} from "@/app/components/comments/body-editor";
+import { ForumModal, ForumTagEditor } from "./shared";
 
 export function ForumEditor({
   draft,
@@ -54,29 +53,12 @@ export function ForumEditor({
   progress: string;
   loginExpired: boolean;
   conflict: boolean;
-  emojis: CustomEmojiDto[];
+  emojis: FaceEmoji[];
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [catalogue, setCatalogue] = useState<CustomEmojiDto[] | null>(null);
-  async function openEmojis() {
-    try {
-      if (!catalogue)
-        setCatalogue(
-          (
-            await forumRequest<{ emojis: CustomEmojiDto[] }>(
-              "/api/discussions?op=emojis",
-            )
-          ).emojis,
-        );
-      setEmojiOpen(true);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "表情加载失败。");
-    }
-  }
   const picker = useRef<HTMLInputElement>(null);
-  const mixed = useRef<MixedEditorHandle>(null);
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const mixed = useRef<BodyEditorHandle>(null);
   const section = useRef<HTMLElement>(null);
   const composing = useRef(false);
   const topic = draft.mode === "topic";
@@ -122,23 +104,6 @@ export function ForumEditor({
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [topic, inline, isCollapsed, busy, emojiOpen]);
-
-  useEffect(() => {
-    if (inline && !isCollapsed) ref.current?.focus();
-  }, [inline, isCollapsed]);
-
-  useEffect(() => {
-    const input = ref.current;
-    if (!input || topic || isCollapsed) return;
-    function fit() {
-      if (!input) return;
-      input.style.height = "auto";
-      input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
-    }
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [draft.body, topic, isCollapsed]);
 
   const form = (
     <section
@@ -261,49 +226,23 @@ export function ForumEditor({
             >
               正文
             </Label>
-            {!inline ? (
-              <MixedEditor
-                ref={mixed}
-                body={draft.body}
-                images={draft.images}
-                busy={busy}
-                topic={topic}
-                onBusyChange={onBusyChange}
-                onError={onError}
-                onCompositionChange={(value) => {
-                  composing.current = value;
-                }}
-                onChange={(body, images) =>
-                  onChange({ ...draft, body, images })
-                }
-              />
-            ) : (
-              <Textarea
-                ref={ref}
-                id="forum-body"
-                rows={2}
-                placeholder={
-                  draft.replyToId
-                    ? `回复 ${draft.replyName}……`
-                    : `回复 #${draft.postNumber}……`
-                }
-                className="min-h-16 max-h-[min(32dvh,calc(var(--reply-viewport,100dvh)-12rem))] shrink-0 resize-none text-base leading-relaxed"
-                aria-describedby={error ? "forum-editor-error" : undefined}
-                maxLength={limit}
-                value={draft.body}
-                required
-                disabled={busy}
-                onCompositionStart={() => {
-                  composing.current = true;
-                }}
-                onCompositionEnd={() => {
-                  composing.current = false;
-                }}
-                onChange={(event) =>
-                  onChange({ ...draft, body: event.target.value })
-                }
-              />
-            )}
+            <BodyEditor
+              ref={mixed}
+              body={draft.body}
+              images={draft.images}
+              busy={busy}
+              topic={topic}
+              textOnly={inline}
+              maxLength={limit}
+              autoFocus={!topic}
+              emojis={emojis}
+              onBusyChange={onBusyChange}
+              onError={onError}
+              onCompositionChange={(value) => {
+                composing.current = value;
+              }}
+              onChange={(body, images) => onChange({ ...draft, body, images })}
+            />
           </div>
           {progress ? (
             <p role="status" className="text-sm text-muted">
@@ -340,122 +279,94 @@ export function ForumEditor({
             </div>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="站点表情"
-            title="站点表情"
-            disabled={busy}
-            onClick={() => void openEmojis()}
-          >
-            <Smile />
-          </Button>
-          {!inline ? (
-            <>
-              <Input
-                ref={picker}
-                type="file"
-                multiple
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                aria-label="选择图片"
-                disabled={busy}
-                onChange={(event) => {
-                  mixed.current?.insertFiles(
-                    Array.from(event.target.files ?? []),
-                  );
-                  event.target.value = "";
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="添加图片"
-                title="添加图片"
-                disabled={busy}
-                onClick={() => picker.current?.click()}
-              >
-                <ImagePlus />
-              </Button>
-            </>
-          ) : null}
-          <span className="font-mono text-xs text-muted">
-            <span className="sr-only">正文字数：</span>
-            {draft.body.length}
-            <span className="hidden sm:inline"> / {limit}</span>
-          </span>
-          <div className="ml-auto flex items-center gap-1">
-            {!topic && !inline ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="收起回复"
-                title="收起回复"
-                disabled={busy || !!error || !!draft.currentVersion}
-                onClick={() => {
-                  setCollapsed(true);
-                  requestAnimationFrame(() =>
-                    section.current
-                      ?.querySelector<HTMLButtonElement>("button")
-                      ?.focus({ preventScroll: true }),
-                  );
-                }}
-              >
-                <ChevronDown />
-              </Button>
-            ) : null}
-            {!topic ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={busy}
-                onClick={onCancel}
-              >
-                取消
-              </Button>
-            ) : null}
-            <Button
-              disabled={busy || conflict || !!draft.currentVersion}
-              type="submit"
-            >
-              {busy ? "正在保存…" : label}
-            </Button>
-          </div>
-        </div>
+        <EmojiPicker
+          disabled={busy}
+          onOpenChange={setEmojiOpen}
+          onSelect={(emoji, options) =>
+            mixed.current?.insertEmoji(emoji, options)
+          }
+          onClose={() => mixed.current?.focus()}
+        >
+          {(trigger) => (
+            <div className="flex shrink-0 flex-wrap items-center gap-1">
+              {trigger}
+              {!inline ? (
+                <>
+                  <Input
+                    ref={picker}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    aria-label="选择图片"
+                    disabled={busy}
+                    onChange={(event) => {
+                      mixed.current?.insertFiles(
+                        Array.from(event.target.files ?? []),
+                      );
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="添加图片"
+                    title="添加图片"
+                    disabled={busy}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <ImagePlus />
+                  </Button>
+                </>
+              ) : null}
+              <span className="font-mono text-xs text-muted">
+                <span className="sr-only">正文字数：</span>
+                {bodyLength(draft.body)}
+                <span className="hidden sm:inline"> / {limit}</span>
+              </span>
+              <div className="ml-auto flex items-center gap-1">
+                {!topic && !inline ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="收起回复"
+                    title="收起回复"
+                    disabled={busy || !!error || !!draft.currentVersion}
+                    onClick={() => {
+                      setCollapsed(true);
+                      requestAnimationFrame(() =>
+                        section.current
+                          ?.querySelector<HTMLButtonElement>("button")
+                          ?.focus({ preventScroll: true }),
+                      );
+                    }}
+                  >
+                    <ChevronDown />
+                  </Button>
+                ) : null}
+                {!topic ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={onCancel}
+                  >
+                    取消
+                  </Button>
+                ) : null}
+                <Button
+                  disabled={busy || conflict || !!draft.currentVersion}
+                  type="submit"
+                >
+                  {busy ? "正在保存…" : label}
+                </Button>
+              </div>
+            </div>
+          )}
+        </EmojiPicker>
       </form>
-      <ForumModal open={emojiOpen} onOpenChange={setEmojiOpen} title="站点表情">
-        <EmojiGrid
-          emojis={catalogue ?? emojis}
-          onSelect={(shortcode) => {
-            if (!inline) {
-              mixed.current?.insertText(`:${shortcode}:`);
-              setEmojiOpen(false);
-              return;
-            }
-            const start = ref.current?.selectionStart ?? draft.body.length;
-            const end = ref.current?.selectionEnd ?? start;
-            const body =
-              draft.body.slice(0, start) +
-              `:${shortcode}:` +
-              draft.body.slice(end);
-            if (body.length > limit) return;
-            onChange({
-              ...draft,
-              body,
-            });
-            setEmojiOpen(false);
-            requestAnimationFrame(() => {
-              ref.current?.focus();
-              const caret = start + shortcode.length + 2;
-              ref.current?.setSelectionRange(caret, caret);
-            });
-          }}
-        />
-      </ForumModal>
     </section>
   );
   if (topic)

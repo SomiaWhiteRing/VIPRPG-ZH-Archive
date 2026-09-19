@@ -1,6 +1,11 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { memoizeRequest } from "@/app/.server/runtime";
+import {
+  bodyEmojis,
+  contentEmojiStatements,
+  validateBodyEmojis,
+} from "@/app/.server/emojis/service";
+import { bodyLength, emojiText, FACE_EMOJI_PATTERN } from "@/lib/face-emojis";
 import {
   COMMENT_REPLY_PAGE_SIZE,
   COMMENT_REPLY_PREVIEW_SIZE,
@@ -12,7 +17,7 @@ import type {
   CommentDto,
   CommentPage,
   CommentReplyPage,
-  CustomEmojiDto,
+  FaceEmoji,
   UserCommentSummary,
 } from "@/lib/dto/db/work-community";
 import { HttpError } from "@/lib/http";
@@ -20,18 +25,6 @@ import { HttpError } from "@/lib/http";
 export type { CommentTarget } from "@/lib/comment-target";
 
 const MAX_COMMENT_LENGTH = 2000;
-const SHORTCODE_RE = /:([A-Za-z0-9_+-]{1,64}):/g;
-
-type EmojiRow = {
-  id: number;
-  shortcode: string;
-  name: string;
-  category: string;
-  image_blob_sha256: string;
-  visible_in_picker: number;
-  status: "active" | "retired";
-};
-
 type CommentRow = {
   id: number;
   work_id: number | null;
@@ -159,131 +152,6 @@ export async function getWorkCommunitySummary(
   };
 }
 
-export async function listPickerEmojis(
-  runtime: AppRuntime,
-): Promise<CustomEmojiDto[]> {
-  return (await listAllRenderEmojis(runtime))
-    .filter((row) => row.status === "active" && row.visible_in_picker === 1)
-    .map(mapEmoji);
-}
-
-export async function listAdminEmojis(
-  runtime: AppRuntime,
-): Promise<CustomEmojiDto[]> {
-  return (await listAllRenderEmojis(runtime)).map(mapEmoji);
-}
-
-export const listAllRenderEmojis = async (
-  runtime: AppRuntime,
-): Promise<EmojiRow[]> => {
-  return memoizeRequest(runtime, "render-emojis", async () => {
-    const rows = await getD1(runtime)
-      .prepare(
-        `SELECT id,shortcode,name,category,image_blob_sha256,visible_in_picker,status
-       FROM custom_emojis
-       WHERE status IN ('active','retired')
-       ORDER BY shortcode`,
-      )
-      .all<EmojiRow>();
-    return rows.results ?? [];
-  });
-};
-
-export async function createCustomEmoji(
-  runtime: AppRuntime,
-  input: {
-    shortcode: string;
-    name: string;
-    category?: string;
-    visibleInPicker?: boolean;
-    imageBlobSha256: string;
-  },
-): Promise<CustomEmojiDto> {
-  const shortcode = normalizeShortcode(input.shortcode);
-  const name = requiredText(input.name, "表情名称", 80);
-  const category = requiredText(input.category ?? "站点", "表情分类", 40);
-  const existingBlob = await getD1(runtime)
-    .prepare(`SELECT status FROM blobs WHERE sha256 = ? LIMIT 1`)
-    .bind(input.imageBlobSha256)
-    .first<{ status: string }>();
-  if (!existingBlob || existingBlob.status !== "active")
-    throw new HttpError(400, "表情图片不存在或不可用");
-  try {
-    await getD1(runtime)
-      .prepare(
-        `INSERT INTO custom_emojis(shortcode,name,category,visible_in_picker,image_blob_sha256)
-         VALUES(?,?,?,?,?)`,
-      )
-      .bind(
-        shortcode,
-        name,
-        category,
-        input.visibleInPicker === false ? 0 : 1,
-        input.imageBlobSha256,
-      )
-      .run();
-  } catch (error) {
-    if (String(error).toLowerCase().includes("unique"))
-      throw new HttpError(409, "shortcode 已存在");
-    throw error;
-  }
-  const emoji = await getD1(runtime)
-    .prepare(
-      `SELECT id,shortcode,name,category,image_blob_sha256,visible_in_picker,status FROM custom_emojis WHERE shortcode=? LIMIT 1`,
-    )
-    .bind(shortcode)
-    .first<EmojiRow>();
-  if (!emoji) throw new Error("表情创建后不可读取");
-  return mapEmoji(emoji);
-}
-
-export async function updateCustomEmoji(
-  runtime: AppRuntime,
-  id: number,
-  input: {
-    name?: string;
-    category?: string;
-    visibleInPicker?: boolean;
-    status?: "active" | "retired";
-  },
-): Promise<CustomEmojiDto> {
-  const current = await getD1(runtime)
-    .prepare(
-      `SELECT id,shortcode,name,category,visible_in_picker,image_blob_sha256,status FROM custom_emojis WHERE id=? LIMIT 1`,
-    )
-    .bind(id)
-    .first<EmojiRow & { id: number }>();
-  if (!current) throw new HttpError(404, "表情不存在");
-  await getD1(runtime)
-    .prepare(
-      `UPDATE custom_emojis SET name=?,category=?,visible_in_picker=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    )
-    .bind(
-      input.name === undefined
-        ? current.name
-        : requiredText(input.name, "表情名称", 80),
-      input.category === undefined
-        ? current.category
-        : requiredText(input.category, "表情分类", 40),
-      input.visibleInPicker === undefined
-        ? current.visible_in_picker
-        : input.visibleInPicker
-          ? 1
-          : 0,
-      input.status ?? current.status,
-      id,
-    )
-    .run();
-  const updated = await getD1(runtime)
-    .prepare(
-      `SELECT id,shortcode,name,category,image_blob_sha256,visible_in_picker,status FROM custom_emojis WHERE id=? LIMIT 1`,
-    )
-    .bind(id)
-    .first<EmojiRow>();
-  if (!updated) throw new Error("表情更新后不可读取");
-  return mapEmoji(updated);
-}
-
 export async function listRootComments(
   runtime: AppRuntime,
   target: CommentTarget,
@@ -354,7 +222,10 @@ export async function listRootComments(
         ),
       ),
     );
-    const emojis = await emojiMap(runtime);
+    const emojis = await emojiMap(
+      runtime,
+      previews.flatMap((result) => result.results as CommentRow[]),
+    );
     rootsWithReplies.forEach((comment, index) => {
       comment.replyPreview = (previews[index].results as CommentRow[]).map(
         (row) => mapComment(row, currentUserId, emojis),
@@ -431,7 +302,10 @@ export async function listReplies(
       ),
     );
   const results = await database.batch(statements);
-  const emojis = await emojiMap(runtime);
+  const emojis = await emojiMap(
+    runtime,
+    results.flatMap((result) => result.results as CommentRow[]),
+  );
   const items = (results[0].results as CommentRow[]).map((row) =>
     mapComment(row, currentUserId, emojis),
   );
@@ -522,7 +396,7 @@ export async function searchUserComments(
       id: row.id,
       target: commentTarget(row),
       targetTitle: row.target_title,
-      body: row.body,
+      body: emojiText(row.body),
       status: row.status,
       likeCount: row.like_count,
       updatedAt: row.updated_at,
@@ -577,23 +451,35 @@ export async function createComment(
     rootCommentId = replyTarget.root_comment_id ?? replyTarget.id;
     replyToId = replyTarget.root_comment_id === null ? null : replyTarget.id;
   }
-  const result = await getD1(runtime)
-    .prepare(
-      `INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status)
-       VALUES(?,?,?,?,?,?,?,'published')`,
-    )
-    .bind(
-      target.kind === "work" ? target.id : null,
-      target.kind === "creator" ? target.id : null,
-      target.kind === "character" ? target.id : null,
-      userId,
-      rootCommentId,
-      replyToId,
+  const db = getD1(runtime);
+  await validateBodyEmojis(db, body);
+  // The batch holds the write transaction; MAX(id) below is this user's just-inserted row.
+  const results = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status)
+      VALUES(?,?,?,?,?,?,?,'published') RETURNING id`,
+      )
+      .bind(
+        target.kind === "work" ? target.id : null,
+        target.kind === "creator" ? target.id : null,
+        target.kind === "character" ? target.id : null,
+        userId,
+        rootCommentId,
+        replyToId,
+        body,
+      ),
+    ...contentEmojiStatements(
+      db,
+      "comment",
+      "SELECT MAX(id) AS id FROM comments WHERE user_id=?",
+      [userId],
       body,
-    )
-    .run();
-  const id = Number(result.meta.last_row_id);
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("评论创建失败");
+      userId,
+      true,
+    ),
+  ]);
+  const id = Number((results[0].results[0] as { id: number }).id);
   return requiredComment(runtime, id, userId);
 }
 
@@ -604,14 +490,35 @@ export async function updateComment(
   bodyInput: unknown,
 ): Promise<CommentDto> {
   const body = normalizeCommentBody(bodyInput);
-  const result = await getD1(runtime)
+  const db = getD1(runtime);
+  const previous = await db
     .prepare(
-      `UPDATE comments SET body=?,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
-       WHERE id=? AND user_id=? AND status IN ('published','hidden')`,
+      "SELECT body FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')",
     )
-    .bind(body, id, userId)
-    .run();
-  if ((result.meta.changes ?? 0) !== 1)
+    .bind(id, userId)
+    .first<{ body: string }>();
+  if (!previous) throw new HttpError(404, "评论不存在或不可编辑");
+  await validateBodyEmojis(db, body, previous.body);
+  const source =
+    "SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')";
+  const results = await db.batch([
+    db
+      .prepare(
+        `UPDATE comments SET body=?,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
+      WHERE id=? AND user_id=? AND status IN('published','hidden')`,
+      )
+      .bind(body, id, userId),
+    ...contentEmojiStatements(
+      db,
+      "comment",
+      source,
+      [id, userId],
+      body,
+      userId,
+      false,
+    ),
+  ]);
+  if ((results[0].meta.changes ?? 0) !== 1)
     throw new HttpError(404, "评论不存在或不可编辑");
   return requiredComment(runtime, id, userId);
 }
@@ -621,13 +528,25 @@ export async function deleteComment(
   id: number,
   userId: number,
 ): Promise<void> {
-  const result = await getD1(runtime)
-    .prepare(
-      `UPDATE comments SET body=NULL,status='deleted',deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
-       WHERE id=? AND user_id=? AND status <> 'deleted'`,
-    )
-    .bind(id, userId)
-    .run();
+  const db = getD1(runtime);
+  const results = await db.batch([
+    db
+      .prepare(
+        `UPDATE comments SET body=NULL,status='deleted',deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+      WHERE id=? AND user_id=? AND status<>'deleted'`,
+      )
+      .bind(id, userId),
+    ...contentEmojiStatements(
+      db,
+      "comment",
+      "SELECT id FROM comments WHERE id=? AND user_id=? AND status='deleted'",
+      [id, userId],
+      "",
+      userId,
+      false,
+    ),
+  ]);
+  const result = results[0];
   if ((result.meta.changes ?? 0) !== 1)
     throw new HttpError(404, "评论不存在或不可删除");
 }
@@ -731,7 +650,7 @@ async function requiredComment(
     .bind(...(viewerId ? [viewerId, id] : [id]))
     .first<CommentRow>();
   if (!row) throw new HttpError(404, "评论不存在");
-  return mapComment(row, viewerId, await emojiMap(runtime));
+  return mapComment(row, viewerId, await emojiMap(runtime, [row]));
 }
 
 async function assertPublicCommentTarget(
@@ -821,27 +740,24 @@ function commentTarget(
   throw new Error("评论目标不合法");
 }
 
-async function emojiMap(runtime: AppRuntime): Promise<Map<string, EmojiRow>> {
-  const rows = await listAllRenderEmojis(runtime);
-  return new Map(rows.map((row) => [row.shortcode.toLowerCase(), row]));
-}
-
-function mapEmoji(row: EmojiRow): CustomEmojiDto {
-  return {
-    id: row.id,
-    shortcode: row.shortcode,
-    name: row.name,
-    category: row.category,
-    imageUrl: `/api/media/blobs/${row.image_blob_sha256}`,
-    visibleInPicker: row.visible_in_picker === 1,
-    status: row.status,
-  };
+async function emojiMap(
+  runtime: AppRuntime,
+  rows: CommentRow[],
+): Promise<Map<number, FaceEmoji>> {
+  return new Map(
+    (
+      await bodyEmojis(
+        getD1(runtime),
+        rows.map((row) => row.body),
+      )
+    ).map((emoji) => [emoji.id, emoji]),
+  );
 }
 
 function mapComment(
   row: CommentRow,
   viewerId: number | null,
-  emojis: Map<string, EmojiRow>,
+  emojis: Map<number, FaceEmoji>,
 ): CommentDto {
   const deleted = row.status === "deleted";
   return {
@@ -882,25 +798,15 @@ function mapComment(
 
 function tokenizeBody(
   value: string,
-  emojis: Map<string, EmojiRow>,
+  emojis: Map<number, FaceEmoji>,
 ): CommentBodySegment[] {
   const result: CommentBodySegment[] = [];
   let cursor = 0;
-  SHORTCODE_RE.lastIndex = 0;
-  for (const match of value.matchAll(SHORTCODE_RE)) {
+  for (const match of value.matchAll(FACE_EMOJI_PATTERN)) {
     const index = match.index ?? 0;
     if (index > cursor)
       result.push({ type: "text", text: value.slice(cursor, index) });
-    const shortcode = match[1];
-    const emoji = emojis.get(shortcode.toLowerCase());
-    if (!emoji) result.push({ type: "text", text: match[0] });
-    else
-      result.push({
-        type: "emoji",
-        shortcode: emoji.shortcode,
-        imageUrl: `/api/media/blobs/${emoji.image_blob_sha256}`,
-        alt: `:${emoji.shortcode}:`,
-      });
+    result.push({ type: "emoji", emoji: emojis.get(Number(match[1])) ?? null });
     cursor = index + match[0].length;
   }
   if (cursor < value.length)
@@ -912,23 +818,9 @@ function normalizeCommentBody(value: unknown): string {
   if (typeof value !== "string") throw new HttpError(400, "评论正文必须是文本");
   const body = value.replace(/\r\n?/g, "\n").trim();
   if (!body) throw new HttpError(400, "评论正文不能为空");
-  if ([...body].length > MAX_COMMENT_LENGTH)
+  if (bodyLength(body) > MAX_COMMENT_LENGTH)
     throw new HttpError(400, "评论正文过长");
   return body;
-}
-
-function normalizeShortcode(value: string): string {
-  const shortcode = value.trim().toLowerCase();
-  if (!/^[a-z0-9_+-]{1,64}$/.test(shortcode))
-    throw new HttpError(400, "shortcode 格式不合法");
-  return shortcode;
-}
-
-function requiredText(value: string, label: string, maxLength: number): string {
-  const text = value.trim();
-  if (!text || [...text].length > maxLength)
-    throw new HttpError(400, `${label}不合法`);
-  return text;
 }
 
 async function pageFromRows(
@@ -940,7 +832,7 @@ async function pageFromRows(
 ): Promise<CommentPage> {
   const hasMore = rows.length > size;
   const items = rows.slice(0, size);
-  const emojis = await emojiMap(runtime);
+  const emojis = await emojiMap(runtime, items);
   return {
     items: items.map((row) => mapComment(row, viewerId, emojis)),
     nextCursor:

@@ -1,3 +1,5 @@
+import { contentEmojiStatements } from "@/app/.server/emojis/service";
+import { emojiText } from "@/lib/face-emojis";
 import { forumSearchTokens } from "@/lib/forum-search-index";
 import type { ForumRuntime } from "./runtime";
 
@@ -76,7 +78,22 @@ export function contentIndexStatements(
           `INSERT INTO forum_search_index(rowid,title,body,scope)
       SELECT d.id,?,?,${searchScopeSql} FROM forum_search_documents d WHERE d.id IN(${documents})`,
         )
-        .bind(forumSearchTokens(title), forumSearchTokens(body), ...args),
+        .bind(
+          forumSearchTokens(title),
+          forumSearchTokens(emojiText(body)),
+          ...args,
+        ),
     );
-  return statements;
+  return [
+    ...statements,
+    ...contentEmojiStatements(
+      ctx.db,
+      kind === "post" ? "post" : "forumComment",
+      source,
+      args,
+      operation === "delete" ? "" : body,
+      userId,
+      operation === "insert",
+    ),
+  ];
 }

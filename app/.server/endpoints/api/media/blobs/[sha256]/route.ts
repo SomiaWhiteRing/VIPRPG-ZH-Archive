@@ -46,12 +46,6 @@ export async function GET(
             )
             OR EXISTS (
               SELECT 1
-              FROM custom_emojis ce
-              WHERE ce.image_blob_sha256 = b.sha256
-                AND ce.status IN ('active', 'retired')
-            )
-            OR EXISTS (
-              SELECT 1
               FROM users u
               WHERE u.avatar_blob_sha256 = b.sha256
                 AND u.status = 'active'

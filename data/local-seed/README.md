@@ -36,3 +36,5 @@ tables; it is not a production initialization procedure.
 
 See [local demo data](../../docs/local-demo-data.md) for accounts, recovery,
 isolated state directories, and migration instructions.
+
+The face emoji schema replaces the independent custom emoji catalogue with immutable face cells, account libraries, default selections and content references. Existing demonstration codes use approved face cells; the retired example is plain unavailable text. Default selections start empty and are configured in the admin workbench. The snapshot retains the single initialization migration and all unrelated business records.
