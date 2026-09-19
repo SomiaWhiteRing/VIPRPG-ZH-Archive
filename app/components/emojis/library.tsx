@@ -59,6 +59,7 @@ export function EmojiLibrary({
   const [active, setActive] = useState<FaceEmoji | null>(null);
   const [locateVersion, setLocateVersion] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [ready, setReady] = useState(false);
   const toast = useToast();
   const [loadError, setLoadError] = useState("");
@@ -138,17 +139,25 @@ export function EmojiLibrary({
     };
   }, [hasPreview]);
 
-  async function update(action: () => Promise<void>) {
-    if (mutation.current) return;
+  async function update(
+    action: () => Promise<void>,
+    { showBusy = true } = {},
+  ) {
+    if (mutation.current) {
+      toast.info("正在保存，请稍后再操作。");
+      return;
+    }
     mutation.current = true;
-    setBusy(true);
+    if (showBusy) setBusy(true);
+    else setSavingOrder(true);
     try {
       await action();
     } catch (error) {
       toast.error(failure(error));
     } finally {
       mutation.current = false;
-      setBusy(false);
+      if (showBusy) setBusy(false);
+      else setSavingOrder(false);
     }
   }
   function select(emoji: FaceEmoji) {
@@ -216,6 +225,11 @@ export function EmojiLibrary({
     from: EmojiDrag["from"],
     event: DragEvent<HTMLButtonElement>,
   ) {
+    if (mutation.current) {
+      event.preventDefault();
+      toast.info("正在保存，请稍后再操作。");
+      return;
+    }
     if (
       busy ||
       !ready ||
@@ -319,6 +333,7 @@ export function EmojiLibrary({
     else void remove(value.emoji);
   }
   async function reorder(value: EmojiDrag) {
+    if (mutation.current) return;
     const next = value.order;
     if (
       next.every(
@@ -333,22 +348,26 @@ export function EmojiLibrary({
       return;
     }
     const index = next.findIndex((emoji) => emoji.id === value.emoji.id);
-    await update(async () => {
-      try {
-        const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
-          "/api/emojis",
-          {
-            op: "reorder",
-            id: value.emoji.id,
-            beforeId: next[index + 1]?.id ?? null,
-          },
-        );
-        setMine(result.emojis);
-      } catch (error) {
-        setMine(previous);
-        throw error;
-      }
-    });
+    // The optimistic order is already visible; saving it must not dim the gallery.
+    await update(
+      async () => {
+        try {
+          const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+            "/api/emojis",
+            {
+              op: "reorder",
+              id: value.emoji.id,
+              beforeId: next[index + 1]?.id ?? null,
+            },
+          );
+          setMine(result.emojis);
+        } catch (error) {
+          setMine(previous);
+          throw error;
+        }
+      },
+      { showBusy: false },
+    );
   }
   function locate(emoji: FaceEmoji, preferred?: number) {
     setActive(emoji);
@@ -483,6 +502,7 @@ export function EmojiLibrary({
           className={cn(
             "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]",
             dropTarget === "library" &&
+              drag?.from === "source" &&
               "bg-primary/5 ring-2 ring-inset ring-primary",
           )}
         >
@@ -494,6 +514,9 @@ export function EmojiLibrary({
               <span className="ml-2 text-xs tabular-nums text-muted">
                 {mine.length}
               </span>
+              <span role="status" className="ml-2 text-xs text-muted">
+                {savingOrder ? "正在保存顺序…" : ""}
+              </span>
             </div>
             {!admin ? (
               <DropdownMenu.Root>
@@ -502,7 +525,7 @@ export function EmojiLibrary({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    disabled={busy || !ready}
+                    disabled={busy || savingOrder || !ready}
                     aria-label="表情库更多操作"
                   >
                     <MoreHorizontal />
@@ -589,7 +612,7 @@ export function EmojiLibrary({
                       aria-label={`定位${emoji.sources[0]?.name ?? "表情"}的来源脸图`}
                       aria-pressed={activeKey === key}
                       disabled={busy}
-                      draggable={!busy}
+                      draggable={!busy && !savingOrder}
                       onDragStart={(event) =>
                         startDrag(emoji, "library", event)
                       }
@@ -611,10 +634,10 @@ export function EmojiLibrary({
                         admin ? "从默认清单移除表情" : "从表情库移除表情"
                       }
                       title="移除表情"
-                      disabled={busy}
+                      disabled={busy || savingOrder}
                       onClick={() => void remove(emoji)}
                       className={cn(
-                        "absolute -right-0.5 -top-0.5 z-10 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:inline-flex [&_svg]:size-2.5",
+                        "absolute -right-0.5 -top-0.5 z-10 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:inline-flex [&_svg]:size-2.5",
                         drag && "invisible",
                       )}
                     >
@@ -642,6 +665,7 @@ export function EmojiLibrary({
                         variant={activeIndex >= 0 ? "outline" : "default"}
                         disabled={
                           busy ||
+                          savingOrder ||
                           !ready ||
                           (activeIndex < 0 && !preview.available)
                         }

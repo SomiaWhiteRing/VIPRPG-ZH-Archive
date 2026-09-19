@@ -13,7 +13,7 @@ import { cn } from "@/lib/ui/cn";
 import { Check, ChevronDown, ChevronRight, Folder } from "lucide-react";
 import { Popover } from "radix-ui";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 export function CategoryPicker({
   id,
@@ -35,6 +35,9 @@ export function CategoryPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const viewport = useRef<HTMLDivElement>(null);
+  const scrollTop = useRef(0);
+  const browsingContext = useRef<string | null>(null);
   const fieldLabel = mode === "parent" ? "上级分类" : "所属分类";
   const available = useMemo(() => {
     const excluded =
@@ -62,6 +65,10 @@ export function CategoryPicker({
     if (next && disabled) return;
     setOpen(next);
     if (!next) return;
+    const context = JSON.stringify([mode, categoryId, value]);
+    if (browsingContext.current === context) return;
+    browsingContext.current = context;
+    scrollTop.current = 0;
     setQuery("");
     const ancestors = new Set<string>();
     const byId = new Map(categories.map((category) => [category.id, category]));
@@ -76,6 +83,7 @@ export function CategoryPicker({
   function choose(next: string | null) {
     if (disabled || (mode === "membership" && next === null)) return;
     onValueChange(next);
+    browsingContext.current = JSON.stringify([mode, categoryId, next]);
     setOpen(false);
   }
 
@@ -162,6 +170,9 @@ export function CategoryPicker({
         <Popover.Content
           align="start"
           sideOffset={4}
+          onOpenAutoFocus={() => {
+            if (viewport.current) viewport.current.scrollTop = scrollTop.current;
+          }}
           aria-label={`选择${fieldLabel}`}
           className="z-50 flex max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-card text-foreground shadow-surface"
         >
@@ -181,7 +192,13 @@ export function CategoryPicker({
               当前选择：{selectedPath}
             </p>
           </div>
-          <div className="min-h-0 overflow-y-auto overscroll-contain p-2">
+          <div
+            ref={viewport}
+            onScroll={(event) => {
+              scrollTop.current = event.currentTarget.scrollTop;
+            }}
+            className="min-h-0 overflow-y-auto overscroll-contain p-2"
+          >
             {mode === "parent" ? (
               <Button
                 type="button"

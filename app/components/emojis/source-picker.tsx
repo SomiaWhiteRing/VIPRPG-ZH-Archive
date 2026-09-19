@@ -41,6 +41,7 @@ export function EmojiSourcePicker({
   const [branches, setBranches] = useState<Record<string, Branch>>({});
   const pending = useRef(new Set<string>());
   const tree = useRef<HTMLDivElement>(null);
+  const scrollTop = useRef(0);
   const [offset, setOffset] = useState(0);
   const [results, setResults] = useState<CharacterPage & { query: string }>({
     query: "",
@@ -280,6 +281,9 @@ export function EmojiSourcePicker({
         <Popover.Content
           align="start"
           sideOffset={4}
+          onOpenAutoFocus={() => {
+            if (tree.current) tree.current.scrollTop = scrollTop.current;
+          }}
           className="z-[75] w-96 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 text-foreground shadow-surface"
         >
           <div className="relative mb-2">
@@ -315,6 +319,9 @@ export function EmojiSourcePicker({
             role="tree"
             aria-label="角色分类"
             className="max-h-[min(24rem,50dvh)] overflow-y-auto"
+            onScroll={(event) => {
+              scrollTop.current = event.currentTarget.scrollTop;
+            }}
             onKeyDown={(event) => {
               const rows = Array.from(
                 tree.current?.querySelectorAll<HTMLButtonElement>(
