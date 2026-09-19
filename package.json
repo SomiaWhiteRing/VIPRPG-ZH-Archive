@@ -50,6 +50,7 @@
     "react-dom": "19.3.0",
     "react-easy-crop": "6.2.3",
     "react-router": "8.4.0",
+    "react-toastify": "11.1.0",
     "tailwind-merge": "3.6.0",
     "upng-js": "2.1.0",
     "yet-another-react-lightbox": "3.32.2"

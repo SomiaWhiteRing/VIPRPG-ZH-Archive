@@ -1,4 +1,6 @@
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
@@ -28,6 +30,7 @@ export function AvatarCropper({
   alignActions?: "start" | "end";
 }) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const dialogId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -48,11 +51,11 @@ export function AvatarCropper({
   function choose(file: File | undefined) {
     if (!file) return;
     if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type)) {
-      setMessage("请选择 JPEG、PNG 或 WebP 图片。");
+      toast.error("请选择 JPEG、PNG 或 WebP 图片。");
       return;
     }
     if (file.size > MAX_SOURCE_BYTES) {
-      setMessage("源图片不能超过 10 MiB。");
+      toast.error("源图片不能超过 10 MiB。");
       return;
     }
     if (source) URL.revokeObjectURL(source);
@@ -78,6 +81,7 @@ export function AvatarCropper({
       const result = (await response.json()) as { detail?: string };
       if (!response.ok) throw new Error(result.detail || "头像上传失败");
       setSource(null);
+      toast.success("头像已更新。");
       revalidator.revalidate();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "头像上传失败");
@@ -98,9 +102,10 @@ export function AvatarCropper({
       });
       const result = (await response.json()) as { detail?: string };
       if (!response.ok) throw new Error(result.detail || "头像删除失败");
+      toast.success("头像已删除。");
       revalidator.revalidate();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "头像删除失败");
+      toast.error(error instanceof Error ? error.message : "头像删除失败");
     } finally {
       setBusy(false);
     }
@@ -167,11 +172,6 @@ export function AvatarCropper({
             </Button>
           ) : null}
         </div>
-        {message ? (
-          <p className="m-0 max-w-sm text-sm text-red-700" role="status">
-            {message}
-          </p>
-        ) : null}
       </div>
       <Dialog.Root
         open={Boolean(source)}
@@ -231,11 +231,7 @@ export function AvatarCropper({
                 />
               </Slider.Root>
             </div>
-            {message ? (
-              <p className="m-0 text-sm text-red-700" role="status">
-                {message}
-              </p>
-            ) : null}
+            {message ? <Notice>{message}</Notice> : null}
             <div className="flex justify-end gap-2">
               <Rm2kButton
                 disabled={busy}

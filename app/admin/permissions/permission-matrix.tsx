@@ -1,5 +1,7 @@
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
@@ -50,7 +52,7 @@ export function PermissionMatrix({
     "new" | "profile" | "permissions" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
   const [conflict, setConflict] = useState<RoleSummary | null>(null);
   const [newRoleDirty, setNewRoleDirty] = useState(false);
   const role = roles.find((item) => item.id === selectedRoleId);
@@ -107,7 +109,6 @@ export function PermissionMatrix({
 
   async function request(url: string, init: RequestInit) {
     setError(null);
-    setMessage(null);
     const response = await fetch(url, init);
     const payload = (await response.json()) as {
       ok?: boolean;
@@ -159,7 +160,7 @@ export function PermissionMatrix({
       setSavedRoles((current) => [...current, created]);
       setSelectedRoleId(created.id);
       setQuery("");
-      setMessage(`已创建“${created.name}”，请选择需要授予的权限。`);
+      toast.success(`已创建“${created.name}”，请选择需要授予的权限。`);
       form.reset();
       setNewRoleDirty(false);
     } catch (cause) {
@@ -184,7 +185,7 @@ export function PermissionMatrix({
       setSelectedRoleId(created.id);
       setConflict(null);
       setQuery("");
-      setMessage("已创建维基人角色并保存模板权限，可在用户管理中分配。");
+      toast.success("已创建维基人角色并保存模板权限，可在用户管理中分配。");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "创建失败，请重试。");
     } finally {
@@ -217,7 +218,7 @@ export function PermissionMatrix({
           item.id === role.id ? { ...item, ...patch } : item,
         ),
       );
-      setMessage("角色资料已保存。");
+      toast.success("角色资料已保存。");
       setConflict(null);
     } catch (cause) {
       setError(
@@ -247,7 +248,7 @@ export function PermissionMatrix({
             : item,
         ),
       );
-      setMessage("该角色的权限已保存。");
+      toast.success("该角色的权限已保存。");
       setConflict(null);
     } catch (cause) {
       setError(
@@ -259,7 +260,6 @@ export function PermissionMatrix({
   }
 
   function updateRole(patch: Partial<RoleSummary>) {
-    setMessage(null);
     setRoles((current) =>
       current.map((item) =>
         item.id === selectedRoleId ? { ...item, ...patch } : item,
@@ -270,7 +270,6 @@ export function PermissionMatrix({
   function selectRole(id: number) {
     setSelectedRoleId(id);
     setError(null);
-    setMessage(null);
     setConflict(null);
   }
 
@@ -441,19 +440,7 @@ export function PermissionMatrix({
                 {!editable ? <Badge variant="outline">只读</Badge> : null}
               </div>
             </div>
-            {error || message ? (
-              <div aria-live="polite">
-                {error ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {error}
-                  </p>
-                ) : message ? (
-                  <p className="text-sm text-primary" role="status">
-                    {message}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+            {error ? <Notice>{error}</Notice> : null}
             {conflict?.id === role.id ? (
               <div className="border-y border-border py-3 text-sm">
                 <p>
@@ -486,7 +473,7 @@ export function PermissionMatrix({
                     );
                     setConflict(null);
                     setError(null);
-                    setMessage("已载入最新配置，可以重新编辑。");
+                    toast.info("已载入最新配置，可以重新编辑。");
                   }}
                   size="sm"
                   type="button"

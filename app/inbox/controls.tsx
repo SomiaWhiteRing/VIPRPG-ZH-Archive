@@ -2,8 +2,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxHref } from "@/lib/inbox";
-import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
-import { useEffect, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Link, useNavigate } from "react-router";
 
 export function InboxControls({
@@ -81,25 +80,5 @@ export function InboxControls({
         只看未读
       </Label>
     </div>
-  );
-}
-
-export function InboxFeedback() {
-  const [message, setMessage] = useState("");
-  useEffect(() => {
-    const receive = (event: Event) => {
-      const detail: unknown = (event as CustomEvent).detail;
-      if (typeof detail === "string") setMessage(detail);
-    };
-    window.addEventListener(INBOX_CHANGED_EVENT, receive);
-    return () => window.removeEventListener(INBOX_CHANGED_EVENT, receive);
-  }, []);
-  return (
-    <p
-      role="status"
-      className={message ? "py-2 text-sm text-muted" : "sr-only"}
-    >
-      {message}
-    </p>
   );
 }

@@ -85,7 +85,7 @@ export default function ProfilePage() {
                 maxLength={500}
                 name="bio"
                 rows={5}
-              />=
+              />
             </div>
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-start">

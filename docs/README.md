@@ -5,6 +5,7 @@
 ## 当前契约
 
 - [产品方向](./product-direction.md)：产品边界和信息架构
+- [操作反馈](./ui-feedback.md)：全局 toast、表单错误、加载与恢复状态的展示规则
 - [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
 - [提醒产品与界面契约](./inbox-design.md)：讨论互动、角色申请、已读状态与未读入口
 - [认证与权限基线](./authentication-authorization.md)：认证、角色、授权和审计边界

@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import { useToast } from "@/app/components/ui/toast";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import { useState, useTransition } from "react";
 import { useRevalidator } from "react-router";
@@ -16,14 +17,13 @@ export function InboxActions({
   all?: boolean;
 }) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [refreshing, startTransition] = useTransition();
-  const [error, setError] = useState("");
   const disabled = busy || refreshing;
   async function act(action: "read" | "approve" | "reject") {
     if (disabled) return;
     setBusy(true);
-    setError("");
     try {
       const data = new FormData();
       if (action !== "read") data.set("decision", action);
@@ -39,7 +39,7 @@ export function InboxActions({
       const detail = typeof result.detail === "string" ? result.detail : null;
       if (!response.ok) {
         if (response.status === 409) {
-          notifyInboxChanged(detail || "申请状态已变化，请查看最新结果。");
+          notifyInboxChanged();
           document
             .getElementById("inbox-controls")
             ?.focus({ preventScroll: true });
@@ -51,7 +51,8 @@ export function InboxActions({
             : detail || "操作失败，请重试。",
         );
       }
-      notifyInboxChanged(
+      notifyInboxChanged();
+      toast.success(
         action === "read"
           ? all
             ? "已将全部提醒标记为已读。"
@@ -63,7 +64,7 @@ export function InboxActions({
       document.getElementById("inbox-controls")?.focus({ preventScroll: true });
       startTransition(() => revalidator.revalidate());
     } catch (failure) {
-      setError(
+      toast.error(
         failure instanceof Error ? failure.message : "操作失败，请重试。",
       );
     } finally {
@@ -103,11 +104,6 @@ export function InboxActions({
           </Button>
         ) : null}
       </div>
-      {error ? (
-        <p role="alert" className="mt-2 max-w-sm text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }

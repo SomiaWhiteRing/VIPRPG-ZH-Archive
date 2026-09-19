@@ -13,7 +13,6 @@ import { useRef } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "../actions";
-import { InboxFeedback } from "../controls";
 import { useInboxAutoRead } from "../use-auto-read";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -58,7 +57,6 @@ export default function InboxTargetPage() {
         </Link>
       </div>
       <PageHeader compact title="提醒" />
-      <InboxFeedback />
       <div ref={contentRef} className="py-6">
         <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}

@@ -2,6 +2,7 @@ import { CharacterCreateButton } from "@/app/admin/characters/character-create-b
 import { CategoryPicker } from "@/app/admin/characters/index/category-picker";
 import { SortableCategoryMembers } from "@/app/admin/characters/index/sortable-category-members";
 import { Button, buttonVariants } from "@/app/components/ui/button";
+import { useToast } from "@/app/components/ui/toast";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
@@ -147,7 +148,7 @@ export function CharacterIndexEditor({
       ),
   );
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
   const [error, setError] = useState("");
   const [batchCharacters, setBatchCharacters] = useState<
     CharacterNameSelection[]
@@ -248,7 +249,6 @@ export function CharacterIndexEditor({
     setDraft(next);
     setBaseline(JSON.stringify(next));
     setError("");
-    setMessage("");
     setBatchCharacters([]);
     syncSelectionUrl(next);
     setOpen((previous) => {
@@ -278,13 +278,11 @@ export function CharacterIndexEditor({
   function changeCategory(patch: Partial<CategoryDraft>) {
     if (draft.kind === "category") {
       setDraft({ ...draft, ...patch });
-      setMessage("");
     }
   }
   function changeCharacter(patch: Partial<CharacterDraft>) {
     if (draft.kind === "character") {
       setDraft({ ...draft, ...patch });
-      setMessage("");
     }
   }
   async function submit(
@@ -297,7 +295,6 @@ export function CharacterIndexEditor({
     if (optimisticData) setData(optimisticData);
     setBusy(true);
     setError("");
-    setMessage("");
     try {
       const result = await requestJson<
         ApiResponsePayload & {
@@ -343,7 +340,7 @@ export function CharacterIndexEditor({
           : next;
       setDraft(retained);
       setBaseline(JSON.stringify(next));
-      setMessage(success);
+      toast.success(success);
       setBatchCharacters([]);
       syncSelectionUrl(next);
       setOpen((previous) => {
@@ -733,11 +730,6 @@ export function CharacterIndexEditor({
             {error ? (
               <p role="alert" className="text-sm text-destructive">
                 {error}
-              </p>
-            ) : null}
-            {message ? (
-              <p role="status" className="text-sm text-primary">
-                {message}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">

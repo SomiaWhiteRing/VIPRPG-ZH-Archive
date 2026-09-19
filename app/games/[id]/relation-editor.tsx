@@ -7,6 +7,8 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
@@ -95,6 +97,7 @@ export function RelationCreateDialog({
   canCreateTranslation,
 }: RelationCreateDialogProps) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -207,6 +210,7 @@ export function RelationCreateDialog({
         return;
       }
       setOpen(false);
+      toast.success("关联已建立。");
       revalidator.revalidate();
     } catch {
       setMessage({
@@ -339,12 +343,7 @@ export function RelationCreateDialog({
                 role="status"
               />
             ) : message ? (
-              <p
-                className="m-0 py-3 text-sm font-normal text-muted"
-                role="status"
-              >
-                {message.text}
-              </p>
+              <Notice>{message.text}</Notice>
             ) : null}
           </div>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -380,6 +379,7 @@ export function RelationManager({
   canManageTranslationsAny,
 }: RelationEditorProps) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const removalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -464,14 +464,16 @@ export function RelationManager({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setMessage(body.detail ?? failureMessage);
+        if (method === "DELETE") setMessage(body.detail ?? failureMessage);
+        else toast.error(body.detail ?? failureMessage);
         return false;
       }
-      setMessage(successMessage);
+      toast.success(successMessage);
       revalidator.revalidate();
       return true;
     } catch {
-      setMessage("网络请求失败，请检查连接后重试。");
+      if (method === "DELETE") setMessage("网络请求失败，请检查连接后重试。");
+      else toast.error("网络请求失败，请检查连接后重试。");
       return false;
     } finally {
       setBusy(false);
@@ -484,12 +486,6 @@ export function RelationManager({
 
   return (
     <div className="grid gap-7">
-      {message ? (
-        <p className="m-0 text-sm text-muted" role="status">
-          {message}
-        </p>
-      ) : null}
-
       {allTranslations.length ? (
         <section aria-labelledby="translation-relations-heading">
           <RelationSectionHeader
@@ -602,11 +598,7 @@ export function RelationManager({
           <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
             对向关系也会同时删除。
           </AlertDialogDescription>
-          {message ? (
-            <p className="m-0 text-sm text-red-700" role="status">
-              {message}
-            </p>
-          ) : null}
+          {message ? <Notice>{message}</Notice> : null}
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button disabled={busy} type="button" variant="outline">

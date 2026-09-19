@@ -23,7 +23,7 @@ import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "./actions";
-import { InboxControls, InboxFeedback } from "./controls";
+import { InboxControls } from "./controls";
 import { useInboxAutoRead } from "./use-auto-read";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -105,7 +105,6 @@ export default function InboxPage() {
         pendingCount={result.pending}
         canResolve={canResolve}
       />
-      <InboxFeedback />
       {result.items.length ? (
         <ul
           aria-label="提醒列表"
