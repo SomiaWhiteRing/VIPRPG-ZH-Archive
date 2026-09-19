@@ -1,4 +1,7 @@
-import type { HeaderNavigationLink } from "@/app/components/header-navigation";
+import type {
+  HeaderNavigationEntry,
+  HeaderNavigationLink,
+} from "@/app/components/header-navigation";
 import { HeaderNavigation } from "@/app/components/header-navigation";
 import { InboxIndicator } from "@/app/components/inbox-indicator";
 import { Badge } from "@/app/components/ui/badge";
@@ -17,7 +20,7 @@ import {
 import { ChevronDown, Menu, Search, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 
 type Session = {
@@ -44,12 +47,14 @@ const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/upload", label: "上传" },
 ];
 
-const ADMIN_LINKS: Array<
-  HeaderNavigationLink & {
-    permission?: PermissionKey;
-    anyPermission?: PermissionKey[];
-    bootstrapOnly?: boolean;
-  }
+type AdminNavigationLink = HeaderNavigationLink & {
+  permission?: PermissionKey;
+  anyPermission?: PermissionKey[];
+  bootstrapOnly?: boolean;
+};
+
+const ADMIN_NAVIGATION: Array<
+  AdminNavigationLink | { label: string; links: AdminNavigationLink[] }
 > = [
   {
     href: "/admin",
@@ -57,67 +62,97 @@ const ADMIN_LINKS: Array<
     exact: true,
     permission: "system.dashboard.read",
   },
-  { href: "/admin/works", label: "作品", permission: "work.read_private" },
   {
-    href: "/admin/archive-versions",
-    label: "版本管理",
-    permission: "archive_version.read_private",
+    label: "作品资料",
+    links: [
+      { href: "/admin/works", label: "作品", permission: "work.read_private" },
+      {
+        href: "/admin/archive-versions",
+        label: "版本管理",
+        permission: "archive_version.read_private",
+      },
+      {
+        href: "/admin/creators",
+        label: "作者",
+        permission: "creator.read_private",
+      },
+      {
+        href: "/admin/characters",
+        label: "角色",
+        anyPermission: [...CHARACTER_ADMIN_PERMISSIONS],
+      },
+      { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
+      {
+        href: "/admin/archive-versions/trash",
+        label: "回收站",
+        permission: "archive_version.restore",
+      },
+    ],
   },
   {
-    href: "/admin/creators",
-    label: "作者",
-    permission: "creator.read_private",
+    label: "社区管理",
+    links: [
+      {
+        href: "/admin/discussions",
+        label: "讨论版",
+        anyPermission: ["forum.content.moderate_any", "forum.topic.feature_any"],
+      },
+      {
+        href: "/admin/discussion-tags",
+        label: "讨论 TAG",
+        permission: "forum.tag.manage",
+      },
+      {
+        href: "/admin/emojis",
+        label: "默认表情",
+        permission: "emoji.defaults.manage",
+      },
+    ],
   },
   {
-    href: "/admin/characters",
-    label: "角色",
-    anyPermission: [...CHARACTER_ADMIN_PERMISSIONS],
-  },
-  { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
-  {
-    href: "/admin/emojis",
-    label: "默认表情",
-    permission: "emoji.defaults.manage",
+    label: "用户权限",
+    links: [
+      { href: "/admin/users", label: "用户", permission: "user.read" },
+      { href: "/admin/permissions", label: "权限", bootstrapOnly: true },
+    ],
   },
   {
-    href: "/admin/discussions",
-    label: "讨论版",
-    anyPermission: ["forum.content.moderate_any", "forum.topic.feature_any"],
+    label: "系统维护",
+    links: [
+      { href: "/admin/resources", label: "资源", bootstrapOnly: true },
+      {
+        href: "/admin/maintenance",
+        label: "维护",
+        permission: "system.maintenance.run",
+      },
+      { href: "/admin/audit", label: "审计", permission: "audit.read" },
+    ],
   },
-  {
-    href: "/admin/discussion-tags",
-    label: "讨论 TAG",
-    permission: "forum.tag.manage",
-  },
-  { href: "/admin/users", label: "用户", permission: "user.read" },
-  { href: "/admin/permissions", label: "权限", bootstrapOnly: true },
-  { href: "/admin/resources", label: "资源", bootstrapOnly: true },
-  {
-    href: "/admin/maintenance",
-    label: "维护",
-    permission: "system.maintenance.run",
-  },
-  {
-    href: "/admin/archive-versions/trash",
-    label: "回收站",
-    permission: "archive_version.restore",
-  },
-  { href: "/admin/audit", label: "审计", permission: "audit.read" },
 ];
 
-function getAdminLinks(session: Session | null) {
-  return ADMIN_LINKS.filter(
-    (link) =>
-      session &&
-      (link.bootstrapOnly
-        ? session.isBootstrapAdmin
-        : link.anyPermission
-          ? link.anyPermission.some((key) =>
-              hasPermissionKey(session.permissionKeys, key),
-            )
-          : !link.permission ||
-            hasPermissionKey(session.permissionKeys, link.permission)),
-  );
+function getAdminNavigation(session: Session | null): HeaderNavigationEntry[] {
+  if (!session) return [];
+
+  const canAccess = (link: AdminNavigationLink) =>
+    link.bootstrapOnly
+      ? session.isBootstrapAdmin
+      : link.anyPermission
+        ? link.anyPermission.some((key) =>
+            hasPermissionKey(session.permissionKeys, key),
+          )
+        : !link.permission ||
+          hasPermissionKey(session.permissionKeys, link.permission);
+
+  return ADMIN_NAVIGATION.flatMap<HeaderNavigationEntry>((entry) => {
+    if (!("links" in entry)) return canAccess(entry) ? [entry] : [];
+    const links = entry.links.filter(canAccess);
+    return links.length ? [{ label: entry.label, links }] : [];
+  });
+}
+
+function getAdminLandingHref(entries: HeaderNavigationEntry[]) {
+  const first = entries[0];
+  return first && ("links" in first ? first.links[0]?.href : first.href);
 }
 
 export function SiteHeaderNav({ session, loginLink }: Props) {
@@ -126,20 +161,60 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const searchPlaceholder =
     searchScope === "discussions" ? "搜索讨论" : `搜索${searchLabel}`;
   const inAdmin = pathname.startsWith("/admin");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const visibleAdminLinks = getAdminLinks(session);
-  const visibleHeaderLinks = inAdmin ? visibleAdminLinks : PUBLIC_LINKS;
+  const [openPanel, setOpenPanel] = useState<"menu" | "search" | null>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuOpen = openPanel === "menu";
+  const mobileSearchOpen = openPanel === "search";
+  const visibleAdminEntries = getAdminNavigation(session);
+
+  useEffect(() => {
+    setOpenPanel(null);
+  }, [pathname, search]);
+
+  useEffect(() => {
+    if (!openPanel) return;
+
+    const breakpoint = window.matchMedia(
+      openPanel === "menu" ? "(min-width: 64rem)" : "(min-width: 48rem)",
+    );
+    const closeAtBreakpoint = () => {
+      if (breakpoint.matches) setOpenPanel(null);
+    };
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !headerRef.current?.contains(event.target)
+      ) {
+        setOpenPanel(null);
+      }
+    };
+    closeAtBreakpoint();
+    breakpoint.addEventListener("change", closeAtBreakpoint);
+    document.addEventListener("pointerdown", closeOutside);
+    return () => {
+      breakpoint.removeEventListener("change", closeAtBreakpoint);
+      document.removeEventListener("pointerdown", closeOutside);
+    };
+  }, [openPanel]);
 
   return (
     <header
       className="sticky top-0 z-40 border-b border-border bg-background/95 text-foreground shadow-sm backdrop-blur"
       id="site-header"
+      ref={headerRef}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented || !openPanel) return;
+        event.preventDefault();
+        (mobileMenuOpen ? menuButtonRef : searchButtonRef).current?.focus();
+        setOpenPanel(null);
+      }}
     >
       <div className="mx-auto flex min-h-14 w-[min(1280px,calc(100vw-2rem))] items-center gap-2 py-1.5 sm:gap-4">
         <Link
           className="inline-flex shrink-0 items-center gap-2 font-extrabold tracking-wide"
-          to={inAdmin ? (visibleAdminLinks[0]?.href ?? "/") : "/"}
+          to={inAdmin ? (getAdminLandingHref(visibleAdminEntries) ?? "/") : "/"}
         >
           <img
             alt=""
@@ -150,35 +225,51 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             width={32}
             loading="lazy"
           />
-          <span>{inAdmin ? "VIPRPG.org 控制台" : "VIPRPG.org"}</span>
+          <span className="sr-only min-[360px]:not-sr-only">
+            VIPRPG.org
+            {inAdmin ? <span className="hidden sm:inline"> 控制台</span> : null}
+          </span>
         </Link>
 
-        <HeaderNavigation
-          ariaLabel={inAdmin ? "管理导航" : "站点导航"}
-          links={visibleHeaderLinks}
-          mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
-          mobileOpen={mobileMenuOpen}
-          onMobileNavigate={() => setMobileMenuOpen(false)}
-          pathname={pathname}
-        />
-
-        {/* 移动端汉堡按钮 */}
+        {/* 折叠菜单按钮放在导航前，展开后可直接按 Tab 进入导航。 */}
         <Button
-          className="md:hidden"
+          className="lg:hidden"
           size="icon"
           variant="ghost"
           type="button"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="菜单"
+          onClick={() => setOpenPanel(mobileMenuOpen ? null : "menu")}
+          aria-label={mobileMenuOpen ? "关闭菜单" : "菜单"}
+          aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
           aria-expanded={mobileMenuOpen}
+          ref={menuButtonRef}
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </Button>
 
-        {/* 桌面端搜索框 */}
+        <HeaderNavigation
+          ariaLabel={inAdmin ? "管理导航" : "站点导航"}
+          entries={inAdmin ? visibleAdminEntries : PUBLIC_LINKS}
+          mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
+          mobileOpen={mobileMenuOpen}
+          onMobileNavigate={() => setOpenPanel(null)}
+          pathname={pathname}
+          mobileFooter={
+            !session ? (
+              <Link
+                className="block border-t border-border/50 px-3 py-2.5 text-sm font-semibold hover:bg-muted/15 sm:hidden"
+                to="/register"
+                onClick={() => setOpenPanel(null)}
+              >
+                注册账户
+              </Link>
+            ) : null
+          }
+        />
+
+        {/* 中等宽度起保留完整搜索框。 */}
         {!inAdmin ? (
           <form
-            className="hidden md:flex h-10 w-[clamp(170px,18vw,260px)] overflow-hidden rounded-full border border-border bg-card focus-within:border-primary"
+            className="hidden h-10 w-[clamp(170px,18vw,260px)] shrink-0 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary md:flex"
             action="/search"
             method="get"
             role="search"
@@ -205,7 +296,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           </form>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {/* 移动端搜索按钮 */}
           {!inAdmin ? (
             <Button
@@ -213,9 +304,11 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
               size="icon"
               variant="ghost"
               type="button"
-              onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+              onClick={() => setOpenPanel(mobileSearchOpen ? null : "search")}
               aria-label={searchPlaceholder}
+              aria-controls={mobileSearchOpen ? "mobile-search-panel" : undefined}
               aria-expanded={mobileSearchOpen}
+              ref={searchButtonRef}
             >
               <Search size={20} />
             </Button>
@@ -236,7 +329,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           ) : (
             <>
               <Link
-                className="inline-flex min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15"
+                className="hidden min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15 sm:inline-flex"
                 to="/register"
               >
                 注册
@@ -249,10 +342,13 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
       {/* 移动端搜索浮层 */}
       {!inAdmin && mobileSearchOpen ? (
-        <div className="fixed inset-x-0 top-14 z-50 border-b border-border bg-background shadow-lg md:hidden">
+        <div
+          className="absolute inset-x-0 top-full z-50 border-b border-border bg-background shadow-lg md:hidden"
+          id="mobile-search-panel"
+        >
           <div className="mx-auto flex w-[min(1280px,calc(100vw-2rem))] items-center gap-2 py-2">
             <form
-              className="flex h-10 flex-1 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary"
+              className="flex h-10 min-w-0 flex-1 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary"
               action="/search"
               method="get"
               role="search"
@@ -281,7 +377,10 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
               size="icon"
               variant="ghost"
               type="button"
-              onClick={() => setMobileSearchOpen(false)}
+              onClick={() => {
+                setOpenPanel(null);
+                searchButtonRef.current?.focus();
+              }}
               aria-label="关闭搜索"
             >
               <X size={20} />
@@ -300,7 +399,7 @@ function UserMenu({
   inAdmin: boolean;
   session: Session;
 }) {
-  const consoleHref = getAdminLinks(session)[0]?.href;
+  const consoleHref = getAdminLandingHref(getAdminNavigation(session));
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const itemClass =
     "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
