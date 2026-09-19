@@ -32,6 +32,11 @@ export async function GET(
           AND b.status = 'active'
           AND (
             EXISTS (
+              SELECT 1 FROM resources r
+              WHERE r.icon_blob_sha256 = b.sha256 AND r.visibility = 'published'
+            )
+            OR
+            EXISTS (
               SELECT 1
               FROM media_assets ma
               JOIN work_media_assets wma ON wma.media_asset_id = ma.id

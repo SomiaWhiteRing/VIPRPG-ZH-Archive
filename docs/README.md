@@ -6,6 +6,7 @@
 
 - [产品方向](./product-direction.md)：产品边界和信息架构
 - [操作反馈](./ui-feedback.md)：全局 toast、表单错误、加载与恢复状态的展示规则
+- [资源与软件托管](./resources.md)：根管理员资源管理、原始包发布、平台推荐、下载与本站 Windy 更新协议
 - [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
 - [提醒产品与界面契约](./inbox-design.md)：讨论互动、角色申请、已读状态与未读入口
 - [认证与权限基线](./authentication-authorization.md)：认证、角色、授权和审计边界
@@ -27,6 +28,8 @@
 
 ## 研究资料与人工笔记
 
+- [资源栏目与工具更新托管开发分析](./research/download-center-development-analysis.md)：设计取舍、包体测量与客户端接入的研究依据；现行功能见资源契约
+- [Kai 与 Windy 包体压缩分析](./research/tool-package-size-analysis.md)：原生库压缩与 RTP 内容去重的测量、实现取舍及已发布包体结果
 - [角色历史游戏分析](./research/character-history-game-analysis.md)：已完成的提取与比较，保留待核实的资料接入候选
 - [灵感笔记](../灵感笔记.md)：由人类开发者维护，AI 不编辑或迁移；内容不作为现行功能或排期承诺
 

@@ -3,16 +3,16 @@
   "capturedAt": "2026-09-16T03:31:22.093Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "f6a7ebe042cdd9e09abb2c661cd24ef97c0285ffcd17f26af564e310982e25cb",
-    "size": 11284480,
-    "gzipSha256": "90a9a348cba3babe49e391cdfc5fab0443eb4db343100f8ebd2e74a5096ea76a",
+    "sha256": "dc03f7f8bba6dcc3d994fd5fd4b8911bf77763817930c141b599ae07bf83e09f",
+    "size": 11362304,
+    "gzipSha256": "e23857607863230d54ad1d6b5148ecf366c392a97e23a79a6c5ff432f1e2a43d",
     "tables": {
       "_cf_METADATA": 1,
       "archive_version_blob_refs": 0,
       "archive_version_core_pack_refs": 5,
       "archive_versions": 5,
       "auth_audit_logs": 159,
-      "blobs": 17170,
+      "blobs": 17173,
       "catalog_items": 12,
       "catalogs": 4,
       "character_aliases": 982,
@@ -55,10 +55,14 @@
       "inbox_item_reads": 4,
       "inbox_items": 5,
       "media_assets": 4,
+      "resources": 3,
       "role_permissions": 162,
       "roles": 7,
       "sqlite_sequence": 35,
       "tags": 5,
+      "tool_artifacts": 0,
+      "tool_channels": 0,
+      "tool_releases": 0,
       "translation_relations": 4,
       "user_role_events": 1,
       "user_roles": 15,
@@ -77,7 +81,7 @@
       "works": 11
     }
   },
-  "referencedObjects": 17187,
+  "referencedObjects": 17190,
   "objects": [
     {
       "key": "blobs/sha256/00/12/0012d9d415fe6e0abdbc96e8a6b80573ed25c44a1ef21af9c3b2337be1687eeb",
@@ -74171,6 +74175,19 @@
       }
     },
     {
+      "key": "blobs/sha256/53/9e/539e5ae7f0dae89977fc052e58401d0c1df9b10fd38cef43593de40316a0a42e",
+      "file": "public/resources/easyrpg-player-kai.png",
+      "sha256": "539e5ae7f0dae89977fc052e58401d0c1df9b10fd38cef43593de40316a0a42e",
+      "size": 15799,
+      "httpMetadata": {
+        "contentType": "image/png"
+      },
+      "customMetadata": {
+        "sha256": "539e5ae7f0dae89977fc052e58401d0c1df9b10fd38cef43593de40316a0a42e",
+        "sizeBytes": "15799"
+      }
+    },
+    {
       "key": "blobs/sha256/53/9f/539fbf540681b5440b4bd6d352d61bed830795940d6a1c25653c15ea0b971907",
       "file": "data/character-materials/assets/539fbf540681b5440b4bd6d352d61bed830795940d6a1c25653c15ea0b971907.png",
       "sha256": "539fbf540681b5440b4bd6d352d61bed830795940d6a1c25653c15ea0b971907",
@@ -86099,6 +86116,19 @@
       "customMetadata": {
         "sha256": "621e47fedfdd5853445a6a6ce0f8e4c49ede44eb54a1269bf9a7a39ae090a3f7",
         "sizeBytes": "6130"
+      }
+    },
+    {
+      "key": "blobs/sha256/62/20/6220154091fbf560d7c5818c7bf0284ead28545c6d9a8c83eb65d8cafde3e403",
+      "file": "public/resources/viprpg-wiki.png",
+      "sha256": "6220154091fbf560d7c5818c7bf0284ead28545c6d9a8c83eb65d8cafde3e403",
+      "size": 2202,
+      "httpMetadata": {
+        "contentType": "image/png"
+      },
+      "customMetadata": {
+        "sha256": "6220154091fbf560d7c5818c7bf0284ead28545c6d9a8c83eb65d8cafde3e403",
+        "sizeBytes": "2202"
       }
     },
     {
@@ -130481,6 +130511,19 @@
       "customMetadata": {
         "sha256": "954f3a5f8f768adff3a051981f117d929c7a81a8a98a62eb792410e9993053ba",
         "sizeBytes": "7391"
+      }
+    },
+    {
+      "key": "blobs/sha256/95/51/9551f0fefc37ccdfbea23061573ead30cd1b8b0dcb939f57f21da53dfc288ed4",
+      "file": "public/resources/windy-translator.png",
+      "sha256": "9551f0fefc37ccdfbea23061573ead30cd1b8b0dcb939f57f21da53dfc288ed4",
+      "size": 2967,
+      "httpMetadata": {
+        "contentType": "image/png"
+      },
+      "customMetadata": {
+        "sha256": "9551f0fefc37ccdfbea23061573ead30cd1b8b0dcb939f57f21da53dfc288ed4",
+        "sizeBytes": "2967"
       }
     },
     {

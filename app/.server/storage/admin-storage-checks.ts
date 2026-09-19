@@ -418,7 +418,7 @@ async function scanR2Objects(
 
   for (const object of listedObjects.objects) {
     // Forum images have their own visibility and manual cleanup lifecycle.
-    if (object.key.startsWith("forum-images/")) continue;
+    if (object.key.startsWith("forum-images/") || object.key.startsWith("tools/artifacts/")) continue;
     const info = parseR2Key(object.key);
 
     if (info.type === "unknown") {
@@ -819,6 +819,7 @@ function eligibleGcSummaryStatement(
           AND NOT EXISTS (
             SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
           )
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )
@@ -881,6 +882,7 @@ async function listEligibleGcRows(
           AND NOT EXISTS (
             SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
           )
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )
@@ -1010,6 +1012,7 @@ async function markGcCandidatePurging(
           AND NOT EXISTS (
             SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = blobs.sha256
           )
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = blobs.sha256)
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = blobs.sha256
           )
@@ -1109,6 +1112,7 @@ function deletedOnlyGcSummaryStatement(
             AND NOT EXISTS (
               SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
             )
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
             AND NOT EXISTS (
               SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
             )
@@ -1172,6 +1176,7 @@ function gcCandidateRowsStatement(
           AND NOT EXISTS (
             SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
           )
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
           AND NOT EXISTS (
             SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
           )

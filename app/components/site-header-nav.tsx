@@ -40,6 +40,7 @@ const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/characters", label: "角色" },
   { href: "/discussions", label: "讨论版" },
   { href: "/catalogs", label: "目录" },
+  { href: "/resources", label: "资源" },
   { href: "/upload", label: "上传" },
 ];
 
@@ -90,6 +91,7 @@ const ADMIN_LINKS: Array<
   },
   { href: "/admin/users", label: "用户", permission: "user.read" },
   { href: "/admin/permissions", label: "权限", bootstrapOnly: true },
+  { href: "/admin/resources", label: "资源", bootstrapOnly: true },
   {
     href: "/admin/maintenance",
     label: "维护",

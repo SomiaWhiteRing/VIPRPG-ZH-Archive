@@ -4,6 +4,9 @@ import type { ButtonHTMLAttributes } from "react";
 import { forwardRef } from "react";
 import { cn } from "@/lib/ui/cn";
 
+export const rm2kSurfaceClassName =
+  "border-2 border-white bg-linear-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 text-white shadow-[3px_3px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)]";
+
 export const buttonVariants = cva(
   "inline-flex cursor-pointer disabled:cursor-not-allowed aria-disabled:cursor-not-allowed data-[disabled]:cursor-not-allowed shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
@@ -14,7 +17,7 @@ export const buttonVariants = cva(
         outline: "border border-border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary",
         ghost: "text-foreground hover:bg-muted/15",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        rm2k: "border-2 border-white bg-linear-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 text-white shadow-[3px_3px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)] hover:brightness-110 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)]",
+        rm2k: `${rm2kSurfaceClassName} hover:brightness-110 active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)]`,
       },
       size: {
         default: "min-h-10 px-3 py-2",

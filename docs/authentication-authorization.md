@@ -39,6 +39,7 @@
 ### 根边界与角色分配
 
 - 只有当前 bootstrap admin 可以创建或修改自定义角色及其 permission 集合；该能力不能通过普通 permission key 转授。
+- 资源资料、图标、软件包上传、发布、推荐、撤回和清理同样仅限当前 bootstrap admin，写入批次重新核对活跃根身份并记录审计；普通上传或管理权限不授予此能力，详见[资源契约](./resources.md)。
 - 拥有 `user.role.assign` 的操作者只能管理活跃且最高 priority 低于自己的用户，只能分配低于自己的角色。
 - 不能操作自己、移除基础 `user`，也不能通过网页授予或移动 bootstrap admin。
 - 根账户轮换只通过 `scripts/rotate-bootstrap-admin.mjs` 完成；命令必须原子移动角色、撤销新旧根账户 session 并写入审计。
