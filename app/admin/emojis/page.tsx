@@ -8,22 +8,22 @@ import { EmojiAdminPanel } from "./panel";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
 
-  await requirePagePermission(runtime, "/admin/emojis", "custom_emoji.manage");
+  await requirePagePermission(
+    runtime,
+    "/admin/emojis",
+    "emoji.defaults.manage",
+  );
 
   return {};
 }
 
 export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["站点表情", "控制台"] }, error);
+  pageMetaDescriptors({ title: ["默认表情", "控制台"] }, error);
 
 export default function AdminEmojiPage() {
   return (
     <main>
-      <PageHeader
-        compact
-        title="站点表情"
-        subtitle="上传表情并管理其公开状态。"
-      />
+      <PageHeader compact title="默认表情" />
       <EmojiAdminPanel />
     </main>
   );

@@ -1,3 +1,5 @@
+import { EmojiDialog } from "@/app/components/emojis/dialog";
+import { EmojiLibrary } from "@/app/components/emojis/library";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 
 import { Button } from "@/app/components/ui/button";
@@ -10,10 +12,15 @@ import Download from "yet-another-react-lightbox/plugins/download";
 export function CharacterMaterials({
   materials,
   name,
+  characterId,
+  canCollect = false,
 }: {
   materials: CharacterMaterial[];
   name: string;
+  characterId: number;
+  canCollect?: boolean;
 }) {
+  const [collect, setCollect] = useState<CharacterMaterial | null>(null);
   const [active, setActive] = useState(-1);
   const groups = new Map(
     CHARACTER_MATERIAL_CATEGORIES.map(
@@ -68,11 +75,54 @@ export function CharacterMaterials({
           </section>
         ))}
       </div>
+      <EmojiDialog
+        open={!!collect}
+        onOpenChange={(open) => {
+          if (!open) setCollect(null);
+        }}
+        title={`${name} · 收藏为表情`}
+      >
+        {collect ? (
+          <EmojiLibrary
+            key={collect.id}
+            initialCharacter={{ id: characterId, name, originalName: name }}
+            initialSheet={{
+              id: Number(collect.id.split(":").at(-1)),
+              blobSha256: collect.blobSha256,
+              width: collect.width,
+              height: collect.height,
+            }}
+          />
+        ) : null}
+      </EmojiDialog>
       {active >= 0 ? (
         <ImageLightbox
           open
           close={() => setActive(-1)}
           index={active}
+          on={{ view: ({ index }) => setActive(index) }}
+          toolbar={{
+            buttons: [
+              ...(canCollect && ordered[active]?.kind === "faceset"
+                ? [
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      key="collect-emoji"
+                      type="button"
+                      className="yarl__button font-normal"
+                      onClick={() => {
+                        setCollect(ordered[active]);
+                        setActive(-1);
+                      }}
+                    >
+                      收藏为表情
+                    </Button>,
+                  ]
+                : []),
+              "close",
+            ],
+          }}
           slides={ordered.map((material) => ({
             src: `/api/media/blobs/${material.blobSha256}`,
             width: material.width,

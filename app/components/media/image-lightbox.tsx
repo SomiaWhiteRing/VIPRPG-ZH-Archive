@@ -13,7 +13,17 @@ export function ImageLightbox({
   labels,
   pixelated = false,
   ...props
-}: Pick<Props, "open" | "close" | "index" | "slides" | "plugins" | "labels"> & {
+}: Pick<
+  Props,
+  | "open"
+  | "close"
+  | "index"
+  | "slides"
+  | "plugins"
+  | "labels"
+  | "toolbar"
+  | "on"
+> & {
   pixelated?: boolean;
 }) {
   return (

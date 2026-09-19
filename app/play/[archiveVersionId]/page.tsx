@@ -7,7 +7,6 @@ import {
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import {
   getWorkCommunitySummary,
-  listPickerEmojis,
   listRootComments,
 } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
@@ -71,7 +70,7 @@ export async function loader(args: LoaderFunctionArgs) {
     throwNotFound();
   }
 
-  const [community, comments, emojis] = await Promise.all([
+  const [community, comments] = await Promise.all([
     getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
     listRootComments(
       runtime,
@@ -79,7 +78,6 @@ export async function loader(args: LoaderFunctionArgs) {
       currentUser?.id ?? null,
       null,
     ),
-    listPickerEmojis(runtime),
   ]);
   const current =
     work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
@@ -115,26 +113,20 @@ export async function loader(args: LoaderFunctionArgs) {
     work,
     community,
     comments,
-    emojis,
     current,
     metadata,
   };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.metadata.title || "游戏", "在线游玩"] }, error);
+  pageMetaDescriptors(
+    { title: [loaderData?.metadata.title || "游戏", "在线游玩"] },
+    error,
+  );
 
 export default function WebPlayPage() {
-  const {
-    record,
-    currentUser,
-    work,
-    community,
-    comments,
-    emojis,
-    current,
-    metadata,
-  } = useLoaderData<typeof loader>();
+  const { record, currentUser, work, community, comments, current, metadata } =
+    useLoaderData<typeof loader>();
   return (
     <DetailPageShell
       key={`${metadata.playKey}:${currentUser?.id ?? "anonymous"}`}
@@ -159,7 +151,6 @@ export default function WebPlayPage() {
         comments={
           <CommentPanel
             currentUserId={currentUser?.id ?? null}
-            emojis={emojis}
             initialComments={comments.items}
             initialNextCursor={comments.nextCursor}
             target={{ kind: "work", id: work.id }}

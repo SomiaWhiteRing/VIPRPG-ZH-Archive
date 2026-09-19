@@ -1,3 +1,4 @@
+import { emojiText } from "@/lib/face-emojis";
 import type { ForumImage, ForumPage, ForumTopic } from "@/lib/forum";
 import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import {
@@ -263,7 +264,7 @@ export async function indexedForumSearch(
     .prepare(
       `SELECT d.post_id,d.comment_id,
     COALESCE(p.topic_id,parent.topic_id) AS topic_id,COALESCE(p.post_number,parent.post_number) AS post_number,
-    t.title,substr(COALESCE(p.body,c.body),1,180) AS snippet,COALESCE(p.created_at,c.created_at) AS created_at,
+    t.title,COALESCE(p.body,c.body) AS snippet,COALESCE(p.created_at,c.created_at) AS created_at,
     u.id AS user_id,u.display_name,u.status AS user_status,u.avatar_blob_sha256
     ${source} ORDER BY f.rowid DESC LIMIT ? OFFSET ?`,
     )
@@ -291,7 +292,7 @@ export async function indexedForumSearch(
       kind: r.post_id ? "post" : "comment",
       topicId: r.topic_id,
       title: r.title,
-      snippet: r.snippet,
+      snippet: emojiText(r.snippet).slice(0,180),
       createdAt: r.created_at,
       author: author(
         r.user_id,

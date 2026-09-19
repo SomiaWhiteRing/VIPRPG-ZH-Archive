@@ -14,7 +14,7 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type {
   ForumContent,
   ForumDetail,
@@ -76,7 +76,7 @@ const ForumEditor = lazy(() =>
 
 type Props = {
   viewer: ForumViewer;
-  emojis: CustomEmojiDto[];
+  emojis: FaceEmoji[];
   initialDetail?: ForumDetail;
   topics?: ForumPage<ForumTopic>;
   selected?: ForumTag[];
@@ -300,7 +300,7 @@ export function DiscussionWorkspace({
       }
       const result = await forumRequest<{
         detail: ForumDetail;
-        emojis: CustomEmojiDto[];
+        emojis: FaceEmoji[];
       }>(
         forumHref("/api/discussions", {
           op: "detail",
@@ -1045,7 +1045,7 @@ function ForumFloorView({
   viewer: ForumViewer;
   page: number;
   returnTo?: string;
-  emojis: CustomEmojiDto[];
+  emojis: FaceEmoji[];
   initialExpanded: boolean;
   menu: (content: ForumContent) => ForumMenuItem[];
   onReply: (parent: ForumContent, reply?: ForumContent) => void;

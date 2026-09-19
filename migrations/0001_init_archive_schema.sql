@@ -71,7 +71,7 @@ SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.u
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","custom_emoji.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run","forum.content.moderate_any","forum.topic.feature_any","forum.tag.manage","character.admin.read","character.create","character.merge_any","character.portrait.manage_any","character.portrait.upload","character_category.create","character_category.update","character_category.delete","character_membership.create","character_membership.update","character_membership.delete","character_index.reorder","character.sources.update_any"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","emoji.defaults.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run","forum.content.moderate_any","forum.topic.feature_any","forum.tag.manage","character.admin.read","character.create","character.merge_any","character.portrait.manage_any","character.portrait.upload","character_category.create","character_category.update","character_category.delete","character_membership.create","character_membership.update","character_membership.delete","character_index.reorder","character.sources.update_any"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -690,27 +690,6 @@ BEGIN
   SELECT RAISE(ABORT, 'user avatar blob must be active');
 END;
 
-CREATE TABLE IF NOT EXISTS custom_emojis (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  shortcode TEXT NOT NULL COLLATE NOCASE UNIQUE,
-  name TEXT NOT NULL,
-  category TEXT NOT NULL DEFAULT '站点',
-  visible_in_picker INTEGER NOT NULL DEFAULT 1 CHECK (visible_in_picker IN (0, 1)),
-  image_blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
-  status TEXT NOT NULL CHECK (status IN ('active', 'retired')) DEFAULT 'active',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CHECK (length(shortcode) BETWEEN 1 AND 64),
-  CHECK (shortcode NOT GLOB '*[^A-Za-z0-9_+-]*')
-);
-
-CREATE INDEX IF NOT EXISTS idx_custom_emojis_picker
-  ON custom_emojis(category, shortcode)
-  WHERE status = 'active' AND visible_in_picker = 1;
-
-CREATE INDEX IF NOT EXISTS idx_custom_emojis_blob
-  ON custom_emojis(image_blob_sha256, status);
-
 CREATE TABLE IF NOT EXISTS archive_version_blob_refs (
   archive_version_id INTEGER NOT NULL REFERENCES archive_versions(id) ON DELETE CASCADE,
   blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
@@ -1151,7 +1130,7 @@ BEFORE UPDATE OF status ON blobs
 WHEN NEW.status IN ('purging','purged') AND (
   EXISTS (SELECT 1 FROM archive_version_blob_refs WHERE blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM media_assets WHERE blob_sha256=OLD.sha256)
-  OR EXISTS (SELECT 1 FROM custom_emojis WHERE image_blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM face_emoji_refs WHERE blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM users WHERE avatar_blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM creators WHERE avatar_blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM resources WHERE icon_blob_sha256=OLD.sha256)
@@ -1568,3 +1547,82 @@ CREATE TRIGGER resources_publish_tool BEFORE UPDATE OF visibility ON resources
 WHEN NEW.kind='tool' AND NEW.visibility='published' AND OLD.visibility<>'published' AND NOT EXISTS(
  SELECT 1 FROM tool_channels WHERE resource_id=NEW.id AND artifact_id IS NOT NULL)
 BEGIN SELECT RAISE(ABORT,'publish a recommended package first'); END;
+
+
+-- A face emoji is an immutable cell, independent of character bindings.
+CREATE TABLE face_emoji_refs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
+  cell_row INTEGER NOT NULL CHECK(cell_row BETWEEN 0 AND 3),
+  cell_column INTEGER NOT NULL CHECK(cell_column BETWEEN 0 AND 3),
+  width_px INTEGER NOT NULL CHECK(width_px BETWEEN 48 AND 192 AND width_px % 48 = 0),
+  height_px INTEGER NOT NULL CHECK(height_px BETWEEN 48 AND 192 AND height_px % 48 = 0),
+  UNIQUE(blob_sha256,cell_row,cell_column),
+  CHECK(cell_row * 48 < height_px AND cell_column * 48 < width_px)
+);
+CREATE TRIGGER face_emoji_refs_immutable BEFORE UPDATE ON face_emoji_refs
+BEGIN SELECT RAISE(ABORT,'face emoji reference is immutable'); END;
+CREATE VIEW available_face_emojis AS
+SELECT e.* FROM face_emoji_refs e JOIN blobs b ON b.sha256=e.blob_sha256
+JOIN face_sheets fs ON fs.blob_sha256=e.blob_sha256
+WHERE b.status='active' AND fs.library_status='approved'
+  AND fs.width_px=e.width_px AND fs.height_px=e.height_px;
+CREATE TABLE user_emoji_library_state (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  initialized_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  initialization_token TEXT NOT NULL,
+  activity INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE user_face_emojis (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji_id INTEGER NOT NULL REFERENCES face_emoji_refs(id),
+  touched_at INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY(user_id,emoji_id)
+) WITHOUT ROWID;
+CREATE INDEX user_face_emojis_order ON user_face_emojis(user_id,touched_at DESC,position,emoji_id);
+CREATE TABLE default_face_emojis (
+  emoji_id INTEGER PRIMARY KEY REFERENCES face_emoji_refs(id),
+  position INTEGER NOT NULL UNIQUE
+);
+
+CREATE TABLE comment_face_emojis (
+  content_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  emoji_id INTEGER NOT NULL REFERENCES face_emoji_refs(id),
+  PRIMARY KEY(content_id,emoji_id)
+) WITHOUT ROWID;
+CREATE INDEX comment_face_emojis_emoji ON comment_face_emojis(emoji_id,content_id);
+
+CREATE TABLE forum_post_face_emojis (
+  content_id INTEGER NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+  emoji_id INTEGER NOT NULL REFERENCES face_emoji_refs(id),
+  PRIMARY KEY(content_id,emoji_id)
+) WITHOUT ROWID;
+CREATE INDEX forum_post_face_emojis_emoji ON forum_post_face_emojis(emoji_id,content_id);
+
+CREATE TABLE forum_comment_face_emojis (
+  content_id INTEGER NOT NULL REFERENCES forum_post_comments(id) ON DELETE CASCADE,
+  emoji_id INTEGER NOT NULL REFERENCES face_emoji_refs(id),
+  PRIMARY KEY(content_id,emoji_id)
+) WITHOUT ROWID;
+CREATE INDEX forum_comment_face_emojis_emoji ON forum_comment_face_emojis(emoji_id,content_id);
+
+CREATE TRIGGER user_face_emojis_available BEFORE INSERT ON user_face_emojis
+WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
+BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
+
+CREATE TRIGGER default_face_emojis_available BEFORE INSERT ON default_face_emojis
+WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
+BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
+
+CREATE TRIGGER comment_face_emojis_available BEFORE INSERT ON comment_face_emojis
+WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
+BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
+
+CREATE TRIGGER forum_post_face_emojis_available BEFORE INSERT ON forum_post_face_emojis
+WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
+BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
+
+CREATE TRIGGER forum_comment_face_emojis_available BEFORE INSERT ON forum_comment_face_emojis
+WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
+BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;

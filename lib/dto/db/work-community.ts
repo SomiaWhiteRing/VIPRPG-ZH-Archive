@@ -1,18 +1,10 @@
 import type { CommentTarget } from "@/lib/comment-target";
 
+import type { FaceEmoji } from "@/lib/face-emojis";
+export type { FaceEmoji } from "@/lib/face-emojis";
 export type CommentBodySegment =
   | { type: "text"; text: string }
-  | { type: "emoji"; shortcode: string; imageUrl: string; alt: string };
-
-export type CustomEmojiDto = {
-  id: number;
-  shortcode: string;
-  name: string;
-  category: string;
-  imageUrl: string;
-  visibleInPicker: boolean;
-  status: "active" | "retired";
-};
+  | { type: "emoji"; emoji: FaceEmoji | null };
 
 export type CommentDto = {
   id: number;

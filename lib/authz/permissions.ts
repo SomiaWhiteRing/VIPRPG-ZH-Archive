@@ -19,7 +19,7 @@ export const PERMISSION_CATEGORIES = {
   catalog: { group: "community", label: "作品目录" },
   comment: { group: "community", label: "评论审核" },
   forum: { group: "community", label: "讨论区" },
-  emoji: { group: "community", label: "站点表情" },
+  emoji: { group: "community", label: "默认表情" },
   user: { group: "access", label: "账户管理" },
   role_access: { group: "access", label: "角色分配与审批" },
   system: { group: "operations", label: "运行概况" },
@@ -289,12 +289,12 @@ export const PERMISSIONS = {
     category: "forum", label: "管理讨论 TAG", scope: "全部讨论 TAG",
     description: "改名、合并、停用、隐藏或恢复讨论 TAG。",
   },
-  "custom_emoji.manage": {
+  "emoji.defaults.manage": {
     category: "emoji",
-    label: "管理站点表情",
-    scope: "全部站点表情",
+    label: "管理默认表情",
+    scope: "默认表情清单",
     description:
-      "上传表情、调整名称与分类，停用或恢复表情；表情短代码不可修改。",
+      "从角色脸图库选择默认表情并调整顺序。",
   },
   "archive_version.read_private": {
     category: "archive",
@@ -676,7 +676,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.manage_any",
     "comment.manage_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
-    "custom_emoji.manage",
+    "emoji.defaults.manage",
     "archive_version.read_private",
     "archive_version.update",
     "archive_version.delete_any",
@@ -717,7 +717,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.manage_any",
     "comment.manage_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
-    "custom_emoji.manage",
+    "emoji.defaults.manage",
     "archive_version.read_private",
     "archive_version.update",
     "archive_version.delete_any",

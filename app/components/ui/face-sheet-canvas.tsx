@@ -1,4 +1,5 @@
 import { cn } from "@/lib/ui/cn";
+import type { DragEvent } from "react";
 
 const GRID_COLUMNS = [
   "",
@@ -22,6 +23,11 @@ export function FaceSheetCanvas({
   onSelectCell,
   scale = 2,
   selectedCell,
+  cellState,
+  disabled = false,
+  fit = false,
+  onDragCell,
+  onDragEnd,
   src,
   width,
 }: {
@@ -31,6 +37,23 @@ export function FaceSheetCanvas({
   onSelectCell: (row: number, column: number) => void;
   scale?: number;
   selectedCell?: { row: number; column: number } | null;
+  cellState?: (
+    row: number,
+    column: number,
+  ) => {
+    selected?: boolean;
+    collected?: boolean;
+    highlighted?: boolean;
+    disabled?: boolean;
+  };
+  disabled?: boolean;
+  fit?: boolean;
+  onDragCell?: (
+    row: number,
+    column: number,
+    event: DragEvent<HTMLButtonElement>,
+  ) => void;
+  onDragEnd?: () => void;
   src?: string;
   width: number;
 }) {
@@ -42,7 +65,12 @@ export function FaceSheetCanvas({
       aria-label={label}
       className="relative shrink-0 overflow-hidden border border-foreground/30 bg-card [image-rendering:pixelated]"
       role="group"
-      style={{ height: height * scale, width: width * scale }}
+      style={{
+        width: width * scale,
+        ...(fit
+          ? { maxWidth: "100%", aspectRatio: `${width} / ${height}` }
+          : { height: height * scale }),
+      }}
     >
       <img
         alt=""
@@ -65,18 +93,40 @@ export function FaceSheetCanvas({
           const column = index % columns;
           const selected =
             selectedCell?.row === row && selectedCell.column === column;
+          const state = cellState?.(row, column);
           return (
             <button
-              aria-label={`第 ${row + 1} 行，第 ${column + 1} 列`}
-              aria-pressed={selected}
+              aria-label={`第 ${row + 1} 行，第 ${column + 1} 列${state?.collected ? "，已添加" : ""}`}
+              aria-pressed={selected || !!state?.selected}
+              disabled={disabled || state?.disabled}
+              draggable={!!onDragCell && !disabled && !state?.disabled}
+              onDragStart={
+                onDragCell
+                  ? (event) => onDragCell(row, column, event)
+                  : undefined
+              }
+              onDragEnd={onDragEnd}
               className={cn(
                 "cursor-pointer border border-white/20 bg-transparent hover:border-2 hover:border-emerald-400 hover:bg-emerald-400/15 focus-visible:z-10 focus-visible:border-2 focus-visible:border-accent focus-visible:outline-none",
-                selected && "border-2 border-emerald-500 bg-emerald-400/20",
+                (selected || state?.selected) &&
+                  "border-2 border-emerald-500 bg-emerald-400/20",
+                state?.highlighted &&
+                  "z-10 ring-2 ring-inset ring-primary bg-primary/20",
+                "relative disabled:cursor-default",
               )}
               key={`${row}:${column}`}
               onClick={() => onSelectCell(row, column)}
               type="button"
-            />
+            >
+              {state?.collected ? (
+                <span
+                  aria-hidden
+                  className="absolute right-0.5 top-0.5 grid size-3.5 place-items-center rounded-full bg-primary text-[10px] leading-none text-primary-foreground"
+                >
+                  ✓
+                </span>
+              ) : null}
+            </button>
           );
         })}
       </div>

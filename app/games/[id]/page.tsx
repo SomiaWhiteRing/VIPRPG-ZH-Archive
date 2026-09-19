@@ -6,7 +6,6 @@ import {
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import {
   getWorkCommunitySummary,
-  listPickerEmojis,
   listRootComments,
 } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
@@ -83,7 +82,7 @@ export async function loader(args: LoaderFunctionArgs) {
     return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   });
 
-  const [community, comments, emojis, catalogs, containingCatalogs] =
+  const [community, comments, catalogs, containingCatalogs] =
     await Promise.all([
       getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
       listRootComments(
@@ -92,7 +91,6 @@ export async function loader(args: LoaderFunctionArgs) {
         currentUser?.id ?? null,
         null,
       ),
-      listPickerEmojis(runtime),
       currentUser ? listCatalogs(runtime) : Promise.resolve([]),
       listCatalogsContainingWork(runtime, work.id),
     ]);
@@ -143,7 +141,6 @@ export async function loader(args: LoaderFunctionArgs) {
     media,
     community,
     comments,
-    emojis,
     containingCatalogs,
     userCatalogs,
     relationCards,
@@ -165,7 +162,6 @@ export default function GameDetailPage() {
     media,
     community,
     comments,
-    emojis,
     containingCatalogs,
     userCatalogs,
     relationCards,
@@ -408,7 +404,6 @@ export default function GameDetailPage() {
               </div>
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
-                emojis={emojis}
                 initialComments={comments.items}
                 initialNextCursor={comments.nextCursor}
                 target={{ kind: "work", id: work.id }}

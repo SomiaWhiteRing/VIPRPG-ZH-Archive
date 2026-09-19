@@ -17,6 +17,7 @@
 - [Android Kai 游戏导入](./easyrpg-android-import.md)：作品导入链接、快照清单与 Android 客户端接入边界
 - [角色分类](./character-index.md)：角色身份、分类归属、管理权限与公开浏览
 - [角色素材库](./character-material-library.md)：素材展示、多人绑定、排序与本地导入
+- [角色脸图表情库](./face-emoji-library.md)：个人库、默认清单、热门统计与正文编辑
 
 ## 运行手册
 

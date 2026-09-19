@@ -1,5 +1,6 @@
+import { bodyEmojis } from "@/app/.server/emojis/service";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
-import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type { ForumDetail } from "@/lib/forum";
 import { FORUM_POST_PAGE_SIZE } from "@/lib/forum";
 import { interactiveContent, interactiveTopic } from "@/lib/forum-state";
@@ -75,27 +76,6 @@ export async function forumDetail(
   };
 }
 
-export async function forumEmojis(
-  ctx: ForumRuntime,
-  bodies: (string | null)[],
-): Promise<CustomEmojiDto[]> {
-  const codes = [
-    ...new Set(
-      bodies.flatMap((body) =>
-        [...(body ?? "").matchAll(/:([A-Za-z0-9_+-]{1,64}):/g)].map(
-          (match) => match[1],
-        ),
-      ),
-    ),
-  ];
-  if (!codes.length) return [];
-  const rows = await ctx.db
-    .prepare(
-      `SELECT id,shortcode,name,category,('/api/media/blobs/'||image_blob_sha256) AS imageUrl,
-    visible_in_picker AS visibleInPicker,status FROM custom_emojis
-    WHERE status IN('active','retired') AND shortcode IN(SELECT value FROM json_each(?)) ORDER BY shortcode`,
-    )
-    .bind(JSON.stringify(codes))
-    .all<CustomEmojiDto>();
-  return rows.results;
+export async function forumEmojis(ctx: ForumRuntime, bodies: (string | null)[]): Promise<FaceEmoji[]> {
+  return bodyEmojis(ctx.db, bodies);
 }

@@ -91,6 +91,7 @@ import * as endpoint89 from "@/app/.server/endpoints/discussions/sitemaps/[shard
 import { jsonError } from "@/lib/http";
 import { Hono } from "hono";
 import type { AppRuntime } from "./runtime";
+import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
 
 export const api = new Hono<{
@@ -99,6 +100,7 @@ export const api = new Hono<{
 }>();
 api.onError((error) => jsonError("请求失败", error));
 api.route("/", resourceApi);
+api.route("/", emojiApi);
 api.on("PUT", "/api/account/avatar", (c) =>
   endpoint0.PUT(c.get("runtime"), c.req.raw),
 );
@@ -254,15 +256,12 @@ api.on(["GET", "HEAD"], "/api/admin/emojis", (c) =>
 api.on("POST", "/api/admin/emojis", (c) =>
   endpoint13.POST(c.get("runtime"), c.req.raw),
 );
-api.on("PATCH", "/api/admin/emojis", (c) =>
-  endpoint13.PATCH(c.get("runtime"), c.req.raw),
-);
 api.options("/api/admin/emojis", (c) =>
-  c.body(null, 204, { Allow: "GET, POST, PATCH, HEAD, OPTIONS" }),
+  c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
 api.all("/api/admin/emojis", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
-    Allow: "GET, POST, PATCH, HEAD, OPTIONS",
+    Allow: "GET, POST, HEAD, OPTIONS",
   }),
 );
 api.on(["GET", "HEAD"], "/api/admin/gc/dry-run", (c) =>

@@ -76,8 +76,8 @@ const ADMIN_LINKS: Array<
   { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
   {
     href: "/admin/emojis",
-    label: "站点表情",
-    permission: "custom_emoji.manage",
+    label: "默认表情",
+    permission: "emoji.defaults.manage",
   },
   {
     href: "/admin/discussions",
@@ -351,6 +351,9 @@ function UserMenu({
               <Link className={itemClass} to="/me/favorites">
                 收藏
               </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <Link className={itemClass} to="/me/emojis">表情库</Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
               <Link className={itemClass} to="/me/catalogs">

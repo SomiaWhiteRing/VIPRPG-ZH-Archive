@@ -1,9 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getPublicCharacterDetail } from "@/app/.server/db/character-detail";
-import {
-  listPickerEmojis,
-  listRootComments,
-} from "@/app/.server/db/work-community";
+import { listRootComments } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
@@ -53,15 +50,12 @@ export async function loader(args: LoaderFunctionArgs) {
   const canEdit = CHARACTER_EDIT_PERMISSIONS.some((permission) =>
     hasPermission(user, permission),
   );
-  const [comments, emojis] = await Promise.all([
-    listRootComments(
-      runtime,
-      { kind: "character", id: character.id },
-      user?.id ?? null,
-      null,
-    ),
-    listPickerEmojis(runtime),
-  ]);
+  const comments = await listRootComments(
+    runtime,
+    { kind: "character", id: character.id },
+    user?.id ?? null,
+    null,
+  );
 
   const pageMetadata = { title: character.primaryName };
   return {
@@ -69,7 +63,6 @@ export async function loader(args: LoaderFunctionArgs) {
     user: pickPageFields(user, ["id"]),
     canEdit,
     comments,
-    emojis,
     pageMetadata,
   };
 }
@@ -78,8 +71,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors(loaderData?.pageMetadata, error);
 
 export default function CharacterDetailPage() {
-  const { character, user, canEdit, comments, emojis } =
-    useLoaderData<typeof loader>();
+  const { character, user, canEdit, comments } = useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <header className="pb-4 pt-4">
@@ -116,6 +108,8 @@ export default function CharacterDetailPage() {
         works={<CharacterWorks works={character.works} />}
         materials={
           <CharacterMaterials
+            characterId={character.id}
+            canCollect={!!user}
             materials={character.materials}
             name={character.primaryName}
           />
@@ -198,7 +192,6 @@ export default function CharacterDetailPage() {
           </div>
           <CommentPanel
             currentUserId={user?.id ?? null}
-            emojis={emojis}
             initialComments={comments.items}
             initialNextCursor={comments.nextCursor}
             placeholder="聊聊这位角色的故事、登场表现或素材……"

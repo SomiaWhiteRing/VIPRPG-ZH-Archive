@@ -1,3 +1,4 @@
+import { emojiText } from "@/lib/face-emojis";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { UserDiscussionItem } from "@/lib/dto/forum/activity";
 import type { ForumPage } from "@/lib/forum";
@@ -58,7 +59,7 @@ async function userDiscussions(
   const rows = await ctx.db
     .prepare(
       `SELECT c.kind,c.id,c.topic_id,c.post_number,t.title,
-      substr(c.body,1,180) AS snippet,c.created_at
+      c.body AS snippet,c.created_at
     ${source} ORDER BY c.created_at DESC,c.kind DESC,c.id DESC LIMIT ? OFFSET ?`,
     )
     .bind(...bindings, pageSize, (page - 1) * pageSize)
@@ -71,7 +72,7 @@ async function userDiscussions(
           ? ("topic" as const)
           : row.kind,
       title: row.title,
-      snippet: row.snippet,
+      snippet: emojiText(row.snippet).slice(0,180),
       createdAt: row.created_at.includes("T")
         ? row.created_at
         : row.created_at.replace(" ", "T") + "Z",

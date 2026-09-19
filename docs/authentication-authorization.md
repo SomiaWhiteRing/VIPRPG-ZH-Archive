@@ -91,7 +91,7 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 | 作品资料 | read/update permission | own/any、目标状态及关联一致性 |
 | 作品关系与目录 | create/update/delete permission | 创建者、owner、反向关系和成员约束 |
 | 评论与点赞 | `comment.manage_any`（管理员）或评论作者 own-scope | published Work、公开作者或角色、活跃用户、主楼/回复关系和评论状态 |
-| 自定义表情 | `custom_emoji.manage` | 管理员上传、图片 blob 状态、shortcode 不可改名、只能退休或恢复 |
+| 默认表情 | `emoji.defaults.manage` | 从已审核脸图库选格、调整默认顺序和保存审计；个人库仅当前账号可写 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |
 | 用户与角色 | user/role permission 或 bootstrap 身份 | 双方 priority、角色 kind/status、自操作禁令 |
 | 用户公开主页 | 本人设置的栏目可见性 | 活跃账户；栏目内容继续满足各自的 published 规则 |

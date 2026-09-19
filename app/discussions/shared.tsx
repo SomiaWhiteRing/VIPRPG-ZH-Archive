@@ -1,9 +1,12 @@
+import { resolveEmojis } from "@/app/components/emojis/client";
+import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
+import { emojiIds } from "@/lib/face-emojis";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import type { CustomEmojiDto } from "@/lib/dto/db/work-community";
+import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type {
   ForumAuthor,
   ForumEditVersion,
@@ -77,29 +80,12 @@ export async function referencedForumEmojis(
   bodies: (string | null)[],
   signal?: AbortSignal,
 ) {
-  const codes = [
-    ...new Set(
-      bodies.flatMap((body) =>
-        [...(body ?? "").matchAll(/:([A-Za-z0-9_+-]{1,64}):/g)].map(
-          (m) => m[1],
-        ),
-      ),
-    ),
-  ];
-  const emojis: CustomEmojiDto[] = [];
-  for (let start = 0; start < codes.length; start += 100) {
-    const data = await forumRequest<{ emojis: CustomEmojiDto[] }>(
-      forumHref("/api/discussions", {
-        op: "emojis",
-        shortcode: codes.slice(start, start + 100),
-      }),
-      undefined,
-      signal,
-    );
-    emojis.push(...data.emojis);
-  }
-  return emojis;
+  return resolveEmojis(
+    [...new Set(bodies.flatMap((body) => emojiIds(body ?? "")))],
+    signal,
+  );
 }
+
 export function ForumAuthorName({
   author,
   query = "",
@@ -230,38 +216,27 @@ export function Highlight({ text, query }: { text: string; query: string }) {
   parts.push(text.slice(cursor));
   return <>{parts}</>;
 }
-const emojiMaps = new WeakMap<CustomEmojiDto[], Map<string, CustomEmojiDto>>();
 export function ForumBody({
   body,
   emojis,
   inline = false,
 }: {
   body: string;
-  emojis: CustomEmojiDto[];
+  emojis: FaceEmoji[];
   inline?: boolean;
 }) {
-  let emojiMap = emojiMaps.get(emojis);
-  if (!emojiMap) {
-    emojiMap = new Map(emojis.map((e) => [`:${e.shortcode}:`, e]));
-    emojiMaps.set(emojis, emojiMap);
-  }
-  const segments = body.split(/(https?:\/\/[^\s<>]+|:[A-Za-z0-9_+-]{1,64}:)/g);
+  const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
+  const segments = body.split(/(https?:\/\/[^\s<>]+|:face_[1-9]\d{0,15}:)/g);
   return (
     <span
       className={`${inline ? "text-sm" : "block max-w-[76ch] text-base"} whitespace-pre-wrap break-words leading-[1.7] [overflow-wrap:anywhere]`}
     >
       {segments.map((part, index) => {
-        const emoji = part.startsWith(":") ? emojiMap.get(part) : null;
-        if (emoji)
+        if (/^:face_[1-9]\d{0,15}:$/.test(part))
           return (
-            <img
-              alt={`:${emoji.shortcode}:`}
-              className="mx-0.5 inline-block size-6 align-text-bottom"
-              height={24}
-              width={24}
-              src={emoji.imageUrl}
+            <FaceEmojiView
+              emoji={emojiMap.get(Number(part.slice(6, -1))) ?? null}
               key={index}
-              loading="lazy"
             />
           );
         if (/^https?:\/\//.test(part)) {
