@@ -45,7 +45,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 type CategoryDraft = {
@@ -148,6 +148,8 @@ export function CharacterIndexEditor({
       ),
   );
   const [busy, setBusy] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const submitting = useRef(false);
   const toast = useToast();
   const [error, setError] = useState("");
   const [batchCharacters, setBatchCharacters] = useState<
@@ -237,8 +239,11 @@ export function CharacterIndexEditor({
   }
 
   const navigateAccepted = useNavigationGuard(
-    dirty || busy,
-    () => !busy && window.confirm("角色分类尚未保存，确定离开？"),
+    dirty || busy || savingOrder,
+    () =>
+      !busy &&
+      !savingOrder &&
+      window.confirm("角色分类尚未保存，确定离开？"),
   );
   function select(next: Draft) {
     if (
@@ -290,10 +295,17 @@ export function CharacterIndexEditor({
     success: string,
     optimisticData?: CharacterIndexData,
   ) {
-    if (busy) return;
+    if (submitting.current) {
+      toast.info("正在保存，请稍后再操作。");
+      return;
+    }
+    submitting.current = true;
+    const sorting =
+      body.operation === "reorder" || body.operation === "reorderTo";
     const previousData = data;
     if (optimisticData) setData(optimisticData);
-    setBusy(true);
+    if (sorting) setSavingOrder(true);
+    else setBusy(true);
     setError("");
     try {
       const result = await requestJson<
@@ -313,6 +325,8 @@ export function CharacterIndexEditor({
         "保存失败",
       );
       setData(result.data);
+      // Sorting changes order only; preserve the current editor and selection.
+      if (sorting) return;
       const role = result.data.characters.find(
         (item) => item.id === result.characterId,
       );
@@ -358,7 +372,9 @@ export function CharacterIndexEditor({
       if (optimisticData) setData(previousData);
       setError(reason instanceof Error ? reason.message : "保存失败，请重试。");
     } finally {
-      setBusy(false);
+      submitting.current = false;
+      if (sorting) setSavingOrder(false);
+      else setBusy(false);
     }
   }
   function renderTree(
@@ -445,6 +461,9 @@ export function CharacterIndexEditor({
         <div className="grid gap-3 border-b border-border p-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">分类与角色</h2>
+            <span role="status" className="text-xs text-muted">
+              {savingOrder ? "正在保存顺序…" : ""}
+            </span>
             <Button
               size="sm"
               variant="outline"
@@ -530,7 +549,7 @@ export function CharacterIndexEditor({
                   size="icon"
                   variant="ghost"
                   type="button"
-                  disabled={busy || dirty}
+                  disabled={busy || savingOrder || dirty}
                   onClick={() =>
                     void submit(
                       {
@@ -866,7 +885,9 @@ export function CharacterIndexEditor({
               key={draft.categoryId}
               nodes={findChildren(allRoots)}
               busy={busy}
-              sortDisabled={busy || dirty || !can("character_index.reorder")}
+              sortDisabled={
+                busy || savingOrder || dirty || !can("character_index.reorder")
+              }
               onSelect={(child) => selectNode(child, draft.categoryId)}
               onReorder={(nodes, move) => {
                 if (

@@ -86,6 +86,10 @@ export function CharacterIndexBrowser({
   const columns = measuredColumns ?? 1;
   const returnRestoredRef = useRef(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuScrollTop = useRef(0);
+  const restoreMenuScroll = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.scrollTop = menuScrollTop.current;
+  }, []);
   const pendingNavigationRef = useRef<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -379,7 +383,13 @@ export function CharacterIndexBrowser({
                 onDraftChange={changeDraft}
                 onApply={applyFilter}
               />
-              <div className="character-menu-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div
+                ref={restoreMenuScroll}
+                onScroll={(event) => {
+                  menuScrollTop.current = event.currentTarget.scrollTop;
+                }}
+                className="character-menu-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              >
                 <CharacterMenu
                   nodes={filteredMenu}
                   onNavigate={navigateFromDrawer}

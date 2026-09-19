@@ -58,6 +58,10 @@ export function EmojiPicker({
   const [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const scrollTop = useRef(0);
+  const restoreScroll = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.scrollTop = scrollTop.current;
+  }, []);
   const request = useRef<AbortController | null>(null);
   const keyboardOpen = useRef(false);
   const panelId = useId();
@@ -201,7 +205,13 @@ export function EmojiPicker({
           </Button>
         </div>
       </div>
-      <div className="@container/emoji-picker h-[min(17rem,38dvh)] min-h-0 overflow-y-auto overscroll-contain bg-muted/5 p-2 sm:h-60 sm:bg-card">
+      <div
+        ref={restoreScroll}
+        onScroll={(event) => {
+          scrollTop.current = event.currentTarget.scrollTop;
+        }}
+        className="@container/emoji-picker h-[min(17rem,38dvh)] min-h-0 overflow-y-auto overscroll-contain bg-muted/5 p-2 sm:h-60 sm:bg-card"
+      >
         {error ? (
           <div role="alert" className="p-2 text-sm">
             {error}
