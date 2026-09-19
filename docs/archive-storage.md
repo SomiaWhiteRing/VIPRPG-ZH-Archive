@@ -4,6 +4,8 @@
 
 认证、角色和授权只以[认证与权限基线](./authentication-authorization.md)为准；本文不复制 permission key 或端点清单。
 
+软件安装包使用同一 bucket 的独立 `tools/artifacts/` 命名空间，保持原始字节，不属于游戏去重归档或重组 ZIP。上传、发布、撤回和清理由[资源与软件托管](./resources.md)管理；资源图标复用 blob，其引用纳入手动及定时 GC 保护。
+
 ## 1. 目标与非目标
 
 目标：

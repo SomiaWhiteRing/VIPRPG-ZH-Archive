@@ -12,8 +12,13 @@ bindings, and all other database tables exactly as captured.
 
 The captured database contains 930 characters, 132 categories, 925 memberships,
 887 default portraits, 5,207 face sheets, and 11,958 other material records.
-The R2 manifest contains 17,227 objects. All referenced asset files must be
+The R2 manifest contains 17,230 objects. All referenced asset files must be
 included when sharing or committing the seed.
+
+The 2026-09-18 resource schema alignment adds three project icons, a public
+VIPRPG@Wiki entry, and unpublished WindyTranslator / EasyRPG Player Kai entries.
+Software release and artifact tables are empty; real installers are uploaded
+through the root administrator resource panel and are not stored in Git.
 
 Commands from the repository root:
 

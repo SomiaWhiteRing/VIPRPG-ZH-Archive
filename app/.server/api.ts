@@ -91,12 +91,14 @@ import * as endpoint89 from "@/app/.server/endpoints/discussions/sitemaps/[shard
 import { jsonError } from "@/lib/http";
 import { Hono } from "hono";
 import type { AppRuntime } from "./runtime";
+import { resourceApi } from "./resources/api";
 
 export const api = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.route("/", resourceApi);
 api.on("PUT", "/api/account/avatar", (c) =>
   endpoint0.PUT(c.get("runtime"), c.req.raw),
 );

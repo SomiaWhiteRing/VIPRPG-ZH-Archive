@@ -1154,6 +1154,7 @@ WHEN NEW.status IN ('purging','purged') AND (
   OR EXISTS (SELECT 1 FROM custom_emojis WHERE image_blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM users WHERE avatar_blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM creators WHERE avatar_blob_sha256=OLD.sha256)
+  OR EXISTS (SELECT 1 FROM resources WHERE icon_blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM face_sheets WHERE blob_sha256=OLD.sha256)
   OR EXISTS (SELECT 1 FROM character_materials WHERE blob_sha256=OLD.sha256)
 )
@@ -1447,3 +1448,123 @@ CREATE INDEX idx_face_sheets_library_order ON face_sheets(
 
 CREATE INDEX idx_comments_character_public ON comments(character_id)
   WHERE character_id IS NOT NULL AND status='published';
+
+-- Resources: editorial links and independently published software.
+CREATE TABLE resources (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK(kind IN ('tool','website')),
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+  summary TEXT NOT NULL DEFAULT '' CHECK(length(summary)<=2000),
+  description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=30000),
+  website_url TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '',
+  icon_blob_sha256 TEXT REFERENCES blobs(sha256),
+  visibility TEXT NOT NULL DEFAULT 'draft' CHECK(visibility IN ('draft','published','hidden')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0),
+  last_release_sequence INTEGER NOT NULL DEFAULT 0 CHECK(last_release_sequence>=0),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK(visibility<>'published' OR icon_blob_sha256 IS NOT NULL),
+  CHECK(kind<>'website' OR visibility<>'published' OR length(website_url)>0)
+);
+CREATE INDEX idx_resources_public ON resources(visibility,sort_order,id);
+CREATE TRIGGER resources_identity_immutable BEFORE UPDATE OF id,slug,kind ON resources
+WHEN NEW.id<>OLD.id OR NEW.slug<>OLD.slug OR NEW.kind<>OLD.kind
+BEGIN SELECT RAISE(ABORT,'resource identity is immutable'); END;
+CREATE TRIGGER resources_icon_insert BEFORE INSERT ON resources
+WHEN NEW.icon_blob_sha256 IS NOT NULL AND NOT EXISTS(SELECT 1 FROM blobs WHERE sha256=NEW.icon_blob_sha256 AND status='active')
+BEGIN SELECT RAISE(ABORT,'resource icon must be active'); END;
+CREATE TRIGGER resources_icon_update BEFORE UPDATE OF icon_blob_sha256 ON resources
+WHEN NEW.icon_blob_sha256 IS NOT NULL AND NOT EXISTS(SELECT 1 FROM blobs WHERE sha256=NEW.icon_blob_sha256 AND status='active')
+BEGIN SELECT RAISE(ABORT,'resource icon must be active'); END;
+
+CREATE TABLE tool_releases (
+  id TEXT PRIMARY KEY,
+  resource_id TEXT NOT NULL REFERENCES resources(id),
+  channel TEXT NOT NULL DEFAULT 'stable' CHECK(channel='stable'),
+  version_label TEXT NOT NULL CHECK(length(version_label) BETWEEN 1 AND 100),
+  release_sequence INTEGER CHECK(release_sequence>0),
+  notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=30000),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','withdrawn')),
+  published_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(resource_id,version_label),
+  UNIQUE(resource_id,release_sequence),
+  CHECK((status='draft' AND release_sequence IS NULL AND published_at IS NULL) OR
+        (status<>'draft' AND release_sequence IS NOT NULL AND published_at IS NOT NULL))
+);
+CREATE TRIGGER tool_releases_tool_only BEFORE INSERT ON tool_releases
+WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=NEW.resource_id AND kind='tool')
+BEGIN SELECT RAISE(ABORT,'only tools have releases'); END;
+CREATE TRIGGER tool_releases_identity_immutable BEFORE UPDATE ON tool_releases
+WHEN NEW.id<>OLD.id OR NEW.resource_id<>OLD.resource_id OR NEW.channel<>OLD.channel OR
+ (OLD.published_at IS NOT NULL AND (NEW.release_sequence IS NOT OLD.release_sequence OR NEW.published_at IS NOT OLD.published_at OR NEW.status='draft')) OR
+ (OLD.status='withdrawn' AND NEW.status<>'withdrawn')
+BEGIN SELECT RAISE(ABORT,'published release identity is immutable'); END;
+CREATE TRIGGER tool_releases_keep_history BEFORE DELETE ON tool_releases
+WHEN OLD.published_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'published release history must be retained'); END;
+
+CREATE TABLE tool_artifacts (
+  id TEXT PRIMARY KEY,
+  release_id TEXT NOT NULL REFERENCES tool_releases(id),
+  target TEXT NOT NULL CHECK(target IN ('windows-x64','android-universal')),
+  format TEXT NOT NULL CHECK(format IN ('zip','exe','apk')),
+  application_build_id TEXT CHECK(length(application_build_id) BETWEEN 1 AND 200),
+  filename TEXT NOT NULL CHECK(length(filename) BETWEEN 1 AND 180),
+  object_key TEXT NOT NULL UNIQUE CHECK(object_key='tools/artifacts/' || id || '/' || sha256),
+  size_bytes INTEGER NOT NULL CHECK(size_bytes>0 AND size_bytes<=95000000),
+  sha256 TEXT NOT NULL CHECK(length(sha256)=64 AND sha256 NOT GLOB '*[^0-9a-f]*'),
+  storage_status TEXT NOT NULL DEFAULT 'pending' CHECK(storage_status IN ('pending','uploading','uncertain','ready','cleanup','cleaned')),
+  upload_actor_id INTEGER NOT NULL REFERENCES users(id),
+  upload_token TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK((target='android-universal' AND format='apk') OR (target='windows-x64' AND format IN ('zip','exe')))
+);
+CREATE UNIQUE INDEX idx_tool_artifact_target ON tool_artifacts(release_id,target) WHERE storage_status<>'cleaned';
+CREATE INDEX idx_tool_artifact_build ON tool_artifacts(application_build_id,target);
+CREATE TRIGGER tool_artifacts_draft_insert BEFORE INSERT ON tool_artifacts
+WHEN NOT EXISTS(SELECT 1 FROM tool_releases WHERE id=NEW.release_id AND status='draft')
+BEGIN SELECT RAISE(ABORT,'only drafts accept artifacts'); END;
+CREATE TRIGGER tool_artifacts_identity_immutable BEFORE UPDATE ON tool_artifacts
+WHEN NEW.id<>OLD.id OR NEW.release_id<>OLD.release_id OR NEW.target<>OLD.target OR NEW.format<>OLD.format OR
+ NEW.application_build_id IS NOT OLD.application_build_id OR NEW.filename<>OLD.filename OR NEW.object_key<>OLD.object_key OR NEW.size_bytes<>OLD.size_bytes OR NEW.sha256<>OLD.sha256 OR
+ (EXISTS(SELECT 1 FROM tool_releases WHERE id=OLD.release_id AND published_at IS NOT NULL) AND NEW.storage_status<>OLD.storage_status) OR
+ (OLD.storage_status IN ('cleanup','cleaned') AND NEW.storage_status NOT IN ('cleanup','cleaned'))
+BEGIN SELECT RAISE(ABORT,'artifact identity is immutable'); END;
+CREATE TRIGGER tool_artifacts_keep_history BEFORE DELETE ON tool_artifacts
+BEGIN SELECT RAISE(ABORT,'artifact records must be retained'); END;
+CREATE TRIGGER tool_releases_publish_ready BEFORE UPDATE OF status ON tool_releases
+WHEN NEW.status='published' AND OLD.status='draft' AND (
+ NOT EXISTS(SELECT 1 FROM tool_artifacts WHERE release_id=NEW.id AND storage_status='ready') OR
+ EXISTS(SELECT 1 FROM tool_artifacts WHERE release_id=NEW.id AND storage_status NOT IN ('ready','cleaned')))
+BEGIN SELECT RAISE(ABORT,'all release artifacts must be verified'); END;
+
+CREATE TABLE tool_channels (
+  resource_id TEXT NOT NULL REFERENCES resources(id),
+  channel TEXT NOT NULL CHECK(channel='stable'),
+  target TEXT NOT NULL CHECK(target IN ('windows-x64','android-universal')),
+  artifact_id TEXT REFERENCES tool_artifacts(id),
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(resource_id,channel,target)
+);
+CREATE TRIGGER tool_channels_insert_valid BEFORE INSERT ON tool_channels
+WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=NEW.resource_id AND kind='tool') OR (NEW.artifact_id IS NOT NULL AND NOT EXISTS(
+ SELECT 1 FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id
+ WHERE a.id=NEW.artifact_id AND r.resource_id=NEW.resource_id AND r.channel=NEW.channel AND a.target=NEW.target AND r.status='published' AND a.storage_status='ready'))
+BEGIN SELECT RAISE(ABORT,'invalid recommended artifact'); END;
+CREATE TRIGGER tool_channels_update_valid BEFORE UPDATE ON tool_channels
+WHEN NEW.resource_id<>OLD.resource_id OR NEW.channel<>OLD.channel OR NEW.target<>OLD.target OR (NEW.artifact_id IS NOT NULL AND NOT EXISTS(
+ SELECT 1 FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id
+ WHERE a.id=NEW.artifact_id AND r.resource_id=NEW.resource_id AND r.channel=NEW.channel AND a.target=NEW.target AND r.status='published' AND a.storage_status='ready'))
+BEGIN SELECT RAISE(ABORT,'invalid recommended artifact'); END;
+CREATE TRIGGER tool_releases_withdraw_unselected BEFORE UPDATE OF status ON tool_releases
+WHEN NEW.status='withdrawn' AND EXISTS(SELECT 1 FROM tool_channels c JOIN tool_artifacts a ON a.id=c.artifact_id WHERE a.release_id=NEW.id)
+BEGIN SELECT RAISE(ABORT,'pause recommendations before withdrawing'); END;
+CREATE TRIGGER resources_publish_tool BEFORE UPDATE OF visibility ON resources
+WHEN NEW.kind='tool' AND NEW.visibility='published' AND OLD.visibility<>'published' AND NOT EXISTS(
+ SELECT 1 FROM tool_channels WHERE resource_id=NEW.id AND artifact_id IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'publish a recommended package first'); END;
