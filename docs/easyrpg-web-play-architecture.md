@@ -19,6 +19,7 @@
 - Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
 - 同时接受 runtime 相对路径 `/play/runtime/easyrpg/{version}/games/{playKey}/...`；只拦截这些同源路径，其他请求（包括 `/games/{id}.data`）由站点正常处理。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
+- 仓库和每次部署只包含当前一个 EasyRPG runtime；升级成功后清理旧版本目录，不提供多版本选择或旧版回退。
 - EasyRPG 在同源 `/play/player.html` iframe 内运行；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker，刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
@@ -58,7 +59,9 @@ GET /play/games/{playKey}/index.json
 GET /play/games/{playKey}/{path...}
 ```
 
-`/play/runtime/easyrpg/{version}/` 由 `public/play/runtime/easyrpg/{version}/` 提供静态文件。当前版本路径由 `easyRpgRuntimeBasePath` 统一生成；升级 EasyRPG 时新增版本目录，不覆盖旧目录。
+`/play/runtime/easyrpg/{version}/` 由 `public/play/runtime/easyrpg/{version}/` 提供静态文件。[当前构建配置](../lib/archive/easyrpg-runtime.json)是页面和导入脚本共用的唯一版本来源，`easyRpgRuntimeBasePath` 据此生成资源路径。`public/play/runtime/easyrpg/` 只保留这一版；升级导入成功后删除其他版本目录。
+
+版本号仍保留在 URL 中，使 JS、WASM 和 SoundFont 可以使用长期 immutable 缓存。同一版本路径的文件不可改写；任何运行时或补丁变化都必须使用新版本号。`.gitattributes` 禁止 Git 转换运行时目录内文件的换行，以保持导入字节与记录摘要一致。新部署不提供旧运行时 URL，跨部署尚未启动的旧页面需刷新后使用当前版本；不保证旧页面继续加载已删除的资源。
 
 ### 3.2 Play key
 
@@ -272,21 +275,27 @@ EasyRPG runtime 必须自托管：
 public/play/runtime/easyrpg/{version}/index.js
 public/play/runtime/easyrpg/{version}/index.wasm
 public/play/runtime/easyrpg/{version}/easyrpg-player.data
+public/play/runtime/easyrpg/{version}/COPYING
+public/play/runtime/easyrpg/{version}/SOURCE.json
 ```
 
 要求：
 
 - `index.wasm` 返回 `Content-Type: application/wasm`。
-- runtime 文件使用长期 immutable 缓存；升级时新增 `{version}` 目录。
+- runtime 文件使用长期 immutable 缓存；升级时生成新的 `{version}` 目录并清理旧目录，仓库和部署只保留当前一版。
 - React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，在该文档内加载 runtime 并调用 `createEasyRpgPlayer(...)`。
 - canvas、全局输入、音频和 WASM 循环归属于 iframe。离开页面或切换 playKey／账户时销毁该文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。
 - 静态资源的缓存和 WASM 类型头由 [public/_headers](../public/_headers) 定义。调整内容安全策略时须允许同源 WASM 运行；运行兼容性仍需按受授权的浏览器验收确认。
 
 当前固定为 EasyRPG Kai `0.8.1.1-kai-b3101682f`，来源为 [Kai 构建 35185078515](https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515) 的 `nightly-web` 产物，对应提交 `b3101682f5cf0b193a01f915f32a6da04f4818b6`。不直接依赖会变化的 Nightly 下载地址；版本目录内的 `SOURCE.json` 记录来源与 SHA-256。
 
-导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本校验固定 ZIP 与随附 SoundFont 的摘要，保留原 WASM 和 `.data`，只在生成的 JS 中适配按 Work 挂载存档及 `index.wasm` 文件名。更新时同步修改脚本中的版本、摘要、构建来源和 `easyRpgRuntimeVersion`。
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本从[当前构建配置](../lib/archive/easyrpg-runtime.json)读取版本、提交、构建来源和摘要，校验固定 ZIP 与随附 SoundFont，保留原 WASM 和 `.data`，只在生成的 JS 中适配按 Work 挂载存档及 `index.wasm` 文件名。Web ZIP 不含许可证，脚本会通过 HTTPS 从同一固定提交获取 `COPYING` 并校验摘要，因此导入需要联网。
 
-当前 Kai 构建已包含 Emscripten 4 的启动顺序修复：在 `preRun` 中建立游戏目录和默认 IDBFS，挂载后等待 `FS.syncfs(true)` 完成再启动。SDL3 初始化与窗口大小变化统一通过 `SDL_GetWindowSizeInPixels` 读取像素尺寸，避免给 `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` 的像素值重复乘 DPI 倍率，造成放大后视口超出画布。引擎更新使用新版本目录和安装键，旧游戏资源需重新安装；存档身份仍按 Work 保留。启动 Promise 拒绝时，iframe 异常转换为父页面 Error 并保留错误堆栈，避免跨窗口 `instanceof Error` 丢失详情。
+全部校验和补丁适配通过后，脚本在临时目录写齐运行资源、`COPYING` 和 `SOURCE.json`，再将其重命名为当前版本目录，最后清理其他版本目录。同版本重复导入要求完整产物字节一致，否则拒绝覆盖并要求改用新版本号。校验、下载或临时写入失败时不删除已有运行时；清理失败则命令报错，修复后重新导入，成功后才能部署。临时目录仅用于导入，不是保留的可选运行时。
+
+升级只修改上述构建配置中的版本、提交、来源与摘要，必要时调整脚本中的 JS 补丁，然后运行导入并同步本文中的当前构建说明。页面的运行时版本和安装键自动跟随配置；提交时应一并包含新资源和旧目录删除。历史版本通过 Git 历史追溯，不随站点静态资源发布。
+
+当前 Kai 构建已包含 Emscripten 4 的启动顺序修复：在 `preRun` 中建立游戏目录和默认 IDBFS，挂载后等待 `FS.syncfs(true)` 完成再启动。SDL3 初始化与窗口大小变化统一通过 `SDL_GetWindowSizeInPixels` 读取像素尺寸，避免给 `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` 的像素值重复乘 DPI 倍率，造成放大后视口超出画布。引擎更新替换唯一运行时并变更安装键，旧游戏资源需重新安装；存档身份仍按 Work 保留。启动 Promise 拒绝时，iframe 异常转换为父页面 Error 并保留错误堆栈，避免跨窗口 `instanceof Error` 丢失详情。
 
 Kai 默认启用「MIDI音效改良」和 FluidSynth，优先使用 `.data` 预加载的 `/builtin/recommended.sf2`。此音色库由播放器共用，不写入各游戏 ZIP、资源索引或 OPFS pack。启动脚本保留预加载回调，等待挂载完成后再启动；`locateFile` 同时将 WASM 和 `.data` 定位到当前 runtime 目录。此前已保存的播放器开关设置继续生效。MIDI 初始化成功后，运行日志会出现 `Fluidsynth: Using soundfont /builtin/recommended.sf2`。
 
