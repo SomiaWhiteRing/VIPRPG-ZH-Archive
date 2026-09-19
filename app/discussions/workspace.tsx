@@ -1,4 +1,5 @@
 import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { useToast } from "@/app/components/ui/toast";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -124,6 +125,7 @@ export function DiscussionWorkspace({
   initialReply,
 }: Props) {
   const location = useLocation();
+  const toast = useToast();
   const navigationType = useNavigationType();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -149,7 +151,6 @@ export function DiscussionWorkspace({
     }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
     [requestError, setRequestError] = useState<ForumRequestError | null>(null);
   const [action, setAction] = useState<ForumDialogAction | null>(null),
     [confirm, setConfirm] = useState<{
@@ -328,7 +329,7 @@ export function DiscussionWorkspace({
       if (e instanceof ForumRequestError && e.status === 404) {
         if (removed) removalFocus.current = { targetId: null };
         setUnavailable(true);
-      } else setMessage(e instanceof Error ? e.message : "加载失败。");
+      } else toast.error(e instanceof Error ? e.message : "加载失败。");
     }
   }
   async function switchDraft(next: ForumDraft | null) {
@@ -382,7 +383,7 @@ export function DiscussionWorkspace({
       setError("");
       setRequestError(null);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "读取失败。");
+      toast.error(e instanceof Error ? e.message : "读取失败。");
     }
   }
   async function submitDraft() {
@@ -433,7 +434,13 @@ export function DiscussionWorkspace({
       );
       protectedRef.current = { dirty: false, busy: false };
       setDraft(null);
-      setMessage("已保存。");
+      toast.success(
+        draft.target
+          ? "修改已保存。"
+          : draft.mode === "topic"
+            ? "主题已发布。"
+            : "回复已发表。",
+      );
       const destination = new URL(result.href, window.location.origin);
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
@@ -530,7 +537,7 @@ export function DiscussionWorkspace({
                     }),
                   )
                     .then((r) => edit(r.detail.posts.items[0]))
-                    .catch((e) => setMessage(e.message));
+                    .catch((e) => toast.error(e.message));
                 },
               },
             ]
@@ -815,6 +822,9 @@ export function DiscussionWorkspace({
             />
           </aside>
           <div className="min-w-0">
+            <span className="sr-only" role="status">
+              {pending ? "正在更新讨论…" : ""}
+            </span>
             <PageHeader
               compact
               title="讨论版"
@@ -962,16 +972,13 @@ export function DiscussionWorkspace({
           </div>
         </div>
       )}
-      <p role="status" className="my-3 text-sm">
-        {pending ? "正在更新讨论…" : message}
-      </p>
       {draft?.mode === "topic" ? editor : null}
       {action ? (
         <ForumActionDialog
           action={action}
           onClose={() => setAction(null)}
           onSuccess={() => {
-            setMessage(
+            toast.success(
               action.kind === "report"
                 ? "已提交，处理结果不会公开显示。"
                 : "操作已保存。",
@@ -1046,6 +1053,7 @@ function ForumFloorView({
   onLocationChange: (href: string, replace?: boolean, targetId?: string) => void;
 }) {
   const location = useLocation();
+  const toast = useToast();
   const [expanded, setExpanded] = useState(initialExpanded),
     [commentEmojis, setCommentEmojis] = useState(emojis),
     [comments, setComments] = useState(post.comments),
@@ -1134,7 +1142,7 @@ function ForumFloorView({
     } catch (e) {
       setLiked(!next);
       setLikes((n) => n + (next ? -1 : 1));
-      setError(e instanceof Error ? e.message : "点赞失败。");
+      toast.error(e instanceof Error ? e.message : "点赞失败。");
     } finally {
       setLiking(false);
     }

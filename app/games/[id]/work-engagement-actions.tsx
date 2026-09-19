@@ -1,4 +1,6 @@
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { FormField } from "@/app/components/ui/form-field";
@@ -34,6 +36,7 @@ export function CatalogAddDialog({
   workId: number;
 }) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [catalogId, setCatalogId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -60,7 +63,8 @@ export function CatalogAddDialog({
         setMessage("添加到目录失败，请稍后重试。");
         return;
       }
-      setMessage("已添加到目录。");
+      toast.success("已添加到目录。");
+      setOpen(false);
       revalidator.revalidate();
     } catch {
       setMessage("网络请求失败，请检查连接后重试。");
@@ -111,9 +115,7 @@ export function CatalogAddDialog({
                 />
               </FormField>
               {message ? (
-                <p className="m-0 text-sm text-muted" role="status">
-                  {message}
-                </p>
+                <Notice>{message}</Notice>
               ) : null}
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <Dialog.Close asChild>

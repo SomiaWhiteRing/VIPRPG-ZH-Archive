@@ -1,6 +1,7 @@
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
+import { useToast } from "@/app/components/ui/toast";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
@@ -25,7 +26,7 @@ export function WebPlayScreenshotGallery({
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
   const [downloadScope, setDownloadScope] = useState<DownloadScope>("all");
   const [downloading, setDownloading] = useState(false);
-  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
+  const toast = useToast();
   const downloadRef = useRef<AbortController | null>(null);
   const selectPageId = useId();
   const activeIndex = screenshots.findIndex((item) => item.id === activeId);
@@ -50,7 +51,6 @@ export function WebPlayScreenshotGallery({
       return next;
     });
     setDownloadScope("selected");
-    setDownloadMessage(null);
   }
 
   async function downloadBatch() {
@@ -58,7 +58,6 @@ export function WebPlayScreenshotGallery({
     const controller = new AbortController();
     downloadRef.current = controller;
     setDownloading(true);
-    setDownloadMessage(null);
     try {
       const blob = await createScreenshotZip(downloadScreenshots, controller.signal);
       controller.signal.throwIfAborted();
@@ -73,9 +72,9 @@ export function WebPlayScreenshotGallery({
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30_000);
       }
-      setDownloadMessage(`已打包 ${downloadScreenshots.length} 张截图。`);
+      toast.success(`已打包 ${downloadScreenshots.length} 张截图。`);
     } catch {
-      if (!controller.signal.aborted) setDownloadMessage("截图打包失败，请重试。");
+      if (!controller.signal.aborted) toast.error("截图打包失败，请重试。");
     } finally {
       downloadRef.current = null;
       if (!controller.signal.aborted) setDownloading(false);
@@ -198,7 +197,6 @@ export function WebPlayScreenshotGallery({
           disabled={downloading}
           onValueChange={(value) => {
             setDownloadScope(value as DownloadScope);
-            setDownloadMessage(null);
           }}
           options={[
             { value: "selected", label: `所选截图（${selectedScreenshots.length}）` },
@@ -219,7 +217,6 @@ export function WebPlayScreenshotGallery({
           {downloading ? <LoaderCircle aria-hidden className="animate-spin" /> : <Download aria-hidden />}
         </Button>
       </div>
-      {downloadMessage ? <p className="mb-0 mt-2 text-xs text-muted" role="status">{downloadMessage}</p> : null}
       {activeIndex >= 0 ? (
         <ImageLightbox
           open

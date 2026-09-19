@@ -11,6 +11,8 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
@@ -23,6 +25,7 @@ import { useNavigate, useRevalidator } from "react-router";
 
 export function CatalogCreateForm() {
   const navigate = useNavigate();
+  const toast = useToast();
 
   const createButtonRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -50,6 +53,7 @@ export function CatalogCreateForm() {
         setMessage(body.detail ?? "目录创建失败。");
         return;
       }
+      toast.success("目录已创建。");
       navigate(`/catalogs/${body.catalog.id}`);
     } catch {
       setMessage("网络请求失败。");
@@ -114,11 +118,7 @@ export function CatalogCreateForm() {
                 onChange={(event) => setDescription(event.target.value)}
               />
             </FormField>
-            {message ? (
-              <p className="m-0 text-sm text-red-700" role="status">
-                {message}
-              </p>
-            ) : null}
+            {message ? <Notice>{message}</Notice> : null}
             <div className="flex justify-end gap-2">
               <Rm2kButton
                 disabled={busy}
@@ -148,6 +148,7 @@ export function CatalogSummaryEditor({
 }) {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(catalog.title);
   const [description, setDescription] = useState(catalog.description ?? "");
@@ -198,6 +199,7 @@ export function CatalogSummaryEditor({
         return;
       }
       setOpen(false);
+      toast.success("目录资料已保存。");
       revalidator.revalidate();
     } catch {
       setMessage("网络请求失败。");
@@ -218,6 +220,7 @@ export function CatalogSummaryEditor({
         setMessage(body.detail ?? "目录删除失败。");
         return;
       }
+      toast.success("目录已删除。");
       navigate("/catalogs");
     } catch {
       setMessage("网络请求失败。");
@@ -284,11 +287,7 @@ export function CatalogSummaryEditor({
               />
             </FormField>
           </div>
-          {message ? (
-            <p className="m-0 text-sm text-red-700" role="status">
-              {message}
-            </p>
-          ) : null}
+          {message ? <Notice>{message}</Notice> : null}
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             {canDelete ? (
               <AlertDialog>

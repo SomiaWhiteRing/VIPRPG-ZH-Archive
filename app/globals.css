@@ -1,4 +1,6 @@
 @import "tailwindcss" source("./");
+@import "react-toastify/ReactToastify.css";
+@import "./components/ui/toast.css";
 @source "../lib";
 
 @layer base {

@@ -8,6 +8,8 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { FormField } from "@/app/components/ui/form-field";
@@ -41,6 +43,7 @@ export function CatalogItemsSection({
   items: CatalogItem[];
 }) {
   const revalidator = useRevalidator();
+  const toast = useToast();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
   const removeReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -63,7 +66,6 @@ export function CatalogItemsSection({
     number | null
   >(null);
   const [removingWorkId, setRemovingWorkId] = useState<number | null>(null);
-  const [listMessage, setListMessage] = useState<string | null>(null);
   const selectedItem =
     items.find((item) => item.workId === selectedWorkId) ?? null;
   const pendingRemovalItem =
@@ -131,6 +133,7 @@ export function CatalogItemsSection({
         return;
       }
       setAddOpen(false);
+      toast.success("游戏已添加到目录。");
       revalidator.revalidate();
     } catch {
       setAddMessage({ kind: "feedback", text: "网络请求失败。" });
@@ -177,6 +180,7 @@ export function CatalogItemsSection({
         return;
       }
       setSelectedWorkId(null);
+      toast.success("目录条目已保存。");
       revalidator.revalidate();
     } catch {
       setEditMessage("网络请求失败。");
@@ -187,7 +191,6 @@ export function CatalogItemsSection({
 
   async function removeItem(workId: number) {
     setRemovingWorkId(workId);
-    setListMessage(null);
     try {
       const response = await fetch(
         `/api/catalogs/${catalogId}/items?workId=${workId}`,
@@ -195,14 +198,15 @@ export function CatalogItemsSection({
       );
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setListMessage(body.detail ?? "条目移除失败。");
+        toast.error(body.detail ?? "条目移除失败。");
         return;
       }
       removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
+      toast.success("游戏已从目录移除。");
       revalidator.revalidate();
     } catch {
-      setListMessage("网络请求失败。");
+      toast.error("网络请求失败。");
     } finally {
       setRemovingWorkId(null);
     }
@@ -236,11 +240,6 @@ export function CatalogItemsSection({
           </Button>
         ) : null}
       </header>
-      {listMessage ? (
-        <p className="mb-0 mt-3 text-sm text-red-700" role="status">
-          {listMessage}
-        </p>
-      ) : null}
       {items.length ? (
         <ol className="divide-y divide-border border-b border-border">
           {items.map((item, index) => (
@@ -403,9 +402,7 @@ export function CatalogItemsSection({
                   role="status"
                 />
               ) : addMessage ? (
-                <p className="m-0 text-sm text-muted" role="status">
-                  {addMessage.text}
-                </p>
+                <Notice>{addMessage.text}</Notice>
               ) : null}
             </div>
             <div className="flex justify-end border-t border-border pt-4">
@@ -471,11 +468,7 @@ export function CatalogItemsSection({
                 </FormField>
               </>
             ) : null}
-            {editMessage ? (
-              <p className="m-0 text-sm text-red-700" role="status">
-                {editMessage}
-              </p>
-            ) : null}
+            {editMessage ? <Notice>{editMessage}</Notice> : null}
             <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Dialog.Close asChild>
                 <Button disabled={saving} type="button" variant="outline">
