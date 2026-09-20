@@ -30,7 +30,7 @@ type Candidate = {
   originalReleaseDate: string | null;
   engineFamily: string;
   language: string;
-  previewBlobSha256: string | null;
+  coverBlobSha256: string | null;
 };
 
 export function CatalogItemsSection({
@@ -377,7 +377,7 @@ export function CatalogItemsSection({
                         originalReleaseDate: candidate.originalReleaseDate,
                         engineFamily: candidate.engineFamily,
                         language: candidate.language,
-                        previewBlobSha256: candidate.previewBlobSha256,
+                        coverBlobSha256: candidate.coverBlobSha256,
                       }}
                       key={candidate.id}
                       management={

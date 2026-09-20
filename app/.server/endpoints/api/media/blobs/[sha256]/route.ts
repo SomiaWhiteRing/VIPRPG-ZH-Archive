@@ -1,7 +1,7 @@
 import { normalizeSha256 } from "@/app/.server/crypto/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { getBlob } from "@/app/.server/storage/archive-bucket";
+import { streamValidatedImage } from "@/app/.server/storage/work-images";
 import { json, jsonError } from "@/lib/http";
 
 type RouteContext = {
@@ -42,7 +42,7 @@ export async function GET(
               JOIN work_media_assets wma ON wma.media_asset_id = ma.id
               JOIN works w ON w.id = wma.work_id
               WHERE ma.blob_sha256 = b.sha256
-                AND w.status = 'published'
+                AND w.id IN (SELECT id FROM public_works)
             )
             OR EXISTS (
               SELECT 1
@@ -57,7 +57,7 @@ export async function GET(
                 AND EXISTS (
                   SELECT 1 FROM work_staff ws
                   JOIN works w ON w.id=ws.work_id
-                  WHERE ws.creator_id=c.id AND w.status='published'
+                  WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
                 )
             )
             OR EXISTS (
@@ -83,7 +83,7 @@ export async function GET(
                     JOIN work_characters wc ON wc.portrait_ref_id = cpr.id
                     JOIN works w ON w.id = wc.work_id
                     WHERE cpr.face_sheet_id = fs.id
-                      AND w.status = 'published'
+                      AND w.id IN (SELECT id FROM public_works)
                   )
                 )
             )
@@ -93,7 +93,7 @@ export async function GET(
       .bind(sha256)
       .first<BlobMediaRow>();
 
-    if (!row || !isSafeImageType(row.content_type_hint)) {
+    if (!row) {
       return json(
         {
           ok: false,
@@ -103,31 +103,18 @@ export async function GET(
       );
     }
 
-    const object = await getBlob(runtime, sha256);
-
-    if (!object) {
-      return json(
-        {
-          ok: false,
-          error: "Media object missing",
-        },
-        { status: 404 },
-      );
-    }
+    const object = await streamValidatedImage(runtime, sha256);
 
     return new Response(object.body, {
       headers: {
         "Cache-Control": "public, max-age=31536000, immutable",
-        "Content-Length": String(row.size_bytes),
-        "Content-Type": row.content_type_hint ?? "application/octet-stream",
+        "Content-Length": String(object.size),
+        "Content-Type": object.contentType,
+        "X-Content-Type-Options": "nosniff",
         ETag: `"blob-${sha256}"`,
       },
     });
   } catch (error) {
     return jsonError("Media blob fetch failed", error);
   }
-}
-
-function isSafeImageType(contentType: string | null): boolean {
-  return Boolean(contentType?.toLowerCase().startsWith("image/"));
 }

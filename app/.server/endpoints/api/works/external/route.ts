@@ -1,3 +1,4 @@
+import { parseWorkSourcesJson } from "@/app/.server/http/work-sources";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -44,8 +45,8 @@ export async function POST(runtime: AppRuntime, request: Request) {
       .getAll("character_face_sheets[]")
       .filter((value): value is File => value instanceof File && value.size > 0)
       .map((value) => readCharacterFaceSheet(value));
-    const imageFiles = [cover, ...browsingImages];
-    const previewBlobSha256s = await storeWorkImages(runtime, imageFiles);
+    const [coverBlobSha256] = await storeWorkImages(runtime, [cover]);
+    const previewBlobSha256s = await storeWorkImages(runtime, browsingImages);
     await storeCharacterFaceSheets(runtime, characterFaceSheets);
     await ensureCharacterFaceSheets(
       runtime,
@@ -58,6 +59,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     const result = await createExternalWork(runtime, {
       user: auth.user,
       ...metadata,
+      coverBlobSha256,
       previewBlobSha256s,
       downloadUrl,
     });
@@ -90,7 +92,7 @@ function parseMetadata(form: FormData): {
   authors: CreatorSelection[];
   extraStaff: ReturnType<typeof parseExtraStaffJson>;
   translators: CreatorSelection[];
-  sourceUrl: string | null;
+  workSources: ReturnType<typeof parseWorkSourcesJson>;
 } {
   return {
     originalTitle: readRequiredString(
@@ -114,7 +116,7 @@ function parseMetadata(form: FormData): {
     authors: parseTranslatorSelectionsJson(form.get("authors")),
     extraStaff: parseExtraStaffJson(form.get("extra_staff")),
     translators: parseTranslatorSelectionsJson(form.get("translators")),
-    sourceUrl: readNullableString(form.get("source_url")),
+    workSources: parseWorkSourcesJson(form.get("work_sources")),
   };
 }
 

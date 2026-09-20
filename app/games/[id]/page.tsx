@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
-  listCatalogs,
+  searchCatalogsForOwner,
   listCatalogsContainingWork,
 } from "@/app/.server/db/catalogs";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
@@ -74,13 +74,13 @@ export async function loader(args: LoaderFunctionArgs) {
     work.externalLinks.find((link) => link.linkType === "download_page") ??
     null;
   const primaryMedia =
-    work.media.find((media) => media.isPrimary)?.blobSha256 ??
-    work.previewBlobSha256;
-  const media = [...work.media].sort((a, b) => {
-    if (a.blobSha256 === primaryMedia) return -1;
-    if (b.blobSha256 === primaryMedia) return 1;
-    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-  });
+    work.coverBlobSha256;
+  const media = [...work.media].sort(
+    (a, b) =>
+      Number(b.role === "cover") -
+        Number(a.role === "cover") ||
+      (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+  );
 
   const [community, comments, catalogs, containingCatalogs] =
     await Promise.all([
@@ -91,12 +91,10 @@ export async function loader(args: LoaderFunctionArgs) {
         currentUser?.id ?? null,
         null,
       ),
-      currentUser ? listCatalogs(runtime) : Promise.resolve([]),
+      currentUser ? searchCatalogsForOwner(runtime, {userId: currentUser.id}) : Promise.resolve({items: [], total: 0, page: 1, pageSize: 20}),
       listCatalogsContainingWork(runtime, work.id),
     ]);
-  const userCatalogs = currentUser
-    ? catalogs.filter((catalog) => catalog.ownerUserId === currentUser.id)
-    : [];
+  const userCatalogs = catalogs;
   const relatedTranslations = dedupeTranslations([
     ...work.translations,
     ...work.parallelTranslations,
@@ -112,14 +110,14 @@ export async function loader(args: LoaderFunctionArgs) {
       href: `/games/${item.workId}`,
       type: `${item.role === "original" ? "原版" : "译版"} · ${languageLabel(item.language)}`,
       title: item.title,
-      previewBlobSha256: item.previewBlobSha256 ?? null,
+      coverBlobSha256: item.coverBlobSha256 ?? null,
     })),
     ...orderedRelations.map((item) => ({
       key: `relation-${item.id}`,
       href: `/games/${item.workId}`,
       type: relationLabel(item.relationType),
       title: item.title,
-      previewBlobSha256: item.previewBlobSha256 ?? null,
+      coverBlobSha256: item.coverBlobSha256 ?? null,
     })),
   ];
   const showRelationEditor =
@@ -138,6 +136,7 @@ export async function loader(args: LoaderFunctionArgs) {
     title,
     current,
     externalDownload,
+    primaryMedia,
     media,
     community,
     comments,
@@ -159,6 +158,7 @@ export default function GameDetailPage() {
     title,
     current,
     externalDownload,
+    primaryMedia,
     media,
     community,
     comments,
@@ -173,6 +173,7 @@ export default function GameDetailPage() {
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader
         chineseTitle={work.chineseTitle}
+        coverBlobSha256={primaryMedia}
         engineFamily={work.engineFamily}
         language={work.language}
         originalTitle={work.originalTitle}
@@ -188,7 +189,7 @@ export default function GameDetailPage() {
               ]
             : []),
           ...(media.length
-            ? [{ href: "#sec-gallery", label: "预览图", count: media.length }]
+            ? [{ href: "#sec-gallery", label: "画廊", count: media.length }]
             : []),
           ...(work.characters.length
             ? [
@@ -230,7 +231,7 @@ export default function GameDetailPage() {
                   简介
                 </h2>
               </div>
-              {work.engineFamily === "rpg_maker_2003_maniac" ? (
+              {work.usesUnsupportedManiac ? (
                 <div
                   className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]"
                   role="note"
@@ -240,7 +241,7 @@ export default function GameDetailPage() {
                     className="mt-0.5 shrink-0"
                     size={16}
                   />
-                  <span>该游戏使用 Maniac，可能无法用 EasyRPG 正常游玩。</span>
+                  <span>该游戏使用了 EasyRPG 不支持的 Maniac 语法，可能无法正常游玩。</span>
                 </div>
               ) : null}
               {work.description ? (
@@ -273,7 +274,7 @@ export default function GameDetailPage() {
               >
                 <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
                   <h2 className="m-0 text-base font-bold" id="gallery-title">
-                    预览图
+                    画廊
                   </h2>
                   <span className="font-mono text-xs text-muted max-[560px]:text-left">
                     {media.length} 张
@@ -357,7 +358,7 @@ export default function GameDetailPage() {
                           {relation.type}
                         </span>
                         <span className="relative block aspect-4/3 overflow-hidden rounded-lg border border-border bg-[#e7ebe6] group-hover:border-primary group-hover:shadow-[0_2px_8px_rgb(23_33_43/10%)]">
-                          {relation.previewBlobSha256 ? (
+                          {relation.coverBlobSha256 ? (
                             <img
                               alt=""
                               className={
@@ -365,7 +366,7 @@ export default function GameDetailPage() {
                                 "object-cover"
                               }
                               sizes="(max-width: 560px) 78vw, 180px"
-                              src={`/api/media/blobs/${relation.previewBlobSha256}`}
+                              src={`/api/media/blobs/${relation.coverBlobSha256}`}
                               loading="lazy"
                             />
                           ) : (

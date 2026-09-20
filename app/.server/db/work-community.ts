@@ -54,7 +54,7 @@ export async function recordWorkView(
   const result = await getD1(runtime)
     .prepare(
       `INSERT INTO work_engagement_stats(work_id, view_count, updated_at)
-       SELECT id,1,CURRENT_TIMESTAMP FROM works WHERE id=? AND status='published'
+       SELECT id,1,CURRENT_TIMESTAMP FROM public_works WHERE id=?
        ON CONFLICT(work_id) DO UPDATE SET
          view_count = work_engagement_stats.view_count + 1,
          updated_at = CURRENT_TIMESTAMP`,
@@ -73,7 +73,7 @@ export async function recordWorkPlayed(
     .prepare(
       `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
        SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-       FROM works WHERE id=? AND status='published'
+       FROM public_works WHERE id=?
        ON CONFLICT(work_id, user_id) DO UPDATE SET
          last_played_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP`,
@@ -95,7 +95,7 @@ export async function setWorkFavorite(
       .prepare(
         `INSERT INTO user_work_entries(work_id, user_id, favorited_at, updated_at)
          SELECT id,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP
-         FROM works WHERE id=? AND status='published'
+         FROM public_works WHERE id=?
          ON CONFLICT(work_id, user_id) DO UPDATE SET
            favorited_at = excluded.favorited_at,
            updated_at = CURRENT_TIMESTAMP`,
@@ -129,12 +129,10 @@ export async function getWorkCommunitySummary(
       `SELECT
          COALESCE((SELECT view_count FROM work_engagement_stats WHERE work_id = w.id), 0) AS view_count,
          (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS player_count,
-         (SELECT COUNT(*) FROM comments c JOIN users cu ON cu.id = c.user_id
-          LEFT JOIN comments root ON root.id = COALESCE(c.root_comment_id, c.id)
-          WHERE c.work_id = w.id AND c.status = 'published' AND cu.status IN ('active','deleted') AND root.status = 'published') AS comment_count,
+         (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
           WHERE ue.work_id = w.id AND ue.user_id = ? AND ue.favorited_at IS NOT NULL) AS favorited_by_me
-       FROM works w WHERE w.id = ? AND w.status = 'published' LIMIT 1`,
+       FROM works w WHERE w.id = ? AND w.id IN (SELECT id FROM public_works) LIMIT 1`,
     )
     .bind(userId ?? 0, workId)
     .first<{
@@ -165,8 +163,7 @@ export async function listRootComments(
   const clauses = [
     `c.${targetColumn} = ?`,
     "c.root_comment_id IS NULL",
-    "c.status = 'published'",
-    "u.status IN ('active','deleted')",
+    "c.id IN (SELECT id FROM public_comments)",
   ];
   const binds: Array<string | number> = [target.id];
   if (parsed) {
@@ -249,7 +246,7 @@ export async function listReplies(
         `SELECT c.id
          FROM comments c
          WHERE c.id=? AND c.root_comment_id IS NULL
-           AND c.status='published' AND ${publicCommentTargetSql("c")}
+           AND c.id IN (SELECT id FROM public_comments)
            AND EXISTS (SELECT 1 FROM users root_user WHERE root_user.id=c.user_id AND root_user.status IN ('active','deleted'))
          LIMIT 1`,
       )
@@ -368,7 +365,7 @@ export async function searchUserComments(
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const publicClause = input.publicOnly
-    ? "AND c.status='published' AND root.status='published' AND u.status IN ('active','deleted')"
+    ? "AND c.id IN (SELECT id FROM public_comments)"
     : "";
   const from = `FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id) LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id WHERE c.user_id=? AND ${publicCommentTargetSql("c")} ${publicClause}`;
   const database = getD1(runtime);
@@ -619,7 +616,7 @@ async function publicCommentIdentity(
       `SELECT c.id FROM comments c JOIN users u ON u.id=c.user_id
        LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
        JOIN users root_user ON root_user.id=root.user_id
-       WHERE c.id=? AND c.status='published' AND ${publicCommentTargetSql("c")}
+       WHERE c.id=? AND c.id IN (SELECT id FROM public_comments)
          AND u.status IN ('active','deleted') AND root_user.status IN ('active','deleted')
          AND root.status='published' LIMIT 1`,
     )
@@ -682,7 +679,7 @@ function publicTargetStatement(
   return target.kind === "work"
     ? database
         .prepare(
-          `SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`,
+          `SELECT id FROM public_works WHERE id=? LIMIT 1`,
         )
         .bind(target.id)
     : database
@@ -690,7 +687,7 @@ function publicTargetStatement(
           `SELECT c.id FROM creators c
            WHERE c.id=? AND EXISTS (
              SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
-             WHERE ws.creator_id=c.id AND w.status='published'
+             WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
            ) LIMIT 1`,
         )
         .bind(target.id);
@@ -698,11 +695,11 @@ function publicTargetStatement(
 
 function publicCommentTargetSql(alias: string): string {
   return `(
-    EXISTS (SELECT 1 FROM works public_work WHERE public_work.id=${alias}.work_id AND public_work.status='published')
+    EXISTS (SELECT 1 FROM works public_work WHERE public_work.id=${alias}.work_id AND public_work.id IN (SELECT id FROM public_works))
     OR EXISTS (
       SELECT 1 FROM work_staff public_staff
       JOIN works public_creator_work ON public_creator_work.id=public_staff.work_id
-      WHERE public_staff.creator_id=${alias}.creator_id AND public_creator_work.status='published'
+      WHERE public_staff.creator_id=${alias}.creator_id AND public_creator_work.id IN (SELECT id FROM public_works)
     )
     OR EXISTS (SELECT 1 FROM characters public_character WHERE public_character.id=${alias}.character_id)
   )`;

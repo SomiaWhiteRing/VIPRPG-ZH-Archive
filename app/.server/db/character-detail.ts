@@ -65,9 +65,9 @@ export async function getPublicCharacterDetail(
       wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
       w.original_release_date AS releaseDate,
       (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
-       WHERE wma.work_id=w.id AND ma.kind='preview' ORDER BY wma.is_primary DESC,wma.sort_order LIMIT 1) AS previewBlobSha256
+       WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS coverBlobSha256
       FROM work_characters wc JOIN works w ON w.id=wc.work_id
-      WHERE wc.character_id=? AND w.status='published'
+      WHERE wc.character_id=? AND w.id IN (SELECT id FROM public_works)
       ORDER BY COALESCE(w.original_release_date,w.published_at,w.created_at) DESC,w.original_title,w.id,wc.sort_order,wc.id`,
         )
         .bind(id),

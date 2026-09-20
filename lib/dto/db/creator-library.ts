@@ -7,7 +7,7 @@ export type CreatorWorkCredit = {
   roleLabel: string | null;
   notes: string | null;
   originalReleaseDate: string | null;
-  previewBlobSha256: string | null;
+  coverBlobSha256: string | null;
   status: string;
 };
 

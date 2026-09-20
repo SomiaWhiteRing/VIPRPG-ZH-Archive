@@ -12,7 +12,7 @@ type WorkLookupRow = {
   original_release_date: string | null;
   engine_family: string;
   language: string;
-  preview_blob_sha256: string | null;
+  cover_blob_sha256: string | null;
   is_original: number;
   is_translation: number;
   can_edit: number;
@@ -58,10 +58,10 @@ export async function GET(runtime: AppRuntime, request: Request) {
             SELECT ma.blob_sha256
             FROM work_media_assets wma
             JOIN media_assets ma ON ma.id = wma.media_asset_id
-            WHERE wma.work_id = w.id AND ma.kind = 'preview'
-            ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+            WHERE wma.work_id = w.id AND wma.role='cover'
+            ORDER BY wma.sort_order, wma.media_asset_id
             LIMIT 1
-          ) AS preview_blob_sha256,
+          ) AS cover_blob_sha256,
           w.is_original,
           w.is_translation,
           CASE
@@ -78,7 +78,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
         LEFT JOIN work_titles wt ON wt.work_id = w.id
         WHERE w.status <> 'deleted'
           AND (
-            w.status = 'published'
+            w.id IN (SELECT id FROM public_works)
             OR ? = 1
             OR (? = 1 AND EXISTS (
               SELECT 1 FROM work_uploaders private_wu
@@ -128,7 +128,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
         originalReleaseDate: work.original_release_date,
         engineFamily: work.engine_family,
         language: work.language,
-        previewBlobSha256: work.preview_blob_sha256,
+        coverBlobSha256: work.cover_blob_sha256,
         isOriginal: work.is_original === 1,
         isTranslation: work.is_translation === 1,
         canEdit: work.can_edit === 1,

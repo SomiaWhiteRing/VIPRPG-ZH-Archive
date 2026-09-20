@@ -1,3 +1,4 @@
+import type { WorkSourceLink } from "@/lib/work-sources";
 import type {
   CharacterCreditSelection,
   CharacterPortrait,
@@ -36,11 +37,10 @@ export type GameCreatorCredit = {
 
 export type GameMediaAsset = {
   blobSha256: string;
-  kind: string;
+  role: "cover" | "preview";
   title: string | null;
   altText: string | null;
   sortOrder: number | null;
-  isPrimary: boolean;
 };
 
 export type GameExternalLink = {
@@ -74,7 +74,7 @@ export type GameWorkRelation = {
   language: string;
   viceVersa: boolean;
   createdByUserId: number | null;
-  previewBlobSha256?: string | null;
+  coverBlobSha256?: string | null;
 };
 
 export type GameTranslationRelation = {
@@ -88,7 +88,7 @@ export type GameTranslationRelation = {
   engineFamily: string;
   language: string;
   createdByUserId: number | null;
-  previewBlobSha256?: string | null;
+  coverBlobSha256?: string | null;
 };
 
 export type GameWorkSummary = {
@@ -103,7 +103,7 @@ export type GameWorkSummary = {
   isTranslation: boolean;
   language: string;
   status: string;
-  previewBlobSha256: string | null;
+  coverBlobSha256: string | null;
   currentArchiveVersionId: number | null;
   externalDownloadUrl: string | null;
   archiveVersionCount: number;
@@ -116,6 +116,7 @@ export type GameWorkSummary = {
 };
 
 export type GameWorkDetail = GameWorkSummary & {
+  usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   aliases: string[];
   creators: GameCreatorCredit[];
@@ -128,6 +129,8 @@ export type GameWorkDetail = GameWorkSummary & {
 };
 
 export type AdminWorkEdit = {
+  hasUsableDistribution: boolean;
+  usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   id: number;
   originalTitle: string;
@@ -194,9 +197,10 @@ export type ExternalWorkInput = {
   authors: CreatorSelection[];
   extraStaff?: StaffCredit[];
   translators: CreatorSelection[];
+  coverBlobSha256: string;
   previewBlobSha256s: string[];
   downloadUrl: string;
-  sourceUrl: string | null;
+  workSources: WorkSourceLink[];
 };
 
 export type UserWorkListItem = {
@@ -207,7 +211,7 @@ export type UserWorkListItem = {
 export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
-  sourceUrl: string | null;
+  workSources: WorkSourceLink[];
   hasCurrentArchive: boolean;
   currentArchive: {
     id: number;
@@ -215,10 +219,12 @@ export type UploaderWorkEdit = AdminWorkEdit & {
     sourceFileCount: number;
     sourceSizeBytes: number;
     publishedAt: string | null;
+    sourceUrl: string | null;
   } | null;
 };
 
 export type UploaderWorkUpdateInput = {
+  usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
   workId: number;
@@ -238,9 +244,10 @@ export type UploaderWorkUpdateInput = {
   authors: CreatorSelection[];
   extraStaff?: StaffCredit[];
   translators: CreatorSelection[];
+  coverBlobSha256: string;
   previewBlobSha256s: string[];
   downloadUrl: string | null;
-  sourceUrl: string | null;
+  workSources: WorkSourceLink[];
 };
 
 export type PaginatedGameSearch = {

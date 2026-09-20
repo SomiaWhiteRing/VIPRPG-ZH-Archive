@@ -1,3 +1,5 @@
+import type { WorkSourceLink } from "@/lib/work-sources";
+import { WorkSourcesEditor } from "@/app/components/work/work-sources-editor";
 import { Notice } from "@/app/components/ui/notice";
 
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
@@ -87,6 +89,7 @@ type AssociationDefaults = {
   translators: UploadStaffCredit[];
 };
 type FlatMetadata = {
+  usesUnsupportedManiac: boolean;
   originalTitle: string;
   chineseTitle: string;
   aliasTitles: string[];
@@ -102,7 +105,8 @@ type FlatMetadata = {
   isOriginal: boolean;
   isTranslation: boolean;
   language: string;
-  sourceUrl: string;
+  archiveSourceUrl: string;
+  workSources: WorkSourceLink[];
   externalDownloadUrl: string;
   status: "published" | "hidden";
 };
@@ -113,9 +117,9 @@ type CurrentUser = {
   permissionKeys: string[];
 };
 
-type ImageSelections = { cover: File | null; browsingImages: File[] };
+type ImageSelections = { cover: File | null; browsingImages: File[]; replacePreviews: boolean };
 type PreparedImages = {
-  hashes: { browsingImageBlobSha256s: string[] };
+  hashes: { coverBlobSha256: string; previewBlobSha256s: string[] };
   blobs: MetadataBlobUpload[];
 };
 type CharacterFaceSheetFiles = Record<number, File[]>;
@@ -125,6 +129,7 @@ type PreparedCharacterFaceSheets = {
 };
 
 export type UploadInitialWork = {
+  usesUnsupportedManiac: boolean;
   id: number;
   originalTitle: string;
   chineseTitle: string | null;
@@ -144,7 +149,9 @@ export type UploadInitialWork = {
   moreInfo: WorkMoreInfo[];
   translators: UploadStaffCredit[];
   externalDownloadUrl: string | null;
-  sourceUrl: string | null;
+  archiveSourceUrl: string | null;
+  workSources: WorkSourceLink[];
+  coverBlobSha256: string;
   previewBlobSha256s: string[];
   currentArchive: {
     name: string;
@@ -189,6 +196,7 @@ export function UploadClient({
   const [imageSelections, setImageSelections] = useState<ImageSelections>({
     cover: null,
     browsingImages: [],
+    replacePreviews: false,
   });
   const [characterFaceSheetFiles, setCharacterFaceSheetFiles] =
     useState<CharacterFaceSheetFiles>({});
@@ -340,7 +348,7 @@ export function UploadClient({
       }
 
       const latestTitleImage = prefill.titleImages[0];
-      if (!latestTitleImage || initialWork?.previewBlobSha256s.length) return;
+      if (!latestTitleImage || initialWork?.coverBlobSha256) return;
 
       if (generation !== sourceInspectionGenerationRef.current) return;
       setImageSelections((current) => {
@@ -532,10 +540,7 @@ export function UploadClient({
       document.getElementById("upload-characters")?.focus();
       return;
     }
-    if (!imageSelections.cover && imageSelections.browsingImages.length) {
-      setSubmitError("添加预览图时须同时更新封面图。");
-      return;
-    }
+
     if (!archiveMode) {
       if (!initialWork && !imageSelections.cover) {
         setSubmitError("新建外链作品必须选择封面图。");
@@ -612,7 +617,7 @@ export function UploadClient({
       }
       const images = await prepareSelectedImages(
         imageSelections,
-        initialWork?.previewBlobSha256s ?? [],
+        initialWork,
       );
       upload.confirmMetadata(
         buildMetadata(
@@ -650,12 +655,13 @@ export function UploadClient({
       const filesByHash = new Map(
         draft.metadataBlobs.map((blob) => [blob.sha256, blob.file]),
       );
-      const previewFiles = draft.metadata.game.browsingImageBlobSha256s
+      const previewFiles = draft.metadata.game.previewBlobSha256s
         .map((hash) => filesByHash.get(hash) ?? null)
         .filter((file): file is File => Boolean(file));
       setImageSelections({
-        cover: previewFiles[0] ?? null,
-        browsingImages: previewFiles.slice(1),
+        cover: filesByHash.get(draft.metadata.game.coverBlobSha256) ?? null,
+        browsingImages: previewFiles,
+        replacePreviews: true,
       });
       setCharacterFaceSheetFiles(
         Object.fromEntries(
@@ -791,7 +797,12 @@ export function UploadClient({
               }}
               onValueChange={(engineFamily) => {
                 setSubmitError(null);
-                setForm((current) => ({ ...current, engineFamily }));
+                setForm((current) => ({
+                  ...current,
+                  engineFamily,
+                  usesUnsupportedManiac:
+                    engineFamily === "rpg_maker_2003_maniac" && current.usesUnsupportedManiac,
+                }));
               }}
               value={form.engineFamily}
             />
@@ -881,10 +892,7 @@ export function UploadClient({
                     changeTranslationDeclaration={changeTranslationDeclaration}
                     changeTranslator={changeTranslator}
                     disabled={preparing}
-                    existingPreviewCount={Math.max(
-                      0,
-                      (initialWork?.previewBlobSha256s.length ?? 0) - 1,
-                    )}
+                    existingPreviewCount={initialWork?.previewBlobSha256s.length ?? 0}
                     form={form}
                     imageSelections={imageSelections}
                     setForm={setForm}
@@ -905,6 +913,8 @@ export function UploadClient({
                     candidateFiles={coverCandidates}
                     disabled={formDisabled}
                     existingBlobSha256s={initialWork?.previewBlobSha256s}
+                    existingCoverBlobSha256={initialWork?.coverBlobSha256}
+                    existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
                     file={imageSelections.cover}
                     includeSelectedFileCandidate={
                       imageSelections.cover !== automaticCoverRef.current
@@ -913,7 +923,7 @@ export function UploadClient({
                       automaticCoverRef.current = null;
                       setImageSelections((current) => ({ ...current, cover }));
                     }}
-                    required={!initialWork?.previewBlobSha256s.length}
+                    required={!initialWork?.coverBlobSha256}
                   />
                 </div>
 
@@ -1260,6 +1270,25 @@ function MetadataFields({
               />
               本作品为翻译作品。
             </Label>
+            {form.engineFamily === "rpg_maker_2003_maniac" ? (
+              <Label
+                className="flex w-fit items-center gap-2 text-sm"
+                htmlFor="upload-unsupported-maniac"
+              >
+                <Checkbox
+                  checked={form.usesUnsupportedManiac}
+                  disabled={disabled}
+                  id="upload-unsupported-maniac"
+                  onCheckedChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      usesUnsupportedManiac: checked === true,
+                    }))
+                  }
+                />
+                本作品使用了EasyRPG不支持的Maniac语法。
+              </Label>
+            ) : null}
           </div>
         </WorkbenchField>
         <WorkbenchField
@@ -1333,15 +1362,17 @@ function MetadataFields({
             <WorkbenchField label="预览图">
               <PreviewPicker
                 disabled={disabled}
-                existingCount={existingPreviewCount}
+                existingCount={imageSelections.replacePreviews ? 0 : existingPreviewCount}
                 files={imageSelections.browsingImages}
                 onChange={(browsingImages) =>
                   setImageSelections((current) => ({
                     ...current,
                     browsingImages,
+                    replacePreviews: true,
                   }))
                 }
               />
+              {existingPreviewCount > 0 && !imageSelections.replacePreviews ? <Button type="button" variant="ghost" disabled={disabled} onClick={() => setImageSelections((current) => ({...current, browsingImages: [], replacePreviews: true}))}>清空已有预览图</Button> : null}
             </WorkbenchField>
             <WorkbenchField controlId="upload-aliases" label="别名">
               <TokenPicker
@@ -1357,20 +1388,21 @@ function MetadataFields({
                 values={form.aliasTitles}
               />
             </WorkbenchField>
-            <WorkbenchField controlId="upload-source-url" label="来源链接">
+            <WorkSourcesEditor values={form.workSources} disabled={disabled} onChange={(workSources) => setForm((current) => ({...current, workSources}))} />
+            {isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label="本次归档文件来源">
               <Input
                 disabled={disabled}
                 id="upload-source-url"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    sourceUrl: event.target.value,
+                    archiveSourceUrl: event.target.value,
                   }))
                 }
                 type="url"
-                value={form.sourceUrl}
+                value={form.archiveSourceUrl}
               />
-            </WorkbenchField>
+            </WorkbenchField> : null}
             <StaffEditor
               rows={form.extraStaff}
               disabled={disabled}
@@ -1546,8 +1578,10 @@ function initialForm(
       originalReleaseDate: initialWork.originalReleaseDate ?? "",
       isOriginal: initialWork.isOriginal,
       isTranslation: initialWork.isTranslation,
+      usesUnsupportedManiac: initialWork.usesUnsupportedManiac,
       language: initialWork.language,
-      sourceUrl: initialWork.sourceUrl ?? "",
+      archiveSourceUrl: initialWork.archiveSourceUrl ?? "",
+      workSources: initialWork.workSources,
       externalDownloadUrl: initialWork.externalDownloadUrl ?? "",
       status: initialWork.status,
     };
@@ -1567,8 +1601,10 @@ function initialForm(
     originalReleaseDate: "",
     isOriginal: false,
     isTranslation: false,
+    usesUnsupportedManiac: false,
     language: "zh-CN",
-    sourceUrl: "",
+    archiveSourceUrl: "",
+    workSources: [],
     externalDownloadUrl: "",
     status: "published",
   };
@@ -1620,8 +1656,12 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     originalReleaseDate: metadata.game.originalReleaseDate ?? "",
     isOriginal: metadata.game.isOriginal,
     isTranslation: metadata.game.isTranslation,
+    usesUnsupportedManiac:
+      metadata.game.engineFamily === "rpg_maker_2003_maniac" &&
+      metadata.game.extra.usesUnsupportedManiac === true,
     language: metadata.game.language,
-    sourceUrl: metadata.archiveVersion.sourceUrl ?? "",
+    archiveSourceUrl: metadata.archiveVersion.sourceUrl ?? "",
+    workSources: metadata.workSources,
     externalDownloadUrl: "",
     status: metadata.game.status === "hidden" ? "hidden" : "published",
   };
@@ -1629,7 +1669,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
 
 function buildMetadata(
   form: FlatMetadata,
-  imageHashes: { browsingImageBlobSha256s: string[] },
+  imageHashes: { coverBlobSha256: string; previewBlobSha256s: string[] },
   faceSheetHashes: Record<number, string[]>,
   targetWorkId: number | null,
   defaults: AssociationDefaults,
@@ -1682,14 +1722,18 @@ function buildMetadata(
       isOriginal: form.isOriginal,
       isTranslation: form.isTranslation,
       language: form.language,
-      browsingImageBlobSha256s: imageHashes.browsingImageBlobSha256s,
+      ...imageHashes,
       status: form.status,
-      extra: { moreInfo: normalizeWorkMoreInfo(form.moreInfo) },
+      extra: {
+        moreInfo: normalizeWorkMoreInfo(form.moreInfo),
+        usesUnsupportedManiac:
+          form.engineFamily === "rpg_maker_2003_maniac" && form.usesUnsupportedManiac,
+      },
     },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
     archiveVersion: {
       sourceName: null,
-      sourceUrl: cleanNullable(form.sourceUrl),
+      sourceUrl: cleanNullable(form.archiveSourceUrl),
     },
     workTitles: uniqueTokens(form.aliasTitles).map((title) => ({
       title,
@@ -1703,29 +1747,21 @@ function buildMetadata(
       ...translatorStaff(form, defaults.translators),
     ],
     tags: uniqueTokens(form.tags),
-    externalLinks: { work: [] },
+    workSources: form.workSources,
   };
 }
 
 async function prepareSelectedImages(
   input: ImageSelections,
-  retainedHashes: string[] = [],
+  retained: UploadInitialWork | null = null,
 ): Promise<PreparedImages> {
-  if (!input.cover) {
-    return {
-      hashes: { browsingImageBlobSha256s: retainedHashes },
-      blobs: [],
-    };
-  }
   const blobs: MetadataBlobUpload[] = [];
-  const hashes: string[] = [];
-  if (input.cover) hashes.push(await prepareMetadataImage(input.cover, blobs));
-  for (const file of input.browsingImages)
-    hashes.push(await prepareMetadataImage(file, blobs));
-  return {
-    hashes: { browsingImageBlobSha256s: hashes },
-    blobs: [...new Map(blobs.map((blob) => [blob.sha256, blob])).values()],
-  };
+  const coverBlobSha256 = input.cover ? await prepareMetadataImage(input.cover, blobs) : retained?.coverBlobSha256 ?? "";
+  if (!coverBlobSha256) throw new Error("请指定封面图。");
+  const previewBlobSha256s = input.replacePreviews
+    ? await Promise.all(input.browsingImages.map((file) => prepareMetadataImage(file, blobs)))
+    : retained?.previewBlobSha256s ?? [];
+  return { hashes: { coverBlobSha256, previewBlobSha256s }, blobs: uniqueMetadataBlobs(blobs) };
 }
 
 async function prepareCharacterFaceSheets(
@@ -1794,7 +1830,7 @@ async function submitExternalWork(
     JSON.stringify(translatorStaff(form).map((staff) => staff.selection)),
   );
   body.set("download_url", form.externalDownloadUrl.trim());
-  body.set("source_url", form.sourceUrl.trim());
+  body.set("work_sources", JSON.stringify(form.workSources));
   body.set("cover", images.cover);
   for (const image of images.browsingImages)
     body.append("browsing_images[]", image);
@@ -1837,6 +1873,9 @@ async function submitOwnedWork(
   if (form.isTranslation) body.set("is_translation", "1");
   body.set("language", form.language);
   body.set("status", form.status);
+  if (form.engineFamily === "rpg_maker_2003_maniac" && form.usesUnsupportedManiac) {
+    body.set("uses_unsupported_maniac", "1");
+  }
   body.set("aliases", form.aliasTitles.join("\n"));
   body.set("tags", form.tags.join("\n"));
   body.set(
@@ -1857,13 +1896,11 @@ async function submitOwnedWork(
     "download_url",
     distribution === "external" ? form.externalDownloadUrl.trim() : "",
   );
-  body.set(
-    "source_url",
-    distribution === "external" ? form.sourceUrl.trim() : "",
-  );
-  if (images.cover) {
-    body.append("images[]", images.cover);
-    for (const image of images.browsingImages) body.append("images[]", image);
+  body.set("work_sources", JSON.stringify(form.workSources));
+  if (images.cover) body.set("cover", images.cover);
+  if (images.replacePreviews) {
+    body.set("replace_previews", "1");
+    for (const image of images.browsingImages) body.append("browsing_images[]", image);
   }
   for (const faceSheet of faceSheets.blobs) {
     body.append("character_face_sheets[]", faceSheet.file);

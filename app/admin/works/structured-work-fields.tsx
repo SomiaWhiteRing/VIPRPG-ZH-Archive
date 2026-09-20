@@ -1,3 +1,4 @@
+import { Label } from "@/app/components/ui/label";
 import { CharacterPicker } from "@/app/components/characters/character-picker";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -14,6 +15,7 @@ export function StructuredWorkFields(props: {
   tags: string[];
   characters: CharacterCreditSelection[];
   characterSuggestions: CharacterSuggestion[];
+  coverBlobSha256: string;
   previewBlobSha256s: string[];
   externalLinks: GameExternalLink[];
 }) {
@@ -38,6 +40,9 @@ export function StructuredWorkFields(props: {
           />
         </fieldset>
       </div>
+      <Label className="grid gap-2 text-sm">封面
+        <Input name="cover_blob_sha256" defaultValue={props.coverBlobSha256} pattern="[a-fA-F0-9]{64}" />
+      </Label>
       <PreviewList initialValues={props.previewBlobSha256s} />
       <ExternalLinkList initialValues={props.externalLinks} />
     </div>
@@ -120,9 +125,9 @@ function PreviewList({ initialValues }: { initialValues: string[] }) {
   }
   return (
     <fieldset className="grid gap-2 rounded-md border border-border p-3">
-      <legend className="px-1 text-sm font-semibold">浏览图</legend>
+      <legend className="px-1 text-sm font-semibold">预览图</legend>
       <p className="m-0 text-xs text-muted">
-        第一项是主浏览图；只接受已上传对象的 SHA-256。
+        按此顺序展示预览图；只接受已上传对象的 SHA-256。
       </p>
       <Textarea
         className="hidden"

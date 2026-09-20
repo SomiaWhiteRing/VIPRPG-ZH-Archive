@@ -1,3 +1,4 @@
+import type { WorkSourceLink } from "@/lib/work-sources";
 import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 
@@ -104,9 +105,13 @@ export type ArchiveCommitMetadata = {
     isOriginal: boolean;
     isTranslation: boolean;
     language: string;
-    browsingImageBlobSha256s: string[];
+    coverBlobSha256: string;
+    previewBlobSha256s: string[];
     status: "processing" | "published" | "hidden";
-    extra: Record<string, unknown> & { moreInfo?: WorkMoreInfo[] };
+    extra: Record<string, unknown> & {
+      moreInfo?: WorkMoreInfo[];
+      usesUnsupportedManiac?: boolean;
+    };
   };
   target: {
     mode: "create" | "update";
@@ -145,19 +150,7 @@ export type ArchiveCommitMetadata = {
     notes: string | null;
   }>;
   tags: string[];
-  externalLinks: {
-    work: Array<{
-      label: string;
-      url: string;
-      linkType:
-        | "official"
-        | "wiki"
-        | "source"
-        | "video"
-        | "download_page"
-        | "other";
-    }>;
-  };
+  workSources: WorkSourceLink[];
 };
 
 export type ExcludedFileTypeSummary = {

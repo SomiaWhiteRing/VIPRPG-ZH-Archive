@@ -14,7 +14,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
     >
       <div className="grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 text-xs font-bold text-muted">
         <WorkThumbnail
-          blobSha256={work.previewBlobSha256}
+          blobSha256={work.coverBlobSha256}
           alt=""
           width={148}
           height={111}

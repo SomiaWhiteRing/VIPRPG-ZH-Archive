@@ -31,7 +31,7 @@ export function GameCard({ work }: { work: GameWorkSummary }) {
     >
       <div className="relative grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 font-mono text-xs font-bold text-muted">
         <WorkThumbnail
-          blobSha256={work.previewBlobSha256}
+          blobSha256={work.coverBlobSha256}
           alt=""
           width={420}
           height={315}

@@ -266,7 +266,7 @@ export async function createTranslationRelation(
          FROM works w
          WHERE w.id IN (?,?) AND w.status<>'deleted'
            AND (
-             w.status='published' OR ?=1 OR
+             w.id IN (SELECT id FROM public_works) OR ?=1 OR
              (?=1 AND EXISTS(
                SELECT 1 FROM work_uploaders wu
                WHERE wu.work_id=w.id AND wu.user_id=?
@@ -519,7 +519,7 @@ async function assertAccessibleWorks(
     WHERE w.id IN (${placeholders})
       AND w.status <> 'deleted'
       AND (
-        w.status = 'published'
+        w.id IN (SELECT id FROM public_works)
         OR ? = 1
         OR (? = 1 AND EXISTS (
           SELECT 1 FROM work_uploaders wu

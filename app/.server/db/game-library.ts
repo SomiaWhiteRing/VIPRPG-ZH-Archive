@@ -1,3 +1,5 @@
+import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements, workSourceStatements } from "@/app/.server/db/work-metadata";
+import { parseWorkSources } from "@/app/.server/http/work-sources";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import type { CharacterPortraitRow } from "@/app/.server/db/character-portrait-library";
@@ -101,7 +103,7 @@ type SummaryRow = {
   is_translation: number;
   language: string;
   status: string;
-  preview_blob_sha256: string | null;
+  cover_blob_sha256: string | null;
   current_archive_version_id: number | null;
   external_download_url: string | null;
   archive_version_count: number;
@@ -148,12 +150,12 @@ type ArchiveEditRow = {
   source_url: string | null;
 };
 type WorkEditInput = {
+  usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   workId: number;
   chineseTitle: string | null;
   description: string | null;
   originalReleaseDate: string | null;
-  originalReleasePrecision: string;
   engineFamily: string;
   isOriginal: boolean;
   isTranslation: boolean;
@@ -163,6 +165,7 @@ type WorkEditInput = {
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];
+  coverBlobSha256: string;
   previewBlobSha256s: string[];
   outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
@@ -182,15 +185,7 @@ const LINK_TYPES = [
   "download_page",
   "other",
 ] as const;
-const VALID_PUBLISHED_DISTRIBUTION_SQL = `(
-  (EXISTS (SELECT 1 FROM archive_versions avp WHERE avp.work_id=w.id AND avp.status='published' AND avp.is_current=1)
-    AND w.engine_family IN ('rpg_maker_2000','rpg_maker_2003','rpg_maker_2003_maniac')
-    AND (SELECT COUNT(*) FROM work_external_links wep WHERE wep.work_id=w.id AND wep.link_type='download_page') = 0)
-  OR
-  (NOT EXISTS (SELECT 1 FROM archive_versions avp WHERE avp.work_id=w.id AND avp.status='published' AND avp.is_current=1)
-    AND w.engine_family NOT IN ('rpg_maker_2000','rpg_maker_2003','rpg_maker_2003_maniac')
-    AND (SELECT COUNT(*) FROM work_external_links wep WHERE wep.work_id=w.id AND wep.link_type='download_page') = 1)
-)`;
+
 
 export async function listGameWorks(
   runtime: AppRuntime,
@@ -224,12 +219,12 @@ export async function searchUserWorks(
   const [countResult, rowsResult] = await database.batch([
     database
       .prepare(
-        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`,
+        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.id IN (SELECT id FROM public_works)`,
       )
       .bind(input.userId),
     database
       .prepare(
-        `SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
+        `SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.id IN (SELECT id FROM public_works) GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
       )
       .bind(input.userId, pageSize, (page - 1) * pageSize),
   ]);
@@ -346,7 +341,7 @@ export async function getGameWorkDetail(
 ): Promise<GameWorkDetail | null> {
   const row = await getD1(runtime)
     .prepare(
-      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL} GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.id IN (SELECT id FROM public_works) GROUP BY w.id LIMIT 1`,
     )
     .bind(id)
     .first<SummaryRow & { extra_json: string }>();
@@ -366,6 +361,9 @@ export async function getGameWorkDetail(
   return {
     ...summary,
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
+    usesUnsupportedManiac:
+      row.engine_family === "rpg_maker_2003_maniac" &&
+      JSON.parse(row.extra_json).usesUnsupportedManiac === true,
     aliases: collections.aliases,
     media: collections.media,
     externalLinks: collections.links,
@@ -443,7 +441,11 @@ export async function getWorkForAdminEdit(
     isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
+    hasUsableDistribution: await hasUsableDistribution(runtime, workId),
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
+    usesUnsupportedManiac:
+      row.engine_family === "rpg_maker_2003_maniac" &&
+      JSON.parse(row.extra_json).usesUnsupportedManiac === true,
     aliases: collections.aliases,
     creators: collections.creators,
     tags: collections.tags.map((item) => item.name),
@@ -471,6 +473,7 @@ export async function getOwnedWorkForEdit(
          av.source_name AS current_archive_source_name,
          av.source_file_count AS current_archive_source_file_count,
          av.source_size_bytes AS current_archive_source_size_bytes,
+         av.source_url AS current_archive_source_url,
          av.published_at AS current_archive_published_at
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
@@ -486,6 +489,7 @@ export async function getOwnedWorkForEdit(
       current_archive_source_file_count: number | null;
       current_archive_source_size_bytes: number | null;
       current_archive_published_at: string | null;
+      current_archive_source_url: string | null;
     }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(runtime, workId);
@@ -494,20 +498,18 @@ export async function getOwnedWorkForEdit(
   const downloadLink = work.externalLinks.find(
     (link) => link.linkType === "download_page",
   );
-  const sourceLink = work.externalLinks.find(
-    (link) => link.linkType === "source",
-  );
+
   const hasCurrentArchive = owned.current_archive_id !== null;
   const distribution = deriveWorkDistribution({
     hasCurrentArchive,
-    downloadLinkCount: downloadLink ? 1 : 0,
+    downloadLinkCount: work.externalLinks.filter((link) => link.linkType === "download_page").length,
   });
-  if (distribution === "invalid") return null;
+
   return {
     ...work,
-    distribution,
+    distribution: distribution === "invalid" ? (isArchiveEngineFamily(work.engineFamily) ? "archive" : "external") : distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
-    sourceUrl: sourceLink?.url ?? null,
+    workSources: work.externalLinks.filter((link) => link.linkType === "source").map(({label, url}) => ({label, url})),
     hasCurrentArchive,
     currentArchive: hasCurrentArchive
       ? {
@@ -516,6 +518,7 @@ export async function getOwnedWorkForEdit(
           sourceFileCount: owned.current_archive_source_file_count ?? 0,
           sourceSizeBytes: owned.current_archive_source_size_bytes ?? 0,
           publishedAt: owned.current_archive_published_at,
+          sourceUrl: owned.current_archive_source_url,
         }
       : null,
   };
@@ -553,9 +556,7 @@ export async function updateOwnedWork(
   ) {
     throw new HttpError(400, "外链作品必须使用非 RPG Maker 2000/2003 系引擎");
   }
-  if (input.distribution === "archive" && !before.hasCurrentArchive) {
-    throw new HttpError(400, "请先选择游戏文件");
-  }
+
   await assertTranslationLanguageChangeAllowed(
     runtime,
     input.workId,
@@ -587,12 +588,8 @@ export async function updateOwnedWork(
   );
   if (input.isTranslation !== translatorCredits.length > 0)
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
-  const previewHashes = uniqueText(
-    input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
-  );
-  await validatePreviewHashes(runtime, previewHashes);
-  if (previewHashes.length === 0)
-    throw new HttpError(400, "作品必须保留至少一张封面图");
+  const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s);
+  await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s]);
   const downloadUrl =
     input.distribution === "external"
       ? normalizeHttpUrl(input.downloadUrl, "外部下载地址")
@@ -600,15 +597,13 @@ export async function updateOwnedWork(
   if (input.distribution === "external" && !downloadUrl) {
     throw new HttpError(400, "外部下载地址不能为空");
   }
-  const sourceUrl =
-    input.distribution === "external"
-      ? normalizeHttpUrl(input.sourceUrl, "来源链接")
-      : null;
+  const workSources = parseWorkSources(input.workSources);
 
   assertStableDistribution({
     status: input.status,
     engineFamily: input.engineFamily,
-    hasCurrentArchive: input.distribution === "archive",
+    hasCurrentArchive: input.distribution === "archive" && before.hasCurrentArchive,
+    allowMissing: input.status === "hidden" || input.status === before.status,
     downloadLinkCount: downloadUrl ? 1 : 0,
   });
 
@@ -644,7 +639,7 @@ export async function updateOwnedWork(
     database
       .prepare(
         `UPDATE works
-         SET original_title=?,chinese_title=?,description=?,extra_json=json_set(extra_json,'$.moreInfo',json(?)),original_release_date=?,
+         SET original_title=?,chinese_title=?,description=?,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.usesUnsupportedManiac',json(?)),original_release_date=?,
            original_release_precision=?,engine_family=?,
            is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
@@ -655,6 +650,7 @@ export async function updateOwnedWork(
         input.chineseTitle?.trim() || null,
         input.description?.trim() || null,
         moreInfo,
+        JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
         releaseDate.value,
         releaseDate.precision,
         input.engineFamily,
@@ -669,25 +665,11 @@ export async function updateOwnedWork(
       .prepare(`DELETE FROM work_titles WHERE work_id=?`)
       .bind(input.workId),
     database
-      .prepare(`DELETE FROM work_tags WHERE work_id=? AND source='uploader'`)
-      .bind(input.workId),
-    database
       .prepare(`DELETE FROM work_staff WHERE work_id=?`)
       .bind(input.workId),
     database
       .prepare(
-        `DELETE FROM work_media_assets
-         WHERE work_id=? AND media_asset_id IN (SELECT id FROM media_assets WHERE kind='preview')`,
-      )
-      .bind(input.workId),
-    database
-      .prepare(
         `DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'`,
-      )
-      .bind(input.workId),
-    database
-      .prepare(
-        `DELETE FROM work_external_links WHERE work_id=? AND link_type='source'`,
       )
       .bind(input.workId),
   ];
@@ -707,18 +689,7 @@ export async function updateOwnedWork(
         .bind(input.workId, title),
     );
   }
-  for (const tag of tags) {
-    statements.push(
-      database
-        .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')`)
-        .bind(tag),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`,
-        )
-        .bind(input.workId, tag),
-    );
-  }
+  statements.push(...workTagStatements(database, input.workId, tags, "uploader"));
   statements.push(
     ...(await prepareWorkCharacterStatements({
       database,
@@ -751,20 +722,7 @@ export async function updateOwnedWork(
       ],
     })),
   );
-  for (const [index, hash] of previewHashes.entries()) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`,
-        )
-        .bind(hash),
-      database
-        .prepare(
-          `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
-        )
-        .bind(input.workId, index + 1, index === 0 ? 1 : 0, hash),
-    );
-  }
+  statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
   if (downloadUrl) {
     statements.push(
       database
@@ -774,15 +732,7 @@ export async function updateOwnedWork(
         .bind(input.workId, downloadUrl),
     );
   }
-  if (sourceUrl) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,'来源链接',?,'source')`,
-        )
-        .bind(input.workId, sourceUrl),
-    );
-  }
+  statements.push(...workSourceStatements(database, input.workId, workSources));
   statements.push(
     database
       .prepare(
@@ -833,11 +783,8 @@ export async function updateWorkForAdmin(
   ) {
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   }
-  assertEnum(
-    input.originalReleasePrecision,
-    ["year", "month", "day", "unknown"],
-    "发布日期精度",
-  );
+  const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
+  if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   assertEnum(
     input.engineFamily,
     [
@@ -872,6 +819,7 @@ export async function updateWorkForAdmin(
     status: input.status,
     engineFamily: input.engineFamily,
     hasCurrentArchive: distributionState.hasCurrentArchive,
+    allowMissing: input.status === "hidden" || input.status === currentStatus.status,
     downloadLinkCount: externalLinks.filter(
       (link) => link.linkType === "download_page",
     ).length,
@@ -881,10 +829,8 @@ export async function updateWorkForAdmin(
     input.workId,
     input.language,
   );
-  const previewHashes = uniqueText(
-    input.previewBlobSha256s.map((value) => value.toLowerCase()),
-  );
-  await validatePreviewHashes(runtime, previewHashes);
+  const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s, input.status === "published");
+  await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s].filter(Boolean));
   const aliases = uniqueText(input.aliases);
   const tags = uniqueText(input.tags.map(normalizeEntityName));
   const characters = input.characters.map(parseCharacterCreditSelection);
@@ -910,7 +856,7 @@ export async function updateWorkForAdmin(
         `UPDATE works
        SET chinese_title = ?,
          description = ?,
-         extra_json = json_set(extra_json, '$.moreInfo', json(?)),
+         extra_json = json_set(extra_json, '$.moreInfo', json(?), '$.usesUnsupportedManiac', json(?)),
          original_release_date = ?,
          original_release_precision = ?,
          engine_family = ?,
@@ -925,8 +871,9 @@ export async function updateWorkForAdmin(
         input.chineseTitle,
         input.description,
         moreInfo,
-        input.originalReleaseDate,
-        input.originalReleasePrecision,
+        JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
+        releaseDate.value,
+        releaseDate.precision,
         input.engineFamily,
         input.isOriginal ? 1 : 0,
         input.isTranslation ? 1 : 0,
@@ -946,15 +893,6 @@ export async function updateWorkForAdmin(
       .prepare(`DELETE FROM work_titles WHERE work_id=?`)
       .bind(input.workId),
     database
-      .prepare(`DELETE FROM work_tags WHERE work_id=?`)
-      .bind(input.workId),
-    database
-      .prepare(
-        `DELETE FROM work_media_assets
-         WHERE work_id=? AND media_asset_id IN (SELECT id FROM media_assets WHERE kind='preview')`,
-      )
-      .bind(input.workId),
-    database
       .prepare(`DELETE FROM work_external_links WHERE work_id=?`)
       .bind(input.workId),
   ];
@@ -967,19 +905,7 @@ export async function updateWorkForAdmin(
         .bind(input.workId, alias),
     );
   }
-  for (const tag of tags) {
-    statements.push(
-      database
-        .prepare(`INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')`)
-        .bind(tag),
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source)
-           SELECT ?,id,'admin' FROM tags WHERE name=? COLLATE NOCASE`,
-        )
-        .bind(input.workId, tag),
-    );
-  }
+  statements.push(...workTagStatements(database, input.workId, tags, "admin"));
   statements.push(
     ...(await prepareWorkCharacterStatements({
       database,
@@ -989,21 +915,7 @@ export async function updateWorkForAdmin(
       actorUserId: actor.id,
     })),
   );
-  for (const [index, hash] of previewHashes.entries()) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?,'preview')`,
-        )
-        .bind(hash),
-      database
-        .prepare(
-          `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary)
-           SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
-        )
-        .bind(input.workId, index + 1, index === 0 ? 1 : 0, hash),
-    );
-  }
+  statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
   for (const link of externalLinks) {
     statements.push(
       database
@@ -1051,15 +963,8 @@ export async function createExternalWork(
   const downloadUrl = normalizeHttpUrl(input.downloadUrl, "外部下载地址");
   if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空");
 
-  const previewBlobSha256s = [
-    ...new Set(
-      input.previewBlobSha256s.map((value) => value.trim().toLowerCase()),
-    ),
-  ];
-  if (previewBlobSha256s.length === 0) {
-    throw new HttpError(400, "外链作品必须提供封面图");
-  }
-  await validatePreviewHashes(runtime, previewBlobSha256s);
+  const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s);
+  await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s]);
 
   const aliases = [
     ...new Set(input.aliases.map((value) => value.trim()).filter(Boolean)),
@@ -1079,7 +984,7 @@ export async function createExternalWork(
   );
   if (input.isTranslation !== translatorCredits.length > 0)
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
-  const sourceUrl = normalizeHttpUrl(input.sourceUrl, "来源链接");
+  const workSources = parseWorkSources(input.workSources);
   const staffCredits = [
     ...translatorCredits,
     ...(input.extraStaff ?? []),
@@ -1163,27 +1068,8 @@ export async function createExternalWork(
           `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
         )
         .bind(workId, downloadUrl),
-      ...(sourceUrl
-        ? [
-            database
-              .prepare(
-                `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '来源链接', ?, 'source')`,
-              )
-              .bind(workId, sourceUrl),
-          ]
-        : []),
-      ...previewBlobSha256s.flatMap((sha256, index) => [
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO media_assets(blob_sha256,kind) VALUES(?, 'preview')`,
-          )
-          .bind(sha256),
-        database
-          .prepare(
-            `INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,is_primary) SELECT ?,id,?,? FROM media_assets WHERE blob_sha256=? AND kind='preview'`,
-          )
-          .bind(workId, index + 1, index === 0 ? 1 : 0, sha256),
-      ]),
+      ...workSourceStatements(database, workId, workSources),
+      ...workMediaStatements(database, workId, media.coverBlobSha256, media.previewBlobSha256s),
     ];
     await database.batch(statements);
   } catch (error) {
@@ -1304,18 +1190,17 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     description: clean(form.get("description")),
     moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: clean(form.get("original_release_date")),
-    originalReleasePrecision: String(
-      form.get("original_release_precision") ?? "unknown",
-    ),
     engineFamily: String(form.get("engine_family") ?? "other"),
     isOriginal: checked(form, "is_original"),
     isTranslation: checked(form, "is_translation"),
+    usesUnsupportedManiac: checked(form, "uses_unsupported_maniac"),
     workStaff: parseWorkStaffJson(form.get("work_staff")),
     language: String(form.get("language") ?? "zh-CN"),
     status: String(form.get("status") ?? ""),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),
+    coverBlobSha256: String(form.get("cover_blob_sha256") ?? ""),
     previewBlobSha256s: lines(form.get("preview_blob_sha256s")),
     outgoingRelations: [],
     externalLinks: parseLinks(form.get("external_links")),
@@ -1347,10 +1232,10 @@ function summarySql(): string {
       FROM work_media_assets wma
       JOIN media_assets ma ON ma.id = wma.media_asset_id
       WHERE wma.work_id = w.id
-        AND ma.kind = 'preview'
-      ORDER BY wma.is_primary DESC, wma.sort_order
+        AND wma.role='cover'
+      ORDER BY wma.sort_order
       LIMIT 1
-    ) AS preview_blob_sha256,
+    ) AS cover_blob_sha256,
     av.id AS current_archive_version_id,
     (
       SELECT wel.url
@@ -1473,7 +1358,7 @@ function buildWhere(input: Filters): {
         ? input.includeDeleted
           ? "1=1"
           : "w.status <> 'deleted'"
-        : `w.status='published' AND ${VALID_PUBLISHED_DISTRIBUTION_SQL}`,
+        : `w.id IN (SELECT id FROM public_works)`,
     ],
     binds: Array<string | number> = [];
   if (input.query) {
@@ -1669,7 +1554,7 @@ function mapSummaryRow(
     isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status,
-    previewBlobSha256: row.preview_blob_sha256,
+    coverBlobSha256: row.cover_blob_sha256,
     currentArchiveVersionId: row.current_archive_version_id,
     externalDownloadUrl: isHttpUrl(row.external_download_url)
       ? row.external_download_url
@@ -1720,7 +1605,7 @@ async function loadWorkCollections(
   const database = getD1(runtime);
   const targetStatus = includeNonPublic
     ? "w.status<>'deleted'"
-    : "w.status='published'";
+    : "w.id IN (SELECT id FROM public_works)";
   const results = await database.batch([
     database
       .prepare(`SELECT title FROM work_titles WHERE work_id=? ORDER BY id`)
@@ -1753,9 +1638,9 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT ma.blob_sha256,ma.kind,ma.title,ma.alt_text,wma.sort_order,wma.is_primary
+        `SELECT ma.blob_sha256,wma.role,ma.title,ma.alt_text,wma.sort_order
          FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
-         WHERE wma.work_id=? ORDER BY wma.sort_order`,
+         WHERE wma.work_id=? ORDER BY (wma.role='cover') DESC,wma.sort_order,wma.media_asset_id`,
       )
       .bind(workId),
     database
@@ -1780,7 +1665,7 @@ async function loadWorkCollections(
                  wr.created_by_user_id,w.id AS work_id,
                  COALESCE(w.chinese_title,w.original_title) AS title,
                  w.original_title,w.chinese_title,w.original_release_date,
-                 w.engine_family,w.language,${RELATED_PREVIEW_SQL}
+                 w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
           WHERE wr.from_work_id=? AND ${targetStatus}
           ORDER BY wr.relation_type,title,w.id,wr.id`,
@@ -1791,7 +1676,7 @@ async function loadWorkCollections(
         `SELECT tr.id,tr.target_role AS role,tr.created_by_user_id,
                  w.id AS work_id,COALESCE(w.chinese_title,w.original_title) AS title,
                  w.original_title,w.chinese_title,w.original_release_date,
-                 w.engine_family,w.language,${RELATED_PREVIEW_SQL}
+                 w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
           WHERE tr.source_work_id=? AND ${targetStatus}
           ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
@@ -1848,18 +1733,16 @@ async function loadWorkCollections(
     creators,
     media: batchRows<{
       blob_sha256: string;
-      kind: string;
+      role: "cover" | "preview";
       title: string | null;
       alt_text: string | null;
       sort_order: number | null;
-      is_primary: number;
     }>(results[4]).map((row) => ({
       blobSha256: row.blob_sha256,
-      kind: row.kind,
+      role: row.role,
       title: row.title,
       altText: row.alt_text,
       sortOrder: row.sort_order,
-      isPrimary: row.is_primary === 1,
     })),
     links: batchRows<{
       id: number;
@@ -1905,7 +1788,7 @@ async function loadWorkCollections(
       original_release_date: string | null;
       engine_family: string;
       language: string;
-      preview_blob_sha256: string | null;
+      cover_blob_sha256: string | null;
     }>(results[7]).map((row) => ({
       id: row.id,
       direction: "from" as const,
@@ -1919,7 +1802,7 @@ async function loadWorkCollections(
       originalReleaseDate: row.original_release_date,
       engineFamily: row.engine_family,
       language: row.language,
-      previewBlobSha256: row.preview_blob_sha256,
+      coverBlobSha256: row.cover_blob_sha256,
     })),
     translations: batchRows<{
       id: number;
@@ -1932,7 +1815,7 @@ async function loadWorkCollections(
       original_release_date: string | null;
       engine_family: string;
       language: string;
-      preview_blob_sha256: string | null;
+      cover_blob_sha256: string | null;
     }>(results[8]).map((row) => ({
       id: row.id,
       role: row.role,
@@ -1944,7 +1827,7 @@ async function loadWorkCollections(
       engineFamily: row.engine_family,
       language: row.language,
       createdByUserId: row.created_by_user_id,
-      previewBlobSha256: row.preview_blob_sha256,
+      coverBlobSha256: row.cover_blob_sha256,
     })),
   };
 }
@@ -1952,15 +1835,15 @@ async function loadWorkCollections(
 function batchRows<T>(result: D1Result): T[] {
   return (result.results ?? []) as T[];
 }
-const RELATED_PREVIEW_SQL = `(
+const RELATED_COVER_SQL = `(
   SELECT ma.blob_sha256
   FROM work_media_assets wma
   JOIN media_assets ma ON ma.id = wma.media_asset_id
   WHERE wma.work_id = w.id
-    AND ma.kind IN ('cover', 'preview')
-  ORDER BY wma.is_primary DESC, wma.sort_order
+    AND wma.role='cover'
+  ORDER BY wma.sort_order
   LIMIT 1
-) AS preview_blob_sha256`;
+) AS cover_blob_sha256`;
 
 async function listTranslations(
   runtime: AppRuntime,
@@ -1969,7 +1852,7 @@ async function listTranslations(
 ): Promise<GameTranslationRelation[]> {
   const targetStatus = includeNonPublic
     ? "w.status <> 'deleted'"
-    : "w.status='published'";
+    : "w.id IN (SELECT id FROM public_works)";
   const rows = await getD1(runtime)
     .prepare(
       `SELECT tr.id,
@@ -1979,7 +1862,7 @@ async function listTranslations(
           COALESCE(w.chinese_title, w.original_title) AS title,
           w.original_title,w.chinese_title,w.original_release_date,
           w.engine_family,w.language,
-          ${RELATED_PREVIEW_SQL}
+          ${RELATED_COVER_SQL}
        FROM translation_relations tr
        JOIN works w ON w.id = tr.target_work_id
        WHERE tr.source_work_id = ?
@@ -1998,7 +1881,7 @@ async function listTranslations(
       original_release_date: string | null;
       engine_family: string;
       language: string;
-      preview_blob_sha256: string | null;
+      cover_blob_sha256: string | null;
     }>();
   return (rows.results ?? []).map((x) => ({
     id: x.id,
@@ -2011,7 +1894,7 @@ async function listTranslations(
     engineFamily: x.engine_family,
     language: x.language,
     createdByUserId: x.created_by_user_id,
-    previewBlobSha256: x.preview_blob_sha256,
+    coverBlobSha256: x.cover_blob_sha256,
   }));
 }
 function normalizeExternalLinks(
@@ -2161,32 +2044,6 @@ function uniqueText(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-async function validatePreviewHashes(
-  runtime: AppRuntime,
-  hashes: string[],
-): Promise<void> {
-  if (hashes.some((value) => !/^[a-f0-9]{64}$/.test(value))) {
-    throw new HttpError(400, "封面或浏览图哈希不合法");
-  }
-  if (!hashes.length) return;
-  const rows = await getD1(runtime)
-    .prepare(
-      `SELECT sha256,content_type_hint FROM blobs
-       WHERE status='active' AND sha256 IN (${hashes.map(() => "?").join(",")})`,
-    )
-    .bind(...hashes)
-    .all<{ sha256: string; content_type_hint: string | null }>();
-  const found = new Map(
-    (rows.results ?? []).map((row) => [row.sha256, row.content_type_hint]),
-  );
-  if (
-    hashes.some(
-      (hash) => !found.has(hash) || !found.get(hash)?.startsWith("image/"),
-    )
-  ) {
-    throw new HttpError(400, "封面或浏览图对象不存在，或不是图片");
-  }
-}
 function parseLinks(value: FormDataEntryValue | null): GameExternalLink[] {
   return String(value ?? "")
     .split(/\r?\n/)
@@ -2249,4 +2106,12 @@ function clamp(value: number, min: number, max: number): number {
   return Number.isFinite(value)
     ? Math.max(min, Math.min(max, Math.floor(value)))
     : min;
+}
+
+async function hasUsableDistribution(runtime: AppRuntime, workId: number) {
+  const state = await getWorkDistributionState(runtime, workId);
+  const work = await getD1(runtime).prepare("SELECT engine_family FROM works WHERE id=?").bind(workId).first<{engine_family: string}>();
+  const links = await getD1(runtime).prepare("SELECT COUNT(*) AS count FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(workId).first<{count: number}>();
+  const distribution = deriveWorkDistribution({...state, downloadLinkCount: links?.count ?? 0});
+  return !!work && (distribution === "archive" ? isArchiveEngineFamily(work.engine_family) : distribution === "external" && isExternalEngineFamily(work.engine_family));
 }

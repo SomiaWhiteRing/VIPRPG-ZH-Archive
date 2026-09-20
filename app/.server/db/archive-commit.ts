@@ -1,3 +1,5 @@
+import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements, workSourceStatements } from "@/app/.server/db/work-metadata";
+import { parseWorkSources } from "@/app/.server/http/work-sources";
 import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
 import {
   parseCharacterCreditSelection,
@@ -12,7 +14,6 @@ import {
 import { getD1 } from "@/app/.server/db/d1";
 import type { ImportJobRow } from "@/app/.server/db/import-jobs";
 import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relations";
-import { assertSingleDownloadLink } from "@/app/.server/db/work-distribution";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
 import { parseWorkMoreInfo } from "@/app/.server/http/work-more-info";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -175,6 +176,7 @@ export async function commitArchiveImport(
     );
   }
 
+  await validateWorkMedia(runtime, metadataBlobHashes);
   validateBlobReferences(manifest, objectLedger.blobs);
   const faceSheetHashes = (metadata.characters ?? []).flatMap((credit) => [
     ...credit.faceSheetBlobSha256s,
@@ -772,8 +774,7 @@ function normalizeMetadata(
     !isRecord(metadata) ||
     !isRecord(metadata.game) ||
     !isRecord(metadata.archiveVersion) ||
-    !isRecord(metadata.target) ||
-    !isRecord(metadata.externalLinks)
+    !isRecord(metadata.target)
   ) {
     throw new HttpError(400, "Upload metadata is incomplete");
   }
@@ -781,7 +782,6 @@ function normalizeMetadata(
   const game = metadata.game;
   const archiveVersion = metadata.archiveVersion;
   const target = metadata.target;
-  const externalLinks = metadata.externalLinks;
   if (
     typeof game.originalTitle !== "string" ||
     !isNullableString(game.chineseTitle) ||
@@ -810,7 +810,8 @@ function normalizeMetadata(
     typeof game.language !== "string" ||
     !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
     !isRecord(game.extra) ||
-    !Array.isArray(game.browsingImageBlobSha256s)
+    typeof game.coverBlobSha256 !== "string" ||
+    !Array.isArray(game.previewBlobSha256s)
   ) {
     throw new HttpError(400, "Upload metadata game fields are invalid");
   }
@@ -829,6 +830,12 @@ function normalizeMetadata(
   }
   if (game.isOriginal && game.isTranslation) {
     throw new HttpError(400, "原创声明与翻译声明不能同时选择");
+  }
+  if (
+    game.extra.usesUnsupportedManiac !== undefined &&
+    typeof game.extra.usesUnsupportedManiac !== "boolean"
+  ) {
+    throw new HttpError(400, "Maniac 语法声明必须为布尔值");
   }
 
   if (
@@ -851,7 +858,7 @@ function normalizeMetadata(
     !Array.isArray(metadata.tags) ||
     !Array.isArray(metadata.workTitles) ||
     !Array.isArray(metadata.workStaff) ||
-    !Array.isArray(externalLinks.work)
+    !Array.isArray(metadata.workSources)
   ) {
     throw new HttpError(400, "Upload metadata lists are invalid");
   }
@@ -862,12 +869,7 @@ function normalizeMetadata(
     throw new HttpError(400, "Upload metadata characters are invalid");
   }
 
-  const browsingImageBlobSha256s = normalizeOptionalHashList(
-    game.browsingImageBlobSha256s,
-  );
-  if (target.mode === "create" && browsingImageBlobSha256s.length === 0) {
-    throw new HttpError(400, "新建游戏必须提供封面图");
-  }
+  const media = normalizeWorkMedia(game.coverBlobSha256, normalizeOptionalHashList(game.previewBlobSha256s));
   const tags = unique(
     metadata.tags
       .map((tag) => normalizeEntityName(requireString(tag, "tag")))
@@ -963,34 +965,7 @@ function normalizeMetadata(
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   }
 
-  const workLinks = externalLinks.work
-    .map((link) => {
-      if (
-        !isRecord(link) ||
-        typeof link.label !== "string" ||
-        typeof link.url !== "string" ||
-        !isEnum(link.linkType, [
-          "official",
-          "wiki",
-          "source",
-          "video",
-          "download_page",
-          "other",
-        ] as const)
-      ) {
-        throw new HttpError(400, "Upload metadata external link is invalid");
-      }
-      return {
-        label: link.label.trim(),
-        url: normalizeHttpUrl(link.url, "作品外链") ?? "",
-        linkType: link.linkType,
-      };
-    })
-    .filter((link) => link.label && link.url);
-  assertSingleDownloadLink(workLinks);
-  if (workLinks.some((link) => link.linkType === "download_page")) {
-    throw new HttpError(400, "本站归档作品不能设置外部下载地址");
-  }
+  const workSources = parseWorkSources(metadata.workSources);
 
   if (!game.originalTitle.trim()) {
     throw new HttpError(400, "游戏原名不能为空");
@@ -1006,11 +981,14 @@ function normalizeMetadata(
       extra: {
         ...game.extra,
         moreInfo: parseWorkMoreInfo(game.extra.moreInfo),
+        usesUnsupportedManiac:
+          game.engineFamily === "rpg_maker_2003_maniac" &&
+          game.extra.usesUnsupportedManiac === true,
       },
       originalReleaseDate: releaseDate.value,
       originalReleasePrecision: releaseDate.precision,
       language: game.language.trim(),
-      browsingImageBlobSha256s,
+      ...media,
     },
     target: { mode: target.mode, workId: target.workId },
     archiveVersion: {
@@ -1022,7 +1000,7 @@ function normalizeMetadata(
     characters,
     workStaff,
     tags,
-    externalLinks: { work: workLinks },
+    workSources,
   };
 }
 
@@ -1032,7 +1010,8 @@ function normalizeNullableWorkText(value: string | null): string | null {
 
 function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
   return unique([
-    ...metadata.game.browsingImageBlobSha256s,
+    metadata.game.coverBlobSha256,
+    ...metadata.game.previewBlobSha256s,
     ...(metadata.characters ?? []).flatMap((credit) => [
       ...credit.faceSheetBlobSha256s,
       ...(credit.portrait ? [credit.portrait.blobSha256] : []),
@@ -1304,101 +1283,12 @@ async function finalizeArchiveCommit(
     })),
   );
 
-  for (const tag of input.metadata.tags) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO tags (name, namespace) VALUES (?, 'other')`,
-        )
-        .bind(tag),
-    );
-  }
   statements.push(
-    database
-      .prepare(
-        `DELETE FROM work_tags WHERE work_id = ? AND source = 'uploader'`,
-      )
-      .bind(input.workId),
+    ...workTagStatements(database, input.workId, input.metadata.tags, "uploader"),
+    ...workSourceStatements(database, input.workId, input.metadata.workSources),
+    database.prepare("DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(input.workId),
+    ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
   );
-  for (const tag of input.metadata.tags) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_tags (work_id, tag_id, source)
-           SELECT ?, id, 'uploader' FROM tags WHERE name = ? COLLATE NOCASE`,
-        )
-        .bind(input.workId, tag),
-    );
-  }
-
-  const links = input.metadata.externalLinks.work;
-  if (input.metadata.target.mode === "update") {
-    statements.push(
-      database
-        .prepare(
-          `DELETE FROM work_external_links
-           WHERE work_id = ? AND link_type IN ('download_page', 'source')`,
-        )
-        .bind(input.workId),
-    );
-  }
-  if (links.length > 0) {
-    for (const link of links) {
-      statements.push(
-        database
-          .prepare(
-            `INSERT INTO work_external_links (work_id, label, url, link_type)
-           SELECT ?, ?, ?, ?
-           WHERE NOT EXISTS (
-             SELECT 1 FROM work_external_links
-             WHERE work_id = ? AND label = ? AND url = ? AND link_type = ?
-           )`,
-          )
-          .bind(
-            input.workId,
-            link.label,
-            link.url,
-            link.linkType,
-            input.workId,
-            link.label,
-            link.url,
-            link.linkType,
-          ),
-      );
-    }
-  }
-
-  const browsingImages = game.browsingImageBlobSha256s;
-  for (const sha256 of browsingImages) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO media_assets (blob_sha256, kind) VALUES (?, 'preview')`,
-        )
-        .bind(sha256),
-    );
-  }
-  statements.push(
-    database
-      .prepare(
-        `DELETE FROM work_media_assets
-           WHERE work_id = ?
-             AND media_asset_id IN (SELECT id FROM media_assets WHERE kind = 'preview')`,
-      )
-      .bind(input.workId),
-  );
-  for (const [index, sha256] of browsingImages.entries()) {
-    statements.push(
-      database
-        .prepare(
-          `INSERT OR REPLACE INTO work_media_assets (
-             work_id, media_asset_id, sort_order, is_primary
-         ) SELECT ?, id, ?, ? FROM media_assets
-             WHERE blob_sha256 = ? AND kind = 'preview'`,
-        )
-        .bind(input.workId, index + 1, index === 0 ? 1 : 0, sha256),
-    );
-  }
 
   statements.push(
     database

@@ -86,11 +86,8 @@ export async function readCharacterCounts(
   const [comments, materials] = await database.batch([
     database
       .prepare(
-        `SELECT c.character_id AS characterId,COUNT(*) AS count FROM comments c
-      JOIN users u ON u.id=c.user_id JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
-      JOIN users root_user ON root_user.id=root.user_id
-      WHERE c.character_id IS NOT NULL AND c.status='published' AND root.status='published'
-        AND u.status IN ('active','deleted') AND root_user.status IN ('active','deleted')${commentFilter} GROUP BY c.character_id`,
+        `SELECT c.character_id AS characterId,COUNT(*) AS count FROM public_comments c
+      WHERE c.character_id IS NOT NULL${commentFilter} GROUP BY c.character_id`,
       )
       .bind(...(selected === null ? [] : [selected])),
     database

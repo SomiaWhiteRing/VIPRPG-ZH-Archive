@@ -31,7 +31,7 @@ export function GameLibraryListRow({ work }: { work: GameWorkSummary }) {
         to={`/games/${work.id}`}
       >
         <WorkThumbnail
-          blobSha256={work.previewBlobSha256}
+          blobSha256={work.coverBlobSha256}
           alt={title}
           width={128}
           height={96}

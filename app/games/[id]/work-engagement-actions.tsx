@@ -1,3 +1,4 @@
+import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
@@ -32,12 +33,32 @@ export function CatalogAddDialog({
   catalogs,
   workId,
 }: {
-  catalogs: CatalogSummary[];
+  catalogs: { items: CatalogSummary[]; total: number; page: number; pageSize: number };
   workId: number;
 }) {
   const revalidator = useRevalidator();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [result, setResult] = useState(catalogs);
+  const [query, setQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  async function loadCatalogs(page: number, search = activeQuery) {
+    if (loading) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/catalogs?${new URLSearchParams({owner:"me",q:search,page:String(page)})}`, {credentials:"same-origin"});
+      if (!response.ok) throw new Error("目录加载失败，请重试。");
+      const payload = await response.json() as typeof catalogs & {ok:boolean};
+      if (!payload.ok) throw new Error("目录加载失败，请重试。");
+      setResult(payload);
+      setActiveQuery(search);
+      setCatalogId("");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "目录加载失败。"); }
+    finally { setLoading(false); }
+  }
+
   const [catalogId, setCatalogId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +66,7 @@ export function CatalogAddDialog({
   function changeOpen(nextOpen: boolean) {
     if (busy) return;
     setOpen(nextOpen);
-    if (nextOpen) setMessage(null);
+    if (nextOpen) { setQuery(""); void loadCatalogs(1, ""); }
   }
 
   async function addToCatalog() {
@@ -98,15 +119,21 @@ export function CatalogAddDialog({
           >
             选择一个目录，将当前游戏添加到其中。
           </Dialog.Description>
-          {catalogs.length ? (
+          <form className="flex gap-2" onSubmit={(event) => {event.preventDefault(); void loadCatalogs(1, query);}}>
+            <Input aria-label="搜索我的目录" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索我的目录" />
+            <Button type="submit" variant="outline" disabled={loading || busy}>搜索</Button>
+          </form>
+          {message ? <Notice>{message}</Notice> : null}
+          {loading ? <p role="status" className="text-sm text-muted">正在加载目录…</p> : null}
+          {result.items.length ? (
             <>
               <FormField controlId="games-id--field-1" label="目录">
                 <SelectField
                   id="games-id--field-1"
                   aria-label="目录"
-                  disabled={busy}
+                  disabled={busy || loading}
                   onValueChange={setCatalogId}
-                  options={catalogs.map((catalog) => ({
+                  options={result.items.map((catalog) => ({
                     value: String(catalog.id),
                     label: catalog.title,
                   }))}
@@ -114,9 +141,11 @@ export function CatalogAddDialog({
                   value={catalogId}
                 />
               </FormField>
-              {message ? (
-                <Notice>{message}</Notice>
-              ) : null}
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <Button type="button" variant="ghost" disabled={loading || busy || result.page <= 1} onClick={() => void loadCatalogs(result.page - 1)}>上一页</Button>
+                <span>{result.page} / {Math.max(1, Math.ceil(result.total / result.pageSize))} 页，共 {result.total} 个目录</span>
+                <Button type="button" variant="ghost" disabled={loading || busy || result.page * result.pageSize >= result.total} onClick={() => void loadCatalogs(result.page + 1)}>下一页</Button>
+              </div>
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <Dialog.Close asChild>
                   <Button disabled={busy} type="button" variant="outline">
@@ -124,7 +153,7 @@ export function CatalogAddDialog({
                   </Button>
                 </Dialog.Close>
                 <Button
-                  disabled={busy || !catalogId}
+                  disabled={busy || loading || !catalogId}
                   onClick={() => void addToCatalog()}
                   type="button"
                 >
@@ -134,7 +163,7 @@ export function CatalogAddDialog({
             </>
           ) : (
             <>
-              <EmptyState title="你还没有可用的目录。" variant="plain" />
+              {!loading && !message ? <EmptyState title={activeQuery ? "没有匹配的目录。" : "你还没有可用的目录。"} variant="plain" /> : null}
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <Dialog.Close asChild>
                   <Button type="button" variant="outline">

@@ -1,3 +1,4 @@
+import { readValidatedImage } from "@/app/.server/storage/work-images";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type {
@@ -23,6 +24,7 @@ export async function searchCatalogsForOwner(
   runtime: AppRuntime,
   input: {
     userId: number;
+    query?: string;
     page?: number;
     pageSize?: number;
   },
@@ -35,17 +37,18 @@ export async function searchCatalogsForOwner(
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const database = getD1(runtime);
+  const like = `%${(input.query ?? "").trim().replace(/[\\%_]/g, "\\$&")}%`;
   const [countResult, rowsResult] = await database.batch([
     database
       .prepare(
-        `SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published'`,
+        `SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published' AND title LIKE ? ESCAPE '\\'`,
       )
-      .bind(input.userId),
+      .bind(input.userId, like),
     database
       .prepare(
-        `${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
+        `${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? AND c.title LIKE ? ESCAPE '\\' ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
       )
-      .bind(input.userId, pageSize, (page - 1) * pageSize),
+      .bind(input.userId, like, pageSize, (page - 1) * pageSize),
   ]);
   return {
     items: ((rowsResult.results ?? []) as Row[]).map(mapSummary),
@@ -224,7 +227,7 @@ export async function addCatalogItem(
   if (!Number.isSafeInteger(workId) || workId <= 0)
     throw new HttpError(400, "目录项目不合法");
   const work = await getD1(runtime)
-    .prepare(`SELECT id FROM works WHERE id=? AND status='published' LIMIT 1`)
+    .prepare(`SELECT id FROM public_works WHERE id=? LIMIT 1`)
     .bind(workId)
     .first<{ id: number }>();
   if (!work) throw new HttpError(400, "目录只能收录已发布游戏");
@@ -283,15 +286,15 @@ async function loadCatalogDetail(
            SELECT ma.blob_sha256
            FROM work_media_assets wma
            JOIN media_assets ma ON ma.id = wma.media_asset_id
-           WHERE wma.work_id = w.id AND ma.kind = 'preview'
-           ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+           WHERE wma.work_id = w.id AND wma.role='cover'
+           ORDER BY wma.sort_order, wma.media_asset_id
            LIMIT 1
-         ) AS preview_blob_sha256,
+         ) AS cover_blob_sha256,
          ci.sort_order,
          ci.note
        FROM catalog_items ci
        JOIN works w ON w.id = ci.work_id
-       WHERE ci.catalog_id = ? AND w.status = 'published'
+       WHERE ci.catalog_id = ? AND w.id IN (SELECT id FROM public_works)
        ORDER BY ci.sort_order ASC, ci.work_id DESC`,
     )
     .bind(row.id)
@@ -307,7 +310,7 @@ async function loadCatalogDetail(
       originalReleaseDate: item.original_release_date,
       engineFamily: item.engine_family,
       language: item.language,
-      previewBlobSha256: item.preview_blob_sha256,
+      coverBlobSha256: item.cover_blob_sha256,
       sortOrder: item.sort_order,
       note: item.note,
     })),
@@ -400,12 +403,13 @@ async function requiredCatalogCover(
     .prepare(
       `SELECT sha256
        FROM blobs
-       WHERE sha256=? AND status='active' AND content_type_hint LIKE 'image/%'
+       WHERE sha256=? AND status='active'
        LIMIT 1`,
     )
     .bind(sha256)
     .first<{ sha256: string }>();
   if (!blob) throw new HttpError(400, "目录封面不存在或不是可用图片");
+  await readValidatedImage(runtime, blob.sha256);
   return blob.sha256;
 }
 function clean(value: string | null | undefined): string | null {
@@ -435,7 +439,7 @@ type ItemRow = {
   original_release_date: string | null;
   engine_family: string;
   language: string;
-  preview_blob_sha256: string | null;
+  cover_blob_sha256: string | null;
   sort_order: number;
   note: string | null;
 };
@@ -452,7 +456,7 @@ const CATALOG_SUMMARY_SELECT = `
       SELECT COUNT(*)
       FROM catalog_items ci
       JOIN works cw ON cw.id = ci.work_id
-      WHERE ci.catalog_id = c.id AND cw.status = 'published'
+      WHERE ci.catalog_id = c.id AND cw.id IN (SELECT id FROM public_works)
     ) AS item_count,
     c.cover_blob_sha256 AS custom_cover_blob_sha256,
     COALESCE(c.cover_blob_sha256, (
@@ -463,12 +467,12 @@ const CATALOG_SUMMARY_SELECT = `
         SELECT first_item.work_id
         FROM catalog_items first_item
         JOIN works first_work ON first_work.id = first_item.work_id
-        WHERE first_item.catalog_id = c.id AND first_work.status = 'published'
+        WHERE first_item.catalog_id = c.id AND first_work.id IN (SELECT id FROM public_works)
         ORDER BY first_item.sort_order ASC, first_item.work_id DESC
         LIMIT 1
       )
-        AND ma.kind = 'preview'
-      ORDER BY wma.is_primary DESC, wma.sort_order, wma.media_asset_id
+        AND wma.role='cover'
+      ORDER BY wma.sort_order, wma.media_asset_id
       LIMIT 1
     )) AS cover_blob_sha256,
     c.created_at,
