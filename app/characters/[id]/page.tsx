@@ -220,7 +220,7 @@ function CharacterWorks({ works }: { works: CharacterWork[] }) {
           >
             {
               <WorkThumbnail
-                blobSha256={work.previewBlobSha256}
+                blobSha256={work.coverBlobSha256}
                 alt=""
                 sizes="112px"
                 imageClassName="object-cover"

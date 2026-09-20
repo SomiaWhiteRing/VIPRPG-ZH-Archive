@@ -32,6 +32,8 @@ export function CoverPicker({
   currentImageSrc,
   disabled = false,
   existingBlobSha256s,
+  existingCoverBlobSha256,
+  existingImageBaseUrl = "/api/media/blobs/",
   file,
   includeSelectedFileCandidate = true,
   name,
@@ -43,6 +45,8 @@ export function CoverPicker({
   currentImageSrc?: string | null;
   disabled?: boolean;
   existingBlobSha256s?: string[];
+  existingCoverBlobSha256?: string;
+  existingImageBaseUrl?: string;
   file: File | null;
   includeSelectedFileCandidate?: boolean;
   name?: string;
@@ -79,11 +83,12 @@ export function CoverPicker({
         src: fileUrl,
       });
     }
+    if (existingCoverBlobSha256) result.push({ key: "existing-cover", label: "当前封面", src: existingImageBaseUrl + existingCoverBlobSha256 });
     for (const [index, sha256] of blobSha256s.entries()) {
       result.push({
         key: "existing-" + sha256,
-        label: index === 0 ? "当前封面" : "已有预览图 " + index,
-        src: "/api/media/blobs/" + sha256,
+        label: "已有预览图 " + (index + 1),
+        src: existingImageBaseUrl + sha256,
       });
     }
     for (const [index, entry] of candidateFileUrls.entries()) {
@@ -105,6 +110,8 @@ export function CoverPicker({
     return result;
   }, [
     blobSha256s,
+    existingCoverBlobSha256,
+    existingImageBaseUrl,
     candidateFileUrls,
     file,
     fileUrl,
@@ -120,7 +127,7 @@ export function CoverPicker({
   const triggerSrc =
     fileUrl ||
     currentImageSrc ||
-    (blobSha256s[0] ? "/api/media/blobs/" + blobSha256s[0] : null);
+    (existingCoverBlobSha256 ? existingImageBaseUrl + existingCoverBlobSha256 : null);
 
   useEffect(
     () => () => {

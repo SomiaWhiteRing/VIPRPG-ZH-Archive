@@ -166,14 +166,14 @@ export default function WebPlayPage() {
         isAuthenticated={Boolean(currentUser)}
         metadata={metadata}
         notice={
-          metadata.engineFamily === "rpg_maker_2003_maniac" ? (
+          work.usesUnsupportedManiac ? (
             <WorkPageNotice>
               <AlertTriangle
                 aria-hidden
                 className="mt-0.5 shrink-0"
                 size={16}
               />
-              <span>该游戏使用了 Maniac，可能无法用 EasyRPG 正常游玩。</span>
+              <span>该游戏使用了 EasyRPG 不支持的 Maniac 语法，可能无法正常游玩。</span>
             </WorkPageNotice>
           ) : null
         }

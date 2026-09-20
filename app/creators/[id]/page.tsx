@@ -128,7 +128,7 @@ export default function CreatorDetailPage() {
                         to={`/games/${work.workId}`}
                       >
                         <WorkThumbnail
-                          blobSha256={work.previewBlobSha256}
+                          blobSha256={work.coverBlobSha256}
                           alt=""
                           sizes="112px"
                           imageClassName="object-cover"

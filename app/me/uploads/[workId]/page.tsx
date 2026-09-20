@@ -67,6 +67,7 @@ export default function UploadedWorkPage() {
           chineseTitle: work.chineseTitle,
           description: work.description,
           moreInfo: work.moreInfo,
+          usesUnsupportedManiac: work.usesUnsupportedManiac,
           originalReleaseDate: work.originalReleaseDate,
           engineFamily: work.engineFamily as UploadInitialWork["engineFamily"],
           isOriginal: work.isOriginal,
@@ -107,9 +108,11 @@ export default function UploadedWorkPage() {
             })),
           translators: staffCredits(work, "translator"),
           externalDownloadUrl: work.externalDownloadUrl,
-          sourceUrl: work.sourceUrl,
+          workSources: work.workSources,
+          archiveSourceUrl: work.currentArchive?.sourceUrl ?? null,
+          coverBlobSha256: work.media.find((media) => media.role === "cover")?.blobSha256 ?? "",
           previewBlobSha256s: work.media
-            .filter((media) => media.kind === "preview")
+            .filter((media) => media.role === "preview")
             .sort(
               (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
             )

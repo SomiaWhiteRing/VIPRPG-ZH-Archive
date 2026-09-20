@@ -17,6 +17,7 @@ export function deriveWorkDistribution(input: {
 
 export function assertStableDistribution(input: {
   status: string;
+  allowMissing?: boolean;
   engineFamily: string;
   hasCurrentArchive: boolean;
   downloadLinkCount: number;
@@ -26,6 +27,7 @@ export function assertStableDistribution(input: {
   }
 
   const distribution = deriveWorkDistribution(input);
+  if (input.allowMissing && !input.hasCurrentArchive && input.downloadLinkCount === 0) return distribution;
   if (distribution === "invalid") {
     throw new HttpError(400, "公开作品必须且只能有一种下载来源");
   }

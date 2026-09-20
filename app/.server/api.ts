@@ -1,3 +1,4 @@
+import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
 import * as endpoint0 from "@/app/.server/endpoints/api/account/avatar/route";
 import * as endpoint1 from "@/app/.server/endpoints/api/account/delete/route";
 import * as endpoint2 from "@/app/.server/endpoints/api/account/email/confirm/route";
@@ -99,6 +100,9 @@ export const api = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.on(["GET", "HEAD"], "/api/works/:workId/media/:sha256", (c) =>
+  workMediaEndpoint.GET(c.get("runtime"), c.req.raw, { params: {workId: c.req.param("workId"), sha256: c.req.param("sha256")} }));
+api.all("/api/works/:workId/media/:sha256", (c) => c.json({ok:false,error:"Method not allowed"},405,{Allow:"GET, HEAD"}));
 api.route("/", resourceApi);
 api.route("/", emojiApi);
 api.on("PUT", "/api/account/avatar", (c) =>
@@ -386,7 +390,7 @@ api.all("/api/auth/register/verify", (c) =>
   }),
 );
 api.on(["GET", "HEAD"], "/api/catalogs", (c) =>
-  endpoint25.GET(c.get("runtime")),
+  endpoint25.GET(c.get("runtime"), c.req.raw),
 );
 api.on("POST", "/api/catalogs", (c) =>
   endpoint25.POST(c.get("runtime"), c.req.raw),

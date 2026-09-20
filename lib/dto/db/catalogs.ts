@@ -6,7 +6,7 @@ export type CatalogItem = {
   originalReleaseDate: string | null;
   engineFamily: string;
   language: string;
-  previewBlobSha256: string | null;
+  coverBlobSha256: string | null;
   sortOrder: number;
   note: string | null;
 };

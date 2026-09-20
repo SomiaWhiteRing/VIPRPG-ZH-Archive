@@ -1092,15 +1092,12 @@ CREATE TABLE IF NOT EXISTS work_tags (
 CREATE TABLE IF NOT EXISTS media_assets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   blob_sha256 TEXT NOT NULL REFERENCES blobs(sha256),
-  kind TEXT NOT NULL CHECK (
-    kind IN ('icon', 'cover', 'preview', 'screenshot', 'banner', 'other')
-  ),
   title TEXT,
   alt_text TEXT,
   width INTEGER,
   height INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (blob_sha256, kind)
+  UNIQUE (blob_sha256)
 );
 
 CREATE TRIGGER IF NOT EXISTS media_assets_require_active_blob
@@ -1121,9 +1118,11 @@ CREATE TABLE IF NOT EXISTS work_media_assets (
   work_id INTEGER NOT NULL REFERENCES works(id) ON DELETE CASCADE,
   media_asset_id INTEGER NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
   sort_order INTEGER,
-  is_primary INTEGER NOT NULL DEFAULT 0,
+  role TEXT NOT NULL CHECK (role IN ('cover', 'preview')),
   PRIMARY KEY (work_id, media_asset_id)
 );
+
+CREATE UNIQUE INDEX work_media_one_cover ON work_media_assets(work_id) WHERE role='cover';
 
 CREATE TRIGGER blobs_purge_requires_unreferenced
 BEFORE UPDATE OF status ON blobs
@@ -1626,3 +1625,26 @@ BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
 CREATE TRIGGER forum_comment_face_emojis_available BEFORE INSERT ON forum_comment_face_emojis
 WHEN NOT EXISTS(SELECT 1 FROM available_face_emojis WHERE id=NEW.emoji_id)
 BEGIN SELECT RAISE(ABORT,'face emoji unavailable'); END;
+
+-- Publication intention and current download availability are separate.
+CREATE VIEW public_works AS
+SELECT w.* FROM works w WHERE w.status='published' AND (
+  (w.engine_family IN ('rpg_maker_2000','rpg_maker_2003','rpg_maker_2003_maniac')
+    AND (SELECT COUNT(*) FROM archive_versions av WHERE av.work_id=w.id AND av.status='published' AND av.is_current=1 AND av.purged_at IS NULL)=1
+    AND NOT EXISTS (SELECT 1 FROM work_external_links link WHERE link.work_id=w.id AND link.link_type='download_page'))
+  OR (w.engine_family IN ('rpg_maker_xp','rpg_maker_vx','rpg_maker_vx_ace','rpg_maker_mv','rpg_maker_mz','rpg_maker_unite','other')
+    AND NOT EXISTS (SELECT 1 FROM archive_versions av WHERE av.work_id=w.id AND av.status='published' AND av.is_current=1)
+    AND (SELECT COUNT(*) FROM work_external_links link WHERE link.work_id=w.id AND link.link_type='download_page')=1)
+);
+
+-- Deleted replies are placeholders only; this view counts readable comment bodies.
+CREATE VIEW public_comments AS
+SELECT c.* FROM comments c
+JOIN users u ON u.id=c.user_id
+JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
+JOIN users root_user ON root_user.id=root.user_id
+WHERE c.status='published' AND root.status='published'
+  AND u.status IN ('active','deleted') AND root_user.status IN ('active','deleted')
+  AND (EXISTS (SELECT 1 FROM public_works w WHERE w.id=c.work_id)
+    OR EXISTS (SELECT 1 FROM work_staff staff JOIN public_works w ON w.id=staff.work_id WHERE staff.creator_id=c.creator_id)
+    OR EXISTS (SELECT 1 FROM characters ch WHERE ch.id=c.character_id));

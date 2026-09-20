@@ -12,7 +12,7 @@ export type WorkListItemData = {
   originalReleaseDate: string | null;
   engineFamily: string;
   language: string;
-  previewBlobSha256?: string | null;
+  coverBlobSha256?: string | null;
 };
 
 export function WorkListItem({
@@ -39,7 +39,7 @@ export function WorkListItem({
         to={href}
       >
         <WorkThumbnail
-          blobSha256={item.previewBlobSha256}
+          blobSha256={item.coverBlobSha256}
           alt=""
           width={128}
           height={96}

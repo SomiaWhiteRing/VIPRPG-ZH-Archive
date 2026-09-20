@@ -3,14 +3,7 @@ import type { GameMediaAsset } from "@/lib/dto/db/game-library";
 import { Maximize2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-const MEDIA_LABELS: Record<string, string> = {
-  icon: "图标",
-  cover: "封面",
-  preview: "预览图",
-  screenshot: "预览图",
-  banner: "横幅",
-  other: "媒体",
-};
+const MEDIA_LABELS = { cover: "封面", preview: "预览图" };
 
 export function WorkMediaGallery({
   items,
@@ -39,7 +32,7 @@ export function WorkMediaGallery({
         className="flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin"
       >
         {items.map((item, index) => {
-          const label = item.title?.trim() || MEDIA_LABELS[item.kind] || "媒体";
+          const label = MEDIA_LABELS[item.role];
           return (
             <Button
               aria-label={`${label}，点击放大`}
@@ -87,9 +80,7 @@ export function WorkMediaGallery({
             </div>
             <div className="flex items-center justify-between gap-4 border-t border-border px-3 py-2">
               <strong>
-                {selected.title?.trim() ||
-                  MEDIA_LABELS[selected.kind] ||
-                  "媒体"}
+                {MEDIA_LABELS[selected.role]}
               </strong>
               <Button
                 aria-label="关闭预览图"

@@ -145,6 +145,7 @@ export async function mergeWorks(
       .first()
   )
     throw new HttpError(409, "作品仍有进行中的上传，请先结束上传");
+  await assertMergeCover(db, target);
   await assertWorkMergeDeclarations(db, source, target);
   await assertArchiveMergeStates(db, source, target);
   // Refuse ambiguous merges instead of dropping files, credits, or catalog annotations.
@@ -163,6 +164,17 @@ export async function mergeWorks(
   if (conflicts.some((r) => r.results?.length))
     throw new HttpError(409, "署名／目录备注不同，请先在后台处理冲突后再合并");
   const statements: D1PreparedStatement[] = [];
+  statements.push(
+    db.prepare(`UPDATE works SET updated_at=CASE WHEN EXISTS (SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?`).bind(target, target),
+    db.prepare(`INSERT INTO work_media_assets(work_id,media_asset_id,sort_order,role)
+      SELECT ?,s.media_asset_id,
+        COALESCE((SELECT MAX(sort_order) FROM work_media_assets WHERE work_id=?),0)
+          + ROW_NUMBER() OVER (ORDER BY (s.role='cover') DESC,s.sort_order,s.media_asset_id),'preview'
+      FROM work_media_assets s WHERE s.work_id=? AND NOT EXISTS
+        (SELECT 1 FROM work_media_assets t WHERE t.work_id=? AND t.media_asset_id=s.media_asset_id)`)
+      .bind(target,target,source,target),
+    db.prepare("DELETE FROM work_media_assets WHERE work_id=?").bind(source),
+  );
   // Enforce the declaration check again inside the batch. NULL violates the
   // existing NOT NULL constraint and aborts the transaction before any transfer.
   statements.push(
@@ -236,7 +248,6 @@ export async function mergeWorks(
     ["work_staff", "creator_id,display_name,role_key,role_label,notes"],
     ["work_tags", "tag_id,source,created_at"],
     ["catalog_items", "catalog_id,sort_order,note,created_at"],
-    ["work_media_assets", "media_asset_id,sort_order,is_primary"],
   ]) {
     statements.push(
       db
@@ -405,4 +416,9 @@ function audit(
       `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,?,?)`,
     )
     .bind(actor.id, actor.email, event, JSON.stringify(detail));
+}
+
+async function assertMergeCover(db: D1Database, target: number) {
+  if (!await db.prepare("SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover'").bind(target).first())
+    throw new HttpError(409, "目标作品缺少封面，请先指定封面再合并");
 }

@@ -521,7 +521,7 @@ export async function listPublicTags(
 ): Promise<PublicTagSummary[]> {
   const binds: Array<string | number> = [];
   const where = [
-    `EXISTS(SELECT 1 FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published')`,
+    `EXISTS(SELECT 1 FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.id IN (SELECT id FROM public_works))`,
   ];
   if (input.query?.trim()) {
     const q = `%${input.query.trim()}%`;
@@ -929,10 +929,10 @@ function characterSql(
   extraJoins = "",
   publicPortrait = false,
 ): string {
-  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.status='published') AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""} ${extraJoins}`;
+  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works)) AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""} ${extraJoins}`;
 }
 function tagSql(): string {
-  return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.status='published') AS work_count,t.updated_at`;
+  return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.id IN (SELECT id FROM public_works)) AS work_count,t.updated_at`;
 }
 function mapCharacter(row: CharacterRow): PublicCharacterSummary {
   return {

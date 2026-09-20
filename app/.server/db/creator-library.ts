@@ -33,7 +33,7 @@ type CreditRow = {
   role_label: string | null;
   notes: string | null;
   original_release_date: string | null;
-  preview_blob_sha256: string | null;
+  cover_blob_sha256: string | null;
   status: string;
 };
 
@@ -114,7 +114,7 @@ export async function browsePublicCreators(
 
 function publicCreatorFilter(query?: string): { where: string; binds: string[] } {
   const where = [
-    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.status='published')`,
+    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works))`,
   ];
   const binds: string[] = [];
   if (query?.trim()) {
@@ -137,7 +137,7 @@ export async function getPublicCreatorDetail(
       .prepare(
         `${summarySql()} FROM creators c WHERE c.id=? AND EXISTS (
       SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
-      WHERE ws.creator_id=c.id AND w.status='published'
+      WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
     ) LIMIT 1`,
       )
       .bind(id),
@@ -389,7 +389,7 @@ async function listCredits(
   id: number,
   includeNonPublic: boolean,
 ): Promise<CreatorWorkCredit[]> {
-  const status = includeNonPublic ? "1=1" : "w.status='published'";
+  const status = includeNonPublic ? "1=1" : "w.id IN (SELECT id FROM public_works)";
   const rows = await getD1(runtime)
     .prepare(
       `SELECT w.id AS work_id,
@@ -404,10 +404,10 @@ async function listCredits(
             SELECT ma.blob_sha256
             FROM work_media_assets wma
             JOIN media_assets ma ON ma.id=wma.media_asset_id
-            WHERE wma.work_id=w.id AND ma.kind='preview'
-            ORDER BY wma.is_primary DESC,wma.sort_order
+            WHERE wma.work_id=w.id AND wma.role='cover'
+            ORDER BY wma.sort_order
             LIMIT 1
-          ) AS preview_blob_sha256,
+          ) AS cover_blob_sha256,
           w.status
        FROM work_staff ws
        JOIN works w ON w.id = ws.work_id
@@ -427,7 +427,7 @@ async function listCredits(
     roleLabel: row.role_label,
     notes: row.notes,
     originalReleaseDate: row.original_release_date,
-    previewBlobSha256: row.preview_blob_sha256,
+    coverBlobSha256: row.cover_blob_sha256,
     status: row.status,
   }));
 }
@@ -444,14 +444,14 @@ function summarySql(): string {
         FROM work_staff ws
         JOIN works w ON w.id = ws.work_id
         WHERE ws.creator_id = c.id
-          AND w.status = 'published'
+          AND w.id IN (SELECT id FROM public_works)
       ) AS work_credit_count,
       (
         SELECT MAX(COALESCE(w.original_release_date, w.published_at, w.created_at))
         FROM work_staff ws
         JOIN works w ON w.id = ws.work_id
         WHERE ws.creator_id = c.id
-          AND w.status = 'published'
+          AND w.id IN (SELECT id FROM public_works)
       ) AS latest_work_credit_at`;
 }
 function mapSummary(row: CreatorRow): PublicCreatorSummary {

@@ -10,7 +10,7 @@ export type CharacterWorkCredit = {
   spoilerLevel: number;
   notes: string | null;
   releaseDate: string | null;
-  previewBlobSha256: string | null;
+  coverBlobSha256: string | null;
 };
 
 export type CharacterWork = CharacterWorkCredit & {

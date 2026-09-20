@@ -158,12 +158,12 @@ export function CatalogSummaryEditor({
   const coverCandidates = useMemo<CoverPickerCandidate[]>(
     () =>
       catalog.items.flatMap((item) =>
-        item.previewBlobSha256
+        item.coverBlobSha256
           ? [
               {
                 key: `catalog-work-${item.workId}`,
                 label: item.title,
-                src: `/api/media/blobs/${item.previewBlobSha256}`,
+                src: `/api/media/blobs/${item.coverBlobSha256}`,
               },
             ]
           : [],

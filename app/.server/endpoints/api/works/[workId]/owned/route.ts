@@ -1,3 +1,4 @@
+import { parseWorkSourcesJson } from "@/app/.server/http/work-sources";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -41,20 +42,13 @@ export async function POST(
       .getAll("character_face_sheets[]")
       .filter((value): value is File => value instanceof File && value.size > 0)
       .map((value) => readCharacterFaceSheet(value));
-    const imageEntries = form
-      .getAll("images[]")
-      .filter(
-        (value): value is File => value instanceof File && value.size > 0,
-      );
-    const previewBlobSha256s = imageEntries.length
-      ? await storeWorkImages(
-          runtime,
-          imageEntries.map((value) => readWorkImage(value, "images[]")),
-        )
-      : current.media
-          .filter((media) => media.kind === "preview")
-          .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
-          .map((media) => media.blobSha256);
+    const coverFile = form.get("cover");
+    const coverBlobSha256 = coverFile instanceof File && coverFile.size > 0
+      ? (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0]
+      : current.media.find((media) => media.role === "cover")?.blobSha256 ?? "";
+    const previewBlobSha256s = form.has("replace_previews")
+      ? await storeWorkImages(runtime, form.getAll("browsing_images[]").map((value) => readWorkImage(value, "browsing_images[]")))
+      : current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256);
     await storeCharacterFaceSheets(runtime, characterFaceSheets);
     await ensureCharacterFaceSheets(
       runtime,
@@ -70,6 +64,7 @@ export async function POST(
         user: auth.user,
         workId,
         ...metadata,
+        coverBlobSha256,
         previewBlobSha256s,
       },
       current,
@@ -111,6 +106,7 @@ function parseMetadata(form: FormData) {
     ),
     isOriginal: form.has("is_original"),
     isTranslation: form.has("is_translation"),
+    usesUnsupportedManiac: form.has("uses_unsupported_maniac"),
     language: readRequiredString(form.get("language"), "language"),
     status: status as "published" | "hidden",
     aliases: readList(form.get("aliases")),
@@ -120,7 +116,7 @@ function parseMetadata(form: FormData) {
     extraStaff: parseExtraStaffJson(form.get("extra_staff")),
     translators: parseTranslatorSelectionsJson(form.get("translators")),
     downloadUrl: readNullableString(form.get("download_url")),
-    sourceUrl: readNullableString(form.get("source_url")),
+    workSources: parseWorkSourcesJson(form.get("work_sources")),
   };
 }
 

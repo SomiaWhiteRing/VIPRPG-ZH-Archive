@@ -136,20 +136,6 @@ export default function AdminWorkEditPage() {
                 placeholder="YYYY-MM-DD / YYYY-MM / YYYY"
               />
             </FormField>
-            <FormField controlId="admin-works-workId--field-4" label="日期精度">
-              <SelectField
-                id="admin-works-workId--field-4"
-                aria-label="日期精度"
-                defaultValue={work.originalReleasePrecision}
-                name="original_release_precision"
-                options={[
-                  { value: "unknown", label: "未知" },
-                  { value: "year", label: "年" },
-                  { value: "month", label: "月" },
-                  { value: "day", label: "日" },
-                ]}
-              />
-            </FormField>
             <AdminLanguageField value={work.language} />
             <CheckboxField
               defaultChecked={work.isOriginal}
@@ -198,6 +184,11 @@ export default function AdminWorkEditPage() {
               defaultChecked={work.isTranslation}
               label="本站翻译"
               name="is_translation"
+            />
+            <CheckboxField
+              defaultChecked={work.usesUnsupportedManiac}
+              label="本作品使用了EasyRPG不支持的Maniac语法。"
+              name="uses_unsupported_maniac"
             />
             <FormField
               controlId="admin-works-workId--field-7"
@@ -249,8 +240,9 @@ export default function AdminWorkEditPage() {
                 characterSuggestions={characterSuggestions}
                 characters={work.characters}
                 externalLinks={work.externalLinks}
+                coverBlobSha256={work.media.find((media) => media.role === "cover")?.blobSha256 ?? ""}
                 previewBlobSha256s={work.media
-                  .filter((media) => media.kind === "preview")
+                  .filter((media) => media.role === "preview")
                   .map((media) => media.blobSha256)}
                 tags={work.tags}
               />
@@ -260,9 +252,10 @@ export default function AdminWorkEditPage() {
         <Pane>
           <WorkMoreInfoFields items={work.moreInfo} />
         </Pane>
+        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源，作品当前不会公开展示。恢复来源后按原发布状态展示。</p> : null}
         <StickySaveBar>
           <Button type="submit">保存游戏资料</Button>
-          {work.status === "published" ? (
+          {work.status === "published" && work.hasUsableDistribution ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/games/${work.id}`}

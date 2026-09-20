@@ -1188,6 +1188,8 @@ ${
     ? `
 INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
 VALUES (103, 'Relation target C', 'published', 2, CURRENT_TIMESTAMP);
+UPDATE works SET engine_family='rpg_maker_mv' WHERE id=103;
+INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(103,'Download','https://example.test/c','download_page');
 INSERT INTO works (id, original_title, status, created_by_user_id)
 VALUES (201, 'Editor Archive Work A', 'hidden', 2),
        (202, 'Editor Archive Work B', 'hidden', 2);

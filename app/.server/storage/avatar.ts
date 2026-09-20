@@ -1,3 +1,4 @@
+import { inspectWorkImage } from "@/app/.server/storage/work-images";
 import { sha256Hex } from "@/app/.server/crypto/sha256";
 import {
   assertObjectUploadAllowed,
@@ -29,14 +30,8 @@ export async function storeAvatarPng(
 export function assertAvatarPng(buffer: ArrayBuffer): void {
   if (buffer.byteLength > MAX_AVATAR_BYTES)
     throw new HttpError(413, "头像文件不能超过 512 KiB");
-  if (buffer.byteLength < 24) throw new HttpError(400, "PNG 文件不完整");
-  const bytes = new Uint8Array(buffer);
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
-  if (!signature.every((value, index) => bytes[index] === value))
-    throw new HttpError(400, "PNG 文件签名不正确");
-  if (String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR")
-    throw new HttpError(400, "PNG 文件缺少 IHDR");
-  const view = new DataView(buffer);
-  if (view.getUint32(16) !== 192 || view.getUint32(20) !== 192)
+  const info = inspectWorkImage(buffer);
+  if (info.format !== "png") throw new HttpError(400, "头像必须是 PNG 图片");
+  if (info.width !== 192 || info.height !== 192)
     throw new HttpError(400, "头像尺寸必须精确为 192×192");
 }
