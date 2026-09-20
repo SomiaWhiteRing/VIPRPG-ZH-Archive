@@ -10,6 +10,7 @@ export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me/profile", label: "个人资料" },
   { href: "/me/privacy", label: "隐私" },
   { href: "/me/favorites", label: "收藏" },
+  { href: "/me/showcase", label: "喜爱展柜" },
   { href: "/me/emojis", label: "表情库" },
   { href: "/me/catalogs", label: "我的目录" },
   { href: "/me/history", label: "游玩历史" },

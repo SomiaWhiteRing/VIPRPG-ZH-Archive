@@ -23,6 +23,11 @@ export async function loader(args: LoaderFunctionArgs) {
       checked: user.profileVisibility.bio,
     },
     {
+      name: "showShowcase",
+      label: "在个人主页展示喜爱展柜",
+      checked: user.profileVisibility.showcase,
+    },
+    {
       name: "showFavorites",
       label: "在个人主页展示收藏",
       checked: user.profileVisibility.favorites,
@@ -92,6 +97,7 @@ export default function PrivacyPage() {
         </div>
         <p className="mb-0 mt-3 text-xs text-muted">
           这些设置只控制个人主页。公开目录仍可被浏览，公开评论仍会显示在作品或作者页，公开发帖和回帖仍会显示在讨论版。
+          喜爱展柜没有有效内容时不会显示。
         </p>
         <div className="mt-5">
           <Rm2kButton type="submit">保存隐私设置</Rm2kButton>

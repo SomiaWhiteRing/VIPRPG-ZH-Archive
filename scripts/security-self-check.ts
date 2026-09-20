@@ -128,6 +128,7 @@ function fakeUser(
     bio: "",
     profileVisibility: {
       bio: true,
+      showcase: true,
       favorites: true,
       history: true,
       catalogs: true,

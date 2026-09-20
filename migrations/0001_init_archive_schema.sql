@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
   bio TEXT NOT NULL DEFAULT '',
+  showcase_revision INTEGER NOT NULL DEFAULT 0 CHECK (showcase_revision >= 0),
   profile_show_bio INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_bio IN (0, 1)),
+  profile_show_showcase INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_showcase IN (0, 1)),
   profile_show_favorites INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_favorites IN (0, 1)),
   profile_show_history INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_history IN (0, 1)),
   profile_show_catalogs INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_catalogs IN (0, 1)),
@@ -1069,6 +1071,28 @@ CREATE TABLE IF NOT EXISTS work_staff (
   notes TEXT,
   PRIMARY KEY (work_id, creator_id, role_key)
 );
+
+CREATE TABLE user_showcase_entries (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('work', 'character', 'creator')),
+  work_id INTEGER REFERENCES works(id) ON DELETE CASCADE,
+  character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+  creator_id INTEGER REFERENCES creators(id) ON DELETE CASCADE,
+  portrait_ref_id INTEGER REFERENCES character_portrait_refs(id) ON DELETE SET NULL CHECK (kind='character' OR portrait_ref_id IS NULL),
+  sort_order INTEGER NOT NULL CHECK (sort_order BETWEEN 0 AND 2),
+  note TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 500),
+  PRIMARY KEY (user_id, kind),
+  UNIQUE (user_id, sort_order),
+  CHECK (
+    (kind='work' AND work_id IS NOT NULL AND character_id IS NULL AND creator_id IS NULL)
+    OR (kind='character' AND character_id IS NOT NULL AND work_id IS NULL AND creator_id IS NULL)
+    OR (kind='creator' AND creator_id IS NOT NULL AND work_id IS NULL AND character_id IS NULL)
+  )
+);
+
+CREATE INDEX idx_user_showcase_work ON user_showcase_entries(work_id) WHERE work_id IS NOT NULL;
+CREATE INDEX idx_user_showcase_character ON user_showcase_entries(character_id) WHERE character_id IS NOT NULL;
+CREATE INDEX idx_user_showcase_creator ON user_showcase_entries(creator_id) WHERE creator_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

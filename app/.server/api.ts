@@ -1,3 +1,4 @@
+import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
 import * as endpoint0 from "@/app/.server/endpoints/api/account/avatar/route";
 import * as endpoint1 from "@/app/.server/endpoints/api/account/delete/route";
@@ -105,6 +106,18 @@ api.on(["GET", "HEAD"], "/api/works/:workId/media/:sha256", (c) =>
 api.all("/api/works/:workId/media/:sha256", (c) => c.json({ok:false,error:"Method not allowed"},405,{Allow:"GET, HEAD"}));
 api.route("/", resourceApi);
 api.route("/", emojiApi);
+api.on(["GET", "HEAD"], "/api/account/showcase", (c) =>
+  showcaseEndpoint.GET(c.get("runtime"), c.req.raw),
+);
+api.on("PUT", "/api/account/showcase", (c) =>
+  showcaseEndpoint.PUT(c.get("runtime"), c.req.raw),
+);
+api.options("/api/account/showcase", (c) =>
+  c.body(null, 204, { Allow: "GET, HEAD, PUT, OPTIONS" }),
+);
+api.all("/api/account/showcase", (c) =>
+  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, HEAD, PUT, OPTIONS" }),
+);
 api.on("PUT", "/api/account/avatar", (c) =>
   endpoint0.PUT(c.get("runtime"), c.req.raw),
 );
