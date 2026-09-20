@@ -4,10 +4,12 @@ import { HttpError } from "@/lib/http";
 import {
   MAX_TOOL_BYTES,
   RESOURCE_TARGETS,
+  type ResourceLink,
   type ToolRelease,
 } from "@/lib/resources";
 import { getArtifact, getResource } from "./data";
 import { verifyArtifactObject } from "./objects";
+import { parseResourceContent } from "@/lib/resource-content";
 
 export type Actor = Pick<ArchiveUser, "id" | "email">;
 const rootSql = `EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
@@ -40,21 +42,28 @@ export function integer(
     throw new HttpError(400, "数字参数不正确");
   return Number(value);
 }
-function webUrl(value: string) {
+function webUrl(value: string, allowAppProtocol = false) {
   if (!value) return "";
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new HttpError(400, "请输入完整的网站地址");
+    throw new HttpError(400, "请输入完整的链接地址");
   }
   if (
-    !["https:", "http:"].includes(url.protocol) ||
+    (allowAppProtocol
+      ? ["javascript:", "data:", "vbscript:"].includes(url.protocol)
+      : !["https:", "http:"].includes(url.protocol)) ||
     url.username ||
     url.password
   )
-    throw new HttpError(400, "仅支持 HTTP／HTTPS 网站地址");
-  return url.href;
+    throw new HttpError(
+      400,
+      allowAppProtocol
+        ? "不支持此链接地址"
+        : "仅支持 HTTP／HTTPS 网站地址",
+    );
+  return url.protocol === "http:" || url.protocol === "https:" ? url.href : value;
 }
 function audit(
   runtime: AppRuntime,
@@ -92,7 +101,7 @@ export async function batchMutation(
     ]);
   } catch (error) {
     if (
-      /constraint|immutable|draft|verified|recommended|pause recommendations|active|publish a|only tools/i.test(
+      /constraint|immutable|draft|verified|recommended|pause recommendations|active|only tools/i.test(
         String(error),
       )
     )
@@ -113,7 +122,7 @@ export async function createResource(
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
     throw new HttpError(400, "固定名称只能使用小写字母、数字和连字符");
   if (data.kind !== "tool" && data.kind !== "website")
-    throw new HttpError(400, "资源类型不正确");
+    throw new HttpError(400, "链接类型不正确");
   const id = crypto.randomUUID();
   try {
     await runtime.db.batch([
@@ -151,22 +160,42 @@ export async function editResource(
     const visibility = textField(data, "visibility", 20, true);
     if (!["draft", "published", "hidden"].includes(visibility))
       throw new HttpError(400, "显示状态不正确");
-    const website = webUrl(textField(data, "websiteUrl", 2048));
+    let links: ResourceLink[];
+    try {
+      const input: unknown = JSON.parse(textField(data, "linksJson", Infinity, true));
+      if (!Array.isArray(input)) throw new Error();
+      links = input.map((link) => {
+        if (!link || typeof link !== "object" || Array.isArray(link)) throw new Error();
+        return {
+          label: textField(link, "label", Infinity, true),
+          url: webUrl(textField(link, "url", 2048, true), true),
+        };
+      });
+    } catch {
+      throw new HttpError(400, "请为每个网站填写按钮文案和有效的访问地址");
+    }
+    let summary: string;
+    try {
+      summary = JSON.stringify(parseResourceContent(textField(data, "summaryJson", Infinity, true)));
+    } catch {
+      throw new HttpError(400, "卡片介绍格式不正确或包含无效链接");
+    }
     if (
       visibility === "published" &&
-      (!resource.icon_blob_sha256 || (resource.kind === "website" && !website))
+      (!resource.icon_blob_sha256 || (resource.kind === "website" && !links.length))
     )
       throw new HttpError(400, "公开前请上传图标并填写访问地址");
     statements.push(
       db
         .prepare(
-          `UPDATE resources SET name=?,summary=?,description=?,website_url=?,source_url=?,sort_order=?,visibility=? WHERE id=?`,
+          `UPDATE resources SET name=?,summary_json=?,links_json=?,windows_button_label=?,android_button_label=?,source_url=?,sort_order=?,visibility=? WHERE id=?`,
         )
         .bind(
           textField(data, "name", 100, true),
-          textField(data, "summary", 2000),
-          textField(data, "description", 30000),
-          website,
+          summary,
+          JSON.stringify(links),
+          resource.kind === "tool" ? textField(data, "windowsButtonLabel", Infinity, true) : resource.windows_button_label,
+          resource.kind === "tool" ? textField(data, "androidButtonLabel", Infinity, true) : resource.android_button_label,
           webUrl(textField(data, "sourceUrl", 2048)),
           integer(data.sortOrder, -100000, 100000),
           visibility,
@@ -176,7 +205,7 @@ export async function editResource(
     detail.visibility = visibility;
   } else {
     if (resource.kind !== "tool")
-      throw new HttpError(400, "网站资源没有软件版本");
+      throw new HttpError(400, "网站链接没有软件版本");
     if (action === "createRelease") {
       const releaseId = crypto.randomUUID();
       statements.push(
@@ -202,7 +231,7 @@ export async function editResource(
       if (artifactId) {
         const a = await getArtifact(runtime, artifactId);
         if (a.resource_id !== id)
-          throw new HttpError(400, "安装包不属于该资源");
+          throw new HttpError(400, "安装包不属于该链接");
         await verifyArtifactObject(runtime, a);
       }
       const before = await db
@@ -257,7 +286,7 @@ export async function editResource(
           await verifyArtifactObject(runtime, a);
         }
         if (data.visible === true && !resource.icon_blob_sha256)
-          throw new HttpError(400, "公开资源前请上传图标");
+          throw new HttpError(400, "公开链接前请上传图标");
         statements.push(
           db
             .prepare(

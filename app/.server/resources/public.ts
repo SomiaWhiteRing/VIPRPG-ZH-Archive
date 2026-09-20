@@ -165,7 +165,7 @@ export async function updateManifest(
     publishedAt: row.published_at,
     notes: row.notes,
     notesUrl: new URL(
-      `/resources/${slug}/releases/${row.release_id}`,
+      `/resources#${slug}`,
       runtime.origin,
     ).href,
     artifact: {

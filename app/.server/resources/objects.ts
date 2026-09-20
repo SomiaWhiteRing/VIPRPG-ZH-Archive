@@ -1,3 +1,4 @@
+import { inspectWorkImage } from "@/app/.server/storage/work-images";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
   assertObjectUploadAllowed,
@@ -75,33 +76,21 @@ export async function uploadIcon(
   request: Request,
 ) {
   await getResource(runtime, id);
-  if (request.headers.get("content-type")?.split(";")[0] !== "image/png")
-    throw new HttpError(415, "图标请上传 PNG 图片");
-  const bytes = await readLimited(request, MAX_RESOURCE_ICON_BYTES),
-    view = new DataView(bytes),
-    raw = new Uint8Array(bytes);
-  if (
-    bytes.byteLength < 33 ||
-    ![137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => raw[i] === v) ||
-    view.getUint32(8) !== 13 ||
-    view.getUint32(12) !== 0x49484452 ||
-    view.getUint32(16) < 1 ||
-    view.getUint32(16) > 512 ||
-    view.getUint32(20) < 1 ||
-    view.getUint32(20) > 512
-  )
-    throw new HttpError(400, "图标须为边长不超过 512px 的 PNG");
+  const bytes = await readLimited(request, MAX_RESOURCE_ICON_BYTES);
+  const info = inspectWorkImage(bytes);
+  if (!["png", "gif", "jpeg"].includes(info.format) || info.width > 512 || info.height > 512)
+    throw new HttpError(400, "图标须为边长不超过 512px 的 PNG、GIF 或 JPG／JPEG");
   const sha = await sha256Hex(bytes);
   await assertObjectUploadAllowed(runtime, { kind: "blob", sha256: sha });
   await runtime.bucket.put(blobKey(sha), bytes, {
     sha256: sha,
-    httpMetadata: { contentType: "image/png" },
+    httpMetadata: { contentType: info.contentType },
   });
   await insertBlobRecord(runtime, {
     sha256: sha,
     sizeBytes: bytes.byteLength,
-    contentTypeHint: "image/png",
-    observedExt: "png",
+    contentTypeHint: info.contentType,
+    observedExt: info.format,
   });
   await batchMutation(
     runtime,
@@ -391,7 +380,7 @@ export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
     else if (row.storage_status !== "ready")
       issues.push({
         key: object.key,
-        issue: `状态为 ${row.storage_status}，请在所属资源中确认或清理`,
+        issue: `状态为 ${row.storage_status}，请在所属链接中确认或清理`,
       });
     else {
       try {

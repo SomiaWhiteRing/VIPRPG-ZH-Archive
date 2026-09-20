@@ -32,8 +32,6 @@ export default [
   route("register", "register/page.tsx"),
   route("reset-password", "reset-password/page.tsx"),
   route("resources", "resources/page.tsx"),
-  route("resources/:slug", "resources/detail.tsx"),
-  route("resources/:slug/releases/:releaseId", "resources/release.tsx"),
   route("search", "search/page.tsx"),
   route("tags", "tags/page.tsx"),
   route("upload", "upload/page.tsx"),

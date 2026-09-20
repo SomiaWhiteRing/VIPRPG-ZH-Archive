@@ -14,7 +14,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
   return { resources: await listResources(rt, true) };
 }
 export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["资源", "控制台"] }, error);
+  pageMetaDescriptors({ title: ["链接", "控制台"] }, error);
 export default function AdminResources() {
   return (
     <ResourceManager resources={useLoaderData<typeof loader>().resources} />

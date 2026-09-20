@@ -15,7 +15,7 @@ export async function getResource(runtime: AppRuntime, id: string) {
     .prepare("SELECT * FROM resources WHERE id=?")
     .bind(id)
     .first<ResourceRecord>();
-  if (!row) throw new HttpError(404, "资源不存在");
+  if (!row) throw new HttpError(404, "链接不存在");
   return row;
 }
 export async function getEditor(
@@ -74,43 +74,6 @@ export async function listPublicResources(
     ...resource,
     downloads: downloads.filter((d) => d.resource_id === resource.id),
   }));
-}
-export async function publicDetail(
-  runtime: AppRuntime,
-  slug: string,
-  releaseId?: string,
-) {
-  const resource = (await listPublicResources(runtime)).find(
-    (row) => row.slug === slug && row.kind === "tool",
-  );
-  if (!resource) throw new Response("资源不存在", { status: 404 });
-  const releases = (
-    await runtime.db
-      .prepare(
-        `SELECT * FROM tool_releases WHERE resource_id=? AND status<>'draft' ORDER BY release_sequence DESC`,
-      )
-      .bind(resource.id)
-      .all<ToolRelease>()
-  ).results;
-  const artifacts = (
-    await runtime.db
-      .prepare(
-        `SELECT a.id,a.target,a.format,a.filename,a.size_bytes,a.sha256,a.release_id,r.version_label
-    FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id
-    WHERE r.resource_id=? AND r.status='published' AND a.storage_status='ready' ORDER BY a.target`,
-      )
-      .bind(resource.id)
-      .all<ResourceDownload>()
-  ).results;
-  if (releaseId && !releases.some((row) => row.id === releaseId))
-    throw new Response("版本不存在", { status: 404 });
-  return {
-    resource,
-    releases: releaseId
-      ? releases.filter((row) => row.id === releaseId)
-      : releases,
-    artifacts,
-  };
 }
 export async function getArtifact(runtime: AppRuntime, id: string) {
   const row = await runtime.db

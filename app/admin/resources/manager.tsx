@@ -34,7 +34,7 @@ export function ResourceManager({
         "/api/admin/resources",
         Object.fromEntries(form),
       );
-      toast.success("资源草稿已创建。");
+      toast.success("链接草稿已创建。");
       await navigate(`/admin/resources/${data.resource.id}`);
     } catch (error) {
       setCreateError(String(error instanceof Error ? error.message : error));
@@ -58,7 +58,7 @@ export function ResourceManager({
   }
   return (
     <main>
-      <PageHeader compact title="资源管理" />
+      <PageHeader compact title="链接管理" />
       <div className="grid gap-2">
         {resources.map((r) => (
           <Link
@@ -82,7 +82,7 @@ export function ResourceManager({
         onSubmit={create}
         className="grid gap-3 rounded-md border border-border bg-card p-4"
       >
-        <h2 className="text-lg font-bold">新增资源</h2>
+        <h2 className="text-lg font-bold">新增链接</h2>
         <Label htmlFor="resource-name">名称</Label>
         <Input id="resource-name" name="name" maxLength={100} required />
         <Label htmlFor="resource-slug">固定名称（创建后不可修改）</Label>
