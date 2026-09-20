@@ -49,7 +49,12 @@ export function FaceEmojiView({
       if (!content.current?.contains(document.activeElement)) setOpen(false);
     }, 200);
   }
-  if (!emoji?.available) return <FaceEmojiImage emoji={emoji} size={24} />;
+  if (!emoji?.available)
+    return (
+      <span className="mx-0.5 inline-flex align-bottom">
+        <FaceEmojiImage emoji={emoji} size={48} />
+      </span>
+    );
   const added = addedId === emoji.id;
   return (
     <Popover.Root open={open} onOpenChange={changeOpen}>
@@ -59,7 +64,7 @@ export function FaceEmojiView({
           size="icon"
           ref={trigger}
           type="button"
-          className="mx-0.5 inline-flex size-6 cursor-pointer rounded-none align-middle focus-visible:outline-2 focus-visible:outline-primary"
+          className="mx-0.5 inline-flex size-12 cursor-pointer rounded-none align-bottom focus-visible:outline-2 focus-visible:outline-primary"
           aria-label={allowCollect ? "查看并收藏表情" : "查看表情"}
           onPointerEnter={(event) => {
             if (
@@ -84,7 +89,7 @@ export function FaceEmojiView({
             activation.current = "keyboard";
           }}
         >
-          <FaceEmojiImage emoji={emoji} size={24} />
+          <FaceEmojiImage emoji={emoji} size={48} />
         </Button>
       </Popover.Trigger>
       <Popover.Portal>

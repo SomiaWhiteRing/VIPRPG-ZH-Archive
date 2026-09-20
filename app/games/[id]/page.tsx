@@ -6,6 +6,7 @@ import {
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import {
   getWorkCommunitySummary,
+  canPinWorkComments,
   listRootComments,
 } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
@@ -133,6 +134,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     work,
+    canPinComments: await canPinWorkComments(runtime, work.id, currentUser),
     currentUser: pickPageFields(currentUser, ["id"]),
     title,
     current,
@@ -155,6 +157,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function GameDetailPage() {
   const {
     work,
+    canPinComments,
     currentUser,
     title,
     current,
@@ -380,6 +383,7 @@ export default function GameDetailPage() {
               </div>
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
+                canPin={canPinComments}
                 initialComments={comments.items}
                 initialNextCursor={comments.nextCursor}
                 target={{ kind: "work", id: work.id }}
