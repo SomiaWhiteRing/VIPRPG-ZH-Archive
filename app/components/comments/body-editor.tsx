@@ -45,7 +45,6 @@ import {
 import { createImageProcessor } from "@/app/discussions/image-processor";
 import type { DraftImage } from "@/app/discussions/images";
 import { cloneDraftImage, selectDraftImages } from "@/app/discussions/images";
-import styles from "@/app/discussions/mixed-editor.module.css";
 
 const EMPTY_EMOJIS: FaceEmoji[] = [];
 
@@ -60,7 +59,7 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
   return (
     <NodeViewWrapper
       as="span"
-      className={styles.image}
+      className="relative my-2 block w-fit max-w-full rounded-[2px] data-selected:outline-2 data-selected:outline-primary data-selected:outline-offset-2"
       contentEditable={false}
       data-selected={selected || undefined}
     >
@@ -71,7 +70,7 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
         height={360}
         draggable
         data-drag-handle
-        className={styles.preview}
+        className="block h-auto max-h-64 w-auto max-w-full object-contain"
         loading="lazy"
       />
       {selected && editor.isEditable ? (
@@ -79,7 +78,7 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
           type="button"
           size="icon"
           variant="secondary"
-          className={styles.remove}
+          className="absolute top-1 right-1"
           aria-label="删除选中图片"
           title="删除图片"
           onMouseDown={(event) => event.preventDefault()}
@@ -242,7 +241,7 @@ export function BodyEditor({
         role: "textbox",
         "aria-label": "正文",
         "aria-multiline": "true",
-        class: styles.document,
+        class: "min-h-16 p-3 outline-none text-[15px] leading-[1.7] [overflow-wrap:anywhere] whitespace-pre-wrap group-data-[topic=true]/body-editor:min-h-48 group-data-[topic=false]/body-editor:max-h-[min(32dvh,20rem)] group-data-[topic=false]/body-editor:overflow-y-auto [&_p]:m-0 [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_.is-editor-empty:first-child]:before:text-muted [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:h-0 [&_[data-node-view-wrapper]]:whitespace-normal [&_.node-faceEmoji]:inline-flex [&_.node-faceEmoji]:align-bottom [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:max-h-none [[data-forum-fullscreen=true]_&]:overflow-y-visible",
       },
       handleDOMEvents: {
         compositionstart: () => {
@@ -506,7 +505,8 @@ export function BodyEditor({
       ) : null}
       <EditorContent
         editor={editor}
-        className={`${styles.editor} ${topic ? styles.topic : ""} rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20`}
+        data-topic={topic}
+        className="group/body-editor min-w-0 rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20 [[data-forum-fullscreen=true]_&]:flex [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:flex-col"
       />
     </EditorEmojis.Provider>
   );

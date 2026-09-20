@@ -34,8 +34,8 @@ export default function AccountLayout() {
   const children = <Outlet />;
   return (
     <PageContainer>
-      <div className="account-layout md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
-        <div className="account-navigation-slot sticky top-20 hidden self-start md:block">
+      <div className="group/account has-[[data-account-full-width]]:block md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
+        <div className="group-has-[[data-account-full-width]]/account:hidden sticky top-20 hidden self-start md:block">
           {user ? (
             <div className="mb-5 flex min-w-0 items-center gap-3 px-2">
               <UserAvatar
@@ -54,7 +54,7 @@ export default function AccountLayout() {
             canUpload={Boolean(user && canAccessOwnWorks(user))}
           />
         </div>
-        <div className="account-navigation-slot md:hidden">
+        <div className="group-has-[[data-account-full-width]]/account:hidden md:hidden">
           <AccountNavigation
             canUpload={Boolean(user && canAccessOwnWorks(user))}
           />

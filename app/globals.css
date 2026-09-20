@@ -1,20 +1,42 @@
 @import "tailwindcss" source("./");
-@import "react-toastify/ReactToastify.css";
-@import "./components/ui/toast.css";
+@import "react-toastify/ReactToastify.css" layer(components);
+@import "react-datepicker/dist/react-datepicker.css" layer(components);
 @source "../lib";
 
 @layer base {
   :focus:not(:focus-visible) {
-    outline: none;
+    @apply outline-none;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
+    @apply outline-2 outline-accent outline-offset-2;
   }
 }
 
 @theme {
+  --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
+  --animate-site-toast-reduced-motion: site-toast-reduced-motion 1ms both;
+
+  @keyframes site-toast-slide-in {
+    from { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes site-toast-slide-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+  }
+  @keyframes site-toast-countdown {
+    from { transform: scaleX(1); opacity: 0.85; }
+    to { transform: scaleX(0); opacity: 0.2; }
+  }
+  /* Animation end events must still complete entry and exit with reduced motion. */
+  @keyframes site-toast-reduced-motion {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+
   --color-background: #f5f4ef;
   --color-foreground: #17212b;
   --color-card: #ffffff;
@@ -36,40 +58,4 @@
   --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
   --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
   --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
-}
-
-.account-layout:has([data-account-full-width]) {
-  display: block;
-}
-
-.account-layout:has([data-account-full-width]) > .account-navigation-slot {
-  display: none;
-}
-
-.character-menu-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-muted) 22%, transparent) transparent;
-}
-
-.character-menu-scrollbar:hover,
-.character-menu-scrollbar:focus-within {
-  scrollbar-color: color-mix(in srgb, var(--color-muted) 50%, transparent) transparent;
-}
-
-.character-menu-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-
-.character-menu-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.character-menu-scrollbar::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
-}
-
-.character-menu-scrollbar:hover::-webkit-scrollbar-thumb,
-.character-menu-scrollbar:focus-within::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
 }

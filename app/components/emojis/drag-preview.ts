@@ -32,8 +32,8 @@ export function emojiDragPreview(emoji: FaceEmoji, button: HTMLButtonElement) {
     context.textAlign = "center";
     context.fillText("×", 24, 32);
   }
-  canvas.style.cssText =
-    "position:fixed;left:-1000px;top:-1000px;width:48px;height:48px;pointer-events:none;image-rendering:pixelated";
+  canvas.className =
+    "fixed -left-[1000px] -top-[1000px] size-12 pointer-events-none [image-rendering:pixelated]";
   canvas.setAttribute("aria-hidden", "true");
   document.body.appendChild(canvas);
   return canvas;

@@ -1,4 +1,5 @@
 import type { WebPlayMetadata } from "./web-play-types";
+import playerStyles from "../player.css?inline";
 
 type PlayerWindow = Window & {
   console: Console;
@@ -63,6 +64,11 @@ export function createPlayerSession(
     const playerDocument = frame.contentDocument;
     if (!playerWindow || !playerDocument?.getElementById("canvas"))
       throw new Error("无法创建游戏画面，请刷新后重试。");
+
+    // The isolated document needs its own compiled Tailwind utilities.
+    const styles = playerDocument.createElement("style");
+    styles.textContent = playerStyles;
+    playerDocument.head.appendChild(styles);
 
     // Keep right-button input available to the game; cancel only the browser UI.
     playerDocument.addEventListener("contextmenu", (event) => event.preventDefault(), {

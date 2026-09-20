@@ -63,12 +63,12 @@ export function FaceSheetCanvas({
   return (
     <div
       aria-label={label}
-      className="relative shrink-0 overflow-hidden border border-foreground/30 bg-card [image-rendering:pixelated]"
+      className={cn("relative shrink-0 overflow-hidden border border-foreground/30 bg-card [image-rendering:pixelated]", fit && "max-w-full")}
       role="group"
       style={{
         width: width * scale,
         ...(fit
-          ? { maxWidth: "100%", aspectRatio: `${width} / ${height}` }
+          ? { aspectRatio: `${width} / ${height}` }
           : { height: height * scale }),
       }}
     >
