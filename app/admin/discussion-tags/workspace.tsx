@@ -1,3 +1,4 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -6,7 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
-import { ForumModal, ForumTime, forumRequest } from "@/app/discussions/shared";
+import { ForumModal, forumRequest } from "@/app/discussions/shared";
 import type { AdminForumTag } from "@/lib/dto/forum/admin";
 import type { ForumPage } from "@/lib/forum";
 import { forumHref } from "@/lib/forum";
@@ -88,7 +89,7 @@ export function AdminDiscussionTags({
                 </td>
                 <td className="hidden p-3 md:table-cell">{tag.creator}</td>
                 <td className="hidden p-3 md:table-cell">
-                  <ForumTime value={tag.updatedAt} />
+                  <Timestamp value={tag.updatedAt} />
                 </td>
                 <td className="p-3">
                   <Button
@@ -214,7 +215,7 @@ function ManageTag({
         <p className="break-words text-sm">创建者：{tag.creator}</p>
         <p className="text-xs text-muted">
           更新时间：
-          <ForumTime value={tag.updatedAt} />
+          <Timestamp value={tag.updatedAt} />
         </p>
         <div>
           <Label htmlFor="tag-action">操作</Label>

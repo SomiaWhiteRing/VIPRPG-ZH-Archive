@@ -1,3 +1,4 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -10,7 +11,6 @@ import { ForumImages } from "@/app/discussions/images";
 import {
   ForumModal,
   ForumTagEditor,
-  ForumTime,
   forumRequest,
 } from "@/app/discussions/shared";
 import type { ForumAdminDetail, ForumAdminRow } from "@/lib/dto/forum/admin";
@@ -174,7 +174,7 @@ export function AdminDiscussions({
                   ) : null}
                 </td>
                 <td className="hidden p-3 md:table-cell">
-                  <ForumTime value={row.createdAt} />
+                  <Timestamp value={row.createdAt} />
                 </td>
                 <td className="p-3">
                   <Button
@@ -314,7 +314,7 @@ function AdminDiscussionPanel({
           <h3 className="mb-2 font-bold">举报信息</h3>
           <p className="break-words">举报人：{row.reporter}</p>
           <p className="text-xs text-muted">
-            <ForumTime value={row.createdAt} />
+            <Timestamp value={row.createdAt} />
           </p>
           <p className="mt-2">原因：{row.reason}</p>
           <p className="mt-1 whitespace-pre-wrap break-words">
@@ -335,7 +335,7 @@ function AdminDiscussionPanel({
       {!row.reportId ? (
         <p className="mt-1 text-xs text-muted">
           {row.kind === "topic" ? "更新时间：" : "发布时间："}
-          <ForumTime value={row.createdAt} />
+          <Timestamp value={row.createdAt} />
         </p>
       ) : null}
       <div className="my-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words">
@@ -443,7 +443,7 @@ function AdminDiscussionPanel({
                 {entry.actor} · {entry.event}
               </strong>
               <p>
-                <ForumTime value={entry.createdAt} />
+                <Timestamp value={entry.createdAt} />
               </p>
               <pre className="whitespace-pre-wrap break-words">
                 {entry.detail}

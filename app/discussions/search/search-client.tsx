@@ -1,8 +1,8 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
 import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import {
   ForumAuthorName,
-  ForumTime,
   Highlight,
 } from "@/app/discussions/shared";
 import { Link } from "react-router";
@@ -40,7 +40,7 @@ export function DiscussionSearch({
               >
                 <Highlight text={hit.title} query={query} />
               </Link>
-              <p className="my-2 line-clamp-2 break-words text-sm [overflow-wrap:anywhere]">
+              <p className="my-2 line-clamp-2 break-words text-[15px] [overflow-wrap:anywhere]">
                 <Highlight text={hit.snippet} query={query} />
               </p>
               <div className="text-xs text-muted">
@@ -48,7 +48,7 @@ export function DiscussionSearch({
                   <ForumAuthorName author={hit.author} query={query} />
                 ) : null}{" "}
                 · {hit.kind === "comment" ? "楼中楼回复" : "主楼"} ·{" "}
-                <ForumTime value={hit.createdAt} />
+                <Timestamp value={hit.createdAt} />
               </div>
             </article>
           ))}

@@ -153,49 +153,6 @@ export function TopicStatus({
     </div>
   );
 }
-const forumDateFormatter = new Intl.DateTimeFormat("zh-CN", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Hong_Kong",
-});
-export function ForumTime({
-  value,
-  relative = false,
-}: {
-  value: string;
-  relative?: boolean;
-}) {
-  const date = new Date(
-    value.includes("T") ? value : value.replace(" ", "T") + "Z",
-  );
-  const full = forumDateFormatter.format(date);
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    const timer = setTimeout(() => setNow(Date.now()), 0);
-    return () => clearTimeout(timer);
-  }, []);
-  let label = full;
-  if (relative && now) {
-    const minutes = Math.max(0, Math.floor((now - date.getTime()) / 60000));
-    label =
-      minutes < 1
-        ? "刚刚"
-        : minutes < 60
-          ? `${minutes}分钟前`
-          : minutes < 1440
-            ? `${Math.floor(minutes / 60)}小时前`
-            : `${Math.floor(minutes / 1440)}天前`;
-  }
-  return (
-    <time
-      className="font-mono text-xs tabular-nums"
-      dateTime={date.toISOString()}
-      title={full}
-    >
-      {label}
-    </time>
-  );
-}
 export function Highlight({ text, query }: { text: string; query: string }) {
   const parts: ReactNode[] = [];
   let cursor = 0;

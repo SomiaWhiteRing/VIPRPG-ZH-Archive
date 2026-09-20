@@ -1,3 +1,4 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useToast } from "@/app/components/ui/toast";
 import {
@@ -61,7 +62,6 @@ import {
   ForumAuthorName,
   ForumBody,
   ForumRequestError,
-  ForumTime,
   PopularTagFilter,
   TopicStatus,
   TopicTags,
@@ -742,7 +742,7 @@ export function DiscussionWorkspace({
             subtitle={
               <>
                 由 <ForumAuthorName author={detail.topic.author} /> 发布 ·{" "}
-                <ForumTime value={detail.topic.createdAt} />
+                <Timestamp value={detail.topic.createdAt} />
               </>
             }
           />
@@ -922,7 +922,7 @@ export function DiscussionWorkspace({
                         <span className="md:hidden">
                           {" "}
                           · {item.replies} 回复 ·{" "}
-                          <ForumTime value={item.activeAt} relative />
+                          <Timestamp value={item.activeAt} />
                         </span>
                         {item.lastAuthor &&
                         item.lastAuthor.id !== item.author.id ? (
@@ -941,7 +941,7 @@ export function DiscussionWorkspace({
                       {item.views}
                     </span>
                     <span className="hidden text-right md:flex md:items-center md:justify-end">
-                      <ForumTime value={item.activeAt} relative />
+                      <Timestamp value={item.activeAt} />
                     </span>
                   </article>
                 ))}
@@ -1200,7 +1200,7 @@ function ForumFloorView({
               #{post.postNumber}
             </Link>
             <span>·</span>
-            <ForumTime value={post.createdAt} />
+            <Timestamp value={post.createdAt} />
             {post.editedAt ? " · 已编辑" : ""}
           </span>
           <div className="ml-auto flex items-center gap-0">
@@ -1308,7 +1308,7 @@ function ForumFloorView({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1">
                   <span className="mr-auto text-xs text-muted">
-                    <ForumTime value={comment.createdAt} />
+                    <Timestamp value={comment.createdAt} />
                     {comment.editedAt ? " · 已编辑" : ""}
                   </span>
                   {comment.capabilities.reply ? (
