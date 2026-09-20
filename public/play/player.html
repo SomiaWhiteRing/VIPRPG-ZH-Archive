@@ -1,34 +1,13 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="zh-Hans" class="m-0 h-full w-full overflow-hidden bg-black">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>游戏画面</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: black;
-      }
-      body {
-        display: grid;
-        place-items: center;
-      }
-      canvas {
-        display: block;
-        /* SDL3 writes fixed inline dimensions; the host controls display size. */
-        width: min(100vw, 133.333333vh) !important;
-        height: min(100vh, 75vw) !important;
-        image-rendering: pixelated;
-        outline: none;
-      }
-    </style>
   </head>
-  <body>
-    <canvas id="canvas" tabindex="0" aria-label="游戏画面"></canvas>
+  <body class="m-0 grid h-full w-full place-items-center overflow-hidden bg-black">
+    <!-- Override the fixed inline dimensions written by SDL3. -->
+    <canvas id="canvas" tabindex="0" aria-label="游戏画面" class="block h-[min(100vh,75vw)]! w-[min(100vw,133.333333vh)]! [image-rendering:pixelated] outline-none"></canvas>
     <span id="status" hidden></span>
   </body>
 </html>

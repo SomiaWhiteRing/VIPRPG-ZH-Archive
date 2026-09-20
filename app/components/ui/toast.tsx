@@ -22,11 +22,21 @@ type ToastTone = "success" | "error" | "info";
 type ToastApi = Record<ToastTone, (message: string) => void>;
 
 const ToastContext = createContext<ToastApi | null>(null);
+// Keep Toastify's progress animation as the single auto-close clock.
+const toastClassName = [
+  "w-full flex-none items-start min-h-18 mb-2 pt-3.5 pr-12 pb-5.5 pl-3.5 border-0 rounded-lg shadow-[inset_0_0_0_1px_var(--color-border),var(--shadow-surface)] text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere] pointer-events-auto",
+  String.raw`[&_.Toastify\_\_toast-icon]:w-5 [&_.Toastify\_\_toast-icon]:mt-0.5 [&_.Toastify\_\_toast-icon]:me-3 [&_.Toastify\_\_toast-icon]:text-(--toastify-color-info)`,
+  String.raw`[&.Toastify\_\_toast--success_.Toastify\_\_toast-icon]:text-(--toastify-color-success) [&.Toastify\_\_toast--error_.Toastify\_\_toast-icon]:text-(--toastify-color-error)`,
+  String.raw`[&_.Toastify\_\_progress-bar--wrp]:[inset:auto_0.875rem_0.5rem] [&_.Toastify\_\_progress-bar--wrp]:w-auto [&_.Toastify\_\_progress-bar--wrp]:h-1 [&_.Toastify\_\_progress-bar--wrp]:border [&_.Toastify\_\_progress-bar--wrp]:border-border [&_.Toastify\_\_progress-bar--wrp]:rounded-[2px]`,
+  String.raw`[&_.Toastify\_\_progress-bar--bg]:opacity-0 [&_.Toastify\_\_progress-bar]:rounded-none [&_.Toastify\_\_progress-bar--animated]:animate-site-toast-countdown`,
+  String.raw`focus-within:[&_.Toastify\_\_progress-bar]:[animation-play-state:paused]! [&[data-in=false]_.Toastify\_\_progress-bar]:[animation-play-state:paused]! data-[in=false]:pointer-events-none motion-reduce:duration-[1ms]!`,
+].join(" ");
+
 const CONTAINER_ID = "site-feedback";
 const disableContainerHotkey = () => false;
 const Slide = cssTransition({
-  enter: "site-toast-enter",
-  exit: "site-toast-exit",
+  enter: "animate-site-toast-enter motion-reduce:animate-site-toast-reduced-motion",
+  exit: "animate-site-toast-exit motion-reduce:animate-site-toast-reduced-motion",
   collapse: true,
   collapseDuration: 220,
 });
@@ -43,7 +53,7 @@ function ToastClose({ closeToast }: CloseButtonProps) {
       type="button"
       variant="ghost"
       size="icon"
-      className="site-toast-close"
+      className="absolute top-2.5 right-2 size-8"
       aria-label="关闭通知"
       title="关闭通知"
       onClick={closeToast}
@@ -104,7 +114,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <Portal.Root asChild>
         <div
           ref={host}
-          className="site-toast-host"
+          className="[--toastify-color-light:var(--color-card)] [--toastify-text-color-light:var(--color-card-foreground)] [--toastify-color-info:#0369a1] [--toastify-color-success:#047857] [--toastify-color-error:var(--color-destructive)] [--toastify-color-progress-info:var(--toastify-color-info)] [--toastify-color-progress-success:var(--toastify-color-success)] [--toastify-color-progress-error:var(--toastify-color-error)] [--toastify-font-family:var(--font-sans)] [--toastify-z-index:2000]"
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             const current = (event.target as HTMLElement).closest<HTMLElement>(
@@ -122,8 +132,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <ToastContainer
             containerId={CONTAINER_ID}
             position="top-right"
-            className="site-toast-list"
-            toastClassName="site-toast"
+            className="top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] left-auto w-[min(24.5rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top))] overflow-x-hidden overflow-y-auto p-1 [scrollbar-width:thin] pointer-events-none"
+            toastClassName={toastClassName}
             transition={Slide}
             limit={3}
             newestOnTop={false}

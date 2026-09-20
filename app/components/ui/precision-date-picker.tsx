@@ -7,8 +7,26 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import styles from "./precision-date-picker.module.css";
+
+const calendarClassName = [
+  "w-64 border-border rounded-md bg-card text-foreground font-sans text-sm shadow-surface",
+  String.raw`[&_:is(.react-datepicker\_\_month-container,.react-datepicker\_\_year--container)]:w-full`,
+  String.raw`[&_:is(.react-datepicker\_\_year-wrapper)]:grid [&_:is(.react-datepicker\_\_year-wrapper)]:grid-cols-3 [&_:is(.react-datepicker\_\_year-wrapper)]:grid-rows-4 [&_:is(.react-datepicker\_\_year-wrapper)]:h-full [&_:is(.react-datepicker\_\_year-wrapper)]:max-w-none`,
+  String.raw`[&_:is([role=table],.react-datepicker\_\_year,.react-datepicker\_\_monthPicker)]:box-border [&_:is([role=table],.react-datepicker\_\_year,.react-datepicker\_\_monthPicker)]:h-64 [&_:is([role=table],.react-datepicker\_\_year,.react-datepicker\_\_monthPicker)]:m-0 [&_:is([role=table],.react-datepicker\_\_year,.react-datepicker\_\_monthPicker)]:p-2`,
+  String.raw`[&_:is(.react-datepicker\_\_month)]:m-0`,
+  String.raw`[&_:is(.react-datepicker\_\_monthPicker)]:grid [&_:is(.react-datepicker\_\_monthPicker)]:grid-rows-4`,
+  String.raw`[&_:is(.react-datepicker\_\_month-wrapper)]:grid [&_:is(.react-datepicker\_\_month-wrapper)]:grid-cols-3`,
+  String.raw`[&_:is(.react-datepicker\_\_year-text,.react-datepicker\_\_month-text)]:flex [&_:is(.react-datepicker\_\_year-text,.react-datepicker\_\_month-text)]:items-center [&_:is(.react-datepicker\_\_year-text,.react-datepicker\_\_month-text)]:justify-center [&_:is(.react-datepicker\_\_year-text,.react-datepicker\_\_month-text)]:min-w-0 [&_:is(.react-datepicker\_\_year-text,.react-datepicker\_\_month-text)]:w-auto`,
+  String.raw`[&_:is(.react-datepicker\_\_day-names,.react-datepicker\_\_week)]:h-[2.125rem]`,
+  String.raw`[&_:is(.react-datepicker\_\_day-names)]:m-0`,
+  String.raw`[&_:is(.react-datepicker\_\_day-name,.react-datepicker\_\_day)]:w-8 [&_:is(.react-datepicker\_\_day-name,.react-datepicker\_\_day)]:m-[0.0625rem] [&_:is(.react-datepicker\_\_day-name,.react-datepicker\_\_day)]:leading-8`,
+  String.raw`[&_:is(.react-datepicker\_\_header)]:border-border [&_:is(.react-datepicker\_\_header)]:bg-background`,
+  String.raw`[&_:is(.react-datepicker\_\_current-month,.react-datepicker\_\_day-name,.react-datepicker\_\_day,.react-datepicker\_\_month-text,.react-datepicker\_\_year-text)]:text-foreground`,
+  String.raw`[&_:is(.react-datepicker\_\_day--keyboard-selected,.react-datepicker\_\_month-text--keyboard-selected,.react-datepicker\_\_year-text--keyboard-selected)]:bg-primary/15`,
+  String.raw`[&_:is(.react-datepicker\_\_day--selected,.react-datepicker\_\_month-text--selected,.react-datepicker\_\_year-text--selected)]:bg-primary [&_:is(.react-datepicker\_\_day--selected,.react-datepicker\_\_month-text--selected,.react-datepicker\_\_year-text--selected)]:text-primary-foreground`,
+  String.raw`[&_:is(.react-datepicker\_\_day--disabled,.react-datepicker\_\_month-text--disabled,.react-datepicker\_\_year-text--disabled)]:text-muted! [&_:is(.react-datepicker\_\_day--disabled,.react-datepicker\_\_month-text--disabled,.react-datepicker\_\_year-text--disabled)]:opacity-50`,
+  String.raw`[&_:is(.react-datepicker\_\_day--outside-month)]:text-muted!`,
+].join(" ");
 
 type DatePrecision = Exclude<OriginalReleasePrecision, "unknown">;
 const DATE_FORMATS: Record<DatePrecision, string> = {
@@ -54,11 +72,11 @@ export function PrecisionDatePicker({
     <div className="relative min-w-0">
       <DatePicker
         autoComplete="off"
-        calendarClassName={styles.calendar}
+        calendarClassName={calendarClassName}
         chooseDayAriaLabelPrefix="选择"
         customInput={
           <DateSegmentInput
-            className={`${styles.input} cursor-pointer pr-10 caret-transparent`}
+            className="cursor-pointer pr-10 caret-transparent selection:bg-primary selection:text-primary-foreground"
             onPrecisionChange={(next) => {
               setPrecision(next);
               pickerRef.current?.setOpen(true);
@@ -87,7 +105,7 @@ export function PrecisionDatePicker({
         }}
         openToDate={selected ?? undefined}
         placeholderText={placeholder}
-        popperClassName={styles.popper}
+        popperClassName="z-50"
         popperPlacement="bottom-start"
         portalId={`${id}-calendar`}
         ref={pickerRef}

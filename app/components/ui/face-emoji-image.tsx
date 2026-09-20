@@ -36,9 +36,8 @@ export function FaceEmojiImage({
         src={`/api/media/blobs/${emoji.blobSha256}`}
         width={emoji.width}
         height={emoji.height}
-        className="absolute select-none"
+        className="absolute max-w-none select-none"
         style={{
-          maxWidth: "none",
           width: (emoji.width * size) / 48,
           height: (emoji.height * size) / 48,
           left: -emoji.column * size,

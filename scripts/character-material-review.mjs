@@ -1,7 +1,15 @@
 import { createServer } from "node:http";
 import { createReadStream, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { preprocessCSS, resolveConfig } from "vite";
 import { buildLibrary, collectionDirectory, readInput, reviewDirectory, root, saveJson } from "./build-character-material-library.mjs";
+
+const stylesheet = resolve(root, "tools/character-material-review/index.css");
+const { code: styles } = await preprocessCSS(
+  readFileSync(stylesheet, "utf8"),
+  stylesheet,
+  await resolveConfig({ configFile: false, root }, "serve"),
+);
 
 const { items, scopes, characters, decisions } = readInput();
 const pending = items.filter((x) => ["collective_scope", "multiple_candidates", "conflicting_anchors"].includes(x.status));
@@ -19,6 +27,10 @@ createServer(async (req, res) => {
   try {
     if (req.headers.host !== `127.0.0.1:${port}`) return json(res, 403, { error: "Invalid host" });
     const url = new URL(req.url, origin);
+    if (req.method === "GET" && url.pathname === "/styles.css") {
+      res.writeHead(200, { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end(styles);
+    }
     if (req.method === "GET" && url.pathname === "/") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return res.end(readFileSync(resolve(root, "tools/character-material-review/index.html")));

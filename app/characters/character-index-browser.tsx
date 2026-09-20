@@ -324,7 +324,7 @@ export function CharacterIndexBrowser({
           onDraftChange={changeDraft}
           onApply={applyFilter}
         />
-        <div className="character-menu-scrollbar min-h-0 overflow-y-auto overscroll-contain">
+        <div className={`${characterMenuScrollbarClassName} min-h-0 overflow-y-auto overscroll-contain`}>
           <CharacterMenu
             nodes={filteredMenu}
             onNavigate={navigate}
@@ -388,7 +388,7 @@ export function CharacterIndexBrowser({
                 onScroll={(event) => {
                   menuScrollTop.current = event.currentTarget.scrollTop;
                 }}
-                className="character-menu-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                className={`${characterMenuScrollbarClassName} min-h-0 flex-1 overflow-y-auto overscroll-contain`}
               >
                 <CharacterMenu
                   nodes={filteredMenu}
@@ -670,3 +670,5 @@ function MenuBranch({
     </div>
   );
 }
+
+const characterMenuScrollbarClassName = "[scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,var(--color-muted)_22%,transparent)_transparent] hover:[scrollbar-color:color-mix(in_srgb,var(--color-muted)_50%,transparent)_transparent] focus-within:[scrollbar-color:color-mix(in_srgb,var(--color-muted)_50%,transparent)_transparent] [&::-webkit-scrollbar]:w-[5px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-[3px] [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-muted)_22%,transparent)] hover:[&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-muted)_50%,transparent)] focus-within:[&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--color-muted)_50%,transparent)]";
