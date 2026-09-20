@@ -144,10 +144,11 @@ export function TopicTags({
 export function TopicStatus({
   topic,
 }: {
-  topic: Pick<ForumTopic, "featured" | "locked">;
+  topic: Pick<ForumTopic, "featured" | "locked" | "pinned">;
 }) {
   return (
     <div className="inline-flex flex-wrap gap-2">
+      {topic.pinned ? <Badge>置顶</Badge> : null}
       {topic.featured ? <Badge>★ 精品</Badge> : null}
       {topic.locked ? <Badge variant="secondary">已锁定</Badge> : null}
     </div>

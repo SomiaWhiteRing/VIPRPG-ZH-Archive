@@ -320,8 +320,9 @@ export async function publicTopicList(
     ${input.featured ? "t.featured_at IS NOT NULL" : "1"}
     AND (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden' AND x.tag_id IN(SELECT value FROM json_each(?)))=?`;
   const bindings = [JSON.stringify(input.tags), input.tags.length];
+  // Pins are shown in addition to the first ordinary page, never carried forward.
   const total = (await ctx.db
-    .prepare(`SELECT COUNT(*) AS total ${source}`)
+    .prepare(`SELECT COUNT(*) AS total ${source} AND t.pinned_at IS NULL`)
     .bind(...bindings)
     .first<{ total: number }>())!.total;
   const page = Math.min(
@@ -330,16 +331,18 @@ export async function publicTopicList(
   );
   const rows = await ctx.db
     .prepare(
-      `SELECT t.id ${source} ORDER BY t.${sort} DESC,t.id DESC LIMIT ? OFFSET ?`,
+      `SELECT t.id ${source} AND t.pinned_at IS NULL ORDER BY t.${sort} DESC,t.id DESC LIMIT ? OFFSET ?`,
     )
     .bind(...bindings, FORUM_PAGE_SIZE, (page - 1) * FORUM_PAGE_SIZE)
     .all<{ id: number }>();
-  const ids = rows.results.map((r) => r.id);
+  const pinned = page === 1 ? await ctx.db.prepare(`SELECT t.id ${source} AND t.pinned_at IS NOT NULL ORDER BY t.pinned_at DESC,t.id DESC`)
+    .bind(...bindings).all<{ id: number }>() : { results: [] };
+  const ids = [...pinned.results, ...rows.results].map((r) => r.id);
   const { topicSql } = await import("./queries");
   const topics = ids.length
     ? await ctx.db
         .prepare(
-          `${topicSql} WHERE t.id IN(SELECT value FROM json_each(?)) AND EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id) ORDER BY t.${sort} DESC,t.id DESC`,
+          `${topicSql} WHERE t.id IN(SELECT value FROM json_each(?)) AND EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id) ORDER BY (t.pinned_at IS NOT NULL) DESC,t.pinned_at DESC,t.${sort} DESC,t.id DESC`,
         )
         .bind(JSON.stringify(ids))
         .all<import("./queries").TopicRow>()

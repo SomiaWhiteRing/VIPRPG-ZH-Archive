@@ -1,5 +1,5 @@
 import { requireUser } from "@/app/.server/auth/guards";
-import { deleteComment, updateComment } from "@/app/.server/db/work-community";
+import { deleteComment, pinComment, updateComment } from "@/app/.server/db/work-community";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
@@ -13,7 +13,7 @@ export async function PATCH(
   if ("response" in auth) return auth.response;
   try {
     const body = await readJsonObject(request, "Invalid comment body");
-    const comment = await updateComment(
+    const comment = "pinned" in body ? await pinComment(runtime, parsePositiveId(context.params.commentId, "comment id"), auth.user, body.pinned) : await updateComment(
       runtime,
       parsePositiveId((await context.params).commentId, "comment id"),
       auth.user.id,
