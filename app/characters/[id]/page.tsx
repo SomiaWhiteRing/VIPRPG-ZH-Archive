@@ -16,7 +16,7 @@ import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoRow } from "@/app/components/ui/info-row";
-import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { WorkListRow } from "@/app/components/work/work-list-row";
 import {
   CHARACTER_EDIT_PERMISSIONS,
   hasPermission,
@@ -209,41 +209,14 @@ function CharacterWorks({ works }: { works: CharacterWork[] }) {
   return (
     <ul className="m-0 list-none divide-y divide-border p-0">
       {works.map((work) => (
-        <li
-          className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 py-4 first:pt-0 max-[480px]:grid-cols-[5rem_minmax(0,1fr)]"
-          key={work.id}
-        >
-          <Link
-            aria-label={work.title}
-            className="relative aspect-4/3 self-start overflow-hidden rounded-md border border-border bg-muted/15"
-            to={`/games/${work.id}`}
+        <li key={work.id}>
+          <WorkListRow
+            href={`/games/${work.id}`}
+            title={work.title}
+            originalTitle={work.originalTitle}
+            coverBlobSha256={work.coverBlobSha256}
+            releaseDate={work.releaseDate ?? "日期未知"}
           >
-            {
-              <WorkThumbnail
-                blobSha256={work.coverBlobSha256}
-                alt=""
-                sizes="112px"
-                imageClassName="object-cover"
-                fallbackClassName="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white"
-                fallback="作"
-              />
-            }
-          </Link>
-          <div className="min-w-0 self-center">
-            <Link
-              className="font-bold text-primary wrap-anywhere hover:underline"
-              to={`/games/${work.id}`}
-            >
-              {work.title}
-            </Link>
-            {work.title !== work.originalTitle ? (
-              <span
-                className="block text-sm text-muted wrap-anywhere"
-                lang="ja"
-              >
-                {work.originalTitle}
-              </span>
-            ) : null}
             {work.credits.map((credit) =>
               credit.spoilerLevel > 0 ? (
                 <details className="mt-1.5 text-sm" key={credit.creditId}>
@@ -256,10 +229,7 @@ function CharacterWorks({ works }: { works: CharacterWork[] }) {
                 <CharacterCredit key={credit.creditId} work={credit} />
               ),
             )}
-            <span className="mt-1 block font-mono text-xs text-muted">
-              {work.releaseDate ?? "日期未知"}
-            </span>
-          </div>
+          </WorkListRow>
         </li>
       ))}
     </ul>

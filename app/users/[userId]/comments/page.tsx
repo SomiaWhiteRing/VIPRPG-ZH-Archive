@@ -40,8 +40,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function PublicComments() {
   const { page, result, base } = useLoaderData<typeof loader>();
   return (
-    <section>
-      <h2>公开评论</h2>
+    <section aria-label="评论">
       {result.items.length ? (
         <CommentSummaryList items={result.items} />
       ) : (

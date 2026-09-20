@@ -1,12 +1,9 @@
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { parseAccountPage } from "@/app/.server/auth/account-user";
-import { searchUserWorks } from "@/app/.server/db/game-library";
+import { loadGameLibrary } from "@/app/.server/game-library-page";
 import { requirePublicProfileSection } from "@/app/.server/public-user";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { GameCard } from "@/app/components/home/game-card";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { AccountEmpty } from "@/app/components/profile/account-content";
+import { GameLibrary } from "@/app/components/library/game-library";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
@@ -17,15 +14,9 @@ export async function loader(args: LoaderFunctionArgs) {
     (await params).userId,
     "history",
   );
-  const page = parseAccountPage((await searchParams).page);
-  const result = await searchUserWorks(runtime, {
-    userId: user.id,
-    kind: "played",
-    page,
-    pageSize: 20,
-  });
+  const data = await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "played" });
   const base = `/users/${user.id}/history`;
-  return { displayName: user.displayName, page, result, base };
+  return { ...data, displayName: user.displayName, base };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
@@ -38,27 +29,10 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function PublicHistory() {
-  const { page, result, base } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
   return (
-    <section>
-      <h2>最近游玩</h2>
-      {result.items.length ? (
-        <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {result.items.map(({ work }) => (
-            <li key={work.id}>
-              <GameCard work={work} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <AccountEmpty>还没有公开游玩记录。</AccountEmpty>
-      )}
-      <PaginationLinks
-        basePath={base}
-        page={page}
-        pageSize={result.pageSize}
-        total={result.total}
-      />
+    <section aria-label="最近游玩">
+      <GameLibrary data={data} basePath={data.base} emptyTitle="还没有公开游玩记录。" />
     </section>
   );
 }

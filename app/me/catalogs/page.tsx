@@ -39,8 +39,11 @@ export default function MyCatalogsPage() {
   const { page, result } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-6">
-      <PageHeader title="我的目录" subtitle={`共 ${result.total} 个公开目录`} />
-      <CatalogCreateForm />
+      <PageHeader
+        actions={<CatalogCreateForm />}
+        title="我的目录"
+        subtitle={`共 ${result.total} 个公开目录`}
+      />
       {result.items.length ? (
         <CatalogSummaryList items={result.items} showDescription />
       ) : (

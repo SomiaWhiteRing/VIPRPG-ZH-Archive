@@ -39,8 +39,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function PublicCatalogs() {
   const { page, result, base } = useLoaderData<typeof loader>();
   return (
-    <section>
-      <h2>公开目录</h2>
+    <section aria-label="目录">
       {result.items.length ? (
         <CatalogSummaryList items={result.items} />
       ) : (

@@ -1,6 +1,7 @@
 import { GameCard } from "@/app/components/home/game-card";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import type { UserWorkListItem } from "@/lib/dto/db/game-library";
+import { formatDate } from "@/lib/format";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -34,7 +35,7 @@ export function AccountSection({
   );
 }
 
-export function AccountWorkGrid({ items }: { items: UserWorkListItem[] }) {
+export function AccountWorkGrid({ items, showPlayedAt = false }: { items: UserWorkListItem[]; showPlayedAt?: boolean }) {
   return (
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {items.map((item, index) => (
@@ -42,7 +43,13 @@ export function AccountWorkGrid({ items }: { items: UserWorkListItem[] }) {
           className={index >= 2 ? "hidden sm:block" : undefined}
           key={item.work.id}
         >
-          <GameCard work={item.work} />
+          <GameCard work={item.work}>
+            {showPlayedAt ? (
+              <p className="mt-1 text-xs text-muted wrap-anywhere">
+                最近游玩：{formatDate(item.occurredAt)}
+              </p>
+            ) : null}
+          </GameCard>
         </li>
       ))}
     </ul>

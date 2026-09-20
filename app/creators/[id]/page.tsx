@@ -17,7 +17,7 @@ import {
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
-import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { WorkListRow } from "@/app/components/work/work-list-row";
 import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
@@ -119,35 +119,14 @@ export default function CreatorDetailPage() {
               {works.length ? (
                 <ul className="m-0 divide-y divide-border border-y border-border p-0">
                   {works.map((work) => (
-                    <li
-                      className="grid grid-cols-[7rem_minmax(0,1fr)] gap-4 py-4 max-[480px]:grid-cols-[5rem_minmax(0,1fr)]"
-                      key={work.workId}
-                    >
-                      <Link
-                        className="relative aspect-4/3 overflow-hidden rounded-md border border-border bg-muted/15"
-                        to={`/games/${work.workId}`}
+                    <li key={work.workId}>
+                      <WorkListRow
+                        href={`/games/${work.workId}`}
+                        title={work.workTitle}
+                        originalTitle={work.workOriginalTitle}
+                        coverBlobSha256={work.coverBlobSha256}
+                        releaseDate={work.originalReleaseDate ?? "日期未知"}
                       >
-                        <WorkThumbnail
-                          blobSha256={work.coverBlobSha256}
-                          alt=""
-                          sizes="112px"
-                          imageClassName="object-cover"
-                          fallbackClassName="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white"
-                          fallback="作"
-                        />
-                      </Link>
-                      <div className="min-w-0 self-center">
-                        <Link
-                          className="font-bold text-[#1f6f67] wrap-anywhere hover:underline"
-                          to={`/games/${work.workId}`}
-                        >
-                          {work.workTitle}
-                        </Link>
-                        {work.workTitle !== work.workOriginalTitle ? (
-                          <span className="block text-sm text-muted wrap-anywhere">
-                            {work.workOriginalTitle}
-                          </span>
-                        ) : null}
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {work.credits.map((credit) => (
                             <Badge
@@ -178,10 +157,7 @@ export default function CreatorDetailPage() {
                             ).join(" · ")}
                           </p>
                         ) : null}
-                        <span className="mt-1 block font-mono text-xs text-muted">
-                          {work.originalReleaseDate ?? "日期未知"}
-                        </span>
-                      </div>
+                      </WorkListRow>
                     </li>
                   ))}
                 </ul>

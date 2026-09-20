@@ -41,8 +41,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function PublicDiscussions() {
   const { user, result } = useLoaderData<typeof loader>();
   return (
-    <section>
-      <h2>最近讨论</h2>
+    <section aria-label="讨论">
       <DiscussionList items={result.items} />
       <PaginationLinks
         basePath={`/users/${user.id}/discussions`}

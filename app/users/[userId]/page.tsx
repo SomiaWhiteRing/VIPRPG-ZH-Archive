@@ -15,11 +15,11 @@ import {
   AccountWorkGrid,
 } from "@/app/components/profile/account-content";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
-import { commentTargetHref } from "@/lib/comment-target";
+import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatDate } from "@/lib/format";
+import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -89,7 +89,10 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.displayName || "用户", "个人主页"] }, error);
+  pageMetaDescriptors(
+    { title: [loaderData?.displayName || "用户", "个人主页"] },
+    error,
+  );
 
 export default function PublicUserPage() {
   const {
@@ -113,7 +116,7 @@ export default function PublicUserPage() {
       {played ? (
         <AccountSection href={`${base}/history`} title="最近游玩">
           {played.items.length ? (
-            <AccountWorkGrid items={played.items} />
+            <AccountWorkGrid items={played.items} showPlayedAt />
           ) : (
             <AccountEmpty>还没有公开游玩记录。</AccountEmpty>
           )}
@@ -131,24 +134,7 @@ export default function PublicUserPage() {
       {catalogs ? (
         <AccountSection href={`${base}/catalogs`} title="公开目录">
           {catalogs.items.length ? (
-            <ul className="divide-y divide-border border-y border-border">
-              {catalogs.items.map((catalog, index) => (
-                <li
-                  className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`}
-                  key={catalog.id}
-                >
-                  <Link
-                    className="font-semibold"
-                    to={`/catalogs/${catalog.id}`}
-                  >
-                    {catalog.title}
-                  </Link>
-                  <p className="mt-1 text-sm text-muted">
-                    {catalog.itemCount} 部作品 · {formatDate(catalog.updatedAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <CatalogSummaryList items={catalogs.items} preview />
           ) : (
             <AccountEmpty>还没有公开目录。</AccountEmpty>
           )}
@@ -157,24 +143,7 @@ export default function PublicUserPage() {
       {comments ? (
         <AccountSection href={`${base}/comments`} title="最近评论">
           {comments.items.length ? (
-            <ul className="divide-y divide-border border-y border-border">
-              {comments.items.map((comment, index) => (
-                <li
-                  className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`}
-                  key={comment.id}
-                >
-                  <Link
-                    className="font-semibold"
-                    to={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
-                  >
-                    {comment.targetTitle}
-                  </Link>
-                  <p className="mt-1 line-clamp-2 text-sm text-muted">
-                    {comment.body}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <RecentCommentList items={comments.items} />
           ) : (
             <AccountEmpty>还没有公开评论。</AccountEmpty>
           )}

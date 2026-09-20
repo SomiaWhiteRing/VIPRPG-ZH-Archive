@@ -3,7 +3,9 @@ import type { PublicCreatorListItem } from "@/lib/dto/db/creator-library";
 import { formatNumber } from "@/lib/format";
 import { Link } from "react-router";
 
-export function CreatorCard({ creator }: { creator: PublicCreatorListItem }) {
+export function CreatorCard({ creator }: {
+  creator: Omit<PublicCreatorListItem, "aliases"> & { aliases?: string[] };
+}) {
   return (
     <article className="h-full min-w-0">
       <Link
@@ -20,7 +22,7 @@ export function CreatorCard({ creator }: { creator: PublicCreatorListItem }) {
           <h2 className="m-0 text-base font-semibold leading-snug wrap-anywhere group-hover:text-primary sm:text-lg">
             {creator.name}
           </h2>
-          {creator.aliases.length ? (
+          {creator.aliases?.length ? (
             <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted wrap-anywhere sm:text-[13px]">
               <span className="sr-only">别名：</span>
               {creator.aliases.join(" · ")}
