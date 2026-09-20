@@ -1,3 +1,7 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
+import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { NestedReply, nestedRepliesClassName } from "./nested-reply";
+import { CommentReplyEditor } from "./reply-editor";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
@@ -8,16 +12,16 @@ import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
 import type {
   CommentBodySegment,
   CommentDto,
+  CommentPage,
   CommentReplyPage,
   FaceEmoji,
 } from "@/lib/dto/db/work-community";
-import { Heart, MessageCircle, Send, Trash2 } from "lucide-react";
+import { MessageCircle, Send, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -26,6 +30,7 @@ const NO_IMAGES: DraftImage[] = [];
 type Props = {
   target: CommentTarget;
   placeholder?: string;
+  canPin?: boolean;
   currentUserId: number | null;
   initialComments: CommentDto[];
   initialNextCursor: string | null;
@@ -42,6 +47,7 @@ export function CommentPanel(props: Props) {
 
 function CommentPanelContent({
   target,
+  canPin = false,
   placeholder = "写下你的游玩感受、攻略提示或考证……",
   currentUserId,
   initialComments,
@@ -51,7 +57,6 @@ function CommentPanelContent({
   const [comments, setComments] = useState(initialComments);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [body, setBody] = useState("");
-  const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -73,7 +78,6 @@ function CommentPanelContent({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           body,
-          ...(replyTarget ? { replyToCommentId: replyTarget.id } : {}),
         }),
       });
       const result = (await response.json()) as {
@@ -86,21 +90,11 @@ function CommentPanelContent({
         return;
       }
       setBody("");
-      if (replyTarget) {
-        setComments((current) =>
-          current.map((comment) =>
-            comment.id === (replyTarget.rootCommentId ?? replyTarget.id)
-              ? { ...comment, replyCount: (comment.replyCount ?? 0) + 1 }
-              : comment,
-          ),
-        );
-        const reply = result.comment;
-        const rootId = replyTarget.rootCommentId ?? replyTarget.id;
-        setNewReplies((current) => ({ ...current, [rootId]: reply }));
-      } else {
-        setComments((current) => [...current, result.comment!]);
-      }
-      setReplyTarget(null);
+      setComments((current) =>
+        target.kind === "work"
+          ? [result.comment!, ...current]
+          : [...current, result.comment!],
+      );
       toast.success("评论已发布。");
     } catch {
       setSubmitError("网络请求失败，评论内容已保留，请重试。");
@@ -148,13 +142,13 @@ function CommentPanelContent({
     }
   }
 
-  async function removeComment(comment: CommentDto) {
+  async function removeComment(comment: CommentDto): Promise<boolean> {
     if (
       !currentUserId ||
       comment.author?.id !== currentUserId ||
       !window.confirm("确定删除这条评论吗？")
     )
-      return;
+      return false;
     try {
       const response = await fetch(`/api/comments/${comment.id}`, {
         method: "DELETE",
@@ -176,13 +170,33 @@ function CommentPanelContent({
           current.filter((entry) => entry.id !== comment.id),
         );
       }
-      if (
-        replyTarget?.id === comment.id ||
-        replyTarget?.rootCommentId === comment.id
-      )
-        setReplyTarget(null);
+      return true;
     } catch {
       toast.error("评论删除失败。");
+      return false;
+    }
+  }
+
+  async function togglePin(comment: CommentDto) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/comments/${comment.id}`, {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pinned: !comment.pinned }),
+      });
+      if (!response.ok) throw new Error();
+      const refreshed = await fetch(endpoint, { credentials: "same-origin" });
+      const result = await refreshed.json() as CommentPage & { ok?: boolean };
+      if (!refreshed.ok || !result.ok) throw new Error();
+      setComments(result.items);
+      setNextCursor(result.nextCursor);
+      toast.success(comment.pinned ? "已取消置顶。" : "评论已置顶。");
+    } catch {
+      toast.error("置顶操作或列表刷新失败，请重试。");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -200,7 +214,14 @@ function CommentPanelContent({
         nextCursor?: string | null;
       };
       if (!response.ok || !result.ok) throw new Error();
-      setComments((current) => [...current, ...(result.items ?? [])]);
+      setComments((current) => {
+        const byId = new Map(current.map((comment) => [comment.id, comment]));
+        for (const comment of result.items ?? []) byId.set(comment.id, comment);
+        return [...byId.values()].sort((a, b) => {
+          const order = a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
+          return target.kind === "work" ? -order : order;
+        });
+      });
       setNextCursor(result.nextCursor ?? null);
     } catch {
       toast.error("评论加载失败。");
@@ -209,9 +230,13 @@ function CommentPanelContent({
     }
   }
 
-  function startReply(comment: CommentDto) {
-    setReplyTarget(comment);
-    textareaRef.current?.focus();
+  function replyCreated(rootId: number, reply: CommentDto) {
+    setComments((current) => current.map((comment) =>
+      comment.id === rootId
+        ? { ...comment, replyCount: (comment.replyCount ?? 0) + 1 }
+        : comment,
+    ));
+    setNewReplies((current) => ({ ...current, [rootId]: reply }));
   }
 
   function insertEmoji(emoji: FaceEmoji, options: { focus: boolean }) {
@@ -222,27 +247,6 @@ function CommentPanelContent({
     <div className="@container/comments grid gap-4" id="comments">
       {currentUserId ? (
         <div className="grid gap-2">
-          {replyTarget ? (
-            <div className="flex items-center justify-between gap-2 text-sm text-muted">
-              <span>
-                回复 @{replyTarget.author?.displayName ?? "已删除用户"}
-              </span>
-              <Button
-                onClick={() => setReplyTarget(null)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                取消
-              </Button>
-            </div>
-          ) : null}
-          <Label
-            className="font-mono text-xs text-muted"
-            htmlFor="comment-input"
-          >
-            发表评论
-          </Label>
           <BodyEditor
             textOnly
             maxLength={2000}
@@ -288,13 +292,15 @@ function CommentPanelContent({
           comments.map((comment) => (
             <CommentCard
               comment={comment}
+              pinControl={canPin ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
               commentUpdates={commentUpdates}
               currentUserId={currentUserId}
               newReply={newReplies[comment.id] ?? null}
               key={comment.id}
               onDelete={removeComment}
               onLike={toggleLike}
-              onReply={startReply}
+              endpoint={endpoint}
+              onReplyCreated={replyCreated}
             />
           ))
         ) : (
@@ -324,21 +330,30 @@ function commentEndpoint(target: CommentTarget): string {
 
 function CommentCard({
   comment,
+  pinControl,
   commentUpdates,
   currentUserId,
   newReply,
-  onReply,
+  endpoint,
+  onReplyCreated,
   onLike,
   onDelete,
 }: {
   comment: CommentDto;
+  pinControl: React.ReactNode;
   commentUpdates: Record<number, Partial<CommentDto>>;
   currentUserId: number | null;
   newReply: CommentDto | null;
-  onReply: (comment: CommentDto) => void;
+  endpoint: string;
+  onReplyCreated: (rootId: number, reply: CommentDto) => void;
   onLike: (comment: CommentDto) => void;
-  onDelete: (comment: CommentDto) => void;
+  onDelete: (comment: CommentDto) => Promise<boolean>;
 }) {
+  const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
+  const [replyBusy, setReplyBusy] = useState(false);
+  function startReply(target: CommentDto) {
+    if (!replyBusy) setReplyTarget(target);
+  }
   const [replies, setReplies] = useState<CommentReplyPage | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -419,39 +434,42 @@ function CommentCard({
         />
       )}
       <div className="min-w-0">
+        {currentComment.pinned ? <span className="text-xs font-bold text-primary">置顶</span> : null}
         <CommentLine comment={currentComment} />
-        <CommentControls
-          comment={currentComment}
-          currentUserId={currentUserId}
-          onDelete={onDelete}
-          onLike={onLike}
-          onReply={onReply}
-        />
-        {replyCount > 0 || loading || error ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <CommentControls
+            comment={currentComment}
+            currentUserId={currentUserId}
+            onDelete={onDelete}
+            onLike={onLike}
+            onReply={startReply}
+          />
+          {pinControl}
+        </div>
+        {replyCount > 0 || loading || error || replyTarget ? (
           <section
-            aria-label={`#${comment.id} 的回复`}
+            aria-label={`${comment.floorNumber} 楼的回复`}
             aria-busy={loading}
-            className="mt-2.5 grid gap-2.5 border-l-2 border-border bg-muted/10 p-3"
+            className={nestedRepliesClassName}
             id={`comment-replies-${comment.id}`}
           >
             {visibleReplies.map((entry) => {
               const reply = { ...entry, ...commentUpdates[entry.id] };
+              if (reply.status === "deleted") return null;
               return (
-                <div
-                  className="min-w-0 scroll-mt-24 focus:bg-primary/5 focus-visible:outline focus-visible:outline-primary"
-                  id={`comment-${reply.id}`}
+                <CommentNestedReply
                   key={reply.id}
-                  tabIndex={-1}
-                >
-                  <CommentLine comment={reply} />
-                  <CommentControls
-                    comment={reply}
-                    currentUserId={currentUserId}
-                    onDelete={onDelete}
-                    onLike={onLike}
-                    onReply={onReply}
-                  />
-                </div>
+                  comment={reply}
+                  currentUserId={currentUserId}
+                  onDelete={async (reply) => {
+                    if (await onDelete(reply)) {
+                      if (replyTarget?.id === reply.id) setReplyTarget(null);
+                      await loadReplies(replies?.page ?? 1);
+                    }
+                  }}
+                  onLike={onLike}
+                  onReply={startReply}
+                />
               );
             })}
             {replyCount > COMMENT_REPLY_PREVIEW_SIZE ? (
@@ -478,35 +496,15 @@ function CommentCard({
               </Button>
             ) : null}
             {expanded && replies && replies.total > replies.pageSize ? (
-              <nav
-                aria-label={`#${comment.id} 楼中楼分页`}
-                className="flex flex-wrap items-center gap-2"
-              >
-                <Button
-                  disabled={loading || replies.page <= 1}
-                  onClick={() => void loadReplies(replies.page - 1)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  上一页
-                </Button>
-                <span className="text-xs">
-                  {replies.page} / {Math.ceil(replies.total / replies.pageSize)}
-                </span>
-                <Button
-                  disabled={
-                    loading ||
-                    replies.page >= Math.ceil(replies.total / replies.pageSize)
-                  }
-                  onClick={() => void loadReplies(replies.page + 1)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  下一页
-                </Button>
-              </nav>
+              <PaginationLinks
+                ariaLabel={`${comment.floorNumber} 楼的回复分页`}
+                className="my-2"
+                page={replies.page}
+                pageSize={replies.pageSize}
+                total={replies.total}
+                disabled={loading}
+                onPageChange={(page) => void loadReplies(page)}
+              />
             ) : null}
             {error ? (
               <div
@@ -530,10 +528,82 @@ function CommentCard({
                 </Button>
               </div>
             ) : null}
+            {replyTarget && currentUserId ? (
+              <CommentReplyEditor
+                endpoint={endpoint}
+                rootId={comment.id}
+                target={replyTarget}
+                unavailable={
+                  commentUpdates[replyTarget.id]?.status === "deleted"
+                }
+                onBusyChange={setReplyBusy}
+                onCancel={() => setReplyTarget(null)}
+                onCreated={(reply) => {
+                  onReplyCreated(comment.id, reply);
+                  setReplyTarget(null);
+                }}
+              />
+            ) : null}
           </section>
         ) : null}
       </div>
     </article>
+  );
+}
+
+function CommentNestedReply({
+  comment,
+  currentUserId,
+  onReply,
+  onLike,
+  onDelete,
+}: {
+  comment: CommentDto;
+  currentUserId: number | null;
+  onReply: (comment: CommentDto) => void;
+  onLike: (comment: CommentDto) => void;
+  onDelete: (comment: CommentDto) => void;
+}) {
+  if (comment.status === "deleted") return null;
+  return (
+    <NestedReply
+      id={`comment-${comment.id}`}
+      metadata={<>
+        <Timestamp value={comment.createdAt} />
+        {comment.editedAt ? " · 已编辑" : ""}
+      </>}
+      actions={<>
+        {currentUserId ? (
+          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" onClick={() => onReply(comment)}>
+            回复
+          </Button>
+        ) : null}
+        <Button
+          className="min-h-10 px-2 disabled:opacity-100"
+          size="sm" variant="ghost" type="button"
+          disabled={!currentUserId}
+          aria-pressed={comment.likedByMe}
+          aria-label={`${comment.likedByMe ? "取消赞" : "赞"}，${comment.likeCount} 个赞`}
+          onClick={() => onLike(comment)}
+        >
+          <ThumbsUp aria-hidden className={comment.likedByMe ? "text-primary" : undefined} />
+          <span className={comment.likedByMe ? "text-primary" : undefined}>{comment.likeCount}</span>
+        </Button>
+        {currentUserId === comment.author?.id ? (
+          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" onClick={() => onDelete(comment)}>
+            删除
+          </Button>
+        ) : null}
+      </>}
+    >
+      {comment.author ? (
+          <Link className="break-all text-primary hover:underline" to={`/users/${comment.author.id}`}>
+            {comment.author.displayName}
+          </Link>
+        ) : "已删除用户"}
+        {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "已删除用户"}</span> : null}
+        ：<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
+    </NestedReply>
   );
 }
 
@@ -552,7 +622,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
           <strong className="text-sm">已删除用户</strong>
         )}
         <span className="font-mono text-xs text-muted">
-          {new Date(comment.createdAt).toLocaleString("zh-CN")}
+          <Timestamp value={comment.createdAt} />
         </span>
         {comment.editedAt ? (
           <span className="font-mono text-xs text-muted">已编辑</span>
@@ -561,10 +631,10 @@ function CommentLine({ comment }: { comment: CommentDto }) {
           <span className="font-mono text-xs text-muted">已删除</span>
         ) : null}
         <span className="ml-auto font-mono text-xs text-muted">
-          #{comment.id}
+          {comment.floorNumber} 楼
         </span>
       </div>
-      <p className="m-0 mt-1 text-sm leading-[1.7] wrap-anywhere whitespace-pre-wrap">
+      <p className="m-0 mt-1 text-[15px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
         {comment.replyTo ? (
           <span className="text-muted">
             回复 @{comment.replyTo.displayName ?? "已删除用户"}：
@@ -628,7 +698,7 @@ function CommentControls({
         type="button"
         variant={comment.likedByMe ? "outline" : "ghost"}
       >
-        <Heart aria-hidden />
+        <ThumbsUp aria-hidden />
         {comment.likeCount}
       </Button>
       {currentUserId === comment.author?.id ? (

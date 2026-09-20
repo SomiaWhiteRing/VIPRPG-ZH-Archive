@@ -16,7 +16,7 @@ function EmojiNodeView({ node, selected }: NodeViewProps) {
     <NodeViewWrapper
       as="span"
       contentEditable={false}
-      className={`inline-flex align-middle ${selected ? "outline-2 outline-primary" : ""}`}
+      className={`inline-flex align-bottom ${selected ? "outline-2 outline-primary" : ""}`}
     >
       <FaceEmojiView
         key={node.attrs.id}

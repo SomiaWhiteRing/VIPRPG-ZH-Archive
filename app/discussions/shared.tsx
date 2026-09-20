@@ -187,7 +187,7 @@ export function ForumBody({
   const segments = body.split(/(https?:\/\/[^\s<>]+|:face_[1-9]\d{0,15}:)/g);
   return (
     <span
-      className={`${inline ? "text-sm" : "block max-w-[76ch] text-base"} whitespace-pre-wrap break-words leading-[1.7] [overflow-wrap:anywhere]`}
+      className={`${inline ? "" : "block max-w-[76ch]"} whitespace-pre-wrap break-words text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
     >
       {segments.map((part, index) => {
         if (/^:face_[1-9]\d{0,15}:$/.test(part))

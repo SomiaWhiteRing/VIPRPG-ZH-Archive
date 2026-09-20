@@ -1,3 +1,4 @@
+import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useToast } from "@/app/components/ui/toast";
@@ -1226,7 +1227,7 @@ function ForumFloorView({
                   className={liked ? "size-4 text-primary" : "size-4"}
                 />
                 <span className={liked ? "text-primary" : undefined}>
-                  {likes || "赞"}
+                  {likes}
                 </span>
               </Button>
             ) : null}
@@ -1266,16 +1267,31 @@ function ForumFloorView({
             id={`floor-comments-${post.id}`}
             aria-label={`#${post.postNumber}的回复`}
             tabIndex={-1}
-            className="mt-3 border-l-2 border-border bg-muted/10 p-2 focus-visible:outline focus-visible:outline-primary sm:p-3"
+            className={nestedRepliesClassName}
           >
             {visibleComments.map((comment) => (
-              <article
+              <NestedReply
                 key={comment.id}
                 id={`comment-${comment.id}`}
-                tabIndex={-1}
-                className="group scroll-mt-24 border-b border-border/50 py-2 focus-visible:outline focus-visible:outline-primary target:bg-primary/5"
+                metadata={<>
+                    <Timestamp value={comment.createdAt} />
+                    {comment.editedAt ? " · 已编辑" : ""}
+                </>}
+                actions={<>
+                  {comment.capabilities.reply ? (
+                    <Button
+                      className="min-h-10 px-2"
+                      size="sm"
+                      variant="ghost"
+                      type="button"
+                      onClick={() => onReply(post, comment)}
+                    >
+                      回复
+                    </Button>
+                  ) : null}
+                  <ForumMenu items={menu(comment)} />
+                </>}
               >
-                <div className="break-words text-sm leading-relaxed">
                   {comment.author ? (
                     <>
                       <ForumAuthorName author={comment.author} />
@@ -1306,26 +1322,7 @@ function ForumFloorView({
                           : "内容不可用。"}
                     </span>
                   )}
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  <span className="mr-auto text-xs text-muted">
-                    <Timestamp value={comment.createdAt} />
-                    {comment.editedAt ? " · 已编辑" : ""}
-                  </span>
-                  {comment.capabilities.reply ? (
-                    <Button
-                      className="min-h-10 px-2"
-                      size="sm"
-                      variant="ghost"
-                      type="button"
-                      onClick={() => onReply(post, comment)}
-                    >
-                      回复
-                    </Button>
-                  ) : null}
-                  <ForumMenu items={menu(comment)} />
-                </div>
-              </article>
+              </NestedReply>
             ))}
             {post.comments.total > 5 ? (
               <Button
@@ -1359,35 +1356,15 @@ function ForumFloorView({
               </Button>
             ) : null}
             {expanded && comments.total > comments.pageSize ? (
-              <nav
-                aria-label={`#${post.postNumber}楼中楼分页`}
-                className="my-2 flex items-center gap-2"
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={loading || comments.page <= 1}
-                  onClick={() => void load(comments.page - 1)}
-                >
-                  上一页
-                </Button>
-                <span className="text-xs">
-                  {comments.page} / {Math.ceil(comments.total / comments.pageSize)}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={
-                    loading ||
-                    comments.page >= Math.ceil(comments.total / comments.pageSize)
-                  }
-                  onClick={() => void load(comments.page + 1)}
-                >
-                  下一页
-                </Button>
-              </nav>
+              <PaginationLinks
+                ariaLabel={`#${post.postNumber} 楼中楼分页`}
+                className="my-2"
+                page={comments.page}
+                pageSize={comments.pageSize}
+                total={comments.total}
+                disabled={loading}
+                onPageChange={(page) => void load(page)}
+              />
             ) : null}
             {editor}
           </section>
