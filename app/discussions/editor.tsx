@@ -1,10 +1,11 @@
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { bodyLength } from "@/lib/face-emojis";
-import { ChevronDown, ImagePlus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ImagePlus, Maximize2, Minimize2 } from "lucide-react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
-import { draftSnapshot, draftValue, forumReplyLauncherClass } from "./draft";
+import { draftSnapshot, forumReplyLauncherClass } from "./draft";
 
+import { HeightBox } from "@/app/components/ui/height-box";
 import { Button } from "@/app/components/ui/button";
 
 import { Input } from "@/app/components/ui/input";
@@ -25,16 +26,16 @@ import {
   type BodyEditorHandle,
 } from "@/app/components/comments/body-editor";
 import { ForumModal, ForumTagEditor } from "./shared";
+import { ForumReplyFullscreenContext } from "./reply-bar";
 
 export function ForumEditor({
   draft,
   onChange,
-  onBusyChange,
   onError,
   onCancel,
   onSubmit,
   onReload,
-  busy,
+  busy: submitting,
   error,
   progress,
   loginExpired,
@@ -43,7 +44,6 @@ export function ForumEditor({
 }: {
   draft: ForumDraft;
   onChange: (draft: ForumDraft) => void;
-  onBusyChange: (value: boolean) => void;
   onError: (message: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -55,11 +55,21 @@ export function ForumEditor({
   conflict: boolean;
   emojis: FaceEmoji[];
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Local image preparation locks editor actions without marking a publish
+  // request in flight or enabling the page's unload guard on an empty draft.
+  const [processingImages, setProcessingImages] = useState(false);
+  const busy = submitting || processingImages;
+  const [collapsed, setCollapsed] = useState(draft.collapsed ?? false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const mixed = useRef<BodyEditorHandle>(null);
   const section = useRef<HTMLElement>(null);
+  const scrollArea = useRef<HTMLDivElement>(null);
+  const originalHeight = useRef(0);
+  const fullScreenControl = useContext(ForumReplyFullscreenContext);
+  const fullscreen = fullScreenControl?.fullscreen ?? false;
+  const setFullscreen = fullScreenControl?.setFullscreen;
+  const [overflowing, setOverflowing] = useState(false);
   const composing = useRef(false);
   const topic = draft.mode === "topic";
   const inline = draft.mode === "comment";
@@ -86,8 +96,73 @@ export function ForumEditor({
         ? `回复 #${draft.postNumber}`
         : `回复：${draft.title}`;
 
+  useLayoutEffect(() => {
+    if (!setFullscreen || fullscreen || isCollapsed) return;
+    const area = scrollArea.current;
+    if (!area) return;
+    const observer = new ResizeObserver(measure);
+    function measure() {
+      if (!area) return;
+      const textbox = area.querySelector<HTMLElement>('[role="textbox"]');
+      if (textbox) observer.observe(textbox);
+      setOverflowing(
+        [area, textbox].some((node) => node && node.scrollHeight > node.clientHeight + 1),
+      );
+    }
+    const mutations = new MutationObserver(measure);
+    observer.observe(area);
+    mutations.observe(area, { childList: true, characterData: true, subtree: true });
+    measure();
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+    };
+  }, [setFullscreen, fullscreen, isCollapsed]);
+
+  useLayoutEffect(() => {
+    if (!fullscreen) return;
+    const editor = section.current;
+    if (!editor) return;
+    const root = document.documentElement;
+    const overflow = root.style.overflow;
+    const gutter = root.style.scrollbarGutter;
+    root.style.scrollbarGutter = "stable";
+    root.style.overflow = "hidden";
+    const inactive: [HTMLElement, boolean][] = [];
+    for (let node: HTMLElement | null = editor; node?.parentElement; node = node.parentElement) {
+      for (const sibling of node.parentElement.children) {
+        if (sibling !== node && sibling instanceof HTMLElement) {
+          inactive.push([sibling, sibling.inert]);
+          sibling.inert = true;
+        }
+      }
+      if (node.parentElement === document.body) break;
+    }
+    const viewport = window.visualViewport;
+    function resize() {
+      if (!editor) return;
+      editor.style.top = `${viewport?.offsetTop ?? 0}px`;
+      editor.style.height = `${viewport?.height ?? window.innerHeight}px`;
+    }
+    resize();
+    viewport?.addEventListener("resize", resize);
+    viewport?.addEventListener("scroll", resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      root.style.overflow = overflow;
+      root.style.scrollbarGutter = gutter;
+      for (const [node, inert] of inactive) node.inert = inert;
+      editor.style.top = "";
+      editor.style.height = "";
+      viewport?.removeEventListener("resize", resize);
+      viewport?.removeEventListener("scroll", resize);
+      window.removeEventListener("resize", resize);
+    };
+  }, [fullscreen]);
+  useEffect(() => () => setFullscreen?.(false), [setFullscreen]);
+
   useEffect(() => {
-    if (topic || inline || isCollapsed || busy || emojiOpen) return;
+    if (topic || inline || isCollapsed || busy || emojiOpen || fullscreen) return;
     function outside(event: PointerEvent) {
       const target = event.target;
       if (
@@ -103,46 +178,70 @@ export function ForumEditor({
     }
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
-  }, [topic, inline, isCollapsed, busy, emojiOpen]);
+  }, [topic, inline, isCollapsed, busy, emojiOpen, fullscreen]);
 
   const form = (
+    <HeightBox
+      className={topic ? "contents" : undefined}
+      height={fullscreen ? originalHeight.current : undefined}
+    >
     <section
       ref={section}
       data-forum-editor
+      data-forum-fullscreen={fullscreen}
+      role={fullscreen ? "dialog" : undefined}
+      aria-modal={fullscreen || undefined}
       aria-label={context}
+      onKeyDown={(event) => {
+        if (fullscreen && event.key === "Escape" && !emojiOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          setFullscreen?.(false);
+        }
+      }}
       className={
-        topic
+        fullscreen
+          ? "fixed inset-x-0 top-0 z-[60] flex h-dvh min-h-0 flex-col bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          : topic
           ? "flex min-h-0 flex-1 flex-col"
           : inline
             ? "mt-3 border-t border-border pt-3"
-            : "min-w-0"
+            : "relative min-w-0"
       }
     >
-      {isCollapsed && !topic && !inline ? (
+      {!topic && !inline ? (
         <Button
           variant="ghost"
           type="button"
-          className={forumReplyLauncherClass}
+          inert={!isCollapsed}
+          aria-hidden={!isCollapsed}
+          className={`${forumReplyLauncherClass} transition-opacity duration-240 motion-reduce:transition-none ${
+            isCollapsed
+              ? "relative opacity-100"
+              : "pointer-events-none absolute inset-x-0 top-0 opacity-0"
+          }`}
           onClick={() => {
             setCollapsed(false);
             requestAnimationFrame(() => mixed.current?.focus());
           }}
         >
-          <span className="shrink-0 text-foreground">
-            {draft.target ? `编辑 #${draft.postNumber}` : "回复主题"}
+          <span className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {draft.body.trim() || "回复主题……"}
           </span>
-          <span className="min-w-0 flex-1 truncate">
-            {draft.body.trim() || "写下你的回复……"}
-            {draft.images.length ? ` · 图片 × ${draft.images.length}` : ""}
-          </span>
-          {draftValue(draft) !== draftValue(draft.original) ? (
-            <span className="shrink-0 text-xs text-primary">未提交</span>
-          ) : null}
         </Button>
       ) : null}
       <form
+        inert={isCollapsed}
+        aria-hidden={isCollapsed}
         className={
-          isCollapsed ? "hidden" : "flex min-h-0 flex-1 flex-col gap-2"
+          "flex min-h-0 flex-1 flex-col gap-2" +
+          (!topic && !inline
+            ? ` transition-opacity duration-240 motion-reduce:transition-none ${
+                isCollapsed
+                  ? "pointer-events-none absolute inset-x-0 top-0 max-h-full overflow-clip opacity-0"
+                  : "relative opacity-100"
+              }`
+            : "")
         }
         onSubmit={(event) => {
           event.preventDefault();
@@ -150,8 +249,11 @@ export function ForumEditor({
         }}
       >
         <div
+          ref={scrollArea}
           className={
-            topic
+            fullscreen
+              ? "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain"
+              : topic
               ? "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2"
               : "flex max-h-[min(50dvh,calc(var(--reply-viewport,100dvh)-10rem))] flex-col gap-2 overflow-y-auto"
           }
@@ -217,7 +319,11 @@ export function ForumEditor({
           ) : null}
           <div
             className={
-              topic ? "flex min-h-48 shrink-0 flex-col gap-1" : "min-w-0"
+              topic
+                ? "flex min-h-48 shrink-0 flex-col gap-1"
+                : fullscreen
+                  ? "flex min-h-48 shrink-0 flex-1 flex-col gap-1"
+                  : "min-w-0"
             }
           >
             <Label
@@ -234,9 +340,9 @@ export function ForumEditor({
               topic={topic}
               textOnly={inline}
               maxLength={limit}
-              autoFocus={!topic}
+              autoFocus={!topic && !isCollapsed}
               emojis={emojis}
-              onBusyChange={onBusyChange}
+              onBusyChange={setProcessingImages}
               onError={onError}
               onCompositionChange={(value) => {
                 composing.current = value;
@@ -326,6 +432,23 @@ export function ForumEditor({
                 <span className="hidden sm:inline"> / {limit}</span>
               </span>
               <div className="ml-auto flex items-center gap-1">
+                {setFullscreen && (overflowing || fullscreen) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={fullscreen ? "退出全屏" : "全屏编辑"}
+                    title={fullscreen ? "退出全屏" : "全屏编辑"}
+                    aria-pressed={fullscreen}
+                    onClick={() => {
+                      if (!fullscreen)
+                        originalHeight.current = section.current?.getBoundingClientRect().height ?? 0;
+                      setFullscreen(!fullscreen);
+                    }}
+                  >
+                    {fullscreen ? <Minimize2 /> : <Maximize2 />}
+                  </Button>
+                ) : null}
                 {!topic && !inline ? (
                   <Button
                     type="button"
@@ -335,6 +458,10 @@ export function ForumEditor({
                     title="收起回复"
                     disabled={busy || !!error || !!draft.currentVersion}
                     onClick={() => {
+                      if (fullscreen) {
+                        setFullscreen?.(false);
+                        return;
+                      }
                       setCollapsed(true);
                       requestAnimationFrame(() =>
                         section.current
@@ -353,14 +480,14 @@ export function ForumEditor({
                     disabled={busy}
                     onClick={onCancel}
                   >
-                    取消
+                    关闭
                   </Button>
                 ) : null}
                 <Button
                   disabled={busy || conflict || !!draft.currentVersion}
                   type="submit"
                 >
-                  {busy ? "正在保存…" : label}
+                  {submitting ? "正在保存…" : label}
                 </Button>
               </div>
             </div>
@@ -368,6 +495,7 @@ export function ForumEditor({
         </EmojiPicker>
       </form>
     </section>
+    </HeightBox>
   );
   if (topic)
     return (
