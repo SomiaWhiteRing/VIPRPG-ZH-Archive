@@ -1,12 +1,17 @@
-import { WorkListSummary } from "@/app/components/work/work-list-summary";
-import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { WorkListRow } from "@/app/components/work/work-list-row";
 import { buildArchiveDownloadUrl } from "@/lib/archive/web-play";
 import type { GameWorkSummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
-import { engineLabel } from "@/lib/labels";
-import { Link } from "react-router";
+import type { ReactNode } from "react";
 
-export function GameLibraryListRow({ work }: { work: GameWorkSummary }) {
+export function GameLibraryListRow({
+  work, action, children, showDownload = true,
+}: {
+  work: GameWorkSummary;
+  action?: ReactNode;
+  children?: ReactNode;
+  showDownload?: boolean;
+}) {
   const title = work.chineseTitle || work.originalTitle;
   const download = work.currentArchiveVersionId
     ? {
@@ -25,31 +30,20 @@ export function GameLibraryListRow({ work }: { work: GameWorkSummary }) {
       : null;
 
   return (
-    <article className="flex items-start gap-3.5 py-3.5">
-      <Link
-        className="group relative block aspect-4/3 w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
-        to={`/games/${work.id}`}
-      >
-        <WorkThumbnail
-          blobSha256={work.coverBlobSha256}
-          alt={title}
-          width={128}
-          height={96}
-          imageClassName="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-          fallbackClassName="grid h-full place-items-center px-1 text-center font-mono text-[10.5px] text-muted"
-          fallback={engineLabel(work.engineFamily)}
-        />
-      </Link>
-      <WorkListSummary
-        href={`/games/${work.id}`}
-        title={title}
-        originalTitle={work.chineseTitle ? work.originalTitle : null}
-        releaseDate={work.originalReleaseDate}
-        engineFamily={work.engineFamily}
-        language={work.language}
-        truncateOriginal
-      ></WorkListSummary>
-      {download ? (
+    <WorkListRow
+      href={`/games/${work.id}`}
+      title={title}
+      coverBlobSha256={work.coverBlobSha256}
+      originalTitle={work.chineseTitle ? work.originalTitle : null}
+      authorName={work.creators
+        .filter((creator) => creator.roleKey === "author")
+        .map((creator) => creator.displayName.trim())
+        .filter(Boolean)
+        .join("、")}
+      releaseDate={work.originalReleaseDate}
+      engineFamily={work.engineFamily}
+      language={work.language}
+      action={action ?? (showDownload && download ? (
         <a
           className="hidden min-h-11 shrink-0 self-center flex-col items-center justify-center rounded-md border border-border bg-card px-3.5 text-center hover:border-primary/50 hover:bg-primary/10 min-[561px]:inline-flex"
           href={download.href}
@@ -63,7 +57,9 @@ export function GameLibraryListRow({ work }: { work: GameWorkSummary }) {
             {download.detail}
           </span>
         </a>
-      ) : null}
-    </article>
+      ) : null)}
+    >
+      {children}
+    </WorkListRow>
   );
 }

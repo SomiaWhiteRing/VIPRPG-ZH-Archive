@@ -17,6 +17,7 @@ import {
 } from "@/app/components/profile/account-content";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { Badge } from "@/app/components/ui/badge";
+import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
@@ -27,8 +28,8 @@ import {
   hasUploaderAccess,
 } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { commentTargetHref } from "@/lib/comment-target";
-import { formatDate } from "@/lib/format";
+import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
+import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { UploadAccess } from "./upload-access";
@@ -97,7 +98,15 @@ export default function MePage() {
   } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-7">
-      <PageHeader compact title="个人中心" />
+      <PageHeader
+        actions={
+          <Button asChild size="sm" variant="outline">
+            <Link to={`/users/${user.id}`}>查看访客页</Link>
+          </Button>
+        }
+        compact
+        title="个人中心"
+      />
       <UploadAccess user={user} request={uploadRequest} />
       <AccountSection
         href="/me/profile"
@@ -135,7 +144,7 @@ export default function MePage() {
         title="最近游玩"
       >
         {played.items.length ? (
-          <AccountWorkGrid items={played.items} />
+          <AccountWorkGrid items={played.items} showPlayedAt />
         ) : (
           <AccountEmpty>
             暂无游玩记录 · <Link to="/games">作品库</Link>
@@ -169,22 +178,7 @@ export default function MePage() {
         title="我的目录"
       >
         {catalogs.items.length ? (
-          <ul className="divide-y divide-border border-y border-border">
-            {catalogs.items.map((catalog, index) => (
-              <li
-                className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`}
-                key={catalog.id}
-              >
-                <Link className="font-semibold" to={`/catalogs/${catalog.id}`}>
-                  {catalog.title}
-                </Link>
-                <p className="mt-1 text-sm text-muted">
-                  {catalog.itemCount} 部作品 · 更新于{" "}
-                  {formatDate(catalog.updatedAt)}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <CatalogSummaryList items={catalogs.items} preview />
         ) : (
           <AccountEmpty>暂无目录</AccountEmpty>
         )}
@@ -199,24 +193,7 @@ export default function MePage() {
         title="我的评论"
       >
         {comments.items.length ? (
-          <ul className="divide-y divide-border border-y border-border">
-            {comments.items.map((comment, index) => (
-              <li
-                className={`py-3 ${index >= 2 ? "hidden sm:block" : ""}`}
-                key={comment.id}
-              >
-                <Link
-                  className="font-semibold"
-                  to={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
-                >
-                  {comment.targetTitle}
-                </Link>
-                <p className="mt-1 line-clamp-2 text-sm text-muted">
-                  {comment.body || "这条评论已删除。"}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <RecentCommentList items={comments.items} />
         ) : (
           <AccountEmpty>浏览作品或作者资料并留下第一条评论。</AccountEmpty>
         )}

@@ -14,6 +14,8 @@ import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
+import { WorkCard } from "@/app/components/work/work-card";
 import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import {
@@ -33,7 +35,6 @@ import type {
   GameTranslationRelation,
   GameWorkRelation,
 } from "@/lib/dto/db/game-library";
-import { formatNumber } from "@/lib/format";
 import {
   WORK_RELATION_TYPES,
   languageLabel,
@@ -349,39 +350,13 @@ export default function GameDetailPage() {
                 {relationCards.length ? (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-3 gap-y-4">
                     {relationCards.map((relation) => (
-                      <Link
-                        className="group grid min-w-0 content-start gap-1.5"
-                        to={relation.href}
+                      <WorkCard
                         key={relation.key}
-                      >
-                        <span className="font-mono text-xs tracking-[0.04em] text-muted">
-                          {relation.type}
-                        </span>
-                        <span className="relative block aspect-4/3 overflow-hidden rounded-lg border border-border bg-[#e7ebe6] group-hover:border-primary group-hover:shadow-[0_2px_8px_rgb(23_33_43/10%)]">
-                          {relation.coverBlobSha256 ? (
-                            <img
-                              alt=""
-                              className={
-                                "absolute inset-0 h-full w-full " +
-                                "object-cover"
-                              }
-                              sizes="(max-width: 560px) 78vw, 180px"
-                              src={`/api/media/blobs/${relation.coverBlobSha256}`}
-                              loading="lazy"
-                            />
-                          ) : (
-                            <span
-                              className="grid h-full place-items-center bg-rm2k-green-1 font-serif text-2xl font-bold text-white"
-                              aria-hidden="true"
-                            >
-                              {relation.title.slice(0, 1)}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-sm font-semibold leading-[1.45] text-[#1f6f67] wrap-anywhere group-hover:underline">
-                          {relation.title}
-                        </span>
-                      </Link>
+                        href={relation.href}
+                        title={relation.title}
+                        coverBlobSha256={relation.coverBlobSha256}
+                        metadata={<p className="text-xs text-muted">{relation.type}</p>}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -452,24 +427,8 @@ export default function GameDetailPage() {
                       收录了本条目的目录
                     </p>
                     {containingCatalogs.map((catalog) => (
-                      <div
-                        className="flex items-baseline gap-2.5 border-b border-dashed border-border py-1.75 last:border-b-0"
-                        key={catalog.id}
-                      >
-                        <div className="min-w-0">
-                          <Link
-                            className="text-sm font-semibold text-[#1f6f67] wrap-anywhere hover:underline"
-                            to={`/catalogs/${catalog.id}`}
-                          >
-                            {catalog.title}
-                          </Link>
-                          <span className="mt-0.5 block text-xs text-muted">
-                            {catalog.ownerName}
-                          </span>
-                        </div>
-                        <span className="ml-auto shrink-0 font-mono text-xs text-muted">
-                          {formatNumber(catalog.itemCount)} 部
-                        </span>
+                      <div className="border-b border-dashed border-border last:border-b-0" key={catalog.id}>
+                        <CatalogListRow catalog={catalog} compact />
                       </div>
                     ))}
                   </Card>

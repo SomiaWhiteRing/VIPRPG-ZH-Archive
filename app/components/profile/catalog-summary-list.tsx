@@ -1,29 +1,28 @@
+import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
-import { formatDate } from "@/lib/format";
-import { Link } from "react-router";
 
 export function CatalogSummaryList({
   items,
   showDescription = false,
+  preview = false,
 }: {
   items: CatalogSummary[];
   showDescription?: boolean;
+  preview?: boolean;
 }) {
   return (
     <ul className="divide-y divide-border border-y border-border">
-      {items.map((catalog) => (
-        <li className="grid gap-1 py-4" key={catalog.id}>
-          <Link className="font-semibold" to={`/catalogs/${catalog.id}`}>
-            {catalog.title}
-          </Link>
-          {showDescription ? (
-            <p className="m-0 text-sm text-muted">
-              {catalog.description || "未填写说明。"}
-            </p>
-          ) : null}
-          <span className="text-xs text-muted">
-            {catalog.itemCount} 部作品 · 更新于 {formatDate(catalog.updatedAt)}
-          </span>
+      {items.map((catalog, index) => (
+        <li
+          className={preview && index >= 2 ? "hidden sm:block" : undefined}
+          key={catalog.id}
+        >
+          <CatalogListRow
+            catalog={catalog}
+            showDescription={showDescription}
+            showOwner={false}
+            showCreatedAt={false}
+          />
         </li>
       ))}
     </ul>

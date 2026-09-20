@@ -39,7 +39,7 @@ export default function CommentsPage() {
     <div>
       <PageHeader
         title="我的评论"
-        subtitle={`共 ${result.total} 条评论；隐藏或删除的内容仍仅在这里对你可见。`}
+        subtitle={`共 ${result.total} 条评论。`}
       />
       {result.items.length ? (
         <CommentSummaryList items={result.items} showStatus />
