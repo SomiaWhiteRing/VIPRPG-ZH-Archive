@@ -1,7 +1,5 @@
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import type { ForumImage } from "@/lib/forum";
-import Counter from "yet-another-react-lightbox/plugins/counter";
-import "yet-another-react-lightbox/plugins/counter.css";
 export function ForumLightbox({
   images,
   active,
@@ -22,7 +20,6 @@ export function ForumLightbox({
         height: image.height,
         alt: `图片 ${index + 1}`,
       }))}
-      plugins={[Counter]}
     />
   );
 }

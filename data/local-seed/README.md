@@ -50,3 +50,7 @@ The face emoji schema replaces the independent custom emoji catalogue with immut
 The pinning schema refresh adds nullable `comments.pinned_at` and
 `forum_topics.pinned_at`. All captured content starts unpinned; the single
 initialization migration ledger is preserved.
+
+The comment attachment refresh adds an empty `comment_images` table and nullable
+comment publication request identities. The nine captured comments and all other
+business records are preserved, with the single initialization migration ledger.

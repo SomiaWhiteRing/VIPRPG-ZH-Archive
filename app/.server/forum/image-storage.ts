@@ -1,3 +1,4 @@
+import { putImmutableImage } from "@/app/.server/storage/immutable-image";
 import type { ForumImage } from "@/lib/forum";
 import type { ForumRuntime } from "./runtime";
 
@@ -77,21 +78,7 @@ export async function writeForumImage(
 ): Promise<ForumImage> {
   const bucket = ctx.bucket;
   try {
-    let object = await bucket.head(row.object_key);
-    if (!object) {
-      object = await bucket.put(row.object_key, bytes, {
-        onlyIf: { etagDoesNotMatch: "*" },
-        httpMetadata: {
-          contentType: `image/${row.format}`,
-          cacheControl: "no-store",
-        },
-        customMetadata: { sha256: row.fingerprint },
-        sha256: row.fingerprint,
-      });
-      if (!object) object = await bucket.head(row.object_key);
-    }
-    if (!object) throw imageUploadPending();
-    verifyObject(row, object);
+    await putImmutableImage(bucket, row, bytes);
     return await finishUpload(ctx, row);
   } catch (error) {
     await ctx.db

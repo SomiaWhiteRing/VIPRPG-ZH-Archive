@@ -1,5 +1,6 @@
 import type { CommentTarget } from "@/lib/comment-target";
 import type { CharacterPortrait } from "@/lib/character-names";
+import type { CommentImage } from "@/lib/comment-images";
 
 import type { FaceEmoji } from "@/lib/face-emojis";
 export type { FaceEmoji } from "@/lib/face-emojis";
@@ -20,6 +21,7 @@ export type CommentDto = {
     avatarBlobSha256: string | null;
   } | null;
   body: CommentBodySegment[];
+  images: CommentImage[];
   bodySource?: string | null;
   status: "published" | "hidden" | "deleted";
   createdAt: string;
@@ -53,6 +55,7 @@ export type UserCommentSummary = {
   avatarBlobSha256: string | null;
   portrait: CharacterPortrait | null;
   body: string;
+  imageCount: number;
   status: "published" | "hidden" | "deleted";
   likeCount: number;
   updatedAt: string;

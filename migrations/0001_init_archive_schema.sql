@@ -317,6 +317,8 @@ CREATE TABLE comments (
   root_comment_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
   reply_to_comment_id INTEGER REFERENCES comments(id) ON DELETE SET NULL,
   body TEXT,
+  request_key TEXT,
+  request_hash TEXT,
   status TEXT NOT NULL CHECK (status IN ('published', 'hidden', 'deleted')) DEFAULT 'published',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -328,8 +330,31 @@ CREATE TABLE comments (
   ),
   CHECK ((work_id IS NOT NULL) + (creator_id IS NOT NULL) + (character_id IS NOT NULL) = 1),
   CHECK (root_comment_id IS NULL OR root_comment_id <> id),
-  CHECK (reply_to_comment_id IS NULL OR reply_to_comment_id <> id)
+  CHECK (reply_to_comment_id IS NULL OR reply_to_comment_id <> id),
+  UNIQUE(user_id,request_key)
 );
+
+CREATE TABLE comment_images (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  client_id TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('uploading','ready','uncertain','cleanup','cleaned')),
+  object_key TEXT NOT NULL UNIQUE CHECK(object_key = 'comment-images/' || id),
+  format TEXT NOT NULL CHECK(format IN ('png','jpeg','webp','gif')),
+  size INTEGER NOT NULL CHECK(size BETWEEN 1 AND 2097152),
+  width INTEGER NOT NULL CHECK(typeof(width)='integer' AND width>0),
+  height INTEGER NOT NULL CHECK(typeof(height)='integer' AND height>0),
+  comment_id INTEGER REFERENCES comments(id) ON DELETE SET NULL,
+  position INTEGER CHECK(position IS NULL OR (typeof(position)='integer' AND position BETWEEN 0 AND 9)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id,client_id),
+  CHECK(comment_id IS NULL OR position IS NOT NULL)
+);
+CREATE INDEX comment_images_comment ON comment_images(comment_id,position);
+CREATE INDEX comment_images_uploads ON comment_images(user_id,updated_at);
+CREATE INDEX comment_images_cleanup ON comment_images(status,updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_comments_work_public_roots
   ON comments(work_id, created_at, id)

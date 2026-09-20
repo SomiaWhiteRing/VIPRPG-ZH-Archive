@@ -1,3 +1,4 @@
+import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
 import * as endpoint0 from "@/app/.server/endpoints/api/account/avatar/route";
@@ -101,6 +102,13 @@ export const api = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.post("/api/comments/images", (c) => uploadCommentImage(c.get("runtime"), c.req.raw));
+api.on(["GET", "HEAD"], "/api/comments/images/:id", (c) => readCommentImage(c.get("runtime"), c.req.param("id")));
+api.options("/api/comments/images", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/comments/images", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
+api.options("/api/comments/images/:id", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/comments/images/:id", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" }));
+
 api.on(["GET", "HEAD"], "/api/works/:workId/media/:sha256", (c) =>
   workMediaEndpoint.GET(c.get("runtime"), c.req.raw, { params: {workId: c.req.param("workId"), sha256: c.req.param("sha256")} }));
 api.all("/api/works/:workId/media/:sha256", (c) => c.json({ok:false,error:"Method not allowed"},405,{Allow:"GET, HEAD"}));

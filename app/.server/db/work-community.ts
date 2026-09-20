@@ -1,3 +1,6 @@
+import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
+import { sha256Hex } from "@/app/.server/crypto/sha256";
+import type { CommentImage } from "@/lib/comment-images";
 import { getD1 } from "@/app/.server/db/d1";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
@@ -260,7 +263,8 @@ export async function listRootComments(
   if (!parsed && target.kind === "work") {
     const pinnedRows = (await rootStatement(true).all<CommentRow>()).results;
     const emojis = await emojiMap(runtime, pinnedRows);
-    page.items.unshift(...pinnedRows.map((row) => mapComment(row, currentUserId, emojis)));
+    const images = await commentImagesById(database, pinnedRows.map((row) => row.id));
+    page.items.unshift(...pinnedRows.map((row) => mapComment(row, currentUserId, emojis, images)));
   }
   const rootsWithReplies = page.items.filter((comment) => comment.replyCount);
   if (rootsWithReplies.length) {
@@ -278,9 +282,10 @@ export async function listRootComments(
       runtime,
       previews.flatMap((result) => result.results as CommentRow[]),
     );
+    const images = await commentImagesById(database, previews.flatMap((result) => (result.results as CommentRow[]).map((row) => row.id)));
     rootsWithReplies.forEach((comment, index) => {
       comment.replyPreview = (previews[index].results as CommentRow[]).map(
-        (row) => mapComment(row, currentUserId, emojis),
+        (row) => mapComment(row, currentUserId, emojis, images),
       );
     });
   }
@@ -358,14 +363,15 @@ export async function listReplies(
     runtime,
     results.flatMap((result) => result.results as CommentRow[]),
   );
+  const images = await commentImagesById(database, results.flatMap((result) => (result.results as CommentRow[]).map((row) => row.id)));
   const items = (results[0].results as CommentRow[]).map((row) =>
-    mapComment(row, currentUserId, emojis),
+    mapComment(row, currentUserId, emojis, images),
   );
   const preview =
     page === 1
       ? items.slice(0, COMMENT_REPLY_PREVIEW_SIZE)
       : (results[1].results as CommentRow[]).map((row) =>
-          mapComment(row, currentUserId, emojis),
+          mapComment(row, currentUserId, emojis, images),
         );
   return { items, preview, total, page, pageSize: COMMENT_REPLY_PAGE_SIZE };
 }
@@ -433,7 +439,7 @@ export async function searchUserComments(
         `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,
         (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
         cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
-        COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
+        COALESCE(c.body,'') AS body,(SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
       )
       .bind(input.userId, pageSize, (page - 1) * pageSize),
   ]);
@@ -443,6 +449,7 @@ export async function searchUserComments(
     creator_id: number | null;
     character_id: number | null;
     target_title: string;
+    image_count: number;
     cover_blob_sha256: string | null;
     avatar_blob_sha256: string | null;
     body: string;
@@ -459,6 +466,7 @@ export async function searchUserComments(
       avatarBlobSha256: row.avatar_blob_sha256,
       portrait: mapCharacterPortrait(row),
       body: emojiText(row.body),
+      imageCount: row.image_count,
       status: row.status,
       likeCount: row.like_count,
       updatedAt: row.updated_at,
@@ -477,6 +485,8 @@ export async function createComment(
   userId: number,
   bodyInput: unknown,
   replyToCommentId?: number,
+  imagesInput?: unknown,
+  requestKeyInput?: unknown,
 ): Promise<CommentDto> {
   await assertPublicCommentTarget(runtime, target);
   const body = normalizeCommentBody(bodyInput);
@@ -514,35 +524,41 @@ export async function createComment(
     replyToId = replyTarget.root_comment_id === null ? null : replyTarget.id;
   }
   const db = getD1(runtime);
+  const ids = parseCommentImageIds(imagesInput);
+  const requestKey = requestKeyInput ?? crypto.randomUUID();
+  if (typeof requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(requestKey))
+    throw new HttpError(400, "评论发布标识无效");
+  const requestHash = await sha256Hex(new TextEncoder().encode(JSON.stringify({ target, body, replyToCommentId, ids })).buffer);
+  const previousRequest = async () => {
+    const previous = await db.prepare("SELECT id,request_hash FROM comments WHERE user_id=? AND request_key=?")
+      .bind(userId, requestKey).first<{ id: number; request_hash: string }>();
+    if (previous && previous.request_hash !== requestHash) throw new HttpError(409, "发布标识对应的评论已变化，请重新发布。");
+    return previous;
+  };
+  const previous = await previousRequest();
+  if (previous) return requiredComment(runtime, previous.id, userId);
   await validateBodyEmojis(db, body);
-  // The batch holds the write transaction; MAX(id) below is this user's just-inserted row.
-  const results = await db.batch([
-    db
-      .prepare(
-        `INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status)
-      VALUES(?,?,?,?,?,?,?,'published') RETURNING id`,
-      )
-      .bind(
-        target.kind === "work" ? target.id : null,
-        target.kind === "creator" ? target.id : null,
-        target.kind === "character" ? target.id : null,
-        userId,
-        rootCommentId,
-        replyToId,
-        body,
-      ),
-    ...contentEmojiStatements(
-      db,
-      "comment",
-      "SELECT MAX(id) AS id FROM comments WHERE user_id=?",
-      [userId],
-      body,
-      userId,
-      true,
-    ),
-  ]);
-  const id = Number((results[0].results[0] as { id: number }).id);
-  return requiredComment(runtime, id, userId);
+  const guard = commentImageGuard(ids, userId);
+  const source = "SELECT id FROM comments WHERE user_id=? AND request_key=?";
+  try {
+    const results = await db.batch([
+      db.prepare(`INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status,request_key,request_hash)
+        VALUES(?,?,?,?,?,?,CASE WHEN ${guard.sql} THEN ? ELSE NULL END,'published',?,?) RETURNING id`)
+        .bind(target.kind === "work" ? target.id : null, target.kind === "creator" ? target.id : null,
+          target.kind === "character" ? target.id : null, userId, rootCommentId, replyToId,
+          ...guard.args, body, requestKey, requestHash),
+      ...contentEmojiStatements(db, "comment", source, [userId, requestKey], body, userId, true),
+      ...commentImageStatements(db, ids, userId, source, [userId, requestKey]),
+    ]);
+    const id = Number((results[0].results[0] as { id: number }).id);
+    return requiredComment(runtime, id, userId);
+  } catch (error) {
+    const committed = await previousRequest();
+    if (committed) return requiredComment(runtime, committed.id, userId);
+    const valid = await db.prepare(`SELECT 1 AS ok WHERE ${guard.sql}`).bind(...guard.args).first();
+    if (!valid) throw new HttpError(409, "图片不可用或已被其他评论使用，请移除后重新选择。");
+    throw error;
+  }
 }
 
 export async function updateComment(
@@ -550,6 +566,7 @@ export async function updateComment(
   id: number,
   userId: number,
   bodyInput: unknown,
+  imagesInput?: unknown,
 ): Promise<CommentDto> {
   const body = normalizeCommentBody(bodyInput);
   const db = getD1(runtime);
@@ -563,13 +580,17 @@ export async function updateComment(
   await validateBodyEmojis(db, body, previous.body);
   const source =
     "SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')";
+  const ids = imagesInput === undefined ? undefined : parseCommentImageIds(imagesInput);
+  const guard = ids === undefined ? { sql: "1", args: [] } : commentImageGuard(ids, userId, id);
+  if (!(await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()))
+    throw new HttpError(409, "图片不可用或已被其他评论使用。");
   const results = await db.batch([
     db
       .prepare(
-        `UPDATE comments SET body=?,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
+        `UPDATE comments SET body=CASE WHEN ${guard.sql} THEN ? ELSE NULL END,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
       WHERE id=? AND user_id=? AND status IN('published','hidden')`,
       )
-      .bind(body, id, userId),
+      .bind(...guard.args, body, id, userId),
     ...contentEmojiStatements(
       db,
       "comment",
@@ -579,6 +600,7 @@ export async function updateComment(
       userId,
       false,
     ),
+    ...(ids === undefined ? [] : commentImageStatements(db, ids, userId, source, [id, userId])),
   ]);
   if ((results[0].meta.changes ?? 0) !== 1)
     throw new HttpError(404, "评论不存在或不可编辑");
@@ -713,10 +735,10 @@ async function requiredComment(
     .bind(...(viewerId ? [viewerId, id] : [id]))
     .first<CommentRow>();
   if (!row) throw new HttpError(404, "评论不存在");
-  return mapComment(row, viewerId, await emojiMap(runtime, [row]));
+  return mapComment(row, viewerId, await emojiMap(runtime, [row]), await commentImagesById(getD1(runtime), [row.id]));
 }
 
-async function assertPublicCommentTarget(
+export async function assertPublicCommentTarget(
   runtime: AppRuntime,
   target: CommentTarget,
 ): Promise<void> {
@@ -831,6 +853,7 @@ function mapComment(
   row: CommentRow,
   viewerId: number | null,
   emojis: Map<number, FaceEmoji>,
+  images: Map<number, CommentImage[]>,
 ): CommentDto {
   const deleted = row.status === "deleted";
   return {
@@ -852,6 +875,7 @@ function mapComment(
           avatarBlobSha256: row.author_avatar_blob_sha256,
         }
       : null,
+    images: deleted ? [] : images.get(row.id) ?? [],
     body: deleted
       ? [{ type: "text", text: "该评论已删除" }]
       : tokenizeBody(row.body ?? "", emojis),
@@ -908,8 +932,9 @@ async function pageFromRows(
   const hasMore = rows.length > size;
   const items = rows.slice(0, size);
   const emojis = await emojiMap(runtime, items);
+  const images = await commentImagesById(getD1(runtime), items.map((row) => row.id));
   return {
-    items: items.map((row) => mapComment(row, viewerId, emojis)),
+    items: items.map((row) => mapComment(row, viewerId, emojis, images)),
     nextCursor:
       hasMore && items.length
         ? encodeCursor(

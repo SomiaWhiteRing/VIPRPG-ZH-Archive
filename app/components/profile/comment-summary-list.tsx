@@ -32,7 +32,7 @@ export function CommentSummaryList({
               ) : null}
             </div>
             <p className="m-0 whitespace-pre-wrap text-[15px]">
-              {comment.body}
+              {comment.body}{comment.imageCount > 0 ? ` ［${comment.imageCount} 张图片］` : ""}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted">
               <Timestamp value={comment.updatedAt} />
