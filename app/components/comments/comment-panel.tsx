@@ -2,14 +2,12 @@ import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { NestedReply, nestedRepliesClassName } from "./nested-reply";
 import { CommentReplyEditor } from "./reply-editor";
-import { BodyEditor, type BodyEditorHandle } from "./body-editor";
-import { EmojiPicker } from "@/app/components/emojis/picker";
+import { CommentComposer } from "./composer";
+import { CommentImages } from "./images";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
-import type { DraftImage } from "@/app/discussions/images";
 
 import type { CommentTarget } from "@/app/.server/db/work-community";
 import { Button } from "@/app/components/ui/button";
-import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
@@ -19,13 +17,11 @@ import type {
   CommentDto,
   CommentPage,
   CommentReplyPage,
-  FaceEmoji,
 } from "@/lib/dto/db/work-community";
-import { MessageCircle, Send, ThumbsUp, Trash2 } from "lucide-react";
+import { MessageCircle, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
-const NO_IMAGES: DraftImage[] = [];
 
 type Props = {
   target: CommentTarget;
@@ -56,52 +52,13 @@ function CommentPanelContent({
   const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
-  const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [newReplies, setNewReplies] = useState<Record<number, CommentDto>>({});
   const [commentUpdates, setCommentUpdates] = useState<
     Record<number, Partial<CommentDto>>
   >({});
   const pendingLikes = useRef(new Set<number>());
-  const textareaRef = useRef<BodyEditorHandle>(null);
-
-  async function submitComment() {
-    if (!currentUserId || !body.trim() || busy) return;
-    setBusy(true);
-    setSubmitError(null);
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          body,
-        }),
-      });
-      const result = (await response.json()) as {
-        ok?: boolean;
-        comment?: CommentDto;
-        detail?: string;
-      };
-      if (!response.ok || !result.ok || !result.comment) {
-        setSubmitError(result.detail ?? "评论发送失败。");
-        return;
-      }
-      setBody("");
-      setComments((current) =>
-        target.kind === "work"
-          ? [result.comment!, ...current]
-          : [...current, result.comment!],
-      );
-      toast.success("评论已发布。");
-    } catch {
-      setSubmitError("网络请求失败，评论内容已保留，请重试。");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function toggleLike(comment: CommentDto) {
     if (
@@ -163,6 +120,7 @@ function CommentPanelContent({
             status: "deleted",
             body: [{ type: "text", text: "该评论已删除" }],
             bodySource: null,
+            images: [],
           },
         }));
       } else {
@@ -239,50 +197,12 @@ function CommentPanelContent({
     setNewReplies((current) => ({ ...current, [rootId]: reply }));
   }
 
-  function insertEmoji(emoji: FaceEmoji, options: { focus: boolean }) {
-    textareaRef.current?.insertEmoji(emoji, options);
-  }
-
   return (
     <div className="@container/comments grid gap-4" id="comments">
       {currentUserId ? (
-        <div className="grid gap-2">
-          <BodyEditor
-            textOnly
-            maxLength={2000}
-            inputId="comment-input"
-            body={body}
-            images={NO_IMAGES}
-            busy={busy}
-            topic={false}
-            placeholder={placeholder}
-            ref={textareaRef}
-            onChange={setBody}
-            onBusyChange={setBusy}
-            onError={setSubmitError}
-            onCompositionChange={() => {}}
-          />
-          <EmojiPicker
-            disabled={busy}
-            onSelect={insertEmoji}
-            onClose={() => textareaRef.current?.focus()}
-          >
-            {(trigger) => (
-              <div className="flex items-center justify-between gap-3">
-                {trigger}
-                <Button
-                  disabled={busy || !body.trim()}
-                  onClick={() => void submitComment()}
-                  type="button"
-                >
-                  <Send aria-hidden />
-                  发布评论
-                </Button>
-              </div>
-            )}
-          </EmojiPicker>
-          {submitError ? <Notice>{submitError}</Notice> : null}
-        </div>
+        <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder}
+          onCreated={(comment) => setComments((current) =>
+            target.kind === "work" ? [comment, ...current] : [...current, comment])} />
       ) : (
         <p className="text-sm text-muted">登录后可以评论、回复和点赞。</p>
       )}
@@ -603,6 +523,7 @@ function CommentNestedReply({
         ) : "已删除用户"}
         {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "已删除用户"}</span> : null}
         ：<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
+        <CommentImages images={comment.images} />
     </NestedReply>
   );
 }
@@ -642,6 +563,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
         ) : null}
         <CommentBody body={comment.body} />
       </p>
+      {comment.status === "published" ? <CommentImages images={comment.images} /> : null}
     </div>
   );
 }

@@ -1,0 +1,118 @@
+/* Scoped to the shared viewer: preserve callers' download and collection tools. */
+.archive-lightbox {
+  --yarl__color_backdrop: rgb(12 18 24 / 78%);
+  --yarl__color_button: rgb(255 255 255 / 92%);
+  --yarl__color_button_disabled: rgb(255 255 255 / 28%);
+  --yarl__button_filter: none;
+  --yarl__icon_size: 24px;
+  --yarl__button_padding: 10px;
+  --yarl__toolbar_padding: 0;
+  --yarl__counter_filter: none;
+  --yarl__counter_margin: 0;
+  --yarl__counter_padding: 0 18px;
+  --yarl__counter_line_height: 44px;
+}
+
+.archive-lightbox .yarl__container {
+  /* Controller measures its content box for zoom and pan bounds. Keep the
+     reserved control space here so images and gestures use the same bounds. */
+  box-sizing: border-box;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: calc(80px + env(safe-area-inset-top, 0px))
+    max(64px, env(safe-area-inset-right, 0px))
+    calc(80px + env(safe-area-inset-bottom, 0px))
+    max(64px, env(safe-area-inset-left, 0px));
+}
+
+.archive-lightbox .yarl__toolbar {
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  gap: 8px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.archive-lightbox .yarl__toolbar > * {
+  pointer-events: auto;
+}
+
+.archive-lightbox .yarl__button,
+.archive-lightbox .yarl__counter {
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(18 24 31 / 68%);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 18%);
+  color: var(--yarl__color_button);
+}
+
+.archive-lightbox .yarl__button {
+  min-width: 44px;
+  min-height: 44px;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.archive-lightbox .yarl__button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+
+.archive-lightbox .yarl__button:disabled {
+  color: var(--yarl__color_button_disabled);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .archive-lightbox .yarl__button:not(:disabled):hover {
+    background: rgb(54 66 78 / 90%);
+    border-color: rgb(255 255 255 / 45%);
+  }
+}
+
+.archive-lightbox .yarl__navigation_prev {
+  left: max(16px, env(safe-area-inset-left, 0px));
+  padding: 10px;
+}
+
+.archive-lightbox .yarl__navigation_next {
+  right: max(16px, env(safe-area-inset-right, 0px));
+  padding: 10px;
+}
+
+.archive-lightbox .yarl__counter {
+  top: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 88px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .archive-lightbox .yarl__container {
+    padding: calc(116px + env(safe-area-inset-top, 0px))
+      max(12px, env(safe-area-inset-right, 0px))
+      calc(80px + env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .archive-lightbox .yarl__navigation_prev,
+  .archive-lightbox .yarl__navigation_next {
+    top: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: none;
+  }
+
+  .archive-lightbox .yarl__navigation_prev { left: calc(50% - 104px); }
+  .archive-lightbox .yarl__navigation_next { right: calc(50% - 104px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-lightbox .yarl__button { transition: none; }
+}

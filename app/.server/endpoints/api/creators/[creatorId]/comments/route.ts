@@ -69,6 +69,8 @@ export async function POST(
       auth.user.id,
       body.body,
       replyTo,
+      body.imageIds,
+      body.requestKey,
     );
     return json({ ok: true, comment }, { status: 201 });
   } catch (error) {

@@ -18,6 +18,7 @@ export async function PATCH(
       parsePositiveId((await context.params).commentId, "comment id"),
       auth.user.id,
       body.body,
+      body.imageIds,
     );
     return json({ ok: true, comment });
   } catch (error) {

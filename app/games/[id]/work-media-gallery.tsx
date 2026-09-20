@@ -64,6 +64,18 @@ export function WorkMediaGallery({
         aria-label="预览图放大查看"
         className="m-auto w-[min(880px,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-border bg-card p-0 text-foreground shadow-[0_24px_64px_rgb(23_33_43/28%)] backdrop:bg-[rgb(23_33_43/48%)]"
         onCancel={() => setSelected(null)}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          if (
+            event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom
+          ) {
+            event.currentTarget.close();
+          }
+        }}
         onClose={() => setSelected(null)}
         ref={dialogRef}
       >

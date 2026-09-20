@@ -11,6 +11,11 @@ export default defineConfig({
     reactRouter(),
   ],
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
+  optimizeDeps: {
+    // Worker-only encoders are discovered too late by the page scan. Discovering
+    // them on the first image selection otherwise reloads the page mid-draft.
+    include: ["upng-js", "@jsquash/jpeg/encode", "@jsquash/webp/encode"],
+  },
   server: {
     host: "127.0.0.1",
     port: 3000,

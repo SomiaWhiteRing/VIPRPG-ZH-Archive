@@ -74,6 +74,7 @@ function checkReferences(dbPath, objects) {
     for (const row of db.prepare("SELECT sha256 FROM blobs WHERE status = 'active'").all()) required.push(shaKey("blobs", row.sha256));
     for (const row of db.prepare("SELECT sha256 FROM core_packs WHERE status = 'active'").all()) required.push(shaKey("core-packs", row.sha256, ".zip"));
     for (const row of db.prepare("SELECT manifest_sha256 FROM archive_versions WHERE purged_at IS NULL").all()) required.push(shaKey("manifests", row.manifest_sha256, ".json"));
+    for (const row of db.prepare("SELECT object_key FROM comment_images WHERE status = 'ready'").all()) required.push(row.object_key);
     for (const row of db.prepare("SELECT object_key FROM forum_images WHERE status = 'ready'").all()) required.push(row.object_key);
     for (const row of db.prepare("SELECT object_key FROM tool_artifacts WHERE storage_status = 'ready'").all()) required.push(row.object_key);
     const missing = required.filter((key) => !keys.has(key));

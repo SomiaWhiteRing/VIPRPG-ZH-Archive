@@ -3,9 +3,9 @@
   "capturedAt": "2026-09-16T03:31:22.093Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "f132db5df28507d38c7d2e6022fd1c2f3e45a78430684d2d1e37eb615dad725e",
-    "size": 11276288,
-    "gzipSha256": "1e3886bd3da8276c685197c3213bbc14f6625c804b37cf1c20e292b373a09595",
+    "sha256": "dd9921bc5e095185a26d24e0f2bb8259470f14a4e807d0bfacf0f87f29208f18",
+    "size": 11313152,
+    "gzipSha256": "a3ff0803f68ba89fbc90dede16bd5b0aeb56da9475b2a3bb8fa25e5bc503a651",
     "tables": {
       "_cf_METADATA": 1,
       "archive_version_blob_refs": 0,
@@ -26,6 +26,7 @@
       "character_sources": 944,
       "characters": 930,
       "comment_face_emojis": 1,
+      "comment_images": 0,
       "comment_likes": 3,
       "comments": 9,
       "core_packs": 1,

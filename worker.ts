@@ -6,6 +6,7 @@ import type { AppRuntime } from "./app/.server/runtime";
 import { runtimeContext } from "./app/.server/router-context";
 import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
+import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 
 const render = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -63,8 +64,9 @@ export default {
         trigger: "scheduled",
         cron: controller.cron,
       })
-        .then((report) => {
+        .then(async (report) => {
           console.log("Scheduled archive GC completed", JSON.stringify(report));
+          console.log("Comment image cleanup completed", JSON.stringify(await cleanupCommentImages(env.DB, env.ARCHIVE_BUCKET)));
         })
         .catch((error) => {
           console.error("Scheduled archive GC failed", error);

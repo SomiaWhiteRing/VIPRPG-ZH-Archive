@@ -24,7 +24,7 @@ export function RecentCommentList({
               {comment.targetTitle}
             </Link>
             <p className="mt-1 line-clamp-2 text-[15px] text-muted">
-              {comment.body}
+              {comment.body}{comment.imageCount > 0 ? ` ［${comment.imageCount} 张图片］` : ""}
             </p>
           </div>
         </li>
