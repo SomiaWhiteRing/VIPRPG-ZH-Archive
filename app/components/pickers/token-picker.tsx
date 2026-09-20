@@ -5,10 +5,16 @@ import {
 } from "@/app/components/ui/combobox";
 
 import { Button } from "@/app/components/ui/button";
-import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
+import { TokenChip, TokenDragPreview, TokenInput } from "@/app/components/ui/token-input";
 import { cn } from "@/lib/ui/cn";
-import type { KeyboardEvent } from "react";
-import { useMemo, useState } from "react";
+import {
+  moveDragItem,
+  nearestDragSlot,
+  readDragSlots,
+  type DragSlot,
+} from "@/lib/ui/drag-reorder";
+import type { KeyboardEvent, ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 export type TokenSuggestion = { value: string; meta: string };
 
 type TokenOption = TokenSuggestion & { kind: "existing" | "create" };
@@ -23,12 +29,16 @@ export function TokenPicker({
   showRecommendations = true,
   showSelectionCount = true,
   suggestions,
+  recommendations = suggestions,
   values,
   maxValues,
   normalizeValue = normalizeToken,
   validateValue,
   onQueryChange,
   sortable = false,
+  commitOnBlur = false,
+  showHelp = true,
+  singleLineRecommendations = false,
 }: {
   disabled?: boolean;
   id: string;
@@ -39,13 +49,34 @@ export function TokenPicker({
   showRecommendations?: boolean;
   showSelectionCount?: boolean;
   suggestions: TokenSuggestion[];
+  recommendations?: TokenSuggestion[];
   values: string[];
   maxValues?: number;
   normalizeValue?: (value: string) => string;
   validateValue?: (value: string) => string | null;
   onQueryChange?: (query: string) => void;
   sortable?: boolean;
+  commitOnBlur?: boolean;
+  showHelp?: boolean;
+  singleLineRecommendations?: boolean;
 }) {
+  const sortContainer = useRef<HTMLDivElement>(null);
+  const drag = useRef<{
+    value: string;
+    original: string[];
+    order: string[];
+    slots: DragSlot[];
+    x: number;
+    y: number;
+    chip: { left: number; top: number; width: number; height: number };
+    moved: boolean;
+  } | null>(null);
+  const [preview, setPreview] = useState<{
+    value: string;
+    order: string[];
+    original: string[];
+    chip: { left: number; top: number; width: number; height: number };
+  } | null>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -79,23 +110,30 @@ export function TokenPicker({
     }
     return matches;
   }, [query, selectedKeys, suggestions, normalizeValue]);
-  const recommended = suggestions
-    .filter((item) => !selectedKeys.has(tokenKey(item.value)))
+  const recommended = recommendations
+    .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
     .slice(0, 6);
   const menuId = `${id}-options`;
   const menuOpen = open && !disabled && options.length > 0;
+  const visiblePreview = !disabled && preview?.original === values ? preview : null;
 
-  function add(rawValue: string) {
+  function cancelDrag() {
+    drag.current = null;
+    setPreview(null);
+  }
+
+  function add(rawValue: string, validateQuery = true) {
     if (disabled || atLimit) return;
     const validation =
-      (query ? validateValue?.(query) : null) ?? validateValue?.(rawValue);
+      (validateQuery && query ? validateValue?.(query) : null) ??
+      validateValue?.(rawValue);
     if (validation) {
       setError(validation);
       return;
     }
     const value = normalizeValue(rawValue);
-    if (!value || selectedKeys.has(tokenKey(value))) return;
-    onChange([...values, value]);
+    if (!value) return;
+    if (!selectedKeys.has(tokenKey(value))) onChange([...values, value]);
     setQuery("");
     setActiveIndex(0);
     setOpen(false);
@@ -128,11 +166,73 @@ export function TokenPicker({
   }
 
   return (
-    <div className={cn("grid gap-2", disabled && "opacity-60")}>
+    <div
+      className={cn("grid gap-2", disabled && "opacity-60")}
+      onBlur={(event) => {
+        if (!commitOnBlur || event.currentTarget.contains(event.relatedTarget))
+          return;
+        if (normalizeValue(query)) {
+          const existing = [...suggestions, ...recommendations].find(
+            (item) =>
+              tokenKey(normalizeValue(item.value)) ===
+              tokenKey(normalizeValue(query)),
+          );
+          add(existing?.value ?? query);
+        }
+      }}
+    >
       {name ? (
         <input name={name} readOnly type="hidden" value={values.join("\n")} />
       ) : null}
-      <div className="relative">
+      <div
+        className="relative"
+        ref={sortContainer}
+        onPointerMove={(event) => {
+          const current = drag.current;
+          if (!current || disabled || current.original !== values) return;
+          if (
+            !current.moved &&
+            Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
+          ) return;
+          current.moved = true;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const nearest = nearestDragSlot(
+            current.slots,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+          );
+          current.order = moveDragItem(
+            current.order,
+            current.order.indexOf(current.value),
+            nearest,
+          );
+          setPreview({
+            value: current.value,
+            order: current.order,
+            original: values,
+            chip: {
+              ...current.chip,
+              left: current.chip.left + event.clientX - current.x,
+              top: current.chip.top + event.clientY - current.y,
+            },
+          });
+        }}
+        onPointerUp={() => {
+          const current = drag.current;
+          cancelDrag();
+          if (current?.moved && !disabled && current.original === values)
+            onChange(current.order);
+        }}
+        onPointerCancel={cancelDrag}
+        onLostPointerCapture={cancelDrag}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && drag.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelDrag();
+          }
+        }}
+      >
         <TokenInput
           aria-activedescendant={
             menuOpen && options[activeIndex]
@@ -160,14 +260,66 @@ export function TokenPicker({
           type="text"
           value={query}
         >
-          {values.map((value) => (
+          {(visiblePreview?.order ?? values).map((value) => (
             <TokenChip
+              data-sort-token=""
+              className={visiblePreview?.value === value ? "opacity-25" : undefined}
               disabled={disabled}
               key={tokenKey(value)}
               label={value}
               onRemove={() => remove(value)}
             >
-              {value}
+              {sortable ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  className="min-h-7 min-w-0 shrink touch-none cursor-grab whitespace-normal rounded-none px-0 text-left text-xs text-primary hover:bg-transparent [overflow-wrap:anywhere] active:cursor-grabbing"
+                  aria-label={`拖动排序 ${value}，也可按 Alt 加方向键调整`}
+                  onPointerDown={(event) => {
+                    if (disabled || event.button !== 0 || !event.isPrimary) return;
+                    const container = sortContainer.current;
+                    if (!container) return;
+                    const chip = event.currentTarget.closest("[data-sort-token]");
+                    if (!chip) return;
+                    const bounds = chip.getBoundingClientRect();
+                    event.preventDefault();
+                    container.setPointerCapture(event.pointerId);
+                    drag.current = {
+                      value,
+                      original: values,
+                      order: values,
+                      slots: readDragSlots(
+                        container.querySelectorAll("[data-sort-token]"),
+                      ),
+                      x: event.clientX,
+                      y: event.clientY,
+                      chip: {
+                        left: bounds.left,
+                        top: bounds.top,
+                        width: bounds.width,
+                        height: bounds.height,
+                      },
+                      moved: false,
+                    };
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      !event.altKey ||
+                      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+                    ) return;
+                    event.preventDefault();
+                    const from = values.indexOf(value);
+                    const to = from +
+                      (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
+                    if (to >= 0 && to < values.length)
+                      onChange(moveDragItem(values, from, to));
+                  }}
+                >
+                  {value}
+                </Button>
+              ) : value}
             </TokenChip>
           ))}
         </TokenInput>
@@ -199,50 +351,31 @@ export function TokenPicker({
           {error ?? `最多选择 ${maxValues} 项`}
         </p>
       ) : null}
-      {sortable && values.length > 1 ? (
-        <div className="flex flex-wrap gap-1" aria-label="TAG 顺序">
-          {values.map((value, index) => (
-            <Button
-              className="min-h-9 text-xs"
-              disabled={disabled || index === 0}
-              key={value}
-              size="sm"
-              type="button"
-              variant="ghost"
-              aria-label={`将 ${value} 前移`}
-              onClick={() => {
-                const next = [...values];
-                [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                onChange(next);
-              }}
-            >
-              {value} ↑
-            </Button>
-          ))}
+      {showHelp ? (
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-2 text-xs text-muted",
+            showSelectionCount && "justify-between",
+          )}
+        >
+          {showSelectionCount ? <span>已选 {values.length} 项</span> : null}
+          <span>输入后按 Enter 添加</span>
         </div>
       ) : null}
-      <div
-        className={cn(
-          "flex flex-wrap items-center gap-2 text-xs text-muted",
-          showSelectionCount && "justify-between",
-        )}
-      >
-        {showSelectionCount ? <span>已选 {values.length} 项</span> : null}
-        <span>输入后按 Enter 添加</span>
-      </div>
       {showRecommendations && recommended.length ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <RecommendationRow singleLineOnMobile={singleLineRecommendations}>
           {recommendationLabel ? (
-            <span className="mr-1 text-xs text-muted">
+            <span className="mr-1 shrink-0 whitespace-nowrap text-xs text-muted">
               {recommendationLabel}
             </span>
           ) : null}
           {recommended.map((item) => (
             <Button
-              className="min-h-7 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
-              disabled={disabled}
+              className="min-h-7 shrink-0 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
+              disabled={disabled || atLimit}
               key={tokenKey(item.value)}
-              onClick={() => add(item.value)}
+              onClick={() => add(item.value, false)}
+              onMouseDown={(event) => event.preventDefault()}
               size="sm"
               type="button"
               variant="outline"
@@ -250,8 +383,60 @@ export function TokenPicker({
               + {item.value}
             </Button>
           ))}
-        </div>
+        </RecommendationRow>
       ) : null}
+      {visiblePreview ? (
+        <TokenDragPreview label={visiblePreview.value} {...visiblePreview.chip} />
+      ) : null}
+    </div>
+  );
+}
+
+function RecommendationRow({
+  children,
+  singleLineOnMobile,
+}: {
+  children: ReactNode;
+  singleLineOnMobile: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = ref.current;
+    if (!container || !singleLineOnMobile) return;
+    const mobile = window.matchMedia("(max-width: 639px)");
+    const items = Array.from(container.children) as HTMLElement[];
+    function fit() {
+      if (!container) return;
+      items.forEach((item) => item.style.removeProperty("display"));
+      if (!mobile.matches) return;
+      const gap = parseFloat(getComputedStyle(container).columnGap) || 0;
+      let used = 0;
+      let full = false;
+      items.forEach((item, index) => {
+        const style = getComputedStyle(item);
+        const width = item.offsetWidth +
+          (parseFloat(style.marginLeft) || 0) +
+          (parseFloat(style.marginRight) || 0);
+        used += width + (index ? gap : 0);
+        full ||= used > container.clientWidth;
+        if (full) item.style.display = "none";
+      });
+    }
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(container);
+    mobile.addEventListener("change", fit);
+    document.fonts.addEventListener("loadingdone", fit);
+    return () => {
+      observer.disconnect();
+      mobile.removeEventListener("change", fit);
+      document.fonts.removeEventListener("loadingdone", fit);
+      items.forEach((item) => item.style.removeProperty("display"));
+    };
+  }, [children, singleLineOnMobile]);
+  return (
+    <div ref={ref} className="flex flex-wrap items-center gap-1.5">
+      {children}
     </div>
   );
 }

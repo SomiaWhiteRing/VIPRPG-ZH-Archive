@@ -2,7 +2,8 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { cn } from "@/lib/ui/cn";
 import { X } from "lucide-react";
-import type { InputHTMLAttributes, ReactNode } from "react";
+import { createPortal } from "react-dom";
+import type { ComponentProps, InputHTMLAttributes, ReactNode } from "react";
 import {
   Children,
   Fragment,
@@ -10,6 +11,9 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+
+const tokenChipClassName =
+  "inline-flex min-h-7 max-w-full items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary";
 
 export function TokenInput({
   children,
@@ -159,7 +163,8 @@ export function TokenChip({
   disabled,
   label,
   onRemove,
-}: {
+  ...props
+}: ComponentProps<"span"> & {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
@@ -168,8 +173,9 @@ export function TokenChip({
 }) {
   return (
     <span
+      {...props}
       className={cn(
-        "inline-flex min-h-7 max-w-full items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary",
+        tokenChipClassName,
         className,
       )}
     >
@@ -189,5 +195,35 @@ export function TokenChip({
         <X className="size-3" />
       </Button>
     </span>
+  );
+}
+
+export function TokenDragPreview({
+  label,
+  left,
+  top,
+  width,
+  height,
+}: {
+  label: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}) {
+  return createPortal(
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed left-0 top-0 z-[100] select-none rounded-full bg-card shadow-lg ring-1 ring-primary/20"
+      style={{ transform: `translate3d(${left}px, ${top}px, 0)`, width, height }}
+    >
+      <span className={cn(tokenChipClassName, "h-full w-full")}>
+        <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+        <span className="inline-flex size-4 shrink-0 items-center justify-center">
+          <X className="size-3" />
+        </span>
+      </span>
+    </div>,
+    document.body,
   );
 }
