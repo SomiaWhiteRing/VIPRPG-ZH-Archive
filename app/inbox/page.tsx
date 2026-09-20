@@ -1,3 +1,4 @@
+import { Timestamp } from "@/app/components/ui/timestamp";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   canResolveInboxRequests,
@@ -15,11 +16,11 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { InboxItem } from "@/lib/dto/db/inbox";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatDate, formatUnreadCount } from "@/lib/format";
+import { formatUnreadCount } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxCategory, inboxCursor, inboxHref } from "@/lib/inbox";
-import { Bell, Heart, MessageCircle, ShieldCheck } from "lucide-react";
+import { Bell, MessageCircle, ShieldCheck, ThumbsUp } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
@@ -173,7 +174,7 @@ function InboxRow({
   const interaction = item.interaction;
   const Icon =
     item.type === "forum_like"
-      ? Heart
+      ? ThumbsUp
       : item.type === "forum_reply"
         ? MessageCircle
         : item.type === "role_change_request"
@@ -264,13 +265,10 @@ function InboxRow({
           </>
         )}
       </div>
-      <time
-        dateTime={utcDate(item.createdAt).toISOString()}
-        title={formatDate(item.createdAt, { time: true })}
-        className="col-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right"
-      >
-        {relativeTime(item.createdAt)}
-      </time>
+      <Timestamp
+        value={item.createdAt}
+        className="col-start-2 text-muted sm:col-start-3 sm:row-start-1 sm:text-right"
+      />
       <div className="col-start-2 min-h-9 sm:col-start-3 sm:row-start-2">
         <InboxActions
           item={{
@@ -290,20 +288,6 @@ function InboxRow({
   );
 }
 
-function utcDate(value: string) {
-  return new Date(value.includes("T") ? value : value.replace(" ", "T") + "Z");
-}
-function relativeTime(value: string) {
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - utcDate(value).getTime()) / 60000),
-  );
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes}分钟前`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`;
-  if (minutes < 10080) return `${Math.floor(minutes / 1440)}天前`;
-  return formatDate(value);
-}
 function emptyLabel(category: InboxCategory, unread: boolean) {
   if (unread) return "没有未读提醒";
   return {

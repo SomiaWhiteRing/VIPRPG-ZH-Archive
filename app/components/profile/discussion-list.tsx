@@ -1,6 +1,6 @@
 import type { UserDiscussionItem } from "@/lib/dto/forum/activity";
 import { AccountEmpty } from "@/app/components/profile/account-content";
-import { formatDate } from "@/lib/format";
+import { Timestamp } from "@/app/components/ui/timestamp";
 import { Link } from "react-router";
 
 const activityLabels = { topic: "发帖", post: "回帖", comment: "楼中楼回复" };
@@ -27,12 +27,12 @@ export function DiscussionList({
           >
             {item.title}
           </Link>
-          <p className="mt-1 line-clamp-2 break-words text-sm text-muted">
+          <p className="mt-1 line-clamp-2 break-words text-[15px] text-muted">
             {item.snippet}
           </p>
           <p className="mb-0 mt-2 text-xs text-muted">
             {activityLabels[item.kind]} ·{" "}
-            <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
+            <Timestamp value={item.createdAt} />
           </p>
         </li>
       ))}

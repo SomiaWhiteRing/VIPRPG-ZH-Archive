@@ -2,6 +2,52 @@ export function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
 }
 
+const timestampFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Hong_Kong",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+export function parseTimestamp(value: string): Date {
+  const normalized = value.trim().replace(" ", "T");
+  return new Date(
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
+      ? normalized
+      : `${normalized}Z`,
+  );
+}
+
+function timestampParts(date: Date) {
+  return Object.fromEntries(
+    timestampFormatter.formatToParts(date).map(({ type, value }) => [type, value]),
+  );
+}
+
+export function formatExactTimestamp(value: string): string {
+  const date = parseTimestamp(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const p = timestampParts(date);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} (UTC+08:00)`;
+}
+
+export function formatRelativeTimestamp(value: string, now: number): string {
+  const date = parseTimestamp(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const p = timestampParts(date);
+  const year = timestampParts(new Date(now)).year;
+  if (p.year !== year) return `${p.year}-${p.month}-${p.day}`;
+  const seconds = Math.max(0, Math.floor((now - date.getTime()) / 1000));
+  if (seconds < 60) return `${seconds}秒前`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`;
+  return `${p.month}-${p.day}`;
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
