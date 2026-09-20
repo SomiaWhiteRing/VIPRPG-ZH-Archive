@@ -13,7 +13,11 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { CharacterCard } from "@/app/components/characters/character-card";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { TagCloud } from "@/app/components/library/tag-cloud";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
+import { CreatorCard } from "@/app/creators/creator-card";
+import type { PublicCreatorSummary } from "@/lib/dto/db/creator-library";
+import type { PublicTagSummary } from "@/lib/dto/db/taxonomy-library";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -133,7 +137,7 @@ export default function SearchPage() {
             “{query}”在{scopeLabel}中找到 {formatNumber(result.total)} 个结果
           </p>
           {result.items.length > 0 ? (
-            <section className="grid gap-2.5" aria-label="作品搜索结果">
+            <section className="divide-y divide-border border-y border-border" aria-label="作品搜索结果">
               {result.items.map((work) => (
                 <SearchResultRow key={work.id} work={work} />
               ))}
@@ -156,46 +160,61 @@ export default function SearchPage() {
             个结果
           </p>
           {directory && directory.items.length > 0 ? (
-            <section
-              className={
-                scope === "characters"
-                  ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  : scope === "catalogs"
-                    ? "divide-y divide-border border-y border-border"
-                    : "grid gap-2.5"
-              }
-              aria-label={
-                scope === "characters"
-                  ? "角色搜索结果"
-                  : scope === "catalogs"
-                    ? "目录搜索结果"
-                    : "分类搜索结果"
-              }
-            >
-              {directory.items.map((item) =>
-                item.character ? (
-                  <CharacterCard
-                    character={item.character}
-                    displayName={item.title}
-                    originalName={item.subtitle ?? item.title}
-                    headingLevel={2}
-                    key={item.href}
-                  />
-                ) : item.catalog ? (
-                  <CatalogListRow catalog={item.catalog} key={item.href} />
-                ) : (
-                  <Link
-                    className="grid gap-1 border-b border-border p-4 text-foreground no-underline hover:bg-primary/5 md:grid-cols-[minmax(0,1fr)_auto]"
-                    to={item.href}
-                    key={item.href}
-                  >
-                    <strong>{item.title}</strong>
-                    {item.subtitle ? <span>{item.subtitle}</span> : null}
-                    <small>{item.meta}</small>
-                  </Link>
-                ),
-              )}
-            </section>
+            scope === "tags" ? (
+              <TagCloud
+                tags={directory.items.flatMap((item) =>
+                  item.tag ? [item.tag] : [],
+                )}
+                label="标签搜索结果"
+              />
+            ) : (
+              <section
+                className={
+                  scope === "characters"
+                    ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                    : scope === "creators"
+                      ? "grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4"
+                      : scope === "catalogs"
+                        ? "divide-y divide-border border-y border-border"
+                        : "grid gap-2.5"
+                }
+                aria-label={
+                  scope === "characters"
+                    ? "角色搜索结果"
+                    : scope === "catalogs"
+                      ? "目录搜索结果"
+                      : scope === "creators"
+                        ? "作者搜索结果"
+                        : "分类搜索结果"
+                }
+              >
+                {directory.items.map((item) =>
+                  item.character ? (
+                    <CharacterCard
+                      character={item.character}
+                      displayName={item.title}
+                      originalName={item.subtitle ?? item.title}
+                      headingLevel={2}
+                      key={item.href}
+                    />
+                  ) : item.catalog ? (
+                    <CatalogListRow catalog={item.catalog} key={item.href} />
+                  ) : item.creator ? (
+                    <CreatorCard creator={item.creator} key={item.href} />
+                  ) : (
+                    <Link
+                      className="grid gap-1 border-b border-border p-4 text-foreground no-underline hover:bg-primary/5 md:grid-cols-[minmax(0,1fr)_auto]"
+                      to={item.href}
+                      key={item.href}
+                    >
+                      <strong>{item.title}</strong>
+                      {item.subtitle ? <span>{item.subtitle}</span> : null}
+                      <small>{item.meta}</small>
+                    </Link>
+                  ),
+                )}
+              </section>
+            )
           ) : (
             <EmptyState title={`没有找到匹配的${scopeLabel}。`} />
           )}
@@ -231,6 +250,8 @@ async function listDirectory(
       "id" | "portrait" | "workCount" | "commentCount" | "materialCount"
     >;
     catalog?: CatalogSummary;
+    creator?: PublicCreatorSummary;
+    tag?: Pick<PublicTagSummary, "id" | "name" | "workCount">;
   }>;
   if (scope === "creators")
     items = (await listPublicCreators(runtime, { query, limit: 300 })).map(
@@ -239,6 +260,7 @@ async function listDirectory(
         title: item.name,
         subtitle: null,
         meta: `${item.workCreditCount} 个作品`,
+        creator: item,
       }),
     );
   else if (scope === "characters") {
@@ -278,6 +300,7 @@ async function listDirectory(
         title: item.name,
         subtitle: null,
         meta: `${item.workCount} 个作品`,
+        tag: { id: item.id, name: item.name, workCount: item.workCount },
       }),
     );
   else if (scope === "catalogs")
