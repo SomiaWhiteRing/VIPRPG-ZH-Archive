@@ -575,6 +575,7 @@ export function DiscussionWorkspace({
         ...(topic.capabilities.moderate
           ? (
               [
+                { label: topic.pinned ? "取消置顶" : "置顶", action: topic.pinned ? "unpin" : "pin" },
                 { label: "隐藏主题", action: "hide" },
                 {
                   label: topic.locked ? "解锁" : "锁定",
@@ -903,7 +904,7 @@ export function DiscussionWorkspace({
                     key={item.id}
                   >
                     <div className="min-w-0">
-                      {item.tags.length > 0 || item.featured || item.locked ? (
+                      {item.tags.length > 0 || item.featured || item.pinned || item.locked ? (
                         <div className="mb-1 break-words text-sm">
                           <TopicTags tags={item.tags} />
                           <TopicStatus topic={item} />

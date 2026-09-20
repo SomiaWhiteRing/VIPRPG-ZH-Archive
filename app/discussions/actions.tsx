@@ -94,6 +94,8 @@ export function ForumActionDialog({
             unlock: "解锁主题",
             feature: "加精主题",
             unfeature: "取消加精",
+            pin: "置顶主题",
+            unpin: "取消置顶",
             tags: "调整主题 TAG",
           }[action.action!] ?? "确认管理操作");
   async function submit() {

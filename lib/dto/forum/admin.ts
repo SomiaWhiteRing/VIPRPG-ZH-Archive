@@ -29,6 +29,7 @@ export type ForumAdminDetail = {
   state: string;
   locked: boolean;
   featured: boolean;
+  pinned: boolean;
   publicHref: string | null;
   context: string;
   tags: string[];

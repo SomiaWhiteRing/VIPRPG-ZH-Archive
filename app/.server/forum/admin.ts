@@ -120,6 +120,7 @@ export async function adminForumDetail(
     state: row.status,
     locked: !!topic.locked,
     featured: !!topic.featured_at,
+    pinned: !!topic.pinned_at,
     publicHref: row.public
       ? target.kind === "comment"
         ? `/discussions/${topic.id}/comments/${row.id}`

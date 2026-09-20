@@ -26,6 +26,7 @@ export type TopicRow = {
   status: ForumState;
   locked: number;
   featured_at: string | null;
+  pinned_at: string | null;
   view_count: number;
   revision: string;
   tag_snapshot: string;
@@ -162,6 +163,7 @@ export function mapTopic(
     state: row.status,
     locked: !!row.locked,
     featured: !!row.featured_at,
+    pinned: !!row.pinned_at,
     author: author(
       row.user_id,
       row.author_name,

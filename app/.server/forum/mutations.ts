@@ -621,7 +621,7 @@ export async function deleteForum(
     statements.push(
       ctx.db
         .prepare(
-          "UPDATE forum_topics SET status='deleted',title='',featured_at=NULL,featured_by=NULL WHERE id=? AND write_token=?",
+          "UPDATE forum_topics SET status='deleted',title='',featured_at=NULL,featured_by=NULL,pinned_at=NULL WHERE id=? AND write_token=?",
         )
         .bind(topic.id, token),
     );
@@ -758,6 +758,8 @@ export async function moderateForum(
       "unlock",
       "feature",
       "unfeature",
+      "pin",
+      "unpin",
       "tags",
       "none",
     ].includes(action)
@@ -775,11 +777,11 @@ export async function moderateForum(
   if (action !== "none" && row.status === "deleted")
     throw new HttpError(409, "已删除内容不能修改或恢复。");
   if (
-    ["lock", "unlock", "feature", "unfeature", "tags"].includes(action) &&
+    ["lock", "unlock", "feature", "unfeature", "pin", "unpin", "tags"].includes(action) &&
     target.kind !== "topic"
   )
     throw new HttpError(400, "此动作只适用于主题。");
-  if (permission === "forum.topic.feature_any" && !topic.public) unavailable();
+  if ((permission === "forum.topic.feature_any" || action === "pin" || action === "unpin") && !topic.public) unavailable();
   if (action === "restore" && row.status !== "hidden")
     throw new HttpError(409, "目标未被隐藏。");
   const tags =
@@ -829,7 +831,7 @@ export async function moderateForum(
   )
     throw new HttpError(409, "关联图片已进入清理，无法完整恢复内容。");
   const predicate: Predicate = {
-    sql: `${permission === "forum.topic.feature_any" ? publicTopicSql : "1"} AND ${tagGuard.sql} AND ${restoreImages.sql}
+    sql: `${permission === "forum.topic.feature_any" || action === "pin" || action === "unpin" ? publicTopicSql : "1"} AND ${tagGuard.sql} AND ${restoreImages.sql}
     ${report ? `AND ${forumActorSql("forum.content.moderate_any")} AND EXISTS(SELECT 1 FROM forum_content_reports WHERE id=? AND status='pending')` : ""}`,
     args: [
       ...tagGuard.args,
@@ -851,7 +853,7 @@ export async function moderateForum(
       statements.push(
         db
           .prepare(
-            `UPDATE forum_topics SET status=?,featured_at=NULL,featured_by=NULL WHERE id=? AND write_token=?`,
+            `UPDATE forum_topics SET status=?,featured_at=NULL,featured_by=NULL,pinned_at=NULL WHERE id=? AND write_token=?`,
           )
           .bind(status, topic.id, token),
       );
@@ -863,6 +865,9 @@ export async function moderateForum(
         )
         .bind(action === "lock" ? 1 : 0, topic.id, token),
     );
+  else if (action === "pin" || action === "unpin")
+    statements.push(db.prepare("UPDATE forum_topics SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE id=? AND write_token=?")
+      .bind(action === "pin" ? 1 : 0, topic.id, token));
   else if (action === "feature")
     statements.push(
       db
@@ -875,7 +880,7 @@ export async function moderateForum(
     statements.push(
       db
         .prepare(
-          "UPDATE forum_topics SET featured_at=NULL,featured_by=NULL WHERE id=? AND write_token=?",
+          "UPDATE forum_topics SET featured_at=NULL,featured_by=NULL,pinned_at=NULL WHERE id=? AND write_token=?",
         )
         .bind(topic.id, token),
     );
@@ -912,6 +917,7 @@ export async function moderateForum(
         status: row.status,
         locked: topic.locked,
         featured: topic.featured_at,
+        pinned: topic.pinned_at,
         tags: topic.tag_snapshot,
       },
       after: { action, tags: tags?.map((t) => t.name) },

@@ -1,4 +1,5 @@
 import type { CommentTarget } from "@/lib/comment-target";
+import type { CharacterPortrait } from "@/lib/character-names";
 
 import type { FaceEmoji } from "@/lib/face-emojis";
 export type { FaceEmoji } from "@/lib/face-emojis";
@@ -8,6 +9,8 @@ export type CommentBodySegment =
 
 export type CommentDto = {
   id: number;
+  floorNumber: number | null;
+  pinned: boolean;
   target: CommentTarget;
   rootCommentId: number | null;
   replyTo: { commentId: number; displayName: string | null } | null;
@@ -46,6 +49,9 @@ export type UserCommentSummary = {
   id: number;
   target: CommentTarget;
   targetTitle: string;
+  coverBlobSha256: string | null;
+  avatarBlobSha256: string | null;
+  portrait: CharacterPortrait | null;
   body: string;
   status: "published" | "hidden" | "deleted";
   likeCount: number;

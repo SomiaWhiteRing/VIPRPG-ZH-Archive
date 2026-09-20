@@ -1,4 +1,11 @@
 import { getD1 } from "@/app/.server/db/d1";
+import {
+  CHARACTER_PORTRAIT_COLUMNS,
+  DEFAULT_CHARACTER_PORTRAIT_JOINS,
+  PUBLIC_CHARACTER_PORTRAIT_CONDITION,
+  mapCharacterPortrait,
+  type CharacterPortraitRow,
+} from "@/app/.server/db/character-portrait-library";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
   bodyEmojis,
@@ -20,6 +27,7 @@ import type {
   FaceEmoji,
   UserCommentSummary,
 } from "@/lib/dto/db/work-community";
+import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
 
 export type { CommentTarget } from "@/lib/comment-target";
@@ -27,6 +35,8 @@ export type { CommentTarget } from "@/lib/comment-target";
 const MAX_COMMENT_LENGTH = 2000;
 type CommentRow = {
   id: number;
+  floor_number?: number | null;
+  pinned_at?: string | null;
   work_id: number | null;
   creator_id: number | null;
   character_id: number | null;
@@ -150,6 +160,39 @@ export async function getWorkCommunitySummary(
   };
 }
 
+export async function canPinWorkComments(
+  runtime: AppRuntime,
+  workId: number,
+  user: ArchiveUser | null,
+): Promise<boolean> {
+  if (!user) return false;
+  if (hasPermission(user, "comment.manage_any")) return true;
+  return !!(await getD1(runtime)
+    .prepare("SELECT 1 FROM work_uploaders WHERE work_id=? AND user_id=?")
+    .bind(workId, user.id)
+    .first());
+}
+
+export async function pinComment(
+  runtime: AppRuntime,
+  id: number,
+  user: ArchiveUser,
+  pinned: unknown,
+): Promise<CommentDto> {
+  if (typeof pinned !== "boolean") throw new HttpError(400, "置顶状态无效");
+  const comment = await requiredComment(runtime, id, user.id);
+  if (comment.target.kind !== "work" || comment.rootCommentId !== null)
+    throw new HttpError(400, "只能置顶游戏主楼评论");
+  if (!(await canPinWorkComments(runtime, comment.target.id, user)))
+    throw new HttpError(403, "只有游戏上传者和管理员可以置顶评论");
+  const result = await getD1(runtime).prepare(`UPDATE comments SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END
+    WHERE id=? AND id IN (SELECT id FROM public_comments)
+      AND (?=1 OR EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=comments.work_id AND user_id=?))`)
+    .bind(pinned ? 1 : 0, id, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id).run();
+  if (result.meta.changes !== 1) throw new HttpError(404, "评论不可用");
+  return requiredComment(runtime, id, user.id);
+}
+
 export async function listRootComments(
   runtime: AppRuntime,
   target: CommentTarget,
@@ -160,6 +203,9 @@ export async function listRootComments(
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
   const targetColumn = `${target.kind}_id`;
+  const descending = target.kind === "work";
+  const direction = descending ? "DESC" : "ASC";
+  const comparison = descending ? "<" : ">";
   const clauses = [
     `c.${targetColumn} = ?`,
     "c.root_comment_id IS NULL",
@@ -167,15 +213,16 @@ export async function listRootComments(
   ];
   const binds: Array<string | number> = [target.id];
   if (parsed) {
-    clauses.push("(c.created_at > ? OR (c.created_at = ? AND c.id > ?))");
+    clauses.push(`(c.created_at ${comparison} ? OR (c.created_at = ? AND c.id ${comparison} ?))`);
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
   }
   const database = getD1(runtime);
-  const [targetResult, rowsResult] = await database.batch([
-    publicTargetStatement(database, target),
+  // Pins are an extra first-page group; only ordinary roots advance the cursor.
+  const rootStatement = (pinned: boolean) =>
     database
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+        `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+          ${commentFloorSql()} AS floor_number,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           (SELECT COUNT(*) FROM comments r LEFT JOIN users ru ON ru.id=r.user_id
@@ -183,14 +230,17 @@ export async function listRootComments(
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c JOIN users u ON u.id=c.user_id
-       WHERE ${clauses.join(" AND ")}
-       ORDER BY c.created_at ASC,c.id ASC LIMIT ?`,
+       WHERE ${[...clauses, pinned ? "c.pinned_at IS NOT NULL" : "c.pinned_at IS NULL"].join(" AND ")}
+       ORDER BY ${pinned ? "c.pinned_at DESC," : ""} c.created_at ${direction},c.id ${direction} LIMIT ?`,
       )
       .bind(
         ...(currentUserId
-          ? [currentUserId, ...binds, size + 1]
-          : [...binds, size + 1]),
-      ),
+          ? [currentUserId, ...binds, pinned ? -1 : size + 1]
+          : [...binds, pinned ? -1 : size + 1]),
+      );
+  const [targetResult, rowsResult] = await database.batch([
+    publicTargetStatement(database, target),
+    rootStatement(false),
   ]);
   if (!targetResult.results?.length)
     throw new HttpError(
@@ -207,6 +257,11 @@ export async function listRootComments(
     size,
     currentUserId,
   );
+  if (!parsed && target.kind === "work") {
+    const pinnedRows = (await rootStatement(true).all<CommentRow>()).results;
+    const emojis = await emojiMap(runtime, pinnedRows);
+    page.items.unshift(...pinnedRows.map((row) => mapComment(row, currentUserId, emojis)));
+  }
   const rootsWithReplies = page.items.filter((comment) => comment.replyCount);
   if (rootsWithReplies.length) {
     const previews = await database.batch(
@@ -316,7 +371,7 @@ export async function listReplies(
 }
 
 function visibleReplySql(comment: string, user: string): string {
-  return `${comment}.status IN ('published','deleted') AND (${comment}.status='deleted' OR ${user}.status IN ('active','deleted'))`;
+  return `${comment}.status='published' AND ${user}.status IN ('active','deleted')`;
 }
 
 function replyRowsStatement(
@@ -328,7 +383,7 @@ function replyRowsStatement(
 ): D1PreparedStatement {
   return database
     .prepare(
-      `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           0 AS reply_count,
@@ -367,13 +422,18 @@ export async function searchUserComments(
   const publicClause = input.publicOnly
     ? "AND c.id IN (SELECT id FROM public_comments)"
     : "";
-  const from = `FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id) LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id WHERE c.user_id=? AND ${publicCommentTargetSql("c")} ${publicClause}`;
+  const from = `FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id) LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
+    ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
+    WHERE c.user_id=? AND c.status<>'deleted' AND root.status<>'deleted' AND ${publicCommentTargetSql("c")} ${publicClause}`;
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
     database.prepare(`SELECT COUNT(*) AS count ${from}`).bind(input.userId),
     database
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
+        `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,
+        (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
+        cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
+        COALESCE(c.body,'') AS body,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
       )
       .bind(input.userId, pageSize, (page - 1) * pageSize),
   ]);
@@ -383,16 +443,21 @@ export async function searchUserComments(
     creator_id: number | null;
     character_id: number | null;
     target_title: string;
+    cover_blob_sha256: string | null;
+    avatar_blob_sha256: string | null;
     body: string;
     status: "published" | "hidden" | "deleted";
     updated_at: string;
     like_count: number;
-  }>;
+  } & CharacterPortraitRow>;
   return {
     items: rows.map((row) => ({
       id: row.id,
       target: commentTarget(row),
       targetTitle: row.target_title,
+      coverBlobSha256: row.cover_blob_sha256,
+      avatarBlobSha256: row.avatar_blob_sha256,
+      portrait: mapCharacterPortrait(row),
       body: emojiText(row.body),
       status: row.status,
       likeCount: row.like_count,
@@ -633,7 +698,8 @@ async function requiredComment(
 ): Promise<CommentDto> {
   const row = await getD1(runtime)
     .prepare(
-      `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+          ${commentFloorSql()} AS floor_number,
           target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
@@ -751,6 +817,16 @@ async function emojiMap(
   );
 }
 
+// Number all roots, including hidden/deleted ones, so moderation never renumbers a floor.
+function commentFloorSql(): string {
+  return `CASE WHEN c.root_comment_id IS NULL THEN (
+    SELECT COUNT(*) FROM comments floor
+    WHERE floor.root_comment_id IS NULL
+      AND (floor.work_id=c.work_id OR floor.creator_id=c.creator_id OR floor.character_id=c.character_id)
+      AND (floor.created_at<c.created_at OR (floor.created_at=c.created_at AND floor.id<=c.id))
+  ) ELSE NULL END`;
+}
+
 function mapComment(
   row: CommentRow,
   viewerId: number | null,
@@ -759,6 +835,8 @@ function mapComment(
   const deleted = row.status === "deleted";
   return {
     id: row.id,
+    floorNumber: row.floor_number ?? null,
+    pinned: !!row.pinned_at,
     target: commentTarget(row),
     rootCommentId: row.root_comment_id,
     replyTo: row.reply_to_comment_id

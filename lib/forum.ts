@@ -46,6 +46,8 @@ export type ForumAction =
   | "unlock"
   | "feature"
   | "unfeature"
+  | "pin"
+  | "unpin"
   | "tags";
 export type ForumTag = {
   id: number;
@@ -77,6 +79,7 @@ export type ForumTopic = {
   state: ForumState;
   locked: boolean;
   featured: boolean;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
   activeAt: string;
