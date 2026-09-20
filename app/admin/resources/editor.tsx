@@ -11,11 +11,14 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import {
   fileSize,
   targetLabel,
+  resourceLinks,
   RESOURCE_TARGETS,
   type ResourceEditorData,
   type ToolRelease,
 } from "@/lib/resources";
 import { PackageUpload } from "./package-upload";
+import { ResourceContentEditor } from "./content-editor";
+import { ResourceLinksEditor } from "./links-editor";
 import { postJson, requestJson } from "./client";
 const statusLabels = {
   pending: "待上传",
@@ -73,7 +76,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         requestJson(base + "/icon", {
           method: "PUT",
           headers: {
-            "Content-Type": "image/png",
+            "Content-Type": file.type || "application/octet-stream",
             "X-Resource-Revision": String(resource.revision),
           },
           body: file,
@@ -84,7 +87,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
   return (
     <main>
       <Link className="text-sm text-primary" to="/admin/resources">
-        ← 资源管理
+        ← 链接管理
       </Link>
       <PageHeader
         compact
@@ -112,15 +115,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         {resource.icon_blob_sha256 ? (
           <img
             src={`${base}/icon?v=${resource.revision}`}
-            alt="资源图标"
+            alt="链接图标"
             className="size-16 object-contain"
           />
         ) : null}
         <Label className="grid gap-2">
-          图标（PNG，最多 512 KiB、边长最多 512px）
+          图标（PNG／GIF／JPG，最多 512 KiB、边长最多 512px）
           <input
             type="file"
-            accept="image/png"
+            accept="image/png,image/gif,image/jpeg,.png,.gif,.jpg,.jpeg"
             disabled={busy}
             onChange={(e) => {
               void icon(e.target.files?.[0]);
@@ -134,7 +137,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         onSubmit={save}
         className="grid gap-4 rounded-md border border-border bg-card p-4"
       >
-        <h2 className="text-lg font-bold">资源资料</h2>
+        <h2 className="text-lg font-bold">链接资料</h2>
         <p className="text-sm text-muted">
           固定名称：{resource.slug} ·{" "}
           {resource.kind === "tool" ? "软件" : "站外网站"}
@@ -148,34 +151,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             disabled={busy}
           />
         </Field>
-        <Field label="卡片介绍">
-          <Textarea
-            name="summary"
-            defaultValue={resource.summary}
-            maxLength={2000}
-            disabled={busy}
-          />
-        </Field>
-        {resource.kind === "website" ? (
-          <Field label="访问地址">
-            <Input
-              type="url"
-              name="websiteUrl"
-              defaultValue={resource.website_url}
-              required
-              maxLength={2048}
-              disabled={busy}
-            />
-          </Field>
-        ) : (
+        <ResourceContentEditor initial={resource.summary_json} disabled={busy} />
+        <ResourceLinksEditor initial={resourceLinks(resource)} disabled={busy} />
+        {resource.kind === "tool" ? (
           <>
-            <Field label="详细介绍与安装说明">
-              <Textarea
-                name="description"
-                defaultValue={resource.description}
-                maxLength={30000}
-                disabled={busy}
-              />
+            <Field label="Windows 下载按钮文案">
+              <Input name="windowsButtonLabel" defaultValue={resource.windows_button_label} required disabled={busy} />
+            </Field>
+            <Field label="Android 下载按钮文案">
+              <Input name="androidButtonLabel" defaultValue={resource.android_button_label} required disabled={busy} />
             </Field>
             <Field label="项目网站（可选）">
               <Input
@@ -187,7 +171,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               />
             </Field>
           </>
-        )}
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="排序（小的在前）">
             <Input
@@ -564,7 +548,7 @@ function PublishRelease({
       </Label>
       <Label className="flex items-center gap-2">
         <Checkbox name="visible" defaultChecked disabled={busy} />
-        同时公开资源
+        同时公开链接
       </Label>
       <Button disabled={busy} className="justify-self-start">
         发布版本

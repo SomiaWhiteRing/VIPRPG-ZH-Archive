@@ -8,9 +8,10 @@ export type ResourceRecord = {
   kind: "tool" | "website";
   slug: string;
   name: string;
-  summary: string;
-  description: string;
-  website_url: string;
+  summary_json: string;
+  links_json: string;
+  windows_button_label: string;
+  android_button_label: string;
   source_url: string;
   icon_blob_sha256: string | null;
   visibility: "draft" | "published" | "hidden";
@@ -67,6 +68,10 @@ export type ResourceDownload = {
   version_label: string;
 };
 export type PublicResource = ResourceRecord & { downloads: ResourceDownload[] };
+export type ResourceLink = { label: string; url: string };
+export function resourceLinks(resource: Pick<ResourceRecord, "links_json">): ResourceLink[] {
+  return JSON.parse(resource.links_json);
+}
 export type ResourceEditorData = {
   resource: ResourceRecord;
   releases: ToolRelease[];
@@ -79,3 +84,5 @@ export function targetLabel(target: string) {
 export function fileSize(bytes: number) {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
+
+export const resourceContentClassName = "space-y-2 break-words whitespace-pre-wrap [&_p]:min-h-[1em] [&_h3]:text-base [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_a]:text-primary [&_a]:underline";

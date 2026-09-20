@@ -1433,9 +1433,7 @@ CREATE TABLE resources (
   kind TEXT NOT NULL CHECK(kind IN ('tool','website')),
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
-  summary TEXT NOT NULL DEFAULT '' CHECK(length(summary)<=2000),
-  description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=30000),
-  website_url TEXT NOT NULL DEFAULT '',
+  links_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(links_json) AND json_type(links_json)='array'),
   source_url TEXT NOT NULL DEFAULT '',
   icon_blob_sha256 TEXT REFERENCES blobs(sha256),
   visibility TEXT NOT NULL DEFAULT 'draft' CHECK(visibility IN ('draft','published','hidden')),
@@ -1444,8 +1442,11 @@ CREATE TABLE resources (
   last_release_sequence INTEGER NOT NULL DEFAULT 0 CHECK(last_release_sequence>=0),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  summary_json TEXT NOT NULL DEFAULT '{"type":"doc","content":[{"type":"paragraph"}]}' CHECK(json_valid(summary_json)),
+  windows_button_label TEXT NOT NULL DEFAULT '下载 Windows 版' CHECK(length(trim(windows_button_label))>0),
+  android_button_label TEXT NOT NULL DEFAULT '下载 Android 版' CHECK(length(trim(android_button_label))>0),
   CHECK(visibility<>'published' OR icon_blob_sha256 IS NOT NULL),
-  CHECK(kind<>'website' OR visibility<>'published' OR length(website_url)>0)
+  CHECK(kind<>'website' OR visibility<>'published' OR json_array_length(links_json)>0)
 );
 CREATE INDEX idx_resources_public ON resources(visibility,sort_order,id);
 CREATE TRIGGER resources_identity_immutable BEFORE UPDATE OF id,slug,kind ON resources
@@ -1542,10 +1543,6 @@ BEGIN SELECT RAISE(ABORT,'invalid recommended artifact'); END;
 CREATE TRIGGER tool_releases_withdraw_unselected BEFORE UPDATE OF status ON tool_releases
 WHEN NEW.status='withdrawn' AND EXISTS(SELECT 1 FROM tool_channels c JOIN tool_artifacts a ON a.id=c.artifact_id WHERE a.release_id=NEW.id)
 BEGIN SELECT RAISE(ABORT,'pause recommendations before withdrawing'); END;
-CREATE TRIGGER resources_publish_tool BEFORE UPDATE OF visibility ON resources
-WHEN NEW.kind='tool' AND NEW.visibility='published' AND OLD.visibility<>'published' AND NOT EXISTS(
- SELECT 1 FROM tool_channels WHERE resource_id=NEW.id AND artifact_id IS NOT NULL)
-BEGIN SELECT RAISE(ABORT,'publish a recommended package first'); END;
 
 
 -- A face emoji is an immutable cell, independent of character bindings.

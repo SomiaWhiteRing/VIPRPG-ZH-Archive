@@ -67,7 +67,7 @@ function route(path: string, methods: string[], admin: boolean, run: Endpoint) {
       }
       return await run(runtime, c.req.raw, c.req.param(), actor);
     } catch (error) {
-      return jsonError("资源操作失败", error);
+      return jsonError("链接操作失败", error);
     }
   });
 }
@@ -125,7 +125,7 @@ route(
     if (!object) throw new HttpError(404, "图标不存在");
     return new Response(req.method === "HEAD" ? null : object.body, {
       headers: {
-        "Content-Type": "image/png",
+        "Content-Type": object.httpMetadata?.contentType ?? "application/octet-stream",
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
       },
