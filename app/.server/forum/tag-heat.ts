@@ -1,7 +1,10 @@
 import type { ForumRequestRuntime } from "./request";
 
 type Candidate = { id: number; count: number };
-export async function forumTagHeat(ctx: ForumRequestRuntime) {
+export async function forumTagHeat(
+  ctx: ForumRequestRuntime,
+  selectable = false,
+) {
   const cache =
     typeof caches === "undefined"
       ? undefined
@@ -32,7 +35,7 @@ export async function forumTagHeat(ctx: ForumRequestRuntime) {
   const rows = await ctx.db
     .prepare(
       `SELECT id,name,status AS state,revision FROM forum_tags
-    WHERE id IN(SELECT value FROM json_each(?)) AND status<>'hidden'`,
+    WHERE id IN(SELECT value FROM json_each(?)) AND status ${selectable ? "='active'" : "<>'hidden'"}`,
     )
     .bind(JSON.stringify(saved.items.map((r) => r.id)))
     .all<{
@@ -49,4 +52,25 @@ export async function forumTagHeat(ctx: ForumRequestRuntime) {
       .slice(0, 10)
       .map((r) => ({ ...live.get(r.id)!, count: r.count })),
   };
+}
+
+export async function forumTagRecommendations(ctx: ForumRequestRuntime) {
+  const heat = await forumTagHeat(ctx, true);
+  const popular = heat.tags.map((tag) => tag.name);
+  if (popular.length >= 5) return popular.slice(0, 5);
+
+  const presets = ["同人创作", "游戏求助", "作品推荐", "制作交流", "资源分享"];
+  const rows = await ctx.db
+    .prepare(
+      `SELECT name_key,name,status FROM forum_tags
+      WHERE name_key IN(SELECT value FROM json_each(?))`,
+    )
+    .bind(JSON.stringify(presets))
+    .all<{ name_key: string; name: string; status: string }>();
+  const existing = new Map(rows.results.map((tag) => [tag.name_key, tag]));
+  const available = presets.flatMap((name) => {
+    const tag = existing.get(name);
+    return !tag ? [name] : tag.status === "active" ? [tag.name] : [];
+  });
+  return [...new Set([...popular, ...available])].slice(0, 5);
 }

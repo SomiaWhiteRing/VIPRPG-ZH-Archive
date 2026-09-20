@@ -13,6 +13,12 @@ import { ReorderItem } from "@/app/components/ui/reorder-item";
 import { useToast } from "@/app/components/ui/toast";
 import { cn } from "@/lib/ui/cn";
 import {
+  moveDragItem,
+  nearestDragSlot,
+  readDragSlots,
+  type DragSlot,
+} from "@/lib/ui/drag-reorder";
+import {
   emojiCellKey,
   type FaceEmoji,
   type EmojiCharacter,
@@ -30,7 +36,7 @@ type EmojiDrag = {
   emoji: FaceEmoji;
   from: "source" | "library";
   order: FaceEmoji[];
-  slots: { left: number; top: number; width: number; height: number }[];
+  slots: DragSlot[];
 };
 const EMOJI_DRAG_TYPE = "application/x-viprpg-face-emoji";
 
@@ -248,17 +254,7 @@ export function EmojiLibrary({
     dragImage.current?.remove();
     dragImage.current = image;
     event.dataTransfer.setDragImage(image, 24, 24);
-    const slots = Array.from(collectionGrid.current?.children ?? []).map(
-      (child) => {
-        const element = child as HTMLElement;
-        return {
-          left: element.offsetLeft,
-          top: element.offsetTop,
-          width: element.offsetWidth,
-          height: element.offsetHeight,
-        };
-      },
-    );
+    const slots = readDragSlots(collectionGrid.current?.children ?? []);
     const value = { emoji, from, order: mine, slots };
     dragRef.current = value;
     setDrag(value);
@@ -287,24 +283,12 @@ export function EmojiLibrary({
       const gridBounds = grid.getBoundingClientRect();
       const x = event.clientX - gridBounds.left,
         y = event.clientY - gridBounds.top;
-      let nearest = 0,
-        distance = Infinity;
-      for (let index = 0; index < value.slots.length; index++) {
-        const slot = value.slots[index];
-        const candidate =
-          (x - slot.left - slot.width / 2) ** 2 +
-          (y - slot.top - slot.height / 2) ** 2;
-        if (candidate < distance) {
-          distance = candidate;
-          nearest = index;
-        }
-      }
+      const nearest = nearestDragSlot(value.slots, x, y);
       const current = value.order.findIndex(
         (emoji) => emojiCellKey(emoji) === emojiCellKey(value.emoji),
       );
       if (current === nearest || current < 0) return;
-      const order = [...value.order];
-      order.splice(nearest, 0, order.splice(current, 1)[0]);
+      const order = moveDragItem(value.order, current, nearest);
       const next = { ...value, order };
       dragRef.current = next;
       setDrag(next);

@@ -30,6 +30,7 @@ import {
 } from "./queries";
 import type { ForumRequestRuntime } from "./request";
 import { assertForumOrigin, readForumJson, requireForumUser } from "./request";
+import { forumTagRecommendations } from "./tag-heat";
 
 function result(data: object) {
   return Response.json(
@@ -93,15 +94,21 @@ async function read(ctx: ForumRequestRuntime, request: Request) {
           forumPage(p.get("page")),
         ),
       });
-    case "tags":
-      return result(
-        await publicTagList(
-          ctx,
-          p.get("q") ?? "",
-          p.get("cursor"),
-          p.get("mode") === "suggest",
-        ),
+    case "tags": {
+      const selectable = p.get("mode") === "suggest";
+      const list = await publicTagList(
+        ctx,
+        p.get("q") ?? "",
+        p.get("cursor"),
+        selectable,
       );
+      return result({
+        ...list,
+        ...(selectable && !p.get("q") && !p.get("cursor")
+          ? { recommendations: await forumTagRecommendations(ctx) }
+          : {}),
+      });
+    }
     case "edit": {
       const auth = await requireForumUser(ctx, request);
       const target = forumTarget({ kind: p.get("kind"), id: id("id") });

@@ -842,22 +842,24 @@ export function DiscussionWorkspace({
           <div className="mb-2 text-sm leading-relaxed">
             <TopicTags tags={detail.topic.tags} />
           </div>
-          <PageHeader
-            compact
-            title={detail.topic.title}
-            actions={
-              <>
-                <TopicStatus topic={detail.topic} />
-                <ForumMenu items={topicMenu} />
-              </>
-            }
-            subtitle={
-              <>
+          <header
+            className="border-b border-border pb-4"
+            data-slot="page-header"
+          >
+            <h1 className="m-0 font-display text-[clamp(24px,3vw,30px)] font-bold leading-[1.2]">
+              {detail.topic.title}
+            </h1>
+            <div className="mt-1.5 flex items-center justify-between gap-4">
+              <div className="min-w-0 text-sm text-muted">
                 由 <ForumAuthorName author={detail.topic.author} /> 发布 ·{" "}
                 <Timestamp value={detail.topic.createdAt} />
-              </>
-            }
-          />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <TopicStatus topic={detail.topic} />
+                <ForumMenu items={topicMenu} />
+              </div>
+            </div>
+          </header>
           <section aria-label="帖子流">
             {detail.posts.items.map((post, index) => (
               <Fragment key={post.id}>

@@ -315,11 +315,16 @@ export function ForumTagEditor({
   }, [query]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [tags, setTags] = useState<ForumTag[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void forumRequest<{ tags: ForumTag[]; nextCursor: string | null }>(
+    void forumRequest<{
+      tags: ForumTag[];
+      nextCursor: string | null;
+      recommendations?: string[];
+    }>(
       forumHref("/api/discussions", {
         op: "tags",
         mode: "suggest",
@@ -332,6 +337,7 @@ export function ForumTagEditor({
       .then((result) => {
         setTags((old) => (cursor ? [...old, ...result.tags] : result.tags));
         setNextCursor(result.nextCursor);
+        if (result.recommendations) setRecommendations(result.recommendations);
         setError("");
       })
       .catch((e) => {
@@ -353,13 +359,17 @@ export function ForumTagEditor({
             meta: "",
           }))}
         placeholder="选择或创建 TAG"
+        recommendationLabel="推荐tag"
+        recommendations={recommendations.map((value) => ({ value, meta: "" }))}
         disabled={disabled}
         maxValues={5}
         normalizeValue={normalizeForumTag}
         validateValue={forumTagError}
         onQueryChange={setQuery}
         sortable
-        showRecommendations={false}
+        commitOnBlur
+        showHelp={false}
+        singleLineRecommendations
       />
       {nextCursor ? (
         <Button

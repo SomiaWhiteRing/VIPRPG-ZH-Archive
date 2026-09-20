@@ -268,6 +268,17 @@ export function ForumEditor({
           ) : null}
           {topic ? (
             <>
+              <ForumTagEditor
+                id="forum-editor-tags"
+                disabled={busy}
+                values={draft.tags}
+                onChange={(tags) => onChange({ ...draft, tags })}
+              />
+              {draft.target ? (
+                <p className="text-xs text-muted">
+                  修改并保存 TAG 时会移除已不可见的标签关联。
+                </p>
+              ) : null}
               <div>
                 <Label htmlFor="forum-title">标题</Label>
                 <Input
@@ -282,17 +293,6 @@ export function ForumEditor({
                   }
                 />
               </div>
-              <ForumTagEditor
-                id="forum-editor-tags"
-                disabled={busy}
-                values={draft.tags}
-                onChange={(tags) => onChange({ ...draft, tags })}
-              />
-              {draft.target ? (
-                <p className="text-xs text-muted">
-                  修改并保存 TAG 时会移除已不可见的标签关联。
-                </p>
-              ) : null}
             </>
           ) : draft.target || inline ? (
             <p className="text-xs font-semibold text-muted">{context}</p>
