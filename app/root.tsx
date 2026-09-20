@@ -17,6 +17,7 @@ import { countUnreadInboxItemsForUser } from "./.server/db/inbox";
 import { runtimeContext } from "./.server/router-context";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeaderNav } from "./components/site-header-nav";
+import { BackToTop } from "./components/back-to-top";
 import { DiscussionVisitBoundary } from "./discussions/visit";
 import { ToastProvider } from "./components/ui/toast";
 import "./globals.css";
@@ -65,7 +66,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         className="min-h-screen bg-background font-sans text-foreground antialiased"
         suppressHydrationWarning
       >
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          {children}
+          <BackToTop />
+        </ToastProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

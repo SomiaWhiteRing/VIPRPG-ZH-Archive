@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { Popover } from "radix-ui";
+import { createPortal } from "react-dom";
+import { HeightBox } from "@/app/components/ui/height-box";
 import { Button } from "@/app/components/ui/button";
 import type { FaceEmoji } from "@/lib/face-emojis";
 import { cn } from "@/lib/ui/cn";
@@ -56,6 +58,8 @@ export function EmojiPicker({
   const [emojis, setEmojis] = useState<FaceEmoji[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
+  const [mobileHost, setMobileHost] = useState<HTMLElement | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const scrollTop = useRef(0);
@@ -66,6 +70,9 @@ export function EmojiPicker({
   const keyboardOpen = useRef(false);
   const panelId = useId();
   const open = mode === "picker" && !disabled;
+  const mobileHeight = keyboardHeight
+    ? `min(${keyboardHeight}px, 60svh)`
+    : "min(20rem, 45svh)";
   const available = emojis.filter((emoji) => emoji.available);
   const changeMode = useCallback(
     (next: Mode) => {
@@ -102,16 +109,33 @@ export function EmojiPicker({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      close(true);
+      close();
     }
-    const frame = requestAnimationFrame(() =>
-      panel.current?.scrollIntoView({ block: "nearest" }),
-    );
+    // Keep the input toolbar above the replacement keyboard after the native
+    // keyboard finishes closing. Fixed reply bars already reserve this space.
+    const viewport = window.visualViewport;
+    let frame = 0;
+    function keepEditorVisible() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const button = trigger.current;
+        const keyboard = panel.current;
+        if (!button || !keyboard || button.closest('[data-docked="true"]'))
+          return;
+        const overlap =
+          button.getBoundingClientRect().bottom -
+          keyboard.getBoundingClientRect().top;
+        if (overlap > 0) window.scrollBy({ top: overlap, behavior: "instant" });
+      });
+    }
+    keepEditorVisible();
+    viewport?.addEventListener("resize", keepEditorVisible);
     document.addEventListener("pointerdown", outside);
     document.addEventListener("focusin", outside);
     window.addEventListener("keydown", escape, true);
     return () => {
       cancelAnimationFrame(frame);
+      viewport?.removeEventListener("resize", keepEditorVisible);
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("focusin", outside);
       window.removeEventListener("keydown", escape, true);
@@ -139,8 +163,20 @@ export function EmojiPicker({
     }
   }
   function showPicker() {
-    if (!desktop && document.activeElement instanceof HTMLElement)
-      document.activeElement.blur();
+    // Stay inside a modal's focus boundary, but outside editor containers that
+    // could turn fixed positioning into a narrow, locally positioned panel.
+    setMobileHost(
+      trigger.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body,
+    );
+    if (!desktop) {
+      const viewport = window.visualViewport;
+      const height = viewport
+        ? window.innerHeight - viewport.height - viewport.offsetTop
+        : 0;
+      if (height > 120) setKeyboardHeight(height);
+      if (document.activeElement instanceof HTMLElement)
+        document.activeElement.blur();
+    }
     changeMode("picker");
     void refresh();
   }
@@ -170,8 +206,8 @@ export function EmojiPicker({
   );
   const contents = (
     <>
-      <div className="order-last flex min-h-11 shrink-0 items-center gap-2 border-t border-border bg-card px-2 sm:order-first sm:border-b sm:border-t-0">
-        <span className="inline-flex h-11 items-center gap-2 border-b-2 border-primary px-2 text-xs text-primary">
+      <div className="order-last flex min-h-11 shrink-0 items-center gap-2 border-t border-border bg-card sm:order-first sm:border-b sm:border-t-0 sm:px-2">
+        <span className="inline-flex h-11 items-center gap-2 border-b-2 border-primary text-xs text-primary sm:px-2">
           <Smile size={18} aria-hidden />
           我的表情
         </span>
@@ -183,12 +219,25 @@ export function EmojiPicker({
           />
         ) : null}
         <div className="ml-auto flex items-center">
+          {!desktop ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="rounded-none"
+              aria-label="返回键盘"
+              onClick={() => close(true)}
+            >
+              <Keyboard />
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="icon"
             variant="ghost"
             aria-label="管理或添加表情"
             title="管理或添加表情"
+            className="rounded-none sm:rounded-md"
             onClick={() => changeMode("manage")}
           >
             <Plus />
@@ -199,7 +248,8 @@ export function EmojiPicker({
             variant="ghost"
             aria-label="收起表情"
             title="收起表情"
-            onClick={() => close(true)}
+            className="rounded-none sm:rounded-md"
+            onClick={() => close(desktop)}
           >
             {desktop ? <X /> : <ChevronDown />}
           </Button>
@@ -210,7 +260,7 @@ export function EmojiPicker({
         onScroll={(event) => {
           scrollTop.current = event.currentTarget.scrollTop;
         }}
-        className="@container/emoji-picker h-[min(17rem,38dvh)] min-h-0 overflow-y-auto overscroll-contain bg-muted/5 p-2 sm:h-60 sm:bg-card"
+        className="@container/emoji-picker min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/5 sm:h-60 sm:flex-none sm:bg-card sm:p-2"
       >
         {error ? (
           <div role="alert" className="p-2 text-sm">
@@ -240,13 +290,13 @@ export function EmojiPicker({
                 size="icon"
                 key={emoji.id}
                 type="button"
-                className="grid h-16 w-auto min-w-0 cursor-pointer place-items-center rounded hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-wait"
+                className="grid h-16 w-auto min-w-0 cursor-pointer place-items-center rounded-none hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-wait sm:rounded"
                 aria-label={`插入${emoji.sources.map((source) => source.name).join("、") || "脸图"}表情`}
                 title={
                   emoji.sources.map((source) => source.name).join("、") ||
                   "表情"
                 }
-                disabled={disabled || loading}
+                disabled={disabled}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => {
                   if (desktop) changeMode("closed");
@@ -298,15 +348,28 @@ export function EmojiPicker({
         ) : null}
       </Popover.Root>
       {open && !desktop ? (
-        <div
-          ref={panel}
-          id={panelId}
-          role="region"
-          aria-label="选择表情"
-          className="flex min-w-0 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-card pb-[env(safe-area-inset-bottom)] text-card-foreground"
-        >
-          {contents}
-        </div>
+        <>
+          <HeightBox
+            aria-hidden="true"
+            data-mobile-emoji-spacer
+            className="shrink-0"
+            height={mobileHeight}
+          />
+          {createPortal(
+            <HeightBox
+              ref={panel}
+              data-mobile-emoji-panel
+              id={panelId}
+              role="region"
+              aria-label="选择表情"
+              height={mobileHeight}
+              className="fixed inset-x-0 bottom-0 z-[70] flex min-w-0 flex-col overflow-hidden border-t border-border bg-card pb-[env(safe-area-inset-bottom)] text-card-foreground"
+            >
+              {contents}
+            </HeightBox>,
+            mobileHost ?? document.body,
+          )}
+        </>
       ) : null}
       <EmojiDialog
         open={mode === "manage"}

@@ -2,6 +2,8 @@ import type { ForumEditVersion, ForumTarget } from "@/lib/forum";
 import type { DraftImage } from "./images";
 
 export type ForumDraft = {
+  cacheKey?: string;
+  collapsed?: boolean;
   editorId: string;
   mode: "topic" | "post" | "comment";
   target?: ForumTarget;

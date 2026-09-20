@@ -1,20 +1,12 @@
-import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
 import { Timestamp } from "@/app/components/ui/timestamp";
+import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useToast } from "@/app/components/ui/toast";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { ClientOnly } from "@/app/components/ui/client-only";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type {
@@ -53,6 +45,13 @@ import type { ForumDialogAction, ForumMenuItem } from "./actions";
 import { ForumActionDialog, ForumMenu } from "./actions";
 import type { ForumDraft } from "./draft";
 import {
+  deleteForumDraft,
+  forumDraftKey,
+  readForumDraft,
+  restoreForumDraft,
+  saveForumDraft,
+} from "./draft-cache";
+import {
   draftSnapshot,
   draftValue,
   forumReplyLauncherClass,
@@ -71,9 +70,22 @@ import {
   referencedForumEmojis,
 } from "./shared";
 import { useDiscussionVisit } from "./visit";
-const ForumEditor = lazy(() =>
-  import("./editor").then((module) => ({ default: module.ForumEditor })),
-);
+let editorModule: Promise<{ default: typeof import("./editor").ForumEditor }> | undefined;
+function preloadEditor() {
+  editorModule ??= import("./editor")
+    .then((module) => ({ default: module.ForumEditor }))
+    .catch((error) => {
+      editorModule = undefined;
+      throw error;
+    });
+  return editorModule;
+}
+const ForumEditor = lazy(preloadEditor);
+
+type PreparedDraft = {
+  value?: ForumDraft | null;
+  pending: Promise<ForumDraft | null>;
+};
 
 type Props = {
   viewer: ForumViewer;
@@ -137,26 +149,11 @@ export function DiscussionWorkspace({
   const [pending, startTransition] = useTransition();
   useDiscussionVisit(initialDetail?.topic.id);
   const [detail, setDetail] = useState(initialDetail),
-    [draft, setDraft] = useState<ForumDraft | null>(() => {
-      if (!viewer || !initialDetail || !initialReply) return null;
-      if (initialReply === "topic")
-        return initialDetail.topic.capabilities.reply
-          ? createDraft("post", initialDetail.topic.title)
-          : null;
-      const post = initialDetail.posts.items.find(
-        (item) => item.postNumber === initialReply,
-      );
-      return post?.capabilities.reply
-        ? createDraft("comment", initialDetail.topic.title, post)
-        : null;
-    }),
+    [draft, setDraft] = useState<ForumDraft | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [requestError, setRequestError] = useState<ForumRequestError | null>(null);
   const [action, setAction] = useState<ForumDialogAction | null>(null),
-    [confirm, setConfirm] = useState<{
-      resolve: (value: boolean) => void;
-    } | null>(null),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
   const pageRef = useRef<HTMLElement>(null);
@@ -166,20 +163,6 @@ export function DiscussionWorkspace({
     targetId: string | null;
   } | null>(null);
   const removalFocus = useRef<{ targetId: string | null } | null>(null);
-  const [replyOccupancy, setReplyOccupancy] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const page = pageRef.current;
-    if (!page || replyOccupancy === null) return;
-    // The discussion page owns document scrolling and its own bottom clearance.
-    const root = document.documentElement;
-    const originalPadding = root.style.scrollPaddingBottom;
-    page.style.setProperty("--forum-reply-clearance", `${replyOccupancy}px`);
-    root.style.scrollPaddingBottom = `${replyOccupancy + 16}px`;
-    return () => {
-      root.style.scrollPaddingBottom = originalPadding;
-      page.style.removeProperty("--forum-reply-clearance");
-    };
-  }, [replyOccupancy]);
   const [detailSource, setDetailSource] = useState(initialDetail);
   // Render new route data together with its URL, before any focus effect runs.
   if (detailSource !== initialDetail) {
@@ -188,29 +171,123 @@ export function DiscussionWorkspace({
     setUnavailable(false);
   }
   const [uploadProgress, setUploadProgress] = useState("");
-  const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
   const listHref = forumHref("/discussions", {
     view: featured ? "featured" : null,
     tag: selected.map((tag) => tag.id),
     page: topics?.page,
   });
   const listReturn = detail ? returnTo : listHref;
-  const protectedRef = useRef({ dirty, busy });
+  const navigateAccepted = navigate;
+  const restoreSequence = useRef(0);
+  const cacheErrorShown = useRef(false);
+  const reportCacheError = useCallback(() => {
+    if (cacheErrorShown.current) return;
+    cacheErrorShown.current = true;
+    toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
+  }, [toast]);
+  const userId = viewer?.id;
+  const topicId = initialDetail?.topic.id;
+  const preparedDrafts = useRef(new Map<string, PreparedDraft>());
+  const prepareDraft = useCallback((key: string) => {
+    const existing = preparedDrafts.current.get(key);
+    if (existing) return existing;
+    const entry: PreparedDraft = {
+      pending: readForumDraft(key).then((value) => {
+        entry.value = value;
+        return value;
+      }).catch((error) => {
+        // A failed preload must not turn into a cached "empty draft".
+        if (preparedDrafts.current.get(key) === entry)
+          preparedDrafts.current.delete(key);
+        throw error;
+      }),
+    };
+    preparedDrafts.current.set(key, entry);
+    return entry;
+  }, []);
   useEffect(() => {
-    protectedRef.current = { dirty, busy };
-  }, [dirty, busy]);
-  const ask = useCallback(
-    () => new Promise<boolean>((resolve) => setConfirm({ resolve })),
-    [],
+    if (userId === undefined) return;
+    void preloadEditor().catch(() => undefined);
+    const drafts = [createDraft("topic", "")];
+    if (detail) {
+      drafts.push(createDraft("post", detail.topic.title));
+      for (const post of detail.posts.items) {
+        if (post.capabilities.reply)
+          drafts.push(createDraft("comment", detail.topic.title, post));
+      }
+    }
+    for (const candidate of drafts) {
+      void prepareDraft(forumDraftKey(userId, topicId, candidate))
+        .pending.catch(reportCacheError);
+    }
+  }, [userId, topicId, detail, prepareDraft, reportCacheError]);
+  const restoreDraft = useCallback(
+    async (next: ForumDraft, onlyCached = false) => {
+      if (userId === undefined) return;
+      const sequence = ++restoreSequence.current;
+      const cacheKey = forumDraftKey(userId, topicId, next);
+      let saved: ForumDraft | null = null;
+      try {
+        const prepared = prepareDraft(cacheKey);
+        saved = prepared.value !== undefined
+          ? prepared.value
+          : await prepared.pending;
+      } catch {
+        reportCacheError();
+      }
+      if (sequence !== restoreSequence.current) {
+        return;
+      }
+      if (onlyCached && !saved) return;
+      setDraft({
+        ...(saved ? restoreForumDraft(saved) : next),
+        ...(next.replyToId !== undefined && next.replyToId !== saved?.replyToId
+          ? {
+              replyToId: next.replyToId,
+              replyName: next.replyName,
+              requestKey: crypto.randomUUID(),
+            }
+          : {}),
+        cacheKey,
+        collapsed: onlyCached,
+      });
+      setError("");
+      setRequestError(null);
+    },
+    [userId, topicId, reportCacheError, prepareDraft],
   );
-  const navigateAccepted = useNavigationGuard(dirty || busy, async () => {
-    if (protectedRef.current.busy) return false;
-    if (!protectedRef.current.dirty) return true;
-    if (!(await ask())) return false;
-    protectedRef.current.dirty = false;
+  // Commit every edit without a debounce that could lose the last keystrokes
+  // when the user follows a link or closes the editor immediately afterward.
+  useLayoutEffect(() => {
+    if (draft) {
+      if (draft.cacheKey) {
+        preparedDrafts.current.set(draft.cacheKey, {
+          value: draft,
+          pending: Promise.resolve(draft),
+        });
+      }
+      void saveForumDraft(draft).catch(reportCacheError);
+    }
+  }, [draft, reportCacheError]);
+  const initialDraftContext = useRef({ initialDetail, initialReply });
+  useEffect(() => {
+    const sequence = restoreSequence;
     setDraft(null);
-    return true;
-  });
+    const { initialDetail: initial, initialReply: reply } =
+      initialDraftContext.current;
+    if (userId !== undefined && initial) {
+      if (typeof reply === "number") {
+        const post = initial.posts.items.find((item) => item.postNumber === reply);
+        if (post?.capabilities.reply)
+          void restoreDraft(createDraft("comment", initial.topic.title, post));
+      } else if (initial.topic.capabilities.reply) {
+        void restoreDraft(createDraft("post", initial.topic.title), !reply);
+      }
+    }
+    return () => {
+      sequence.current++;
+    };
+  }, [restoreDraft, userId]);
   useEffect(() => {
     const page = pageRef.current;
     if (!detail || !page || handledNavigation.current === location.key) return;
@@ -335,9 +412,14 @@ export function DiscussionWorkspace({
   }
   async function switchDraft(next: ForumDraft | null) {
     if (busy) return;
-    if (dirty && !(await ask())) return;
     if (next) trigger.current = document.activeElement as HTMLElement;
-    setDraft(next);
+    if (next) {
+      await restoreDraft(next);
+    }
+    else {
+      restoreSequence.current++;
+      setDraft(null);
+    }
     setError("");
     setRequestError(null);
     if (!next) trigger.current?.focus();
@@ -358,7 +440,7 @@ export function DiscussionWorkspace({
   }
   async function edit(content: ForumContent) {
     if (busy) return;
-    if (dirty && !(await ask())) return;
+    const sequence = ++restoreSequence.current;
     trigger.current = document.activeElement as HTMLElement;
     try {
       const target: ForumTarget =
@@ -366,6 +448,7 @@ export function DiscussionWorkspace({
           ? { kind: "topic", id: content.topicId }
           : { kind: content.kind, id: content.id };
       const result = await readForumEditVersion(target);
+      if (sequence !== restoreSequence.current) return;
       const next: Omit<ForumDraft, "original"> = {
         editorId: crypto.randomUUID(),
         mode: target.kind,
@@ -380,7 +463,7 @@ export function DiscussionWorkspace({
         topicRevision: result.topic.revision,
         requestKey: crypto.randomUUID(),
       };
-      setDraft({ ...next, original: draftSnapshot(next) });
+      await restoreDraft({ ...next, original: draftSnapshot(next) });
       setError("");
       setRequestError(null);
     } catch (e) {
@@ -433,7 +516,14 @@ export function DiscussionWorkspace({
           requestKey: draft.requestKey,
         },
       );
-      protectedRef.current = { dirty: false, busy: false };
+      restoreSequence.current++;
+      if (draft.cacheKey) {
+        preparedDrafts.current.set(draft.cacheKey, {
+          value: null,
+          pending: Promise.resolve(null),
+        });
+        void deleteForumDraft(draft.cacheKey).catch(reportCacheError);
+      }
       setDraft(null);
       toast.success(
         draft.target
@@ -482,7 +572,7 @@ export function DiscussionWorkspace({
   }
   async function openAction(next: ForumDialogAction) {
     if (busy) return;
-    if (dirty && !(await ask())) return;
+    restoreSequence.current++;
     setDraft(null);
     setAction(next);
   }
@@ -622,7 +712,21 @@ export function DiscussionWorkspace({
   // Let the router finish removing the reply parameter before the editor mounts
   // and takes focus through its own textarea/Tiptap lifecycle.
   const editor = draft && !initialReply ? (
-    <ClientOnly>
+    <ClientOnly
+      fallback={
+        draft.mode === "post" ? (
+          <Button
+            variant="ghost"
+            className={forumReplyLauncherClass}
+            type="button"
+            disabled
+            aria-busy="true"
+          >
+            正在打开回复框……
+          </Button>
+        ) : null
+      }
+    >
       <ForumEditor
         key={draft.editorId}
         draft={draft}
@@ -630,10 +734,6 @@ export function DiscussionWorkspace({
           if (draftValue(next) !== draftValue(draft))
             next.requestKey = crypto.randomUUID();
           setDraft(next);
-        }}
-        onBusyChange={(value) => {
-          protectedRef.current.busy = value;
-          setBusy(value);
         }}
         onError={setError}
         onCancel={() => void switchDraft(null)}
@@ -650,7 +750,18 @@ export function DiscussionWorkspace({
   ) : null;
   const replyBar =
     detail && !unavailable && draft?.mode !== "topic" ? (
-      <ForumReplyBar viewer={viewer} onOccupancyChange={setReplyOccupancy}>
+      <ForumReplyBar
+        viewer={viewer}
+        onBottomOverscroll={
+          viewer &&
+          !draft &&
+          !busy &&
+          !detail.topic.locked &&
+          detail.topic.capabilities.reply
+            ? () => newDraft("post")
+            : undefined
+        }
+      >
         {draft?.mode === "post" ? (
           editor
         ) : detail.topic.locked ? (
@@ -692,8 +803,7 @@ export function DiscussionWorkspace({
     ) : null;
   async function listNavigate(nextFeatured: boolean, tags: ForumTag[]) {
     if (busy) return;
-    if (dirty && !(await ask())) return;
-    protectedRef.current.dirty = false;
+    restoreSequence.current++;
     setDraft(null);
     startTransition(() =>
       navigate(
@@ -994,37 +1104,6 @@ export function DiscussionWorkspace({
           }}
         />
       ) : null}
-      <AlertDialog
-        open={!!confirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            confirm?.resolve(false);
-            setConfirm(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogTitle>舍弃当前未保存内容？</AlertDialogTitle>
-          <AlertDialogDescription>舍弃后无法恢复。</AlertDialogDescription>
-          <div className="flex justify-end gap-2">
-            <AlertDialogCancel asChild>
-              <Button variant="outline" type="button">
-                取消
-              </Button>
-            </AlertDialogCancel>
-            <Button
-              variant="destructive"
-              type="button"
-              onClick={() => {
-                confirm?.resolve(true);
-                setConfirm(null);
-              }}
-            >
-              舍弃
-            </Button>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
     </Container>
   );
 }
