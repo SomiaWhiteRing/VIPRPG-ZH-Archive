@@ -12,6 +12,7 @@ export type UserRow = {
   avatar_blob_sha256: string | null;
   bio: string;
   profile_show_bio: number;
+  profile_show_showcase: number;
   profile_show_favorites: number;
   profile_show_history: number;
   profile_show_catalogs: number;
@@ -38,6 +39,7 @@ export type SessionUserAccessRow = UserAccessRow & { session_id: number };
 export type ProfileVisibilityRow = Pick<
   UserRow,
   | "profile_show_bio"
+  | "profile_show_showcase"
   | "profile_show_favorites"
   | "profile_show_history"
   | "profile_show_catalogs"
@@ -53,6 +55,7 @@ export const USER_ACCESS_COLUMNS = `
   u.avatar_blob_sha256,
   u.bio,
   u.profile_show_bio,
+  u.profile_show_showcase,
   u.profile_show_favorites,
   u.profile_show_history,
   u.profile_show_catalogs,
@@ -173,6 +176,7 @@ export function mapProfileVisibility(
 ): ProfileVisibility {
   return {
     bio: row.profile_show_bio === 1,
+    showcase: row.profile_show_showcase === 1,
     favorites: row.profile_show_favorites === 1,
     history: row.profile_show_history === 1,
     catalogs: row.profile_show_catalogs === 1,

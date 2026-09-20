@@ -97,6 +97,7 @@ export async function mergeCreators(
     db
       .prepare(`UPDATE comments SET creator_id=? WHERE creator_id=?`)
       .bind(target, source),
+    db.prepare(`UPDATE user_showcase_entries SET creator_id=? WHERE creator_id=?`).bind(target, source),
     db.prepare(`DELETE FROM creators WHERE id=?`).bind(source),
     audit(db, actor, "creators_merged", { source, target }),
   ]);
@@ -273,6 +274,7 @@ export async function mergeWorks(
       )
       .bind(target, source),
     db.prepare(`DELETE FROM user_work_entries WHERE work_id=?`).bind(source),
+    db.prepare(`UPDATE user_showcase_entries SET work_id=? WHERE work_id=?`).bind(target, source),
     db
       .prepare(
         `INSERT INTO work_engagement_stats(work_id,view_count) SELECT ?,view_count FROM work_engagement_stats WHERE work_id=?

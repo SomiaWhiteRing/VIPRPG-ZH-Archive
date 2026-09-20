@@ -850,6 +850,12 @@ async function prepareCharacterMerge(
         `INSERT OR IGNORE INTO character_material_bindings(character_id,material_id,sort_order) SELECT ?,material_id,sort_order FROM character_material_bindings WHERE character_id=?`,
       )
       .bind(targetRow.id, sourceRow.id),
+    database.prepare(`UPDATE user_showcase_entries SET character_id=?,portrait_ref_id=(
+      SELECT target_ref.id FROM character_portrait_refs source_ref JOIN character_portrait_refs target_ref
+        ON target_ref.character_id=? AND target_ref.face_sheet_id=source_ref.face_sheet_id
+        AND target_ref.cell_row=source_ref.cell_row AND target_ref.cell_column=source_ref.cell_column
+      WHERE source_ref.id=user_showcase_entries.portrait_ref_id
+    ) WHERE character_id=?`).bind(targetRow.id, targetRow.id, sourceRow.id),
     database.prepare(`DELETE FROM characters WHERE id=?`).bind(sourceRow.id),
     database
       .prepare(

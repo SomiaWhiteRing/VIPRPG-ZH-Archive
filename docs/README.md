@@ -5,6 +5,7 @@
 ## 当前契约
 
 - [产品方向](./product-direction.md)：产品边界和信息架构
+- [个人喜爱展柜](./profile-showcase.md)：作品／角色／作者选择、排序、附言、公开边界与主页展示
 - [操作反馈](./ui-feedback.md)：全局 toast、表单错误、加载与恢复状态的展示规则
 - [资源与软件托管](./resources.md)：根管理员资源管理、原始包发布、平台推荐、下载与本站 Windy 更新协议
 - [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面

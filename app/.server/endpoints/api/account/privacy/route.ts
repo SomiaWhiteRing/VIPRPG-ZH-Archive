@@ -15,6 +15,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       user: auth.user,
       visibility: {
         bio: form.get("showBio") === "1",
+        showcase: form.get("showShowcase") === "1",
         favorites: form.get("showFavorites") === "1",
         history: form.get("showHistory") === "1",
         catalogs: form.get("showCatalogs") === "1",

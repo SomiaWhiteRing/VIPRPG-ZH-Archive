@@ -25,13 +25,21 @@ export function EmojiSourcePicker({
   hot,
   onSelect,
   onHot,
+  mode = "emojis",
+  disabled = false,
+  id,
 }: {
   character?: EmojiCharacter;
   label: string;
-  hot: boolean;
+  hot?: boolean;
   onSelect: (character: EmojiCharacter) => void;
-  onHot: () => void;
+  onHot?: () => void;
+  mode?: "emojis" | "showcase";
+  disabled?: boolean;
+  id?: string;
 }) {
+  const endpoint =
+    mode === "showcase" ? "/api/account/showcase" : "/api/emojis";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [categories, setCategories] = useState<EmojiCategory[] | null>(null);
@@ -54,7 +62,7 @@ export function EmojiSourcePicker({
     if (!open || categories) return;
     const controller = new AbortController();
     void emojiRequest<{ items: EmojiCategory[] }>(
-      "/api/emojis?op=categories",
+      `${endpoint}?op=categories`,
       undefined,
       controller.signal,
     )
@@ -66,14 +74,14 @@ export function EmojiSourcePicker({
         if (!controller.signal.aborted) setError(String(error));
       });
     return () => controller.abort();
-  }, [open, categories, retry]);
+  }, [open, categories, retry, endpoint]);
   useEffect(() => {
     if (!open || !query.trim()) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setSearching(true);
       void emojiRequest<CharacterPage>(
-        `/api/emojis?op=characters&q=${encodeURIComponent(query)}&offset=${offset}`,
+        `${endpoint}?op=characters&q=${encodeURIComponent(query)}&offset=${offset}`,
         undefined,
         controller.signal,
       )
@@ -106,7 +114,7 @@ export function EmojiSourcePicker({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, query, offset, retry]);
+  }, [open, query, offset, retry, endpoint]);
 
   async function loadBranch(id: string, append = false) {
     if (pending.current.has(id)) return;
@@ -121,7 +129,7 @@ export function EmojiSourcePicker({
     }));
     try {
       const page = await emojiRequest<CharacterPage>(
-        `/api/emojis?op=characters&categoryId=${encodeURIComponent(id)}&offset=${append ? (branches[id]?.items.length ?? 0) : 0}`,
+        `${endpoint}?op=characters&categoryId=${encodeURIComponent(id)}&offset=${append ? (branches[id]?.items.length ?? 0) : 0}`,
       );
       setBranches((current) => ({
         ...current,
@@ -252,7 +260,9 @@ export function EmojiSourcePicker({
             !branch.error &&
             !branch.items.length &&
             !children.length ? (
-              <p className="px-6 py-2 text-xs text-muted">暂无可用脸图</p>
+              <p className="px-6 py-2 text-xs text-muted">
+                {mode === "showcase" ? "暂无角色" : "暂无可用脸图"}
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -260,13 +270,15 @@ export function EmojiSourcePicker({
     );
   }
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open && !disabled} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <Button
           type="button"
+          id={id}
+          disabled={disabled}
           variant="outline"
           className="w-full justify-between font-normal"
-          aria-label="选择角色或全站热门"
+          aria-label={onHot ? "选择角色或全站热门" : "选择角色"}
         >
           {hot ? (
             <Flame aria-hidden className="text-muted" />
@@ -296,6 +308,7 @@ export function EmojiSourcePicker({
               placeholder="搜索中文名、日文名或别名"
               className="pl-9"
               value={query}
+              maxLength={100}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setOffset(0);
@@ -350,29 +363,33 @@ export function EmojiSourcePicker({
               rows[next]?.focus();
             }}
           >
-            <Button
-              type="button"
-              role="treeitem"
-              aria-level={1}
-              aria-selected={hot}
-              variant="ghost"
-              className={cn(
-                rowClass,
-                "mb-1",
-                hot && "text-primary bg-primary/5",
-              )}
-              onClick={() => {
-                onHot();
-                setOpen(false);
-                setQuery("");
-                setOffset(0);
-              }}
-            >
-              <Flame aria-hidden />
-              <span className="flex-1">全站热门</span>
-              {hot ? <Check aria-hidden /> : null}
-            </Button>
-            <div className="mb-1 border-t border-border" />
+            {onHot ? (
+              <>
+                <Button
+                  type="button"
+                  role="treeitem"
+                  aria-level={1}
+                  aria-selected={hot}
+                  variant="ghost"
+                  className={cn(
+                    rowClass,
+                    "mb-1",
+                    hot && "text-primary bg-primary/5",
+                  )}
+                  onClick={() => {
+                    onHot();
+                    setOpen(false);
+                    setQuery("");
+                    setOffset(0);
+                  }}
+                >
+                  <Flame aria-hidden />
+                  <span className="flex-1">全站热门</span>
+                  {hot ? <Check aria-hidden /> : null}
+                </Button>
+                <div className="mb-1 border-t border-border" />
+              </>
+            ) : null}
             {query.trim() ? (
               results.query === query ? (
                 results.items.map((item) => characterRow(item))

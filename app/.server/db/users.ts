@@ -52,6 +52,7 @@ const USER_SELECT = `SELECT
   avatar_blob_sha256,
   bio,
   profile_show_bio,
+  profile_show_showcase,
   profile_show_favorites,
   profile_show_history,
   profile_show_catalogs,
@@ -72,6 +73,7 @@ const USER_AUTH_SELECT = `SELECT
   avatar_blob_sha256,
   bio,
   profile_show_bio,
+  profile_show_showcase,
   profile_show_favorites,
   profile_show_history,
   profile_show_catalogs,
@@ -150,7 +152,7 @@ export const findPublicUserById = async (
     const row = await getD1(runtime)
       .prepare(
         `SELECT id,display_name,avatar_blob_sha256,bio,
-              profile_show_bio,profile_show_favorites,profile_show_history,
+              profile_show_bio,profile_show_showcase,profile_show_favorites,profile_show_history,
               profile_show_catalogs,profile_show_comments,profile_show_discussions,created_at
        FROM users
        WHERE id=? AND status IN ('active','deleted')
@@ -374,12 +376,13 @@ export async function updateOwnProfileVisibility(
     getD1(runtime)
       .prepare(
         `UPDATE users
-         SET profile_show_bio=?,profile_show_favorites=?,profile_show_history=?,
+         SET profile_show_bio=?,profile_show_showcase=?,profile_show_favorites=?,profile_show_history=?,
              profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,updated_at=CURRENT_TIMESTAMP
          WHERE id=?`,
       )
       .bind(
         input.visibility.bio ? 1 : 0,
+        input.visibility.showcase ? 1 : 0,
         input.visibility.favorites ? 1 : 0,
         input.visibility.history ? 1 : 0,
         input.visibility.catalogs ? 1 : 0,
@@ -810,10 +813,11 @@ export async function deleteOwnAccount(
   await verifyOwnPassword(runtime, user.id, password);
   const db = getD1(runtime);
   await db.batch([
+    db.prepare("DELETE FROM user_showcase_entries WHERE user_id=?").bind(user.id),
     db
       .prepare(
         `UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
-      bio='',password_hash=NULL,profile_show_bio=0,profile_show_favorites=0,profile_show_history=0,
+      bio='',password_hash=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_favorites=0,profile_show_history=0,
       profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`,
       )
       .bind(user.id),

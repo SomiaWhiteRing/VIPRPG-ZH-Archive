@@ -1,6 +1,9 @@
 import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import { searchUserWorks } from "@/app/.server/db/game-library";
 import { searchUserComments } from "@/app/.server/db/work-community";
+import { readShowcase } from "@/app/.server/db/showcase";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { Showcase } from "@/app/components/profile/showcase";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { publicUserDiscussions } from "@/app/.server/forum/user-discussions";
 import { requirePublicUser } from "@/app/.server/public-user";
@@ -25,6 +28,12 @@ export async function loader(args: LoaderFunctionArgs) {
   const user = await requirePublicUser(runtime, (await params).userId);
   const base = `/users/${user.id}`;
   const visibility = user.profileVisibility;
+  const showcaseEntries = visibility.showcase
+    ? (await readShowcase(runtime, user.id)).entries.filter(
+        (entry) => entry.target !== null,
+      )
+    : [];
+  const viewer = await getCurrentUser(runtime);
   const [played, favorites, catalogs, comments, discussions] =
     await Promise.all([
       visibility.history
@@ -58,6 +67,7 @@ export async function loader(args: LoaderFunctionArgs) {
         : null,
     ]);
   const hasVisibleSections =
+    showcaseEntries.length > 0 ||
     visibility.history ||
     visibility.favorites ||
     visibility.catalogs ||
@@ -66,6 +76,8 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     displayName: user.displayName,
+    showcaseEntries,
+    canEditShowcase: viewer?.id === user.id,
     base,
     played,
     favorites,
@@ -82,6 +94,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function PublicUserPage() {
   const {
     base,
+    showcaseEntries,
+    canEditShowcase,
     played,
     favorites,
     catalogs,
@@ -91,6 +105,11 @@ export default function PublicUserPage() {
   } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-7">
+      <Showcase
+        key={base}
+        entries={showcaseEntries}
+        editable={canEditShowcase}
+      />
       {played ? (
         <AccountSection href={`${base}/history`} title="最近游玩">
           {played.items.length ? (
