@@ -1,5 +1,6 @@
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Notice } from "@/app/components/ui/notice";
+import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { useToast } from "@/app/components/ui/toast";
 
 import {
@@ -631,6 +632,7 @@ export function WebPlayClient({
       { label: "本地状态", value: installation ? installStatusLabel(installation.status) : "未安装" },
       {
         label: "自动清理保护",
+        info: "未获得保护仍可正常保存游戏和存档，但浏览器可能在空间不足时自动清理。已获得保护也无法阻止手动清除站点数据。",
         value: browserStorage?.protectionStatus ?? "查询中…",
       },
       {
@@ -947,13 +949,11 @@ export function WebPlayClient({
                         <DiagnosticRow
                           key={item.label}
                           label={item.label}
+                          info={item.info}
                           value={item.value}
                         />
                       ))}
                     </dl>
-                    <p className="text-xs text-muted">
-                      未获得保护仍可正常保存游戏和存档，但浏览器可能在空间不足时自动清理。已获得保护也无法阻止手动清除站点数据。
-                    </p>
 
                     {installation && !activeInstalling ? (
                       <InstallProgress installation={installation} compact />
@@ -1136,10 +1136,13 @@ function InstallProgress({
   );
 }
 
-function DiagnosticRow({ label, value }: { label: string; value: ReactNode }) {
+function DiagnosticRow({ label, value, info }: { label: string; value: ReactNode; info?: string }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-border/70 border-b pb-2 last:border-b-0 last:pb-0">
-      <dt className="text-muted">{label}</dt>
+      <dt className="flex items-center gap-1 text-muted">
+        {label}
+        {info ? <InfoTooltip>{info}</InfoTooltip> : null}
+      </dt>
       <dd className="m-0 max-w-48 text-right text-foreground">{value}</dd>
     </div>
   );
