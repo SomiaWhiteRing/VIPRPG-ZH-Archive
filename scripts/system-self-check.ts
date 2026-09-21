@@ -400,17 +400,12 @@ async function run(): Promise<void> {
     });
   await page.locator('[data-upload-phase="awaiting_metadata"]').waitFor();
   const canceledJob = await waitForUploadDraft(page);
-  const dismissUploadLeave = (dialog: import("playwright").Dialog) =>
-    void dialog.dismiss();
-  page.on("dialog", dismissUploadLeave);
+  const uploadLeave = page.getByRole("alertdialog");
   await page.locator('a[href="/games"]').first().click();
+  await uploadLeave.getByRole("button", { name: "取消", exact: true }).click();
   assert.equal(new URL(page.url()).pathname, "/upload");
-  page.off("dialog", dismissUploadLeave);
-  const acceptUploadLeave = (dialog: import("playwright").Dialog) =>
-    void dialog.accept();
-  page.on("dialog", acceptUploadLeave);
   await page.locator('a[href="/games"]').first().click();
-  page.off("dialog", acceptUploadLeave);
+  await uploadLeave.getByRole("button", { name: "取消上传并离开", exact: true }).click();
   await page.waitForURL(origin + "/games");
   const canceled = await jsonResponse<{ importJob: { status: string } }>(
     "canceled upload",
@@ -726,7 +721,7 @@ async function verifyWorkDialogs(
   await editor
     .getByRole("option", { name: "Dialog destination", exact: true })
     .click();
-  // Successful revalidation of this same work preserves the open dialog and its selection.
+  // A successful addition closes the dialog; reopening it must still follow work identity.
   const saved = editor.waitForResponse(
     (r) =>
       r.url().endsWith(`/api/catalogs/${catalog.catalog.id}/items`) &&
@@ -735,7 +730,9 @@ async function verifyWorkDialogs(
   await editor.getByRole("button", { name: "添加", exact: true }).click();
   assert.equal((await saved).status(), 200);
   await editor.waitForLoadState("networkidle");
-  assert.equal(await editor.getByRole("dialog").count(), 1);
+  await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.getByRole("button", { name: "添加到目录", exact: true }).click();
+  await editor.getByRole("dialog").waitFor();
   await editor.goBack();
   await editor.waitForURL(origin + "/games/101");
   await editor.getByRole("dialog").waitFor({ state: "detached" });
@@ -747,27 +744,23 @@ async function verifyWorkDialogs(
     await editor.locator(`a[href="${path}"]`).first().click();
     await editor.waitForURL(origin + path);
   }
-  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
   await editor
-    .getByRole("textbox", { name: "查找关联对象" })
+    .getByRole("combobox", { name: "关联作品", exact: true })
     .fill("Relation target C");
-  await editor.getByRole("button", { name: "查找", exact: true }).click();
-  await editor.getByRole("button", { name: "选择", exact: true }).click();
+  await editor.getByRole("option", { name: "Relation target C", exact: true }).click();
   await editor.evaluate(() => history.go(-3));
   await editor.waitForURL(origin + "/games/102/relations");
-  await editor.getByRole("dialog").waitFor({ state: "detached" });
-  await editor.getByRole("button", { name: "添加关联", exact: true }).click();
+  await editor.locator('input[id="relation-target-102"]').waitFor();
   assert.equal(
-    await editor.getByRole("textbox", { name: "查找关联对象" }).inputValue(),
+    await editor.getByRole("combobox", { name: "关联作品", exact: true }).inputValue(),
     "",
   );
   assert.equal(
     await editor
-      .getByRole("button", { name: "建立关联", exact: true })
+      .getByRole("button", { name: "添加关联", exact: true })
       .isDisabled(),
     true,
   );
-  await editor.getByRole("button", { name: "取消", exact: true }).click();
 }
 
 async function verifyPermissionHistory(
@@ -797,16 +790,13 @@ async function verifyPermissionHistory(
       .click();
     const field = matrix.locator('details input[name="name"]');
     await field.fill("Unsaved role");
-    let accept = false;
-    matrix.on(
-      "dialog",
-      (dialog) => void (accept ? dialog.accept() : dialog.dismiss()),
-    );
-    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    const confirmation = matrix.getByRole("alertdialog");
+    await matrix.goBack();
+    await confirmation.getByRole("button", { name: "取消", exact: true }).click();
     await matrix.waitForURL(origin + "/admin/permissions");
     assert.equal(await field.inputValue(), "Unsaved role");
-    accept = true;
-    await Promise.all([matrix.waitForEvent("dialog"), matrix.goBack()]);
+    await matrix.goBack();
+    await confirmation.getByRole("button", { name: "继续", exact: true }).click();
     await matrix.waitForURL(origin + "/admin");
   } finally {
     await rootContext.close();
@@ -868,7 +858,7 @@ async function verifyCatalogEditorNavigation(
 
 async function verifyForumNavigation(currentPage: Page, origin: string) {
   stage(
-    "verify client navigation, forum publishing and unsaved draft protection",
+    "verify client navigation, forum publishing and persisted drafts",
   );
   await currentPage.goto(`${origin}/games/${catalogWorkIds[0]}`);
   await currentPage.evaluate(() => {
@@ -933,12 +923,12 @@ async function verifyForumNavigation(currentPage: Page, origin: string) {
     .click();
   await currentPage
     .locator('[data-forum-editor] [contenteditable="true"]')
-    .fill("Draft must survive canceled navigation");
-  const confirmation = currentPage.getByRole("alertdialog");
+    .fill("Draft must survive navigation");
   await currentPage.locator('a[href="/games"]').first().click();
-  await confirmation.waitFor();
-  await confirmation.getByRole("button", { name: "取消", exact: true }).click();
-  assert.equal(currentPage.url(), topicUrl);
+  await currentPage.waitForURL(origin + "/games");
+  await currentPage.goBack();
+  await currentPage.waitForURL(topicUrl);
+  await currentPage.getByRole("button", { name: "Draft must survive navigation", exact: true }).click();
   assert.ok(
     (
       await currentPage
@@ -946,11 +936,6 @@ async function verifyForumNavigation(currentPage: Page, origin: string) {
         .textContent()
     )?.includes("Draft must survive"),
   );
-  await currentPage.locator('a[href="/games"]').first().click();
-  await confirmation.getByRole("button", { name: "舍弃", exact: true }).click();
-  await currentPage.waitForURL(origin + "/games");
-  await currentPage.goBack();
-  await currentPage.waitForURL(topicUrl);
   await currentPage.goForward();
   await currentPage.waitForURL(origin + "/games");
 }

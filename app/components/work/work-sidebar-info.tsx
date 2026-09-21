@@ -1,4 +1,5 @@
 import { InfoRow } from "@/app/components/ui/info-row";
+import { Button } from "@/app/components/ui/button";
 import type {
   GameArchiveVersionDetail,
   GameWorkDetail,
@@ -94,10 +95,11 @@ export function WorkSidebarInfo({
 
       {current ? (
         <div className="mt-[0.65rem]">
-          <button
+          <Button
+            variant="ghost"
             aria-controls={filesId}
             aria-expanded={filesExpanded}
-            className="flex cursor-pointer items-center gap-1 py-1 font-mono text-xs tracking-[0.08em] text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+            className="min-h-0 gap-1 rounded-none px-0 py-1 font-mono text-xs font-normal tracking-[0.08em] text-muted hover:bg-transparent hover:text-foreground [&_svg]:size-3"
             onClick={() => {
               filesToggled.current = true;
               setFilesExpanded((expanded) => !expanded);
@@ -110,7 +112,7 @@ export function WorkSidebarInfo({
               size={12}
             />
             文件信息
-          </button>
+          </Button>
           <div
             className={`grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none ${filesExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
             id={filesId}
