@@ -188,7 +188,6 @@ export default function GameDetailPage() {
         engineFamily={work.engineFamily}
         language={work.language}
         originalTitle={work.originalTitle}
-        stickyTabs
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
           ...(current
