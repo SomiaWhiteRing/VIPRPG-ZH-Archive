@@ -1,5 +1,6 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { getD1 } from "@/app/.server/db/d1";
+import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
 
@@ -32,6 +33,10 @@ export async function GET(runtime: AppRuntime, request: Request) {
   try {
     const url = new URL(request.url);
     const title = url.searchParams.get("title")?.trim() ?? "";
+    const excludedWorkIds = (url.searchParams.get("excludeWorkIds") ?? "")
+      .split(",")
+      .filter(Boolean)
+      .map((id) => parsePositiveId(id, "excluded work id"));
 
     if (!title) {
       return json({ ok: true, works: [] });
@@ -74,17 +79,9 @@ export async function GET(runtime: AppRuntime, request: Request) {
             ) OR ? = 1 THEN 1
             ELSE 0
           END AS can_edit
-        FROM works w
+        FROM public_works w
         LEFT JOIN work_titles wt ON wt.work_id = w.id
-        WHERE w.status <> 'deleted'
-          AND (
-            w.id IN (SELECT id FROM public_works)
-            OR ? = 1
-            OR (? = 1 AND EXISTS (
-              SELECT 1 FROM work_uploaders private_wu
-              WHERE private_wu.work_id = w.id AND private_wu.user_id = ?
-            ))
-          )
+        WHERE w.id NOT IN (SELECT value FROM json_each(?))
           AND (
             w.original_title LIKE ? ESCAPE '\\'
             OR w.chinese_title LIKE ? ESCAPE '\\'
@@ -104,9 +101,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
         auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
         auth.user.id,
         auth.user.permissionKeys.includes("work.metadata.update_any") ? 1 : 0,
-        auth.user.permissionKeys.includes("work.read_private") ? 1 : 0,
-        auth.user.permissionKeys.includes("work.update_own") ? 1 : 0,
-        auth.user.id,
+        JSON.stringify(excludedWorkIds),
         like,
         like,
         like,

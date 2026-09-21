@@ -1,5 +1,9 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
+import {
+  getRelationEditorCapabilities,
+  type RelationEditorCapabilities,
+} from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import { isLanguageCode, relationInverse } from "@/lib/labels";
@@ -60,14 +64,10 @@ export async function createWorkRelation(
   assertRelationType(input.relationType);
   if (input.fromWorkId === input.toWorkId)
     throw new HttpError(400, "不能关联自身");
-  assertCanCreateWorkRelation(actor);
-  await assertAccessibleWorks(
-    runtime,
-    actor,
-    "relation",
-    input.fromWorkId,
-    input.toWorkId,
+  await assertCanEditWorkRelations(
+    runtime, input.fromWorkId, actor, "canCreateRelation",
   );
+  await assertPublicRelationWorks(runtime, input.fromWorkId, input.toWorkId);
   const inverse = relationInverse(input.relationType);
   if (
     await hasLogicalRelation(
@@ -126,7 +126,8 @@ export async function updateWorkRelation(
     throw new HttpError(400, "关联 ID 不合法");
   const row = await relationById(runtime, id);
   if (!row) throw new HttpError(404, "关联不存在");
-  assertCanModifyRelation(actor, "relation.update_any");
+  await assertCanEditWorkRelations(runtime, row.from_work_id, actor, "canUpdate");
+  await assertPublicRelationWorks(runtime, row.from_work_id, row.to_work_id);
   assertRelationType(input.relationType);
   if (input.relationType === row.relation_type && row.vice_versa === 0) return;
 
@@ -209,7 +210,7 @@ export async function deleteWorkRelation(
     throw new HttpError(400, "关联 ID 不合法");
   const row = await relationById(runtime, id);
   if (!row) throw new HttpError(404, "关联不存在");
-  assertCanModifyRelation(actor, "relation.delete_any");
+  await assertCanEditWorkRelations(runtime, row.from_work_id, actor, "canDeleteRelation");
   const database = getD1(runtime);
   const statements = [
     database.prepare(`DELETE FROM work_relations WHERE id=?`).bind(id),
@@ -250,36 +251,20 @@ export async function createTranslationRelation(
     throw new HttpError(400, "不能关联自身");
   if (input.targetRole !== "original" && input.targetRole !== "translation")
     throw new HttpError(400, "翻译角色不合法");
-  assertCanCreateTranslationRelation(actor);
+  await assertCanEditWorkRelations(
+    runtime, input.sourceWorkId, actor, "canCreateTranslation",
+  );
   const database = getD1(runtime);
-  const canReadPrivate =
-    actor.permissionKeys.includes("work.read_private") ||
-    actor.permissionKeys.includes("translation_relation.create_any") ||
-    actor.permissionKeys.includes("translation_relation.delete_any");
-  const canReadOwn = actor.permissionKeys.includes("work.update_own");
   const originalSourceId =
     input.targetRole === "original" ? input.sourceWorkId : input.targetWorkId;
   const validation = await database.batch([
     database
       .prepare(
         `SELECT w.id,w.language
-         FROM works w
-         WHERE w.id IN (?,?) AND w.status<>'deleted'
-           AND (
-             w.id IN (SELECT id FROM public_works) OR ?=1 OR
-             (?=1 AND EXISTS(
-               SELECT 1 FROM work_uploaders wu
-               WHERE wu.work_id=w.id AND wu.user_id=?
-             ))
-           )`,
+         FROM public_works w
+         WHERE w.id IN (?,?)`,
       )
-      .bind(
-        input.sourceWorkId,
-        input.targetWorkId,
-        canReadPrivate ? 1 : 0,
-        canReadOwn ? 1 : 0,
-        actor.id,
-      ),
+      .bind(input.sourceWorkId, input.targetWorkId),
     database
       .prepare(
         `SELECT source_work_id,target_work_id,target_role
@@ -318,7 +303,7 @@ export async function createTranslationRelation(
   }>;
   const source = works.find((work) => work.id === input.sourceWorkId);
   const target = works.find((work) => work.id === input.targetWorkId);
-  if (!source || !target) throw new HttpError(404, "目标游戏不存在");
+  if (!source || !target) throw new HttpError(404, "关联只能使用可公开访问的作品");
   if (
     !isLanguageCode(source.language) ||
     !isLanguageCode(target.language) ||
@@ -399,11 +384,9 @@ export async function deleteTranslationRelation(
       created_by_user_id: number | null;
     }>();
   if (!row) throw new HttpError(404, "翻译关联不存在");
-  if (
-    actor.status !== "active" ||
-    !actor.permissionKeys.includes("translation_relation.delete_any")
-  )
-    throw new HttpError(403, "无权删除此关联");
+  await assertCanEditWorkRelations(
+    runtime, row.source_work_id, actor, "canDeleteTranslation",
+  );
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(`DELETE FROM translation_relations WHERE id=?`)
@@ -498,60 +481,52 @@ async function hasLogicalRelation(
   );
 }
 
-async function assertAccessibleWorks(
+async function assertPublicRelationWorks(
   runtime: AppRuntime,
-  actor: ArchiveUser,
-  domain: "relation" | "translation",
   ...ids: number[]
 ): Promise<void> {
   const placeholders = ids.map(() => "?").join(",");
-  const canReadPrivate =
-    actor.permissionKeys.includes("work.read_private") ||
-    (domain === "relation"
-      ? actor.permissionKeys.includes("relation.create_any")
-      : actor.permissionKeys.includes("translation_relation.create_any"));
-  const canReadOwn = actor.permissionKeys.includes("work.update_own");
   const rows = await getD1(runtime)
-    .prepare(
-      `
-    SELECT w.id
-    FROM works w
-    WHERE w.id IN (${placeholders})
-      AND w.status <> 'deleted'
-      AND (
-        w.id IN (SELECT id FROM public_works)
-        OR ? = 1
-        OR (? = 1 AND EXISTS (
-          SELECT 1 FROM work_uploaders wu
-          WHERE wu.work_id = w.id AND wu.user_id = ?
-        ))
-      )
-  `,
-    )
-    .bind(...ids, canReadPrivate ? 1 : 0, canReadOwn ? 1 : 0, actor.id)
+    .prepare(`SELECT id FROM public_works WHERE id IN (${placeholders})`)
+    .bind(...ids)
     .all<{ id: number }>();
-  if ((rows.results ?? []).length !== ids.length)
-    throw new HttpError(404, "目标游戏不存在");
+  if (rows.results.length !== ids.length)
+    throw new HttpError(404, "关联只能使用可公开访问的作品");
 }
-function assertCanCreateWorkRelation(actor: ArchiveUser): void {
-  if (
-    !actor.permissionKeys.includes("relation.create") &&
-    !actor.permissionKeys.includes("relation.create_any")
-  )
-    throw new HttpError(403, "无权创建关联");
+export async function getWorkRelationEditorCapabilities(
+  runtime: AppRuntime,
+  workId: number,
+  actor: ArchiveUser | null,
+): Promise<RelationEditorCapabilities> {
+  const work = actor?.status === "active"
+    ? await getD1(runtime)
+        .prepare(`SELECT
+          EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=w.id AND user_id=?) AS is_uploader,
+          w.id IN (SELECT id FROM public_works) AS is_public
+          FROM works w WHERE w.id=?`)
+        .bind(actor.id, workId)
+        .first<{ is_uploader: number; is_public: number }>()
+    : null;
+  const capabilities = getRelationEditorCapabilities(actor, work?.is_uploader === 1);
+  return {
+    ...capabilities,
+    canCreateRelation: capabilities.canCreateRelation && work?.is_public === 1,
+    canCreateTranslation: capabilities.canCreateTranslation && work?.is_public === 1,
+    canUpdate: capabilities.canUpdate && work?.is_public === 1,
+  };
 }
-function assertCanCreateTranslationRelation(actor: ArchiveUser): void {
-  if (
-    !actor.permissionKeys.includes("translation_relation.create") &&
-    !actor.permissionKeys.includes("translation_relation.create_any")
-  )
-    throw new HttpError(403, "无权创建翻译关联");
-}
-function assertCanModifyRelation(
+
+async function assertCanEditWorkRelations(
+  runtime: AppRuntime,
+  workId: number,
   actor: ArchiveUser,
-  permission: "relation.update_any" | "relation.delete_any",
-): void {
-  if (actor.status !== "active" || !actor.permissionKeys.includes(permission))
+  capability: keyof RelationEditorCapabilities,
+): Promise<void> {
+  // Only the operated side requires ownership; its inverse is maintained atomically.
+  const capabilities = await getWorkRelationEditorCapabilities(
+    runtime, workId, actor,
+  );
+  if (!capabilities[capability])
     throw new HttpError(403, "没有执行此关联操作的权限");
 }
 function assertRelationType(value: string): asserts value is RelationType {

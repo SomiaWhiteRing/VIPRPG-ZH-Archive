@@ -1,4 +1,4 @@
-import { requireAnyPermission } from "@/app/.server/auth/authorize";
+import { requireUser } from "@/app/.server/auth/guards";
 import {
   deleteWorkRelation,
   updateWorkRelation,
@@ -12,9 +12,7 @@ export async function DELETE(
   request: Request,
   context: { params: { relationId: string } },
 ) {
-  const auth = await requireAnyPermission(runtime, request, [
-    "relation.delete_any",
-  ]);
+  const auth = await requireUser(runtime, request);
   if ("response" in auth) return auth.response;
   try {
     await deleteWorkRelation(
@@ -33,9 +31,7 @@ export async function PATCH(
   request: Request,
   context: { params: { relationId: string } },
 ) {
-  const auth = await requireAnyPermission(runtime, request, [
-    "relation.update_any",
-  ]);
+  const auth = await requireUser(runtime, request);
   if ("response" in auth) return auth.response;
   try {
     const body = await readBody(request);
