@@ -1,8 +1,7 @@
+import { scrypt } from "node:crypto";
 import {
   base64UrlDecodeBytes,
   base64UrlEncodeBytes,
-  toArrayBuffer,
-  utf8Encode,
 } from "@/app/.server/crypto/encoding";
 import { timingSafeEqualString } from "@/app/.server/crypto/sha256";
 import {
@@ -11,10 +10,11 @@ import {
 } from "@/lib/auth/password-rules";
 import passwordPolicy from "./password-policy.json";
 
-const PASSWORD_HASH_VERSION = "pbkdf2-sha256";
-export const PASSWORD_HASH_ITERATIONS = passwordPolicy.iterations;
+const PASSWORD_HASH_VERSION = "scrypt";
+// Workers caps native scrypt at N * r * p <= 2^20. This OWASP profile uses 32 MiB.
+const MAX_SCRYPT_COST = 2 ** 20;
 const SALT_BYTES = 16;
-const DERIVED_KEY_BITS = 256;
+const DERIVED_KEY_BYTES = 32;
 
 export function validatePasswordStrength(password: string): void {
   if (password.length < PASSWORD_MIN_LENGTH) {
@@ -30,15 +30,13 @@ export async function hashPassword(password: string): Promise<string> {
   validatePasswordStrength(password);
 
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const derivedKey = await derivePasswordKey(
-    password,
-    salt,
-    PASSWORD_HASH_ITERATIONS,
-  );
+  const derivedKey = await derivePasswordKey(password, salt, passwordPolicy);
 
   return [
     PASSWORD_HASH_VERSION,
-    String(PASSWORD_HASH_ITERATIONS),
+    String(passwordPolicy.N),
+    String(passwordPolicy.r),
+    String(passwordPolicy.p),
     base64UrlEncodeBytes(salt),
     base64UrlEncodeBytes(derivedKey),
   ].join("$");
@@ -55,30 +53,24 @@ export async function verifyPassword(
 
   const parts = passwordHash.split("$");
 
-  if (parts.length !== 4 || parts[0] !== PASSWORD_HASH_VERSION) {
+  if (parts.length !== 6 || parts[0] !== PASSWORD_HASH_VERSION) {
     return false;
   }
 
-  const iterations = Number.parseInt(parts[1], 10);
+  const parameters = parseParameters(parts);
 
-  if (
-    !Number.isSafeInteger(iterations) ||
-    iterations < 10_000 ||
-    iterations > 2_000_000
-  ) {
-    return false;
-  }
+  if (!parameters) return false;
 
-  if (!/^[A-Za-z0-9_-]{22}$/.test(parts[2])) return false;
-  const expected = parts[3];
+  if (!/^[A-Za-z0-9_-]{22}$/.test(parts[4])) return false;
+  const expected = parts[5];
   if (!/^[A-Za-z0-9_-]{43}$/.test(expected)) return false;
 
   let actual: string;
   try {
-    const salt = base64UrlDecodeBytes(parts[2]);
+    const salt = base64UrlDecodeBytes(parts[4]);
     if (salt.byteLength !== SALT_BYTES) return false;
     actual = base64UrlEncodeBytes(
-      await derivePasswordKey(password, salt, iterations),
+      await derivePasswordKey(password, salt, parameters),
     );
   } catch {
     return false;
@@ -89,37 +81,43 @@ export async function verifyPassword(
 
 export function passwordHashNeedsUpgrade(passwordHash: string | null): boolean {
   if (!passwordHash) return false;
-  const [version, rawIterations] = passwordHash.split("$", 2);
-  const iterations = Number.parseInt(rawIterations ?? "", 10);
+  const parts = passwordHash.split("$");
+  const parameters = parseParameters(parts);
   return (
-    version !== PASSWORD_HASH_VERSION ||
-    !Number.isSafeInteger(iterations) ||
-    iterations < PASSWORD_HASH_ITERATIONS
+    parts[0] !== PASSWORD_HASH_VERSION ||
+    !parameters ||
+    parameters.N < passwordPolicy.N ||
+    parameters.N * parameters.r * parameters.p <
+      passwordPolicy.N * passwordPolicy.r * passwordPolicy.p
   );
+}
+
+function parseParameters(parts: string[]): typeof passwordPolicy | null {
+  if (!parts.slice(1, 4).every((part) => /^[1-9]\d*$/.test(part))) return null;
+  const [N, r, p] = parts.slice(1, 4).map(Number);
+  if (
+    ![N, r, p].every(Number.isSafeInteger) ||
+    N < 8192 ||
+    N > 32768 ||
+    (N & (N - 1)) !== 0 ||
+    r !== 8 ||
+    p < 1 ||
+    N * r * p > MAX_SCRYPT_COST
+  ) {
+    return null;
+  }
+  return { N, r, p, maxmem: passwordPolicy.maxmem };
 }
 
 async function derivePasswordKey(
   password: string,
   salt: Uint8Array,
-  iterations: number,
+  parameters: typeof passwordPolicy,
 ): Promise<Uint8Array> {
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    toArrayBuffer(utf8Encode(password)),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: toArrayBuffer(salt),
-      iterations,
-    },
-    keyMaterial,
-    DERIVED_KEY_BITS,
-  );
-
-  return new Uint8Array(bits);
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, DERIVED_KEY_BYTES, parameters, (error, key) => {
+      if (error) reject(error);
+      else resolve(key);
+    });
+  });
 }
