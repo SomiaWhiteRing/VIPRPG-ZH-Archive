@@ -65,15 +65,15 @@ VALUES
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'user';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","emoji.defaults.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run","forum.content.moderate_any","forum.topic.feature_any","forum.tag.manage","character.admin.read","character.create","character.merge_any","character.portrait.manage_any","character.portrait.upload","character_category.create","character_category.update","character_category.delete","character_membership.create","character_membership.update","character_membership.delete","character_index.reorder","character.sources.update_any"]')
+SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own","work.read_private","work.metadata.update_any","work.status.update_any","work.maintainer.manage_any","work.merge_any","relation.create_any","relation.update_any","relation.delete_any","translation_relation.create_any","translation_relation.delete_any","catalog.manage_any","comment.manage_any","emoji.defaults.manage","creator.read_private","creator.metadata.update_any","creator.merge_any","character.metadata.update_any","tag.read_private","tag.metadata.update_any","archive_version.read_private","archive_version.update","archive_version.delete_any","archive_version.restore","archive_version.set_current","user.read","user.status.update","user.role.assign","inbox.role_request.resolve","system.dashboard.read","system.maintenance.run","forum.content.moderate_any","forum.topic.feature_any","forum.tag.manage","character.admin.read","character.create","character.merge_any","character.portrait.manage_any","character.portrait.upload","character_category.create","character_category.update","character_category.delete","character_membership.create","character_membership.update","character_membership.delete","character_index.reorder","character.sources.update_any"]')
 WHERE roles.key IN ('admin', 'super_admin');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
@@ -1052,7 +1052,7 @@ CREATE TABLE IF NOT EXISTS creators (
   name TEXT NOT NULL COLLATE NOCASE,
   name_key TEXT NOT NULL UNIQUE,
   avatar_blob_sha256 TEXT REFERENCES blobs(sha256),
-  website_url TEXT,
+  links_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(links_json) AND json_type(links_json) = 'array'),
   extra_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(extra_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

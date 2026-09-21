@@ -1,3 +1,5 @@
+import type { CreatorLink } from "@/lib/creator-links";
+
 export type CreatorWorkCredit = {
   workId: number;
   workTitle: string;
@@ -15,7 +17,7 @@ export type PublicCreatorSummary = {
   id: number;
   name: string;
   avatarBlobSha256: string | null;
-  websiteUrl: string | null;
+  links: CreatorLink[];
   bio: string | null;
   workCreditCount: number;
   latestWorkCreditAt: string | null;

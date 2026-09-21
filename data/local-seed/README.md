@@ -28,6 +28,16 @@ existing character portrait library, without changing captured content.
 The showcase privacy refresh adds `users.profile_show_showcase`, enabled by
 default. Empty showcases remain hidden on public profiles.
 
+The 2026-09-21 creator refresh grants public creator editing to the four built-in
+roles and replaces the single homepage column with an ordered `links_json`
+array. The three existing homepages are retained as personal-website entries;
+all six creators, unrelated table contents and the single initialization
+migration ledger are preserved.
+
+The 2026-09-21 work-source removal drops the `source` external-link type.
+All seven captured external links and all 80 tables' contents, including the
+single initialization migration ledger, are preserved.
+
 Commands from the repository root:
 
 ```sh

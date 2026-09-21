@@ -37,6 +37,7 @@ import type {
 } from "@/lib/character-names";
 import { isCharacterRoleKey } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
+import { parseCreatorLinks } from "@/lib/creator-links";
 import { creatorSelectionKey } from "@/lib/creator-names";
 import type {
   AdminArchiveVersionEdit,
@@ -1454,7 +1455,7 @@ async function hydrate(
         kind: "creator",
         statement: database
           .prepare(
-            `SELECT ws.work_id,c.id,c.name,ws.display_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+            `SELECT ws.work_id,c.id,c.name,ws.display_name,c.links_json,ws.role_key,ws.role_label,ws.notes
              FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
              WHERE ws.work_id IN (${placeholders})
              ORDER BY ws.work_id,c.name`,
@@ -1486,7 +1487,7 @@ async function hydrate(
     id: number;
     name: string;
     display_name: string;
-    website_url: string | null;
+    links_json: string;
     role_key: string;
     role_label: string | null;
     notes: string | null;
@@ -1521,7 +1522,7 @@ async function hydrate(
     id: creator.id,
     name: creator.name,
     displayName: creator.display_name,
-    websiteUrl: isHttpUrl(creator.website_url) ? creator.website_url : null,
+    links: parseCreatorLinks(creator.links_json),
     roleKey: creator.role_key,
     roleLabel: creator.role_label,
     notes: creator.notes,
@@ -1632,7 +1633,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT c.id,c.name,ws.display_name,c.website_url,ws.role_key,ws.role_label,ws.notes
+        `SELECT c.id,c.name,ws.display_name,c.links_json,ws.role_key,ws.role_label,ws.notes
          FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
          WHERE ws.work_id=? ORDER BY c.name`,
       )
@@ -1714,7 +1715,7 @@ async function loadWorkCollections(
     id: number;
     name: string;
     display_name: string;
-    website_url: string | null;
+    links_json: string;
     role_key: string;
     role_label: string | null;
     notes: string | null;
@@ -1722,7 +1723,7 @@ async function loadWorkCollections(
     id: row.id,
     name: row.name,
     displayName: row.display_name,
-    websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
+    links: parseCreatorLinks(row.links_json),
     roleKey: row.role_key,
     roleLabel: row.role_label,
     notes: row.notes,

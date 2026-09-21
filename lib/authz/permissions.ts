@@ -71,6 +71,12 @@ export const PERMISSIONS = {
     scope: "符合条件的重复作品",
     description: "将重复作品合并；还需普通关联和翻译关联的相应删除能力。",
   },
+  "creator.metadata.update_public": {
+    category: "creator",
+    label: "编辑公开作者资料",
+    scope: "已关联公开作品的作者",
+    description: "在前台编辑作者名称、别名、网站、简介和头像，保存后直接生效并记录修改。",
+  },
   "creator.read_private": {
     category: "creator",
     label: "查看非公开作者",
@@ -623,6 +629,7 @@ export const CHARACTER_ADMIN_PERMISSIONS = [
 
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
+    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "relation.create",
     "translation_relation.create",
@@ -632,6 +639,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.reorder_own",
   ] as const,
   uploader: [
+    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "work.update_own",
     "work.external_create",
@@ -649,6 +657,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.reorder_own",
   ] as const,
   admin: [
+    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "work.update_own",
     "work.external_create",
@@ -690,6 +699,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "system.maintenance.run",
   ] as const,
   super_admin: [
+    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "work.update_own",
     "work.external_create",
