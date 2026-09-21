@@ -17,10 +17,12 @@ const tokenChipClassName =
 
 export function TokenInput({
   children,
+  field,
   preserveHoverRows = false,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & {
   preserveHoverRows?: boolean;
+  field?: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +34,7 @@ export function TokenInput({
       container.querySelectorAll<HTMLElement>(
         ":scope > [data-token-row-break]",
       ),
-    );
+    ).filter((rowBreak) => rowBreak.nextElementSibling instanceof HTMLElement);
     const items = breaks.map(
       (rowBreak) => rowBreak.nextElementSibling as HTMLElement,
     );
@@ -149,10 +151,12 @@ export function TokenInput({
           hidden
         />
       ) : null}
-      <Input
-        {...props}
-        className="h-auto min-h-7 min-w-40 flex-1 border-0 bg-transparent px-1 py-0 text-sm shadow-none outline-none placeholder:text-muted focus-visible:border-0 focus-visible:ring-0"
-      />
+      {field ?? (
+        <Input
+          {...props}
+          className="h-auto min-h-7 min-w-40 flex-1 border-0 bg-transparent px-1 py-0 text-sm shadow-none outline-none placeholder:text-muted focus-visible:border-0 focus-visible:ring-0"
+        />
+      )}
     </div>
   );
 }
@@ -172,13 +176,7 @@ export function TokenChip({
   onRemove: () => void;
 }) {
   return (
-    <span
-      {...props}
-      className={cn(
-        tokenChipClassName,
-        className,
-      )}
-    >
+    <span {...props} className={cn(tokenChipClassName, className)}>
       {children}
       <Button
         aria-label={`移除 ${label}`}
@@ -215,7 +213,11 @@ export function TokenDragPreview({
     <div
       aria-hidden="true"
       className="pointer-events-none fixed left-0 top-0 z-[100] select-none rounded-full bg-card shadow-lg ring-1 ring-primary/20"
-      style={{ transform: `translate3d(${left}px, ${top}px, 0)`, width, height }}
+      style={{
+        transform: `translate3d(${left}px, ${top}px, 0)`,
+        width,
+        height,
+      }}
     >
       <span className={cn(tokenChipClassName, "h-full w-full")}>
         <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>

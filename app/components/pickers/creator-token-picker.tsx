@@ -1,9 +1,4 @@
-import {
-  ComboboxOption,
-  ComboboxOptions,
-  handleComboboxNavigation,
-} from "@/app/components/ui/combobox";
-
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import {
   CreatorPicker,
   creatorOptions,
@@ -11,12 +6,11 @@ import {
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
+import { TokenChip } from "@/app/components/ui/token-input";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey, creatorSelectionKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { cn } from "@/lib/ui/cn";
-import type { KeyboardEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
 type CreatorTokenOption = { selection: CreatorSelection; meta: string };
@@ -41,8 +35,6 @@ export function CreatorTokenPicker({
   values: CreatorSelection[];
 }) {
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [editing, setEditing] = useState<{
     index: number;
     selection: CreatorSelection | null;
@@ -88,8 +80,6 @@ export function CreatorTokenPicker({
     }
     return matches;
   }, [query, selectedKeys, suggestions]);
-  const menuId = `${id}-options`;
-  const menuOpen = open && !disabled && options.length > 0;
   const editingSelection = editing?.selection;
   const duplicateEdit =
     editingSelection &&
@@ -103,32 +93,6 @@ export function CreatorTokenPicker({
     if (selectedKeys.has(creatorSelectionKey(selection))) return;
     onChange([...values, selection]);
     setQuery("");
-    setActiveIndex(0);
-    setOpen(false);
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (
-      handleComboboxNavigation(event, {
-        count: options.length,
-        open: menuOpen,
-        activeIndex,
-        setOpen,
-        setActiveIndex,
-      })
-    )
-      return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const active = menuOpen
-        ? options[activeIndex]
-        : query.trim()
-          ? options[0]
-          : null;
-      if (active) add(active.selection);
-    } else if (event.key === "Backspace" && !query && values.length) {
-      onChange(values.slice(0, -1));
-    }
   }
 
   function saveEdit() {
@@ -151,32 +115,26 @@ export function CreatorTokenPicker({
     <>
       <div className={cn("grid gap-2", disabled && "opacity-60")}>
         <div className="relative">
-          <TokenInput
-            aria-activedescendant={
-              menuOpen && options[activeIndex]
-                ? `${menuId}-${activeIndex}`
-                : undefined
-            }
-            aria-autocomplete="list"
-            aria-controls={menuId}
-            aria-describedby={errorId}
-            aria-expanded={menuOpen}
-            aria-invalid={invalid || undefined}
-            disabled={disabled}
+          <SearchComboBox
             id={id}
-            onBlur={() => setOpen(false)}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-              setOpen(Boolean(creatorNameKey(event.target.value)));
-            }}
-            onFocus={() => setOpen(Boolean(creatorNameKey(query)))}
-            onKeyDown={onKeyDown}
+            query={query}
+            onQueryChange={setQuery}
+            disabled={disabled}
+            items={options}
+            enterSelectsFirst
+            label={label}
             placeholder={values.length ? "继续添加" : `搜索或新建${label}`}
-            role="combobox"
-            value={query}
-          >
-            {values.map((value, index) => (
+            invalid={invalid}
+            descriptionId={errorId}
+            getKey={(option) =>
+              `${creatorSelectionKey(option.selection)}:${option.selection.displayName}`
+            }
+            getText={(option) => option.selection.displayName}
+            onChoose={(option) => add(option.selection)}
+            onRemoveLast={() => {
+              if (values.length) onChange(values.slice(0, -1));
+            }}
+            tokens={values.map((value, index) => (
               <TokenChip
                 disabled={disabled}
                 key={`${creatorSelectionKey(value)}:${index}`}
@@ -193,7 +151,6 @@ export function CreatorTokenPicker({
                   disabled={disabled}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget;
-                    setOpen(false);
                     setEditing({ index, selection: value });
                   }}
                   size="sm"
@@ -209,31 +166,22 @@ export function CreatorTokenPicker({
                 </Button>
               </TokenChip>
             ))}
-          </TokenInput>
-          {menuOpen ? (
-            <ComboboxOptions id={menuId} activeIndex={activeIndex}>
-              {options.map((option, index) => (
-                <ComboboxOption
-                  selected={index === activeIndex}
-                  id={`${menuId}-${index}`}
-                  key={`${creatorSelectionKey(option.selection)}:${option.selection.displayName}`}
-                  onClick={() => add(option.selection)}
-                >
-                  <span>
-                    {option.selection.displayName}
-                    {option.selection.displayName !== option.selection.name ? (
-                      <span className="block text-xs text-muted">
-                        身份：{option.selection.name}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted">
-                    {option.meta}
-                  </span>
-                </ComboboxOption>
-              ))}
-            </ComboboxOptions>
-          ) : null}
+            renderItem={(option) => (
+              <>
+                <span>
+                  {option.selection.displayName}
+                  {option.selection.displayName !== option.selection.name ? (
+                    <span className="block text-xs text-muted">
+                      身份：{option.selection.name}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-xs text-muted">
+                  {option.meta}
+                </span>
+              </>
+            )}
+          />
         </div>
         <span className="text-xs text-muted">输入后按 Enter 添加</span>
       </div>
@@ -262,6 +210,7 @@ export function CreatorTokenPicker({
             <div className="grid gap-2">
               <Label htmlFor={`${id}-edit-name`}>{label}署名</Label>
               <CreatorPicker
+                label={`${label}署名`}
                 disabled={disabled}
                 id={`${id}-edit-name`}
                 onChange={(selection) =>

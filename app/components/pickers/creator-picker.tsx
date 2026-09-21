@@ -1,17 +1,10 @@
-import {
-  ComboboxOption,
-  ComboboxOptions,
-  handleComboboxNavigation,
-} from "@/app/components/ui/combobox";
-
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { cn } from "@/lib/ui/cn";
-import type { KeyboardEvent } from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 type CreatorOption = {
   creator: CreatorSuggestion;
@@ -28,6 +21,7 @@ export function CreatorPicker({
   name,
   onChange,
   placeholder,
+  label = "人物",
   suggestions,
   value,
 }: {
@@ -39,19 +33,16 @@ export function CreatorPicker({
   name?: string;
   onChange: (value: CreatorSelection | null) => void;
   placeholder: string;
+  label?: string;
   suggestions: CreatorSuggestion[];
   value: CreatorSelection | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const inputValue = value?.displayName ?? "";
   const identityLocked = value?.kind === "existing";
   const options = useMemo(
     () => (identityLocked ? [] : creatorOptions(suggestions, inputValue)),
     [identityLocked, inputValue, suggestions],
   );
-  const menuId = `${id}-options`;
-  const menuOpen = open && !disabled && options.length > 0;
 
   function choose(option: CreatorOption) {
     onChange({
@@ -60,8 +51,6 @@ export function CreatorPicker({
       name: option.creator.name,
       displayName: option.matchedName,
     });
-    setOpen(false);
-    setActiveIndex(0);
   }
 
   function changeDisplayName(rawValue: string) {
@@ -73,8 +62,6 @@ export function CreatorPicker({
           ? { kind: "new", name: rawValue, displayName: rawValue }
           : null,
       );
-      setOpen(Boolean(creatorNameKey(rawValue)));
-      setActiveIndex(0);
     }
   }
 
@@ -83,28 +70,7 @@ export function CreatorPicker({
     onChange(
       displayName ? { kind: "new", name: displayName, displayName } : null,
     );
-    setOpen(Boolean(creatorNameKey(displayName)));
-    setActiveIndex(0);
     window.requestAnimationFrame(() => document.getElementById(id)?.focus());
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (identityLocked) return;
-    if (
-      handleComboboxNavigation(event, {
-        count: options.length,
-        open: menuOpen,
-        activeIndex,
-        setOpen,
-        setActiveIndex,
-      })
-    )
-      return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (menuOpen && options[activeIndex]) choose(options[activeIndex]);
-      else setOpen(false);
-    }
   }
 
   return (
@@ -117,71 +83,56 @@ export function CreatorPicker({
           value={value ? JSON.stringify(normalizedSelection(value)) : ""}
         />
       ) : null}
-      <div className="relative">
-        <Input
-          className={compact && identityLocked ? "pr-12" : undefined}
-          aria-activedescendant={
-            menuOpen && options[activeIndex]
-              ? `${menuId}-${activeIndex}`
-              : undefined
-          }
-          aria-autocomplete="list"
-          aria-controls={menuId}
-          aria-describedby={errorId}
-          aria-expanded={menuOpen}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          id={id}
-          onBlur={() => setOpen(false)}
-          onChange={(event) => changeDisplayName(event.target.value)}
-          onFocus={() => {
-            setOpen(!identityLocked && Boolean(creatorNameKey(inputValue)));
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          role="combobox"
-          value={inputValue}
-        />
-        {compact && identityLocked ? (
-          <Button
-            className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-1.5 text-xs"
-            disabled={disabled}
-            title={`已关联：${value.name}`}
-            aria-label={`更换人物，当前关联：${value.name}`}
-            onClick={unlockIdentity}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            更换
-          </Button>
-        ) : null}
-        {menuOpen ? (
-          <ComboboxOptions id={menuId} activeIndex={activeIndex}>
-            {options.map((option, index) => (
-              <ComboboxOption
-                selected={index === activeIndex}
-                className="min-h-10"
-                id={`${menuId}-${index}`}
-                key={`${option.creator.id}-${creatorNameKey(option.matchedName)}`}
-                onClick={() => choose(option)}
-              >
-                <span>
-                  <strong>{option.matchedName}</strong>
-                  {option.matchedName !== option.creator.name ? (
-                    <span className="block text-xs text-muted">
-                      身份：{option.creator.name}
-                    </span>
-                  ) : null}
+      <SearchComboBox
+        id={id}
+        label={label}
+        query={inputValue}
+        onQueryChange={changeDisplayName}
+        disabled={disabled}
+        invalid={invalid}
+        descriptionId={errorId}
+        placeholder={placeholder}
+        items={options}
+        getKey={(option) =>
+          `${option.creator.id}:${creatorNameKey(option.matchedName)}`
+        }
+        getText={(option) => option.matchedName}
+        onChoose={choose}
+        enterSelectsFirst
+        inputSuffix={
+          compact && identityLocked ? (
+            <Button
+              className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-1.5 text-xs"
+              disabled={disabled}
+              title={`已关联：${value.name}`}
+              aria-label={`更换人物，当前关联：${value.name}`}
+              onClick={unlockIdentity}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              更换
+            </Button>
+          ) : identityLocked ? (
+            <span />
+          ) : undefined
+        }
+        renderItem={(option) => (
+          <>
+            <span>
+              <strong>{option.matchedName}</strong>
+              {option.matchedName !== option.creator.name ? (
+                <span className="block text-xs text-muted">
+                  身份：{option.creator.name}
                 </span>
-                <span className="shrink-0 text-xs text-muted">
-                  {option.creator.workCount} 部作品
-                </span>
-              </ComboboxOption>
-            ))}
-          </ComboboxOptions>
-        ) : null}
-      </div>
+              ) : null}
+            </span>
+            <span className="shrink-0 text-xs text-muted">
+              {option.creator.workCount} 部作品
+            </span>
+          </>
+        )}
+      />
       {!compact ? (
         <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs text-muted">
           {value?.kind === "existing" ? (
