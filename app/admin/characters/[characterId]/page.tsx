@@ -19,7 +19,7 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -36,11 +36,9 @@ const CHARACTER_EDIT_FORM_ID = "character-edit-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
-  const { params, searchParams } = routeInput(args);
+  const { params } = routeInput(args);
 
   const { characterId: rawCharacterId } = await params;
-  const query = await searchParams;
-  const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const characterId = parseId(rawCharacterId);
   const adminUser = await requireAnyPagePermission(
     runtime,
@@ -70,7 +68,6 @@ export async function loader(args: LoaderFunctionArgs) {
   }
 
   return {
-    formError,
     adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
     canEdit,
     canMerge,
@@ -93,7 +90,6 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function AdminCharacterEditPage() {
   const {
-    formError,
     adminUser,
     canEdit,
     canMerge,
@@ -134,11 +130,7 @@ export default function AdminCharacterEditPage() {
         }
       />
 
-      {formError ? (
-        <Notice tone="error" className="mb-4 border p-3 text-sm" role="alert">
-          {formError}
-        </Notice>
-      ) : null}
+      <RedirectFeedback />
 
       <section
         id="portrait-workbench"

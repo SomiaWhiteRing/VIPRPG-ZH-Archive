@@ -1,3 +1,4 @@
+import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import { SelectField } from "@/app/components/ui/select";
 import type { RoleSummary } from "@/lib/dto/db/permissions";
@@ -13,13 +14,13 @@ export function RoleAssignmentControl({
   initialRoleIds: number[];
   roles: RoleSummary[];
 }) {
+  const toast = useToast();
   const roleIds = initialRoleIds;
 
   const revalidator = useRevalidator();
   const [refreshing, startTransition] = useTransition();
   const [selectedRoleId, setSelectedRoleId] = useState(roles[0]?.id ?? 0);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const assigned = roles.filter((role) => roleIds.includes(role.id));
   const available = roles.filter(
     (role) => role.status === "active" && !roleIds.includes(role.id),
@@ -32,7 +33,6 @@ export function RoleAssignmentControl({
 
   async function request(url: string, init: RequestInit) {
     setSaving(true);
-    setError(null);
     try {
       const response = await fetch(url, init);
       const payload = (await response.json()) as {
@@ -44,7 +44,7 @@ export function RoleAssignmentControl({
         throw new Error(payload.detail ?? payload.error ?? "操作失败");
       startTransition(() => revalidator.revalidate());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "操作失败");
+      toast.error(cause instanceof Error ? cause.message : "操作失败");
       throw cause;
     } finally {
       setSaving(false);
@@ -60,6 +60,7 @@ export function RoleAssignmentControl({
         body: JSON.stringify({ roleId: effectiveSelectedRoleId }),
       });
       setSelectedRoleId(0);
+      toast.success("角色已分配。");
     } catch {
       return;
     }
@@ -70,6 +71,7 @@ export function RoleAssignmentControl({
       await request(`/api/admin/users/${userId}/roles/${roleId}`, {
         method: "DELETE",
       });
+      toast.success("角色已移除。");
     } catch {
       return;
     }
@@ -115,11 +117,6 @@ export function RoleAssignmentControl({
             分配
           </Button>
         </div>
-      ) : null}
-      {error ? (
-        <span className="text-xs text-red-700" role="alert">
-          {error}
-        </span>
       ) : null}
     </div>
   );

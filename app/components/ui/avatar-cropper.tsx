@@ -1,5 +1,5 @@
+import { useConfirm } from "./confirm-provider";
 import { Button } from "@/app/components/ui/button";
-import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -31,6 +31,7 @@ export function AvatarCropper({
 }) {
   const revalidator = useRevalidator();
   const toast = useToast();
+  const confirm = useConfirm();
   const dialogId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -39,7 +40,6 @@ export function AvatarCropper({
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -63,13 +63,11 @@ export function AvatarCropper({
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setArea(null);
-    setMessage(null);
   }
 
   async function upload() {
     if (!source || !area) return;
     setBusy(true);
-    setMessage(null);
     try {
       const blob = await cropToPng(source, area);
       const response = await fetch(endpoint, {
@@ -84,31 +82,27 @@ export function AvatarCropper({
       toast.success("头像已更新。");
       revalidator.revalidate();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "头像上传失败");
+      toast.error(error instanceof Error ? error.message : "头像上传失败");
     } finally {
       setBusy(false);
     }
   }
 
   async function remove() {
-    if (!avatarBlobSha256 || busy || !window.confirm("确定删除当前头像吗？"))
-      return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const response = await fetch(endpoint, {
-        method: "DELETE",
-        credentials: "same-origin",
-      });
-      const result = (await response.json()) as { detail?: string };
-      if (!response.ok) throw new Error(result.detail || "头像删除失败");
-      toast.success("头像已删除。");
-      revalidator.revalidate();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "头像删除失败");
-    } finally {
-      setBusy(false);
-    }
+    if (!avatarBlobSha256 || busy) return;
+    await confirm(`确定删除“${displayName}”的当前头像吗？`, {
+      title: "删除头像", confirmLabel: "删除", destructive: true,
+      action: async () => {
+        setBusy(true);
+        try {
+          const response = await fetch(endpoint, { method: "DELETE", credentials: "same-origin" });
+          const result = (await response.json()) as { detail?: string };
+          if (!response.ok) throw new Error(result.detail || "头像删除失败");
+          toast.success("头像已删除。");
+          revalidator.revalidate();
+        } finally { setBusy(false); }
+      },
+    });
   }
 
   return (
@@ -231,7 +225,6 @@ export function AvatarCropper({
                 />
               </Slider.Root>
             </div>
-            {message ? <Notice>{message}</Notice> : null}
             <div className="flex justify-end gap-2">
               <Rm2kButton
                 disabled={busy}

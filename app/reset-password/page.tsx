@@ -13,6 +13,7 @@ import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 import { Link } from "react-router";
 
@@ -54,11 +55,7 @@ export default function ResetPasswordPage() {
           {VERIFICATION_EMAIL_HINT.replace("{email}", params.email ?? "")}
         </Notice>
       ) : null}
-      {params.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3">
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback />
       <form
         action="/api/auth/password-reset/confirm"
         method="post"

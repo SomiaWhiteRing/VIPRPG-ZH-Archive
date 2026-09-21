@@ -5,6 +5,7 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
+import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
@@ -73,13 +74,13 @@ export function ForumActionDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const toast = useToast();
   const [reason, setReason] = useState(
       action.request ? "其他" : (FORUM_REPORT_REASONS[0] as string),
     ),
     [text, setText] = useState(""),
     [tags, setTags] = useState(action.tags ?? []),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [busy, setBusy] = useState(false);
   const title =
     action.kind === "report"
       ? action.request
@@ -100,7 +101,6 @@ export function ForumActionDialog({
           }[action.action!] ?? "确认管理操作");
   async function submit() {
     setBusy(true);
-    setError("");
     try {
       await forumRequest("/api/discussions", {
         op: action.kind,
@@ -113,7 +113,7 @@ export function ForumActionDialog({
       onSuccess();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "操作失败。");
+      toast.error(e instanceof Error ? e.message : "操作失败。");
     } finally {
       setBusy(false);
     }
@@ -179,11 +179,6 @@ export function ForumActionDialog({
           ) : (
             <p className="text-sm">删除后不能恢复。</p>
           )}
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
           <div className="flex justify-end gap-2">
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline" disabled={busy}>

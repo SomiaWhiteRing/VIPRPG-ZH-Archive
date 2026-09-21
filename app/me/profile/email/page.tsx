@@ -14,6 +14,7 @@ import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { AccountField } from "@/app/components/profile/account-field";
 import { Input } from "@/app/components/ui/input";
 import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
@@ -35,15 +36,7 @@ export default function EmailPage() {
   return (
     <div>
       <PageHeader title="修改登录邮箱" />
-      {params.emailUpdated ? (
-        <Notice
-          tone="success"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="status"
-        >
-          邮箱已更新，其他设备已登出。
-        </Notice>
-      ) : null}
+      <RedirectFeedback success={{ emailUpdated: "邮箱已更新，其他设备已登出。" }} />
       {params.emailSent ? (
         <Notice
           tone="success"
@@ -53,15 +46,7 @@ export default function EmailPage() {
           验证码已发送到新邮箱。
         </Notice>
       ) : null}
-      {params.error ? (
-        <Notice
-          tone="error"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="alert"
-        >
-          {params.error}
-        </Notice>
-      ) : null}
+
       <div className="max-w-2xl">
         <p className="mb-5 text-sm text-muted">
           当前登录邮箱：

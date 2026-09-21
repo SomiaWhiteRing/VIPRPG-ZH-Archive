@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { UndoRedo } from "@tiptap/extensions";
 import { Button } from "@/app/components/ui/button";
 import { resourceContentClassName } from "@/lib/resources";
 import { Notice } from "@/app/components/ui/notice";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
 import {
   resourceContentExtensions, resourceLink,
 } from "@/lib/resource-content";
@@ -14,6 +17,11 @@ export function ResourceContentEditor({ initial, disabled }: {
 }) {
   const [value, setValue] = useState(initial);
   const [error, setError] = useState("");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [href, setHref] = useState("");
+  const selection = useRef<{ from: number; to: number } | null>(null);
+  const linkInput = useRef<HTMLInputElement>(null);
+  const linkId = useId();
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
@@ -27,14 +35,21 @@ export function ResourceContentEditor({ initial, disabled }: {
   });
   useEffect(() => { editor?.setEditable(!disabled); }, [editor, disabled]);
   function link() {
-    if (!editor) return;
-    const href = window.prompt("链接地址（留空移除链接）", editor.getAttributes("link").href ?? "");
-    if (href === null) return;
+    if (!editor || disabled) return;
+    selection.current = { from: editor.state.selection.from, to: editor.state.selection.to };
+    setHref(editor.getAttributes("link").href ?? "");
+    setError("");
+    setLinkOpen(true);
+  }
+  function applyLink(remove = false) {
+    if (!editor || disabled || !selection.current) return;
     try {
+      const url = remove || !href.trim() ? null : resourceLink(href);
       setError("");
-      const chain = editor.chain().focus().extendMarkRange("link");
-      if (href.trim()) chain.setMark("link", { href: resourceLink(href) }).run();
+      const chain = editor.chain().setTextSelection(selection.current).extendMarkRange("link");
+      if (url) chain.setMark("link", { href: url }).run();
       else chain.unsetMark("link").run();
+      setLinkOpen(false);
     } catch (error) {
       setError(error instanceof Error ? error.message : "链接格式不正确");
     }
@@ -64,7 +79,31 @@ export function ResourceContentEditor({ initial, disabled }: {
         </div>
         <EditorContent editor={editor} />
       </div>
-      {error ? <Notice>{error}</Notice> : null}
+      <Dialog.Root open={linkOpen} onOpenChange={setLinkOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content className="left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-6"
+            onOpenAutoFocus={(event) => { event.preventDefault(); linkInput.current?.focus(); }}
+            onCloseAutoFocus={(event) => { event.preventDefault(); if (!editor?.isDestroyed) editor?.commands.focus(); }}>
+            <Dialog.Title>编辑链接</Dialog.Title>
+            <Dialog.Description className="text-sm text-muted">为选中的文字设置链接。留空保存或选择“移除链接”，会保留文字并移除链接。</Dialog.Description>
+            <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); applyLink(); }}>
+              <div className="grid gap-2">
+                <Label htmlFor={linkId}>链接地址</Label>
+                <Input ref={linkInput} id={linkId} value={href} disabled={disabled} autoComplete="off" inputMode="url"
+                  aria-invalid={!!error} aria-describedby={error ? `${linkId}-error` : undefined}
+                  onChange={(event) => { setHref(event.target.value); setError(""); }} />
+                {error ? <Notice id={`${linkId}-error`}>{error}</Notice> : null}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="ghost" disabled={disabled} onClick={() => applyLink(true)}>移除链接</Button>
+                <Dialog.Close asChild><Button type="button" variant="outline">取消</Button></Dialog.Close>
+                <Button type="submit" disabled={disabled}>保存链接</Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

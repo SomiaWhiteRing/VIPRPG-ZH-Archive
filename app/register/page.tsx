@@ -16,6 +16,7 @@ import { redirectPage } from "@/app/.server/http/page-response";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 import { Link } from "react-router";
 
@@ -56,11 +57,7 @@ export default function RegisterPage() {
         </>
       }
     >
-      {params.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3">
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback />
       {params.sent ? (
         <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
       ) : (

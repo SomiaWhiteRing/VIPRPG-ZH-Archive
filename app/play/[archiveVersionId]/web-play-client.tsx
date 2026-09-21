@@ -1,4 +1,6 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 
 import {
   AlertDialog,
@@ -82,6 +84,7 @@ export function WebPlayClient({
   secondary,
   stats,
 }: WebPlayClientProps) {
+  const toast = useToast();
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(
     null,
   );
@@ -95,7 +98,8 @@ export function WebPlayClient({
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
   const [copyingLogs, setCopyingLogs] = useState(false);
-  const [copyLogsMessage, setCopyLogsMessage] = useState<string | null>(null);
+  const [screenshotFeedback, setScreenshotFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+  const immersiveRef = useRef(false);
   const [nativeFullscreen, setNativeFullscreen] = useState(false);
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [mobileControls, setMobileControls] = useState(false);
@@ -113,7 +117,7 @@ export function WebPlayClient({
     screenshots,
     loading: loadingScreenshots,
     capturing,
-    message: screenshotMessage,
+    loadError: screenshotLoadError,
     capture,
   } = useWebPlayScreenshots(metadata.workId);
 
@@ -126,13 +130,30 @@ export function WebPlayClient({
   const immersive = nativeFullscreen || pageFullscreen;
   const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
 
+  useEffect(() => {
+    immersiveRef.current = immersive;
+    if (!immersive) setScreenshotFeedback(null);
+  }, [immersive]);
+
+  useEffect(() => {
+    if (!screenshotFeedback) return;
+    const timer = setTimeout(() => setScreenshotFeedback(null), screenshotFeedback.ok ? 5000 : 12000);
+    return () => clearTimeout(timer);
+  }, [screenshotFeedback]);
+
+  const screenshotMessage = screenshotFeedback?.message ?? screenshotLoadError;
   const captureScreenshot = useCallback(async () => {
     const player = playerRef.current;
     if (!player || captureDisabled) return;
     focusPlayerCanvas();
-    await capture(player);
+    const result = await capture(player);
+    if (result) {
+      if (immersiveRef.current) setScreenshotFeedback(result);
+      else if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
+    }
     if (playerRef.current === player) focusPlayerCanvas();
-  }, [capture, captureDisabled]);
+  }, [capture, captureDisabled, toast]);
 
   const addLog = useCallback(
     (level: WebPlayLog["level"], message: string) => {
@@ -153,16 +174,15 @@ export function WebPlayClient({
 
   const copyLogs = useCallback(async () => {
     setCopyingLogs(true);
-    setCopyLogsMessage(null);
     try {
       await navigator.clipboard.writeText(logs.map(formatLog).join("\n"));
-      setCopyLogsMessage(`已复制 ${logs.length} 条日志。`);
+      toast.success(`已复制 ${logs.length} 条日志。`);
     } catch {
-      setCopyLogsMessage("复制失败，请允许浏览器访问剪贴板后重试。");
+      toast.error("复制失败，请允许浏览器访问剪贴板后重试。");
     } finally {
       setCopyingLogs(false);
     }
-  }, [logs]);
+  }, [logs, toast]);
 
   useEffect(() => {
     const lifetime = new AbortController();
@@ -177,8 +197,9 @@ export function WebPlayClient({
     };
   }, []);
 
+  const confirm = useConfirm();
   useNavigationGuard(installSessionActive, () =>
-    window.confirm("游戏安装尚未完成，确定离开并中断安装吗？"),
+    confirm("游戏安装尚未完成，确定离开并中断安装吗？"),
   );
 
   useEffect(() => {
@@ -706,8 +727,8 @@ export function WebPlayClient({
                 <span id="status">
                   {running ? "EasyRPG 正在运行" : "未启动"}
                 </span>
-                {!immersive && screenshotMessage ? (
-                  <span role="status">{screenshotMessage}</span>
+                {!immersive && screenshotLoadError ? (
+                  <span role="alert">{screenshotLoadError}</span>
                 ) : null}
                 {!immersive && displayMessage ? (
                   <span role="status">{displayMessage}</span>
@@ -937,7 +958,6 @@ export function WebPlayClient({
                               disabled={copyingLogs}
                               onClick={() => {
                                 setLogs([]);
-                                setCopyLogsMessage(null);
                               }}
                               size="sm"
                               type="button"
@@ -948,11 +968,6 @@ export function WebPlayClient({
                           </div>
                         ) : null}
                       </div>
-                      {copyLogsMessage ? (
-                        <p className="mb-2 text-muted" role="status">
-                          {copyLogsMessage}
-                        </p>
-                      ) : null}
                       {logs.length ? (
                         <ol className="m-0 grid max-h-64 list-none gap-1 overflow-y-auto p-0">
                           {logs.map((log) => (

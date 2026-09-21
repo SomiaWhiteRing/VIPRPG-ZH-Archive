@@ -16,7 +16,7 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { SelectField } from "@/app/components/ui/select";
@@ -25,11 +25,9 @@ import { Link } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
-  const { params, searchParams } = routeInput(args);
+  const { params } = routeInput(args);
 
   const { tagId: rawTagId } = await params;
-  const query = await searchParams;
-  const formError = Array.isArray(query.error) ? query.error[0] : query.error;
   const tagId = parseId(rawTagId);
   await requirePagePermission(
     runtime,
@@ -45,14 +43,14 @@ export async function loader(args: LoaderFunctionArgs) {
     throwNotFound();
   }
 
-  return { formError, tag, candidates };
+  return { tag, candidates };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: [loaderData?.tag.name || "标签", "标签维护", "控制台"] }, error);
 
 export default function AdminTagEditPage() {
-  const { formError, tag, candidates } = useLoaderData<typeof loader>();
+  const { tag, candidates } = useLoaderData<typeof loader>();
   return (
     <main key={tag.id}>
       <PageHeader
@@ -73,11 +71,7 @@ export default function AdminTagEditPage() {
         }
       />
 
-      {formError ? (
-        <Notice tone="error" className="mb-4 border p-3 text-sm" role="alert">
-          {formError}
-        </Notice>
-      ) : null}
+      <RedirectFeedback />
 
       <ConfirmingForm
         action={`/api/admin/tags/${tag.id}/update`}

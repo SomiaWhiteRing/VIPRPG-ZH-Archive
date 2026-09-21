@@ -3,11 +3,10 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PasswordInput } from "@/app/components/auth/auth-input";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { AccountField } from "@/app/components/profile/account-field";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
@@ -25,28 +24,11 @@ export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["修改密码", "个人中心"] }, error);
 
 export default function PasswordPage() {
-  const { params } = useLoaderData<typeof loader>();
   return (
     <div>
       <PageHeader title="修改密码" />
-      {params.passwordUpdated ? (
-        <Notice
-          tone="success"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="status"
-        >
-          密码已更新，其他设备已登出。
-        </Notice>
-      ) : null}
-      {params.error ? (
-        <Notice
-          tone="error"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="alert"
-        >
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback success={{ passwordUpdated: "密码已更新，其他设备已登出。" }} />
+
       <form action="/api/account/password" className="grid gap-4" method="post">
         <AccountField htmlFor="password-current" label="当前密码">
           <PasswordInput

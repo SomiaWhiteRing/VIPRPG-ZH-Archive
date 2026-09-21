@@ -10,7 +10,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import {
@@ -25,7 +25,6 @@ type OperationKind = "consistency" | "gc" | "sweep";
 type OperationState = {
   kind: OperationKind | null;
   loading: boolean;
-  error: string | null;
   result: unknown;
 };
 
@@ -41,11 +40,11 @@ export function AdminOperationPanel({
 }: {
   canRunFinalCleanup: boolean;
 }) {
+  const toast = useToast();
   const sweepButtonRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<OperationState>({
     kind: null,
     loading: false,
-    error: null,
     result: null,
   });
   const [sweepConfirm, setSweepConfirm] = useState("");
@@ -60,7 +59,6 @@ export function AdminOperationPanel({
     setState({
       kind,
       loading: true,
-      error: null,
       result: null,
     });
 
@@ -98,14 +96,13 @@ export function AdminOperationPanel({
       setState({
         kind,
         loading: false,
-        error: null,
         result: summarize(kind, payload.report),
       });
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
       setState({
         kind,
         loading: false,
-        error: error instanceof Error ? error.message : "操作失败",
         result: null,
       });
     }
@@ -206,11 +203,6 @@ export function AdminOperationPanel({
         </p>
       )}
       {state.loading ? <p className="text-sm text-muted">检查运行中</p> : null}
-      {state.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3 text-sm">
-          {state.error}
-        </Notice>
-      ) : null}
       {state.result ? (
         <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs">
           {JSON.stringify(state.result, null, 2)}

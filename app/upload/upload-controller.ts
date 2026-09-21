@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { rememberPublishedTranslators } from "@/app/upload/translation-preference";
 import type { DraftLock } from "@/app/upload/upload-drafts";
@@ -229,9 +230,10 @@ export function useUploadController(accountId: number) {
     };
   }, [accountId]);
 
+  const confirm = useConfirm();
   const active = starting || workerRef.current !== null;
   useNavigationGuard(active, async () => {
-    if (!window.confirm("离开此页将取消当前上传。是否继续？")) return false;
+    if (!(await confirm("离开此页将取消当前上传。是否继续？", { title: "离开上传页面", confirmLabel: "取消上传并离开" }))) return false;
     return cancelTask();
   });
 

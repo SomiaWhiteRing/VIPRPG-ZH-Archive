@@ -8,22 +8,14 @@ import {
 
 export type ScreenshotPreview = WebPlayScreenshot & { url: string };
 
-const savedMessage = "截图已保存。";
-
 export function useWebPlayScreenshots(workId: number) {
   const [screenshots, setScreenshots] = useState<ScreenshotPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const lifetimeRef = useRef<AbortController | null>(null);
   const capturingRef = useRef(false);
   const urlsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (message !== savedMessage) return;
-    const timer = setTimeout(() => setMessage(null), 3_000);
-    return () => clearTimeout(timer);
-  }, [message]);
 
   useEffect(() => {
     const lifetime = new AbortController();
@@ -31,7 +23,7 @@ export function useWebPlayScreenshots(workId: number) {
     const urls = urlsRef.current;
     setScreenshots([]);
     setLoading(true);
-    setMessage(null);
+    setLoadError(null);
     void listWebPlayScreenshots(workId)
       .then((rows) => {
         if (lifetime.signal.aborted) return;
@@ -42,7 +34,7 @@ export function useWebPlayScreenshots(workId: number) {
         }));
       })
       .catch(() => {
-        if (!lifetime.signal.aborted) setMessage("读取本地截图失败，请刷新后重试。");
+        if (!lifetime.signal.aborted) setLoadError("读取本地截图失败，请刷新后重试。");
       })
       .finally(() => {
         if (!lifetime.signal.aborted) setLoading(false);
@@ -59,7 +51,6 @@ export function useWebPlayScreenshots(workId: number) {
     if (!player || !signal || signal.aborted || loading || capturingRef.current) return;
     capturingRef.current = true;
     setCapturing(true);
-    setMessage(null);
     try {
       const image = await player.captureScreenshot();
       signal.throwIfAborted();
@@ -74,21 +65,22 @@ export function useWebPlayScreenshots(workId: number) {
       const url = URL.createObjectURL(screenshot.blob);
       urlsRef.current.add(url);
       setScreenshots((current) => [{ ...screenshot, url }, ...current]);
-      setMessage(savedMessage);
+      return { ok: true, message: "截图已保存。" };
     } catch (error) {
       if (signal.aborted) return;
-      setMessage(
-        error instanceof DOMException && error.name === "QuotaExceededError"
+      return {
+        ok: false,
+        message: error instanceof DOMException && error.name === "QuotaExceededError"
           ? "浏览器存储空间不足，截图未保存。"
           : error instanceof Error
             ? `截图未保存：${error.message}`
             : "截图未保存，请检查浏览器本地存储后重试。",
-      );
+      };
     } finally {
       capturingRef.current = false;
       if (!signal.aborted) setCapturing(false);
     }
   }, [loading, workId]);
 
-  return { screenshots, loading, capturing, message, capture };
+  return { screenshots, loading, capturing, loadError, capture };
 }

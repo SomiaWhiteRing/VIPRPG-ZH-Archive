@@ -8,6 +8,7 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { useToast } from "@/app/components/ui/toast";
 import type {
   ApiConfirmation,
   ApiResponsePayload,
@@ -43,13 +44,13 @@ export function ConfirmingForm({
   title,
   description,
 }: ConfirmingFormProps) {
+  const toast = useToast();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const formRef = useRef<HTMLFormElement>(null);
   const submitterRef = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
   const [open, setOpen] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryConfirmation, setRetryConfirmation] =
     useState<ApiConfirmation | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +75,6 @@ export function ConfirmingForm({
     if (!form || submittingRef.current) return;
     submittingRef.current = true;
     setSubmitting(true);
-    setErrorMessage(null);
     setRetryConfirmation(null);
     try {
       const formData = new FormData(form);
@@ -110,7 +110,7 @@ export function ConfirmingForm({
         setRetryConfirmation(nextConfirmation);
         return;
       }
-      setErrorMessage(
+      toast.error(
         error instanceof Error ? error.message : `${errorTitle}，请稍后重试。`,
       );
     }
@@ -184,27 +184,6 @@ export function ConfirmingForm({
                 {submitting ? "提交中…" : retryConfirmation?.confirmLabel}
               </Button>
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) setErrorMessage(null);
-        }}
-        open={Boolean(errorMessage)}
-      >
-        <AlertDialogContent
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            if (submitterRef.current?.isConnected) submitterRef.current.focus();
-          }}
-        >
-          <AlertDialogTitle>{errorTitle}</AlertDialogTitle>
-          <AlertDialogDescription>{errorMessage}</AlertDialogDescription>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline">返回修改</Button>
-            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

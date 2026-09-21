@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { readShowcase } from "@/app/.server/db/showcase";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -117,9 +118,10 @@ function ShowcaseEditor({
   const dirty =
     JSON.stringify(entriesFor(slots)) !==
     JSON.stringify(entriesFor(slotsFor(saved)));
+  const confirm = useConfirm();
   const navigateSaved = useNavigationGuard(
     dirty || busy,
-    () => !busy && window.confirm("展柜尚未保存，确定放弃修改并离开？"),
+    () => !busy && confirm("展柜尚未保存，确定放弃修改并离开？"),
   );
 
   function update(kind: ShowcaseKind, change: Partial<Slot>) {
@@ -148,7 +150,7 @@ function ShowcaseEditor({
   async function reload() {
     if (
       dirty &&
-      !window.confirm("重新读取会丢弃当前尚未保存的修改，确定继续？")
+      !(await confirm("重新读取会丢弃当前尚未保存的修改，确定继续？", { title: "重新读取展柜", confirmLabel: "放弃修改并读取" }))
     )
       return;
     setBusy(true);
@@ -165,7 +167,7 @@ function ShowcaseEditor({
       setSlots(slotsFor(data));
       setConflict(false);
     } catch (error) {
-      setError(
+      toast.error(
         error instanceof Error ? error.message : "展柜读取失败，请重试。",
       );
     } finally {
@@ -194,12 +196,14 @@ function ShowcaseEditor({
       };
       if (!response.ok) {
         setConflict(data.code === "showcase_conflict");
+        if (data.code === "showcase_conflict")
+          setError(data.detail || "展柜已被修改，当前草稿仍保留，请重新读取。");
         throw new Error(data.detail || data.error || "展柜保存失败");
       }
       toast.success("喜爱展柜已保存。");
       await navigateSaved(`/users/${userId}`);
     } catch (error) {
-      setError(
+      toast.error(
         error instanceof Error ? error.message : "展柜保存失败，请重试。",
       );
     } finally {

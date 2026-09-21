@@ -11,7 +11,7 @@ import { Button } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -40,28 +40,12 @@ export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["个人资料", "个人中心"] }, error);
 
 export default function ProfilePage() {
-  const { user, params } = useLoaderData<typeof loader>();
+  const { user } = useLoaderData<typeof loader>();
   return (
     <div>
       <PageHeader title="个人资料" />
-      {params.profileUpdated ? (
-        <Notice
-          tone="success"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="status"
-        >
-          个人资料已更新。
-        </Notice>
-      ) : null}
-      {params.error ? (
-        <Notice
-          tone="error"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="alert"
-        >
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
+
       <form action="/api/account/profile" method="post">
         <div className="divide-y divide-border border-y border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">

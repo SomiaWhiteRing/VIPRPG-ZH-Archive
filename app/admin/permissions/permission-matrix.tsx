@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
@@ -103,8 +104,9 @@ export function PermissionMatrix({
     }))
     .filter((group) => group.categories.length > 0);
 
+  const confirm = useConfirm();
   useNavigationGuard(hasUnsavedChanges, () =>
-    window.confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？"),
+    confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？"),
   );
 
   async function request(url: string, init: RequestInit) {
@@ -119,8 +121,10 @@ export function PermissionMatrix({
       code?: string;
       currentRole?: RoleSummary;
     };
-    if (payload.code === "role_conflict" && payload.currentRole)
+    if (payload.code === "role_conflict" && payload.currentRole) {
       setConflict(payload.currentRole);
+      setError(payload.detail ?? "角色配置已被修改，当前草稿仍保留。");
+    }
     if (!response.ok || !payload.ok)
       throw new Error(payload.detail ?? payload.error ?? "保存失败，请重试。");
     return payload;
@@ -164,7 +168,7 @@ export function PermissionMatrix({
       form.reset();
       setNewRoleDirty(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "创建失败，请重试。");
+      toast.error(cause instanceof Error ? cause.message : "创建失败，请重试。");
     } finally {
       setSaving(null);
     }
@@ -187,7 +191,7 @@ export function PermissionMatrix({
       setQuery("");
       toast.success("已创建维基人角色并保存模板权限，可在用户管理中分配。");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "创建失败，请重试。");
+      toast.error(cause instanceof Error ? cause.message : "创建失败，请重试。");
     } finally {
       setSaving(null);
     }
@@ -221,7 +225,7 @@ export function PermissionMatrix({
       toast.success("角色资料已保存。");
       setConflict(null);
     } catch (cause) {
-      setError(
+      toast.error(
         cause instanceof Error ? cause.message : "角色资料保存失败，请重试。",
       );
     } finally {
@@ -251,7 +255,7 @@ export function PermissionMatrix({
       toast.success("该角色的权限已保存。");
       setConflict(null);
     } catch (cause) {
-      setError(
+      toast.error(
         cause instanceof Error ? cause.message : "权限保存失败，请重试。",
       );
     } finally {

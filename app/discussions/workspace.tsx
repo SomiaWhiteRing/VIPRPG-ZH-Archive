@@ -544,13 +544,15 @@ export function DiscussionWorkspace({
         navigate(destination.pathname + destination.search + destination.hash);
       }
     } catch (e) {
-      setError(
+      const message =
         e instanceof ForumRequestError && e.status === 0
           ? "网络连接失败，内容已保留，请重试。"
           : e instanceof Error
             ? e.message
-            : "发布失败，请重试。",
-      );
+            : "发布失败，请重试。";
+      toast.error(message);
+      if (e instanceof ForumRequestError && (e.status === 401 || e.status === 409))
+        setError(message);
       if (e instanceof ForumRequestError) setRequestError(e);
     } finally {
       setBusy(false);
@@ -565,7 +567,7 @@ export function DiscussionWorkspace({
       setDraft({ ...draft, currentVersion: result });
       setRequestError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "读取失败。");
+      toast.error(e instanceof Error ? e.message : "读取失败。");
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,6 @@
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
@@ -143,6 +144,7 @@ function ManageTag({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   const [action, setAction] = useState("rename"),
     [name, setName] = useState(tag.name),
     [query, setQuery] = useState(""),
@@ -186,9 +188,10 @@ function ManageTag({
         targetId: target?.id,
         targetRevision: target?.revision,
       });
+      toast.success("TAG 管理操作已保存。");
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败。");
+      toast.error(e instanceof Error ? e.message : "保存失败。");
     } finally {
       setBusy(false);
     }

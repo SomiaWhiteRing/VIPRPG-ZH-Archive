@@ -6,7 +6,7 @@ import { useLoaderData } from "react-router";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 
@@ -61,28 +61,12 @@ export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["隐私设置", "个人中心"] }, error);
 
 export default function PrivacyPage() {
-  const { params, settings } = useLoaderData<typeof loader>();
+  const { settings } = useLoaderData<typeof loader>();
   return (
     <div>
       <PageHeader title="隐私" />
-      {params.privacyUpdated ? (
-        <Notice
-          tone="success"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="status"
-        >
-          隐私设置已更新。
-        </Notice>
-      ) : null}
-      {params.error ? (
-        <Notice
-          tone="error"
-          className="mb-4 rounded-md px-4 py-3 text-sm"
-          role="alert"
-        >
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。" }} />
+
       <form action="/api/account/privacy" method="post">
         <div className="divide-y divide-border border-y border-border">
           {settings.map((setting) => (

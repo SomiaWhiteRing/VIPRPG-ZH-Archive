@@ -8,7 +8,7 @@ import { useLoaderData } from "react-router";
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { Link } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -41,11 +41,7 @@ export default function ForgotPasswordPage() {
         </>
       }
     >
-      {params.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3">
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback />
       <form
         action="/api/auth/password-reset/start"
         method="post"

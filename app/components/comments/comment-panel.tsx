@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { NestedReply, nestedRepliesClassName } from "./nested-reply";
@@ -54,6 +55,7 @@ function CommentPanelContent({
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
   const [newReplies, setNewReplies] = useState<Record<number, CommentDto>>({});
   const [commentUpdates, setCommentUpdates] = useState<
     Record<number, Partial<CommentDto>>
@@ -102,37 +104,38 @@ function CommentPanelContent({
   async function removeComment(comment: CommentDto): Promise<boolean> {
     if (
       !currentUserId ||
-      comment.author?.id !== currentUserId ||
-      !window.confirm("确定删除这条评论吗？")
+      comment.author?.id !== currentUserId
     )
       return false;
-    try {
-      const response = await fetch(`/api/comments/${comment.id}`, {
-        method: "DELETE",
-        credentials: "same-origin",
-      });
-      if (!response.ok) throw new Error();
-      if (comment.rootCommentId) {
-        setCommentUpdates((current) => ({
-          ...current,
-          [comment.id]: {
-            ...current[comment.id],
-            status: "deleted",
-            body: [{ type: "text", text: "该评论已删除" }],
-            bodySource: null,
-            images: [],
-          },
-        }));
-      } else {
-        setComments((current) =>
-          current.filter((entry) => entry.id !== comment.id),
-        );
-      }
-      return true;
-    } catch {
-      toast.error("评论删除失败。");
-      return false;
-    }
+    return confirm(`确定删除${comment.rootCommentId ? "这条回复" : "这条评论"}吗？${comment.images.length ? "附带图片也将一并移除。" : ""}`, {
+      title: "删除评论", confirmLabel: "删除", destructive: true,
+      action: async () => {
+        const response = await fetch(`/api/comments/${comment.id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({})) as { detail?: string };
+          throw new Error(result.detail ?? "评论删除失败，请重试。");
+        }
+        if (comment.rootCommentId) {
+          setCommentUpdates((current) => ({
+            ...current,
+            [comment.id]: {
+              ...current[comment.id],
+              status: "deleted",
+              body: [{ type: "text", text: "该评论已删除" }],
+              bodySource: null,
+              images: [],
+            },
+          }));
+        } else {
+          setComments((current) =>
+            current.filter((entry) => entry.id !== comment.id),
+          );
+        }
+      },
+    });
   }
 
   async function togglePin(comment: CommentDto) {

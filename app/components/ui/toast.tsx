@@ -94,7 +94,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       containerId: CONTAINER_ID,
       toastId: ++sequence.current,
       type: tone,
-      autoClose: tone === "error" ? 12000 : 5000,
+      autoClose: tone === "success" ? 2000 : 4000,
       role: tone === "error" ? "alert" : "status",
       onClose: () => messages.current.delete(key),
     });
