@@ -1,5 +1,14 @@
 # 操作反馈
 
+## 焦点提示
+
+- 根布局使用 [React Aria `useFocusVisible`](https://react-spectrum.adobe.com/react-aria/useFocusVisible.html) 判断当前交互方式，通过 `html[data-focus-visible]` 让站内控件与 Portal 浮层共享同一规则。鼠标、触摸操作及其触发的程序回焦不显示键盘焦点框；键盘导航和辅助技术操作显示提示。
+- `app/globals.css` 统一定义 Tailwind 的 `focus-visible:` 变体，同时控制默认轮廓和各组件的圆环、边框、伪元素样式。独立 CSS 使用 `@reference` 引入该文件，再用 `@variant focus-visible`，不要另写原生 `:focus-visible` 绕过统一规则。React Aria 组件自身的 `data-focus-visible` 继续由组件管理。
+- 文本输入框、文本域和可编辑内容保留聚焦时的编辑提示；现有 `focus-within` 编辑区、游戏输入区域和菜单项高亮仍表示实际操作状态。服务端渲染和 hydration 完成前保留浏览器原生焦点提示。
+- 保留 Radix 的焦点管理、Escape 回焦和对话框焦点约束，不通过全局 `blur()`、拦截鼠标默认行为或取消所有自动回焦隐藏样式。原生 `:focus-visible` 对脚本聚焦的判断可能显示鼠标操作后的圆环，见 [Radix Select 问题记录](https://github.com/radix-ui/primitives/issues/1803)；因此由交互方式决定焦点装饰，实际焦点位置仍由组件管理。
+
+## 通知
+
 全局 `ToastProvider` 挂在 `app/root.tsx` 的根布局中，使用 React-Toastify 管理通知生命周期、排队、计时和离场补位。客户端事件处理器通过 `app/components/ui/toast.tsx` 的 `useToast()` 调用 `toast.success(message)`、`toast.error(message)` 或 `toast.info(message)`。站内导航不会卸载通知区。使用 `react-toastify/unstyled` 入口，在 `app/globals.css` 显式加载库样式和本站 `toast.css`，避免运行时重复注入样式。
 
 ## 展示规则

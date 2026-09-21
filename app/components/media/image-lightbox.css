@@ -1,3 +1,5 @@
+@reference "../../globals.css";
+
 /* Scoped to the shared viewer: preserve callers' download and collection tools. */
 .archive-lightbox {
   --yarl__color_backdrop: rgb(12 18 24 / 78%);
@@ -51,11 +53,11 @@
   min-width: 44px;
   min-height: 44px;
   transition: background-color 150ms ease, border-color 150ms ease;
-}
 
-.archive-lightbox .yarl__button:focus-visible {
-  outline: 2px solid white;
-  outline-offset: 3px;
+  @variant focus-visible {
+    outline: 2px solid white;
+    outline-offset: 3px;
+  }
 }
 
 .archive-lightbox .yarl__button:disabled {
