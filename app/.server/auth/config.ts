@@ -2,7 +2,7 @@ import { getCloudflareEnv } from "@/app/.server/cloudflare/env";
 import type { AppRuntime } from "@/app/.server/runtime";
 
 export function getAuthSecret(runtime: AppRuntime): string {
-  const value = readRuntimeSecret(runtime, "AUTH_SECRET");
+  const value = readRuntimeVariable(runtime, "AUTH_SECRET");
 
   if (!value) {
     throw new Error("AUTH_SECRET is not configured");
@@ -13,16 +13,6 @@ export function getAuthSecret(runtime: AppRuntime): string {
   }
 
   return value;
-}
-
-export function getBootstrapAdminEmail(runtime: AppRuntime): string | null {
-  const value = readRuntimeSecret(runtime, "BOOTSTRAP_ADMIN_EMAIL");
-
-  if (!value) {
-    return null;
-  }
-
-  return value.trim().toLowerCase();
 }
 
 export function getEmailFrom(runtime: AppRuntime): string {
@@ -59,16 +49,9 @@ export function normalizeAppOrigin(input: string | undefined): string {
   return url.origin;
 }
 
-function readRuntimeSecret(
-  runtime: AppRuntime,
-  name: "AUTH_SECRET" | "BOOTSTRAP_ADMIN_EMAIL",
-): string | null {
-  return readRuntimeVariable(runtime, name);
-}
-
 function readRuntimeVariable(
   runtime: AppRuntime,
-  name: "AUTH_SECRET" | "BOOTSTRAP_ADMIN_EMAIL" | "EMAIL_FROM" | "APP_ORIGIN",
+  name: "AUTH_SECRET" | "EMAIL_FROM" | "APP_ORIGIN",
 ): string | null {
   try {
     const env = getCloudflareEnv(runtime) as unknown as Record<
