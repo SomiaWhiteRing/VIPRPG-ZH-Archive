@@ -20,6 +20,7 @@ import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
 import { DiscussionVisitBoundary } from "./discussions/visit";
 import { ToastProvider } from "./components/ui/toast";
+import { ConfirmProvider } from "./components/ui/confirm-provider";
 import "./globals.css";
 
 export const meta: MetaFunction = ({ error }) =>
@@ -67,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         suppressHydrationWarning
       >
         <ToastProvider>
-          {children}
+          <ConfirmProvider>{children}</ConfirmProvider>
           <BackToTop />
         </ToastProvider>
         <ScrollRestoration />

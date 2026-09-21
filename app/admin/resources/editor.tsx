@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -37,6 +38,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
+  const confirm = useConfirm();
   const toast = useToast();
   const [data, setData] = useState(initial),
     [busy, setBusy] = useState(false),
@@ -46,6 +48,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
   async function run(
     operation: () => Promise<ResourceEditorData>,
     success = "已保存",
+    propagateError = false,
   ) {
     if (busy) return;
     setBusy(true);
@@ -53,13 +56,14 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
       setData(await operation());
       toast.success(success);
     } catch (error) {
+      if (propagateError) throw error;
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
   }
-  const action = (values: Record<string, unknown>) =>
-    run(() => postJson(base, { revision: resource.revision, ...values }));
+  const action = (values: Record<string, unknown>, propagateError = false) =>
+    run(() => postJson(base, { revision: resource.revision, ...values }), "已保存", propagateError);
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -96,15 +100,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
           <Button
             disabled={busy}
             variant="outline"
-            onClick={() => {
-              if (
-                window.confirm("重新读取会放弃表单中尚未保存的修改。继续吗？")
-              )
-                void run(async () => {
+            onClick={async () => {
+              await confirm(`重新读取“${resource.name}”会放弃表单中尚未保存的修改。继续吗？`, {
+                title: "重新读取资料", confirmLabel: "放弃修改并读取",
+                action: () => run(async () => {
                   const next = await requestJson<ResourceEditorData>(base);
                   setFormKey((v) => v + 1);
                   return next;
-                }, "已重新读取");
+                }, "已重新读取", true),
+              });
             }}
           >
             重新读取
@@ -227,17 +231,11 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       disabled={busy}
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "暂停此平台的新下载与更新推荐？历史版本仍可下载。",
-                          )
-                        )
-                          void action({
-                            action: "recommend",
-                            target,
-                            artifactId: null,
-                          });
+                      onClick={async () => {
+                        await confirm(`暂停 ${targetLabel(target)} 的新下载与更新推荐？历史版本仍可下载。`, {
+                          title: "暂停推荐", confirmLabel: "暂停推荐",
+                          action: () => action({ action: "recommend", target, artifactId: null }, true),
+                        });
                       }}
                     >
                       暂停推荐
@@ -397,23 +395,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                               disabled={busy}
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    "删除此草稿安装包？此操作会清理已上传的文件。",
-                                  )
-                                )
-                                  void run(
-                                    () =>
-                                      postJson(
-                                        `/api/admin/resource-artifacts/${a.id}`,
-                                        {
-                                          action: "cleanup",
-                                          revision: resource.revision,
-                                        },
-                                      ),
-                                    "草稿安装包已清理",
-                                  );
+                              onClick={async () => {
+                                await confirm(`删除草稿安装包“${a.filename}”？此操作会清理已上传的文件。`, {
+                                  title: "移除并清理安装包", confirmLabel: "移除并清理", destructive: true,
+                                  action: () => run(() => postJson(`/api/admin/resource-artifacts/${a.id}`, {
+                                    action: "cleanup", revision: resource.revision,
+                                  }), "草稿安装包已清理", true),
+                                });
                               }}
                             >
                               移除并清理
@@ -426,17 +414,11 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                               data.channels.some((c) => c.artifact_id === a.id)
                             }
                             size="sm"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `将 ${targetLabel(a.target)} 的推荐切换为 ${release.version_label}？`,
-                                )
-                              )
-                                void action({
-                                  action: "recommend",
-                                  target: a.target,
-                                  artifactId: a.id,
-                                });
+                            onClick={async () => {
+                              await confirm(`将 ${targetLabel(a.target)} 的推荐切换为 ${release.version_label}？`, {
+                                title: "切换推荐版本", confirmLabel: "切换推荐",
+                                action: () => action({ action: "recommend", target: a.target, artifactId: a.id }, true),
+                              });
                             }}
                           >
                             设为该平台推荐
@@ -475,21 +457,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                 {release.status === "published" ? (
                   <form
                     className="flex flex-wrap gap-2"
-                    onSubmit={(e) => {
+                    onSubmit={async (e) => {
                       e.preventDefault();
                       const reason = new FormData(e.currentTarget).get(
                         "reason",
                       );
-                      if (
-                        window.confirm(
-                          "撤回后停止此版本所有新下载，并暂停引用它的平台推荐。继续吗？",
-                        )
-                      )
-                        void action({
-                          action: "withdraw",
-                          releaseId: release.id,
-                          reason,
-                        });
+                      await confirm(`撤回“${release.version_label}”后停止此版本所有新下载，并暂停引用它的平台推荐。继续吗？`, {
+                        title: "撤回版本", confirmLabel: "撤回版本", destructive: true,
+                        action: () => action({ action: "withdraw", releaseId: release.id, reason }, true),
+                      });
                     }}
                   >
                     <Input
@@ -521,25 +497,22 @@ function PublishRelease({
 }: {
   release: ToolRelease;
   busy: boolean;
-  action: (values: Record<string, unknown>) => Promise<void>;
+  action: (values: Record<string, unknown>, propagateError?: boolean) => Promise<void>;
 }) {
+  const confirm = useConfirm();
   return (
     <form
       className="grid gap-3 border-t border-border pt-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
         const form = new FormData(e.currentTarget);
-        if (
-          window.confirm(
-            `发布本站版本「${release.version_label}」？发布后不可更换安装包。`,
-          )
-        )
-          void action({
-            action: "publish",
-            releaseId: release.id,
-            recommend: form.get("recommend") === "on",
-            visible: form.get("visible") === "on",
-          });
+        await confirm(`发布本站版本「${release.version_label}」？发布后不可更换安装包。`, {
+          title: "发布版本", confirmLabel: "发布版本",
+          action: () => action({
+            action: "publish", releaseId: release.id,
+            recommend: form.get("recommend") === "on", visible: form.get("visible") === "on",
+          }, true),
+        });
       }}
     >
       <Label className="flex items-center gap-2">

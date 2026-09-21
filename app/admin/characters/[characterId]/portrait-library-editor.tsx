@@ -1,3 +1,4 @@
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
+import { useToast } from "@/app/components/ui/toast";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
@@ -324,9 +326,11 @@ export function PortraitLibraryEditor({
     if (!bound) setLibraryRevision((revision) => revision + 1);
   }
 
+  const confirm = useConfirm();
+  const toast = useToast();
   useNavigationGuard(
     dirty || busy,
-    () => !busy && window.confirm("当前角色的素材修改尚未保存，确定离开？"),
+    () => !busy && confirm("当前角色的素材修改尚未保存，确定离开？"),
   );
 
   function edit(next: Configuration, feedback: string) {
@@ -464,9 +468,10 @@ export function PortraitLibraryEditor({
       );
       setSaved(draft);
       setUndo(null);
-      setMessage("素材已保存");
+      setMessage("");
+      toast.success("素材已保存。");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "素材保存失败");
+      toast.error(error instanceof Error ? error.message : "素材保存失败");
       setMessage("");
     } finally {
       busyRef.current = false;
@@ -532,7 +537,9 @@ export function PortraitLibraryEditor({
         );
       }
     }
-    setMessage(succeeded ? `${succeeded} 张素材已上传并保存` : "");
+    setMessage("");
+    if (succeeded) toast.success(`${succeeded} 张素材已上传并保存。`);
+    if (failures.length) toast.error(`${failures.length} 张素材上传失败，详情见失败清单。`);
     setError(failures.join("\n"));
     busyRef.current = false;
     setBusy(false);

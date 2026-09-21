@@ -139,7 +139,7 @@ export function PackageUpload({
       setProgress("上传与校验完成");
       toast.success("安装包已校验，可以发布。");
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      toast.error(error instanceof Error ? error.message : String(error));
       setProgress("");
     } finally {
       cancel.current = null;

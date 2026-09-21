@@ -1,7 +1,8 @@
+import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import { Button } from "@/app/components/ui/button";
 import type { GameMediaAsset } from "@/lib/dto/db/game-library";
-import { Maximize2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Maximize2 } from "lucide-react";
+import { useState } from "react";
 
 const MEDIA_LABELS = { cover: "封面", preview: "预览图" };
 
@@ -12,18 +13,7 @@ export function WorkMediaGallery({
   items: GameMediaAsset[];
   title: string;
 }) {
-  const [selected, setSelected] = useState<GameMediaAsset | null>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (selected && !dialog.open) {
-      dialog.showModal();
-    } else if (!selected && dialog.open) {
-      dialog.close();
-    }
-  }, [selected]);
+  const [active, setActive] = useState(-1);
 
   return (
     <>
@@ -38,7 +28,7 @@ export function WorkMediaGallery({
               aria-label={`${label}，点击放大`}
               className="block basis-75 shrink-0 snap-start overflow-hidden rounded-lg border-2 border-border bg-card p-0 text-left hover:border-primary focus-visible:border-primary max-[560px]:basis-[min(300px,78vw)]"
               key={`${item.blobSha256}-${item.sortOrder ?? index}`}
-              onClick={() => setSelected(item)}
+              onClick={() => setActive(index)}
               type="button"
               variant="ghost"
             >
@@ -60,54 +50,14 @@ export function WorkMediaGallery({
         })}
       </div>
 
-      <dialog
-        aria-label="预览图放大查看"
-        className="m-auto w-[min(880px,calc(100vw-2rem))] max-w-none overflow-hidden rounded-lg border border-border bg-card p-0 text-foreground shadow-[0_24px_64px_rgb(23_33_43/28%)] backdrop:bg-[rgb(23_33_43/48%)]"
-        onCancel={() => setSelected(null)}
-        onClick={(event) => {
-          if (event.target !== event.currentTarget) return;
-          const bounds = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX < bounds.left ||
-            event.clientX > bounds.right ||
-            event.clientY < bounds.top ||
-            event.clientY > bounds.bottom
-          ) {
-            event.currentTarget.close();
-          }
-        }}
-        onClose={() => setSelected(null)}
-        ref={dialogRef}
-      >
-        {selected ? (
-          <>
-            <div className="relative min-h-48 aspect-4/3 bg-[#e7ebe6]">
-              <img
-                alt={selected.altText ?? title}
-                className={"absolute inset-0 h-full w-full " + "object-contain"}
-                sizes="(max-width: 900px) calc(100vw - 2rem), 880px"
-                src={`/api/media/blobs/${selected.blobSha256}`}
-                loading="lazy"
-              />
-            </div>
-            <div className="flex items-center justify-between gap-4 border-t border-border px-3 py-2">
-              <strong>
-                {MEDIA_LABELS[selected.role]}
-              </strong>
-              <Button
-                aria-label="关闭预览图"
-                onClick={() => dialogRef.current?.close()}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <X aria-hidden />
-                关闭
-              </Button>
-            </div>
-          </>
-        ) : null}
-      </dialog>
+      {active >= 0 ? (
+        <ImageLightbox open close={() => setActive(-1)} index={active}
+          slides={items.map((item) => ({
+            src: `/api/media/blobs/${item.blobSha256}`,
+            alt: item.altText ?? `${title} ${MEDIA_LABELS[item.role]}`,
+          }))}
+        />
+      ) : null}
     </>
   );
 }

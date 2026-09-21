@@ -81,14 +81,14 @@ export function CatalogAddDialog({
         body: JSON.stringify({ workId }),
       });
       if (!response.ok) {
-        setMessage("添加到目录失败，请稍后重试。");
+        toast.error("添加到目录失败，请稍后重试。");
         return;
       }
       toast.success("已添加到目录。");
       setOpen(false);
       revalidator.revalidate();
     } catch {
-      setMessage("网络请求失败，请检查连接后重试。");
+      toast.error("网络请求失败，请检查连接后重试。");
     } finally {
       setBusy(false);
     }

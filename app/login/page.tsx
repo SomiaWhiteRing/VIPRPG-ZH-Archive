@@ -10,7 +10,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { FormField } from "@/app/components/ui/form-field";
-import { Notice } from "@/app/components/ui/notice";
+import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Link } from "react-router";
 
@@ -53,16 +53,8 @@ export default function LoginPage() {
         </>
       }
     >
-      {params.reset ? (
-        <Notice tone="success" className="mb-4 rounded-md border p-3">
-          密码已更新，请重新登录。
-        </Notice>
-      ) : null}
-      {params.error ? (
-        <Notice tone="error" className="mb-4 rounded-md border p-3">
-          {params.error}
-        </Notice>
-      ) : null}
+      <RedirectFeedback success={{ reset: "密码已更新，请重新登录。" }} />
+
       <form action="/api/auth/login" method="post" className="grid gap-4">
         <input type="hidden" name="next" value={nextPath} />
         <FormField controlId="login-field-1" label="邮箱">

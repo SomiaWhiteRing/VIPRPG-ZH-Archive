@@ -177,7 +177,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       onCreated(result.comment);
       toast.success(replyToCommentId ? "回复已发布。" : "评论已发布。");
     } catch (cause) {
-      if (mounted.current) setError(`${cause instanceof Error ? cause.message : "网络请求失败。"} 正文和图片已保留，请重试。`);
+      if (mounted.current) toast.error(`${cause instanceof Error ? cause.message : "网络请求失败。"} 正文和图片已保留，请重试。`);
     } finally { finish(); }
   }
 

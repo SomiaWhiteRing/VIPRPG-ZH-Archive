@@ -1,6 +1,7 @@
 import type { WorkSourceLink } from "@/lib/work-sources";
 import { WorkSourcesEditor } from "@/app/components/work/work-sources-editor";
 import { Notice } from "@/app/components/ui/notice";
+import { useToast } from "@/app/components/ui/toast";
 
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
 
@@ -214,7 +215,7 @@ export function UploadClient({
     initialWork?.currentArchive ?? null,
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const toast = useToast();
   const [staffErrorsVisible, setStaffErrorsVisible] = useState(false);
   const [moreInfoErrorsVisible, setMoreInfoErrorsVisible] = useState(false);
   const [translatorError, setTranslatorError] = useState<string | null>(null);
@@ -458,7 +459,6 @@ export function UploadClient({
     if (event.target !== event.currentTarget) return;
     event.preventDefault();
     setSubmitError(null);
-    setSubmitSuccess(null);
     setTranslatorError(null);
     setStaffErrorsVisible(true);
     setMoreInfoErrorsVisible(true);
@@ -567,7 +567,7 @@ export function UploadClient({
             ),
           );
           revalidator.revalidate();
-          setSubmitSuccess("作品资料已保存。");
+          toast.success("作品资料已保存。");
         } else {
           const result = await submitExternalWork(
             form,
@@ -575,10 +575,11 @@ export function UploadClient({
             faceSheets,
           );
           rememberPublishedTranslators(currentUser.id, result.translators);
+          toast.success("作品已发布。");
           navigate(`/games/${result.workId}`);
         }
       } catch (error) {
-        setSubmitError(
+        toast.error(
           error instanceof Error ? error.message : "作品资料保存失败。",
         );
       } finally {
@@ -612,7 +613,7 @@ export function UploadClient({
           ),
         );
         revalidator.revalidate();
-        setSubmitSuccess("作品资料已保存。");
+        toast.success("作品资料已保存。");
         return;
       }
       const images = await prepareSelectedImages(
@@ -630,7 +631,7 @@ export function UploadClient({
         uniqueMetadataBlobs([...images.blobs, ...faceSheets.blobs]),
       );
     } catch (error) {
-      setSubmitError(
+      toast.error(
         error instanceof Error ? error.message : "作品资料确认失败。",
       );
     } finally {
@@ -700,7 +701,6 @@ export function UploadClient({
     }
     setSourceSummary(null);
     setSubmitError(null);
-    setSubmitSuccess(null);
   }
 
   async function cancelUpload() {
@@ -831,7 +831,6 @@ export function UploadClient({
                     onRemoveExisting={() => {
                       setExistingArchive(null);
                       setSubmitError(null);
-                      setSubmitSuccess(null);
                     }}
                     onRestart={restart}
                     onZip={(file) =>
@@ -986,15 +985,6 @@ export function UploadClient({
                       role="alert"
                     >
                       {submitError}
-                    </Notice>
-                  ) : null}
-                  {submitSuccess ? (
-                    <Notice
-                      tone="success"
-                      className="border p-3 text-sm"
-                      role="status"
-                    >
-                      {submitSuccess}
                     </Notice>
                   ) : null}
                   {upload.task?.commitStarted && !upload.task.result ? (

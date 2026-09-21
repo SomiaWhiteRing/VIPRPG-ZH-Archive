@@ -1,3 +1,4 @@
+import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -69,7 +70,7 @@ export function CoverPicker({
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   const candidates = useMemo(() => {
     const result: CoverPickerCandidate[] = [];
@@ -146,7 +147,6 @@ export function CoverPicker({
 
   function selectCandidate(candidate: CoverPickerCandidate) {
     setActiveKey(candidate.key);
-    setMessage(null);
     resetCrop();
   }
 
@@ -167,7 +167,7 @@ export function CoverPicker({
     event.target.value = "";
     if (!selected) return;
     if (!selected.type.toLowerCase().startsWith("image/")) {
-      setMessage("请选择图片文件。");
+      toast.error("请选择图片文件。");
       return;
     }
     if (uploadedSourceRef.current) {
@@ -188,14 +188,12 @@ export function CoverPicker({
     uploadedSourceRef.current = source;
     setUploadedSource(source);
     setActiveKey(source.key);
-    setMessage(null);
     resetCrop();
   }
 
   async function confirmCrop() {
     if (!activeCandidate || !area) return;
     setBusy(true);
-    setMessage(null);
     try {
       const originalFile = activeCandidate.originalFile;
       const cover =
@@ -210,7 +208,7 @@ export function CoverPicker({
       onChange(cover);
       setOpen(false);
     } catch (error) {
-      setMessage(
+      toast.error(
         error instanceof Error
           ? error.message
           : "无法处理所选图片，请更换图片后重试。",
@@ -229,7 +227,6 @@ export function CoverPicker({
       <Dialog.Root
         onOpenChange={(nextOpen) => {
           if (busy) return;
-          setMessage(null);
           setOpen(nextOpen);
         }}
         open={open}
@@ -433,15 +430,6 @@ export function CoverPicker({
                     上传图片
                   </Button>
                 </div>
-
-                {message ? (
-                  <p
-                    className="mx-auto my-0 w-full max-w-[640px] text-sm text-red-700"
-                    role="alert"
-                  >
-                    {message}
-                  </p>
-                ) : null}
               </main>
             </div>
 

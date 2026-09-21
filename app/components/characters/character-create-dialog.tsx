@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { normalizeEntityName } from "@/lib/entity-name";
@@ -82,6 +83,7 @@ function CharacterCreateForm({
   submittingLabel: string;
 }) {
   const fieldId = useId();
+  const toast = useToast();
   const [originalName, setOriginalName] = useState(initialOriginalName);
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +108,7 @@ function CharacterCreateForm({
       });
       onOpenChange(false);
     } catch (submitError) {
-      setError(
+      toast.error(
         submitError instanceof Error
           ? submitError.message
           : "角色创建失败，请稍后重试。",

@@ -2,7 +2,6 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Button } from "@/app/components/ui/button";
-import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -16,8 +15,7 @@ export function ResourceManager({
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const [busy, setBusy] = useState(false),
-    [createError, setCreateError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<{
     issues: { key: string; issue: string }[];
     nextCursor: string | null;
@@ -28,7 +26,6 @@ export function ResourceManager({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setBusy(true);
-    setCreateError("");
     try {
       const data = await postJson<ResourceEditorData>(
         "/api/admin/resources",
@@ -37,7 +34,7 @@ export function ResourceManager({
       toast.success("链接草稿已创建。");
       await navigate(`/admin/resources/${data.resource.id}`);
     } catch (error) {
-      setCreateError(String(error instanceof Error ? error.message : error));
+      toast.error(String(error instanceof Error ? error.message : error));
     } finally {
       setBusy(false);
     }
@@ -104,7 +101,6 @@ export function ResourceManager({
             { value: "tool", label: "软件" },
           ]}
         />
-        {createError ? <Notice>{createError}</Notice> : null}
         <Button disabled={busy} className="justify-self-start">
           创建草稿
         </Button>

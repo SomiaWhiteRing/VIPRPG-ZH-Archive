@@ -126,17 +126,14 @@ export function CatalogItemsSection({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setAddMessage({
-          kind: "feedback",
-          text: body.detail ?? "游戏添加失败。",
-        });
+        toast.error(body.detail ?? "游戏添加失败。");
         return;
       }
       setAddOpen(false);
       toast.success("游戏已添加到目录。");
       revalidator.revalidate();
     } catch {
-      setAddMessage({ kind: "feedback", text: "网络请求失败。" });
+      toast.error("网络请求失败。");
     } finally {
       setAdding(false);
     }
@@ -176,14 +173,14 @@ export function CatalogItemsSection({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setEditMessage(body.detail ?? "条目保存失败。");
+        toast.error(body.detail ?? "条目保存失败。");
         return;
       }
       setSelectedWorkId(null);
       toast.success("目录条目已保存。");
       revalidator.revalidate();
     } catch {
-      setEditMessage("网络请求失败。");
+      toast.error("网络请求失败。");
     } finally {
       setSaving(false);
     }

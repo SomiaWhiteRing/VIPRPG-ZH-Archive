@@ -1,3 +1,4 @@
+import { useToast } from "@/app/components/ui/toast";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Button } from "@/app/components/ui/button";
@@ -31,17 +32,16 @@ export function AdminDiscussions({
   state: string;
   viewer: NonNullable<ForumViewer>;
 }) {
+  const toast = useToast();
   const [selected, setSelected] = useState<{
       row: ForumAdminRow;
       detail: ForumAdminDetail;
     } | null>(null),
-    [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
 
   const revalidator = useRevalidator();
   async function open(row: ForumAdminRow) {
     setBusy(true);
-    setError("");
     try {
       const result = await forumRequest<{ detail: ForumAdminDetail }>(
         forumHref("/api/admin/discussions", {
@@ -52,7 +52,7 @@ export function AdminDiscussions({
       );
       setSelected({ row, detail: result.detail });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "读取失败。");
+      toast.error(e instanceof Error ? e.message : "读取失败。");
     } finally {
       setBusy(false);
     }
@@ -109,11 +109,6 @@ export function AdminDiscussions({
         </div>
         <Button type="submit">查询</Button>
       </form>
-      {error ? (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      ) : null}
       <div className="overflow-x-auto rounded-md border border-border">
         <table className="w-full text-left text-sm">
           <thead>
@@ -240,12 +235,12 @@ function AdminDiscussionPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   const [action, setAction] = useState("none"),
     [resolution, setResolution] = useState("resolved"),
     [reason, setReason] = useState(""),
     [tags, setTags] = useState(detail.tags),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [busy, setBusy] = useState(false);
   const options = [
     { value: "none", label: row.reportId ? "只记录处理结果" : "选择管理动作" },
     ...(viewer.moderate && detail.state !== "deleted"
@@ -281,7 +276,6 @@ function AdminDiscussionPanel({
   ];
   async function submit() {
     setBusy(true);
-    setError("");
     try {
       await forumRequest("/api/admin/discussions", {
         op: "moderate",
@@ -293,9 +287,10 @@ function AdminDiscussionPanel({
         reportId: row.reportId,
         resolution,
       });
+      toast.success("管理操作已保存。");
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败。");
+      toast.error(e instanceof Error ? e.message : "保存失败。");
     } finally {
       setBusy(false);
     }
@@ -413,11 +408,6 @@ function AdminDiscussionPanel({
             disabled={busy}
           />
         </div>
-        {error ? (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        ) : null}
         <div className="flex justify-end gap-2">
           <Button
             type="button"

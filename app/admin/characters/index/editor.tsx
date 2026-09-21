@@ -1,4 +1,5 @@
 import { CharacterMembershipPicker, CharacterNameFields } from "./character-membership-picker";
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
 import { CategoryPicker } from "@/app/admin/characters/index/category-picker";
 import { SortableCategoryMembers } from "@/app/admin/characters/index/sortable-category-members";
@@ -235,17 +236,18 @@ export function CharacterIndexEditor({
     });
   }
 
+  const confirm = useConfirm();
   const navigateAccepted = useNavigationGuard(
     dirty || busy || savingOrder,
     () =>
       !busy &&
       !savingOrder &&
-      window.confirm("角色分类尚未保存，确定离开？"),
+      confirm("角色分类尚未保存，确定离开？"),
   );
-  function select(next: Draft) {
+  async function select(next: Draft) {
     if (
       busy ||
-      (dirty && !window.confirm("当前修改尚未保存。放弃修改并切换？"))
+      (dirty && !(await confirm("当前修改尚未保存。放弃修改并切换？", { title: "切换编辑对象", confirmLabel: "放弃修改并切换" })))
     )
       return;
     setDraft(next);
@@ -367,7 +369,7 @@ export function CharacterIndexEditor({
       });
     } catch (reason) {
       if (optimisticData) setData(previousData);
-      setError(reason instanceof Error ? reason.message : "保存失败，请重试。");
+      toast.error(reason instanceof Error ? reason.message : "保存失败，请重试。");
     } finally {
       submitting.current = false;
       if (sorting) setSavingOrder(false);
@@ -786,12 +788,12 @@ export function CharacterIndexEditor({
                     dirty ||
                     (draft.kind === "category" && childCount > 0)
                   }
-                  onClick={() => {
+                  onClick={async () => {
                     const prompt =
                       draft.kind === "category"
                         ? `删除空分类“${draft.label}”？`
                         : `将“${character?.primaryName}”移出“${selectedCategory?.label}”？角色资料会保留。`;
-                    if (window.confirm(prompt))
+                    if (await confirm(prompt, { title: draft.kind === "category" ? "删除分类" : "移出分类", confirmLabel: draft.kind === "category" ? "删除分类" : "移出分类", destructive: true }))
                       void submit(
                         {
                           operation:

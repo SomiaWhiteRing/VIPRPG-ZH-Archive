@@ -11,7 +11,6 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
-import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { FormField } from "@/app/components/ui/form-field";
@@ -31,12 +30,10 @@ export function CatalogCreateForm() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setMessage(null);
     try {
       const response = await fetch("/api/catalogs", {
         method: "POST",
@@ -50,13 +47,13 @@ export function CatalogCreateForm() {
         detail?: string;
       };
       if (!response.ok || !body.ok || !body.catalog) {
-        setMessage(body.detail ?? "目录创建失败。");
+        toast.error(body.detail ?? "目录创建失败。");
         return;
       }
       toast.success("目录已创建。");
       navigate(`/catalogs/${body.catalog.id}`);
     } catch {
-      setMessage("网络请求失败。");
+      toast.error("网络请求失败。");
     } finally {
       setBusy(false);
     }
@@ -118,7 +115,6 @@ export function CatalogCreateForm() {
                 onChange={(event) => setDescription(event.target.value)}
               />
             </FormField>
-            {message ? <Notice>{message}</Notice> : null}
             <div className="flex justify-end gap-2">
               <Rm2kButton
                 disabled={busy}
@@ -153,7 +149,6 @@ export function CatalogSummaryEditor({
   const [title, setTitle] = useState(catalog.title);
   const [description, setDescription] = useState(catalog.description ?? "");
   const [cover, setCover] = useState<File | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const coverCandidates = useMemo<CoverPickerCandidate[]>(
     () =>
@@ -177,12 +172,10 @@ export function CatalogSummaryEditor({
       setTitle(catalog.title);
       setDescription(catalog.description ?? "");
       setCover(null);
-      setMessage(null);
     }
   }
   async function save() {
     setBusy(true);
-    setMessage(null);
     try {
       const form = new FormData();
       form.set("title", title);
@@ -195,21 +188,20 @@ export function CatalogSummaryEditor({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setMessage(body.detail ?? "目录保存失败。");
+        toast.error(body.detail ?? "目录保存失败。");
         return;
       }
       setOpen(false);
       toast.success("目录资料已保存。");
       revalidator.revalidate();
     } catch {
-      setMessage("网络请求失败。");
+      toast.error("网络请求失败。");
     } finally {
       setBusy(false);
     }
   }
   async function remove() {
     setBusy(true);
-    setMessage(null);
     try {
       const response = await fetch(`/api/catalogs/${catalog.id}`, {
         method: "DELETE",
@@ -217,13 +209,13 @@ export function CatalogSummaryEditor({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setMessage(body.detail ?? "目录删除失败。");
+        toast.error(body.detail ?? "目录删除失败。");
         return;
       }
       toast.success("目录已删除。");
       navigate("/catalogs");
     } catch {
-      setMessage("网络请求失败。");
+      toast.error("网络请求失败。");
     } finally {
       setBusy(false);
     }
@@ -287,7 +279,6 @@ export function CatalogSummaryEditor({
               />
             </FormField>
           </div>
-          {message ? <Notice>{message}</Notice> : null}
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
             {canDelete ? (
               <AlertDialog>
