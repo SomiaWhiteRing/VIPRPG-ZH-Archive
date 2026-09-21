@@ -30,13 +30,13 @@ Worker 运行时 secrets 不由 GitHub Actions 写入，应先在本机或受控
 
 ```bash
 npx wrangler secret put AUTH_SECRET --env staging
-npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL --env staging
 
 npx wrangler secret put AUTH_SECRET
-npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
 ```
 
 `.env.local` 只用于本地开发，不要提交，也不要把其中的值硬编码到 workflow。
+
+空数据库中第一个完成邮箱验证并注册的账号自动成为超级管理员，不需要配置管理员邮箱。
 
 ## 部署流程
 

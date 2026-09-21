@@ -17,7 +17,6 @@ import {
   mapUserAccessRows,
 } from "./user-access";
 
-import { getBootstrapAdminEmail } from "@/app/.server/auth/config";
 import {
   hashPassword,
   passwordHashNeedsUpgrade,
@@ -740,7 +739,10 @@ async function ensureInitialBootstrapRole(
   email: string,
 ): Promise<void> {
   const database = getD1(runtime);
-  if (getBootstrapAdminEmail(runtime) !== email) return;
+  const firstUser = await database
+    .prepare("SELECT id FROM users ORDER BY id LIMIT 1")
+    .first<{ id: number }>();
+  if (firstUser?.id !== userId) return;
   const existingRoot = await database
     .prepare(
       `

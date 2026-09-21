@@ -19,7 +19,7 @@ npm run db:staging:prepare -- --output output/staging-seed/candidate
 ## 配置与发布
 
 1. 在被忽略的 `wrangler.jsonc` 中配置 staging 的独立 D1/R2、`staging.viprpg.org` custom domain、对应 `APP_ORIGIN`、`EMAIL_FROM=noreply@viprpg.org`；关闭 staging 的 `workers_dev` 和 `preview_urls`。
-2. 启用 viprpg.org 的 Email Sending，核实 DKIM、SPF、DMARC 和 return-path DNS。为 staging 设置独立的 `AUTH_SECRET` 与真实的 `BOOTSTRAP_ADMIN_EMAIL`；不创建开发管理员。根管理员必须使用与该配置一致的邮箱完成注册；注册顺序本身不授予管理权限。验收时核对该账号的 `super_admin` 角色和后台访问。
+2. 启用 viprpg.org 的 Email Sending，核实 DKIM、SPF、DMARC 和 return-path DNS。为 staging 设置独立的 `AUTH_SECRET`；不导入开发账号。由站点负责人完成首个账号的邮箱验证与注册，该账号自动获得 `super_admin`。验收时核对其角色和后台访问。
 3. 执行 `npm run verify:preprod`。共享状态的检查串行运行；失败按[维护手册](maintenance-regression.md)分类处理。
 4. 执行 `npm run deploy:staging`；核实构建产物 `build/server/wrangler.json` 中的 Worker、D1、R2、域名和 noindex 设置均属于 staging。
 5. 执行 `npm run smoke:staging`，然后检查 TLS、robots/noindex、匿名权限、角色图片及素材、八个精选链接及其图标、空作品和讨论列表、桌面及移动端页面。验证码实际到达邮箱须单独记录，不能由 DNS 检查代替。
