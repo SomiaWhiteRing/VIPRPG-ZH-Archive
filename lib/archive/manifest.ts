@@ -1,4 +1,3 @@
-import type { WorkSourceLink } from "@/lib/work-sources";
 import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 
@@ -150,7 +149,6 @@ export type ArchiveCommitMetadata = {
     notes: string | null;
   }>;
   tags: string[];
-  workSources: WorkSourceLink[];
 };
 
 export type ExcludedFileTypeSummary = {

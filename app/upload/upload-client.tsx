@@ -1,5 +1,3 @@
-import type { WorkSourceLink } from "@/lib/work-sources";
-import { WorkSourcesEditor } from "@/app/components/work/work-sources-editor";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 
@@ -107,7 +105,6 @@ type FlatMetadata = {
   isTranslation: boolean;
   language: string;
   archiveSourceUrl: string;
-  workSources: WorkSourceLink[];
   externalDownloadUrl: string;
   status: "published" | "hidden";
 };
@@ -151,7 +148,6 @@ export type UploadInitialWork = {
   translators: UploadStaffCredit[];
   externalDownloadUrl: string | null;
   archiveSourceUrl: string | null;
-  workSources: WorkSourceLink[];
   coverBlobSha256: string;
   previewBlobSha256s: string[];
   currentArchive: {
@@ -1380,8 +1376,7 @@ function MetadataFields({
                 values={form.aliasTitles}
               />
             </WorkbenchField>
-            <WorkSourcesEditor values={form.workSources} disabled={disabled} onChange={(workSources) => setForm((current) => ({...current, workSources}))} />
-            {isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label="本次归档文件来源">
+            {isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label="发布地址">
               <Input
                 disabled={disabled}
                 id="upload-source-url"
@@ -1573,7 +1568,6 @@ function initialForm(
       usesUnsupportedManiac: initialWork.usesUnsupportedManiac,
       language: initialWork.language,
       archiveSourceUrl: initialWork.archiveSourceUrl ?? "",
-      workSources: initialWork.workSources,
       externalDownloadUrl: initialWork.externalDownloadUrl ?? "",
       status: initialWork.status,
     };
@@ -1596,7 +1590,6 @@ function initialForm(
     usesUnsupportedManiac: false,
     language: "zh-CN",
     archiveSourceUrl: "",
-    workSources: [],
     externalDownloadUrl: "",
     status: "published",
   };
@@ -1653,7 +1646,6 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
       metadata.game.extra.usesUnsupportedManiac === true,
     language: metadata.game.language,
     archiveSourceUrl: metadata.archiveVersion.sourceUrl ?? "",
-    workSources: metadata.workSources,
     externalDownloadUrl: "",
     status: metadata.game.status === "hidden" ? "hidden" : "published",
   };
@@ -1739,7 +1731,6 @@ function buildMetadata(
       ...translatorStaff(form, defaults.translators),
     ],
     tags: uniqueTokens(form.tags),
-    workSources: form.workSources,
   };
 }
 
@@ -1822,7 +1813,6 @@ async function submitExternalWork(
     JSON.stringify(translatorStaff(form).map((staff) => staff.selection)),
   );
   body.set("download_url", form.externalDownloadUrl.trim());
-  body.set("work_sources", JSON.stringify(form.workSources));
   body.set("cover", images.cover);
   for (const image of images.browsingImages)
     body.append("browsing_images[]", image);
@@ -1888,7 +1878,6 @@ async function submitOwnedWork(
     "download_url",
     distribution === "external" ? form.externalDownloadUrl.trim() : "",
   );
-  body.set("work_sources", JSON.stringify(form.workSources));
   if (images.cover) body.set("cover", images.cover);
   if (images.replacePreviews) {
     body.set("replace_previews", "1");

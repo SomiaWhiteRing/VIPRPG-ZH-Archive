@@ -1,4 +1,3 @@
-import type { WorkSourceLink } from "@/lib/work-sources";
 import type {
   CharacterCreditSelection,
   CharacterPortrait,
@@ -200,7 +199,6 @@ export type ExternalWorkInput = {
   coverBlobSha256: string;
   previewBlobSha256s: string[];
   downloadUrl: string;
-  workSources: WorkSourceLink[];
 };
 
 export type UserWorkListItem = {
@@ -211,7 +209,6 @@ export type UserWorkListItem = {
 export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
-  workSources: WorkSourceLink[];
   hasCurrentArchive: boolean;
   currentArchive: {
     id: number;
@@ -247,7 +244,6 @@ export type UploaderWorkUpdateInput = {
   coverBlobSha256: string;
   previewBlobSha256s: string[];
   downloadUrl: string | null;
-  workSources: WorkSourceLink[];
 };
 
 export type PaginatedGameSearch = {

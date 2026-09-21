@@ -1,4 +1,3 @@
-import { parseWorkSourcesJson } from "@/app/.server/http/work-sources";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -116,7 +115,6 @@ function parseMetadata(form: FormData) {
     extraStaff: parseExtraStaffJson(form.get("extra_staff")),
     translators: parseTranslatorSelectionsJson(form.get("translators")),
     downloadUrl: readNullableString(form.get("download_url")),
-    workSources: parseWorkSourcesJson(form.get("work_sources")),
   };
 }
 

@@ -1,5 +1,4 @@
-import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements, workSourceStatements } from "@/app/.server/db/work-metadata";
-import { parseWorkSources } from "@/app/.server/http/work-sources";
+import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import type { CharacterPortraitRow } from "@/app/.server/db/character-portrait-library";
@@ -509,7 +508,6 @@ export async function getOwnedWorkForEdit(
     ...work,
     distribution: distribution === "invalid" ? (isArchiveEngineFamily(work.engineFamily) ? "archive" : "external") : distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
-    workSources: work.externalLinks.filter((link) => link.linkType === "source").map(({label, url}) => ({label, url})),
     hasCurrentArchive,
     currentArchive: hasCurrentArchive
       ? {
@@ -597,7 +595,6 @@ export async function updateOwnedWork(
   if (input.distribution === "external" && !downloadUrl) {
     throw new HttpError(400, "外部下载地址不能为空");
   }
-  const workSources = parseWorkSources(input.workSources);
 
   assertStableDistribution({
     status: input.status,
@@ -732,7 +729,6 @@ export async function updateOwnedWork(
         .bind(input.workId, downloadUrl),
     );
   }
-  statements.push(...workSourceStatements(database, input.workId, workSources));
   statements.push(
     database
       .prepare(
@@ -984,7 +980,6 @@ export async function createExternalWork(
   );
   if (input.isTranslation !== translatorCredits.length > 0)
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
-  const workSources = parseWorkSources(input.workSources);
   const staffCredits = [
     ...translatorCredits,
     ...(input.extraStaff ?? []),
@@ -1068,7 +1063,6 @@ export async function createExternalWork(
           `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
         )
         .bind(workId, downloadUrl),
-      ...workSourceStatements(database, workId, workSources),
       ...workMediaStatements(database, workId, media.coverBlobSha256, media.previewBlobSha256s),
     ];
     await database.batch(statements);

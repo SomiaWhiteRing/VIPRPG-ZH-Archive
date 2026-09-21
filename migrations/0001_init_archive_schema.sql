@@ -1207,7 +1207,7 @@ CREATE TABLE IF NOT EXISTS work_external_links (
   label TEXT NOT NULL,
   url TEXT NOT NULL,
   link_type TEXT NOT NULL CHECK (
-    link_type IN ('official', 'wiki', 'source', 'video', 'download_page', 'other')
+    link_type IN ('official', 'wiki', 'video', 'download_page', 'other')
   ) DEFAULT 'other',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
