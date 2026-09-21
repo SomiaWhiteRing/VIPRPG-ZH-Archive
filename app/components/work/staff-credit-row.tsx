@@ -1,11 +1,10 @@
 import { CreatorPicker } from "@/app/components/pickers/creator-picker";
-import { Button } from "@/app/components/ui/button";
+import { CustomSelect } from "@/app/components/ui/custom-select";
+import { InformationRow } from "@/app/components/ui/information-editor";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { SelectField } from "@/app/components/ui/select";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { StaffCredit } from "@/lib/staff-credits";
-import { cn } from "@/lib/ui/cn";
 
 type Role = StaffCredit["roleKey"];
 export type EditableStaffCredit = {
@@ -31,6 +30,7 @@ export function StaffCreditRow({
   error,
   onChange,
   onRemove,
+  removeFocusId,
 }: {
   id: string;
   index: number;
@@ -43,64 +43,47 @@ export function StaffCreditRow({
   error?: StaffRowError | null;
   onChange: (patch: Partial<EditableStaffCredit>) => void;
   onRemove: () => void;
+  removeFocusId?: string;
 }) {
-  const feedback = (field: StaffRowError["field"]) => ({
-    "aria-invalid": error?.field === field,
-    "aria-describedby": error?.field === field ? `${id}-error` : undefined,
-  });
   return (
-    <div
-      className={cn(
-        "grid min-w-0 items-start gap-2",
-        showNotes
-          ? cn(
-              "border-b border-border pb-3",
-              value.roleKey === "other"
-                ? "md:grid-cols-[7rem_7rem_minmax(0,1fr)_minmax(8rem,1fr)_auto]"
-                : "md:grid-cols-[7rem_minmax(0,1fr)_minmax(8rem,1fr)_auto]",
-            )
-          : value.roleKey === "other"
-            ? "grid-cols-[6.5rem_6.5rem_minmax(0,1fr)_auto]"
-            : "grid-cols-[6.5rem_minmax(0,1fr)_auto]",
-      )}
-    >
-      <div className="grid gap-1">
-        <Label className="sr-only" htmlFor={`${id}-role`}>
-          职务
-        </Label>
-        <SelectField
+    <InformationRow
+      disabled={disabled}
+      removeLabel={`移除第 ${index + 1} 条制作署名`}
+      onRemove={onRemove}
+      removeFocusId={removeFocusId}
+      error={error ? { id: `${id}-error`, message: error.message } : undefined}
+      label={
+        <CustomSelect
           id={`${id}-role`}
+          customInputId={`${id}-label`}
+          label="职务"
           disabled={disabled}
           value={value.roleKey}
-          options={[...roles]}
+          customOption="other"
+          customValue={value.roleLabel ?? ""}
+          options={roles}
           placeholder="选择职务"
-          {...feedback("role")}
-          onValueChange={(key) => {
+          required={requireRoleLabel}
+          invalid={error?.field === "role" || error?.field === "label"}
+          descriptionId={error?.field === "role" || error?.field === "label" ? `${id}-error` : undefined}
+          onChange={(key, label) => {
             const role = roles.find((option) => option.value === key);
-            if (role) onChange({ roleKey: role.value, roleLabel: "" });
+            if (role) onChange({ roleKey: role.value, roleLabel: label });
           }}
         />
-      </div>
-      {value.roleKey === "other" ? (
-        <div className="grid min-w-0 gap-1">
-          <Label className="sr-only" htmlFor={`${id}-label`}>
-            职务名称
-          </Label>
-          <Input
-            id={`${id}-label`}
-            value={value.roleLabel ?? ""}
-            disabled={disabled}
-            placeholder="职务名称"
-            required={requireRoleLabel}
-            {...feedback("label")}
-            onChange={(event) => onChange({ roleLabel: event.target.value })}
-          />
-        </div>
-      ) : null}
+      }
+      details={showNotes ? (
+        <Input
+          aria-label={`第 ${index + 1} 条署名的备注`}
+          placeholder="署名备注"
+          value={value.notes ?? ""}
+          disabled={disabled}
+          onChange={(event) => onChange({ notes: event.target.value || null })}
+        />
+      ) : undefined}
+    >
       <div className="grid min-w-0 gap-1">
-        <Label className="sr-only" htmlFor={`${id}-person`}>
-          人物
-        </Label>
+        <Label className="sr-only" htmlFor={`${id}-person`}>人物</Label>
         <CreatorPicker
           compact
           id={`${id}-person`}
@@ -113,35 +96,6 @@ export function StaffCreditRow({
           onChange={(selection) => onChange({ selection })}
         />
       </div>
-      {showNotes ? (
-        <Input
-          aria-label={`第 ${index + 1} 条署名的备注`}
-          placeholder="署名备注"
-          value={value.notes ?? ""}
-          disabled={disabled}
-          onChange={(event) => onChange({ notes: event.target.value || null })}
-        />
-      ) : null}
-      <Button
-        className="px-1.5"
-        type="button"
-        size="sm"
-        variant="ghost"
-        disabled={disabled}
-        aria-label={`移除第 ${index + 1} 条制作署名`}
-        onClick={onRemove}
-      >
-        移除
-      </Button>
-      {error ? (
-        <p
-          className="col-span-full text-xs text-red-600"
-          id={`${id}-error`}
-          role="alert"
-        >
-          {error.message}
-        </p>
-      ) : null}
-    </div>
+    </InformationRow>
   );
 }

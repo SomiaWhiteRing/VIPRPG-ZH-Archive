@@ -1,7 +1,7 @@
 import type { StaffRowError } from "@/app/components/work/staff-credit-row";
 import { StaffCreditRow } from "@/app/components/work/staff-credit-row";
 
-import { Button } from "@/app/components/ui/button";
+import { AddInformationButton } from "@/app/components/ui/information-editor";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorSelectionKey } from "@/lib/creator-names";
 import type { StaffCredit } from "@/lib/staff-credits";
@@ -89,9 +89,7 @@ export function StaffEditor({
       ...rows,
       { id, roleKey: "", roleLabel: "", selection: null, notes: null },
     ]);
-    requestAnimationFrame(() =>
-      document.getElementById(`staff-${id}-role`)?.focus(),
-    );
+    return `staff-${id}-role`;
   }
   return (
     <fieldset className="min-w-0 grid gap-2" disabled={disabled}>
@@ -112,25 +110,13 @@ export function StaffEditor({
               roleLabel: patch.roleLabel ?? row.roleLabel,
             })
           }
-          onRemove={() => {
-            onChange(rows.filter((item) => item.id !== row.id));
-            requestAnimationFrame(() =>
-              document.getElementById("add-work-staff")?.focus(),
-            );
-          }}
+          removeFocusId="add-work-staff"
+          onRemove={() => onChange(rows.filter((item) => item.id !== row.id))}
         />
       ))}
-      <Button
-        className="w-fit"
-        id="add-work-staff"
-        variant="ghost"
-        size="sm"
-        type="button"
-        disabled={disabled}
-        onClick={add}
-      >
-        ＋ 添加制作人员
-      </Button>
+      <AddInformationButton id="add-work-staff" disabled={disabled} onAdd={add}>
+        添加制作人员
+      </AddInformationButton>
     </fieldset>
   );
 }
