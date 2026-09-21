@@ -1,12 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type DisplayOrientation = "landscape" | "portrait";
-export type ControlLayout = { screen: number; dpad: number; actions: number };
+export const controlIds = ["dpad", "decision", "cancel", "shift", "menu", "debug", "log"] as const;
+export type ControlId = typeof controlIds[number];
+export type ControlPlacement = { x: number; y: number; size: number; opacity: number; visible: boolean };
+export type ControlLayout = { screen: number; buttons: Record<ControlId, ControlPlacement> };
 
-// Positions are fractions of each element's available vertical travel.
+export const controlDefinitions = {
+  dpad: { label: "十字键", optional: false },
+  decision: { label: "A", optional: false },
+  cancel: { label: "B", optional: false },
+  shift: { label: "Shift", optional: true },
+  menu: { label: "Menu", optional: true },
+  debug: { label: "Debug", optional: true },
+  log: { label: "log", optional: true },
+} as const;
+
+function createDefaultLayout(orientation: DisplayOrientation): ControlLayout {
+  // GBA: controls flank the screen. GBA SP: controls sit below the screen.
+  // In both layouts A is above and to the right of B.
+  const positions: Record<ControlId, [number, number]> = orientation === "landscape" ? {
+    dpad: [0.03, 0.6], decision: [0.97, 0.42], cancel: [0.84, 0.65],
+    shift: [0.35, 0.9], menu: [0.48, 0.9], debug: [0.61, 0.9], log: [0.74, 0.9],
+  } : {
+    dpad: [0.03, 0.82], decision: [0.97, 0.74], cancel: [0.7, 0.85],
+    shift: [0.05, 0.97], menu: [0.35, 0.97], debug: [0.65, 0.97], log: [0.95, 0.97],
+  };
+  return {
+    screen: 0,
+    buttons: Object.fromEntries(controlIds.map((id) => [id, {
+      x: positions[id][0], y: positions[id][1], size: 1, opacity: 0.7,
+      visible: !controlDefinitions[id].optional,
+    }])) as Record<ControlId, ControlPlacement>,
+  };
+}
+
+// Positions are fractions of each element's available horizontal/vertical travel.
 export const defaultControlLayouts: Record<DisplayOrientation, ControlLayout> = {
-  portrait: { screen: 0, dpad: 1, actions: 1 },
-  landscape: { screen: 0.5, dpad: 1, actions: 1 },
+  portrait: createDefaultLayout("portrait"),
+  landscape: createDefaultLayout("landscape"),
 };
 
 type ControlsPreferences = {
@@ -21,14 +53,30 @@ const defaultPreferences: ControlsPreferences = {
 };
 
 function readLayout(value: unknown, fallback: ControlLayout): ControlLayout {
-  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  const position = (key: keyof ControlLayout) => {
-    const value = record[key];
-    return typeof value === "number" && Number.isFinite(value)
-      ? Math.max(0, Math.min(1, value))
-      : fallback[key];
+  const record = asRecord(value);
+  const buttons = asRecord(record.buttons);
+  return {
+    screen: readNumber(record.screen, fallback.screen, 0, 1),
+    buttons: Object.fromEntries(controlIds.map((id) => {
+      const saved = asRecord(buttons[id]);
+      const defaults = fallback.buttons[id];
+      return [id, {
+        x: readNumber(saved.x, defaults.x, 0, 1),
+        y: readNumber(saved.y, defaults.y, 0, 1),
+        size: readNumber(saved.size, defaults.size, 0.5, 2),
+        opacity: readNumber(saved.opacity, defaults.opacity, 0, 1),
+        visible: controlDefinitions[id].optional && typeof saved.visible === "boolean" ? saved.visible : defaults.visible,
+      }];
+    })) as Record<ControlId, ControlPlacement>,
   };
-  return { screen: position("screen"), dpad: position("dpad"), actions: position("actions") };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function readNumber(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
 }
 
 export function useWebPlayControlsPreferences() {

@@ -683,7 +683,7 @@ export function WebPlayClient({
                   {running ? "运行中" : playerStarting ? "启动中" : "待机"}
                 </span>
               </div>
-              <div className={mobileControls && running && viewportPortrait ? "aspect-3/4 w-full" : "aspect-4/3 w-full"}>
+              <div className={mobileControls && running && viewportPortrait ? "aspect-3/5 w-full" : "aspect-4/3 w-full"}>
                 <div
                   className={
                     immersive
@@ -729,7 +729,7 @@ export function WebPlayClient({
                         ) : null}
                         <Button
                           aria-label="恢复窗口"
-                          className="border-white/30 bg-white/15 text-white shadow-lg backdrop-blur-md hover:border-white/60 hover:bg-white/25 hover:text-white"
+                          className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                           onClick={() => void exitImmersive()}
                           size="sm"
                           type="button"
