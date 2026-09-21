@@ -30,14 +30,18 @@ selected.exec(schema);
 try {
   const approvedSheets = source.prepare("SELECT * FROM face_sheets WHERE library_status='approved' ORDER BY id").all();
   const approvedIds = new Set(approvedSheets.map((row) => row.id));
+  const resources = source.prepare("SELECT * FROM resources WHERE visibility='published' ORDER BY sort_order,id").all();
   const materials = source.prepare("SELECT * FROM character_materials ORDER BY id").all();
   const defaultEmojis = source.prepare("SELECT * FROM default_face_emojis ORDER BY position").all();
   const emojiIds = new Set(defaultEmojis.map((row) => row.emoji_id));
   const emojiRefs = source.prepare("SELECT * FROM available_face_emojis ORDER BY id").all().filter((row) => emojiIds.has(row.id));
   if (emojiRefs.length !== defaultEmojis.length) throw new Error("A default emoji is not approved or its blob is unavailable.");
-  const blobShas = new Set([...approvedSheets, ...materials, ...emojiRefs].map((row) => row.blob_sha256));
+  const blobShas = new Set([
+    ...[...approvedSheets, ...materials, ...emojiRefs].map((row) => row.blob_sha256),
+    ...resources.map((row) => row.icon_blob_sha256),
+  ]);
   const blobs = source.prepare("SELECT * FROM blobs ORDER BY sha256").all().filter((row) => blobShas.has(row.sha256));
-  if (blobs.length !== blobShas.size || blobs.some((row) => row.status !== "active")) throw new Error("Selected materials reference missing or inactive blobs.");
+  if (blobs.length !== blobShas.size || blobs.some((row) => row.status !== "active")) throw new Error("Selected materials or resource icons reference missing or inactive blobs.");
   const portraits = source.prepare("SELECT * FROM character_portrait_refs ORDER BY id").all().filter((row) => approvedIds.has(row.face_sheet_id));
   const portraitIds = new Set(portraits.map((row) => row.id));
   const defaultPortraits = source.prepare("SELECT * FROM character_default_portraits ORDER BY character_id").all();
@@ -62,6 +66,7 @@ try {
     ["character_material_bindings", source.prepare("SELECT * FROM character_material_bindings ORDER BY character_id,material_id").all()],
     ["face_emoji_refs", emojiRefs],
     ["default_face_emojis", defaultEmojis],
+    ["resources", resources.map((row) => ({ ...row, last_release_sequence: 0 }))],
   ]);
   const statements = [];
   selected.exec("BEGIN");
@@ -117,6 +122,6 @@ try {
     validation: { foreignKeyViolations: 0, integrity: "ok", users: 0, works: 0 },
   }, null, 2) + "\n");
   console.log(JSON.stringify({ output: relative(root, output), characters: populated.characters, categories: populated.character_categories,
-    defaultPortraits: populated.character_default_portraits, defaultEmojis: populated.default_face_emojis,
+    defaultPortraits: populated.character_default_portraits, defaultEmojis: populated.default_face_emojis, resources: populated.resources,
     objects: objects.length, bytes: objects.reduce((sum, item) => sum + item.size, 0), sqlStatements: statements.length, users: 0, works: 0 }));
 } finally { source.close(); selected.close(); }
