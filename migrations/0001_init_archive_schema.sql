@@ -35,9 +35,12 @@ CREATE TABLE IF NOT EXISTS roles (
   priority INTEGER NOT NULL DEFAULT 0,
   kind TEXT NOT NULL CHECK (kind IN ('built_in', 'bootstrap_admin', 'custom')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  application_enabled INTEGER NOT NULL DEFAULT 0 CHECK (application_enabled IN (0, 1)),
+  available_to_all INTEGER NOT NULL DEFAULT 0 CHECK (available_to_all IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CHECK (kind <> 'custom' OR priority BETWEEN 101 AND 699)
+  CHECK (kind <> 'custom' OR priority BETWEEN 101 AND 699),
+  CHECK ((kind = 'custom' OR key = 'uploader') OR (application_enabled = 0 AND available_to_all = 0))
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
@@ -57,12 +60,20 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_key, role_id);
 
-INSERT OR IGNORE INTO roles (key, name, description, priority, kind)
+-- Keep individually assigned memberships separate from currently effective grants.
+CREATE VIEW effective_user_roles AS
+SELECT ur.user_id, ur.role_id FROM user_roles ur
+JOIN roles r ON r.id = ur.role_id AND r.status = 'active'
+UNION
+SELECT u.id, r.id FROM users u JOIN roles r ON r.available_to_all = 1 AND r.status = 'active'
+WHERE u.status = 'active';
+
+INSERT OR IGNORE INTO roles (key, name, description, priority, kind, application_enabled)
 VALUES
-  ('user', '普通用户', '基础账户', 100, 'built_in'),
-  ('uploader', '上传者', '可提交上传任务', 400, 'built_in'),
-  ('admin', '管理员', '管理业务内容和用户角色', 700, 'built_in'),
-  ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin');
+  ('user', '普通用户', '基础账户', 100, 'built_in', 0),
+  ('uploader', '上传者', '可提交上传任务', 400, 'built_in', 1),
+  ('admin', '管理员', '管理业务内容和用户角色', 700, 'built_in', 0),
+  ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin', 0);
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
 SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
@@ -122,6 +133,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS roles_protect_system_definition
 BEFORE UPDATE ON roles
 WHEN OLD.kind <> 'custom'
+  AND (NEW.name <> OLD.name OR NEW.priority <> OLD.priority OR NEW.status <> OLD.status)
 BEGIN
   SELECT RAISE(ABORT, 'system role cannot be changed');
 END;

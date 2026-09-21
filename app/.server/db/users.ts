@@ -528,7 +528,7 @@ export async function searchUsersForAdmin(
     "u.id<>?",
     `COALESCE((
        SELECT MAX(rm.priority)
-       FROM user_roles urm JOIN roles rm ON rm.id=urm.role_id AND rm.status='active'
+       FROM effective_user_roles urm JOIN roles rm ON rm.id=urm.role_id AND rm.status='active'
        WHERE urm.user_id=u.id
      ),0)<?`,
   ];

@@ -17,6 +17,8 @@ export async function PATCH(
       description?: unknown;
       priority?: unknown;
       status?: unknown;
+      applicationEnabled?: unknown;
+      availableToAll?: unknown;
       expected?: unknown;
     };
     if (
@@ -24,6 +26,8 @@ export async function PATCH(
       !Number.isInteger(roleId) ||
       typeof body.name !== "string" ||
       typeof body.description !== "string" ||
+      typeof body.applicationEnabled !== "boolean" ||
+      typeof body.availableToAll !== "boolean" ||
       !Number.isInteger(body.priority) ||
       (body.status !== "active" && body.status !== "disabled")
     ) {
@@ -36,6 +40,8 @@ export async function PATCH(
       description: body.description,
       priority: body.priority as number,
       status: body.status,
+      applicationEnabled: body.applicationEnabled,
+      availableToAll: body.availableToAll,
       expected: body.expected,
     });
     return json({ ok: true });

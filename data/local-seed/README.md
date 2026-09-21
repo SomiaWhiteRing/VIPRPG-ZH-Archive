@@ -1,5 +1,12 @@
 # Fixed Local Seed
 
+The 2026-09-22 role application refresh adds independent application and global
+availability settings plus the effective-role view. Only uploader applications
+are enabled initially; every role starts with global availability off. The
+existing contents of all 80 tables, including individual role grants, role
+events, inbox records and the single initialization migration ledger, are
+preserved. Existing local databases are not rebuilt by this snapshot change.
+
 Captured from the reviewed local D1 database and R2 bucket on 2026-09-16.
 This snapshot is the source of truth for local initialization. It preserves
 character IDs, names, aliases, categories, memberships, portrait cells, material

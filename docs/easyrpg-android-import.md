@@ -7,9 +7,9 @@
 当前仅对正式站及预发布站启用：
 
 - `https://viprpg-zh-archive.q578235562.workers.dev`
-- `https://viprpg-zh-archive-staging.q578235562.workers.dev`
+- `https://staging.viprpg.org`
 
-APK 内相同的来源白名单不可被链接参数扩充，HTTP、跨源及重定向均拒绝。将来更换域名需同步修改两端并发布 APK。
+APK 内相同的来源白名单不可被链接参数扩充，HTTP、跨源及重定向均拒绝。独立预生产域名需要安装已更新来源白名单的新版 APK，旧版会拒绝导入。将来更换域名需同步修改两端并发布 APK。
 
 `GET/HEAD /api/archive-versions/:id/kai-import` 由 `worker.ts` 注册，复用 `worker/archive-download.mjs` 的发布状态查询、原归档清单哈希校验和 ZIP 大小计算。无需登录；只有已发布作品的已发布当前快照可获取。不存在／隐藏／不再当前返回 404，不支持的引擎或超限快照返回 422，其他方法返回 405。
 

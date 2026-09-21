@@ -49,7 +49,7 @@ export default function UploadPage() {
         <Pane>
           <p>上传需要上传者权限，可在「我的账户」申请。</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Link className={buttonVariants()} to="/me#upload-access">
+            <Link className={buttonVariants()} to="/me/permissions?role=uploader">
               前往我的账户
             </Link>
           </div>

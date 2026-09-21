@@ -10,7 +10,7 @@ import * as endpoint3 from "@/app/.server/endpoints/api/account/email/start/rout
 import * as endpoint4 from "@/app/.server/endpoints/api/account/password/route";
 import * as endpoint5 from "@/app/.server/endpoints/api/account/privacy/route";
 import * as endpoint6 from "@/app/.server/endpoints/api/account/profile/route";
-import * as endpoint7 from "@/app/.server/endpoints/api/account/request-upload-access/route";
+import * as endpoint7 from "@/app/.server/endpoints/api/account/role-requests/route";
 import * as endpoint37 from "@/app/.server/endpoints/api/admin/archive-versions/[archiveVersionId]/current/route";
 import * as endpoint38 from "@/app/.server/endpoints/api/admin/archive-versions/[archiveVersionId]/delete/route";
 import * as endpoint39 from "@/app/.server/endpoints/api/admin/archive-versions/[archiveVersionId]/restore/route";
@@ -208,13 +208,13 @@ api.all("/api/account/profile", (c) =>
     Allow: "POST, OPTIONS",
   }),
 );
-api.on("POST", "/api/account/request-upload-access", (c) =>
+api.on("POST", "/api/account/role-requests", (c) =>
   endpoint7.POST(c.get("runtime"), c.req.raw),
 );
-api.options("/api/account/request-upload-access", (c) =>
+api.options("/api/account/role-requests", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/request-upload-access", (c) =>
+api.all("/api/account/role-requests", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
     Allow: "POST, OPTIONS",
   }),
