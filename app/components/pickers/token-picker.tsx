@@ -1,11 +1,6 @@
-import {
-  ComboboxOption,
-  ComboboxOptions,
-  handleComboboxNavigation,
-} from "@/app/components/ui/combobox";
-
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
-import { TokenChip, TokenDragPreview, TokenInput } from "@/app/components/ui/token-input";
+import { TokenChip, TokenDragPreview } from "@/app/components/ui/token-input";
 import { cn } from "@/lib/ui/cn";
 import {
   moveDragItem,
@@ -13,7 +8,7 @@ import {
   readDragSlots,
   type DragSlot,
 } from "@/lib/ui/drag-reorder";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 export type TokenSuggestion = { value: string; meta: string };
 
@@ -25,6 +20,7 @@ export function TokenPicker({
   name,
   onChange,
   placeholder,
+  label,
   recommendationLabel,
   showRecommendations = true,
   showSelectionCount = true,
@@ -45,6 +41,7 @@ export function TokenPicker({
   name?: string;
   onChange: (values: string[]) => void;
   placeholder: string;
+  label: string;
   recommendationLabel?: string;
   showRecommendations?: boolean;
   showSelectionCount?: boolean;
@@ -78,8 +75,6 @@ export function TokenPicker({
     chip: { left: number; top: number; width: number; height: number };
   } | null>(null);
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const atLimit = maxValues !== undefined && values.length >= maxValues;
   const selectedKeys = useMemo(
@@ -113,9 +108,8 @@ export function TokenPicker({
   const recommended = recommendations
     .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
     .slice(0, 6);
-  const menuId = `${id}-options`;
-  const menuOpen = open && !disabled && options.length > 0;
-  const visiblePreview = !disabled && preview?.original === values ? preview : null;
+  const visiblePreview =
+    !disabled && preview?.original === values ? preview : null;
 
   function cancelDrag() {
     drag.current = null;
@@ -135,34 +129,12 @@ export function TokenPicker({
     if (!value) return;
     if (!selectedKeys.has(tokenKey(value))) onChange([...values, value]);
     setQuery("");
-    setActiveIndex(0);
-    setOpen(false);
     setError(null);
     onQueryChange?.("");
   }
 
   function remove(value: string) {
     onChange(values.filter((item) => tokenKey(item) !== tokenKey(value)));
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (
-      handleComboboxNavigation(event, {
-        count: options.length,
-        open: menuOpen,
-        activeIndex,
-        setOpen,
-        setActiveIndex,
-      })
-    )
-      return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const active = menuOpen ? options[activeIndex] : null;
-      add(active?.value ?? query);
-    } else if (event.key === "Backspace" && !query && values.length) {
-      remove(values[values.length - 1]);
-    }
   }
 
   return (
@@ -193,7 +165,8 @@ export function TokenPicker({
           if (
             !current.moved &&
             Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
-          ) return;
+          )
+            return;
           current.moved = true;
           const bounds = event.currentTarget.getBoundingClientRect();
           const nearest = nearestDragSlot(
@@ -233,37 +206,34 @@ export function TokenPicker({
           }
         }}
       >
-        <TokenInput
-          aria-activedescendant={
-            menuOpen && options[activeIndex]
-              ? `${menuId}-${activeIndex}`
-              : undefined
-          }
-          aria-autocomplete="list"
-          aria-controls={menuId}
-          aria-expanded={menuOpen}
-          aria-describedby={error || atLimit ? `${id}-feedback` : undefined}
-          disabled={disabled}
+        <SearchComboBox
           id={id}
-          onBlur={() => setOpen(false)}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setActiveIndex(0);
-            setOpen(Boolean(tokenKey(event.target.value)));
+          query={query}
+          onQueryChange={(value) => {
+            setQuery(value);
             setError(null);
-            onQueryChange?.(event.target.value);
+            onQueryChange?.(value);
           }}
-          onFocus={() => setOpen(Boolean(tokenKey(query)))}
-          onKeyDown={onKeyDown}
+          disabled={disabled}
+          items={options}
+          enterSelectsFirst
+          label={label}
           placeholder={values.length ? "继续添加" : placeholder}
-          role="combobox"
-          type="text"
-          value={query}
-        >
-          {(visiblePreview?.order ?? values).map((value) => (
+          descriptionId={error || atLimit ? `${id}-feedback` : undefined}
+          getKey={(option) => `${option.kind}:${tokenKey(option.value)}`}
+          getText={(option) => option.value}
+          isItemDisabled={() => atLimit}
+          onChoose={(option) => add(option.value)}
+          onCommit={() => add(query)}
+          onRemoveLast={() => {
+            if (values.length) remove(values[values.length - 1]);
+          }}
+          tokens={(visiblePreview?.order ?? values).map((value) => (
             <TokenChip
               data-sort-token=""
-              className={visiblePreview?.value === value ? "opacity-25" : undefined}
+              className={
+                visiblePreview?.value === value ? "opacity-25" : undefined
+              }
               disabled={disabled}
               key={tokenKey(value)}
               label={value}
@@ -278,10 +248,12 @@ export function TokenPicker({
                   className="min-h-7 min-w-0 shrink touch-none cursor-grab whitespace-normal rounded-none px-0 text-left text-xs text-primary hover:bg-transparent [overflow-wrap:anywhere] active:cursor-grabbing"
                   aria-label={`拖动排序 ${value}，也可按 Alt 加方向键调整`}
                   onPointerDown={(event) => {
-                    if (disabled || event.button !== 0 || !event.isPrimary) return;
+                    if (disabled || event.button !== 0 || !event.isPrimary)
+                      return;
                     const container = sortContainer.current;
                     if (!container) return;
-                    const chip = event.currentTarget.closest("[data-sort-token]");
+                    const chip =
+                      event.currentTarget.closest("[data-sort-token]");
                     if (!chip) return;
                     const bounds = chip.getBoundingClientRect();
                     event.preventDefault();
@@ -307,11 +279,18 @@ export function TokenPicker({
                   onKeyDown={(event) => {
                     if (
                       !event.altKey ||
-                      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-                    ) return;
+                      ![
+                        "ArrowLeft",
+                        "ArrowRight",
+                        "ArrowUp",
+                        "ArrowDown",
+                      ].includes(event.key)
+                    )
+                      return;
                     event.preventDefault();
                     const from = values.indexOf(value);
-                    const to = from +
+                    const to =
+                      from +
                       (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
                     if (to >= 0 && to < values.length)
                       onChange(moveDragItem(values, from, to));
@@ -319,28 +298,18 @@ export function TokenPicker({
                 >
                   {value}
                 </Button>
-              ) : value}
+              ) : (
+                value
+              )}
             </TokenChip>
           ))}
-        </TokenInput>
-        {menuOpen ? (
-          <ComboboxOptions id={menuId} activeIndex={activeIndex}>
-            {options.map((option, index) => (
-              <ComboboxOption
-                selected={index === activeIndex}
-                id={`${menuId}-${index}`}
-                key={`${option.kind}-${tokenKey(option.value)}`}
-                onClick={() => add(option.value)}
-                disabled={atLimit}
-              >
-                <span>{option.value}</span>
-                <span className="shrink-0 text-xs text-muted">
-                  {option.meta}
-                </span>
-              </ComboboxOption>
-            ))}
-          </ComboboxOptions>
-        ) : null}
+          renderItem={(option) => (
+            <>
+              <span>{option.value}</span>
+              <span className="shrink-0 text-xs text-muted">{option.meta}</span>
+            </>
+          )}
+        />
       </div>
       {error || atLimit ? (
         <p
@@ -386,7 +355,10 @@ export function TokenPicker({
         </RecommendationRow>
       ) : null}
       {visiblePreview ? (
-        <TokenDragPreview label={visiblePreview.value} {...visiblePreview.chip} />
+        <TokenDragPreview
+          label={visiblePreview.value}
+          {...visiblePreview.chip}
+        />
       ) : null}
     </div>
   );
@@ -414,7 +386,8 @@ function RecommendationRow({
       let full = false;
       items.forEach((item, index) => {
         const style = getComputedStyle(item);
-        const width = item.offsetWidth +
+        const width =
+          item.offsetWidth +
           (parseFloat(style.marginLeft) || 0) +
           (parseFloat(style.marginRight) || 0);
         used += width + (index ? gap : 0);

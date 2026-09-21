@@ -1,13 +1,5 @@
-import {
-  ComboboxOption,
-  ComboboxOptions,
-  handleComboboxNavigation,
-} from "@/app/components/ui/combobox";
-
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
-import { EmptyState } from "@/app/components/ui/empty-state";
-import { Input } from "@/app/components/ui/input";
-import type { KeyboardEvent } from "react";
 import { useId, useMemo, useState } from "react";
 
 type MergeCandidate = {
@@ -32,117 +24,66 @@ export function CharacterMergeTargetField({
 }) {
   const generatedId = useId();
   const id = providedId ?? generatedId;
-  const listId = `${id}-matches`;
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [selected, setSelected] = useState<MergeCandidate | null>(null);
   const matches = useMemo(
     () => matchCandidates(candidates, query),
     [candidates, query],
   );
-  const menuOpen = open && Boolean(normalizeSearch(query));
 
   function choose(candidate: MergeCandidate) {
     setSelected(candidate);
     setQuery("");
-    setActiveIndex(0);
-    setOpen(false);
   }
 
   function changeQuery(nextQuery: string) {
     setQuery(nextQuery);
     setSelected(null);
-    setActiveIndex(0);
-    setOpen(Boolean(normalizeSearch(nextQuery)));
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (
-      handleComboboxNavigation(event, {
-        count: matches.items.length,
-        open: menuOpen,
-        activeIndex,
-        setOpen,
-        setActiveIndex,
-      })
-    )
-      return;
-    if (event.key === "Enter" && normalizeSearch(query)) {
-      event.preventDefault();
-      if (open && matches.items[activeIndex])
-        choose(matches.items[activeIndex]);
-      else setOpen(true);
-    }
   }
 
   return (
     <div className="grid gap-2">
       <input name={name} readOnly type="hidden" value={selected?.id ?? ""} />
-      <div className="relative">
-        <Input
-          id={id}
-          aria-activedescendant={
-            menuOpen && matches.items[activeIndex]
-              ? `${listId}-${matches.items[activeIndex].id}`
-              : undefined
-          }
-          aria-autocomplete="list"
-          aria-controls={listId}
-          aria-describedby={descriptionId}
-          aria-expanded={menuOpen}
-          aria-label="目标角色"
-          onBlur={() => setOpen(false)}
-          onChange={(event) => changeQuery(event.target.value)}
-          onFocus={() => setOpen(Boolean(normalizeSearch(query)))}
-          onKeyDown={onKeyDown}
-          placeholder="输入角色原名、译名或 #ID"
-          role="combobox"
-          type="search"
-          value={query}
-        />
-        {menuOpen ? (
-          <ComboboxOptions
-            id={listId}
-            activeIndex={activeIndex}
-            className="max-h-72"
-          >
-            {matches.items.length ? (
-              matches.items.map((candidate, index) => (
-                <ComboboxOption
-                  selected={index === activeIndex}
-                  className="min-h-11"
-                  id={`${listId}-${candidate.id}`}
-                  key={candidate.id}
-                  onClick={() => choose(candidate)}
-                >
-                  <span className="min-w-0 truncate">
-                    {candidate.originalName} · {candidate.primaryName}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted">
-                    #{candidate.id} · {candidate.workCount} 部作品
-                  </span>
-                </ComboboxOption>
-              ))
-            ) : (
-              <EmptyState
-                title="没有匹配角色"
-                variant="plain"
-                className="px-2.5 py-2"
-                role="status"
-              />
-            )}
-            {matches.total > RESULT_LIMIT ? (
-              <p
-                className="m-0 border-t border-border px-2.5 py-2 text-xs text-muted"
-                role="status"
-              >
-                匹配 {matches.total} 个，显示前 {RESULT_LIMIT} 个
-              </p>
-            ) : null}
-          </ComboboxOptions>
-        ) : null}
-      </div>
+      <SearchComboBox
+        id={id}
+        label="目标角色"
+        query={query}
+        onQueryChange={changeQuery}
+        placeholder="输入角色原名、译名或 #ID"
+        descriptionId={descriptionId}
+        items={matches.items}
+        getKey={(item) => item.id}
+        getText={(item) => `${item.originalName} · ${item.primaryName}`}
+        onChoose={choose}
+        enterSelectsFirst
+        emptyState={
+          query.trim() ? (
+            <p className="p-2 text-sm text-muted" role="status">
+              没有匹配角色
+            </p>
+          ) : undefined
+        }
+        footer={
+          matches.total > RESULT_LIMIT ? (
+            <p
+              className="border-t border-border p-2 text-xs text-muted"
+              role="status"
+            >
+              匹配 {matches.total} 个，显示前 {RESULT_LIMIT} 个
+            </p>
+          ) : null
+        }
+        renderItem={(candidate) => (
+          <>
+            <span className="min-w-0 truncate">
+              {candidate.originalName} · {candidate.primaryName}
+            </span>
+            <span className="shrink-0 text-xs text-muted">
+              #{candidate.id} · {candidate.workCount} 部作品
+            </span>
+          </>
+        )}
+      />
       {selected ? (
         <div className="flex min-h-10 items-center justify-between gap-3 border-y border-border py-2">
           <span className="min-w-0 truncate text-sm font-normal">

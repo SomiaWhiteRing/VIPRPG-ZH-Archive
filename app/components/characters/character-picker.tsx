@@ -1,9 +1,4 @@
-import {
-  ComboboxOption,
-  ComboboxOptions,
-  handleComboboxNavigation,
-} from "@/app/components/ui/combobox";
-
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import type { CharacterNameInput } from "@/app/components/characters/character-create-dialog";
 import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
 import { badgeVariants } from "@/app/components/ui/badge";
@@ -15,7 +10,7 @@ import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
-import { TokenChip, TokenInput } from "@/app/components/ui/token-input";
+import { TokenChip } from "@/app/components/ui/token-input";
 import type {
   CharacterCreditSelection,
   CharacterFaceSheet,
@@ -36,7 +31,7 @@ import { normalizeEntityName } from "@/lib/entity-name";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 import { Pencil, X } from "lucide-react";
-import type { FormEvent, KeyboardEvent } from "react";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type ExistingOption = {
@@ -76,8 +71,6 @@ export function CharacterPicker({
   values: CharacterCreditSelection[];
 }) {
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [createQuery, setCreateQuery] = useState("");
   const [portraitIndex, setPortraitIndex] = useState<number | null>(null);
@@ -140,8 +133,6 @@ export function CharacterPicker({
     activeCredit?.selection.kind === "existing"
       ? (suggestionsById.get(activeCredit.selection.characterId) ?? null)
       : null;
-  const menuId = `${id}-options`;
-  const menuOpen = open && !disabled && options.length > 0;
 
   function addExisting(
     selection: Extract<CharacterSelection, { kind: "existing" }>,
@@ -151,8 +142,6 @@ export function CharacterPicker({
       { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] },
     ]);
     setQuery("");
-    setActiveIndex(0);
-    setOpen(false);
   }
 
   function remove(index: number) {
@@ -208,7 +197,6 @@ export function CharacterPicker({
       activeElement instanceof HTMLElement ? activeElement : null;
     const originalName = normalizeEntityName(rawQuery);
     setCreateQuery(originalName);
-    setOpen(false);
     setCreateOpen(true);
   }
 
@@ -223,7 +211,6 @@ export function CharacterPicker({
       { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] },
     ]);
     setQuery("");
-    setActiveIndex(0);
     portraitReturnFocusRef.current = document.getElementById(id);
     setPortraitIndex(values.length);
   }
@@ -307,28 +294,6 @@ export function CharacterPicker({
     setPortraitErrors((current) => omitKey(current, index));
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (
-      handleComboboxNavigation(event, {
-        count: options.length,
-        open: menuOpen,
-        activeIndex,
-        setOpen,
-        setActiveIndex,
-      })
-    )
-      return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const active = menuOpen ? options[activeIndex] : options[0];
-      if (!active) return;
-      if (active.kind === "create") startCreate(active.query);
-      else addExisting(active.selection);
-    } else if (event.key === "Backspace" && !query && values.length) {
-      remove(values.length - 1);
-    }
-  }
-
   return (
     <>
       <div className={cn("grid gap-2", disabled && "opacity-60")}>
@@ -341,34 +306,38 @@ export function CharacterPicker({
           />
         ) : null}
         <div className="relative">
-          <TokenInput
-            aria-activedescendant={
-              menuOpen && options[activeIndex]
-                ? `${menuId}-${activeIndex}`
-                : undefined
-            }
-            aria-autocomplete="list"
-            aria-controls={menuId}
-            aria-expanded={menuOpen}
-            disabled={disabled}
+          <SearchComboBox
             id={id}
-            onBlur={() => setOpen(false)}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-              setOpen(Boolean(characterNameKey(event.target.value)));
-            }}
-            onFocus={() => setOpen(Boolean(characterNameKey(query)))}
-            onKeyDown={onKeyDown}
+            query={query}
+            onQueryChange={setQuery}
+            disabled={disabled}
+            items={options}
+            enterSelectsFirst
+            label="登场角色"
             placeholder={
               values.length ? "添加更多" : "本作的主要角色（或更多）"
             }
             preserveHoverRows
-            role="combobox"
-            type="text"
-            value={query}
-          >
-            {values.map((credit, index) => {
+            itemClassName="min-h-12"
+            getKey={(option) =>
+              option.kind === "create"
+                ? `create:${option.query}`
+                : option.selection.characterId
+            }
+            getText={(option) =>
+              option.kind === "create"
+                ? `新增角色“${option.query}”`
+                : option.selection.displayName
+            }
+            onChoose={(option) =>
+              option.kind === "create"
+                ? startCreate(option.query)
+                : addExisting(option.selection)
+            }
+            onRemoveLast={() => {
+              if (values.length) remove(values.length - 1);
+            }}
+            tokens={values.map((credit, index) => {
               const selection = credit.selection;
               const label = selection.displayName;
               const suggestion =
@@ -396,7 +365,6 @@ export function CharacterPicker({
                     disabled={disabled}
                     onClick={(event) => {
                       portraitReturnFocusRef.current = event.currentTarget;
-                      setOpen(false);
                       setPortraitIndex(index);
                     }}
                     size="icon"
@@ -439,7 +407,6 @@ export function CharacterPicker({
                             event.detail === 0
                               ? event.currentTarget
                               : document.getElementById(id);
-                          setOpen(false);
                           setAliasEdit({
                             index,
                             value: selection.displayName,
@@ -461,65 +428,37 @@ export function CharacterPicker({
                 </TokenChip>
               );
             })}
-          </TokenInput>
-          {menuOpen ? (
-            <ComboboxOptions
-              id={menuId}
-              activeIndex={activeIndex}
-              className="max-h-72"
-            >
-              {options.map((option, index) => (
-                <ComboboxOption
-                  selected={index === activeIndex}
-                  className="min-h-12"
-                  aria-controls={
-                    option.kind === "create" ? `${id}-create-dialog` : undefined
-                  }
-                  aria-haspopup={
-                    option.kind === "create" ? "dialog" : undefined
-                  }
-                  id={`${menuId}-${index}`}
-                  key={
-                    option.kind === "create"
-                      ? `create:${option.query}`
-                      : option.selection.characterId
-                  }
-                  onClick={() =>
-                    option.kind === "create"
-                      ? startCreate(option.query)
-                      : addExisting(option.selection)
-                  }
-                >
-                  {option.kind === "create" ? (
-                    <>
-                      <span>新增角色“{option.query}”</span>
-                      <span className="shrink-0 text-xs text-muted">
-                        填写中文名
+            renderItem={(option) => (
+              <>
+                {option.kind === "create" ? (
+                  <>
+                    <span>新增角色“{option.query}”</span>
+                    <span className="shrink-0 text-xs text-muted">
+                      填写中文名
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <CharacterPortrait
+                        className="size-9 rounded-md text-sm"
+                        displayName={option.selection.displayName}
+                        portrait={option.defaultPortrait}
+                        size={36}
+                        toneKey={option.selection.characterId}
+                      />
+                      <span className="truncate">
+                        {option.selection.displayName}
                       </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <CharacterPortrait
-                          className="size-9 rounded-md text-sm"
-                          displayName={option.selection.displayName}
-                          portrait={option.defaultPortrait}
-                          size={36}
-                          toneKey={option.selection.characterId}
-                        />
-                        <span className="truncate">
-                          {option.selection.displayName}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-muted">
-                        {option.meta}
-                      </span>
-                    </>
-                  )}
-                </ComboboxOption>
-              ))}
-            </ComboboxOptions>
-          ) : null}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted">
+                      {option.meta}
+                    </span>
+                  </>
+                )}
+              </>
+            )}
+          />
         </div>
 
         <span className="text-xs text-muted">输入后按 Enter 添加</span>

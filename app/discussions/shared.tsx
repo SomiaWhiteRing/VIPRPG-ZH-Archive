@@ -349,6 +349,7 @@ export function ForumTagEditor({
     <div className="grid gap-2">
       <Label htmlFor={id}>TAG</Label>
       <TokenPicker
+        label="TAG"
         id={id}
         values={values}
         onChange={onChange}

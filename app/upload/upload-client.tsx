@@ -1317,6 +1317,7 @@ function MetadataFields({
           <TokenPicker
             disabled={disabled}
             id="upload-tags"
+            label="标签"
             onChange={(tags) => setForm((current) => ({ ...current, tags }))}
             placeholder="搜索或创建标签"
             recommendationLabel="推荐标签"
@@ -1378,6 +1379,7 @@ function MetadataFields({
               <TokenPicker
                 disabled={disabled}
                 id="upload-aliases"
+                label="别名"
                 onChange={(aliasTitles) =>
                   setForm((current) => ({ ...current, aliasTitles }))
                 }

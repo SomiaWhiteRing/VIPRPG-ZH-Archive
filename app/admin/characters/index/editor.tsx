@@ -1,13 +1,12 @@
+import { CharacterMembershipPicker, CharacterNameFields } from "./character-membership-picker";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
 import { CategoryPicker } from "@/app/admin/characters/index/category-picker";
 import { SortableCategoryMembers } from "@/app/admin/characters/index/sortable-category-members";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
-import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import type { PermissionKey } from "@/lib/authz/permissions";
@@ -26,7 +25,6 @@ import type {
 import {
   buildCharacterBrowseTree,
   characterMembershipNames,
-  characterNameOptions,
   characterNodePath,
 } from "@/lib/character-index";
 import { characterNameKey } from "@/lib/character-names";
@@ -42,7 +40,6 @@ import {
   Save,
   Trash2,
   UserRound,
-  X,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
@@ -952,7 +949,7 @@ export function CharacterIndexEditor({
                   : `仅看未分类 (${unplaced.length})`}
               </Button>
             </div>
-            <CharacterPicker
+            <CharacterMembershipPicker
               characters={data.characters}
               selected={batchCharacters}
               onChange={setBatchCharacters}
@@ -992,171 +989,6 @@ export function CharacterIndexEditor({
           </section>
         ) : null}
       </section>
-    </div>
-  );
-}
-function CharacterNameFields({
-  character,
-  selected,
-  onChange,
-  disabled,
-}: {
-  character: CharacterIndexEntry;
-  selected: Pick<CharacterNameSelection, "displayName" | "originalName">;
-  onChange: (
-    patch: Partial<
-      Pick<CharacterNameSelection, "displayName" | "originalName">
-    >,
-  ) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {(
-        [
-          { language: "zh", field: "displayName", label: "中文显示名" },
-          { language: "ja", field: "originalName", label: "日文显示名" },
-        ] as const
-      ).map(({ language, field, label }) => {
-        const options = [
-          ...new Set([
-            ...characterNameOptions(character, language),
-            selected[field],
-          ]),
-        ].map((name) => ({ value: name, label: name }));
-        return (
-          <div key={field}>
-            <Label>{label}</Label>
-            <SelectField
-              aria-label={label}
-              disabled={disabled}
-              value={selected[field]}
-              options={options}
-              onValueChange={(value) => {
-                if (value) onChange({ [field]: value });
-              }}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-function CharacterPicker({
-  characters,
-  selected,
-  onChange,
-  disabled,
-  excludeIds,
-}: {
-  characters: CharacterIndexEntry[];
-  selected: CharacterNameSelection[];
-  onChange: (values: CharacterNameSelection[]) => void;
-  disabled: boolean;
-  excludeIds: number[];
-}) {
-  const [query, setQuery] = useState("");
-  const results = characters.filter(
-    (character) =>
-      !excludeIds.includes(character.id) &&
-      !selected.some((item) => item.characterId === character.id) &&
-      characterNameKey(
-        [
-          character.primaryName,
-          character.originalName,
-          ...character.aliases.map((alias) => alias.name),
-        ].join(" "),
-      ).includes(characterNameKey(query)),
-  );
-  return (
-    <div className="grid gap-3">
-      {selected.map((selection) => {
-        const character = characters.find(
-          (item) => item.id === selection.characterId,
-        )!;
-        return (
-          <div
-            key={selection.characterId}
-            className="grid gap-2 border-b border-border pb-3"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">
-                {selection.displayName} · {selection.originalName}
-              </span>
-              <Button
-                aria-label={"取消选择" + selection.displayName}
-                type="button"
-                size="icon"
-                variant="ghost"
-                disabled={disabled}
-                onClick={() =>
-                  onChange(
-                    selected.filter(
-                      (item) => item.characterId !== selection.characterId,
-                    ),
-                  )
-                }
-              >
-                <X aria-hidden size={14} />
-              </Button>
-            </div>
-            <CharacterNameFields
-              character={character}
-              selected={selection}
-              disabled={disabled}
-              onChange={(patch) =>
-                onChange(
-                  selected.map((item) =>
-                    item.characterId === selection.characterId
-                      ? { ...item, ...patch }
-                      : item,
-                  ),
-                )
-              }
-            />
-          </div>
-        );
-      })}
-      <Input
-        aria-label="搜索要加入分类的角色"
-        type="search"
-        placeholder="输入中文名、日文名或别名"
-        value={query}
-        disabled={disabled}
-        onChange={(event) => setQuery(event.target.value)}
-      />
-      <div className="max-h-48 overflow-y-auto rounded-md border border-border">
-        {results.slice(0, 40).map((character) => (
-          <Button
-            className="w-full justify-start gap-2 rounded-none border-b border-border/50 text-left text-sm font-normal last:border-b-0"
-            key={character.id}
-            type="button"
-            variant="ghost"
-            disabled={disabled || selected.length >= 100}
-            onClick={() =>
-              onChange([...selected, characterMembershipNames(character)])
-            }
-          >
-            <Plus aria-hidden size={13} />
-            <span>{character.primaryName}</span>
-            <span className="truncate text-xs text-muted">
-              {character.originalName}
-            </span>
-          </Button>
-        ))}
-        {!results.length ? (
-          <EmptyState
-            title="没有可添加的匹配角色"
-            variant="plain"
-            className="p-3 text-xs"
-          />
-        ) : null}
-      </div>
-      {results.length > 40 ? (
-        <p className="text-xs text-muted">
-          还有 {results.length - 40} 位，请输入名称缩小范围。
-        </p>
-      ) : null}
     </div>
   );
 }
