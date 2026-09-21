@@ -4,7 +4,6 @@ import {
   searchUploadedWorks,
   searchUserWorks,
 } from "@/app/.server/db/game-library";
-import { latestUploaderRequest } from "@/app/.server/db/permissions";
 import { searchUserComments } from "@/app/.server/db/work-community";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { ownUserDiscussions } from "@/app/.server/forum/user-discussions";
@@ -25,14 +24,12 @@ import {
   canAccessOwnWorks,
   canPublishWork,
   hasPermission,
-  hasUploaderAccess,
 } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { UploadAccess } from "./upload-access";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -59,11 +56,7 @@ export async function loader(args: LoaderFunctionArgs) {
       ownUserDiscussions(getForumRuntime(runtime), user, { pageSize: 3 }),
     ]);
 
-  const uploadRequest = hasUploaderAccess(user)
-    ? null
-    : await latestUploaderRequest(runtime, user.id);
   return {
-    uploadRequest,
     user: pickPageFields(user, [
       "profileVisibility",
       "avatarBlobSha256",
@@ -87,7 +80,6 @@ export const meta: MetaFunction = ({ error }) =>
 
 export default function MePage() {
   const {
-    uploadRequest,
     user,
     played,
     favorites,
@@ -107,7 +99,6 @@ export default function MePage() {
         compact
         title="个人中心"
       />
-      <UploadAccess user={user} request={uploadRequest} />
       <AccountSection
         href="/me/profile"
         status={

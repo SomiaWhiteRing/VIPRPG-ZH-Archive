@@ -84,6 +84,7 @@ export function RoleAssignmentControl({
           <span className="text-sm">
             {role.name}
             {role.status === "disabled" ? "（已停用）" : ""}
+            {role.status === "active" && role.availableToAll ? "（移除单独授权后仍全员可用）" : ""}
           </span>
           <Button
             disabled={saving || refreshing}
@@ -104,7 +105,7 @@ export function RoleAssignmentControl({
             onValueChange={(value) => setSelectedRoleId(Number(value))}
             options={available.map((role) => ({
               value: String(role.id),
-              label: role.name,
+              label: role.name + (role.availableToAll ? "（另行单独授权）" : ""),
             }))}
             value={String(effectiveSelectedRoleId)}
           />

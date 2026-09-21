@@ -74,7 +74,7 @@ export const USER_ACCESS_COLUMNS = `
   rp.permission_key`;
 
 export const USER_ACCESS_JOINS = `
-  LEFT JOIN user_roles ur ON ur.user_id=u.id
+  LEFT JOIN effective_user_roles ur ON ur.user_id=u.id
   LEFT JOIN roles r ON r.id=ur.role_id AND r.status='active'
   LEFT JOIN role_permissions rp ON rp.role_id=r.id`;
 

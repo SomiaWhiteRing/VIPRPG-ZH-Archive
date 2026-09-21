@@ -69,6 +69,7 @@ export async function loader(args: LoaderFunctionArgs) {
     (role) =>
       role.key !== "user" &&
       role.kind !== "bootstrap_admin" &&
+      (role.key !== "admin" || adminUser.isBootstrapAdmin) &&
       role.priority < adminUser.maxRolePriority,
   );
 
@@ -149,13 +150,14 @@ export default function AdminUsersPage() {
                 <td>
                   <div className="flex flex-wrap gap-2">
                     {roles
-                      .filter((role) =>
-                        memberships.get(user.id)?.includes(role.id),
-                      )
+                      .filter((role) => memberships.get(user.id)?.includes(role.id) ||
+                        (user.status === "active" && role.status === "active" && role.availableToAll))
                       .map((role) => (
                         <span className="session-pill" key={role.id}>
                           {role.name}
                           {role.status === "disabled" ? "（已停用）" : ""}
+                          {role.status === "active" && role.availableToAll ?
+                            (memberships.get(user.id)?.includes(role.id) ? "（单独授权及全员开放）" : "（全员开放）") : ""}
                         </span>
                       ))}
                   </div>
@@ -179,14 +181,16 @@ export default function AdminUsersPage() {
                                 .filter(
                                   (role) =>
                                     role.status === "active" &&
-                                    memberships
+                                    (role.availableToAll || memberships
                                       .get(user.id)
-                                      ?.includes(role.id) &&
+                                      ?.includes(role.id)) &&
                                     role.permissionKeys.includes(
                                       permission.key,
                                     ),
                                 )
-                                .map((role) => role.name)
+                                .map((role) => role.name + (role.availableToAll
+                                  ? (memberships.get(user.id)?.includes(role.id) ? "（单独授权及全员开放）" : "（全员开放）")
+                                  : "（单独授权）"))
                                 .join("、")}
                             </span>
                           </li>

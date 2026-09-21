@@ -18,7 +18,7 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   permissionConfigurationWarnings,
 } from "@/lib/authz/permissions";
-import { ROLE_TEMPLATES, roleEditSnapshot } from "@/lib/authz/roles";
+import { ROLE_TEMPLATES, roleEditSnapshot, roleSupportsApplications } from "@/lib/authz/roles";
 import type { Permission, RoleSummary } from "@/lib/dto/db/permissions";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FormEvent } from "react";
@@ -157,6 +157,8 @@ export function PermissionMatrix({
         id: payload.id,
         kind: "custom",
         status: "active",
+        applicationEnabled: false,
+        availableToAll: false,
         userCount: 0,
         permissionKeys: [],
       };
@@ -205,6 +207,8 @@ export function PermissionMatrix({
       description: String(formData.get("description")).trim(),
       priority: Number(formData.get("priority")),
       status: role.status,
+      applicationEnabled: role.applicationEnabled,
+      availableToAll: role.availableToAll,
     };
     try {
       await request(`/api/admin/roles/${role.id}`, {
@@ -432,7 +436,7 @@ export function PermissionMatrix({
                   {role.name}
                 </h2>
                 <p className="text-xs text-muted">
-                  {roleKindLabels[role.kind]} · {role.userCount} 位成员 · 已选{" "}
+                  {roleKindLabels[role.kind]} · {role.userCount} 位单独授权成员 · 已选{" "}
                   {role.permissionKeys.length} / {permissions.length} 项权限
                 </p>
               </div>
@@ -441,7 +445,9 @@ export function PermissionMatrix({
                   {role.status === "disabled" ? "停用" : "启用"}
                   {role.status !== saved.status ? "（未保存）" : ""}
                 </Badge>
-                {!editable ? <Badge variant="outline">只读</Badge> : null}
+                {!editable ? <Badge variant="outline">系统功能固定</Badge> : null}
+                {role.applicationEnabled ? <Badge variant="outline">开放申请</Badge> : null}
+                {role.availableToAll ? <Badge variant="outline">全员开放</Badge> : null}
               </div>
             </div>
             {error ? <Notice>{error}</Notice> : null}
@@ -451,6 +457,8 @@ export function PermissionMatrix({
                   服务器上的最新配置：{conflict.name} ·{" "}
                   {conflict.permissionKeys.length} 项权限。当前草稿仍保留。
                 </p>
+                <p className="mt-2 whitespace-pre-wrap">{conflict.description || "暂无说明"}</p>
+                <p>开放申请：{conflict.applicationEnabled ? "是" : "否"}；全员开放：{conflict.availableToAll ? "是" : "否"}。</p>
                 <details className="my-2">
                   <summary className="cursor-pointer">查看最新权限</summary>
                   <ul className="mt-2 grid gap-1">
@@ -490,9 +498,8 @@ export function PermissionMatrix({
 
             <details className="border-b border-border pb-3" key={role.id}>
               <summary className="w-fit cursor-pointer text-sm font-semibold">
-                角色资料与备注{profileDirty ? " · 未保存" : ""}
+                角色资料与开放设置{profileDirty ? " · 未保存" : ""}
               </summary>
-              {editable ? (
                 <form action={saveProfile} className="mt-4">
                   <fieldset
                     className="grid gap-4 md:grid-cols-2"
@@ -503,6 +510,7 @@ export function PermissionMatrix({
                       <Input
                         maxLength={80}
                         name="name"
+                        readOnly={!editable}
                         required
                         value={role.name}
                         onChange={(event) =>
@@ -516,6 +524,7 @@ export function PermissionMatrix({
                         max={699}
                         min={101}
                         name="priority"
+                        readOnly={!editable}
                         required
                         type="number"
                         value={role.priority}
@@ -531,7 +540,7 @@ export function PermissionMatrix({
                       角色状态
                       <SelectField
                         aria-label="角色状态"
-                        disabled={saving !== null}
+                        disabled={!editable || saving !== null}
                         value={role.status}
                         onValueChange={(value) =>
                           updateRole({ status: value as RoleSummary["status"] })
@@ -550,7 +559,7 @@ export function PermissionMatrix({
                       <code className="break-all text-muted">{role.key}</code>
                     </div>
                     <Label className="grid gap-2 md:col-span-2">
-                      角色备注
+                      权限说明
                       <Textarea
                         name="description"
                         value={role.description}
@@ -558,7 +567,24 @@ export function PermissionMatrix({
                           updateRole({ description: event.target.value })
                         }
                       />
+                      <span className="text-xs font-normal text-muted">在个人中心展示的角色总说明；功能明细由下方权限配置生成。</span>
                     </Label>
+                    {roleSupportsApplications(role) ? (
+                      <div className="grid gap-3 md:col-span-2">
+                        <Label className="flex items-center gap-2">
+                          <Checkbox checked={role.applicationEnabled} disabled={saving !== null}
+                            onCheckedChange={(checked) => updateRole({ applicationEnabled: checked === true })} />
+                          开放申请
+                        </Label>
+                        <p className="text-xs text-muted">关闭后会结束尚未处理的申请，并通知申请人。</p>
+                        <Label className="flex items-center gap-2">
+                          <Checkbox checked={role.availableToAll} disabled={saving !== null}
+                            onCheckedChange={(checked) => updateRole({ availableToAll: checked === true })} />
+                          向所有用户开放
+                        </Label>
+                        <p className="text-xs text-muted">所有正常登录用户均可使用，包括以后注册的用户。开启时结束待审申请；收回时保留单独授权。</p>
+                      </div>
+                    ) : <p className="text-sm text-muted md:col-span-2">此角色不开放申请，也不能向所有用户开放。</p>}
                     <div className="flex flex-wrap gap-2 md:col-span-2">
                       <Button disabled={!profileDirty} type="submit">
                         {saving === "profile" ? "保存中…" : "保存角色资料"}
@@ -571,6 +597,8 @@ export function PermissionMatrix({
                             description: saved.description,
                             priority: saved.priority,
                             status: saved.status,
+                            applicationEnabled: saved.applicationEnabled,
+                            availableToAll: saved.availableToAll,
                           })
                         }
                         type="button"
@@ -581,28 +609,6 @@ export function PermissionMatrix({
                     </div>
                   </fieldset>
                 </form>
-              ) : (
-                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <div>
-                    <dt className="text-muted">角色备注</dt>
-                    <dd className="mt-1 whitespace-pre-wrap">
-                      {role.description || "暂无备注"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">管理优先级</dt>
-                    <dd className="mt-1">{role.priority}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">角色标识</dt>
-                    <dd className="mt-1 font-mono">{role.key}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">编辑限制</dt>
-                    <dd className="mt-1">系统角色不可在此修改。</dd>
-                  </div>
-                </dl>
-              )}
             </details>
 
             {editable && warnings.length > 0 ? (
@@ -956,7 +962,9 @@ function profileChanged(role: RoleSummary, saved: RoleSummary) {
     role.name !== saved.name ||
     role.description !== saved.description ||
     role.priority !== saved.priority ||
-    role.status !== saved.status
+    role.status !== saved.status ||
+    role.applicationEnabled !== saved.applicationEnabled ||
+    role.availableToAll !== saved.availableToAll
   );
 }
 

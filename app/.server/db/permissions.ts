@@ -3,16 +3,16 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import {
   hasPermission,
-  hasUploaderAccess,
   parsePermissionKeys,
   PERMISSION_LIST,
 } from "@/lib/authz/permissions";
 import type { RoleKind, RoleStatus } from "@/lib/authz/roles";
-import { isCustomRolePriority, ROLE_TEMPLATES } from "@/lib/authz/roles";
+import { hasRoleAccess, isAdministrator, isCustomRolePriority, roleSupportsApplications, ROLE_TEMPLATES } from "@/lib/authz/roles";
 import type {
   Permission,
   RoleRequestSummary,
   RoleSummary,
+  AccountRoleOption,
 } from "@/lib/dto/db/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
@@ -25,6 +25,8 @@ type RoleRow = {
   priority: number;
   kind: RoleKind;
   status: RoleStatus;
+  application_enabled: number;
+  available_to_all: number;
   user_count: number;
 };
 
@@ -49,7 +51,7 @@ export class RoleConflictError extends HttpError {
   }
 }
 
-const ROLE_EDIT_SNAPSHOT_SQL = `json_array(r.name,r.description,r.priority,r.status,
+const ROLE_EDIT_SNAPSHOT_SQL = `json_array(r.name,r.description,r.priority,r.status,r.application_enabled,r.available_to_all,
   json((SELECT json_group_array(permission_key) FROM
     (SELECT permission_key FROM role_permissions WHERE role_id=r.id ORDER BY permission_key))))`;
 
@@ -63,11 +65,25 @@ export function userManagementScopeSql(
 ): string {
   return `EXISTS (SELECT 1 FROM users manager WHERE manager.id=? AND manager.status='active'
     AND manager.id<>${target}
-    AND EXISTS (SELECT 1 FROM user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
+    AND EXISTS (SELECT 1 FROM effective_user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
       JOIN role_permissions p ON p.role_id=r.id WHERE mr.user_id=manager.id AND p.permission_key='${permission}')
-    AND COALESCE((SELECT MAX(r.priority) FROM user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
-      WHERE mr.user_id=manager.id),0) > COALESCE((SELECT MAX(r.priority) FROM user_roles tr
+    AND COALESCE((SELECT MAX(r.priority) FROM effective_user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
+      WHERE mr.user_id=manager.id),0) > COALESCE((SELECT MAX(r.priority) FROM effective_user_roles tr
       JOIN roles r ON r.id=tr.role_id AND r.status='active' WHERE tr.user_id=${target}),0))`;
+}
+
+export function administratorSql(userId: string): string {
+  return `EXISTS (SELECT 1 FROM users administrator JOIN user_roles membership ON membership.user_id=administrator.id
+    JOIN roles admin_role ON admin_role.id=membership.role_id AND admin_role.status='active'
+    WHERE administrator.id=${userId} AND administrator.status='active' AND admin_role.key IN ('admin','super_admin'))`;
+}
+
+export function roleAccessSql(userId: string, roleId: string): string {
+  return `(EXISTS (SELECT 1 FROM effective_user_roles granted WHERE granted.user_id=${userId} AND granted.role_id=${roleId})
+    OR (EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId})
+      AND NOT EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId}
+        AND NOT EXISTS (SELECT 1 FROM effective_user_roles granted JOIN role_permissions p ON p.role_id=granted.role_id
+          WHERE granted.user_id=${userId} AND p.permission_key=wanted.permission_key))))`;
 }
 
 type RoleRequestTarget = {
@@ -85,7 +101,7 @@ export async function listRoles(runtime: AppRuntime): Promise<RoleSummary[]> {
   const rows = await getD1(runtime)
     .prepare(
       `
-    SELECT r.id, r.key, r.name, r.description, r.priority, r.kind, r.status,
+    SELECT r.id, r.key, r.name, r.description, r.priority, r.kind, r.status, r.application_enabled, r.available_to_all,
       COUNT(DISTINCT ur.user_id) AS user_count
     FROM roles r LEFT JOIN user_roles ur ON ur.role_id = r.id
     GROUP BY r.id ORDER BY r.priority DESC, r.name ASC
@@ -116,6 +132,8 @@ export async function listRoles(runtime: AppRuntime): Promise<RoleSummary[]> {
   return roles.map((row) => ({
     ...row,
     userCount: Number(row.user_count),
+    applicationEnabled: row.application_enabled === 1,
+    availableToAll: row.available_to_all === 1,
     permissionKeys: byRole.get(row.id) ?? [],
   }));
 }
@@ -137,98 +155,81 @@ export async function listUserRoleMemberships(
   return result;
 }
 
-export async function latestUploaderRequest(
-  runtime: AppRuntime,
-  userId: number,
-): Promise<{ status: string; id: number } | null> {
-  return getD1(runtime)
-    .prepare(
-      `SELECT id,status FROM inbox_items WHERE type='role_change_request'
-    AND target_user_id=? AND requested_role_key_snapshot='uploader' ORDER BY id DESC LIMIT 1`,
-    )
-    .bind(userId)
-    .first<{ status: string; id: number }>();
-}
-
-export async function requestUploaderRole(
+export async function listAccountRoleOptions(
   runtime: AppRuntime,
   actor: ArchiveUser,
+): Promise<AccountRoleOption[]> {
+  const database = getD1(runtime);
+  const roles = await listRoles(runtime);
+  const memberships = await listUserRoleMemberships(runtime, [actor.id]);
+  const requests = await database.prepare(`SELECT id, status, requested_role_id AS role_id,
+    requested_role_key_snapshot AS role_key, requested_role_name_snapshot AS role_name,
+    json_extract(metadata_json,'$.closedReason') AS closed_reason
+    FROM inbox_items i WHERE type='role_change_request' AND target_user_id=?
+      AND id=(SELECT MAX(latest.id) FROM inbox_items latest WHERE latest.type='role_change_request'
+        AND latest.target_user_id=i.target_user_id AND latest.requested_role_id=i.requested_role_id)`)
+    .bind(actor.id).all<{
+      id: number; status: RoleRequestSummary["status"]; role_id: number;
+      role_key: string; role_name: string; closed_reason: string | null;
+    }>();
+  const byRole = new Map(requests.results.map((row) => [row.role_id, {
+    id: row.id, status: row.status, closedReason: row.closed_reason,
+    requestedRole: { id: row.role_id, key: row.role_key, name: row.role_name },
+  }]));
+  const assigned = memberships.get(actor.id) ?? [];
+  return roles.filter((role) => roleSupportsApplications(role) && (
+    (role.status === "active" && (role.applicationEnabled || role.availableToAll)) ||
+    assigned.includes(role.id) || byRole.has(role.id)
+  )).map((role) => ({
+    id: role.id, key: role.key, name: role.name, description: role.description, status: role.status,
+    applicationEnabled: role.applicationEnabled, availableToAll: role.availableToAll,
+    permissions: PERMISSION_LIST.filter((permission) => role.permissionKeys.includes(permission.key)),
+    individuallyAssigned: assigned.includes(role.id),
+    granted: role.status === "active" && hasRoleAccess(actor, role),
+    request: byRole.get(role.id) ?? null,
+  }));
+}
+
+export async function requestRole(
+  runtime: AppRuntime,
+  actor: ArchiveUser,
+  input: { roleId: number; reason?: string },
 ): Promise<RoleRequestSummary> {
   if (actor.status !== "active") throw new HttpError(401, "账户不可用");
-  if (hasUploaderAccess(actor)) {
-    throw new HttpError(409, "当前账户已有上传权限");
-  }
-
+  if (!Number.isSafeInteger(input.roleId) || input.roleId <= 0)
+    throw new HttpError(400, "请选择要申请的权限");
+  const reason = input.reason?.trim() ?? "";
+  if (reason.length > 2000) throw new HttpError(400, "申请理由不能超过 2000 字");
   const database = getD1(runtime);
-  const role = await database
-    .prepare(
-      "SELECT id, key, name FROM roles WHERE key = 'uploader' AND status = 'active'",
-    )
-    .first<{ id: number; key: string; name: string }>();
-  if (!role) throw new Error("上传者角色不存在");
-
+  const eventKey = crypto.randomUUID();
   await database.batch([
-    database
-      .prepare(
-        `
-    INSERT OR IGNORE INTO inbox_items (
-      type, status, sender_user_id, recipient_user_id, required_permission_key,
-      target_user_id, requested_role_id, requested_role_key_snapshot,
-      requested_role_name_snapshot, title, body
-    ) VALUES ('role_change_request', 'pending', ?, ?, 'user.role.assign', ?, ?, ?, ?, ?, ?)
-    `,
-      )
-      .bind(
-        actor.id,
-        actor.id,
-        actor.id,
-        role.id,
-        role.key,
-        role.name,
-        "上传者权限申请",
-        `${actor.displayName} 申请获得上传者角色。`,
-      ),
-    roleRequestAuditStatement(database, actor, {
-      targetUserId: actor.id,
-      roleId: role.id,
-      roleKey: role.key,
+    database.prepare(`INSERT OR IGNORE INTO inbox_items (
+      type,status,sender_user_id,recipient_user_id,required_permission_key,target_user_id,
+      requested_role_id,requested_role_key_snapshot,requested_role_name_snapshot,title,body,event_key)
+      SELECT 'role_change_request','pending',u.id,u.id,'user.role.assign',u.id,r.id,r.key,r.name,
+        r.name || '权限申请',?,?
+      FROM users u JOIN roles r ON r.id=? WHERE u.id=? AND u.status='active'
+        AND r.status='active' AND (r.key='uploader' OR r.kind='custom')
+        AND r.application_enabled=1 AND r.available_to_all=0 AND NOT ${roleAccessSql("u.id", "r.id")}`)
+      .bind(reason, eventKey, input.roleId, actor.id),
+    requiredPreviousMutationAuditStatement(database, actor, "role_request_created", {
+      eventKey, targetUserId: actor.id, roleId: input.roleId,
     }),
   ]);
-
-  const request = await database
-    .prepare(
-      `
-    SELECT id, status, requested_role_id, requested_role_key_snapshot,
-      requested_role_name_snapshot
-    FROM inbox_items
-    WHERE type = 'role_change_request'
-      AND status = 'pending'
-      AND target_user_id = ?
-      AND requested_role_id = ?
-    ORDER BY id DESC
-    LIMIT 1
-  `,
-    )
-    .bind(actor.id, role.id)
-    .first<{
-      id: number;
-      status: string;
-      requested_role_id: number | null;
-      requested_role_key_snapshot: string | null;
-      requested_role_name_snapshot: string | null;
+  // Read our record even if an administrator resolved it immediately after submission.
+  const request = await database.prepare(`SELECT id,status,requested_role_id AS role_id,
+      requested_role_key_snapshot AS role_key,requested_role_name_snapshot AS role_name,
+      json_extract(metadata_json,'$.closedReason') AS closed_reason
+    FROM inbox_items WHERE type='role_change_request' AND target_user_id=? AND requested_role_id=?
+      AND (event_key=? OR status='pending') ORDER BY id DESC LIMIT 1`)
+    .bind(actor.id, input.roleId, eventKey).first<{
+      id: number; status: RoleRequestSummary["status"]; role_id: number;
+      role_key: string; role_name: string; closed_reason: string | null;
     }>();
-
-  if (!request) throw new Error("角色申请创建失败");
+  if (!request) throw new HttpError(409, "当前权限已拥有或不再开放申请，请刷新后查看。");
   return {
-    id: request.id,
-    status: request.status,
-    requestedRole: request.requested_role_id
-      ? {
-          id: request.requested_role_id,
-          key: request.requested_role_key_snapshot ?? role.key,
-          name: request.requested_role_name_snapshot ?? role.name,
-        }
-      : null,
+    id: request.id, status: request.status, closedReason: request.closed_reason,
+    requestedRole: { id: request.role_id, key: request.role_key, name: request.role_name },
   };
 }
 
@@ -301,25 +302,39 @@ export async function updateRole(
     description?: string;
     priority: number;
     status: RoleStatus;
+    applicationEnabled: boolean;
+    availableToAll: boolean;
     expected: string;
   },
 ): Promise<void> {
   requireBootstrapAdmin(input.actor);
-  if (!isCustomRolePriority(input.priority))
-    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
   const database = getD1(runtime);
-  const role = await requiredCustomRole(runtime, input.roleId);
+  const role = (await listRoles(runtime)).find((item) => item.id === input.roleId);
+  if (!role) throw new HttpError(404, "角色不存在");
+  if (role.kind === "custom" && !isCustomRolePriority(input.priority))
+    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
+  if (role.kind !== "custom" && (input.name !== role.name || input.priority !== role.priority || input.status !== role.status))
+    throw new HttpError(403, "系统角色的名称、优先级和状态不可修改");
+  if (!roleSupportsApplications(role) && (input.applicationEnabled || input.availableToAll))
+    throw new HttpError(400, "此角色不能开放申请或向所有用户开放");
+  const eventKey = crypto.randomUUID();
+  const closedReason = input.status === "disabled" ? "该角色已停用，申请已关闭。"
+    : input.availableToAll ? "此权限已向所有用户开放，无需申请。"
+    : !input.applicationEnabled ? "该角色已关闭开放申请，本次申请已关闭。" : null;
   const [result] = await database.batch([
     database
       .prepare(
-        `UPDATE roles AS r SET name = ?, description = ?, priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND kind = 'custom' AND ${ROLE_EDIT_SNAPSHOT_SQL}=? AND ${CURRENT_BOOTSTRAP_SQL}`,
+        `UPDATE roles AS r SET name = ?, description = ?, priority = ?, status = ?,
+          application_enabled = ?, available_to_all = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND ${ROLE_EDIT_SNAPSHOT_SQL}=? AND ${CURRENT_BOOTSTRAP_SQL}`,
       )
       .bind(
         normalizeRoleName(input.name),
         input.description?.trim() ?? "",
         input.priority,
         input.status,
+        Number(input.applicationEnabled),
+        Number(input.availableToAll),
         role.id,
         input.expected,
         input.actor.id,
@@ -329,14 +344,32 @@ export async function updateRole(
       input.actor,
       "role_updated",
       {
+        eventKey,
         roleId: role.id,
         before: input.expected,
         name: input.name.trim(),
         description: input.description?.trim() ?? "",
         priority: input.priority,
         status: input.status,
+        applicationEnabled: input.applicationEnabled,
+        availableToAll: input.availableToAll,
       },
     ),
+    ...(closedReason ? [
+      database.prepare(`UPDATE inbox_items SET status='archived',resolved_by_user_id=?,resolved_at=CURRENT_TIMESTAMP,
+          metadata_json=json_set(COALESCE(metadata_json,'{}'),'$.closedReason',?,'$.closureEventKey',?)
+        WHERE type='role_change_request' AND status='pending' AND requested_role_id=?
+          AND EXISTS (SELECT 1 FROM auth_audit_logs WHERE user_id=? AND event_type='role_updated'
+            AND json_extract(detail_json,'$.eventKey')=?)`)
+        .bind(input.actor.id, closedReason, eventKey, role.id, input.actor.id, eventKey),
+      database.prepare(`INSERT INTO inbox_items(type,status,sender_user_id,recipient_user_id,target_user_id,title,body,event_key)
+        SELECT 'system_notice','open',?,i.target_user_id,i.target_user_id,'权限申请已关闭',
+          i.requested_role_name_snapshot || '：' || json_extract(i.metadata_json,'$.closedReason'),
+          'role-request-closed:' || ? || ':' || i.id
+        FROM inbox_items i WHERE i.type='role_change_request' AND i.status='archived'
+          AND json_extract(i.metadata_json,'$.closureEventKey')=?`)
+        .bind(input.actor.id, eventKey, eventKey),
+    ] : []),
   ]);
   if (Number(result.meta.changes) !== 1)
     throw new RoleConflictError(
@@ -435,6 +468,7 @@ export async function resolveRoleRequest(
   },
 ): Promise<void> {
   if (
+    !isAdministrator(input.actor) ||
     !hasPermission(input.actor, "inbox.role_request.resolve") ||
     !hasPermission(input.actor, "user.role.assign")
   ) {
@@ -737,7 +771,7 @@ function userPriorityTargetStatement(
     .prepare(
       `
     SELECT u.status, COALESCE(MAX(CASE WHEN r.status = 'active' THEN r.priority END), 0) AS priority
-    FROM users u LEFT JOIN user_roles ur ON ur.user_id = u.id LEFT JOIN roles r ON r.id = ur.role_id
+    FROM users u LEFT JOIN effective_user_roles ur ON ur.user_id = u.id LEFT JOIN roles r ON r.id = ur.role_id
     WHERE u.id = ? GROUP BY u.id
   `,
     )
@@ -761,6 +795,8 @@ function assertManageableRoleChange(
     throw new Error(`Unknown role kind: ${String(role.kind)}`);
   if (role.kind === "bootstrap_admin")
     throw new HttpError(403, "超级管理员不能通过网页授予");
+  if (role.key === "admin" && !actor.isBootstrapAdmin)
+    throw new HttpError(403, "只有超级管理员可以授予或收回管理员角色");
   if (
     actor.maxRolePriority <= Number(target.priority) ||
     actor.maxRolePriority <= role.priority
@@ -785,9 +821,10 @@ function roleChangeAuditStatement(
       `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
     SELECT ?,?,?,? FROM users target JOIN roles role ON role.id=?
     WHERE target.id=? AND target.status='active' AND role.kind<>'bootstrap_admin'
+      AND (role.key<>'admin' OR ${CURRENT_BOOTSTRAP_SQL})
       AND role.name=? AND role.priority=? AND (?=0 OR role.status='active')
       AND ${userManagementScopeSql("user.role.assign", "target.id")}
-      AND role.priority < (SELECT MAX(r.priority) FROM user_roles ar JOIN roles r ON r.id=ar.role_id
+      AND role.priority < (SELECT MAX(r.priority) FROM effective_user_roles ar JOIN roles r ON r.id=ar.role_id
         WHERE ar.user_id=? AND r.status='active')
       ${action ? `AND ${action === "assigned" ? "NOT " : ""}EXISTS (SELECT 1 FROM user_roles WHERE user_id=target.id AND role_id=role.id)` : ""}
       ${action === "removed" ? "AND role.key<>'user'" : ""}
@@ -795,7 +832,11 @@ function roleChangeAuditStatement(
         inboxItemId
           ? `AND EXISTS (SELECT 1 FROM inbox_items WHERE id=? AND type='role_change_request' AND status='pending'
         AND target_user_id=target.id AND requested_role_id=role.id)
-        AND EXISTS (SELECT 1 FROM user_roles ar JOIN roles r ON r.id=ar.role_id AND r.status='active'
+        AND role.status='active' AND role.application_enabled=1 AND role.available_to_all=0
+        AND (role.key='uploader' OR role.kind='custom')
+        AND ${administratorSql("?")}
+        ${action === "assigned" ? `AND NOT ${roleAccessSql("target.id", "role.id")}` : ""}
+        AND EXISTS (SELECT 1 FROM effective_user_roles ar JOIN roles r ON r.id=ar.role_id AND r.status='active'
           JOIN role_permissions p ON p.role_id=r.id WHERE ar.user_id=? AND p.permission_key='inbox.role_request.resolve')`
           : ""
       }`,
@@ -807,12 +848,13 @@ function roleChangeAuditStatement(
       JSON.stringify(detail),
       role.id,
       targetUserId,
+      actor.id,
       role.name,
       role.priority,
       requireActiveRole ? 1 : 0,
       actor.id,
       actor.id,
-      ...(inboxItemId ? [inboxItemId, actor.id] : []),
+      ...(inboxItemId ? [inboxItemId, actor.id, actor.id] : []),
     );
 }
 
@@ -902,19 +944,4 @@ function requiredPreviousMutationAuditStatement(
   `,
     )
     .bind(actor.id, actor.email, eventType, JSON.stringify(detail));
-}
-
-function roleRequestAuditStatement(
-  database: ReturnType<typeof getD1>,
-  actor: ArchiveUser,
-  detail: Record<string, string | number | boolean | null>,
-) {
-  return database
-    .prepare(
-      `
-    INSERT INTO auth_audit_logs (user_id, email, event_type, detail_json)
-    SELECT ?, ?, CASE WHEN changes() = 1 THEN 'role_request_created' ELSE 'role_request_reused' END, ?
-  `,
-    )
-    .bind(actor.id, actor.email, JSON.stringify(detail));
 }

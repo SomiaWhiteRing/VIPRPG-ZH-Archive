@@ -5,6 +5,8 @@ import { forumLocation } from "@/app/.server/forum/location";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import { hasPermission, isPermissionKey } from "@/lib/authz/permissions";
+import { isAdministrator } from "@/lib/authz/roles";
+import { administratorSql, roleAccessSql } from "./permissions";
 import type {
   InboxItem,
   InboxItemStatus,
@@ -34,6 +36,7 @@ type InboxItemRow = {
   resolved_at: string | null;
   title: string;
   body: string;
+  closed_reason: string | null;
   created_at: string;
   read_at: string | null;
   target_status: string | null;
@@ -64,13 +67,17 @@ const INBOX_SELECT = `SELECT
   i.resolved_at,
   i.title,
   i.body,
+  json_extract(i.metadata_json,'$.closedReason') AS closed_reason,
   i.created_at,
   target.status AS target_status,
-  COALESCE((SELECT MAX(r.priority) FROM user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) AS target_priority,
+  COALESCE((SELECT MAX(r.priority) FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) AS target_priority,
+  requested_role.key AS role_key,
   requested_role.priority AS role_priority,
   requested_role.kind AS role_kind,
   requested_role.status AS role_status,
-  EXISTS(SELECT 1 FROM user_roles ur WHERE ur.user_id=target.id AND ur.role_id=i.requested_role_id) AS already_assigned,
+  requested_role.application_enabled AS role_application_enabled,
+  requested_role.available_to_all AS role_available_to_all,
+  ${roleAccessSql("target.id", "i.requested_role_id")} AS already_assigned,
   reads.read_at
 FROM inbox_items i
 LEFT JOIN users sender ON sender.id = i.sender_user_id
@@ -80,33 +87,33 @@ LEFT JOIN users resolver ON resolver.id = i.resolved_by_user_id
 LEFT JOIN inbox_item_reads reads ON reads.item_id = i.id AND reads.user_id = ?`;
 
 export function buildInboxVisibilityClause(
-  permissionKeys: readonly PermissionKey[],
+  user: ArchiveUser,
 ): {
   sql: string;
-  permissionBinds: readonly PermissionKey[];
+  audienceBinds: readonly (PermissionKey | number)[];
 } {
-  if (permissionKeys.length === 0) {
-    return { sql: "i.recipient_user_id = ? OR 0", permissionBinds: [] };
-  }
-
   return {
-    sql: `i.recipient_user_id = ? OR i.required_permission_key IN (${permissionKeys.map(() => "?").join(",")})`,
-    permissionBinds: permissionKeys,
+    sql: `i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?")})
+      OR (i.type<>'role_change_request' AND ${user.permissionKeys.length
+        ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})`,
+    audienceBinds: [user.id, ...user.permissionKeys],
   };
 }
 
 function inboxQuery(user: ArchiveUser) {
-  const visibility = buildInboxVisibilityClause(user.permissionKeys);
+  const visibility = buildInboxVisibilityClause(user);
   return {
     sql: `WITH visible AS (${INBOX_SELECT} WHERE (${visibility.sql})), actionable AS (
       SELECT *, (type='role_change_request' AND status='pending' AND ?
         AND target_user_id<>? AND target_status='active' AND role_priority IS NOT NULL
-        AND role_kind<>'bootstrap_admin' AND ?>target_priority AND ?>role_priority) AS can_reject
+        AND (role_kind='custom' OR role_key='uploader') AND role_status='active'
+        AND role_application_enabled=1 AND role_available_to_all=0
+        AND ?>target_priority AND ?>role_priority) AS can_reject
       FROM visible)`,
     binds: [
       user.id,
       user.id,
-      ...visibility.permissionBinds,
+      ...visibility.audienceBinds,
       canResolveInboxRequests(user) ? 1 : 0,
       user.id,
       user.maxRolePriority,
@@ -117,6 +124,7 @@ function inboxQuery(user: ArchiveUser) {
 
 export function canResolveInboxRequests(user: ArchiveUser) {
   return (
+    isAdministrator(user) &&
     hasPermission(user, "inbox.role_request.resolve") &&
     hasPermission(user, "user.role.assign")
   );
@@ -219,7 +227,7 @@ export async function countUnreadInboxItemsForUser(
   runtime: AppRuntime,
   user: ArchiveUser,
 ): Promise<number> {
-  const visibility = buildInboxVisibilityClause(user.permissionKeys);
+  const visibility = buildInboxVisibilityClause(user);
   const row = await getD1(runtime)
     .prepare(
       `SELECT COUNT(*) AS count
@@ -229,7 +237,7 @@ export async function countUnreadInboxItemsForUser(
       WHERE (${visibility.sql})
         AND reads.read_at IS NULL`,
     )
-    .bind(user.id, user.id, ...visibility.permissionBinds)
+    .bind(user.id, user.id, ...visibility.audienceBinds)
     .first<{ count: number }>();
   return row?.count ?? 0;
 }
@@ -252,14 +260,14 @@ export async function markInboxItemRead(
   ) {
     throw new HttpError(409, "提醒对应的内容已变化或不可用。");
   }
-  const visibility = buildInboxVisibilityClause(input.user.permissionKeys);
+  const visibility = buildInboxVisibilityClause(input.user);
   await getD1(runtime)
     .prepare(
       `INSERT INTO inbox_item_reads (item_id, user_id, read_at)
       SELECT i.id,?,CURRENT_TIMESTAMP FROM inbox_items i WHERE i.id=? AND (${visibility.sql})
       ON CONFLICT(item_id, user_id) DO NOTHING`,
     )
-    .bind(input.user.id, item.id, input.user.id, ...visibility.permissionBinds)
+    .bind(input.user.id, item.id, input.user.id, ...visibility.audienceBinds)
     .run();
 }
 
@@ -267,7 +275,7 @@ export async function markAllInboxItemsRead(
   runtime: AppRuntime,
   user: ArchiveUser,
 ): Promise<number> {
-  const visibility = buildInboxVisibilityClause(user.permissionKeys);
+  const visibility = buildInboxVisibilityClause(user);
   // One statement fixes the visible set at the start of the write; later events stay unread.
   const result = await getD1(runtime)
     .prepare(
@@ -276,7 +284,7 @@ export async function markAllInboxItemsRead(
       AND NOT EXISTS(SELECT 1 FROM inbox_item_reads r WHERE r.item_id=i.id AND r.user_id=?)
     ON CONFLICT(item_id,user_id) DO NOTHING`,
     )
-    .bind(user.id, user.id, ...visibility.permissionBinds, user.id)
+    .bind(user.id, user.id, ...visibility.audienceBinds, user.id)
     .run();
   return Number(result.meta.changes ?? 0);
 }
@@ -332,6 +340,7 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
     resolvedAt: row.resolved_at,
     title: row.title,
     body: row.body,
+    closedReason: row.closed_reason,
     createdAt: row.created_at,
     readAt: row.read_at,
   };

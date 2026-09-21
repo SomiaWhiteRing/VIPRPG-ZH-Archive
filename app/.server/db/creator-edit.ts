@@ -8,7 +8,7 @@ import { HttpError } from "@/lib/http";
 
 const PUBLIC_CREATOR_SQL = `EXISTS (SELECT 1 FROM work_staff ws JOIN public_works w ON w.id=ws.work_id WHERE ws.creator_id=creators.id)`;
 const EDITOR_PERMISSION_SQL = `EXISTS (SELECT 1 FROM users u
-  JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
+  JOIN effective_user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
   JOIN role_permissions rp ON rp.role_id=r.id
   WHERE u.id=? AND u.status='active' AND r.status='active'
     AND rp.permission_key IN ('creator.metadata.update_public','creator.metadata.update_any'))`;

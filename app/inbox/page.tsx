@@ -185,7 +185,7 @@ function InboxRow({
     approved: "已通过",
     rejected: "已驳回",
     open: "待审核",
-    archived: "已归档",
+    archived: "已关闭",
   };
   return (
     <li
@@ -262,6 +262,7 @@ function InboxRow({
             {item.body ? (
               <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
             ) : null}
+            {item.closedReason ? <p className="mt-2 text-sm text-muted">{item.closedReason}</p> : null}
           </>
         )}
       </div>

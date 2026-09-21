@@ -38,7 +38,7 @@ export const forumActorSql = (
 ) => `EXISTS(SELECT 1 FROM users actor WHERE actor.id=? AND actor.status='active'
   ${
     permission
-      ? `AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id
+      ? `AND EXISTS(SELECT 1 FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id
     WHERE ur.user_id=actor.id AND r.status='active' AND rp.permission_key='${permission}')`
       : ""
   })`;

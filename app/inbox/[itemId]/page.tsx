@@ -60,6 +60,7 @@ export default function InboxTargetPage() {
       <div ref={contentRef} className="py-6">
         <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}
+        {item.closedReason ? <p className="mt-2 text-muted">{item.closedReason}</p> : null}
       </div>
       <InboxActions
         item={{

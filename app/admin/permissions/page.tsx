@@ -29,7 +29,7 @@ export default function AdminPermissionsPage() {
       <PageHeader
         compact
         title="角色与权限"
-        subtitle="系统角色只读；自定义角色的资料与权限分别保存。"
+        subtitle="管理角色说明、开放申请与全员开放；自定义角色的资料与功能权限分别保存。"
       />
       <PermissionMatrix permissions={permissions} roles={roles} />
     </main>

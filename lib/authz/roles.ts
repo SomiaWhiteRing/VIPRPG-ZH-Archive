@@ -49,6 +49,8 @@ export function roleEditSnapshot(role: {
   description: string;
   priority: number;
   status: RoleStatus;
+  applicationEnabled: boolean;
+  availableToAll: boolean;
   permissionKeys: readonly string[];
 }): string {
   return JSON.stringify([
@@ -56,8 +58,27 @@ export function roleEditSnapshot(role: {
     role.description,
     role.priority,
     role.status,
+    Number(role.applicationEnabled),
+    Number(role.availableToAll),
     [...role.permissionKeys].sort(),
   ]);
+}
+
+export function roleSupportsApplications(role: { key: string; kind: RoleKind }): boolean {
+  return role.key === "uploader" || role.kind === "custom";
+}
+
+export function isAdministrator(user: { status: string; roleKeys: readonly string[] }): boolean {
+  return user.status === "active" &&
+    (user.roleKeys.includes("admin") || user.roleKeys.includes("super_admin"));
+}
+
+export function hasRoleAccess(
+  user: { roleIds: readonly number[]; permissionKeys: readonly PermissionKey[] },
+  role: { id: number; permissionKeys: readonly PermissionKey[] },
+): boolean {
+  return user.roleIds.includes(role.id) ||
+    (role.permissionKeys.length > 0 && role.permissionKeys.every((key) => user.permissionKeys.includes(key)));
 }
 
 export function isCustomRolePriority(value: number): boolean {

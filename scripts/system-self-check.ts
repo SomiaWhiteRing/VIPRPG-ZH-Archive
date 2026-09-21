@@ -275,11 +275,8 @@ async function run(): Promise<void> {
   const access = await jsonResponse<{ inboxItem: { id: number } }>(
     "request uploader access",
     origin,
-    "/api/account/request-upload-access",
-    {
-      method: "POST",
-      headers: { accept: "application/json", cookie: userCookie, origin },
-    },
+    "/api/account/role-requests",
+    jsonMutation(origin, userCookie, { roleId: 2 }),
     200,
   );
   await expectStatus(

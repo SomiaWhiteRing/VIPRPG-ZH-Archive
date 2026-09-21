@@ -32,6 +32,7 @@ export type InboxItem = {
   resolvedAt: string | null;
   title: string;
   body: string;
+  closedReason: string | null;
   createdAt: string;
   readAt: string | null;
   canApprove: boolean;

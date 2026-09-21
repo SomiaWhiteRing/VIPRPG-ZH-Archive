@@ -5,6 +5,7 @@ import playerStyles from "../player.css?inline";
 
 type PlayerWindow = Window & {
   console: Console;
+  KeyboardEvent: typeof KeyboardEvent;
   createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<{
     initApi?: () => void;
   }>;
@@ -13,6 +14,18 @@ type PlayerWindow = Window & {
 export type PlayerLogLevel = "debug" | "info" | "warning" | "error";
 
 type PlayerLogHandler = (level: PlayerLogLevel, message: string) => void;
+
+const playerButtons = {
+  up: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
+  down: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
+  left: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+  right: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
+  decision: { key: "z", code: "KeyZ", keyCode: 90 },
+  cancel: { key: "x", code: "KeyX", keyCode: 88 },
+  shift: { key: "Shift", code: "ShiftLeft", keyCode: 16 },
+} as const;
+
+export type PlayerButton = keyof typeof playerButtons;
 
 // Known FluidSynth Web and bundled SoundFont messages; retain other diagnostics.
 const suppressedPlayerLogs = new Set([
@@ -26,6 +39,7 @@ const suppressedPlayerLogs = new Set([
 export type PlayerSession = {
   ready: Promise<void>;
   captureScreenshot: () => Promise<PlayerScreenshot>;
+  setButtonPressed: (button: PlayerButton, pressed: boolean) => void;
   dispose: () => void;
 };
 
@@ -42,6 +56,7 @@ export function createPlayerSession(
   onLog: PlayerLogHandler,
 ): PlayerSession {
   const lifetime = new AbortController();
+  const heldButtons = new Set<PlayerButton>();
   let disconnectLogs: (() => void) | undefined;
   let captureNextFrame: (() => void) | undefined;
   let releaseResources: (() => void) | undefined;
@@ -50,7 +65,27 @@ export function createPlayerSession(
   frame.className = "block h-full w-full border-0";
   frame.allow = "autoplay; fullscreen";
 
+  function setButtonPressed(button: PlayerButton, pressed: boolean) {
+    if (lifetime.signal.aborted || heldButtons.has(button) === pressed) return;
+    const playerWindow = frame.contentWindow as PlayerWindow | null;
+    const canvas = frame.contentDocument?.querySelector("canvas");
+    if (!playerWindow || !canvas) return;
+    if (pressed) heldButtons.add(button);
+    else heldButtons.delete(button);
+    const key = playerButtons[button];
+    // SDL3 reads code, keyCode and which from the isolated document's events.
+    canvas.dispatchEvent(new playerWindow.KeyboardEvent(pressed ? "keydown" : "keyup", {
+      ...key,
+      which: key.keyCode,
+      location: button === "shift" ? 1 : 0,
+      shiftKey: heldButtons.has("shift"),
+      bubbles: true,
+      cancelable: true,
+    }));
+  }
+
   function dispose() {
+    for (const button of heldButtons) setButtonPressed(button, false);
     disconnectLogs?.();
     disconnectLogs = undefined;
     frame.remove();
@@ -152,7 +187,7 @@ export function createPlayerSession(
     }
   }
 
-  return { ready, captureScreenshot, dispose };
+  return { ready, captureScreenshot, setButtonPressed, dispose };
 }
 
 function connectPlayerLogs(
