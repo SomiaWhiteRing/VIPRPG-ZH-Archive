@@ -13,7 +13,6 @@ export function WorkPageHeader({
   engineFamily,
   language,
   originalTitle,
-  stickyTabs = false,
   tabs,
 }: {
   chineseTitle: string | null;
@@ -21,7 +20,6 @@ export function WorkPageHeader({
   engineFamily: string;
   language: string;
   originalTitle: string;
-  stickyTabs?: boolean;
   tabs: SectionLink[];
 }) {
   const title = chineseTitle || originalTitle;
@@ -70,7 +68,7 @@ export function WorkPageHeader({
       </header>
 
       <SectionNavigation
-        className={stickyTabs ? "sticky top-[var(--site-header-height,3.5rem)] z-30 bg-background" : undefined}
+        className="sticky top-[var(--site-header-height,3.5rem)] z-30 bg-background"
         items={tabs}
       />
     </>

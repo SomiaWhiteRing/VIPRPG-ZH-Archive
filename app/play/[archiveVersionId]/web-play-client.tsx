@@ -789,7 +789,7 @@ export function WebPlayClient({
 
             <section
               aria-labelledby="comments-title"
-              className="scroll-mt-20 border-t border-border py-4.5"
+              className="scroll-mt-28 border-t border-border py-4.5"
               id="sec-comments"
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
