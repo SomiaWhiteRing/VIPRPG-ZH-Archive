@@ -338,7 +338,7 @@ export function CharacterIndexBrowser({
         <Dialog.Trigger asChild>
           <Button
             aria-label="打开角色分类目录"
-            className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] z-40 min-h-12 gap-2 rounded-full px-4 shadow-surface md:hidden"
+            className="fixed bottom-[calc(1.25rem+max(env(safe-area-inset-bottom),var(--page-footer-occlusion,0px)))] left-[calc(1rem+env(safe-area-inset-left))] z-40 min-h-12 gap-2 rounded-full px-4 shadow-surface md:hidden"
             ref={menuTriggerRef}
             type="button"
           >
