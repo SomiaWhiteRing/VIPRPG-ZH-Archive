@@ -1,6 +1,6 @@
 import { StaffCreditRow } from "@/app/components/work/staff-credit-row";
 
-import { Button } from "@/app/components/ui/button";
+import { AddInformationButton } from "@/app/components/ui/information-editor";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { StaffCredit } from "@/lib/staff-credits";
 import { EXTRA_STAFF_ROLES } from "@/lib/staff-credits";
@@ -61,31 +61,19 @@ export function WorkStaffFields({
           onChange={(patch) =>
             update(row.id, { ...patch, roleKey: patch.roleKey || row.roleKey })
           }
+          removeFocusId="admin-add-staff"
           onRemove={() =>
             setRows((current) => current.filter((item) => item.id !== row.id))
           }
         />
       ))}
-      <Button
-        className="w-fit"
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          setRows((current) => [
-            ...current,
-            {
-              id: crypto.randomUUID(),
-              roleKey: "author",
-              selection: null,
-              roleLabel: null,
-              notes: null,
-            },
-          ])
-        }
-      >
-        添加署名
-      </Button>
+      <AddInformationButton id="admin-add-staff" onAdd={() => {
+        const id = crypto.randomUUID();
+        setRows((current) => [...current, {
+          id, roleKey: "author", selection: null, roleLabel: null, notes: null,
+        }]);
+        return `admin-${id}-role`;
+      }}>添加署名</AddInformationButton>
     </fieldset>
   );
 }

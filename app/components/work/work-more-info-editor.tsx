@@ -1,4 +1,4 @@
-import { Button } from "@/app/components/ui/button";
+import { AddInformationButton, InformationRow } from "@/app/components/ui/information-editor";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -52,15 +52,20 @@ export function WorkMoreInfoEditor({
         const error = moreInfoItemError(row);
         const visibleError = showErrors || invalid ? error : null;
         return (
-          <div
-            className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)_auto] items-start gap-2"
+          <InformationRow
             key={row.id}
-          >
+            disabled={disabled}
+            removeLabel={`移除第 ${index + 1} 条更多信息`}
+            removeFocusId={`${id}-add`}
+            onRemove={() => onChange(rows.filter((item) => item.id !== row.id))}
+            error={visibleError ? { id: `${prefix}-error`, message: visibleError.message } : undefined}
+            label={
             <div className="grid min-w-0 gap-1">
               <Label className="sr-only" htmlFor={`${prefix}-title`}>
                 标题
               </Label>
               <Input
+                className="px-2 text-xs sm:text-sm"
                 id={`${prefix}-title`}
                 value={row.title}
                 placeholder="标题"
@@ -81,12 +86,14 @@ export function WorkMoreInfoEditor({
                 }
               />
             </div>
+            }
+          >
             <div className="grid min-w-0 gap-1">
               <Label className="sr-only" htmlFor={`${prefix}-body`}>
                 内容
               </Label>
               <Textarea
-                className="h-10 min-h-10 resize-y"
+                className="h-10 min-h-10 resize-y px-2 sm:px-3"
                 id={`${prefix}-body`}
                 value={row.body}
                 placeholder="内容"
@@ -106,51 +113,14 @@ export function WorkMoreInfoEditor({
                 }
               />
             </div>
-            <Button
-              className="px-1.5"
-              size="sm"
-              type="button"
-              variant="ghost"
-              disabled={disabled}
-              aria-label={`移除第 ${index + 1} 条更多信息`}
-              onClick={() => {
-                onChange(rows.filter((item) => item.id !== row.id));
-                requestAnimationFrame(() =>
-                  document.getElementById(`${id}-add`)?.focus(),
-                );
-              }}
-            >
-              移除
-            </Button>
-            {visibleError ? (
-              <p
-                className="col-span-full text-xs text-red-600"
-                id={`${prefix}-error`}
-                role="alert"
-              >
-                {visibleError.message}
-              </p>
-            ) : null}
-          </div>
+          </InformationRow>
         );
       })}
-      <Button
-        className="w-fit"
-        id={`${id}-add`}
-        size="sm"
-        type="button"
-        variant="ghost"
-        disabled={disabled || rows.length >= MORE_INFO_MAX_ITEMS}
-        onClick={() => {
-          const rowId = crypto.randomUUID();
-          onChange([...rows, { id: rowId, title: "", body: "" }]);
-          requestAnimationFrame(() =>
-            document.getElementById(`${id}-${rowId}-title`)?.focus(),
-          );
-        }}
-      >
-        ＋ 添加信息
-      </Button>
+      <AddInformationButton id={`${id}-add`} disabled={disabled || rows.length >= MORE_INFO_MAX_ITEMS} onAdd={() => {
+        const rowId = crypto.randomUUID();
+        onChange([...rows, { id: rowId, title: "", body: "" }]);
+        return `${id}-${rowId}-title`;
+      }}>添加信息</AddInformationButton>
     </fieldset>
   );
 }
