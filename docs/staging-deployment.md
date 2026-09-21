@@ -10,7 +10,7 @@
 npm run db:staging:prepare -- --output output/staging-seed/candidate
 ```
 
-脚本只读固定快照，校验源数据库与文件 SHA-256，并在当前初始化 schema 中验证外键和完整性。允许导入的对象为角色、别名、分类及归属、来源、角色素材、已审核脸图、头像与默认头像、默认表情，以及这些记录引用的 blob。用户和归档溯源字段置空；账号、会话、作品、作者、目录、论坛、评论及其他互动记录不导入。内置角色权限来自当前 schema。
+脚本只读固定快照，校验源数据库与文件 SHA-256，并在当前初始化 schema 中验证外键和完整性。允许导入的对象为角色、别名、分类及归属、来源、角色素材、已审核脸图、头像与默认头像、默认表情、已发布的链接卡片（当前八个），以及这些记录引用的 blob。链接保留富文本介绍、按钮、排序、来源网址和图标；软件版本、安装包与发布频道不导入，发布序号从零开始。用户和归档溯源字段置空；账号、会话、作品、作者、目录、论坛、评论及其他互动记录不导入。内置角色权限来自当前 schema。
 
 生成的 `data.sql` 仅含允许的数据；`statements.json` 保存同一组 SQL 语句，供逐批导入；`manifest.json` 记录逐表数量、文件清单及校验和。`source.sqlite` 是本地验证中间文件，包含完整开发快照，不能上传；整个 `output/` 都不进入 Git。
 
@@ -22,7 +22,7 @@ npm run db:staging:prepare -- --output output/staging-seed/candidate
 2. 启用 viprpg.org 的 Email Sending，核实 DKIM、SPF、DMARC 和 return-path DNS。为 staging 设置独立的 `AUTH_SECRET` 与真实的 `BOOTSTRAP_ADMIN_EMAIL`；不创建开发管理员。根管理员按真实邮箱注册流程建立。
 3. 执行 `npm run verify:preprod`。共享状态的检查串行运行；失败按[维护手册](maintenance-regression.md)分类处理。
 4. 执行 `npm run deploy:staging`；核实构建产物 `build/server/wrangler.json` 中的 Worker、D1、R2、域名和 noindex 设置均属于 staging。
-5. 执行 `npm run smoke:staging`，然后检查 TLS、robots/noindex、匿名权限、角色图片及素材、空作品和讨论列表、桌面及移动端页面。验证码实际到达邮箱须单独记录，不能由 DNS 检查代替。
+5. 执行 `npm run smoke:staging`，然后检查 TLS、robots/noindex、匿名权限、角色图片及素材、八个精选链接及其图标、空作品和讨论列表、桌面及移动端页面。验证码实际到达邮箱须单独记录，不能由 DNS 检查代替。
 
 GitHub Actions 见[部署说明](github-actions-deployment.md)。推送 main 前同步 staging environment 的 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`WRANGLER_CONFIG_JSONC` secrets 和 `SMOKE_BASE_URL=https://staging.viprpg.org` variable，避免后续 CI 恢复旧资源绑定。staging environment 配置优先于同名仓库配置，不改变 production。
 
