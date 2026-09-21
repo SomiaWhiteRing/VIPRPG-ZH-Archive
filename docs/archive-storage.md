@@ -170,9 +170,11 @@ published Work + published current ArchiveVersion
 - 只允许完整 published 引用链；回收站、purged、processing 或 hidden 对象不能下载。
 - 输出顺序由 manifest 固定，相同输入和 builder 版本产生稳定 cache key。
 - ZIP 使用 STORE；local header 写入明确 CRC32、compressed size 和 uncompressed size，不依赖 data descriptor。
-- 可以预取少量后续对象和缓存单次请求内重复的小 blob，但不能改变输出顺序或把完整 ZIP写回 R2。
+- 预取窗口包含正在消费的条目，最多保留 6 个打开或待消费的对象；应用层窗口覆盖整个正文消费周期，避免未消费响应积压，异常或取消时须取消剩余预取响应。这不同于平台“等待响应头的并发连接”计数。2026-09-22 同一大游戏的 4/5/6 冷 ZIP 缓存串行实测中，6 的两轮完整下载最快且均校验通过；该结果不代表多用户高负载验收。
+- 可以缓存单次请求内重复的小 blob，但不能改变输出顺序或把完整 ZIP 写回 R2。
 - Workers Cache/CDN 是可丢弃派生缓存；`download_builds` 只记录 cache key 和观测数据，不拥有文件内容。
 - 构建失败必须记录错误并中止响应，不能跳过缺失 entry 生成“可下载”的残缺 ZIP。
+- MISS/BYPASS 的成功及耗时在 ZIP 输出流完整关闭后记录，流失败进入失败统计；HIT 仍记录缓存响应取得时的访问耗时。这些服务端记录不证明客户端已将文件落盘，R2 GET 计数仍按现有估计口径。
 
 ## 7. 在线游玩
 

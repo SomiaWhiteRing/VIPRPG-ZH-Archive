@@ -11,7 +11,9 @@ const zipMethodStore = 0;
 const zipVersion20 = 20;
 const uint16Max = 0xffff;
 const uint32Max = 0xffffffff;
-const zipEntryOpenPrefetch = 32;
+// Bound the window including the current entry, not just pending open calls.
+// Six passed the staging 4/5/6 cold-download comparison with cache writes enabled.
+const zipEntryOpenPrefetch = 6;
 const blobReadCacheMaxEntryBytes = 2 * 1024 * 1024;
 const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 
@@ -85,30 +87,41 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       return new Response(null, { headers });
     }
 
-    const response = new Response(createFixedLengthZipStream(zipEntries, zipSizeBytes), {
+    const zipStream = createFixedLengthZipStream(zipEntries, zipSizeBytes);
+    const response = new Response(zipStream.readable, {
       headers,
     });
-    const recordMissAccess = recordDownloadAccess(env.DB, {
-      record,
-      cacheKey,
-      cacheStatus,
-      sizeBytes: zipSizeBytes,
-      actualR2GetCount: record.estimatedR2GetCount,
-      durationMs: Date.now() - startedAt,
-    });
+    ctx.waitUntil(
+      zipStream.completion.then(
+        () => recordDownloadAccess(env.DB, {
+          record,
+          cacheKey,
+          cacheStatus,
+          sizeBytes: zipSizeBytes,
+          actualR2GetCount: record.estimatedR2GetCount,
+          durationMs: Date.now() - startedAt,
+        }),
+        (error) => {
+          console.error("Native fixed-length ZIP stream failed", error?.message ?? error);
+          return recordDownloadFailure(env.DB, {
+            record,
+            cacheKey,
+            durationMs: Date.now() - startedAt,
+            errorMessage: error?.message ?? "Unknown error",
+          });
+        },
+      ),
+    );
 
     if (!bypassDownloadCache && shouldTryWorkersCache(record.totalSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
-          .then(() => recordMissAccess)
           .catch((error) => {
             console.warn("Native download cache put failed", error?.message ?? error);
           }),
       );
     }
-
-    ctx.waitUntil(recordMissAccess);
 
     return response;
   } catch (error) {
@@ -371,31 +384,21 @@ async function loadCorePackEntries(bucket, sha256) {
 
 function createFixedLengthZipStream(entries, expectedLength) {
   const { readable, writable } = new FixedLengthStream(expectedLength);
-
-  createZipStream(entries)
-    .pipeTo(writable)
-    .catch((error) => {
-      console.error("Native fixed-length ZIP stream failed", error?.message ?? error);
-    });
-
-  return readable;
-}
-
-function createZipStream(entries) {
-  const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
+  const completion = writeZip(writer, entries)
+    .catch(async (error) => {
+      await writer.abort(error).catch(() => undefined);
+      throw error;
+    })
+    .finally(() => writer.releaseLock());
 
-  writeZip(writer, entries).catch((error) => {
-    writer.abort(error).catch(() => undefined);
-  });
-
-  return readable;
+  return { readable, completion };
 }
 
 async function writeZip(writer, entries) {
   let offset = 0;
   const centralEntries = [];
-  const openPromises = new Array(entries.length);
+  const openPromises = new Map();
   let nextToPrefetch = 0;
 
   async function write(bytes) {
@@ -408,64 +411,77 @@ async function writeZip(writer, entries) {
       const promise = entries[nextToPrefetch].open();
 
       promise.catch(() => undefined);
-      openPromises[nextToPrefetch] = promise;
+      openPromises.set(nextToPrefetch, promise);
       nextToPrefetch += 1;
     }
   }
 
-  prefetchThrough(zipEntryOpenPrefetch);
+  try {
+    for (let index = 0; index < entries.length; index += 1) {
+      prefetchThrough(index + zipEntryOpenPrefetch);
 
-  for (let index = 0; index < entries.length; index += 1) {
-    prefetchThrough(index + zipEntryOpenPrefetch + 1);
+      const entry = entries[index];
 
-    const entry = entries[index];
+      validateZipPath(entry.path);
 
-    validateZipPath(entry.path);
+      const pathBytes = textEncoder.encode(entry.path);
+      const { dosTime, dosDate } = toDosDateTime(entry.mtimeMs);
+      const localHeaderOffset = offset;
 
-    const pathBytes = textEncoder.encode(entry.path);
-    const { dosTime, dosDate } = toDosDateTime(entry.mtimeMs);
-    const localHeaderOffset = offset;
+      assertZip32Value(entry.size, "ZIP entry size");
+      assertZip32Value(entry.crc32, "ZIP entry CRC32");
+      assertZip32Value(localHeaderOffset, "ZIP local header offset");
 
-    assertZip32Value(entry.size, "ZIP entry size");
-    assertZip32Value(entry.crc32, "ZIP entry CRC32");
-    assertZip32Value(localHeaderOffset, "ZIP local header offset");
+      await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
-    await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
+      let actualSize = 0;
+      const stream = await openPromises.get(index);
+      const reader = stream.getReader();
+      openPromises.delete(index);
 
-    let actualSize = 0;
-    const stream = await (openPromises[index] ?? entry.open());
-    const reader = stream.getReader();
+      try {
+        while (true) {
+          const result = await reader.read();
 
-    try {
-      while (true) {
-        const result = await reader.read();
+          if (result.done) {
+            break;
+          }
 
-        if (result.done) {
-          break;
+          const chunk = normalizeChunk(result.value);
+          actualSize += chunk.byteLength;
+          await write(chunk);
         }
-
-        const chunk = normalizeChunk(result.value);
-        actualSize += chunk.byteLength;
-        await write(chunk);
+      } catch (error) {
+        await reader.cancel(error).catch(() => undefined);
+        throw error;
+      } finally {
+        reader.releaseLock();
       }
-    } finally {
-      reader.releaseLock();
-    }
 
-    if (actualSize !== entry.size) {
-      throw new Error(
-        `ZIP entry size mismatch for ${entry.path}: expected ${entry.size}, got ${actualSize}`,
-      );
-    }
+      if (actualSize !== entry.size) {
+        throw new Error(
+          `ZIP entry size mismatch for ${entry.path}: expected ${entry.size}, got ${actualSize}`,
+        );
+      }
 
-    centralEntries.push({
-      pathBytes,
-      crc32: entry.crc32,
-      size: actualSize,
-      localHeaderOffset,
-      dosTime,
-      dosDate,
-    });
+      centralEntries.push({
+        pathBytes,
+        crc32: entry.crc32,
+        size: actualSize,
+        localHeaderOffset,
+        dosTime,
+        dosDate,
+      });
+    }
+  } finally {
+    // A failed read, write or canceled consumer must not leave prefetched
+    // responses occupying connections. Pending opens are canceled on arrival.
+    await Promise.allSettled(
+      [...openPromises.values()].map(async (promise) => {
+        const stream = await promise;
+        await stream.cancel();
+      }),
+    );
   }
 
   const centralDirectoryOffset = offset;
