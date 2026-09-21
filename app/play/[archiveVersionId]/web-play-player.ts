@@ -1,4 +1,6 @@
 import type { WebPlayMetadata } from "./web-play-types";
+import { acquireGameResourceReadLock } from "./web-play-locks";
+import { getWebPlayInstallation } from "./web-play-db";
 import playerStyles from "../player.css?inline";
 
 type PlayerWindow = Window & {
@@ -42,19 +44,27 @@ export function createPlayerSession(
   const lifetime = new AbortController();
   let disconnectLogs: (() => void) | undefined;
   let captureNextFrame: (() => void) | undefined;
+  let releaseResources: (() => void) | undefined;
   const frame = document.createElement("iframe");
   frame.title = `${metadata.title} 游戏画面`;
   frame.className = "block h-full w-full border-0";
   frame.allow = "autoplay; fullscreen";
 
   function dispose() {
-    lifetime.abort();
     disconnectLogs?.();
     disconnectLogs = undefined;
     frame.remove();
+    lifetime.abort();
+    releaseResources?.();
+    releaseResources = undefined;
   }
 
   const ready = (async () => {
+    releaseResources = await acquireGameResourceReadLock(metadata.playKey, lifetime.signal);
+    lifetime.signal.throwIfAborted();
+    if ((await getWebPlayInstallation(metadata.playKey))?.status !== "ready") {
+      throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
+    }
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
       frame.src = `/play/player.html${window.location.search}`;

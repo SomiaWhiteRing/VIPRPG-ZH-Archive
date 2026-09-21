@@ -13,7 +13,7 @@
 - R2 仍然只保存 canonical 数据：`blobs/`、`core-packs/`、`manifests/` 和元数据资产。
 - 完整游戏 ZIP 只允许作为响应流、Workers Cache/CDN 边缘缓存，或浏览器下载过程中的临时数据存在。
 - 浏览器拿到 ZIP 后在本地解包，解包完成后丢弃 ZIP，不长期保存完整 ZIP。
-- 解包后的 Web Play 运行目录写入 OPFS；安装器跳过所有 `.txt`、`.exe`、`.dll` 文件，这些文件仍保留在普通下载 ZIP 中。
+- 解包后的 Web Play 运行目录写入 OPFS；安装器跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。普通下载 ZIP 保留全部归档文件。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
@@ -95,11 +95,11 @@ GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBu
 
 - `Content-Disposition: attachment` 不影响 `fetch()` 读取响应体，不需要为了 Web Play 改出另一条 URL。
 - 不要添加 `web_play=1` 之类会改变 cache key 的查询参数，除非下载端显式把它归一化到同一 cache key。
-- Web Play 下载 URL 不改变，普通下载 ZIP 仍包含 `RPG_RT.exe`、DLL 和 `.txt` 文件；但 OPFS 本地运行目录会跳过所有 `.txt`、`.exe`、`.dll` 文件，减少不参与 EasyRPG Web 运行的本地写入。
-- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 排除 `.txt`、`.exe`、`.dll` 后预先统计，安装进度条的文件数和写入体积必须使用这个口径。
+- Web Play 下载 URL 不改变，普通下载 ZIP 仍包含 `RPG_RT.exe`、DLL 和 `.txt` 文件；OPFS 本地运行目录会跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写），减少不参与 EasyRPG Web 运行的本地写入。
+- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装进度条的文件数和写入体积必须使用这个口径。
 - ZIP 下载进度来自 `Content-Length`；下载端必须继续保证固定长度响应。
 - 下载 ZIP 必须使用 STORE，并在 local file header 中写入明确 `crc32`、compressed size 和 uncompressed size；不能使用 data descriptor。这样浏览器安装器可以顺序解析 entry，不需要等待中央目录。
-- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe`、`.dll` entry 在本地写入和 EasyRPG 索引生成阶段跳过。
+- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe` 和普通 `.dll` entry 在本地写入和 EasyRPG 索引生成阶段跳过；五个根目录引擎/补丁识别 DLL 同时写入 pack 和 EasyRPG 索引。`b3101682f` Web runtime 会为索引中的前四种文件创建检测占位；`Destiny.dll` 不在其自动占位名单中，保留文件与索引不等于已验证 Destiny 自动识别或插件兼容性。
 
 ## 5. OPFS 本地目录
 
@@ -177,7 +177,7 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 - 使用响应 `Content-Length` 计算下载进度。
 - 下载阶段使用 `ReadableStream` 显示进度，并顺序解析 ZIP local file header。
 - 对每个 STORE entry 读取 local header 中的 size/CRC；如果发现 data descriptor flag，安装失败并提示下载 ZIP builder 不可流式安装。
-- 逐文件规范化路径，跳过 `.txt`、`.exe`、`.dll` 文件，生成 EasyRPG 索引，并把 entry 字节追加写入当前 OPFS pack。
+- 逐文件规范化路径，按共享本地安装策略过滤文件，生成 EasyRPG 索引，并把 entry 字节追加写入当前 OPFS pack。
 - Pack 默认按约 256 MB 分段，例如 `assets-000.pack`、`assets-001.pack`；单个 entry 超过分段阈值时单独占用当前 pack。
 - 小于分段阈值的游戏生成 1 个 pack 是预期行为。Pack 的第一目标是减少 OPFS 文件数量和 `createWritable/close` 成本，不是按目录制造并行写入。
 - ZIP 网络流的 chunk 可能很碎，不能把每个 chunk 都直接 `writable.write()` 到 OPFS。安装器必须先在 Worker 内聚合到约 1 MB 再写入 pack，降低 OPFS write 调用次数和 backpressure。
@@ -221,7 +221,7 @@ EasyRPG Web Player 需要每个游戏目录提供 `index.json`。本站不依赖
 - 图像和音频资源需要额外写入去扩展名别名，例如 `system/sys-thin2 -> sys-thin2.png`、`music/ad astra -> Ad Astra.ogg`；EasyRPG 运行时通常用不带扩展名的资源名查询。
 - 路径必须来自 canonical ZIP entry，禁止接受 `..`、绝对路径、空路径和重复冲突路径。
 - 文件名仅因 NFKC 规范化重名时，采用官方 gencache 的后项覆盖规则，同时记录警告；完整文件名键与去扩展名别名指向同一原文件，pack 中保留全部原文件。原始路径大小写冲突、文件/目录冲突或目录规范化重名仍中止安装，避免混用不同目录的内容。
-- `pack-index.json` 与 Service Worker 继续按真实路径的小写键查找，不对存储路径做 NFKC；运行索引的值已还原真实路径。安装器版本为 `opfs-v9-nfkc-resource-index`，旧安装需要重新安装以生成新索引；存档仍按 Work 保存。
+- `pack-index.json` 与 Service Worker 继续按真实路径的小写键查找，不对存储路径做 NFKC；运行索引的值已还原真实路径。安装器版本为 `opfs-v11-patch-detection`，旧安装需要重新安装以补齐引擎识别文件并生成新索引；存档仍按 Work 保存。
 
 ## 9. Service Worker OPFS 桥
 
@@ -262,6 +262,11 @@ Service Worker scope 固定覆盖 `/play/`。
 - 收藏：在线游玩卡片在启动/全屏操作下显示收藏按钮，不再显示下载 ZIP 按钮；安装仍使用原 ZIP 下载接口。
 - 截图：窗口和全屏模式均提供截取图片按钮；通过 EasyRPG 的 `postMainLoop` 在绘制结束后、WebGL 清空绘图缓冲区前截取原始分辨率 PNG。截图按 Work ID 存入独立 IndexedDB `viprpg_web_play_screenshots_v1`，同一游戏的各归档版本共用，清理安装缓存不会删除截图。已有截图时，在在线游玩卡片下方显示两列截图画廊，每页 6 张，支持翻页、灯箱缩放和单张 PNG 下载；可跨页勾选截图，按所选、本页或全部范围打包为 ZIP 下载。预览的 Blob URL 随页面卸载释放。
 - 本地数据与诊断：运行中提供“停止游戏”，销毁当前 iframe 并退出全屏，回到可再次启动的已安装状态；不删除本地游戏文件或已持久化存档。启动尚未完成时禁用停止按钮。
+- 自动清理保护：展开诊断时只调用 `persisted()` 查询当前状态并刷新存储估计；安装结束后展开中的诊断也刷新，不把安装记录中的旧快照当作实时授权。只在用户点击安装时由页面调用 `persist()` 申请，区分未获得、不支持、查询失败和申请失败；保护失败不阻止安装，Worker 不申请权限。存储估计不可用时显示“未知”。保护不代表云备份，也不能阻止手动清除站点数据。
+- “本站浏览器用量”使用当前 origin 的 `storage.estimate()`，不是当前游戏体积。清理后刷新估计。
+- 本地资源生命周期：运行前取得以 playKey 为粒度的 Web Locks 共享锁，并在锁内确认安装仍为 ready；销毁 iframe 后释放锁。安装 Worker、手动删除及旧资源回收使用同名排他锁，无法立即取得锁时不等待、不覆盖其他页面的数据。
+- 新版安装成功、停止游戏或再次进入已安装页面时尝试回收旧资源。回收前读取线上当前 Web Play 元数据，只有当前版本本地 ready 才清理同作品其他安装；旧记录缺少 workId 时只按相同 archiveVersionId 归属。失败安装、正在安装或运行的版本受到同一把锁保护，不删除存档数据库或截图数据库。
+- 已打开但不支持资源锁协议的旧页面无法补持锁。Service Worker 探测其他在线游玩页面；有页面未确认协议就延后回收，并拒绝破坏性重装/删除。关闭或刷新这些页面后，下次触发回收可继续。关闭或崩溃会由浏览器释放 Web Lock；不依赖持久化“运行中”标记，不保证网站关闭时仍能后台执行清理。
 - 运行日志：加载 runtime 前接入播放器 iframe 的 console.debug/log/info/warn/error，同时收集未捕获错误与 Promise 拒绝，保留浏览器控制台原输出。页面与剪贴板统一逐行使用 `[HH:mm:ss]内容` 格式，警告与错误通过颜色区分，不重复输出来源和级别文字；“清空”旁提供“复制”按钮，按显示顺序复制当前日志。保留最近 300 条（每条最多 16,000 字符），停止后可继续查看。当前 runtime 会覆盖 print/printErr 并直接调用 console，因此不依赖传入 print 回调。
 - 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
@@ -342,7 +347,7 @@ const persisted = await navigator.storage.persist();
 - 首次点击在线游玩时显示下载进度、解包进度、当前文件和本地缓存状态。
 - 下载 ZIP 复用现有下载 URL；命中 Workers Cache/CDN 时下载观测记录不增加 R2 Get。
 - 安装完成后 OPFS 中有 Web Play 运行目录、`index.json`、`pack-index.json` 和少量 `packs/*.pack`；不会出现完整 ZIP，也不会出现逐文件资源树。
-- `pack-index.json` 中不包含 `.txt`、`.exe`、`.dll` 文件。
+- `pack-index.json` 中不包含 `.txt`、`.exe` 和普通 `.dll` 文件；根目录的五个引擎/补丁识别 DLL 必须保留，并出现在 EasyRPG 索引中。
 - 刷新页面后无需重新请求云端即可启动已安装游戏。
 - 删除本地缓存后再次进入会重新安装。
 - 浏览器崩溃或安装中关闭页面后，再进入能清理并重新安装。

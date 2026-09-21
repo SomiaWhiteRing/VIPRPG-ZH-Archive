@@ -13,6 +13,32 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "web-play-forget-pack-index") {
+    packIndexCache.delete(event.data.playKey);
+    return;
+  }
+  if (event.data?.type !== "web-play-check-resource-locks" || !event.ports[0]) return;
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const peers = clients.filter((client) => client.id !== event.source?.id &&
+      /^\/play\/\d+\/?$/.test(new URL(client.url).pathname));
+    const results = await Promise.all(peers.map((client) => new Promise((resolve) => {
+      const channel = new MessageChannel();
+      const finish = (safe) => {
+        clearTimeout(timer);
+        channel.port1.close();
+        channel.port2.close();
+        resolve(safe);
+      };
+      const timer = setTimeout(() => finish(false), 1500);
+      channel.port1.onmessage = (reply) => finish(reply.data?.resourceLocks === true);
+      client.postMessage({ type: "web-play-resource-locks-probe" }, [channel.port2]);
+    })));
+    event.ports[0].postMessage({ safe: results.every(Boolean) });
+  })().catch(() => event.ports[0].postMessage({ safe: false })));
+});
+
 self.addEventListener("fetch", (event) => {
   const gameRequest = parseGameRequest(event.request.url);
 

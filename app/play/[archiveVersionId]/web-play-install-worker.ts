@@ -22,6 +22,7 @@ import type {
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
+import { withGameResourceWriteLock } from "./web-play-locks";
 
 type EasyRpgCacheNode = {
   _dirname?: string;
@@ -102,12 +103,15 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
 
   if (message.type === "install") {
     canceledPlayKeys.delete(message.metadata.playKey);
-    runInstall(message.metadata, message.storageSnapshot).catch((error: unknown) => {
-      postLog(
-        message.metadata.playKey,
-        "error",
-        error instanceof Error ? error.message : "安装失败",
-      );
+    withGameResourceWriteLock(message.metadata.playKey, () =>
+      runInstall(message.metadata, message.storageSnapshot),
+    ).then(() => {
+      postMessage({ type: "install-finished" } satisfies WebPlayInstallWorkerOutput);
+    }).catch((error: unknown) => {
+      postMessage({
+        type: "install-rejected",
+        message: error instanceof Error ? error.message : "安装失败",
+      } satisfies WebPlayInstallWorkerOutput);
     });
     return;
   }
@@ -295,9 +299,10 @@ async function requestStorage(
   if (!snapshot) {
     const storage = navigator.storage;
     const estimate = await storage.estimate().catch(() => null);
+    // Permission requests belong to the window; the worker only reads status.
     const persisted =
-      typeof storage.persist === "function"
-        ? await storage.persist().catch(() => false)
+      typeof storage.persisted === "function"
+        ? await storage.persisted().catch(() => null)
         : null;
 
     snapshot = {
@@ -777,6 +782,7 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
   const now = new Date().toISOString();
 
   return {
+    workId: metadata.workId,
     playKey: metadata.playKey,
     archiveVersionId: metadata.archiveVersionId,
     manifestSha256: metadata.manifestSha256,

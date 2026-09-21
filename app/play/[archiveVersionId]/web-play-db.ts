@@ -9,6 +9,20 @@ const DB_VERSION = 1;
 const STORE_INSTALLATIONS = "web_play_installations";
 const STORE_FILES = "web_play_files";
 
+export async function listWebPlayInstallations(): Promise<WebPlayInstallation[]> {
+  const db = await openWebPlayDb();
+  try {
+    return await new Promise<WebPlayInstallation[]>((resolve, reject) => {
+      const request = db.transaction(STORE_INSTALLATIONS, "readonly")
+        .objectStore(STORE_INSTALLATIONS).getAll();
+      request.onsuccess = () => resolve(request.result as WebPlayInstallation[]);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function saveWebPlayInstallation(
   installation: WebPlayInstallation,
 ): Promise<void> {
