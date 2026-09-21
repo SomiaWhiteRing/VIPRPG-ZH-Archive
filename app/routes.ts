@@ -9,6 +9,7 @@ export default [
   route("characters/:id", "characters/[id]/page.tsx"),
   route("creators", "creators/page.tsx"),
   route("creators/:id", "creators/[id]/page.tsx"),
+  route("creators/:id/edit", "creators/[id]/edit/page.tsx"),
   route("discussions", "discussions/page.tsx"),
   route("discussions/search", "discussions/search/page.tsx"),
   route(

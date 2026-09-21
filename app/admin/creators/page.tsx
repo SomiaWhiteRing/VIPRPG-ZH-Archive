@@ -112,15 +112,17 @@ export default function AdminCreatorsPage() {
                   ) : null}
                 </td>
                 <td>
-                  {creator.websiteUrl ? (
+                  {creator.links.length ? creator.links.map((link, index) => (
                     <a
-                      href={creator.websiteUrl}
+                      key={index}
+                      className="block"
+                      href={link.url}
                       rel="noreferrer"
                       target="_blank"
                     >
-                      个人链接
+                      {link.label}
                     </a>
-                  ) : (
+                  )) : (
                     <span className="text-sm text-muted">未填写</span>
                   )}
                 </td>

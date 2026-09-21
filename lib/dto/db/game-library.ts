@@ -1,3 +1,4 @@
+import type { CreatorLink } from "@/lib/creator-links";
 import type {
   CharacterCreditSelection,
   CharacterPortrait,
@@ -28,7 +29,7 @@ export type GameCreatorCredit = {
   id: number;
   name: string;
   displayName: string;
-  websiteUrl: string | null;
+  links: CreatorLink[];
   roleKey: string;
   roleLabel: string | null;
   notes: string | null;

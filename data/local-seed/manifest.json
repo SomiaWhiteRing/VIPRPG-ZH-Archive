@@ -3,9 +3,9 @@
   "capturedAt": "2026-09-16T03:31:22.093Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "dd9921bc5e095185a26d24e0f2bb8259470f14a4e807d0bfacf0f87f29208f18",
-    "size": 11313152,
-    "gzipSha256": "a3ff0803f68ba89fbc90dede16bd5b0aeb56da9475b2a3bb8fa25e5bc503a651",
+    "sha256": "9ecb43402ce2e9adfbf2be4119acfdb08a974114cc59faec56cf514e6a79eff9",
+    "size": 11317248,
+    "gzipSha256": "413b9e182e1ade3fe6c7151146c3e6486aaa3c10ccf5074be7605b736218541a",
     "tables": {
       "_cf_METADATA": 1,
       "archive_version_blob_refs": 0,
@@ -61,7 +61,7 @@
       "inbox_items": 5,
       "media_assets": 4,
       "resources": 8,
-      "role_permissions": 162,
+      "role_permissions": 166,
       "roles": 7,
       "sqlite_sequence": 35,
       "tags": 5,

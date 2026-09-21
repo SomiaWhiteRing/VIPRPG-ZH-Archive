@@ -5,6 +5,7 @@ import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
+import { CreatorLinksEditor } from "@/app/components/creators/creator-links-editor";
 import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
 import { BackLink } from "@/app/components/ui/back-link";
 import { Button, buttonVariants } from "@/app/components/ui/button";
@@ -117,17 +118,9 @@ export default function AdminCreatorEditPage() {
                 rows={5}
               />
             </FormField>
-            <FormField
-              controlId="admin-creators-creatorId--field-3"
-              label="个人链接"
-            >
-              <Input
-                id="admin-creators-creatorId--field-3"
-                defaultValue={creator.websiteUrl ?? ""}
-                name="website_url"
-                type="url"
-              />
-            </FormField>
+            <div className="md:col-span-2">
+              <CreatorLinksEditor initialLinks={creator.links} />
+            </div>
             <FormField
               controlId="admin-creators-creatorId--field-4"
               label="简介"

@@ -1,5 +1,7 @@
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
+import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
+import * as creatorUpdateEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/update/route";
 import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
 import * as endpoint0 from "@/app/.server/endpoints/api/account/avatar/route";
 import * as endpoint1 from "@/app/.server/endpoints/api/account/delete/route";
@@ -971,6 +973,19 @@ api.all("/api/core-packs/:sha256", (c) =>
     Allow: "PUT, OPTIONS",
   }),
 );
+api.on("PUT", "/api/creators/:creatorId/avatar", (c) =>
+  creatorAvatarEndpoint.PUT(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
+);
+api.on("DELETE", "/api/creators/:creatorId/avatar", (c) =>
+  creatorAvatarEndpoint.DELETE(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
+);
+api.options("/api/creators/:creatorId/avatar", (c) => c.body(null, 204, { Allow: "PUT, DELETE, OPTIONS" }));
+api.all("/api/creators/:creatorId/avatar", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "PUT, DELETE, OPTIONS" }));
+api.on("POST", "/api/creators/:creatorId/update", (c) =>
+  creatorUpdateEndpoint.POST(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
+);
+api.options("/api/creators/:creatorId/update", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/creators/:creatorId/update", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
 api.on(["GET", "HEAD"], "/api/creators/:creatorId/comments", (c) =>
   endpoint66.GET(c.get("runtime"), c.req.raw, {
     params: { creatorId: c.req.param("creatorId") },

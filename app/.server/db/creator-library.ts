@@ -1,5 +1,5 @@
 import { getD1 } from "@/app/.server/db/d1";
-import { isHttpUrl, normalizeHttpUrl } from "@/app/.server/http/safe-url";
+import { normalizeCreatorLinks, parseCreatorLinks, type CreatorLink } from "@/lib/creator-links";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey } from "@/lib/creator-names";
@@ -17,7 +17,7 @@ type CreatorRow = {
   id: number;
   name: string;
   avatar_blob_sha256: string | null;
-  website_url: string | null;
+  links_json: string;
   extra_json: string;
   created_at?: string;
   updated_at?: string;
@@ -282,7 +282,7 @@ export async function updateCreatorForAdmin(
   input: {
     creatorId: number;
     name: string;
-    websiteUrl: string | null;
+    links: CreatorLink[];
     bio: string | null;
     aliases: string[];
   },
@@ -298,7 +298,7 @@ export async function updateCreatorForAdmin(
   const extra = { ...existing.extra };
   if (input.bio?.trim()) extra.bio = input.bio.trim();
   else delete extra.bio;
-  const websiteUrl = normalizeHttpUrl(input.websiteUrl, "作者网站");
+  const links = normalizeCreatorLinks(input.links);
   const database = getD1(runtime);
   try {
     await database.batch([
@@ -310,7 +310,7 @@ export async function updateCreatorForAdmin(
           `UPDATE creators
            SET name=?,name_key=CASE
              WHEN EXISTS(SELECT 1 FROM creator_aliases WHERE name_key=? AND creator_id<>?) THEN NULL
-             ELSE ? END,website_url=?,extra_json=?,updated_at=CURRENT_TIMESTAMP
+             ELSE ? END,links_json=?,extra_json=?,updated_at=CURRENT_TIMESTAMP
            WHERE id=?`,
         )
         .bind(
@@ -318,7 +318,7 @@ export async function updateCreatorForAdmin(
           creatorNameKey(name),
           input.creatorId,
           creatorNameKey(name),
-          websiteUrl,
+          JSON.stringify(links),
           JSON.stringify(extra),
           input.creatorId,
         ),
@@ -379,7 +379,7 @@ export function parseCreatorEditForm(
   return {
     creatorId: id,
     name: String(form.get("name") ?? ""),
-    websiteUrl: clean(form.get("website_url")),
+    links: parseCreatorLinks(String(form.get("links_json") ?? "")),
     bio: clean(form.get("bio")),
     aliases: lines(form.get("aliases")),
   };
@@ -437,7 +437,7 @@ function summarySql(): string {
       c.id,
       c.name,
       c.avatar_blob_sha256,
-      c.website_url,
+      c.links_json,
       c.extra_json,
       (
         SELECT COUNT(DISTINCT ws.work_id)
@@ -459,7 +459,7 @@ function mapSummary(row: CreatorRow): PublicCreatorSummary {
     id: row.id,
     name: row.name,
     avatarBlobSha256: row.avatar_blob_sha256,
-    websiteUrl: isHttpUrl(row.website_url) ? row.website_url : null,
+    links: parseCreatorLinks(row.links_json),
     bio: bio(row.extra_json),
     workCreditCount: row.work_credit_count,
     latestWorkCreditAt: row.latest_work_credit_at,

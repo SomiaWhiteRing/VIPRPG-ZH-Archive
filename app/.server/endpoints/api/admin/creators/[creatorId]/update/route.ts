@@ -58,7 +58,7 @@ export async function POST(
           id: creator.id,
           name: creator.name,
           avatarBlobSha256: creator.avatarBlobSha256,
-          websiteUrl: creator.websiteUrl,
+          links: creator.links,
           bio: creator.bio,
         },
       });

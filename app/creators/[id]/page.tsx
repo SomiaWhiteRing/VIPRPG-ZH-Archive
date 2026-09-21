@@ -19,6 +19,7 @@ import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
+import { canEditPublicCreator } from "@/lib/authz/creator-permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
@@ -46,6 +47,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     currentUser: pickPageFields(currentUser, ["id"]),
+    canEdit: canEditPublicCreator(currentUser),
     creator,
     comments,
     works,
@@ -56,7 +58,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
 
 export default function CreatorDetailPage() {
-  const { currentUser, creator, comments, works } =
+  const { currentUser, creator, comments, works, canEdit } =
     useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
@@ -190,6 +192,7 @@ export default function CreatorDetailPage() {
           </>
         }
         sidebar={
+          <>
           <Card className="rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full">
             <CreatorPortrait
               avatarBlobSha256={creator.avatarBlobSha256}
@@ -208,18 +211,28 @@ export default function CreatorDetailPage() {
                 <InfoRow label="别名">{creator.aliases.join("、")}</InfoRow>
               ) : null}
             </dl>
-            {creator.websiteUrl ? (
+            {creator.links.map((link, index) => (
               <a
-                className="mt-3 inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-[#1f6f67] hover:underline"
-                href={creator.websiteUrl}
+                key={index}
+                className="mt-3 flex min-h-8 items-center gap-1.5 text-sm font-medium text-[#1f6f67] hover:underline"
+                href={link.url}
                 rel="noreferrer"
                 target="_blank"
               >
-                个人主页
-                <ExternalLink aria-hidden size={14} />
+                <span className="wrap-anywhere">{link.label}</span>
+                <ExternalLink aria-hidden size={14} className="shrink-0" />
               </a>
-            ) : null}
+            ))}
           </Card>
+          {canEdit || !currentUser ? (
+            <div className="flex items-center gap-1 px-2 max-[980px]:w-full" aria-label="作者资料操作">
+              <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-[#1f6f67] hover:underline"
+                to={currentUser ? `/creators/${creator.id}/edit` : `/login?next=${encodeURIComponent(`/creators/${creator.id}/edit`)}`}>
+                {currentUser ? "编辑资料" : "登录后编辑"}
+              </Link>
+            </div>
+          ) : null}
+          </>
         }
       />
     </DetailPageShell>
