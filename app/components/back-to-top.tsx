@@ -26,7 +26,7 @@ export function BackToTop() {
       inert={!visible}
       data-visible={visible}
       title="返回顶部"
-      className="pointer-events-none fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+max(env(safe-area-inset-bottom),var(--page-bottom-occlusion,0px)))] z-30 size-12 translate-y-2 scale-95 rounded-full opacity-0 shadow-lg transition-[opacity,translate,scale,background-color] duration-250 ease-out data-[visible=true]:pointer-events-auto data-[visible=true]:translate-y-0 data-[visible=true]:scale-100 data-[visible=true]:opacity-100 motion-reduce:translate-none motion-reduce:scale-100 motion-reduce:transition-none [&_svg]:size-5"
+      className="pointer-events-none fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+max(env(safe-area-inset-bottom),var(--page-bottom-occlusion,0px),var(--page-footer-occlusion,0px)))] z-30 size-12 translate-y-2 scale-95 rounded-full opacity-0 shadow-lg transition-[opacity,translate,scale,background-color] duration-250 ease-out data-[visible=true]:pointer-events-auto data-[visible=true]:translate-y-0 data-[visible=true]:scale-100 data-[visible=true]:opacity-100 motion-reduce:translate-none motion-reduce:scale-100 motion-reduce:transition-none [&_svg]:size-5"
       onClick={() => window.scrollTo({ top: 0, behavior: "auto" })}
     >
       <ArrowUp aria-hidden="true" />
