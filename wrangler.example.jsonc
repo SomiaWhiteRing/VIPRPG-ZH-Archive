@@ -50,6 +50,7 @@
     }
   ],
   "vars": {
+    "SITE_NOINDEX": "false",
     "EMAIL_FROM": "noreply@example.com",
     "APP_ORIGIN": "https://example.com"
   },
@@ -98,6 +99,7 @@
         }
       ],
       "vars": {
+        "SITE_NOINDEX": "true",
         "EMAIL_FROM": "noreply@example.com",
         "APP_ORIGIN": "https://staging.example.com"
       },

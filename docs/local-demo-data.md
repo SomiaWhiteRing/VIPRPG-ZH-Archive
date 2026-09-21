@@ -2,6 +2,8 @@
 
 当前种子是 2026-09-16 本地数据库与 R2 的固定快照。它包含已审核的角色分类、真实来源素材，以及日常开发使用的虚构作品、账号和互动场景。
 
+预生产只使用审核过的资料，不恢复完整开发快照；使用 `npm run db:staging:prepare` 生成允许的数据集，操作与验收见[预生产初始化与验收](staging-deployment.md)。
+
 ## 固定快照
 
 `data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。快照已对齐统一初始化 `migrations/0001_init_archive_schema.sql`，包含当前索引，迁移账本仅保留这一条；原有业务记录、审核结果和素材引用保持原值。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。

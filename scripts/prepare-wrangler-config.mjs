@@ -15,6 +15,7 @@ const infrastructure = [
   "name",
   "routes",
   "workers_dev",
+  "preview_urls",
   "d1_databases",
   "r2_buckets",
   "send_email",

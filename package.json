@@ -25,7 +25,8 @@
     "regression": "node scripts/regression.mjs",
     "verify:preprod": "npm run check && npm run test:flow",
     "auth:calibrate-password": "tsx scripts/password-calibration.ts",
-    "smoke:staging": "node scripts/smoke.mjs https://viprpg-zh-archive-staging.q578235562.workers.dev"
+    "smoke:staging": "node scripts/smoke.mjs",
+    "db:staging:prepare": "node scripts/prepare-staging-seed.mjs"
   },
   "dependencies": {
     "@jsquash/jpeg": "1.6.0",

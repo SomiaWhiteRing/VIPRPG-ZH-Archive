@@ -40,6 +40,8 @@ npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
 
 ## 部署流程
 
+首次干净初始化、审核种子范围、域名与禁止索引设置见[预生产初始化与验收](staging-deployment.md)。预生产入口为 `https://staging.viprpg.org`；`SMOKE_BASE_URL` 可通过 staging environment variable 覆盖。首次切换资源前同步该 environment 的三个部署 secrets，避免 main 推送重新绑定旧数据库。
+
 精确顺序以 `.github/workflows/deploy.yml` 为准。staging 与 production job 都会安装依赖、恢复 Wrangler 配置、执行静态检查、安装 Chromium、运行 `npm run test:flow`，然后才对目标环境应用 D1 migration 并部署。staging 部署后另运行最小 smoke test；production 不自动复用 staging 的检查结果。
 
 `npm run deploy:staging` 和 `npm run deploy` 自身负责目标环境的 Vite/SSR Worker 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。

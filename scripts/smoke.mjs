@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const baseUrl = process.argv[2] ?? process.env.SMOKE_BASE_URL;
+const baseUrl = process.argv[2] || process.env.SMOKE_BASE_URL || "https://staging.viprpg.org";
 
 if (!baseUrl) {
   console.error("Usage: node scripts/smoke.mjs <base-url>");
