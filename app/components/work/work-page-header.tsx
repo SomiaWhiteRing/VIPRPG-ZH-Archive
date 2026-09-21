@@ -70,7 +70,7 @@ export function WorkPageHeader({
       </header>
 
       <SectionNavigation
-        className={stickyTabs ? "sticky top-[calc(3.5rem+1px)] z-30 bg-background" : undefined}
+        className={stickyTabs ? "sticky top-[var(--site-header-height,3.5rem)] z-30 bg-background" : undefined}
         items={tabs}
       />
     </>

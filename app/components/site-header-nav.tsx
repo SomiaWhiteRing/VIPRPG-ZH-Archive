@@ -170,6 +170,22 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const visibleAdminEntries = getAdminNavigation(session);
 
   useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const updateHeight = () => {
+      root.style.setProperty("--site-header-height", `${header.getBoundingClientRect().height}px`);
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(header, { box: "border-box" });
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--site-header-height");
+    };
+  }, []);
+
+  useEffect(() => {
     setOpenPanel(null);
   }, [pathname, search]);
 
