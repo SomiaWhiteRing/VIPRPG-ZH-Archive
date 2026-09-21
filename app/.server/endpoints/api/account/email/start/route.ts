@@ -70,7 +70,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
         callbackUrl: buildAuthCallbackUrl(runtime, "/me/profile/email", {
           newEmail,
           emailSent: "1",
-        }),
+        }, code),
       });
     } catch (error) {
       await deletePendingEmailChallenge(runtime, {

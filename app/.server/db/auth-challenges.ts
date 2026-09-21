@@ -11,6 +11,7 @@ export type EmailVerificationChallenge = {
   purpose: ChallengePurpose;
   codeHash: string;
   pendingPasswordHash: string | null;
+  pendingDisplayName: string | null;
   expiresAt: string;
   consumedAt: string | null;
   attemptCount: number;
@@ -23,6 +24,7 @@ type ChallengeRow = {
   purpose: ChallengePurpose;
   code_hash: string;
   pending_password_hash: string | null;
+  pending_display_name: string | null;
   expires_at: string;
   consumed_at: string | null;
   attempt_count: number;
@@ -65,6 +67,7 @@ export async function createEmailChallenge(
     purpose: ChallengePurpose;
     codeHash: string;
     pendingPasswordHash?: string | null;
+    pendingDisplayName?: string | null;
   },
 ): Promise<void> {
   await getD1(runtime)
@@ -75,8 +78,9 @@ export async function createEmailChallenge(
         purpose,
         code_hash,
         pending_password_hash,
+        pending_display_name,
         expires_at
-      ) VALUES (?, ?, ?, ?, ?, datetime('now', '+10 minutes'))`,
+      ) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))`,
     )
     .bind(
       input.userId ?? null,
@@ -84,6 +88,7 @@ export async function createEmailChallenge(
       input.purpose,
       input.codeHash,
       input.pendingPasswordHash ?? null,
+      input.pendingDisplayName ?? null,
     )
     .run();
 }
@@ -128,6 +133,7 @@ export async function consumeLatestEmailChallenge(
         purpose,
         code_hash,
         pending_password_hash,
+        pending_display_name,
         expires_at,
         consumed_at,
         attempt_count
@@ -197,6 +203,7 @@ function mapChallengeRow(row: ChallengeRow): EmailVerificationChallenge {
     purpose: row.purpose,
     codeHash: row.code_hash,
     pendingPasswordHash: row.pending_password_hash,
+    pendingDisplayName: row.pending_display_name,
     expiresAt: row.expires_at,
     consumedAt: row.consumed_at,
     attemptCount: row.attempt_count,

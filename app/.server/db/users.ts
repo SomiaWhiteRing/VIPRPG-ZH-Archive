@@ -99,6 +99,13 @@ export function normalizeEmail(value: string): string {
   return email;
 }
 
+export function normalizeDisplayName(value: string): string {
+  const displayName = value.trim();
+  if (!displayName || [...displayName].length > 80)
+    throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
+  return displayName;
+}
+
 export async function findUserById(
   runtime: AppRuntime,
   id: number,
@@ -178,10 +185,12 @@ export async function createOrActivateVerifiedUser(
   input: {
     email: string;
     passwordHash: string;
+    displayName: string;
   },
 ): Promise<ArchiveUser> {
   const email = normalizeEmail(input.email);
   const externalAuthId = emailToExternalAuthId(email);
+  const displayName = normalizeDisplayName(input.displayName);
   const existing = await findUserRowByEmail(runtime, email);
 
   if (existing?.status === "deleted") throw new Error("账号不存在");
@@ -194,7 +203,7 @@ export async function createOrActivateVerifiedUser(
       .prepare(
         `UPDATE users
         SET email = ?,
-          display_name = COALESCE(NULLIF(display_name, ''), ?),
+          display_name = ?,
           password_hash = ?,
           password_updated_at = CURRENT_TIMESTAMP,
           email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
@@ -204,7 +213,7 @@ export async function createOrActivateVerifiedUser(
           status = 'active'
         WHERE id = ?`,
       )
-      .bind(email, email, input.passwordHash, existing.id)
+      .bind(email, displayName, input.passwordHash, existing.id)
       .run();
 
     await ensureInitialBootstrapRole(runtime, existing.id, email);
@@ -224,7 +233,7 @@ export async function createOrActivateVerifiedUser(
         last_login_at
       ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-    .bind(externalAuthId, email, email, input.passwordHash)
+    .bind(externalAuthId, email, displayName, input.passwordHash)
     .run();
 
   const created = await findUserRowByEmail(runtime, email);
@@ -345,10 +354,8 @@ export async function updateOwnProfile(
     bio: string;
   },
 ): Promise<void> {
-  const displayName = input.displayName.trim();
+  const displayName = normalizeDisplayName(input.displayName);
   const bio = input.bio.trim();
-  if (!displayName || [...displayName].length > 80)
-    throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
   if ([...bio].length > 500)
     throw new HttpError(400, "简介不能超过 500 个字符");
   await getD1(runtime).batch([

@@ -32,13 +32,14 @@ export async function POST(runtime: AppRuntime, request: Request) {
       }),
     });
 
-    if (!challenge.pendingPasswordHash) {
+    if (!challenge.pendingPasswordHash || !challenge.pendingDisplayName) {
       throw new Error("注册状态不完整，请重新获取验证码");
     }
 
     const user = await createOrActivateVerifiedUser(runtime, {
       email,
       passwordHash: challenge.pendingPasswordHash,
+      displayName: challenge.pendingDisplayName,
     });
     await writeAuthAuditLog(runtime, {
       userId: user.id,

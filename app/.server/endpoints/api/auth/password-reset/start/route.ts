@@ -60,7 +60,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
             next: nextPath,
             email,
             sent: "1",
-          }),
+          }, code),
         });
       } catch (sendError) {
         await deletePendingEmailChallenge(runtime, {
