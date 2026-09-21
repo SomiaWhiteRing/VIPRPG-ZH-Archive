@@ -57,6 +57,7 @@ export type GameArchiveVersionDetail = {
   totalSizeBytes: number;
   estimatedR2GetCount: number;
   publishedAt: string | null;
+  uploaderId: number | null;
   uploaderName: string | null;
 };
 

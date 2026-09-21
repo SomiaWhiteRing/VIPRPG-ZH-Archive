@@ -1,4 +1,5 @@
 import { countGameWorks, listGameWorks, searchUserWorks } from "@/app/.server/db/game-library";
+import { findPublicUserById } from "@/app/.server/db/users";
 import { getPublicCharacterSummary, getPublicTagSummary, listPublicTags } from "@/app/.server/db/taxonomy-library";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -22,6 +23,7 @@ export async function loadGameLibrary(
   const engine = stringParam(params.engine) || "all";
   const tag = parseOptionalId(stringParam(params.tag));
   const character = parseOptionalId(stringParam(params.character));
+  const uploader = parseOptionalId(stringParam(params.uploader));
   const language = stringParam(params.language);
   const original = stringParam(params.original);
   const requestedView = stringParam(params.view);
@@ -39,10 +41,11 @@ export async function loadGameLibrary(
     engine,
     tag: tag ?? undefined,
     character: character ?? undefined,
+    uploader: uploader ?? undefined,
     language: language || undefined,
     isOriginal: original === "1" ? true : original === "0" ? false : undefined,
   };
-  const [works, total, selectedTag, selectedCharacter, popularTags] =
+  const [works, total, selectedTag, selectedCharacter, popularTags, selectedUploader] =
     await Promise.all([
       userWorks ? Promise.resolve(userWorks.items.map(({ work }) => work)) : listGameWorks(runtime, {
         ...filters,
@@ -56,11 +59,13 @@ export async function loadGameLibrary(
         ? getPublicCharacterSummary(runtime, character)
         : Promise.resolve(null),
       userWorks ? Promise.resolve([]) : listPublicTags(runtime, { limit: 12 }),
+      uploader ? findPublicUserById(runtime, uploader) : Promise.resolve(null),
     ]);
   const activeParams = {
     engine: engine !== "all" ? engine : undefined,
     tag: tag ? String(tag) : undefined,
     character: character ? String(character) : undefined,
+    uploader: uploader ? String(uploader) : undefined,
     language: language || undefined,
     original: original || undefined,
     sort: sort !== "id" ? sort : undefined,
@@ -68,7 +73,7 @@ export async function loadGameLibrary(
   };
   const isListView = view === "list";
   const hasFilters =
-    engine !== "all" || Boolean(tag || character || language || original);
+    engine !== "all" || Boolean(tag || character || uploader || language || original);
 
   return {
     userWorkKind: userList?.kind ?? null,
@@ -78,6 +83,8 @@ export async function loadGameLibrary(
     engine,
     tag,
     character,
+    uploader,
+    uploaderName: selectedUploader?.displayName ?? null,
     language,
     original,
     view,
