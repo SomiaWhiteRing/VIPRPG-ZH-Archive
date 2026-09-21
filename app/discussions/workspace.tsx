@@ -540,6 +540,8 @@ export function DiscussionWorkspace({
           destination.pathname + destination.search + destination.hash,
           { preventScrollReset: true },
         );
+        // Hash-only navigation does not reload data after an edit or reply.
+        await revalidator.revalidate();
       } else {
         navigate(destination.pathname + destination.search + destination.hash);
       }
