@@ -781,11 +781,11 @@ async function verifyPermissionHistory(
     await matrix.goto(origin + "/admin", { waitUntil: "networkidle" });
     await matrix.locator('a[href="/admin/permissions"]').first().click();
     await matrix.waitForURL(origin + "/admin/permissions");
-    await matrix
-      .locator("summary")
-      .filter({ hasText: "新建自定义角色" })
-      .click();
-    const field = matrix.locator('details input[name="name"]');
+    const createRole = matrix.locator("details").filter({
+      has: matrix.locator("summary", { hasText: "新建自定义角色" }),
+    });
+    await createRole.locator("summary").click();
+    const field = createRole.getByRole("textbox", { name: "中文名称", exact: true });
     await field.fill("Unsaved role");
     const confirmation = matrix.getByRole("alertdialog");
     await matrix.goBack();
