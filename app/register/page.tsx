@@ -15,6 +15,7 @@ import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
+import { Input } from "@/app/components/ui/input";
 import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
@@ -61,24 +62,54 @@ export default function RegisterPage() {
       {params.sent ? (
         <VerificationForm email={params.email ?? ""} nextPath={nextPath} />
       ) : (
-        <RegisterStartForm nextPath={nextPath} />
+        <RegisterStartForm
+          nextPath={nextPath}
+          email={params.email ?? ""}
+          displayName={params.displayName ?? ""}
+        />
       )}
     </AuthPageShell>
   );
 }
 
-function RegisterStartForm({ nextPath }: { nextPath: string }) {
+function RegisterStartForm({ nextPath, email, displayName }: {
+  nextPath: string;
+  email: string;
+  displayName: string;
+}) {
   return (
     <form
       action="/api/auth/register/start"
       method="post"
       className="grid gap-4"
+      onInput={(event) => {
+        const fields = event.currentTarget.elements;
+        const password = fields.namedItem("password");
+        const confirmation = fields.namedItem("confirmPassword");
+        if (password instanceof HTMLInputElement && confirmation instanceof HTMLInputElement) {
+          confirmation.setCustomValidity(
+            confirmation.value && confirmation.value !== password.value
+              ? "两次输入的密码不一致" : "",
+          );
+        }
+      }}
     >
       <input type="hidden" name="next" value={nextPath} />
+      <FormField controlId="register-display-name" label="显示名">
+        <Input
+          id="register-display-name"
+          name="displayName"
+          autoComplete="nickname"
+          defaultValue={displayName}
+          maxLength={80}
+          required
+        />
+      </FormField>
       <FormField controlId="register-field-1" label="邮箱">
         <EmailInput
           id="register-field-1"
           name="email"
+          defaultValue={email}
           placeholder="name@example.com"
           required
         />
@@ -88,6 +119,14 @@ function RegisterStartForm({ nextPath }: { nextPath: string }) {
           id="register-field-2"
           purpose="new"
           name="password"
+          required
+        />
+      </FormField>
+      <FormField controlId="register-confirm-password" label="确认密码">
+        <PasswordInput
+          id="register-confirm-password"
+          purpose="new"
+          name="confirmPassword"
           required
         />
       </FormField>

@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS email_verification_challenges (
   purpose TEXT NOT NULL CHECK (purpose IN ('register', 'password_reset', 'email_change')),
   code_hash TEXT NOT NULL,
   pending_password_hash TEXT,
+  pending_display_name TEXT,
   expires_at TEXT NOT NULL,
   consumed_at TEXT,
   attempt_count INTEGER NOT NULL DEFAULT 0,

@@ -68,3 +68,7 @@ business records are preserved, with the single initialization migration ledger.
 The 2026-09-21 password refresh rehashes the nine development accounts with the
 current Workers-compatible scrypt policy. Their documented password and all other
 captured fields remain unchanged. Staging initialization still excludes users.
+
+The registration refresh adds nullable `email_verification_challenges.pending_display_name`
+to match the current initialization schema, preserving all rows and the single
+migration ledger.

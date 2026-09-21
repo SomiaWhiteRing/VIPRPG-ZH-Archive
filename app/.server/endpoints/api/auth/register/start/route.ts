@@ -14,7 +14,7 @@ import {
   createEmailChallenge,
   deletePendingEmailChallenge,
 } from "@/app/.server/db/auth-challenges";
-import { findUserByEmail, normalizeEmail } from "@/app/.server/db/users";
+import { findUserByEmail, normalizeDisplayName, normalizeEmail } from "@/app/.server/db/users";
 import { sendRegistrationCodeEmail } from "@/app/.server/email/auth-email";
 import {
   readRequiredFormString,
@@ -29,6 +29,10 @@ export async function POST(runtime: AppRuntime, request: Request) {
   try {
     assertSameOrigin(runtime, request);
     const email = normalizeEmail(readRequiredFormString(formData, "email"));
+    const displayName = normalizeDisplayName(String(formData.get("displayName") ?? ""));
+    if (formData.get("password") !== formData.get("confirmPassword")) {
+      throw new Error("两次输入的密码不一致");
+    }
     const existingUser = await findUserByEmail(runtime, email);
 
     if (existingUser?.emailVerifiedAt) {
@@ -54,6 +58,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       purpose: "register",
       codeHash,
       pendingPasswordHash,
+      pendingDisplayName: displayName,
     });
 
     try {
@@ -64,7 +69,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
           next: nextPath,
           email,
           sent: "1",
-        }),
+        }, code),
       });
     } catch (sendError) {
       await deletePendingEmailChallenge(runtime, {
@@ -94,6 +99,8 @@ export async function POST(runtime: AppRuntime, request: Request) {
           ? String(formData.get("email"))
           : null,
       error: error instanceof Error ? error.message : "注册验证码发送失败",
+      displayName: typeof formData.get("displayName") === "string"
+        ? String(formData.get("displayName")) : null,
     });
   }
 }
