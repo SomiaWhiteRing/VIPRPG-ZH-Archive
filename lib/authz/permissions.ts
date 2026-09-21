@@ -35,10 +35,10 @@ export type PermissionCategory = keyof typeof PERMISSION_CATEGORIES;
 export const PERMISSIONS = {
   "work.lookup_non_deleted": {
     category: "work",
-    label: "查找未删除作品",
-    scope: "有权访问的未删除作品",
+    label: "查找公开作品",
+    scope: "可公开访问的作品",
     description:
-      "在作品选择器中查找有权访问的未删除作品；查看非公开作品仍需相应权限或维护资格。",
+      "在关联和目录作品选择器中查找公开作品；后台权限不扩大候选范围。",
   },
   "work.read_private": {
     category: "work",
@@ -207,8 +207,8 @@ export const PERMISSIONS = {
   "relation.create": {
     category: "relation",
     label: "创建作品关联",
-    scope: "有权访问的作品",
-    description: "为有权访问的作品新增关联；不允许修改或删除已有关联。",
+    scope: "本人上传的作品",
+    description: "为本人上传的作品新增关联；自动建立对向关联无需对向作品的上传者权限。",
   },
   "relation.create_any": {
     category: "relation",
@@ -237,8 +237,8 @@ export const PERMISSIONS = {
   "translation_relation.create": {
     category: "relation",
     label: "创建翻译关联",
-    scope: "有权访问的作品",
-    description: "为有权访问的作品建立原作与译作关系；不允许修改或删除已有翻译关联。",
+    scope: "本人上传的作品",
+    description: "为本人上传的作品建立原作与译作关系；自动建立对向关联无需对向作品的上传者权限。",
   },
   "translation_relation.delete_any": {
     category: "relation",
@@ -577,8 +577,6 @@ export type RelationEditorCapabilities = {
   canUpdate: boolean;
   canDeleteRelation: boolean;
   canDeleteTranslation: boolean;
-  canManageRelationsAny: boolean;
-  canManageTranslationsAny: boolean;
 };
 
 export function getRelationEditorCapabilities(
@@ -586,25 +584,20 @@ export function getRelationEditorCapabilities(
     status: "active" | "disabled" | "deleted";
     permissionKeys: readonly PermissionKey[];
   } | null,
+  isUploader: boolean,
 ): RelationEditorCapabilities {
-  const relationAny =
-    hasPermission(user, "relation.create_any") ||
-    hasPermission(user, "relation.update_any") ||
-    hasPermission(user, "relation.delete_any");
-  const translationAny =
-    hasPermission(user, "translation_relation.create_any") ||
-    hasPermission(user, "translation_relation.delete_any");
+  const ownsWork = user?.status === "active" && isUploader;
   return {
-    canCreateRelation: hasPermission(user, "relation.create") || hasPermission(user, "relation.create_any"),
-    canCreateTranslation: hasPermission(user, "translation_relation.create") || hasPermission(user, "translation_relation.create_any"),
-    canUpdate: hasPermission(user, "relation.update_any"),
-    canDeleteRelation: hasPermission(user, "relation.delete_any"),
-    canDeleteTranslation: hasPermission(
-      user,
-      "translation_relation.delete_any",
-    ),
-    canManageRelationsAny: relationAny,
-    canManageTranslationsAny: translationAny,
+    canCreateRelation:
+      (ownsWork && hasPermission(user, "relation.create")) ||
+      hasPermission(user, "relation.create_any"),
+    canCreateTranslation:
+      (ownsWork && hasPermission(user, "translation_relation.create")) ||
+      hasPermission(user, "translation_relation.create_any"),
+    canUpdate: ownsWork || hasPermission(user, "relation.update_any"),
+    canDeleteRelation: ownsWork || hasPermission(user, "relation.delete_any"),
+    canDeleteTranslation:
+      ownsWork || hasPermission(user, "translation_relation.delete_any"),
   };
 }
 

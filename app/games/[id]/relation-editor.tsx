@@ -9,10 +9,10 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
-import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
-import { Input } from "@/app/components/ui/input";
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { SelectField } from "@/app/components/ui/select";
 import type { WorkListItemData } from "@/app/components/work/work-list-item";
 import { WorkListItem } from "@/app/components/work/work-list-item";
@@ -27,7 +27,7 @@ import {
 } from "@/lib/labels";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRevalidator } from "react-router";
 
 type Candidate = WorkListItemData & {
@@ -46,20 +46,17 @@ type RelationEditorProps = {
   relations: GameWorkRelation[];
   translations: GameTranslationRelation[];
   parallelTranslations: GameTranslationRelation[];
-  currentUserId: number | null;
   canCreateRelation: boolean;
   canCreateTranslation: boolean;
   canUpdate: boolean;
   canDeleteRelation: boolean;
   canDeleteTranslation: boolean;
-  canManageRelationsAny: boolean;
-  canManageTranslationsAny: boolean;
 };
 
-type RelationCreateDialogProps = Pick<
+type RelationCreateFormProps = Pick<
   RelationEditorProps,
   "workId" | "language" | "canCreateRelation" | "canCreateTranslation"
->;
+> & { excludedWorkIds: number[] };
 
 type PendingRemoval = {
   kind: "work" | "translation";
@@ -77,11 +74,16 @@ export function RelationEditor(props: RelationEditorProps) {
     <div className="grid gap-5 border-t border-border pt-5">
       {showCreate ? (
         <div className="flex justify-end">
-          <RelationCreateDialog
+          <RelationCreateForm
             canCreateRelation={props.canCreateRelation}
             canCreateTranslation={props.canCreateTranslation}
             language={props.language}
             workId={props.workId}
+            excludedWorkIds={[
+              ...props.relations,
+              ...props.translations,
+              ...props.parallelTranslations,
+            ].map((item) => item.workId)}
           />
         </div>
       ) : null}
@@ -90,89 +92,102 @@ export function RelationEditor(props: RelationEditorProps) {
   );
 }
 
-export function RelationCreateDialog({
+export function RelationCreateForm({
   workId,
   language,
   canCreateRelation,
   canCreateTranslation,
-}: RelationCreateDialogProps) {
+  excludedWorkIds,
+}: RelationCreateFormProps) {
   const revalidator = useRevalidator();
   const toast = useToast();
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [result, setResult] = useState<{
+    query: string;
+    candidates: Candidate[];
+  } | null>(null);
+  const [searchError, setSearchError] = useState("");
+  const [retry, setRetry] = useState(0);
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [relationChoice, setRelationChoice] = useState<RelationChoice>(() =>
     canCreateRelation ? "work:same_setting" : "translation:original",
   );
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{
-    kind: "empty" | "feedback";
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  function changeOpen(nextOpen: boolean) {
-    if (busy) return;
-    setOpen(nextOpen);
-    if (nextOpen) {
-      setQuery("");
-      setCandidates([]);
-      setSelected(null);
-      setMessage(null);
-    }
-  }
+  const menuOpen = open && !busy;
+  const excludedIds = new Set([workId, ...excludedWorkIds]);
+  const exclusions = [...excludedIds].sort((a, b) => a - b).join(",");
+  const candidates = result?.query === query
+    ? result.candidates.filter((candidate) => !excludedIds.has(candidate.id))
+    : [];
 
-  async function lookup() {
-    if (!query.trim()) return;
+  useEffect(() => {
+    if (!menuOpen || !query.trim() || selected) return;
+    const controller = new AbortController();
     setSearching(true);
-    setMessage(null);
-    setSelected(null);
-    try {
-      const response = await fetch(
-        `/api/works/lookup?title=${encodeURIComponent(query.trim())}`,
-        { credentials: "same-origin" },
-      );
-      const body = (await response.json()) as {
-        ok?: boolean;
-        works?: Array<Omit<Candidate, "workId" | "title">>;
-        detail?: string;
-      };
-      if (!response.ok || !body.ok) {
-        setMessage({ kind: "feedback", text: body.detail ?? "查找游戏失败。" });
-        return;
+    setSearchError("");
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          title: query.trim(),
+          excludeWorkIds: exclusions,
+        });
+        const response = await fetch(
+          `/api/works/lookup?${params}`,
+          { credentials: "same-origin", signal: controller.signal },
+        );
+        const body = (await response.json()) as {
+          ok?: boolean;
+          works?: Array<Omit<Candidate, "workId" | "title">>;
+          detail?: string;
+        };
+        if (!response.ok || !body.ok)
+          throw new Error(body.detail ?? "查找游戏失败。");
+        if (!controller.signal.aborted) {
+          setResult({
+            query,
+            candidates: (body.works ?? [])
+              .filter((candidate) => candidate.id !== workId)
+              .map((candidate) => ({
+                ...candidate,
+                workId: candidate.id,
+                title: candidate.chineseTitle || candidate.originalTitle,
+              })),
+          });
+        }
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setSearchError(
+            error instanceof Error ? error.message : "搜索失败，请重试。",
+          );
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
       }
-      const works = (body.works ?? [])
-        .filter((candidate) => candidate.id !== workId)
-        .map((candidate) => ({
-          ...candidate,
-          workId: candidate.id,
-          title: candidate.chineseTitle || candidate.originalTitle,
-        }));
-      setCandidates(works);
-      if (!works.length)
-        setMessage({ kind: "empty", text: "没有找到可关联的游戏。" });
-    } catch {
-      setMessage({
-        kind: "feedback",
-        text: "网络请求失败，请检查连接后重试。",
-      });
-    } finally {
-      setSearching(false);
-    }
-  }
+    }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [menuOpen, query, retry, selected, workId, exclusions]);
 
   async function createRelation() {
+    if (busy) return;
     if (!selected) {
-      setMessage({ kind: "feedback", text: "请先查找并选择关联对象。" });
+      setMessage("请先查找并选择关联对象。");
+      return;
+    }
+    if (excludedIds.has(selected.id)) {
+      setMessage("该作品已在关联列表中。");
       return;
     }
     if (
       relationChoice.startsWith("translation:") &&
       selected.language === language
     ) {
-      setMessage({ kind: "feedback", text: "原版和译版语言必须不同。" });
+      setMessage("原版和译版语言必须不同。");
       return;
     }
 
@@ -206,17 +221,18 @@ export function RelationCreateDialog({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        setMessage({ kind: "feedback", text: body.detail ?? "保存关联失败。" });
+        toast.error(body.detail ?? "保存关联失败。");
         return;
       }
-      setOpen(false);
+      setSelected(null);
+      setQuery("");
+      setResult(null);
+      setSearching(false);
+      setSearchError("");
       toast.success("关联已建立。");
-      revalidator.revalidate();
+      await revalidator.revalidate();
     } catch {
-      setMessage({
-        kind: "feedback",
-        text: "网络请求失败，请检查连接后重试。",
-      });
+      toast.error("网络请求失败，请检查连接后重试。");
     } finally {
       setBusy(false);
     }
@@ -243,126 +259,114 @@ export function RelationCreateDialog({
   ];
 
   return (
-    <Dialog.Root open={open} onOpenChange={changeOpen}>
-      <Dialog.Trigger asChild>
-        <Button ref={triggerRef} type="button">
-          添加关联
-        </Button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content
-          aria-describedby="relation-create-description"
-          className="left-1/2 top-1/2 grid h-[min(85dvh,680px)] w-[min(92vw,680px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg p-5"
-          id="relation-create-dialog"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            triggerRef.current?.focus();
-          }}
-        >
-          <Dialog.Title>添加关联</Dialog.Title>
-          <Dialog.Description
-            className="sr-only"
-            id="relation-create-description"
-          >
-            选择关联类型，查找关联对象并建立关联。
-          </Dialog.Description>
-          <div className="grid gap-2 text-sm font-semibold">
-            <div className="flex items-center gap-1">
-              <span>关联类型</span>
-              <InfoTooltip>本作品之于关联对象的关系。</InfoTooltip>
-            </div>
-            <SelectField
-              aria-label="关联类型"
-              disabled={busy}
-              onValueChange={(value) => {
-                setRelationChoice(value as RelationChoice);
-                setMessage(null);
-              }}
-              options={relationOptions}
-              value={relationChoice}
-            />
-          </div>
-          <form
-            className="flex gap-2 max-sm:flex-col"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void lookup();
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-64 max-w-full">
+          <SearchComboBox
+            id={`relation-target-${workId}`}
+            label="关联作品"
+            query={query}
+            selectedKey={selected?.id ?? null}
+            onClear={() => {
+              setSelected(null);
+              setQuery("");
+              setResult(null);
+              setSearching(false);
+              setSearchError("");
+              setMessage(null);
             }}
-          >
-            <Input
-              aria-label="查找关联对象"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="输入游戏标题"
-              value={query}
-            />
-            <Button
-              disabled={searching || busy || !query.trim()}
-              type="submit"
-              variant="outline"
-            >
-              {searching ? "正在查找…" : "查找"}
-            </Button>
-          </form>
-          <div className="min-h-0 overflow-y-auto">
-            {candidates.length ? (
-              <ol
-                aria-label="查找结果"
-                className="divide-y divide-border border-y border-border"
-              >
-                {candidates.map((candidate, index) => (
-                  <WorkListItem
-                    index={index}
-                    item={candidate}
-                    key={candidate.id}
-                    management={
-                      <Button
-                        disabled={busy}
-                        onClick={() => {
-                          setSelected(candidate);
-                          setMessage(null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant={
-                          selected?.id === candidate.id ? "default" : "outline"
-                        }
-                      >
-                        {selected?.id === candidate.id ? "已选择" : "选择"}
-                      </Button>
-                    }
+            onQueryChange={(value) => {
+              setQuery(value);
+              setSelected(null);
+              setMessage(null);
+              setSearchError("");
+              setSearching(Boolean(value.trim()));
+            }}
+            onOpenChange={setOpen}
+            disabled={busy}
+            loading={searching && Boolean(query.trim())}
+            items={searching || searchError ? [] : candidates}
+            getKey={(candidate) => candidate.id}
+            getText={(candidate) => candidate.title}
+            placeholder="搜索作品名称或别名"
+            maxLength={100}
+            onChoose={(candidate) => {
+              setSelected(candidate);
+              setQuery(candidate.title);
+              setResult({ query: candidate.title, candidates });
+              setSearching(false);
+              setSearchError("");
+              setMessage(null);
+            }}
+            itemClassName="min-h-16 justify-start"
+            renderItem={(candidate) => (
+              <>
+                <span
+                  className="flex size-12 shrink-0 overflow-hidden"
+                  aria-hidden="true"
+                >
+                  <WorkThumbnail
+                    blobSha256={candidate.coverBlobSha256}
+                    width={320}
+                    height={240}
+                    fallback="暂无封面"
+                    fallbackClassName="flex h-full items-center text-xs text-muted"
+                    imageClassName="block h-full w-auto max-w-none object-contain object-left"
                   />
-                ))}
-              </ol>
-            ) : null}
-            {message?.kind === "empty" ? (
-              <EmptyState
-                title={message.text}
-                variant="plain"
-                className="py-3 font-normal"
-                role="status"
-              />
-            ) : message ? (
-              <Notice>{message.text}</Notice>
-            ) : null}
-          </div>
-          <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Dialog.Close asChild>
-              <Button disabled={busy} type="button" variant="outline">
-                取消
-              </Button>
-            </Dialog.Close>
-            <Button
-              disabled={busy || searching || !selected}
-              onClick={() => void createRelation()}
-              type="button"
-            >
-              {busy ? "正在建立…" : "建立关联"}
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+                </span>
+                <span className="min-w-0 wrap-anywhere">{candidate.title}</span>
+              </>
+            )}
+            emptyState={
+              <p
+                className="px-3 py-2 text-sm text-muted"
+                role={searchError ? "alert" : "status"}
+              >
+                {!query.trim()
+                  ? "输入作品名称或别名开始搜索。"
+                  : searching
+                    ? "正在搜索…"
+                    : searchError || "没有找到可关联的作品。"}
+              </p>
+            }
+            footer={
+              searchError && !searching ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="m-2"
+                  onClick={() => setRetry((value) => value + 1)}
+                >
+                  重新搜索
+                </Button>
+              ) : null
+            }
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <SelectField
+            aria-label="关联类型"
+            disabled={busy}
+            onValueChange={(value) => {
+              setRelationChoice(value as RelationChoice);
+              setMessage(null);
+            }}
+            options={relationOptions}
+            value={relationChoice}
+          />
+          <InfoTooltip>本作品之于关联对象的关系。</InfoTooltip>
+        </div>
+        <Button
+          disabled={busy || !selected || excludedIds.has(selected.id)}
+          onClick={() => void createRelation()}
+          type="button"
+        >
+          {busy ? "正在添加…" : "添加关联"}
+        </Button>
+      </div>
+      {message ? <Notice>{message}</Notice> : null}
+    </div>
   );
 }
 
@@ -371,18 +375,14 @@ export function RelationManager({
   relations,
   translations,
   parallelTranslations,
-  currentUserId,
   canUpdate,
   canDeleteRelation,
   canDeleteTranslation,
-  canManageRelationsAny,
-  canManageTranslationsAny,
 }: RelationEditorProps) {
   const revalidator = useRevalidator();
   const toast = useToast();
   const removalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
     null,
   );
@@ -438,7 +438,6 @@ export function RelationManager({
     returnFocus: HTMLElement | null,
   ) {
     removalReturnFocusRef.current = returnFocus;
-    setMessage(null);
     setPendingRemoval(removal);
   }
 
@@ -450,7 +449,6 @@ export function RelationManager({
     failureMessage: string,
   ): Promise<boolean> {
     setBusy(true);
-    setMessage(null);
     try {
       const response = await fetch(path, {
         method,
@@ -464,16 +462,14 @@ export function RelationManager({
       });
       const body = (await response.json()) as { ok?: boolean; detail?: string };
       if (!response.ok || !body.ok) {
-        if (method === "DELETE") setMessage(body.detail ?? failureMessage);
-        else toast.error(body.detail ?? failureMessage);
+        toast.error(body.detail ?? failureMessage);
         return false;
       }
       toast.success(successMessage);
       revalidator.revalidate();
       return true;
     } catch {
-      if (method === "DELETE") setMessage("网络请求失败，请检查连接后重试。");
-      else toast.error("网络请求失败，请检查连接后重试。");
+      toast.error("网络请求失败，请检查连接后重试。");
       return false;
     } finally {
       setBusy(false);
@@ -495,9 +491,9 @@ export function RelationManager({
           />
           <ol className="divide-y divide-border border-b border-border">
             {allTranslations.map((translation, index) => {
-              const ownsRelation =
-                translation.createdByUserId === currentUserId ||
-                canManageTranslationsAny;
+              const isDirectRelation = translations.some(
+                (item) => item.id === translation.id,
+              );
               return (
                 <WorkListItem
                   index={index}
@@ -506,7 +502,7 @@ export function RelationManager({
                   management={
                     <TranslationRelationActions
                       busy={busy}
-                      canDelete={canDeleteTranslation && ownsRelation}
+                      canDelete={canDeleteTranslation && isDirectRelation}
                       onDelete={(returnFocus) =>
                         requestRemoval(
                           {
@@ -540,9 +536,6 @@ export function RelationManager({
           />
           <ol className="divide-y divide-border border-b border-border">
             {group.items.map((relation, index) => {
-              const ownsRelation =
-                relation.createdByUserId === currentUserId ||
-                canManageRelationsAny;
               return (
                 <WorkListItem
                   index={index}
@@ -551,8 +544,8 @@ export function RelationManager({
                   management={
                     <WorkRelationActions
                       busy={busy}
-                      canDelete={canDeleteRelation && ownsRelation}
-                      canEdit={canUpdate && ownsRelation}
+                      canDelete={canDeleteRelation}
+                      canEdit={canUpdate}
                       onChangeType={(relationType) =>
                         void changeType(relation, relationType)
                       }
@@ -598,7 +591,6 @@ export function RelationManager({
           <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
             对向关系也会同时删除。
           </AlertDialogDescription>
-          {message ? <Notice>{message}</Notice> : null}
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button disabled={busy} type="button" variant="outline">

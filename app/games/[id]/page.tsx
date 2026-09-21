@@ -1,3 +1,4 @@
+import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   searchCatalogsForOwner,
@@ -31,7 +32,6 @@ import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import type {
   GameTranslationRelation,
   GameWorkRelation,
@@ -69,7 +69,7 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!work) throwNotFound();
 
   const currentUser = await getCurrentUser(runtime);
-  const relationCapabilities = getRelationEditorCapabilities(currentUser);
+  const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, id, currentUser);
   const title = work.chineseTitle || work.originalTitle;
   const current = work.archiveVersions[0] ?? null;
   const externalDownload =
@@ -172,6 +172,13 @@ export default function GameDetailPage() {
     showRelationEditor,
     externalLinks,
   } = useLoaderData<typeof loader>();
+  const relationGroups = new Map<string, typeof relationCards>();
+  for (const relation of relationCards) {
+    const group = relationGroups.get(relation.type);
+    if (group) group.push(relation);
+    else relationGroups.set(relation.type, [relation]);
+  }
+
   return (
     <DetailPageShell key={`${work.id}:${currentUser?.id ?? "anonymous"}`}>
       <WorkViewTracker workId={work.id} />
@@ -351,15 +358,27 @@ export default function GameDetailPage() {
                   ) : null}
                 </div>
                 {relationCards.length ? (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-3 gap-y-4">
-                    {relationCards.map((relation) => (
-                      <WorkCard
-                        key={relation.key}
-                        href={relation.href}
-                        title={relation.title}
-                        coverBlobSha256={relation.coverBlobSha256}
-                        metadata={<p className="text-xs text-muted">{relation.type}</p>}
-                      />
+                  <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5 scrollbar-thin">
+                    {Array.from(relationGroups, ([type, relations]) => (
+                      <div
+                        className="shrink-0 border-l border-border pl-3 first:border-l-0 first:pl-0"
+                        key={type}
+                      >
+                        <h3 className="mb-2 text-sm font-normal text-muted">
+                          {type}
+                        </h3>
+                        <div className="flex gap-3">
+                          {relations.map((relation) => (
+                            <div className="w-[150px] shrink-0 snap-start" key={relation.key}>
+                              <WorkCard
+                                href={relation.href}
+                                title={relation.title}
+                                coverBlobSha256={relation.coverBlobSha256}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 ) : (

@@ -1,3 +1,4 @@
+import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
@@ -7,11 +8,10 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { getRelationEditorCapabilities } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
-import { RelationCreateDialog, RelationManager } from "../relation-editor";
+import { RelationCreateForm, RelationManager } from "../relation-editor";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -22,7 +22,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const work = await getGameWorkDetail(runtime, workId);
   if (!work) throwNotFound();
 
-  const capabilities = getRelationEditorCapabilities(user);
+  const capabilities = await getWorkRelationEditorCapabilities(runtime, workId, user);
   const canManage = Object.values(capabilities).some(Boolean);
   if (!canManage) redirectPage(`/games/${workId}`);
 
@@ -56,11 +56,16 @@ export default function WorkRelationsPage() {
           <>
             <BackLink href={`/games/${workId}`} label="返回作品" />
             {canCreate ? (
-              <RelationCreateDialog
+              <RelationCreateForm
                 canCreateRelation={capabilities.canCreateRelation}
                 canCreateTranslation={capabilities.canCreateTranslation}
                 language={work.language}
                 workId={work.id}
+                excludedWorkIds={[
+                  ...work.relations,
+                  ...work.translations,
+                  ...work.parallelTranslations,
+                ].map((item) => item.workId)}
               />
             ) : null}
           </>
@@ -70,7 +75,6 @@ export default function WorkRelationsPage() {
       />
       <RelationManager
         {...capabilities}
-        currentUserId={user.id}
         language={work.language}
         parallelTranslations={work.parallelTranslations}
         relations={work.relations}

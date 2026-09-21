@@ -34,6 +34,8 @@
 - 业务入口按完成操作所需的权限组合显示；角色配置可以提示缺失的配套能力，但不自动补授权限，多角色依然只取并集。
 - `ROLE_TEMPLATES.wiki_editor` 是可创建为自定义角色的维基人模板；仅根管理员可创建，创建角色与初始授权一起提交。模板不自动分配给用户，也不覆盖已存在的同名标识角色。
 - 维基人可维护作品资料、署名、作者、游戏角色、标签及普通/翻译关联；移除错误关联不等于删除作品或资料实体。普通关联修改和删除分别校验；翻译关联目前通过删除错误关系后重建来纠正。
+- 作品关联按当前条目的 `work_uploaders` 判断上传者资格；基础角色的 `relation.create` / `translation_relation.create` 仅允许为本人上传的条目添加关联，上传者也可修改或删除该条目的直接关联，不按关联创建人判断。非上传者须取得对应操作的 `*_any` 权限。前台入口、后台编辑器及写入接口使用同一判定；对向关联随当前操作自动建立、修改或删除，不另要求对向条目的上传者资格。同一原版下其他译版的间接关联仅展示，需进入对应条目编辑。
+- 关联属于公开展示：搜索、创建、修改类型和关联列表统一限定 `public_works`，隐藏、已删除及不满足公开分发条件的作品不因上传者或后台权限而放行。目录共用的作品搜索同样仅返回公开作品。作品随后隐藏时保留原有关联记录，但不展示该目标；删除操作仍按编辑权限校验，允许清理旧记录。
 - `work.metadata.update_any` 不赋予发布状态或归档文件管理能力；无状态权限的资料保存不写 `status` 和 `published_at`。更新已有作品的归档必须同时具备上传能力、`work.update_own` 和该作品的维护者资格，管理员也遵守此规则。
 - 作者详情卡片下方提供前台编辑入口，`creator.metadata.update_public` 允许正常账号维护已关联公开作品的作者，默认授予内置角色；`creator.metadata.update_any` 也可使用该入口。前台仅编辑名称、别名、网站、简介和头像，不授予后台访问、非公开作者读取或合并能力。别名使用共用多 tag 输入器，不设数量上限。网站以 `creators.links_json` 保存有序的 `{label,url}` 数组，支持 itch、Twitter(X)、blog、个人网站及自定义名称，每条网址只允许 HTTP(S)。资料直接生效，保存时原子比对原始资料，冲突返回 409；头像独立保存并比对原头像。修改人与修改前后内容随资料一起写入审计日志，名称及别名冲突时整批回滚。
 
@@ -90,7 +92,7 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 | --- | --- | --- |
 | 上传 | import 与 storage permission | import job 属于当前上传者且状态允许操作 |
 | 作品资料 | read/update permission | own/any、目标状态及关联一致性 |
-| 作品关系与目录 | create/update/delete permission | 创建者、owner、反向关系和成员约束 |
+| 作品关系与目录 | create/update/delete permission | 当前作品上传者或对应管理权限、目录 owner、公开性、反向关系和成员约束 |
 | 评论与点赞 | `comment.manage_any`（管理员）或评论作者 own-scope | published Work、公开作者或角色、活跃用户、主楼/回复关系和评论状态 |
 | 默认表情 | `emoji.defaults.manage` | 从已审核脸图库选格、调整默认顺序和保存审计；个人库仅当前账号可写 |
 | 归档版本 | read/update/delete/restore/current permission | uploader、published/current、deleted/purged 状态机 |

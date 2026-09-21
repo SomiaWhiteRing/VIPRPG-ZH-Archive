@@ -424,7 +424,7 @@ export async function getWorkForAdminEdit(
     .bind(workId)
     .first<WorkRow>();
   if (!row) return null;
-  const collections = await loadWorkCollections(runtime, workId, true);
+  const collections = await loadWorkCollections(runtime, workId);
   const originalId =
     collections.translations.find((item) => item.role === "original")?.workId ??
     (collections.translations.some((item) => item.role === "translation")
@@ -456,7 +456,7 @@ export async function getWorkForAdminEdit(
     outgoingRelations: collections.relations,
     translations: collections.translations,
     parallelTranslations: originalId
-      ? await listTranslations(runtime, originalId, true)
+      ? await listTranslations(runtime, originalId)
       : [],
     externalLinks: collections.links,
   };
@@ -1602,12 +1602,8 @@ type WorkCollections = {
 async function loadWorkCollections(
   runtime: AppRuntime,
   workId: number,
-  includeNonPublic = false,
 ): Promise<WorkCollections> {
   const database = getD1(runtime);
-  const targetStatus = includeNonPublic
-    ? "w.status<>'deleted'"
-    : "w.id IN (SELECT id FROM public_works)";
   const results = await database.batch([
     database
       .prepare(`SELECT title FROM work_titles WHERE work_id=? ORDER BY id`)
@@ -1669,7 +1665,7 @@ async function loadWorkCollections(
                  w.original_title,w.chinese_title,w.original_release_date,
                  w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
-          WHERE wr.from_work_id=? AND ${targetStatus}
+          WHERE wr.from_work_id=? AND w.id IN (SELECT id FROM public_works)
           ORDER BY wr.relation_type,title,w.id,wr.id`,
       )
       .bind(workId),
@@ -1680,7 +1676,7 @@ async function loadWorkCollections(
                  w.original_title,w.chinese_title,w.original_release_date,
                  w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
-          WHERE tr.source_work_id=? AND ${targetStatus}
+          WHERE tr.source_work_id=? AND w.id IN (SELECT id FROM public_works)
           ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
       )
       .bind(workId),
@@ -1852,11 +1848,7 @@ const RELATED_COVER_SQL = `(
 async function listTranslations(
   runtime: AppRuntime,
   id: number,
-  includeNonPublic = false,
 ): Promise<GameTranslationRelation[]> {
-  const targetStatus = includeNonPublic
-    ? "w.status <> 'deleted'"
-    : "w.id IN (SELECT id FROM public_works)";
   const rows = await getD1(runtime)
     .prepare(
       `SELECT tr.id,
@@ -1870,7 +1862,7 @@ async function listTranslations(
        FROM translation_relations tr
        JOIN works w ON w.id = tr.target_work_id
        WHERE tr.source_work_id = ?
-         AND ${targetStatus}
+         AND w.id IN (SELECT id FROM public_works)
        ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
     )
     .bind(id)

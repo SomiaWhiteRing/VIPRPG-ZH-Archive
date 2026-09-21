@@ -1,3 +1,4 @@
+import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { listWorkMaintainers } from "@/app/.server/db/catalog-maintenance";
 import { listCreatorSuggestions } from "@/app/.server/db/creator-library";
@@ -23,7 +24,6 @@ import { WorkMoreInfoFields } from "@/app/components/work/work-more-info-editor"
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import {
   canMergeWorks,
-  getRelationEditorCapabilities,
   hasPermission,
 } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
@@ -54,7 +54,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const maintainers = hasPermission(adminUser, "work.maintainer.manage_any")
     ? await listWorkMaintainers(runtime, workId)
     : [];
-  const relationCapabilities = getRelationEditorCapabilities(adminUser);
+  const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, workId, adminUser);
 
   return {
     workId,
@@ -359,7 +359,6 @@ export default function AdminWorkEditPage() {
         </p>
         <RelationEditor
           {...relationCapabilities}
-          currentUserId={adminUser.id}
           language={work.language}
           parallelTranslations={work.parallelTranslations}
           relations={work.outgoingRelations}

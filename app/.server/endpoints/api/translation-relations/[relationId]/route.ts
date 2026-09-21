@@ -1,4 +1,4 @@
-import { requireAnyPermission } from "@/app/.server/auth/authorize";
+import { requireUser } from "@/app/.server/auth/guards";
 import { deleteTranslationRelation } from "@/app/.server/db/relations";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -9,9 +9,7 @@ export async function DELETE(
   request: Request,
   context: { params: { relationId: string } },
 ) {
-  const auth = await requireAnyPermission(runtime, request, [
-    "translation_relation.delete_any",
-  ]);
+  const auth = await requireUser(runtime, request);
   if ("response" in auth) return auth.response;
   try {
     await deleteTranslationRelation(
