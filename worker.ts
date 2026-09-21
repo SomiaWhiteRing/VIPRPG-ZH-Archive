@@ -23,7 +23,13 @@ app.use("*", async (c, next) => {
     createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV),
   );
   await next();
+  if (c.env.SITE_NOINDEX === "true") {
+    c.header("X-Robots-Tag", "noindex, nofollow");
+  }
 });
+app.get("/robots.txt", (c) => c.text(c.env.SITE_NOINDEX === "true"
+  ? "User-agent: *\nDisallow: /\n"
+  : "User-agent: *\nAllow: /\n"));
 app.all(
   "/api/archive-versions/:id/kai-import",
   async (c) =>
