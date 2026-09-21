@@ -188,6 +188,7 @@ export default function GameDetailPage() {
         engineFamily={work.engineFamily}
         language={work.language}
         originalTitle={work.originalTitle}
+        stickyTabs
         tabs={[
           { href: "#sec-intro", label: "概览", active: true },
           ...(current
@@ -234,7 +235,7 @@ export default function GameDetailPage() {
           <>
             <section
               aria-labelledby="intro-title"
-              className="scroll-mt-20 py-4.5"
+              className="scroll-mt-28 py-4.5"
               id="sec-intro"
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
@@ -280,7 +281,7 @@ export default function GameDetailPage() {
             {media.length ? (
               <section
                 aria-labelledby="gallery-title"
-                className="scroll-mt-20 border-t border-border py-4.5"
+                className="scroll-mt-28 border-t border-border py-4.5"
                 id="sec-gallery"
               >
                 <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
@@ -298,7 +299,7 @@ export default function GameDetailPage() {
             {work.characters.length ? (
               <section
                 aria-labelledby="cast-title"
-                className="scroll-mt-20 border-t border-border py-4.5"
+                className="scroll-mt-28 border-t border-border py-4.5"
                 id="sec-cast"
               >
                 <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
@@ -343,7 +344,7 @@ export default function GameDetailPage() {
             {relationCards.length ? (
               <section
                 aria-labelledby="relations-title"
-                className="scroll-mt-20 border-t border-border py-4.5"
+                className="scroll-mt-28 border-t border-border py-4.5"
                 id="sec-relations"
               >
                 <span aria-hidden="true" className="sr-only" id="relations" />
@@ -389,7 +390,7 @@ export default function GameDetailPage() {
 
             <section
               aria-labelledby="comments-title"
-              className="scroll-mt-20 border-t border-border py-4.5"
+              className="scroll-mt-28 border-t border-border py-4.5"
               id="sec-comments"
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">

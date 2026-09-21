@@ -9,11 +9,17 @@ export type SectionLink = {
   count?: number;
 };
 
-export function SectionNavigation({ items }: { items: SectionLink[] }) {
+export function SectionNavigation({
+  items,
+  className,
+}: {
+  items: SectionLink[];
+  className?: string;
+}) {
   return (
     <nav
       aria-label="页面分区"
-      className="mt-4 overflow-x-auto border-b border-border"
+      className={cn("mt-4 overflow-x-auto border-b border-border", className)}
     >
       <ul className="m-0 flex min-w-max list-none gap-0.5 p-0">
         {items.map((item) => (
