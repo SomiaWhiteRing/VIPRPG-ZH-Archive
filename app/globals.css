@@ -3,13 +3,28 @@
 @import "react-datepicker/dist/react-datepicker.css" layer(components);
 @source "../lib";
 
-@layer base {
-  :focus:not(:focus-visible) {
-    @apply outline-none;
+/* React Aria tracks pointer, keyboard and assistive-technology interactions.
+   Keep the native fallback before hydration and editing feedback for text fields.
+   Apply the same policy to every focus-visible utility, including portal content. */
+@custom-variant focus-visible {
+  &:focus-visible:where(:root:not([data-focus-visible]) *),
+  &:focus:where(:root[data-focus-visible="true"] *),
+  &:focus:where(
+    input:not([type="button"], [type="checkbox"], [type="color"], [type="file"], [type="hidden"], [type="image"], [type="radio"], [type="range"], [type="reset"], [type="submit"]),
+    textarea,
+    [contenteditable]:not([contenteditable="false"])
+  ) {
+    @slot;
   }
+}
 
-  :focus-visible {
-    @apply outline-2 outline-accent outline-offset-2;
+@layer base {
+  :focus {
+    @apply outline-none;
+
+    @variant focus-visible {
+      @apply outline-solid outline-2 outline-accent outline-offset-2;
+    }
   }
 }
 

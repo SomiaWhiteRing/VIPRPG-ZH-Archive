@@ -1,6 +1,8 @@
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { copyFaceEmojis } from "@/app/components/emojis/client";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useIsSSR } from "react-aria/SSRProvider";
+import { useFocusVisible } from "react-aria/useFocusVisible";
 import {
   isRouteErrorResponse,
   Link,
@@ -45,6 +47,9 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const isSSR = useIsSSR();
+  const { isFocusVisible } = useFocusVisible();
+
   // Immersive Translate and other extensions can add document-root attributes
   // before hydration. Tolerate those attributes without suppressing diagnostics
   // inside the application tree.
@@ -52,6 +57,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html
       lang="zh-Hans"
       className="scroll-smooth motion-reduce:scroll-auto"
+      data-focus-visible={isSSR ? undefined : isFocusVisible}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
