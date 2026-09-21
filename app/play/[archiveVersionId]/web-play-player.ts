@@ -23,6 +23,9 @@ const playerButtons = {
   decision: { key: "z", code: "KeyZ", keyCode: 90 },
   cancel: { key: "x", code: "KeyX", keyCode: 88 },
   shift: { key: "Shift", code: "ShiftLeft", keyCode: 16 },
+  menu: { key: "F1", code: "F1", keyCode: 112 },
+  debug: { key: "F9", code: "F9", keyCode: 120 },
+  log: { key: "`", code: "Backquote", keyCode: 192 },
 } as const;
 
 export type PlayerButton = keyof typeof playerButtons;
