@@ -1,7 +1,7 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
 
-export const webPlayInstallerVersion = "opfs-v9-nfkc-resource-index";
+export const webPlayInstallerVersion = "opfs-v11-patch-detection";
 export const easyRpgRuntimeVersion = easyRpgRuntime.version;
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 

@@ -28,6 +28,8 @@ import {
   markWebPlayLastPlayed,
 } from "@/app/play/[archiveVersionId]/web-play-db";
 import { resetGameOpfsDirectory } from "@/app/play/[archiveVersionId]/web-play-opfs";
+import { canManageGameResources, cleanupObsoleteGameResources } from "./web-play-cleanup";
+import { withGameResourceWriteLock } from "./web-play-locks";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,
@@ -57,6 +59,10 @@ type WebPlayLog = {
 };
 
 type DisplayOrientation = "landscape" | "portrait";
+
+type BrowserStorageStatus = WebPlayStorageSnapshot & {
+  protectionStatus: "已获得" | "未获得" | "浏览器不支持" | "查询失败" | "申请失败";
+};
 
 const mobileControlsQuery = "(hover: none) and (pointer: coarse)";
 
@@ -90,6 +96,8 @@ export function WebPlayClient({
   );
   const [loadingLocalState, setLoadingLocalState] = useState(true);
   const [installSessionActive, setInstallSessionActive] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [browserStorage, setBrowserStorage] = useState<BrowserStorageStatus | null>(null);
   const [running, setRunning] = useState(false);
   const [playerStarting, setPlayerStarting] = useState(false);
   const [playerStopping, setPlayerStopping] = useState(false);
@@ -203,6 +211,15 @@ export function WebPlayClient({
   );
 
   useEffect(() => {
+    if (!diagnosticsOpen || installSessionActive) return;
+    let current = true;
+    readBrowserStorage().then((snapshot) => {
+      if (current) setBrowserStorage(snapshot);
+    });
+    return () => { current = false; };
+  }, [diagnosticsOpen, installSessionActive]);
+
+  useEffect(() => {
     let mounted = true;
 
     getWebPlayInstallation(metadata.playKey)
@@ -246,6 +263,11 @@ export function WebPlayClient({
         message?: string;
       };
 
+      if (message.type === "web-play-resource-locks-probe") {
+        event.ports[0]?.postMessage({ resourceLocks: true });
+        return;
+      }
+
       if (
         message.type !== "web-play-file-missing" ||
         message.playKey !== metadata.playKey
@@ -262,6 +284,25 @@ export function WebPlayClient({
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [addLog, metadata.playKey]);
+
+  useEffect(() => {
+    if (!installed || installSessionActive || running || playerStarting) return;
+    let current = true;
+    void (async () => {
+      await registerPlayServiceWorker(lifetimeRef.current!.signal);
+      const { removed, deferred } = await cleanupObsoleteGameResources(metadata);
+      if (!current) return;
+      if (deferred) addLog("info", "其他游玩页面仍在使用资源或尚未响应，旧资源清理已延后。");
+      if (removed.length === 0) return;
+      addLog("info", `已清理 ${removed.length} 份不再使用的旧游戏资源，存档和截图保留。`);
+      setInstallation(await getWebPlayInstallation(metadata.playKey));
+      const snapshot = await readBrowserStorage();
+      if (current) setBrowserStorage(snapshot);
+    })().catch((error: unknown) => {
+      if (current) addLog("warning", `旧资源暂未清理：${error instanceof Error ? error.message : "请下次进入时重试"}`);
+    });
+    return () => { current = false; };
+  }, [addLog, installed, installSessionActive, metadata, running, playerStarting]);
 
   useEffect(() => {
     const frame = document.getElementById("web-player-frame");
@@ -321,16 +362,19 @@ export function WebPlayClient({
     worker.onmessage = (event: MessageEvent<WebPlayInstallWorkerOutput>) => {
       const message = event.data;
 
+      if (message.type === "install-finished") {
+        setInstallSessionActive(false);
+        return;
+      }
+      if (message.type === "install-rejected") {
+        setInstallSessionActive(false);
+        setOperationError(message.message);
+        addLog("error", message.message);
+        return;
+      }
+
       if (message.type === "installation") {
         setInstallation(message.installation);
-
-        if (
-          message.installation.status === "ready" ||
-          message.installation.status === "failed" ||
-          message.installation.status === "deleted"
-        ) {
-          setInstallSessionActive(false);
-        }
 
         return;
       }
@@ -352,9 +396,18 @@ export function WebPlayClient({
       }
 
       setInstallSessionActive(true);
-      const storageSnapshot = await requestBrowserStorage();
+      setBrowserStorage(null);
+      const { protectionStatus, ...storageSnapshot } = await readBrowserStorage(true);
       signal.throwIfAborted();
+      setBrowserStorage({ protectionStatus, ...storageSnapshot });
+      if (protectionStatus === "查询失败" || protectionStatus === "申请失败") {
+        addLog("warning", `自动清理保护${protectionStatus}，仍可继续安装游戏。`);
+      }
       await registerPlayServiceWorker(signal);
+      signal.throwIfAborted();
+      if (!(await canManageGameResources())) {
+        throw new Error("请先关闭或刷新其他旧版在线游玩页面，再安装游戏资源。");
+      }
       signal.throwIfAborted();
       const worker = ensureWorker();
 
@@ -389,9 +442,17 @@ export function WebPlayClient({
         throw new Error("游戏运行中不能删除本地缓存。");
       }
 
-      await resetGameOpfsDirectory(metadata.playKey);
-      await deleteWebPlayInstallation(metadata.playKey);
+      await registerPlayServiceWorker(lifetimeRef.current!.signal);
+      if (!(await canManageGameResources())) {
+        throw new Error("请先关闭或刷新其他旧版在线游玩页面，再删除游戏资源。");
+      }
+      await withGameResourceWriteLock(metadata.playKey, async () => {
+        await resetGameOpfsDirectory(metadata.playKey);
+        await deleteWebPlayInstallation(metadata.playKey);
+        navigator.serviceWorker.controller?.postMessage({ type: "web-play-forget-pack-index", playKey: metadata.playKey });
+      });
       setInstallation(null);
+      setBrowserStorage(await readBrowserStorage());
       addLog("info", "已删除本地游戏文件。游戏存档不受影响。");
     } catch (error) {
       const message =
@@ -566,31 +627,22 @@ export function WebPlayClient({
   );
 
   const storageSummary = useMemo(() => {
-    if (!installation) {
-      return null;
-    }
-
     return [
-      { label: "本地状态", value: installStatusLabel(installation.status) },
+      { label: "本地状态", value: installation ? installStatusLabel(installation.status) : "未安装" },
       {
-        label: "长期保存",
-        value:
-          installation.persistedStorage === null
-            ? "未请求"
-            : installation.persistedStorage
-              ? "已允许"
-              : "未允许",
+        label: "自动清理保护",
+        value: browserStorage?.protectionStatus ?? "查询中…",
       },
       {
-        label: "浏览器用量",
-        value: formatBytes(installation.storageUsageBytes ?? 0),
+        label: "本站浏览器用量",
+        value: browserStorage?.storageUsageBytes == null ? "未知" : formatBytes(browserStorage.storageUsageBytes),
       },
       {
         label: "浏览器额度",
-        value: formatBytes(installation.storageQuotaBytes ?? 0),
+        value: browserStorage?.storageQuotaBytes == null ? "未知" : formatBytes(browserStorage.storageQuotaBytes),
       },
     ];
-  }, [installation]);
+  }, [installation, browserStorage]);
 
   const rotation =
     immersive && mobileControls && !orientationLockActive
@@ -724,9 +776,6 @@ export function WebPlayClient({
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-                <span id="status">
-                  {running ? "EasyRPG 正在运行" : "未启动"}
-                </span>
                 {!immersive && screenshotLoadError ? (
                   <span role="alert">{screenshotLoadError}</span>
                 ) : null}
@@ -873,7 +922,14 @@ export function WebPlayClient({
 
                 {engagement}
 
-                <details className="border-t border-border pt-3">
+                <details
+                  className="border-t border-border pt-3"
+                  onToggle={(event) => {
+                    const open = event.currentTarget.open;
+                    if (open && !installSessionActive) setBrowserStorage(null);
+                    setDiagnosticsOpen(open);
+                  }}
+                >
                   <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-foreground">
                     本地数据与诊断
                   </summary>
@@ -895,6 +951,9 @@ export function WebPlayClient({
                         />
                       ))}
                     </dl>
+                    <p className="text-xs text-muted">
+                      未获得保护仍可正常保存游戏和存档，但浏览器可能在空间不足时自动清理。已获得保护也无法阻止手动清除站点数据。
+                    </p>
 
                     {installation && !activeInstalling ? (
                       <InstallProgress installation={installation} compact />
@@ -1163,7 +1222,7 @@ function focusPlayerCanvas(): void {
   canvas?.focus({ preventScroll: true });
 }
 
-async function requestBrowserStorage(): Promise<WebPlayStorageSnapshot> {
+async function readBrowserStorage(requestPersistence = false): Promise<BrowserStorageStatus> {
   const storage = navigator.storage;
 
   if (!storage) {
@@ -1171,25 +1230,36 @@ async function requestBrowserStorage(): Promise<WebPlayStorageSnapshot> {
       persistedStorage: null,
       storageQuotaBytes: null,
       storageUsageBytes: null,
+      protectionStatus: "浏览器不支持",
     };
   }
 
-  const beforeEstimate = await storage.estimate?.().catch(() => null);
   let persistedStorage: boolean | null = null;
+  let protectionStatus: BrowserStorageStatus["protectionStatus"] = "浏览器不支持";
 
   if (typeof storage.persisted === "function") {
-    persistedStorage = await storage.persisted().catch(() => false);
+    try {
+      persistedStorage = await storage.persisted();
+      protectionStatus = persistedStorage ? "已获得" : "未获得";
+    } catch {
+      protectionStatus = "查询失败";
+    }
   }
 
-  if (!persistedStorage && typeof storage.persist === "function") {
-    persistedStorage = await storage.persist().catch(() => false);
+  if (requestPersistence && persistedStorage !== true && typeof storage.persist === "function") {
+    try {
+      persistedStorage = await storage.persist();
+      protectionStatus = persistedStorage ? "已获得" : "未获得";
+    } catch {
+      protectionStatus = "申请失败";
+    }
   }
 
-  const afterEstimate = await storage.estimate?.().catch(() => beforeEstimate);
-  const estimate = afterEstimate ?? beforeEstimate;
+  const estimate = await storage.estimate?.().catch(() => null);
 
   return {
     persistedStorage,
+    protectionStatus,
     storageQuotaBytes: estimate?.quota ?? null,
     storageUsageBytes: estimate?.usage ?? null,
   };

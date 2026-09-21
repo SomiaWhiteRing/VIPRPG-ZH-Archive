@@ -37,6 +37,7 @@ export type WebPlayInstallPhase =
 
 export type WebPlayInstallation = {
   playKey: string;
+  workId?: number;
   archiveVersionId: number;
   manifestSha256: string;
   downloadZipBuilderVersion: string;
@@ -88,6 +89,8 @@ export type WebPlayInstallWorkerInput =
     };
 
 export type WebPlayInstallWorkerOutput =
+  | { type: "install-finished" }
+  | { type: "install-rejected"; message: string }
   | {
       type: "installation";
       installation: WebPlayInstallation;
