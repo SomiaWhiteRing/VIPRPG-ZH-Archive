@@ -80,6 +80,7 @@ type Filters = {
   engine?: string;
   tag?: number;
   character?: number;
+  uploader?: number;
   isOriginal?: boolean;
   language?: string;
   includeNonPublic?: boolean;
@@ -1390,6 +1391,12 @@ function buildWhere(input: Filters): {
     );
     binds.push(input.character);
   }
+  if (input.uploader) {
+    clauses.push(
+      "(EXISTS(SELECT 1 FROM work_uploaders wu WHERE wu.work_id=w.id AND wu.user_id=?) OR EXISTS(SELECT 1 FROM archive_versions uploaded WHERE uploaded.work_id=w.id AND uploaded.uploader_id=? AND uploaded.status='published'))",
+    );
+    binds.push(input.uploader, input.uploader);
+  }
   return { where: clauses.join(" AND "), binds };
 }
 
@@ -1645,7 +1652,7 @@ async function loadWorkCollections(
     database
       .prepare(
         `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
-                av.estimated_r2_get_count,av.published_at,u.display_name AS uploader_name
+                av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name
          FROM archive_versions av
          JOIN works w ON w.id=av.work_id
          LEFT JOIN users u ON u.id=av.uploader_id
@@ -1759,6 +1766,7 @@ async function loadWorkCollections(
       total_size_bytes: number;
       estimated_r2_get_count: number;
       published_at: string | null;
+      uploader_id: number | null;
       uploader_name: string | null;
     }>(results[6]).map((row) => ({
       id: row.id,
@@ -1768,6 +1776,7 @@ async function loadWorkCollections(
       totalSizeBytes: row.total_size_bytes,
       estimatedR2GetCount: row.estimated_r2_get_count,
       publishedAt: row.published_at,
+      uploaderId: row.uploader_id,
       uploaderName: row.uploader_name,
     })),
     relations: batchRows<{

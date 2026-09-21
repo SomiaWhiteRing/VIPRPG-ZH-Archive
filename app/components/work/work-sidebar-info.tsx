@@ -80,7 +80,16 @@ export function WorkSidebarInfo({
               {formatBytes(current.totalSizeBytes)}
             </InfoRow>
             {current.uploaderName ? (
-              <InfoRow label="上传者">{current.uploaderName}</InfoRow>
+              <InfoRow label="上传者">
+                {current.uploaderId ? (
+                  <Link
+                    className="font-medium text-[#1f6f67] hover:underline"
+                    to={`/games?uploader=${current.uploaderId}`}
+                  >
+                    {current.uploaderName}
+                  </Link>
+                ) : current.uploaderName}
+              </InfoRow>
             ) : null}
             {current.publishedAt ? (
               <InfoRow label="收录" mono>

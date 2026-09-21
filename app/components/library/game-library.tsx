@@ -35,6 +35,8 @@ export function GameLibrary({
     engine,
     tag,
     character,
+    uploader,
+    uploaderName,
     language,
     original,
     view,
@@ -155,6 +157,12 @@ export function GameLibrary({
                 <FilterChip
                   href={gamesHref({ ...activeParams, engine: undefined })}
                   label={`引擎：${ENGINES.find((option) => option.value === engine)?.label ?? engine}`}
+                />
+              ) : null}
+              {uploader ? (
+                <FilterChip
+                  href={gamesHref({ ...activeParams, uploader: undefined })}
+                  label={`上传者：${uploaderName || uploader}`}
                 />
               ) : null}
               {tag ? (
