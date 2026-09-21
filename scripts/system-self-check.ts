@@ -47,7 +47,7 @@ assert.ok(
 );
 const password = "system-test-password";
 const passwordHash =
-  "pbkdf2-sha256$870000$QdLo-2n6vY0f1uWwq2pMPA$cPaEgk4RXUTq6frnxAChkq2nKgT5fqDo_9-gKuDijI8";
+  "scrypt$32768$8$3$QdLo-2n6vY0f1uWwq2pMPA$-di8_t7Ig7hpcVrgFaRS6mPtEWOqt-fyxi5HV5A0Qm4";
 const adminSessionToken = Buffer.alloc(32, 2).toString("base64url");
 const coverBytes = new Uint8Array(
   Buffer.from(
@@ -1038,7 +1038,7 @@ async function verifyPageContracts(origin: string, adminCookie: string) {
       "identity cannot leak across requests",
     );
     assert.ok(
-      !content.includes("pbkdf2-sha256$") &&
+      !content.includes("scrypt$") &&
         !content.includes("sessionHash") &&
         !content.includes("passwordHash"),
       "private auth fields cannot enter hydration data",

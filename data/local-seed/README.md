@@ -64,3 +64,7 @@ initialization migration ledger is preserved.
 The comment attachment refresh adds an empty `comment_images` table and nullable
 comment publication request identities. The nine captured comments and all other
 business records are preserved, with the single initialization migration ledger.
+
+The 2026-09-21 password refresh rehashes the nine development accounts with the
+current Workers-compatible scrypt policy. Their documented password and all other
+captured fields remain unchanged. Staging initialization still excludes users.
