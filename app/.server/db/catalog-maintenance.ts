@@ -299,10 +299,11 @@ export async function mergeWorks(
     db
       .prepare(`UPDATE import_jobs SET work_id=? WHERE work_id=?`)
       .bind(target, source),
-    // Keep the target's download source; source download links remain as provenance.
+    // Keep the target's download address when merging works.
+    db.prepare("DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(source),
     db
       .prepare(
-        `UPDATE work_external_links SET work_id=?,link_type=CASE WHEN link_type='download_page' THEN 'source' ELSE link_type END WHERE work_id=?`,
+        `UPDATE work_external_links SET work_id=? WHERE work_id=?`,
       )
       .bind(target, source),
   );

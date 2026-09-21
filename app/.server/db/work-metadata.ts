@@ -3,7 +3,6 @@ import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { readValidatedImage } from "@/app/.server/storage/work-images";
 import { HttpError } from "@/lib/http";
-import type { WorkSourceLink } from "@/lib/work-sources";
 
 export function normalizeWorkMedia(cover: string, previews: string[], requireCover = true) {
   if (requireCover && !cover) throw new HttpError(400, "作品必须指定一张封面");
@@ -46,12 +45,5 @@ export function workTagStatements(database: D1Database, workId: number, tags: st
       database.prepare("INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')").bind(tag),
       database.prepare("INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,? FROM tags WHERE name=? COLLATE NOCASE").bind(workId, source, tag),
     ]),
-  ];
-}
-
-export function workSourceStatements(database: D1Database, workId: number, sources: WorkSourceLink[]) {
-  return [
-    database.prepare("DELETE FROM work_external_links WHERE work_id=? AND link_type='source'").bind(workId),
-    ...sources.map((link) => database.prepare("INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,?,?,'source')").bind(workId, link.label, link.url)),
   ];
 }

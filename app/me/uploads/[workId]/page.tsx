@@ -108,7 +108,6 @@ export default function UploadedWorkPage() {
             })),
           translators: staffCredits(work, "translator"),
           externalDownloadUrl: work.externalDownloadUrl,
-          workSources: work.workSources,
           archiveSourceUrl: work.currentArchive?.sourceUrl ?? null,
           coverBlobSha256: work.media.find((media) => media.role === "cover")?.blobSha256 ?? "",
           previewBlobSha256s: work.media

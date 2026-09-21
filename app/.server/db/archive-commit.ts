@@ -1,5 +1,4 @@
-import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements, workSourceStatements } from "@/app/.server/db/work-metadata";
-import { parseWorkSources } from "@/app/.server/http/work-sources";
+import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
 import {
   parseCharacterCreditSelection,
@@ -857,8 +856,7 @@ function normalizeMetadata(
   if (
     !Array.isArray(metadata.tags) ||
     !Array.isArray(metadata.workTitles) ||
-    !Array.isArray(metadata.workStaff) ||
-    !Array.isArray(metadata.workSources)
+    !Array.isArray(metadata.workStaff)
   ) {
     throw new HttpError(400, "Upload metadata lists are invalid");
   }
@@ -965,8 +963,6 @@ function normalizeMetadata(
     throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
   }
 
-  const workSources = parseWorkSources(metadata.workSources);
-
   if (!game.originalTitle.trim()) {
     throw new HttpError(400, "游戏原名不能为空");
   }
@@ -994,13 +990,12 @@ function normalizeMetadata(
     archiveVersion: {
       ...metadata.archiveVersion,
       sourceName: archiveVersion.sourceName?.trim() || null,
-      sourceUrl: normalizeHttpUrl(archiveVersion.sourceUrl, "来源网址"),
+      sourceUrl: normalizeHttpUrl(archiveVersion.sourceUrl, "发布地址"),
     },
     workTitles,
     characters,
     workStaff,
     tags,
-    workSources,
   };
 }
 
@@ -1285,7 +1280,6 @@ async function finalizeArchiveCommit(
 
   statements.push(
     ...workTagStatements(database, input.workId, input.metadata.tags, "uploader"),
-    ...workSourceStatements(database, input.workId, input.metadata.workSources),
     database.prepare("DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(input.workId),
     ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
   );

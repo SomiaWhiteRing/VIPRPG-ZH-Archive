@@ -1,4 +1,3 @@
-import { parseWorkSourcesJson } from "@/app/.server/http/work-sources";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -92,7 +91,6 @@ function parseMetadata(form: FormData): {
   authors: CreatorSelection[];
   extraStaff: ReturnType<typeof parseExtraStaffJson>;
   translators: CreatorSelection[];
-  workSources: ReturnType<typeof parseWorkSourcesJson>;
 } {
   return {
     originalTitle: readRequiredString(
@@ -116,7 +114,6 @@ function parseMetadata(form: FormData): {
     authors: parseTranslatorSelectionsJson(form.get("authors")),
     extraStaff: parseExtraStaffJson(form.get("extra_staff")),
     translators: parseTranslatorSelectionsJson(form.get("translators")),
-    workSources: parseWorkSourcesJson(form.get("work_sources")),
   };
 }
 
