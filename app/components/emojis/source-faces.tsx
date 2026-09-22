@@ -7,7 +7,7 @@ import {
 } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
+import { FaceSheetGrid } from "@/app/components/ui/face-sheet-grid";
 import { cn } from "@/lib/ui/cn";
 import {
   emojiCellKey,
@@ -224,6 +224,17 @@ export function SourceFaces({
       })}
     </div>
   );
+  const sheetCell = (sheet: EmojiSheet, row: number, column: number): FaceEmoji => ({
+    ...sheet,
+    id: 0,
+    row,
+    column,
+    available: true,
+    sources:
+      source.kind === "character"
+        ? [{ id: source.character.id, name: source.character.name }]
+        : [],
+  });
   return (
     <div
       ref={viewport}
@@ -257,54 +268,26 @@ export function SourceFaces({
           ) : null}
         </>
       ) : (
-        <div className="grid grid-cols-2 content-start items-start gap-2 sm:grid-cols-3 sm:gap-3">
-          {(items as EmojiSheet[]).map((sheet) => {
-            const cell = (row: number, column: number): FaceEmoji => ({
-              ...sheet,
-              id: 0,
-              row,
-              column,
-              available: true,
-              sources:
-                source.kind === "character"
-                  ? [{ id: source.character.id, name: source.character.name }]
-                  : [],
-            });
-            return (
-              <div
-                key={sheet.blobSha256}
-                data-face-sheet={sheet.blobSha256}
-                data-highlighted={
-                  activeBlob === sheet.blobSha256 ? "true" : undefined
-                }
-                className="min-w-0 max-w-full"
-              >
-                <FaceSheetCanvas
-                  blobSha256={sheet.blobSha256}
-                  width={sheet.width}
-                  height={sheet.height}
-                  scale={1}
-                  fit
-                  label="角色脸图选格"
-                  disabled={disabled}
-                  onSelectCell={(row, column) => onSelect(cell(row, column))}
-                  onDragCell={(row, column, event) =>
-                    onDragEmoji(cell(row, column), event)
-                  }
-                  onDragEnd={onDragEnd}
-                  cellState={(row, column) => {
-                    const key = emojiCellKey(cell(row, column));
-                    return {
-                      selected: activeKey === key,
-                      collected: owned.has(key),
-                      highlighted: activeKey === key,
-                    };
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
+        <FaceSheetGrid
+          sheets={items as EmojiSheet[]}
+          highlightedBlob={activeBlob}
+          disabled={disabled}
+          onSelectCell={(sheet, row, column) =>
+            onSelect(sheetCell(sheet, row, column))
+          }
+          onDragCell={(sheet, row, column, event) =>
+            onDragEmoji(sheetCell(sheet, row, column), event)
+          }
+          onDragEnd={onDragEnd}
+          cellState={(sheet, row, column) => {
+            const key = emojiCellKey(sheetCell(sheet, row, column));
+            return {
+              selected: activeKey === key,
+              collected: owned.has(key),
+              highlighted: activeKey === key,
+            };
+          }}
+        />
       )}
       {loading ? (
         <p role="status" className="text-sm text-muted">

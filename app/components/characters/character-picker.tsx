@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/app/components/ui/button";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
+import { FaceSheetGrid } from "@/app/components/ui/face-sheet-grid";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
@@ -36,7 +36,7 @@ import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 import { Pencil, X } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 type ExistingOption = {
   kind: "existing";
@@ -632,7 +632,7 @@ export function CharacterPicker({
         <Dialog.Portal>
           <Dialog.Overlay />
           <Dialog.Content
-            className="left-1/2 top-1/2 grid h-[min(720px,calc(100vh-2rem))] w-[min(96vw,72rem)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg"
+            className="inset-0 flex h-dvh w-full flex-col overflow-hidden sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(720px,90dvh)] sm:w-[min(64rem,calc(100vw-1rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg"
             id={`${id}-portrait-dialog`}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
@@ -642,7 +642,7 @@ export function CharacterPicker({
               returnFocus?.focus();
             }}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3 pt-[max(.75rem,env(safe-area-inset-top))]">
               <div>
                 <Dialog.Title>选择本作头像</Dialog.Title>
                 <Dialog.Description className="mt-0.5 text-sm text-muted">
@@ -666,21 +666,12 @@ export function CharacterPicker({
                 disabled={disabled}
                 files={faceSheetFiles[portraitIndex ?? -1] ?? []}
                 key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
-                onChooseExisting={(sheet, row, column) =>
+                onChoose={(blobSha256, row, column) =>
                   updatePortrait(portraitIndex ?? -1, {
-                    blobSha256: sheet.blobSha256,
+                    blobSha256,
                     row,
                     column,
                   })
-                }
-                onChooseUploaded={(row, column, blobSha256) =>
-                  onChange(
-                    values.map((item, itemIndex) =>
-                      itemIndex === portraitIndex
-                        ? { ...item, portrait: { blobSha256, row, column } }
-                        : item,
-                    ),
-                  )
                 }
                 onRemoveUpload={(file, sha256) =>
                   removeFaceSheetFile(portraitIndex ?? -1, file, sha256)
@@ -726,12 +717,21 @@ export function CharacterPicker({
   );
 }
 
+type PortraitGridSheet = {
+  id: number;
+  blobSha256: string;
+  width: number;
+  height: number;
+  src?: string;
+  label: string;
+  file?: File;
+};
+
 function PortraitSelectionWorkbench({
   credit,
   disabled,
   files,
-  onChooseExisting,
-  onChooseUploaded,
+  onChoose,
   onRemoveUpload,
   onUpload,
   onUseDefault,
@@ -741,12 +741,7 @@ function PortraitSelectionWorkbench({
   credit: CharacterCreditSelection;
   disabled: boolean;
   files: File[];
-  onChooseExisting: (
-    sheet: CharacterFaceSheet,
-    row: number,
-    column: number,
-  ) => void;
-  onChooseUploaded: (row: number, column: number, blobSha256: string) => void;
+  onChoose: (blobSha256: string, row: number, column: number) => void;
   onRemoveUpload: (file: File, sha256: string) => void;
   onUpload: ((files: File[]) => Promise<string[]>) | null;
   onUseDefault: () => void;
@@ -754,393 +749,215 @@ function PortraitSelectionWorkbench({
   suggestion: CharacterSuggestion | null;
 }) {
   const previews = useLocalFaceSheets(files);
-  const faceSheets = suggestion?.faceSheets ?? [];
-  const [activeSheetKey, setActiveSheetKey] = useState(() =>
-    initialFaceSheetKey(credit, suggestion),
-  );
-  const selectedUpload = previews.find(
-    (preview) => preview.sha256 === credit.portrait?.blobSha256,
-  );
-  const effectiveActiveSheetKey =
-    activeSheetKey ??
-    (selectedUpload ? localFaceSheetKey(selectedUpload.sha256) : null) ??
-    (previews[0] ? localFaceSheetKey(previews[0].sha256) : null);
-
-  const activeLibrarySheet =
-    faceSheets.find(
-      (sheet) => faceSheetKey(sheet) === effectiveActiveSheetKey,
-    ) ?? null;
-  const activeUpload =
-    previews.find(
-      (preview) =>
-        localFaceSheetKey(preview.sha256) === effectiveActiveSheetKey,
-    ) ?? null;
-  const activeSha256 =
-    activeUpload?.sha256 ?? activeLibrarySheet?.blobSha256 ?? null;
-  const effectivePortrait =
-    credit.portrait ?? suggestion?.defaultPortrait ?? null;
-  const selectedCell =
-    activeSha256 && effectivePortrait?.blobSha256 === activeSha256
-      ? { row: effectivePortrait.row, column: effectivePortrait.column }
-      : null;
-  const activeName = activeUpload
-    ? activeUpload.file.name
-    : activeLibrarySheet
-      ? faceSheetName(activeLibrarySheet)
-      : "尚未选择素材表";
-  const activeDimensions = activeUpload
-    ? faceSheetDimensions(activeUpload.width, activeUpload.height)
-    : activeLibrarySheet
-      ? faceSheetDimensions(activeLibrarySheet.width, activeLibrarySheet.height)
-      : null;
-  const defaultSheet = suggestion?.defaultPortrait
-    ? (faceSheets.find(
-        (sheet) => sheet.id === suggestion.defaultPortrait?.faceSheetId,
-      ) ??
-      faceSheets.find(
-        (sheet) => sheet.blobSha256 === suggestion.defaultPortrait?.blobSha256,
-      ) ??
-      null)
-    : null;
-
-  function useDefaultPortrait() {
-    if (defaultSheet) setActiveSheetKey(faceSheetKey(defaultSheet));
-    onUseDefault();
+  const [uploading, setUploading] = useState(false);
+  const [locateHash, setLocateHash] = useState<string | null>(null);
+  const viewport = useRef<HTMLDivElement>(null);
+  const located = useRef<string | null>(null);
+  const sheetsByHash = new Map<string, PortraitGridSheet>();
+  for (const preview of previews) {
+    sheetsByHash.set(preview.sha256, {
+      ...preview,
+      id: 0,
+      blobSha256: preview.sha256,
+      label: preview.file.name,
+    });
   }
+  for (const sheet of suggestion?.faceSheets ?? []) {
+    if (!sheetsByHash.has(sheet.blobSha256)) {
+      sheetsByHash.set(sheet.blobSha256, { ...sheet, label: faceSheetName(sheet) });
+    }
+  }
+  const sheets = [...sheetsByHash.values()];
+  const effectivePortrait = credit.portrait ?? suggestion?.defaultPortrait ?? null;
+  const selectedSheet = effectivePortrait
+    ? sheetsByHash.get(effectivePortrait.blobSha256)
+    : undefined;
+  const portrait = effectivePortrait && selectedSheet
+    ? {
+        ...effectivePortrait,
+        faceSheetId: selectedSheet.id,
+        width: selectedSheet.width,
+        height: selectedSheet.height,
+      }
+    : resolvePortrait(credit, suggestion);
+  const targetHash = locateHash ?? effectivePortrait?.blobSha256;
+  const busy = disabled || uploading;
+
+  useLayoutEffect(() => {
+    const container = viewport.current;
+    if (!container || !targetHash || located.current === targetHash) return;
+    const target = container.querySelector<HTMLElement>(
+      `[data-face-sheet="${targetHash}"]`,
+    );
+    if (!target) return;
+    const bounds = container.getBoundingClientRect();
+    const itemBounds = target.getBoundingClientRect();
+    if (itemBounds.top < bounds.top)
+      container.scrollTop += itemBounds.top - bounds.top;
+    else if (itemBounds.bottom > bounds.bottom) {
+      container.scrollTop += Math.min(
+        itemBounds.top - bounds.top,
+        itemBounds.bottom - bounds.bottom,
+      );
+    }
+    located.current = targetHash;
+  });
 
   return (
-    <div className="grid min-h-0 grid-cols-[18rem_minmax(0,1fr)]">
-      <aside
-        className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] border-r border-border"
-        aria-label="选择脸图素材表"
+    <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] sm:grid-rows-1">
+      <section
+        aria-label="角色脸图"
+        className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] border-b border-border sm:border-b-0 sm:border-r"
       >
-        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-3 py-2">
-          <strong className="text-sm">素材表</strong>
-          <span className="text-xs text-muted">
-            {faceSheets.length + files.length} 张
-          </span>
-        </header>
-
-        <div className="min-h-0 overflow-y-auto p-2">
-          {files.map((file, index) => {
-            const preview = previews.find((item) => item.file === file) ?? null;
-            return (
-              <FaceSheetChoice
-                active={Boolean(
-                  preview &&
-                    effectiveActiveSheetKey ===
-                      localFaceSheetKey(preview.sha256),
-                )}
-                currentLabel={portraitSourceLabel(
-                  preview?.sha256 ?? null,
-                  credit,
-                  suggestion,
-                )}
-                height={preview?.height ?? 48}
-                key={
-                  preview?.sha256 ??
-                  `${file.name}:${file.size}:${file.lastModified}:${index}`
-                }
-                label={file.name}
-                meta={
-                  preview
-                    ? `${faceSheetDimensions(preview.width, preview.height)} · 新上传`
-                    : "正在读取…"
-                }
-                onClick={() => {
-                  if (preview)
-                    setActiveSheetKey(localFaceSheetKey(preview.sha256));
-                }}
-                src={preview?.src ?? null}
-                width={preview?.width ?? 48}
-              />
-            );
-          })}
-          {faceSheets.map((sheet) => (
-            <FaceSheetChoice
-              active={effectiveActiveSheetKey === faceSheetKey(sheet)}
-              currentLabel={portraitSourceLabel(
-                sheet.blobSha256,
-                credit,
-                suggestion,
+        <header className="flex min-h-[65px] flex-wrap items-center justify-between gap-2 border-b border-border p-3">
+          <div>
+            <strong className="text-sm">角色脸图</strong>
+            <span className="ml-2 text-xs tabular-nums text-muted">{sheets.length} 张</span>
+          </div>
+          {onUpload ? (
+            <Label
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "cursor-pointer",
+                busy && "pointer-events-none opacity-50",
               )}
-              height={sheet.height}
-              key={sheet.id}
-              label={faceSheetName(sheet)}
-              meta={faceSheetMeta(sheet)}
-              onClick={() => setActiveSheetKey(faceSheetKey(sheet))}
-              src={`/api/media/blobs/${sheet.blobSha256}`}
-              width={sheet.width}
-            />
-          ))}
-          {!files.length && !faceSheets.length ? (
-            <EmptyState
-              title="这个角色还没有脸图素材表"
-              variant="plain"
-              className="h-full min-h-28 place-items-center px-3 text-center"
-            />
+            >
+              {uploading ? "正在读取…" : "添加脸图"}
+              <input
+                accept="image/png"
+                className="sr-only"
+                disabled={busy}
+                multiple
+                type="file"
+                onChange={(event) => {
+                  const nextFiles = Array.from(event.currentTarget.files ?? []);
+                  event.currentTarget.value = "";
+                  if (!nextFiles.length) return;
+                  setUploading(true);
+                  void onUpload(nextFiles)
+                    .then((hashes) => {
+                      if (hashes[0]) {
+                        located.current = null;
+                        setLocateHash(hashes[0]);
+                      }
+                    })
+                    .finally(() => setUploading(false));
+                }}
+              />
+            </Label>
+          ) : null}
+          {portraitError ? (
+            <p role="alert" className="w-full text-xs font-semibold text-red-700">
+              {portraitError}
+            </p>
+          ) : null}
+        </header>
+        <div ref={viewport} className="min-h-0 overflow-auto p-3 [overflow-anchor:none]">
+          <FaceSheetGrid
+            sheets={sheets}
+            highlightedBlob={effectivePortrait?.blobSha256}
+            disabled={busy}
+            onSelectCell={(sheet, row, column) => {
+              setLocateHash(null);
+              onChoose(sheet.blobSha256, row, column);
+            }}
+            cellState={(sheet, row, column) => {
+              const selected =
+                effectivePortrait?.blobSha256 === sheet.blobSha256 &&
+                effectivePortrait.row === row &&
+                effectivePortrait.column === column;
+              return { selected, highlighted: selected };
+            }}
+            renderFooter={(sheet) => (
+              <div className="mt-1 flex min-h-6 items-center gap-1">
+                <span
+                  className="min-w-0 flex-1 truncate text-xs text-muted"
+                  title={sheet.label}
+                >
+                  {sheet.label}
+                </span>
+                {sheet.file && onUpload ? (
+                  <Button
+                    aria-label={`移除 ${sheet.label}`}
+                    className="size-6 min-h-0 shrink-0 p-0"
+                    disabled={busy}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setLocateHash(null);
+                      if (sheet.file) onRemoveUpload(sheet.file, sheet.blobSha256);
+                    }}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+            )}
+          />
+          {files.length > previews.length ? (
+            <p role="status" className="text-sm text-muted">正在读取脸图…</p>
+          ) : null}
+          {!sheets.length && !files.length ? (
+            <EmptyState title={onUpload ? "暂无脸图，可添加脸图素材表" : "暂无可用脸图"} variant="plain" />
           ) : null}
         </div>
-
-        {onUpload || portraitError ? (
-          <footer className="grid gap-2 border-t border-border p-2">
-            {onUpload ? (
-              <Label
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "w-full cursor-pointer",
-                  disabled && "pointer-events-none opacity-50",
-                )}
-              >
-                添加脸图素材表
-                <input
-                  accept="image/png"
-                  className="sr-only"
-                  disabled={disabled}
-                  onChange={(event) => {
-                    const nextFiles = Array.from(
-                      event.currentTarget.files ?? [],
-                    );
-                    event.currentTarget.value = "";
-                    if (nextFiles.length) {
-                      void onUpload(nextFiles).then((hashes) => {
-                        if (hashes[0])
-                          setActiveSheetKey(localFaceSheetKey(hashes[0]));
-                      });
-                    }
-                  }}
-                  multiple
-                  type="file"
-                />
-              </Label>
-            ) : null}
-            {activeUpload ? (
-              <Button
-                disabled={disabled}
-                onClick={() => {
-                  const next = previews.find(
-                    (preview) => preview.file !== activeUpload.file,
-                  );
-                  setActiveSheetKey(
-                    next
-                      ? localFaceSheetKey(next.sha256)
-                      : faceSheets[0]
-                        ? faceSheetKey(faceSheets[0])
-                        : null,
-                  );
-                  onRemoveUpload(activeUpload.file, activeUpload.sha256);
-                }}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                移除当前上传素材表
-              </Button>
-            ) : null}
-            {portraitError ? (
-              <span className="text-xs font-semibold text-red-700" role="alert">
-                {portraitError}
-              </span>
-            ) : null}
-          </footer>
-        ) : null}
-      </aside>
-
+      </section>
       <section
-        className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]"
-        aria-label="选择头像坐标"
+        aria-label="本作头像预览"
+        className="flex min-w-0 items-center gap-3 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:flex-col sm:justify-center sm:gap-4 sm:p-4"
       >
-        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-3 py-2">
-          <div className="min-w-0">
-            <strong className="block truncate text-sm" title={activeName}>
-              {activeName}
-            </strong>
-            {activeDimensions ? (
-              <span className="block text-xs text-muted">
-                {activeDimensions}
-              </span>
-            ) : null}
-          </div>
+        <CharacterPortrait
+          className="size-24 shrink-0 rounded-md"
+          displayName={credit.selection.displayName}
+          portrait={portrait}
+          previewSrc={selectedSheet?.src}
+          size={96}
+          toneKey={
+            credit.selection.kind === "existing"
+              ? credit.selection.characterId
+              : credit.selection.originalName
+          }
+        />
+        <div className="grid min-w-0 gap-2 sm:justify-items-center sm:text-center" aria-live="polite">
+          <strong className="text-sm">
+            {credit.portrait
+              ? "本作头像"
+              : suggestion?.defaultPortrait
+                ? "角色默认头像"
+                : "未选择头像"}
+          </strong>
+          {effectivePortrait ? (
+            <p className="m-0 text-xs text-muted">
+              第 {effectivePortrait.row + 1} 行，第 {effectivePortrait.column + 1} 列
+            </p>
+          ) : null}
+          {selectedSheet ? (
+            <p className="m-0 max-w-full truncate text-xs text-muted" title={selectedSheet.label}>
+              {selectedSheet.label}
+            </p>
+          ) : null}
           <Button
-            disabled={disabled || !suggestion?.defaultPortrait}
-            onClick={useDefaultPortrait}
+            disabled={busy || !suggestion?.defaultPortrait}
+            onClick={() => {
+              located.current = null;
+              setLocateHash(null);
+              onUseDefault();
+            }}
             size="sm"
             type="button"
             variant="outline"
           >
             沿用角色默认头像
           </Button>
-        </header>
-
-        <div className="grid min-h-0 place-items-center overflow-auto bg-muted/5 p-4">
-          {activeUpload ? (
-            <FaceSheetCanvas
-              height={activeUpload.height}
-              label={`在 ${activeUpload.file.name} 中选择本作头像`}
-              onSelectCell={(row, column) =>
-                onChooseUploaded(row, column, activeUpload.sha256)
-              }
-              scale={Math.min(
-                2.5,
-                480 / Math.max(activeUpload.width, activeUpload.height),
-              )}
-              selectedCell={selectedCell}
-              src={activeUpload.src}
-              width={activeUpload.width}
-            />
-          ) : activeLibrarySheet ? (
-            <FaceSheetCanvas
-              blobSha256={activeLibrarySheet.blobSha256}
-              height={activeLibrarySheet.height}
-              label={`在 ${faceSheetName(activeLibrarySheet)} 中选择本作头像`}
-              onSelectCell={(row, column) =>
-                onChooseExisting(activeLibrarySheet, row, column)
-              }
-              scale={Math.min(
-                2.5,
-                480 /
-                  Math.max(activeLibrarySheet.width, activeLibrarySheet.height),
-              )}
-              selectedCell={selectedCell}
-              width={activeLibrarySheet.width}
-            />
-          ) : (
-            <EmptyState
-              title={onUpload ? "请先上传脸图素材表" : "没有可选的脸图素材表"}
-              variant="plain"
-            />
-          )}
         </div>
-
-        <footer className="flex min-h-12 items-center border-t border-border px-3 py-2">
-          <strong className="text-sm">
-            {selectedCell
-              ? `${credit.portrait ? "本作已选" : "角色默认"}：第 ${selectedCell.row + 1} 行，第 ${selectedCell.column + 1} 列`
-              : "未选择头像"}
-          </strong>
-        </footer>
       </section>
     </div>
   );
 }
 
-function FaceSheetChoice({
-  active,
-  currentLabel,
-  height,
-  label,
-  meta,
-  onClick,
-  src,
-  width,
-}: {
-  active: boolean;
-  currentLabel: string | null;
-  height: number;
-  label: string;
-  meta: string;
-  onClick: () => void;
-  src: string | null;
-  width: number;
-}) {
-  return (
-    <Button
-      aria-pressed={active}
-      className={cn(
-        "mb-2 grid h-auto w-full grid-cols-[88px_minmax(0,1fr)] items-center justify-stretch gap-2 rounded-sm border p-1.5 text-left font-normal last:mb-0",
-        active
-          ? "border-primary bg-primary/10 ring-1 ring-primary"
-          : "border-border bg-card",
-      )}
-      onClick={onClick}
-      type="button"
-      variant="ghost"
-    >
-      <span className="grid size-[88px] place-items-center overflow-hidden border border-foreground/10 bg-muted/10">
-        {src ? (
-          <img
-            alt=""
-            className="size-[88px] object-contain [image-rendering:pixelated]"
-            height={height}
-            src={src}
-            width={width}
-            loading="lazy"
-          />
-        ) : (
-          <span className="text-xs text-muted">读取中</span>
-        )}
-      </span>
-      <span className="min-w-0">
-        <strong className="block truncate text-sm" title={label}>
-          {label}
-        </strong>
-        <span className="block truncate text-xs text-muted">{meta}</span>
-        {currentLabel ? (
-          <span className="block text-xs font-semibold text-primary">
-            {currentLabel}
-          </span>
-        ) : null}
-      </span>
-    </Button>
-  );
-}
-
-function initialFaceSheetKey(
-  credit: CharacterCreditSelection,
-  suggestion: CharacterSuggestion | null,
-): string | null {
-  const effectivePortrait =
-    credit.portrait ?? suggestion?.defaultPortrait ?? null;
-  const selectedSheet = effectivePortrait
-    ? suggestion?.faceSheets.find(
-        (sheet) => sheet.blobSha256 === effectivePortrait.blobSha256,
-      )
-    : null;
-  return selectedSheet
-    ? faceSheetKey(selectedSheet)
-    : suggestion?.faceSheets[0]
-      ? faceSheetKey(suggestion.faceSheets[0])
-      : null;
-}
-
-function faceSheetKey(sheet: CharacterFaceSheet): string {
-  return `sheet:${sheet.id}`;
-}
-
-function localFaceSheetKey(sha256: string): string {
-  return `upload:${sha256}`;
-}
-
 function faceSheetName(sheet: CharacterFaceSheet): string {
-  return (
-    sheet.sourcePageTitle || sheet.sourceSectionTitle || `素材表 #${sheet.id}`
-  );
-}
-
-function faceSheetDimensions(width: number, height: number): string {
-  return `${width / 48} 列 × ${height / 48} 行`;
-}
-
-function faceSheetMeta(sheet: CharacterFaceSheet): string {
-  const section =
-    sheet.sourceSectionTitle &&
-    sheet.sourceSectionTitle !== sheet.sourcePageTitle
-      ? `${sheet.sourceSectionTitle} · `
-      : "";
-  return `${section}#${sheet.id} · ${faceSheetDimensions(sheet.width, sheet.height)}`;
-}
-
-function portraitSourceLabel(
-  sha256: string | null,
-  credit: CharacterCreditSelection,
-  suggestion: CharacterSuggestion | null,
-): string | null {
-  if (!sha256) return null;
-  if (credit.portrait?.blobSha256 === sha256) return "本作使用";
-  if (!credit.portrait && suggestion?.defaultPortrait?.blobSha256 === sha256) {
-    return "角色默认";
-  }
-  return null;
+  return sheet.sourcePageTitle || sheet.sourceSectionTitle || `素材表 #${sheet.id}`;
 }
 
 function resolvePortrait(
