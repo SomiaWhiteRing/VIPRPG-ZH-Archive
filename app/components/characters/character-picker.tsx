@@ -875,27 +875,29 @@ function PortraitSelectionWorkbench({
               第 {effectivePortrait.row + 1} 行，第 {effectivePortrait.column + 1} 列
             </p>
           ) : null}
-          <Button
-            disabled={busy || !suggestion?.defaultPortrait}
-            onClick={() => {
-              located.current = null;
-              setLocateHash(null);
-              setDraft((current) => ({ ...current, portrait: null }));
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            沿用角色默认头像
-          </Button>
-          <Button
-            disabled={busy || readingPreviews}
-            onClick={() => onConfirm(draft)}
-            size="sm"
-            type="button"
-          >
-            确定
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={busy || !suggestion?.defaultPortrait}
+              onClick={() => {
+                located.current = null;
+                setLocateHash(null);
+                setDraft((current) => ({ ...current, portrait: null }));
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              沿用角色默认头像
+            </Button>
+            <Button
+              disabled={busy || readingPreviews}
+              onClick={() => onConfirm(draft)}
+              size="sm"
+              type="button"
+            >
+              确定
+            </Button>
+          </div>
         </div>
       </section>
     </div>
