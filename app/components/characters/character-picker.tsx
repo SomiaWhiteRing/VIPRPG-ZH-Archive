@@ -89,9 +89,6 @@ export function CharacterPicker({
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
   const aliasReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [portraitErrors, setPortraitErrors] = useState<Record<number, string>>(
-    {},
-  );
   const suggestionsById = useMemo(
     () => new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])),
     [suggestions],
@@ -153,7 +150,6 @@ export function CharacterPicker({
 
   function remove(index: number) {
     onFaceSheetFilesRemove?.(index);
-    setPortraitErrors((current) => removeIndexedValue(current, index));
     setPortraitIndex((current) => {
       if (current === null || current < index) return current;
       return current === index ? null : current - 1;
@@ -187,17 +183,6 @@ export function CharacterPicker({
     setAliasEdit(null);
   }
 
-  function updatePortrait(
-    index: number,
-    portrait: CharacterCreditSelection["portrait"],
-  ) {
-    onChange(
-      values.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, portrait } : item,
-      ),
-    );
-  }
-
   function startCreate(rawQuery: string) {
     const activeElement = document.activeElement;
     createReturnFocusRef.current =
@@ -223,94 +208,10 @@ export function CharacterPicker({
     setPortraitIndex(values.length);
   }
 
-  async function addFaceSheetFiles(
-    index: number,
-    files: File[],
-  ): Promise<string[]> {
-    if (!onFaceSheetFilesChange || !files.length) return [];
-    try {
-      const existing = await Promise.all(
-        (faceSheetFiles[index] ?? []).map(async (file) => ({
-          file,
-          ...(await inspectNamedFaceSheet(file)),
-        })),
-      );
-      const added = await Promise.all(
-        files.map(async (file) => ({
-          file,
-          ...(await inspectNamedFaceSheet(file)),
-        })),
-      );
-      const uniqueSheets = [
-        ...new Map(
-          [...existing, ...added].map((sheet) => [sheet.sha256, sheet]),
-        ).values(),
-      ];
-      const hashes = uniqueSheets.map((sheet) => sheet.sha256);
-      onFaceSheetFilesChange(
-        index,
-        uniqueSheets.map((sheet) => sheet.file),
-      );
-      onChange(
-        values.map((item, itemIndex) =>
-          itemIndex === index
-            ? {
-                ...item,
-                faceSheetBlobSha256s: hashes,
-                portrait:
-                  item.portrait ??
-                  (item.selection.kind === "existing" &&
-                  suggestionsById.get(item.selection.characterId)
-                    ?.defaultPortrait
-                    ? null
-                    : { blobSha256: added[0].sha256, row: 0, column: 0 }),
-              }
-            : item,
-        ),
-      );
-      setPortraitErrors((current) => omitKey(current, index));
-      return added.map((sheet) => sheet.sha256);
-    } catch (error) {
-      setPortraitErrors((current) => ({
-        ...current,
-        [index]:
-          error instanceof Error ? error.message : "无法读取脸图素材表。",
-      }));
-      return [];
-    }
-  }
-
-  function removeFaceSheetFile(index: number, file: File, sha256: string) {
-    const nextFiles = (faceSheetFiles[index] ?? []).filter(
-      (item) => item !== file,
-    );
-    onFaceSheetFilesChange?.(index, nextFiles);
-    onChange(
-      values.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              faceSheetBlobSha256s: item.faceSheetBlobSha256s.filter(
-                (hash) => hash !== sha256,
-              ),
-              portrait:
-                item.portrait?.blobSha256 === sha256 ? null : item.portrait,
-            }
-          : item,
-      ),
-    );
-    setPortraitErrors((current) => omitKey(current, index));
-  }
-
   const reorder = useTokenReorder(
     values,
     (next) => {
       const indices = next.map((credit) => values.indexOf(credit));
-      setPortraitErrors((current) => Object.fromEntries(
-        indices.flatMap((oldIndex, index) =>
-          current[oldIndex] ? [[index, current[oldIndex]]] : [],
-        ),
-      ));
       setPortraitIndex((current) => current === null ? null : indices.indexOf(current));
       setAliasEdit((current) => current === null ? null : {
         ...current, index: indices.indexOf(current.index),
@@ -662,27 +563,23 @@ export function CharacterPicker({
             </div>
             {activeCredit ? (
               <PortraitSelectionWorkbench
+                canUpload={Boolean(onFaceSheetFilesChange)}
                 credit={activeCredit}
                 disabled={disabled}
                 files={faceSheetFiles[portraitIndex ?? -1] ?? []}
                 key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
-                onChoose={(blobSha256, row, column) =>
-                  updatePortrait(portraitIndex ?? -1, {
-                    blobSha256,
-                    row,
-                    column,
-                  })
-                }
-                onRemoveUpload={(file, sha256) =>
-                  removeFaceSheetFile(portraitIndex ?? -1, file, sha256)
-                }
-                onUpload={
-                  onFaceSheetFilesChange
-                    ? (files) => addFaceSheetFiles(portraitIndex ?? -1, files)
-                    : null
-                }
-                onUseDefault={() => updatePortrait(portraitIndex ?? -1, null)}
-                portraitError={portraitErrors[portraitIndex ?? -1] ?? null}
+                onConfirm={({ files, portrait, faceSheetBlobSha256s }) => {
+                  if (disabled || portraitIndex === null) return;
+                  onFaceSheetFilesChange?.(portraitIndex, files);
+                  onChange(
+                    values.map((item, index) =>
+                      index === portraitIndex
+                        ? { ...item, portrait, faceSheetBlobSha256s }
+                        : item,
+                    ),
+                  );
+                  setPortraitIndex(null);
+                }}
                 suggestion={activeSuggestion}
               />
             ) : null}
@@ -727,28 +624,33 @@ type PortraitGridSheet = {
   file?: File;
 };
 
+type PortraitDraft = Pick<
+  CharacterCreditSelection,
+  "portrait" | "faceSheetBlobSha256s"
+> & { files: File[] };
+
 function PortraitSelectionWorkbench({
+  canUpload,
   credit,
   disabled,
   files,
-  onChoose,
-  onRemoveUpload,
-  onUpload,
-  onUseDefault,
-  portraitError,
+  onConfirm,
   suggestion,
 }: {
+  canUpload: boolean;
   credit: CharacterCreditSelection;
   disabled: boolean;
   files: File[];
-  onChoose: (blobSha256: string, row: number, column: number) => void;
-  onRemoveUpload: (file: File, sha256: string) => void;
-  onUpload: ((files: File[]) => Promise<string[]>) | null;
-  onUseDefault: () => void;
-  portraitError: string | null;
+  onConfirm: (draft: PortraitDraft) => void;
   suggestion: CharacterSuggestion | null;
 }) {
-  const previews = useLocalFaceSheets(files);
+  const [draft, setDraft] = useState<PortraitDraft>(() => ({
+    files,
+    portrait: credit.portrait,
+    faceSheetBlobSha256s: credit.faceSheetBlobSha256s,
+  }));
+  const previews = useLocalFaceSheets(draft.files);
+  const [portraitError, setPortraitError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [locateHash, setLocateHash] = useState<string | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -768,7 +670,7 @@ function PortraitSelectionWorkbench({
     }
   }
   const sheets = [...sheetsByHash.values()];
-  const effectivePortrait = credit.portrait ?? suggestion?.defaultPortrait ?? null;
+  const effectivePortrait = draft.portrait ?? suggestion?.defaultPortrait ?? null;
   const selectedSheet = effectivePortrait
     ? sheetsByHash.get(effectivePortrait.blobSha256)
     : undefined;
@@ -779,9 +681,54 @@ function PortraitSelectionWorkbench({
         width: selectedSheet.width,
         height: selectedSheet.height,
       }
-    : resolvePortrait(credit, suggestion);
+    : draft.portrait
+      ? null
+      : suggestion?.defaultPortrait ?? null;
   const targetHash = locateHash ?? effectivePortrait?.blobSha256;
   const busy = disabled || uploading;
+  const readingPreviews = draft.files.length > previews.length;
+
+  async function addFaceSheetFiles(nextFiles: File[]) {
+    if (!canUpload || busy || !nextFiles.length) return;
+    setUploading(true);
+    try {
+      const existing = await Promise.all(
+        draft.files.map(async (file) => ({
+          file,
+          ...(await inspectNamedFaceSheet(file)),
+        })),
+      );
+      const added = await Promise.all(
+        nextFiles.map(async (file) => ({
+          file,
+          ...(await inspectNamedFaceSheet(file)),
+        })),
+      );
+      const uniqueSheets = [
+        ...new Map(
+          [...existing, ...added].map((sheet) => [sheet.sha256, sheet]),
+        ).values(),
+      ];
+      setDraft((current) => ({
+        files: uniqueSheets.map((sheet) => sheet.file),
+        faceSheetBlobSha256s: uniqueSheets.map((sheet) => sheet.sha256),
+        portrait: current.portrait ?? (
+          suggestion?.defaultPortrait
+            ? null
+            : { blobSha256: added[0].sha256, row: 0, column: 0 }
+        ),
+      }));
+      located.current = null;
+      setLocateHash(added[0].sha256);
+      setPortraitError(null);
+    } catch (error) {
+      setPortraitError(
+        error instanceof Error ? error.message : "无法读取脸图素材表。",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useLayoutEffect(() => {
     const container = viewport.current;
@@ -814,7 +761,7 @@ function PortraitSelectionWorkbench({
             <strong className="text-sm">角色脸图</strong>
             <span className="ml-2 text-xs tabular-nums text-muted">{sheets.length} 张</span>
           </div>
-          {onUpload ? (
+          {canUpload ? (
             <Label
               className={cn(
                 buttonVariants({ variant: "outline", size: "sm" }),
@@ -832,16 +779,7 @@ function PortraitSelectionWorkbench({
                 onChange={(event) => {
                   const nextFiles = Array.from(event.currentTarget.files ?? []);
                   event.currentTarget.value = "";
-                  if (!nextFiles.length) return;
-                  setUploading(true);
-                  void onUpload(nextFiles)
-                    .then((hashes) => {
-                      if (hashes[0]) {
-                        located.current = null;
-                        setLocateHash(hashes[0]);
-                      }
-                    })
-                    .finally(() => setUploading(false));
+                  void addFaceSheetFiles(nextFiles);
                 }}
               />
             </Label>
@@ -859,7 +797,10 @@ function PortraitSelectionWorkbench({
             disabled={busy}
             onSelectCell={(sheet, row, column) => {
               setLocateHash(null);
-              onChoose(sheet.blobSha256, row, column);
+              setDraft((current) => ({
+                ...current,
+                portrait: { blobSha256: sheet.blobSha256, row, column },
+              }));
             }}
             cellState={(sheet, row, column) => {
               const selected =
@@ -868,15 +809,8 @@ function PortraitSelectionWorkbench({
                 effectivePortrait.column === column;
               return { selected, highlighted: selected };
             }}
-            renderFooter={(sheet) => (
-              <div className="mt-1 flex min-h-6 items-center gap-1">
-                <span
-                  className="min-w-0 flex-1 truncate text-xs text-muted"
-                  title={sheet.label}
-                >
-                  {sheet.label}
-                </span>
-                {sheet.file && onUpload ? (
+            renderFooter={(sheet) => sheet.file && canUpload ? (
+                <div className="mt-1 flex justify-end">
                   <Button
                     aria-label={`移除 ${sheet.label}`}
                     className="size-6 min-h-0 shrink-0 p-0"
@@ -886,20 +820,29 @@ function PortraitSelectionWorkbench({
                     variant="ghost"
                     onClick={() => {
                       setLocateHash(null);
-                      if (sheet.file) onRemoveUpload(sheet.file, sheet.blobSha256);
+                      setDraft((current) => ({
+                        files: current.files.filter((file) => file !== sheet.file),
+                        faceSheetBlobSha256s: current.faceSheetBlobSha256s.filter(
+                          (hash) => hash !== sheet.blobSha256,
+                        ),
+                        portrait:
+                          current.portrait?.blobSha256 === sheet.blobSha256
+                            ? null
+                            : current.portrait,
+                      }));
+                      setPortraitError(null);
                     }}
                   >
                     <X className="size-3.5" />
                   </Button>
-                ) : null}
-              </div>
-            )}
+                </div>
+            ) : null}
           />
-          {files.length > previews.length ? (
+          {readingPreviews ? (
             <p role="status" className="text-sm text-muted">正在读取脸图…</p>
           ) : null}
-          {!sheets.length && !files.length ? (
-            <EmptyState title={onUpload ? "暂无脸图，可添加脸图素材表" : "暂无可用脸图"} variant="plain" />
+          {!sheets.length && !draft.files.length ? (
+            <EmptyState title={canUpload ? "暂无脸图，可添加脸图素材表" : "暂无可用脸图"} variant="plain" />
           ) : null}
         </div>
       </section>
@@ -921,7 +864,7 @@ function PortraitSelectionWorkbench({
         />
         <div className="grid min-w-0 gap-2 sm:justify-items-center sm:text-center" aria-live="polite">
           <strong className="text-sm">
-            {credit.portrait
+            {draft.portrait
               ? "本作头像"
               : suggestion?.defaultPortrait
                 ? "角色默认头像"
@@ -932,23 +875,26 @@ function PortraitSelectionWorkbench({
               第 {effectivePortrait.row + 1} 行，第 {effectivePortrait.column + 1} 列
             </p>
           ) : null}
-          {selectedSheet ? (
-            <p className="m-0 max-w-full truncate text-xs text-muted" title={selectedSheet.label}>
-              {selectedSheet.label}
-            </p>
-          ) : null}
           <Button
             disabled={busy || !suggestion?.defaultPortrait}
             onClick={() => {
               located.current = null;
               setLocateHash(null);
-              onUseDefault();
+              setDraft((current) => ({ ...current, portrait: null }));
             }}
             size="sm"
             type="button"
             variant="outline"
           >
             沿用角色默认头像
+          </Button>
+          <Button
+            disabled={busy || readingPreviews}
+            onClick={() => onConfirm(draft)}
+            size="sm"
+            type="button"
+          >
+            确定
           </Button>
         </div>
       </section>
@@ -1150,24 +1096,4 @@ async function inspectNamedFaceSheet(file: File) {
       error instanceof Error ? error.message : "无法读取脸图素材表。";
     throw new Error(`无法添加“${file.name}”：${detail}`);
   }
-}
-
-function omitKey<T>(value: Record<number, T>, key: number): Record<number, T> {
-  if (!(key in value)) return value;
-  const next = { ...value };
-  delete next[key];
-  return next;
-}
-
-function removeIndexedValue<T>(
-  value: Record<number, T>,
-  removedIndex: number,
-): Record<number, T> {
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([rawIndex, item]) => {
-      const index = Number(rawIndex);
-      if (index === removedIndex) return [];
-      return [[index > removedIndex ? index - 1 : index, item]];
-    }),
-  );
 }
