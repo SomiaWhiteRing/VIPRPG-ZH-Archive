@@ -2,6 +2,7 @@ import { Timestamp } from "@/app/components/ui/timestamp";
 import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useToast } from "@/app/components/ui/toast";
+import { BackLink } from "@/app/components/ui/back-link";
 import { Button } from "@/app/components/ui/button";
 import { ClientOnly } from "@/app/components/ui/client-only";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -837,12 +838,12 @@ export function DiscussionWorkspace({
         </>
       ) : detail ? (
         <>
-          <Link
-            className="mb-4 inline-block text-sm text-primary"
-            to={returnTo ?? "/discussions"}
-          >
-            ← 返回讨论版
-          </Link>
+          <BackLink
+            className="mb-4"
+            href={returnTo ?? "/discussions"}
+            label="返回讨论版"
+            variant="text"
+          />
           <div className="mb-2 text-sm leading-relaxed">
             <TopicTags tags={detail.topic.tags} />
           </div>

@@ -1,11 +1,10 @@
+import { BackLink } from "@/app/components/ui/back-link";
 import {
   SectionNavigation,
   type SectionLink,
 } from "@/app/components/ui/section-navigation";
 import { engineLabel, languageLabel } from "@/lib/labels";
-import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
 
 export function WorkPageHeader({
   chineseTitle,
@@ -35,13 +34,7 @@ export function WorkPageHeader({
               src={`/api/media/blobs/${coverBlobSha256}`}
             />
           ) : null}
-          <Link
-            className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-secondary"
-            to="/games"
-          >
-            <ArrowLeft aria-hidden size={15} />
-            作品库
-          </Link>
+          <BackLink href="/games" label="作品库" variant="text" />
           <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
             {title}
             {chineseTitle ? (

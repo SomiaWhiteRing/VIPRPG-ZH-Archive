@@ -9,6 +9,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { CharacterContentTabs } from "@/app/characters/[id]/character-content-tabs";
 import { CharacterMaterials } from "@/app/characters/[id]/character-materials";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { BackLink } from "@/app/components/ui/back-link";
 import { Badge } from "@/app/components/ui/badge";
 import { buttonVariants } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -28,7 +29,7 @@ import type {
 } from "@/lib/dto/db/character-detail";
 import { formatNumber } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -75,13 +76,7 @@ export default function CharacterDetailPage() {
   return (
     <DetailPageShell>
       <header className="pb-4 pt-4">
-        <Link
-          className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-primary"
-          to="/characters"
-        >
-          <ArrowLeft aria-hidden size={15} />
-          角色索引
-        </Link>
+        <BackLink href="/characters" label="角色索引" variant="text" />
         <div className="mt-2 flex items-start gap-2">
           <h1 className="min-w-0 break-words font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
             {character.primaryName}

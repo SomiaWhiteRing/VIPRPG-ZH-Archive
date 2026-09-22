@@ -462,6 +462,17 @@ export async function getWorkForAdminEdit(
   };
 }
 
+export async function isWorkUploader(
+  runtime: AppRuntime,
+  workId: number,
+  userId: number,
+): Promise<boolean> {
+  return !!(await getD1(runtime)
+    .prepare("SELECT 1 FROM work_uploaders WHERE work_id=? AND user_id=?")
+    .bind(workId, userId)
+    .first());
+}
+
 export async function getOwnedWorkForEdit(
   runtime: AppRuntime,
   workId: number,
