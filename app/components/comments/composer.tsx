@@ -206,7 +206,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
                 <span className="sr-only">图片 {index + 1} {image.stage === "processing" ? "正在处理" : "正在上传"}</span>
               </div>
             ) : (
-              <Button type="button" size="icon" variant="secondary" className="absolute right-0 top-0" disabled={busy || unavailable}
+              <Button type="button" size="icon" variant="neutral" className="absolute right-0 top-0" disabled={busy || unavailable}
                 aria-label={`移除图片 ${index + 1}`} onClick={() => { release(image.preview); setImages((current) => current.filter((item) => item.key !== image.key)); }}><X aria-hidden /></Button>
             )}
           </div>

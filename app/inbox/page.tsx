@@ -128,7 +128,7 @@ export default function InboxPage() {
           <nav aria-label="未读提醒分页" className="my-8 flex flex-wrap gap-2">
             {result.previousCursor ? (
               <Link
-                className={buttonVariants({ size: "sm", variant: "secondary" })}
+                className={buttonVariants({ size: "sm", variant: "neutral" })}
                 prefetch="none"
                 to={inboxHref(category, true, 1, result.previousCursor)}
               >
@@ -137,7 +137,7 @@ export default function InboxPage() {
             ) : null}
             {result.nextCursor ? (
               <Link
-                className={buttonVariants({ size: "sm", variant: "secondary" })}
+                className={buttonVariants({ size: "sm", variant: "neutral" })}
                 prefetch="none"
                 to={inboxHref(category, true, 1, result.nextCursor)}
               >

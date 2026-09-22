@@ -219,7 +219,7 @@ function PageControl({
   return onPageChange ? (
     <Button
       type="button"
-      variant="secondary"
+      variant="neutral"
       size="icon"
       className={className}
       aria-label={ariaLabel}
@@ -236,7 +236,7 @@ function PageControl({
 }
 
 const paginationItem = cn(
-  buttonVariants({ size: "icon", variant: "secondary" }),
+  buttonVariants({ size: "icon", variant: "neutral" }),
   "h-8 w-auto min-w-8 rounded-md px-2 py-0 text-xs tabular-nums sm:text-sm",
 );
 const activePaginationItem =

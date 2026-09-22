@@ -662,7 +662,7 @@ export function PortraitLibraryEditor({
                       onClick={() => changeScope(true)}
                       size="sm"
                       type="button"
-                      variant={boundOnly ? "secondary" : "ghost"}
+                      variant={boundOnly ? "neutral" : "ghost"}
                     >
                       已绑定 {counts[kind]}
                     </Button>
@@ -671,7 +671,7 @@ export function PortraitLibraryEditor({
                       onClick={() => changeScope(false)}
                       size="sm"
                       type="button"
-                      variant={!boundOnly ? "secondary" : "ghost"}
+                      variant={!boundOnly ? "neutral" : "ghost"}
                     >
                       素材库
                     </Button>
@@ -1239,7 +1239,7 @@ export function PortraitLibraryEditor({
                       }
                       onClick={setPortrait}
                       type="button"
-                      variant="secondary"
+                      variant="neutral"
                     >
                       {isDefaultCell ? "已是默认头像" : "设为默认头像"}
                     </Button>

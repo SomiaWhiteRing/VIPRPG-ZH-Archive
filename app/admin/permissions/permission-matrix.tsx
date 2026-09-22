@@ -319,7 +319,7 @@ export function PermissionMatrix({
                       onClick={() => selectRole(item.id)}
                       type="button"
                       variant={
-                        item.id === selectedRoleId ? "secondary" : "ghost"
+                        item.id === selectedRoleId ? "neutral" : "ghost"
                       }
                     >
                       <span className="min-w-0 break-words">

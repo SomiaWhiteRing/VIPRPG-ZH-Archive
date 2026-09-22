@@ -34,7 +34,7 @@ export function SectionNavigation({
               }
               className={cn(
                 "inline-flex min-h-10.5 items-center gap-1.5 border-b-2 border-transparent px-3.25 text-sm whitespace-nowrap text-muted hover:border-border hover:text-foreground",
-                item.active && "border-primary font-semibold text-[#1f6f67]",
+                item.active && "border-primary font-semibold text-secondary",
               )}
               to={item.href}
               reloadDocument={item.reloadDocument}

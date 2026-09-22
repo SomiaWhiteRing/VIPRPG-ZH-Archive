@@ -64,7 +64,7 @@ export default function CreatorDetailPage() {
     <DetailPageShell>
       <header className="pt-4">
         <Link
-          className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-[#1f6f67]"
+          className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-secondary"
           to="/creators"
         >
           <ArrowLeft aria-hidden size={15} />
@@ -214,7 +214,7 @@ export default function CreatorDetailPage() {
             {creator.links.map((link, index) => (
               <a
                 key={index}
-                className="mt-3 flex min-h-8 items-center gap-1.5 text-sm font-medium text-[#1f6f67] hover:underline"
+                className="mt-3 flex min-h-8 items-center gap-1.5 text-sm font-medium text-secondary hover:underline"
                 href={link.url}
                 rel="noreferrer"
                 target="_blank"
@@ -226,7 +226,7 @@ export default function CreatorDetailPage() {
           </Card>
           {canEdit || !currentUser ? (
             <div className="flex items-center gap-1 px-2 max-[980px]:w-full" aria-label="作者资料操作">
-              <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-[#1f6f67] hover:underline"
+              <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
                 to={currentUser ? `/creators/${creator.id}/edit` : `/login?next=${encodeURIComponent(`/creators/${creator.id}/edit`)}`}>
                 {currentUser ? "编辑资料" : "登录后编辑"}
               </Link>

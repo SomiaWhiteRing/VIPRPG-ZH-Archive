@@ -36,7 +36,7 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
               "relative whitespace-nowrap rounded-md text-sm transition-colors",
               mobile ? "px-3 py-2" : "flex min-h-8 items-center px-3 py-1.5 pointer-coarse:min-h-11",
               active
-                ? "bg-primary/10 font-semibold text-[#1f6f67]"
+                ? "bg-primary/10 font-semibold text-secondary"
                 : "text-foreground hover:bg-muted/15",
               !mobile && active && "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-current",
             )}

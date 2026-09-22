@@ -266,7 +266,7 @@ export default function GameDetailPage() {
                 <div aria-label="标签" className="mt-4 flex flex-wrap gap-2">
                   {work.tags.map((tag) => (
                     <Link
-                      className="inline-flex min-h-7.5 items-center rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-[#1f6f67] hover:border-primary hover:bg-primary/10"
+                      className="inline-flex min-h-7.5 items-center rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-secondary hover:border-primary hover:bg-primary/10"
                       to={`/games?tag=${tag.id}`}
                       key={tag.id}
                     >
@@ -330,7 +330,7 @@ export default function GameDetailPage() {
                         {character.displayName}
                       </span>
                       <span
-                        className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-[#1f6f67]" : ""}`}
+                        className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-secondary" : ""}`}
                       >
                         {CHARACTER_ROLE_LABELS[character.roleKey] ?? "其他"}
                       </span>
@@ -428,7 +428,7 @@ export default function GameDetailPage() {
                   >
                     {showRelationEditor ? (
                       <Link
-                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-[#1f6f67] hover:underline"
+                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
                         to={`/games/${work.id}/relations`}
                       >
                         编辑关联
@@ -468,7 +468,7 @@ export default function GameDetailPage() {
                     <div className="grid gap-0.5">
                       {externalLinks.map((link) => (
                         <a
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-[#1f6f67] hover:bg-foreground/5"
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-secondary hover:bg-foreground/5"
                           href={link.url}
                           key={link.id}
                           rel="noreferrer"
