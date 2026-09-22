@@ -9,7 +9,6 @@ import {
   createGamePackWritable,
   ensureOpfsSupported,
   resetGameOpfsDirectory,
-  writeGameIndexJson,
   writeGamePackIndexJson,
 } from "@/app/play/[archiveVersionId]/web-play-opfs";
 import type {
@@ -24,11 +23,6 @@ import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { withGameResourceWriteLock } from "./web-play-locks";
 
-type EasyRpgCacheNode = {
-  _dirname?: string;
-  [name: string]: string | EasyRpgCacheNode | undefined;
-};
-
 type LocalZipEntry = {
   name: string;
   flags: number;
@@ -42,9 +36,7 @@ type WebPlayPackIndex = {
   version: 1;
   archiveVersionId: number;
   manifestSha256: string;
-  downloadZipBuilderVersion: string;
   webPlayInstallerVersion: string;
-  easyRpgRuntimeVersion: string;
   packs: Array<{
     name: string;
     size: number;
@@ -84,19 +76,6 @@ const packTargetSizeBytes = 256 * 1024 * 1024;
 const packWriteBufferTargetBytes = 1024 * 1024;
 const maxInstallAttempts = 3;
 const retryBaseDelayMs = 1500;
-const easyRpgResourceAliasExtensions = new Set([
-  "bmp",
-  "gif",
-  "jpg",
-  "jpeg",
-  "mid",
-  "midi",
-  "mp3",
-  "ogg",
-  "png",
-  "wav",
-  "xyz",
-]);
 
 self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
   const message = event.data;
@@ -216,7 +195,6 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  const indexRoot: EasyRpgCacheNode = {};
   const response = await fetch(metadata.downloadUrl, {
     credentials: "same-origin",
   });
@@ -239,7 +217,6 @@ async function runInstallAttempt(input: {
     metadata,
     response,
     installation,
-    indexRoot,
   });
   installation = result.installation;
 
@@ -248,22 +225,10 @@ async function runInstallAttempt(input: {
     {
       ...installation,
       phase: "writing_index",
-      currentPath: "index.json",
+      currentPath: "pack-index.json",
       updatedAt: new Date().toISOString(),
     },
     true,
-  );
-  await writeGameIndexJson(
-    metadata.playKey,
-    JSON.stringify({
-      cache: indexRoot,
-      metadata: {
-        version: 3,
-        storage: "pack-index",
-        archiveVersionId: metadata.archiveVersionId,
-        manifestSha256: metadata.manifestSha256,
-      },
-    }),
   );
   await writeGamePackIndexJson(metadata.playKey, JSON.stringify(result.packIndex));
 
@@ -329,7 +294,6 @@ async function streamZipToPacks(input: {
   metadata: WebPlayMetadata;
   response: Response;
   installation: WebPlayInstallation;
-  indexRoot: EasyRpgCacheNode;
 }): Promise<{
   installation: WebPlayInstallation;
   packIndex: WebPlayPackIndex;
@@ -356,9 +320,7 @@ async function streamZipToPacks(input: {
     version: 1,
     archiveVersionId: input.metadata.archiveVersionId,
     manifestSha256: input.metadata.manifestSha256,
-    downloadZipBuilderVersion: input.metadata.downloadZipBuilderVersion,
     webPlayInstallerVersion: input.metadata.webPlayInstallerVersion,
-    easyRpgRuntimeVersion: input.metadata.easyRpgRuntimeVersion,
     packs: packWriter.packs,
     files: {},
   };
@@ -473,11 +435,9 @@ async function streamZipToPacks(input: {
       }
 
       currentPath = normalizedPath;
-      queueProgress();
-      addToEasyRpgIndex(input.indexRoot, normalizedPath, (message) => {
-        postLog(input.metadata.playKey, "warning", message);
-      });
+
       const location = await packWriter.beginEntry(entry.uncompressedSize);
+      queueProgress();
       const lookupKey = packLookupKey(normalizedPath);
 
       if (packIndex.files[lookupKey]) {
@@ -786,9 +746,7 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     playKey: metadata.playKey,
     archiveVersionId: metadata.archiveVersionId,
     manifestSha256: metadata.manifestSha256,
-    downloadZipBuilderVersion: metadata.downloadZipBuilderVersion,
     webPlayInstallerVersion: metadata.webPlayInstallerVersion,
-    easyRpgRuntimeVersion: metadata.easyRpgRuntimeVersion,
     title: metadata.title,
     status: "created",
     phase: "metadata",
@@ -837,110 +795,6 @@ async function persistAndPost(
   } satisfies WebPlayInstallWorkerOutput);
 
   return installation;
-}
-
-function addToEasyRpgIndex(
-  root: EasyRpgCacheNode,
-  path: string,
-  onCollision: (message: string) => void,
-): void {
-  const parts = path.split("/");
-  const fileName = parts.at(-1) ?? "";
-  const parentParts = parts.slice(0, -1);
-
-  addEasyRpgIndexEntry(root, parts, path, fileName, true, onCollision);
-
-  const alias = easyRpgResourceAliasForFile(fileName);
-
-  if (alias) {
-    addEasyRpgIndexEntry(root, [...parentParts, alias], path, fileName, false, onCollision);
-  }
-}
-
-function addEasyRpgIndexEntry(
-  root: EasyRpgCacheNode,
-  parts: string[],
-  sourcePath: string,
-  fileName: string,
-  strict: boolean,
-  onCollision: (message: string) => void,
-): void {
-  let node = root;
-
-  for (let index = 0; index < parts.length; index += 1) {
-    const part = parts[index];
-    // Match liblcf ReaderUtil::Normalize: lowercase first, then NFKC.
-    // Keep the original names in values so pack lookups still use real paths.
-    const folded = part.toLowerCase().normalize("NFKC");
-    const isFile = index === parts.length - 1;
-
-    if (isFile) {
-      const existing = node[folded];
-
-      if (existing !== undefined) {
-        if (
-          typeof existing === "string" &&
-          existing.toLowerCase() !== fileName.toLowerCase() &&
-          existing.toLowerCase().normalize("NFKC") ===
-            fileName.toLowerCase().normalize("NFKC")
-        ) {
-          // Like EasyRPG gencache, the later entry wins a normalized name.
-          // Both originals stay in the pack; update the extensionless alias too.
-          node[folded] = fileName;
-          if (strict) {
-            const previousPath = [...parts.slice(0, -1), existing].join("/");
-            onCollision(
-              `游戏资源名规范化后重名：${previousPath} / ${sourcePath}；EasyRPG 使用后者，原文件均保留。`,
-            );
-          }
-          return;
-        }
-        if (strict) {
-          throw new Error(`游戏文件名规范化后冲突：${sourcePath}`);
-        }
-
-        return;
-      }
-
-      node[folded] = fileName;
-      return;
-    }
-
-    const existing = node[folded];
-
-    if (typeof existing === "string") {
-      throw new Error(`游戏路径冲突：${sourcePath}`);
-    }
-
-    if (!existing) {
-      const child: EasyRpgCacheNode = { _dirname: part };
-      node[folded] = child;
-      node = child;
-      continue;
-    }
-
-    if (existing._dirname !== part) {
-      throw new Error(`游戏目录名规范化后冲突：${sourcePath}`);
-    }
-
-    node = existing;
-  }
-}
-
-function easyRpgResourceAliasForFile(fileName: string): string | null {
-  const dotIndex = fileName.lastIndexOf(".");
-
-  if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
-    return null;
-  }
-
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-
-  if (!easyRpgResourceAliasExtensions.has(extension)) {
-    return null;
-  }
-
-  return fileName.slice(0, dotIndex);
 }
 
 function normalizeZipEntryPath(path: string): string | null {

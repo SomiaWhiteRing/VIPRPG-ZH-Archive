@@ -510,46 +510,25 @@ async function run(): Promise<void> {
     .waitFor({ timeout: 45_000 });
   const opfs = await inspectOpfs(page, webPlay.playKey);
   assert.deepEqual(opfs.rootEntries, [
-    "index.json",
     "pack-index.json",
     "packs",
   ]);
   assert.ok(opfs.packEntries.length > 0, "OPFS contains at least one pack");
-  const virtualFiles = await page.evaluate(
-    async ({ playKey, workId, runtimeBasePath }) => {
-      const prefix = `${runtimeBasePath}/games/${playKey}`;
-      const valid = await fetch(prefix + "/RPG_RT.lmt");
-      const other = await fetch(
-        prefix.replace(playKey, playKey + "-other") + "/RPG_RT.lmt",
-      );
-      const wasm = await fetch(`${runtimeBasePath}/index.wasm`);
+  const runtimeResponses = await page.evaluate(
+    async ({ workId, runtimeBasePath }) => {
+      const wasm = await fetch(`${runtimeBasePath}/easyrpg-player.wasm`);
       const wasmMime = wasm.headers.get("content-type");
       await WebAssembly.compileStreaming(wasm);
       const pageData = await fetch(`/games/${workId}.data`);
       return {
         pageData: pageData.status,
-        valid: valid.status,
-        body: await valid.text(),
-        other: other.status,
         wasmMime,
-        scope: (await navigator.serviceWorker.getRegistration())?.scope,
       };
     },
-    { playKey: webPlay.playKey, workId, runtimeBasePath: easyRpgRuntimeBasePath },
+    { workId, runtimeBasePath: easyRpgRuntimeBasePath },
   );
-  assert.equal(virtualFiles.valid, 200);
-  assert.equal(virtualFiles.pageData, 200, "play SW must leave Router page data to the server");
-  assert.equal(
-    virtualFiles.body,
-    new TextDecoder().decode(sourceFiles["RPG_RT.lmt"]),
-  );
-  assert.equal(
-    virtualFiles.other,
-    404,
-    "uninstalled playKey cannot read a different version's files",
-  );
-  assert.match(virtualFiles.wasmMime ?? "", /application\/wasm/);
-  assert.equal(virtualFiles.scope, origin + "/play/");
+  assert.equal(runtimeResponses.pageData, 200, "Router page data remains available");
+  assert.match(runtimeResponses.wasmMime ?? "", /application\/wasm/);
   await page.reload();
   await page.locator('[data-web-play-status="ready"]').waitFor();
   // Exercise the action button as well as the tab, from a document outside /play/.
@@ -557,11 +536,6 @@ async function run(): Promise<void> {
   await page.locator(`a[href="/play/${archiveVersionId}"]`).last().click();
   await page.waitForURL(`${origin}/play/${archiveVersionId}`);
   await page.locator('[data-web-play-status="ready"]').waitFor();
-  assert.equal(
-    await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL),
-    origin + "/play/sw.js",
-    "both play entry points must load a document controlled by the play worker",
-  );
   assert.deepEqual(
     browserErrors,
     [],
@@ -1041,9 +1015,6 @@ async function verifyPageContracts(origin: string, adminCookie: string) {
       "private auth fields cannot enter hydration data",
     );
   }
-  const sw = await fetch(`${origin}/play/sw.js`);
-  assert.equal(sw.status, 200);
-  assert.match(sw.headers.get("cache-control") ?? "", /no-store/);
   const player = await fetch(`${origin}/play/player.html`);
   assert.equal(player.status, 200);
   assert.match(player.headers.get("content-type") ?? "", /text\/html/);

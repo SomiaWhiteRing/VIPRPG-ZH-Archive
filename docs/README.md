@@ -14,7 +14,7 @@
 - [游戏领域架构](./game-domain-architecture.md)：Work、ArchiveVersion、关系、目录和公开查询
 - [上传资料、发布声明与制作署名](./upload-metadata.md)：上传表单、署名、更多信息、偏好与恢复
 - [RPG Maker 2000/2003 去重存储架构](./archive-storage.md)：上传、对象存储、下载和 GC
-- [EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)：浏览器安装、OPFS、Service Worker 和运行时边界
+- [EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)：浏览器安装、OPFS、Worker 本地播放器和运行时边界
 - [Android Kai 游戏导入](./easyrpg-android-import.md)：作品导入链接、快照清单与 Android 客户端接入边界
 - [角色分类](./character-index.md)：角色身份、分类归属、管理权限与公开浏览
 - [角色素材库](./character-material-library.md)：素材展示、多人绑定、排序与本地导入

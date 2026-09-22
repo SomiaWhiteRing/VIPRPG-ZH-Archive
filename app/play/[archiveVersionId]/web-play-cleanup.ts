@@ -3,22 +3,8 @@ import { gameResourceLockName } from "./web-play-locks";
 import { resetGameOpfsDirectory } from "./web-play-opfs";
 import type { WebPlayMetadata } from "./web-play-types";
 
-// Older open pages cannot participate in Web Locks. No reply means defer, not idle.
 export async function canManageGameResources(): Promise<boolean> {
-  const controller = navigator.serviceWorker?.controller;
-  if (!navigator.locks || !controller) return false;
-  return new Promise((resolve) => {
-    const channel = new MessageChannel();
-    const finish = (safe: boolean) => {
-      clearTimeout(timer);
-      channel.port1.close();
-      channel.port2.close();
-      resolve(safe);
-    };
-    const timer = setTimeout(() => finish(false), 2500);
-    channel.port1.onmessage = (event) => finish(event.data?.safe === true);
-    controller.postMessage({ type: "web-play-check-resource-locks" }, [channel.port2]);
-  });
+  return Boolean(navigator.locks);
 }
 
 export async function cleanupObsoleteGameResources(metadata: WebPlayMetadata): Promise<{ removed: string[]; deferred: boolean }> {
@@ -54,7 +40,6 @@ export async function cleanupObsoleteGameResources(metadata: WebPlayMetadata): P
             }
             await resetGameOpfsDirectory(installation.playKey);
             await deleteWebPlayInstallation(installation.playKey);
-            navigator.serviceWorker.controller?.postMessage({ type: "web-play-forget-pack-index", playKey: installation.playKey });
             removed.push(installation.playKey);
           },
         );

@@ -9,7 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
 import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
@@ -31,42 +31,22 @@ if (sha256(archive) !== archiveSha256)
   throw new Error("Web ZIP does not match the pinned Kai build");
 
 const files = unzipSync(archive);
-for (const name of ["easyrpg-player.js", "easyrpg-player.wasm", "easyrpg-player.data"])
+const runtimeFiles = [
+  "easyrpg-player.js", "easyrpg-player.wasm", "easyrpg-player.data",
+  "player-worker.js", "player-audio.js",
+];
+for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);
 if (sha256(files["easyrpg-player.data"]) !== soundfontSha256)
   throw new Error("Bundled SoundFont does not match Kai recommended.sf2");
-
-let script = new TextDecoder().decode(files["easyrpg-player.js"]);
-function replaceOnce(before, after) {
-  if (script.split(before).length !== 2)
-    throw new Error(`Runtime patch no longer matches: ${before}`);
-  script = script.replace(before, after);
-}
-
-// Keep the site's existing Work-based IDBFS identity across runtime upgrades.
-replaceOnce(
-  'FS.mkdir("Save");FS.mount(Module.saveFs,{},"Save");',
-  'if(!Number.isSafeInteger(Module.workId)||Module.workId<=0)throw new Error("Invalid workId");' +
-    'FS.mkdir("/work-saves");const savePath="/work-saves/"+Module.workId;' +
-    'FS.mkdir(savePath);FS.mount(Module.saveFs,{},savePath);FS.symlink(savePath,"Save");',
-);
-replaceOnce('return locateFile("easyrpg-player.wasm")', 'return locateFile("index.wasm")');
-
-// The Web ZIP omits COPYING; fetch the license from the same pinned revision.
-const licenseResponse = await fetch(
-  `https://raw.githubusercontent.com/SomiaWhiteRing/Player/${revision}/COPYING`,
-  { signal: AbortSignal.timeout(30_000) },
-);
-if (!licenseResponse.ok)
-  throw new Error(`Cannot fetch Kai license: HTTP ${licenseResponse.status}`);
-const license = Buffer.from(await licenseResponse.arrayBuffer());
+const license = files.COPYING;
 if (sha256(license) !== licenseSha256)
   throw new Error("Kai license does not match the pinned digest");
 
+// Runtime source owns the site API and Work-based saves; import preserves every byte.
 const output = {
-  "index.js": Buffer.from(script),
-  "index.wasm": files["easyrpg-player.wasm"],
-  "easyrpg-player.data": files["easyrpg-player.data"],
+  "index.js": files["player-host.js"],
+  ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
 };
 const source =
   JSON.stringify(
@@ -75,14 +55,17 @@ const source =
       revision,
       version,
       build,
-      artifact: "nightly-web/EasyRPG-Player-Kai-nightly-web.zip",
+      artifact: basename(zipPath),
       archiveSha256,
       source: `https://github.com/SomiaWhiteRing/Player/tree/${revision}`,
       license: `https://github.com/SomiaWhiteRing/Player/blob/${revision}/COPYING`,
-      patches: [
-        "Work-based IDBFS saves",
-        "WASM filename: index.wasm",
-      ],
+      sourceState: runtime.sourceState ?? "commit",
+      sourceSnapshot: runtime.sourceSnapshot ?? null,
+      sourceSnapshotSha256: runtime.sourceSnapshotSha256 ?? null,
+      liblcfRevision: runtime.liblcfRevision ?? null,
+      emscriptenVersion: runtime.emscriptenVersion ?? null,
+      buildscriptsRevision: runtime.buildscriptsRevision ?? null,
+      patches: [],
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),
       ),

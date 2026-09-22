@@ -1,4 +1,5 @@
 import type { WebPlayMetadata } from "./web-play-types";
+import { readGamePackages } from "./web-play-opfs";
 import { acquireGameResourceReadLock } from "./web-play-locks";
 import { getWebPlayInstallation } from "./web-play-db";
 import playerStyles from "../player.css?inline";
@@ -7,7 +8,8 @@ type PlayerWindow = Window & {
   console: Console;
   KeyboardEvent: typeof KeyboardEvent;
   createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<{
-    initApi?: () => void;
+    captureScreenshot: () => Promise<PlayerScreenshot>;
+    stop: () => Promise<void>;
   }>;
 };
 
@@ -45,7 +47,7 @@ export type PlayerSession = {
   ready: Promise<void>;
   captureScreenshot: () => Promise<PlayerScreenshot>;
   setButtonPressed: (button: PlayerButton, pressed: boolean) => void;
-  dispose: () => void;
+  dispose: () => Promise<void>;
 };
 
 export type PlayerScreenshot = {
@@ -59,11 +61,16 @@ export function createPlayerSession(
   host: HTMLElement,
   metadata: WebPlayMetadata,
   onLog: PlayerLogHandler,
+  onFullscreen: () => void,
+  onExit: () => void,
 ): PlayerSession {
   const lifetime = new AbortController();
+  const resourceLifetime = new AbortController();
   const heldButtons = new Set<PlayerButton>();
   let disconnectLogs: (() => void) | undefined;
-  let captureNextFrame: (() => void) | undefined;
+  let runtime: Awaited<ReturnType<NonNullable<PlayerWindow["createEasyRpgPlayer"]>>> | undefined;
+  let runtimeCreation: Promise<NonNullable<typeof runtime>> | undefined;
+  let disposing: Promise<void> | undefined;
   let releaseResources: (() => void) | undefined;
   const frame = document.createElement("iframe");
   frame.title = `${metadata.title} 游戏画面`;
@@ -78,7 +85,7 @@ export function createPlayerSession(
     if (pressed) heldButtons.add(button);
     else heldButtons.delete(button);
     const key = playerButtons[button];
-    // SDL3 reads code, keyCode and which from the isolated document's events.
+    // The host forwards this document's key events to the engine Worker.
     canvas.dispatchEvent(new playerWindow.KeyboardEvent(pressed ? "keydown" : "keyup", {
       ...key,
       which: key.keyCode,
@@ -89,22 +96,39 @@ export function createPlayerSession(
     }));
   }
 
-  function dispose() {
+  function dispose(): Promise<void> {
+    if (disposing) return disposing;
     for (const button of heldButtons) setButtonPressed(button, false);
-    disconnectLogs?.();
-    disconnectLogs = undefined;
-    frame.remove();
     lifetime.abort();
-    releaseResources?.();
-    releaseResources = undefined;
+    disposing = (async () => {
+      try {
+        const current = runtime ?? await runtimeCreation?.catch(() => undefined);
+        await current?.stop();
+      } catch (error) {
+        disposing = undefined;
+        throw error;
+      }
+      disconnectLogs?.();
+      disconnectLogs = undefined;
+      frame.remove();
+      resourceLifetime.abort();
+      releaseResources?.();
+      releaseResources = undefined;
+    })();
+    // Cleanup on unmount cannot await; retain an error report for failed saves.
+    void disposing.catch(error => onLog("error", formatLogValue(error)));
+    return disposing;
   }
 
   const ready = (async () => {
-    releaseResources = await acquireGameResourceReadLock(metadata.playKey, lifetime.signal);
+    releaseResources = await acquireGameResourceReadLock(metadata.playKey, resourceLifetime.signal);
     lifetime.signal.throwIfAborted();
     if ((await getWebPlayInstallation(metadata.playKey))?.status !== "ready") {
       throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
     }
+    const packages = await readGamePackages(
+      metadata.playKey, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
+    );
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
       frame.src = `/play/player.html${window.location.search}`;
@@ -125,8 +149,7 @@ export function createPlayerSession(
       signal: lifetime.signal,
     });
 
-    // This runtime replaces print/printErr and also logs directly to console.
-    // Capture only its iframe, before loading the runtime, and keep DevTools output.
+    // Capture Worker diagnostics forwarded by its iframe and keep DevTools output.
     disconnectLogs = connectPlayerLogs(playerWindow, lifetime.signal, onLog);
 
     const script = playerDocument.createElement("script");
@@ -137,59 +160,29 @@ export function createPlayerSession(
     if (!playerWindow.createEasyRpgPlayer)
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
-    const module = await untilAborted(
-      playerWindow.createEasyRpgPlayer({
-        game: metadata.playKey,
-        workId: metadata.workId,
-        locateFile: (path: string) => `${metadata.runtimeBasePath}/${path}`,
-        // Snapshot after drawing, before WebGL discards the frame buffer.
-        postMainLoop: () => captureNextFrame?.(),
-      }),
-      lifetime.signal,
-    );
-    module.initApi?.();
+    const args: string[] = [];
+    const loadId = new URLSearchParams(window.location.search).get("load-game-id");
+    if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
+    runtimeCreation = playerWindow.createEasyRpgPlayer({
+      packages,
+      workId: metadata.workId,
+      runtimeBase: `${metadata.runtimeBasePath}/`,
+      arguments: args,
+      signal: lifetime.signal,
+      onError: (error: unknown) => onLog("error", formatLogValue(error)),
+      onFullscreen,
+      onExit: () => { void dispose().then(onExit).catch(() => {}); },
+    });
+    runtime = await untilAborted(runtimeCreation, lifetime.signal);
   })().catch((error: unknown) => {
-    // Rejected iframe errors belong to another realm and fail instanceof Error.
     const failure = new Error(formatLogValue(error));
-    dispose();
+    void dispose();
     throw failure;
   });
   async function captureScreenshot(): Promise<PlayerScreenshot> {
     await ready;
     lifetime.signal.throwIfAborted();
-    if (captureNextFrame) throw new Error("正在截取图片，请稍后重试。");
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await untilAborted(
-        new Promise<PlayerScreenshot>((resolve, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("截取图片超时，请返回游戏画面后重试。")),
-            5_000,
-          );
-          captureNextFrame = () => {
-            captureNextFrame = undefined;
-            try {
-              const canvas = frame.contentDocument?.querySelector("canvas");
-              if (!canvas?.width || !canvas.height) {
-                throw new Error("游戏画面尚未准备好，无法截取图片。");
-              }
-              const { width, height } = canvas;
-              canvas.toBlob((blob) => {
-                if (blob) resolve({ blob, width, height });
-                else reject(new Error("截取图片失败，请重试。"));
-              }, "image/png");
-            } catch (error) {
-              reject(new Error(formatLogValue(error)));
-            }
-          };
-        }),
-        lifetime.signal,
-      );
-    } finally {
-      clearTimeout(timer);
-      captureNextFrame = undefined;
-    }
+    return untilAborted(runtime!.captureScreenshot(), lifetime.signal);
   }
 
   return { ready, captureScreenshot, setButtonPressed, dispose };
@@ -264,6 +257,7 @@ function load(
   signal: AbortSignal,
   start: () => void,
 ): Promise<void> {
+  signal.throwIfAborted();
   return untilAborted(
     new Promise<void>((resolve, reject) => {
       const cleanup = () => {
