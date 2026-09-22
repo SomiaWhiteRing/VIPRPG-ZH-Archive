@@ -149,7 +149,7 @@ export function CreatorTokenPicker({
             }}
             tokens={reorder.items.map(({ value, index }) => (
               <TokenChip
-                data-sort-token=""
+                {...reorder.chipProps(index)}
                 className={reorder.preview?.index === index ? "opacity-25" : undefined}
                 disabled={disabled}
                 key={`${creatorSelectionKey(value)}:${index}`}

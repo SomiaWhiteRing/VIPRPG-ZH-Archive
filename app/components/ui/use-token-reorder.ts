@@ -58,7 +58,7 @@ export function useTokenReorder<T>(
         !current.moved &&
         Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
       ) return;
-      // Keep clicks on the handle; capture the container only once dragging starts.
+      // Preserve button clicks; capture the container only once dragging starts.
       if (!current.moved) {
         event.currentTarget.setPointerCapture(event.pointerId);
         const bounds = current.element.getBoundingClientRect();
@@ -113,18 +113,23 @@ export function useTokenReorder<T>(
     },
   };
 
-  function handleProps(index: number): HTMLAttributes<HTMLButtonElement> & {
-    "data-token-drag-handle": string;
+  function chipProps(index: number): HTMLAttributes<HTMLSpanElement> & {
+    "data-sort-token": string;
+    "data-token-sortable": boolean;
   } {
     return {
-      "data-token-drag-handle": "",
+      "data-sort-token": "",
+      "data-token-sortable": !disabled,
       onPointerDown(event) {
         if (disabled || event.button !== 0 || !event.isPrimary || !container.current) return;
-        const chip = event.currentTarget.closest<HTMLElement>("[data-sort-token]");
-        if (!chip) return;
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const control = target.closest<HTMLElement>("button, a, input, select, textarea, [role=button]");
+        if (control && !control.hasAttribute("data-token-drag-handle")) return;
+        const chip = event.currentTarget;
         event.preventDefault();
-        event.currentTarget.focus({ preventScroll: true });
-        event.currentTarget.setPointerCapture(event.pointerId);
+        chip.querySelector<HTMLElement>("[data-token-drag-handle]")?.focus({ preventScroll: true });
+        (control ?? chip).setPointerCapture(event.pointerId);
         const bounds = chip.getBoundingClientRect();
         drag.current = {
           index,
@@ -138,6 +143,14 @@ export function useTokenReorder<T>(
           chip: { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height },
         };
       },
+    };
+  }
+
+  function handleProps(index: number): HTMLAttributes<HTMLButtonElement> & {
+    "data-token-drag-handle": string;
+  } {
+    return {
+      "data-token-drag-handle": "",
       onKeyDown(event) {
         if (
           disabled || !event.altKey ||
@@ -157,6 +170,7 @@ export function useTokenReorder<T>(
   return {
     container,
     containerProps,
+    chipProps,
     handleProps,
     preview: visiblePreview,
     items: (visiblePreview?.order ?? values.map((_, index) => index))
