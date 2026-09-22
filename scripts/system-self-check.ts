@@ -1115,6 +1115,7 @@ export default {
 
 function seedSql(passwordHash: string, adminSessionHash: string): string {
   return `
+UPDATE roles SET application_enabled=1 WHERE key='uploader';
 INSERT INTO users (id, external_auth_id, email, password_hash, display_name, email_verified_at)
 VALUES
   (1, 'email:root@example.test', 'root@example.test', '${sqlQuote(passwordHash)}', 'Root', CURRENT_TIMESTAMP),

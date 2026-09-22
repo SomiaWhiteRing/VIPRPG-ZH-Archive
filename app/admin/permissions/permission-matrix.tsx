@@ -18,7 +18,7 @@ import {
   SYSTEM_ROLE_PERMISSIONS,
   permissionConfigurationWarnings,
 } from "@/lib/authz/permissions";
-import { ROLE_TEMPLATES, roleEditSnapshot, roleSupportsApplications } from "@/lib/authz/roles";
+import { ROLE_TEMPLATES, roleEditSnapshot, roleSupportsApplications, roleSupportsGlobalAccess } from "@/lib/authz/roles";
 import type { Permission, RoleSummary } from "@/lib/dto/db/permissions";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { FormEvent } from "react";
@@ -501,16 +501,16 @@ export function PermissionMatrix({
                             onCheckedChange={(checked) => updateRole({ applicationEnabled: checked === true })} />
                           开放申请
                         </Label>
-                        <p className="text-xs text-muted">关闭后会结束尚未处理的申请，并通知申请人。</p>
+                        <p className="text-xs text-muted">{role.key === "admin" ? "申请仅超级管理员可见和处理。关闭后会结束尚未处理的申请，并通知申请人。" : "关闭后会结束尚未处理的申请，并通知申请人。"}</p>
                         </div>
-                        <div className="grid content-start gap-2 rounded-md border border-border p-3">
+                        {roleSupportsGlobalAccess(role) ? <div className="grid content-start gap-2 rounded-md border border-border p-3">
                         <Label className="flex items-center gap-2" htmlFor="role-available-to-all">
                           <Checkbox id="role-available-to-all" checked={role.availableToAll} disabled={saving !== null}
                             onCheckedChange={(checked) => updateRole({ availableToAll: checked === true })} />
                           向所有用户开放
                         </Label>
                         <p className="text-xs text-muted">所有正常登录用户均可使用，包括以后注册的用户。开启时结束待审申请；收回时保留单独授权。</p>
-                        </div>
+                        </div> : <p className="text-sm text-muted">管理员不能向所有用户开放。</p>}
                       </div>
                     ) : <p className="text-sm text-muted sm:col-span-2">此角色不开放申请，也不能向所有用户开放。</p>}
                     <div className="flex flex-wrap items-center gap-2 sm:col-span-2">

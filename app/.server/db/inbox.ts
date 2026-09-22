@@ -93,7 +93,7 @@ export function buildInboxVisibilityClause(
   audienceBinds: readonly (PermissionKey | number)[];
 } {
   return {
-    sql: `i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?")})
+    sql: `i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?", "COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)")})
       OR (i.type<>'role_change_request' AND ${user.permissionKeys.length
         ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})`,
     audienceBinds: [user.id, ...user.permissionKeys],
@@ -106,7 +106,7 @@ function inboxQuery(user: ArchiveUser) {
     sql: `WITH visible AS (${INBOX_SELECT} WHERE (${visibility.sql})), actionable AS (
       SELECT *, (type='role_change_request' AND status='pending' AND ?
         AND target_user_id<>? AND target_status='active' AND role_priority IS NOT NULL
-        AND (role_kind='custom' OR role_key='uploader') AND role_status='active'
+        AND (role_kind='custom' OR role_key IN ('uploader','admin')) AND role_status='active'
         AND role_application_enabled=1 AND role_available_to_all=0
         AND ?>target_priority AND ?>role_priority) AS can_reject
       FROM visible)`,

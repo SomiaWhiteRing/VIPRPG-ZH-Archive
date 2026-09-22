@@ -394,10 +394,10 @@ export const PERMISSIONS = {
   },
   "inbox.role_request.resolve": {
     category: "role_access",
-    label: "审批上传权限申请",
+    label: "审批角色权限申请",
     scope: "符合角色分配条件的申请",
     description:
-      "通过或驳回角色申请；还需角色分配权限，并满足用户与角色的层级限制。",
+      "管理员通过或驳回角色申请；还需角色分配权限并满足层级限制，管理员角色的申请仅限超级管理员处理。",
   },
   "system.dashboard.read": {
     category: "system",

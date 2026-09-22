@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   profile_show_history INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_history IN (0, 1)),
   profile_show_catalogs INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_catalogs IN (0, 1)),
   profile_show_comments INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_comments IN (0, 1)),
-  profile_show_discussions INTEGER NOT NULL DEFAULT 0 CHECK (profile_show_discussions IN (0, 1)),
+  profile_show_discussions INTEGER NOT NULL DEFAULT 1 CHECK (profile_show_discussions IN (0, 1)),
   status TEXT NOT NULL CHECK (status IN ('active', 'disabled', 'deleted')) DEFAULT 'active',
   email_verified_at TEXT,
   last_login_at TEXT,
@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS roles (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK (kind <> 'custom' OR priority BETWEEN 101 AND 699),
-  CHECK ((kind = 'custom' OR key = 'uploader') OR (application_enabled = 0 AND available_to_all = 0))
+  CHECK ((kind = 'custom' OR key IN ('uploader', 'admin')) OR application_enabled = 0),
+  CHECK ((kind = 'custom' OR key = 'uploader') OR available_to_all = 0)
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
@@ -71,16 +72,16 @@ WHERE u.status = 'active';
 INSERT OR IGNORE INTO roles (key, name, description, priority, kind, application_enabled)
 VALUES
   ('user', '普通用户', '基础账户', 100, 'built_in', 0),
-  ('uploader', '上传者', '可提交上传任务', 400, 'built_in', 1),
-  ('admin', '管理员', '管理业务内容和用户角色', 700, 'built_in', 0),
+  ('uploader', '上传者', '可提交上传任务', 400, 'built_in', 0),
+  ('admin', '管理员', '管理站点业务内容、作品与归档、社区和较低层级用户，处理普通角色申请。管理员申请仅由超级管理员审批；不包含角色策略、软件发布、最终存储清理或安全审计。', 700, 'built_in', 1),
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin', 0);
 
--- Public creator editing starts globally available and can be closed or granted individually.
+-- Creator maintenance is an individually approved contribution role.
 INSERT OR IGNORE INTO roles (key, name, description, priority, kind, application_enabled, available_to_all)
-VALUES ('creator_editor', '作者资料编辑', '编辑已关联公开作品的作者名称、别名、网站、简介和头像；保存后直接生效并记录修改，不包含后台管理、非公开资料或作者合并。', 150, 'custom', 1, 1);
+VALUES ('creator_editor', '维护作者信息', '补充和修订作者名称、别名、网站、简介与头像，可查看尚未关联公开作品的作者。修改直接生效并记录操作，不包含作者合并或账户管理。', 150, 'custom', 1, 0);
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT id, 'creator.metadata.update_public' FROM roles WHERE key = 'creator_editor';
+SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","creator.read_private","creator.metadata.update_any"]') WHERE roles.key = 'creator_editor';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
 SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')

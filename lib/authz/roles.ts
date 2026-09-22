@@ -13,12 +13,13 @@ export const ROLE_TEMPLATES = {
     key: "wiki_editor",
     name: "维基人",
     description:
-      "维护作品、作者、角色、标签及作品关联资料；允许移除错误关联，不授予作品发布、实体删除、归档文件、维护者或账户管理能力。",
+      "综合维护作品、作者和游戏角色资料，整理标签、作品关联、角色分类、来源与素材。修改直接生效并记录操作；不包含实体合并、作品上下架、归档文件或账户管理。",
     priority: 300,
     permissionKeys: [
       "work.lookup_non_deleted",
       "work.read_private",
       "work.metadata.update_any",
+      "creator.metadata.update_public",
       "creator.read_private",
       "creator.metadata.update_any",
       "character.admin.read",
@@ -28,6 +29,7 @@ export const ROLE_TEMPLATES = {
       "character.portrait.upload",
       "character_category.create",
       "character_category.update",
+      "character_category.delete",
       "character_membership.create",
       "character_membership.update",
       "character_membership.delete",
@@ -65,6 +67,10 @@ export function roleEditSnapshot(role: {
 }
 
 export function roleSupportsApplications(role: { key: string; kind: RoleKind }): boolean {
+  return role.key === "admin" || roleSupportsGlobalAccess(role);
+}
+
+export function roleSupportsGlobalAccess(role: { key: string; kind: RoleKind }): boolean {
   return role.key === "uploader" || role.kind === "custom";
 }
 
@@ -74,9 +80,10 @@ export function isAdministrator(user: { status: string; roleKeys: readonly strin
 }
 
 export function hasRoleAccess(
-  user: { roleIds: readonly number[]; permissionKeys: readonly PermissionKey[] },
-  role: { id: number; permissionKeys: readonly PermissionKey[] },
+  user: { roleIds: readonly number[]; permissionKeys: readonly PermissionKey[]; isBootstrapAdmin: boolean },
+  role: { id: number; key: string; permissionKeys: readonly PermissionKey[] },
 ): boolean {
+  if (role.key === "admin") return user.isBootstrapAdmin || user.roleIds.includes(role.id);
   return user.roleIds.includes(role.id) ||
     (role.permissionKeys.length > 0 && role.permissionKeys.every((key) => user.permissionKeys.includes(key)));
 }
