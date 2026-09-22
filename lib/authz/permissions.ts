@@ -622,7 +622,6 @@ export const CHARACTER_ADMIN_PERMISSIONS = [
 
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
-    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "relation.create",
     "translation_relation.create",
@@ -632,7 +631,6 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.reorder_own",
   ] as const,
   uploader: [
-    "creator.metadata.update_public",
     "work.lookup_non_deleted",
     "work.update_own",
     "work.external_create",

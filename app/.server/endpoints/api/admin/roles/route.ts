@@ -50,7 +50,9 @@ export async function POST(runtime: AppRuntime, request: Request) {
       description: body.description,
       priority: body.priority!,
     });
-    return json({ ok: true, id }, { status: 201 });
+    const role = (await listRoles(runtime)).find((item) => item.id === id);
+    if (!role) throw new Error("创建的角色不可读取");
+    return json({ ok: true, id, role }, { status: 201 });
   } catch (error) {
     return jsonError("Failed to create role", error);
   }

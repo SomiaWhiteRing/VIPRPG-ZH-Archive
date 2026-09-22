@@ -58,6 +58,11 @@ export function PermissionMatrix({
   const [newRoleDirty, setNewRoleDirty] = useState(false);
   const role = roles.find((item) => item.id === selectedRoleId);
   const saved = savedRoles.find((item) => item.id === selectedRoleId);
+  const orderedRoles = [...roles].sort((left, right) => {
+    const a = savedRoles.find((item) => item.id === left.id) ?? left;
+    const b = savedRoles.find((item) => item.id === right.id) ?? right;
+    return Number(a.kind === "custom") - Number(b.kind === "custom") || b.priority - a.priority || a.id - b.id;
+  });
   const editable = role?.kind === "custom";
   const dirtyRoleIds = roles
     .filter((item) => {
@@ -150,18 +155,8 @@ export function PermissionMatrix({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
-      if (!payload.id)
-        throw new Error("角色已创建，但未收到角色编号。请刷新页面后查看。");
-      const created: RoleSummary = {
-        ...input,
-        id: payload.id,
-        kind: "custom",
-        status: "active",
-        applicationEnabled: false,
-        availableToAll: false,
-        userCount: 0,
-        permissionKeys: [],
-      };
+      const created = payload.role;
+      if (!created) throw new Error("角色已创建，但未收到角色资料。请刷新页面后查看。");
       setRoles((current) => [...current, created]);
       setSavedRoles((current) => [...current, created]);
       setSelectedRoleId(created.id);
@@ -199,31 +194,34 @@ export function PermissionMatrix({
     }
   }
 
-  async function saveProfile(formData: FormData) {
-    if (!role || !saved) return;
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!role || !saved || saving !== null) return;
     setSaving("profile");
     const patch = {
-      name: String(formData.get("name")).trim(),
-      description: String(formData.get("description")).trim(),
-      priority: Number(formData.get("priority")),
+      name: role.name.trim(),
+      description: role.description.trim(),
+      priority: role.priority,
       status: role.status,
       applicationEnabled: role.applicationEnabled,
       availableToAll: role.availableToAll,
     };
     try {
-      await request(`/api/admin/roles/${role.id}`, {
+      const payload = await request(`/api/admin/roles/${role.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...patch, expected: roleEditSnapshot(saved) }),
       });
+      const persisted = payload.role;
+      if (!persisted) throw new Error("角色已保存，但未收到保存后的资料。请刷新页面后查看。");
       setRoles((current) =>
         current.map((item) =>
-          item.id === role.id ? { ...item, ...patch } : item,
+          item.id === role.id ? { ...persisted, permissionKeys: item.permissionKeys } : item,
         ),
       );
       setSavedRoles((current) =>
         current.map((item) =>
-          item.id === role.id ? { ...item, ...patch } : item,
+          item.id === role.id ? persisted : item,
         ),
       );
       toast.success("角色资料已保存。");
@@ -238,10 +236,10 @@ export function PermissionMatrix({
   }
 
   async function savePermissions() {
-    if (!role || !saved) return;
+    if (!role || !saved || saving !== null) return;
     setSaving("permissions");
     try {
-      await request(`/api/admin/roles/${role.id}/permissions`, {
+      const payload = await request(`/api/admin/roles/${role.id}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -249,10 +247,14 @@ export function PermissionMatrix({
           expected: roleEditSnapshot(saved),
         }),
       });
+      const persisted = payload.role;
+      if (!persisted) throw new Error("权限已保存，但未收到保存后的资料。请刷新页面后查看。");
+      setRoles((current) => current.map((item) => item.id === role.id
+        ? { ...item, permissionKeys: persisted.permissionKeys, userCount: persisted.userCount } : item));
       setSavedRoles((current) =>
         current.map((item) =>
           item.id === role.id
-            ? { ...item, permissionKeys: [...role.permissionKeys] }
+            ? persisted
             : item,
         ),
       );
@@ -282,84 +284,8 @@ export function PermissionMatrix({
   }
 
   return (
-    <div className="grid gap-3">
-      <details className="border-b border-border pb-3">
-        <summary className="w-fit cursor-pointer text-sm font-semibold">
-          新建自定义角色
-        </summary>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button
-            disabled={
-              saving !== null ||
-              roles.some((item) => item.key === ROLE_TEMPLATES.wiki_editor.key)
-            }
-            onClick={createWikiRole}
-            type="button"
-            variant="outline"
-          >
-            按模板创建维基人
-          </Button>
-          <span className="text-xs text-muted">
-            {ROLE_TEMPLATES.wiki_editor.description}
-          </span>
-        </div>
-        <form
-          onSubmit={createRole}
-          onChange={() => setNewRoleDirty(true)}
-          className="mt-4"
-        >
-          <fieldset
-            className="grid gap-4 md:grid-cols-2"
-            disabled={saving !== null}
-          >
-            <Label className="grid gap-2">
-              中文名称
-              <Input maxLength={80} name="name" required />
-            </Label>
-            <Label className="grid gap-2">
-              角色标识
-              <Input
-                maxLength={64}
-                name="key"
-                pattern="[a-z0-9]+(_[a-z0-9]+)*"
-                required
-                placeholder="例如：content_editor"
-              />
-              <span className="text-xs font-normal text-muted">
-                小写字母、数字和下划线，创建后不可修改。
-              </span>
-            </Label>
-            <Label className="grid gap-2">
-              管理优先级
-              <Input
-                defaultValue="200"
-                max={699}
-                min={101}
-                name="priority"
-                required
-                type="number"
-              />
-              <span className="text-xs font-normal text-muted">
-                101–699；普通用户为 100，上传者为 400，管理员为 700。
-              </span>
-            </Label>
-            <Label className="grid gap-2">
-              角色备注
-              <Textarea
-                name="description"
-                placeholder="记录角色用途或分配对象"
-              />
-            </Label>
-            <div className="md:col-span-2">
-              <Button type="submit">
-                {saving === "new" ? "创建中…" : "创建角色"}
-              </Button>
-            </div>
-          </fieldset>
-        </form>
-      </details>
-
-      <div className="grid items-start gap-4 lg:grid-cols-[10rem_minmax(0,1fr)]">
+    <div className="grid gap-6">
+      <div className="grid items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
         <aside className="grid gap-3 lg:sticky lg:top-20" aria-label="账户角色">
           <div className="lg:hidden">
             <Label className="grid gap-2">
@@ -369,7 +295,7 @@ export function PermissionMatrix({
                 disabled={saving !== null}
                 value={String(selectedRoleId ?? "")}
                 onValueChange={(value) => selectRole(Number(value))}
-                options={roles.map((item) => ({
+                options={orderedRoles.map((item) => ({
                   value: String(item.id),
                   label: `${item.name}${item.status === "disabled" ? "（已停用）" : ""}${dirtyRoleIds.includes(item.id) ? " · 未保存" : ""}`,
                 }))}
@@ -382,7 +308,7 @@ export function PermissionMatrix({
                 <h2 className="px-2 pb-1 text-xs font-semibold text-muted">
                   {custom ? "自定义角色" : "系统角色"}
                 </h2>
-                {roles
+                {orderedRoles
                   .filter((item) => (item.kind === "custom") === custom)
                   .map((item) => (
                     <Button
@@ -400,7 +326,7 @@ export function PermissionMatrix({
                         {item.name}
                         <span className="block text-xs font-normal text-muted">
                           {item.status === "disabled" ? "已停用 · " : ""}
-                          {item.userCount} 位成员
+                          {item.userCount} 位单独授权成员
                         </span>
                       </span>
                       {dirtyRoleIds.includes(item.id) ? (
@@ -440,7 +366,7 @@ export function PermissionMatrix({
                   {role.permissionKeys.length} / {permissions.length} 项权限
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">
                   {role.status === "disabled" ? "停用" : "启用"}
                   {role.status !== saved.status ? "（未保存）" : ""}
@@ -496,13 +422,11 @@ export function PermissionMatrix({
               </div>
             ) : null}
 
-            <details className="border-b border-border pb-3" key={role.id}>
-              <summary className="w-fit cursor-pointer text-sm font-semibold">
-                角色资料与开放设置{profileDirty ? " · 未保存" : ""}
-              </summary>
-                <form action={saveProfile} className="mt-4">
+            <section className="border-b border-border pb-5" aria-labelledby="role-profile-heading" key={role.id}>
+              <h3 id="role-profile-heading" className="text-base font-semibold">角色资料与开放设置</h3>
+                <form onSubmit={saveProfile} className="mt-4">
                   <fieldset
-                    className="grid gap-4 md:grid-cols-2"
+                    className="grid gap-4 sm:grid-cols-2"
                     disabled={saving !== null}
                   >
                     <Label className="grid gap-2">
@@ -518,11 +442,15 @@ export function PermissionMatrix({
                         }
                       />
                     </Label>
+                    <div className="grid content-start gap-2 text-sm">
+                      <span className="font-semibold">角色标识</span>
+                      <code className="break-all text-muted">{role.key}</code>
+                    </div>
                     <Label className="grid gap-2">
                       管理优先级
                       <Input
-                        max={699}
-                        min={101}
+                        max={editable ? 699 : undefined}
+                        min={editable ? 101 : undefined}
                         name="priority"
                         readOnly={!editable}
                         required
@@ -554,11 +482,7 @@ export function PermissionMatrix({
                         停用后不再授予权限；重新启用会恢复原成员的授权。
                       </span>
                     </Label>
-                    <div className="grid content-start gap-2 text-sm">
-                      <span className="font-semibold">角色标识</span>
-                      <code className="break-all text-muted">{role.key}</code>
-                    </div>
-                    <Label className="grid gap-2 md:col-span-2">
+                    <Label className="grid gap-2 sm:col-span-2">
                       权限说明
                       <Textarea
                         name="description"
@@ -570,23 +494,27 @@ export function PermissionMatrix({
                       <span className="text-xs font-normal text-muted">在个人中心展示的角色总说明；功能明细由下方权限配置生成。</span>
                     </Label>
                     {roleSupportsApplications(role) ? (
-                      <div className="grid gap-3 md:col-span-2">
-                        <Label className="flex items-center gap-2">
-                          <Checkbox checked={role.applicationEnabled} disabled={saving !== null}
+                      <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                        <div className="grid content-start gap-2 rounded-md border border-border p-3">
+                        <Label className="flex items-center gap-2" htmlFor="role-application-enabled">
+                          <Checkbox id="role-application-enabled" checked={role.applicationEnabled} disabled={saving !== null}
                             onCheckedChange={(checked) => updateRole({ applicationEnabled: checked === true })} />
                           开放申请
                         </Label>
                         <p className="text-xs text-muted">关闭后会结束尚未处理的申请，并通知申请人。</p>
-                        <Label className="flex items-center gap-2">
-                          <Checkbox checked={role.availableToAll} disabled={saving !== null}
+                        </div>
+                        <div className="grid content-start gap-2 rounded-md border border-border p-3">
+                        <Label className="flex items-center gap-2" htmlFor="role-available-to-all">
+                          <Checkbox id="role-available-to-all" checked={role.availableToAll} disabled={saving !== null}
                             onCheckedChange={(checked) => updateRole({ availableToAll: checked === true })} />
                           向所有用户开放
                         </Label>
                         <p className="text-xs text-muted">所有正常登录用户均可使用，包括以后注册的用户。开启时结束待审申请；收回时保留单独授权。</p>
+                        </div>
                       </div>
-                    ) : <p className="text-sm text-muted md:col-span-2">此角色不开放申请，也不能向所有用户开放。</p>}
-                    <div className="flex flex-wrap gap-2 md:col-span-2">
-                      <Button disabled={!profileDirty} type="submit">
+                    ) : <p className="text-sm text-muted sm:col-span-2">此角色不开放申请，也不能向所有用户开放。</p>}
+                    <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                      <Button disabled={saving !== null || !profileDirty} type="submit">
                         {saving === "profile" ? "保存中…" : "保存角色资料"}
                       </Button>
                       <Button
@@ -606,10 +534,16 @@ export function PermissionMatrix({
                       >
                         撤销资料修改
                       </Button>
+                      <span className="text-sm text-muted" role="status">{profileDirty ? "角色资料有未保存修改" : "角色资料已保存"}</span>
                     </div>
                   </fieldset>
                 </form>
-            </details>
+            </section>
+
+            <div className="pt-2">
+              <h3 className="text-base font-semibold">功能权限</h3>
+              <p className="mt-1 text-sm text-muted">{editable ? "功能权限单独保存；多角色权限取并集。" : "系统角色的功能固定，仅供查看。"}</p>
+            </div>
 
             {editable && warnings.length > 0 ? (
               <details className="border-b border-border pb-3" open>
@@ -670,9 +604,7 @@ export function PermissionMatrix({
               ))}
             </nav>
             <p className="text-xs text-muted">
-              {editable
-                ? "勾选后保存生效；多角色权限取并集。"
-                : "系统角色只读；多角色权限取并集。"}
+              {editable ? "勾选需要授予的功能，保存后生效。" : "下方勾选状态为系统预设。"}
             </p>
 
             <div className="overflow-x-auto border-y border-border">
@@ -953,14 +885,91 @@ export function PermissionMatrix({
           <EmptyState title="暂无角色，请先创建角色。" />
         )}
       </div>
+
+      <details className="border-b border-border pb-3">
+        <summary className="w-fit cursor-pointer text-sm font-semibold">
+          新建自定义角色
+        </summary>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button
+            disabled={
+              saving !== null ||
+              roles.some((item) => item.key === ROLE_TEMPLATES.wiki_editor.key)
+            }
+            onClick={createWikiRole}
+            type="button"
+            variant="outline"
+          >
+            按模板创建维基人
+          </Button>
+          <span className="text-xs text-muted">
+            {ROLE_TEMPLATES.wiki_editor.description}
+          </span>
+        </div>
+        <form
+          onSubmit={createRole}
+          onChange={() => setNewRoleDirty(true)}
+          className="mt-4"
+        >
+          <fieldset
+            className="grid gap-4 md:grid-cols-2"
+            disabled={saving !== null}
+          >
+            <Label className="grid gap-2">
+              中文名称
+              <Input maxLength={80} name="name" required />
+            </Label>
+            <Label className="grid gap-2">
+              角色标识
+              <Input
+                maxLength={64}
+                name="key"
+                pattern="[a-z0-9]+(_[a-z0-9]+)*"
+                required
+                placeholder="例如：content_editor"
+              />
+              <span className="text-xs font-normal text-muted">
+                小写字母、数字和下划线，创建后不可修改。
+              </span>
+            </Label>
+            <Label className="grid gap-2">
+              管理优先级
+              <Input
+                defaultValue="200"
+                max={699}
+                min={101}
+                name="priority"
+                required
+                type="number"
+              />
+              <span className="text-xs font-normal text-muted">
+                101–699；普通用户为 100，上传者为 400，管理员为 700。
+              </span>
+            </Label>
+            <Label className="grid gap-2">
+              角色备注
+              <Textarea
+                name="description"
+                placeholder="记录角色用途或分配对象"
+              />
+            </Label>
+            <div className="md:col-span-2">
+              <Button type="submit">
+                {saving === "new" ? "创建中…" : "创建角色"}
+              </Button>
+            </div>
+          </fieldset>
+        </form>
+      </details>
+
     </div>
   );
 }
 
 function profileChanged(role: RoleSummary, saved: RoleSummary) {
   return (
-    role.name !== saved.name ||
-    role.description !== saved.description ||
+    role.name.trim() !== saved.name.trim() ||
+    role.description.trim() !== saved.description.trim() ||
     role.priority !== saved.priority ||
     role.status !== saved.status ||
     role.applicationEnabled !== saved.applicationEnabled ||

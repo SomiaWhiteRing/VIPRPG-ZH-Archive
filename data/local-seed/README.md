@@ -1,5 +1,18 @@
 # Fixed Local Seed
 
+The public creator editing refresh moves the fixed user/uploader grant into the
+custom creator_editor role (作者资料编辑, priority 150). This role starts with
+applications and global availability enabled, preserving the existing access
+while allowing administrators to close global access or approve individuals.
+Its only grant is creator.metadata.update_public. All existing roles, other
+grants, memberships, events and the migration ledger are preserved.
+
+The 2026-09-22 custom account role sync verifies the local definitions and all
+16 grants for wiki_editor, dev_forum_curator and dev_retired_editor against this
+snapshot. They are already preserved here. The staging seed now includes those
+three custom roles and their grants, without copying development accounts,
+sessions or user-role memberships. Built-in roles remain initialized by schema.
+
 The 2026-09-22 role application refresh adds independent application and global
 availability settings plus the effective-role view. Only uploader applications
 are enabled initially; every role starts with global availability off. The

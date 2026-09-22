@@ -75,12 +75,19 @@ VALUES
   ('admin', '管理员', '管理业务内容和用户角色', 700, 'built_in', 0),
   ('super_admin', '超级管理员', '唯一根账户', 1000, 'bootstrap_admin', 0);
 
+-- Public creator editing starts globally available and can be closed or granted individually.
+INSERT OR IGNORE INTO roles (key, name, description, priority, kind, application_enabled, available_to_all)
+VALUES ('creator_editor', '作者资料编辑', '编辑已关联公开作品的作者名称、别名、网站、简介和头像；保存后直接生效并记录修改，不包含后台管理、非公开资料或作者合并。', 150, 'custom', 1, 1);
+
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT id, 'creator.metadata.update_public' FROM roles WHERE key = 'creator_editor';
+
+INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'user';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-SELECT roles.id, value FROM roles, json_each('["creator.metadata.update_public","work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
+SELECT roles.id, value FROM roles, json_each('["work.lookup_non_deleted","work.update_own","work.external_create","import_job.create","import_job.cancel_own","import_job.preflight_own","import_job.commit_own","storage_object.upload","archive_version.delete_own","relation.create","translation_relation.create","catalog.create","catalog.update_own","catalog.delete_own","catalog.reorder_own"]')
 WHERE roles.key = 'uploader';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_key)

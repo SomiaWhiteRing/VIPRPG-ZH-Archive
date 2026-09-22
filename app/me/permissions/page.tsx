@@ -64,7 +64,7 @@ export default function AccountPermissionsPage() {
 
   return (
     <div className="grid gap-6">
-      <PageHeader compact title="权限申请" subtitle="选择权限，了解可使用的功能并提交申请。" />
+      <PageHeader title="权限申请" />
       {role && state ? <>
         <Label className="grid max-w-md gap-2">
           选择权限
@@ -83,13 +83,6 @@ export default function AccountPermissionsPage() {
             <h2 id="permission-heading" className="text-lg font-semibold">{role.name}</h2>
             <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{role.description || "暂无权限说明。"}</p>
           </div>
-          <ul className="divide-y divide-border border-y border-border">
-            {role.permissions.map((permission) => <li key={permission.key} className="py-3">
-              <p className="text-sm font-semibold">{permission.label}</p>
-              <p className="mt-1 text-sm text-muted">{permission.description}</p>
-            </li>)}
-          </ul>
-          {role.permissions.length === 0 ? <p className="text-sm text-muted">该角色尚未配置功能。</p> : null}
           <p className="text-sm" role="status">{state.message}</p>
           {role.request ? <Link className="w-fit text-sm text-primary" to={`/inbox/${role.request.id}`}>查看最近一次申请</Link> : null}
           {state.canApply ? <form className="grid max-w-2xl gap-3" onSubmit={submit}>

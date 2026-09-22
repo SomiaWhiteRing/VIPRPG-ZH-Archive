@@ -28,6 +28,7 @@ type RoleRow = {
   application_enabled: number;
   available_to_all: number;
   user_count: number;
+  permission_keys_json: string;
 };
 
 type RoleTarget = {
@@ -100,42 +101,34 @@ export function listPermissions(): readonly Permission[] {
 export async function listRoles(runtime: AppRuntime): Promise<RoleSummary[]> {
   const rows = await getD1(runtime)
     .prepare(
-      `
-    SELECT r.id, r.key, r.name, r.description, r.priority, r.kind, r.status, r.application_enabled, r.available_to_all,
-      COUNT(DISTINCT ur.user_id) AS user_count
-    FROM roles r LEFT JOIN user_roles ur ON ur.role_id = r.id
-    GROUP BY r.id ORDER BY r.priority DESC, r.name ASC
-  `,
+      `${ROLE_SUMMARY_SELECT} ORDER BY r.priority DESC, r.id ASC`,
     )
     .all<RoleRow>();
-  const roles = rows.results ?? [];
-  if (roles.length === 0) return [];
-  for (const role of roles) {
-    if (!isRoleKind(role.kind))
-      throw new Error(`Unknown role kind: ${String(role.kind)}`);
-  }
-  const grants = await getD1(runtime)
-    .prepare(
-      `
-    SELECT role_id, permission_key FROM role_permissions
-    WHERE role_id IN (${roles.map(() => "?").join(",")})
-    ORDER BY permission_key
-  `,
-    )
-    .bind(...roles.map((role) => role.id))
-    .all<{ role_id: number; permission_key: string }>();
-  const byRole = new Map<number, PermissionKey[]>();
-  for (const row of grants.results ?? []) {
-    const [permission] = parsePermissionKeys([row.permission_key]);
-    byRole.set(row.role_id, [...(byRole.get(row.role_id) ?? []), permission]);
-  }
-  return roles.map((row) => ({
-    ...row,
+  return rows.results.map(mapRoleSummary);
+}
+
+const ROLE_SUMMARY_SELECT = `SELECT r.id,r.key,r.name,r.description,r.priority,r.kind,r.status,
+  r.application_enabled,r.available_to_all,
+  (SELECT COUNT(*) FROM user_roles ur WHERE ur.role_id=r.id) AS user_count,
+  (SELECT json_group_array(permission_key) FROM
+    (SELECT permission_key FROM role_permissions WHERE role_id=r.id ORDER BY permission_key)) AS permission_keys_json
+  FROM roles r`;
+
+function mapRoleSummary(row: RoleRow): RoleSummary {
+  if (!isRoleKind(row.kind)) throw new Error(`Unknown role kind: ${String(row.kind)}`);
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    description: row.description,
+    priority: row.priority,
+    kind: row.kind,
+    status: row.status,
     userCount: Number(row.user_count),
     applicationEnabled: row.application_enabled === 1,
     availableToAll: row.available_to_all === 1,
-    permissionKeys: byRole.get(row.id) ?? [],
-  }));
+    permissionKeys: parsePermissionKeys(JSON.parse(row.permission_keys_json)),
+  };
 }
 
 export async function listUserRoleMemberships(
@@ -183,7 +176,6 @@ export async function listAccountRoleOptions(
   )).map((role) => ({
     id: role.id, key: role.key, name: role.name, description: role.description, status: role.status,
     applicationEnabled: role.applicationEnabled, availableToAll: role.availableToAll,
-    permissions: PERMISSION_LIST.filter((permission) => role.permissionKeys.includes(permission.key)),
     individuallyAssigned: assigned.includes(role.id),
     granted: role.status === "active" && hasRoleAccess(actor, role),
     request: byRole.get(role.id) ?? null,
@@ -306,7 +298,7 @@ export async function updateRole(
     availableToAll: boolean;
     expected: string;
   },
-): Promise<void> {
+): Promise<RoleSummary> {
   requireBootstrapAdmin(input.actor);
   const database = getD1(runtime);
   const role = (await listRoles(runtime)).find((item) => item.id === input.roleId);
@@ -321,7 +313,7 @@ export async function updateRole(
   const closedReason = input.status === "disabled" ? "该角色已停用，申请已关闭。"
     : input.availableToAll ? "此权限已向所有用户开放，无需申请。"
     : !input.applicationEnabled ? "该角色已关闭开放申请，本次申请已关闭。" : null;
-  const [result] = await database.batch([
+  const results = await database.batch([
     database
       .prepare(
         `UPDATE roles AS r SET name = ?, description = ?, priority = ?, status = ?,
@@ -370,11 +362,13 @@ export async function updateRole(
           AND json_extract(i.metadata_json,'$.closureEventKey')=?`)
         .bind(input.actor.id, eventKey, eventKey),
     ] : []),
+    database.prepare(`${ROLE_SUMMARY_SELECT} WHERE r.id=?`).bind(role.id),
   ]);
-  if (Number(result.meta.changes) !== 1)
+  if (Number(results[0].meta.changes) !== 1)
     throw new RoleConflictError(
       (await listRoles(runtime)).find((item) => item.id === role.id) ?? null,
     );
+  return mapRoleSummary(results.at(-1)!.results[0] as RoleRow);
 }
 
 export async function replaceRolePermissions(
@@ -385,7 +379,7 @@ export async function replaceRolePermissions(
     permissionKeys: readonly unknown[];
     expected: string;
   },
-): Promise<void> {
+): Promise<RoleSummary> {
   requireBootstrapAdmin(input.actor);
   let permissions: PermissionKey[];
   try {
@@ -397,7 +391,7 @@ export async function replaceRolePermissions(
   const database = getD1(runtime);
   const eventKey = crypto.randomUUID();
   const authorized = `EXISTS (SELECT 1 FROM auth_audit_logs WHERE user_id=? AND event_type='role_permissions_updated' AND json_extract(detail_json,'$.eventKey')=?)`;
-  const [result] = await database.batch([
+  const results = await database.batch([
     database
       .prepare(
         `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
@@ -427,11 +421,13 @@ export async function replaceRolePermissions(
         )
         .bind(role.id, permission, input.actor.id, eventKey),
     ),
+    database.prepare(`${ROLE_SUMMARY_SELECT} WHERE r.id=?`).bind(role.id),
   ]);
-  if (Number(result.meta.changes) !== 1)
+  if (Number(results[0].meta.changes) !== 1)
     throw new RoleConflictError(
       (await listRoles(runtime)).find((item) => item.id === role.id) ?? null,
     );
+  return mapRoleSummary(results.at(-1)!.results[0] as RoleRow);
 }
 
 export async function assignRoleToUser(
