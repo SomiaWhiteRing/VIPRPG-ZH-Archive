@@ -20,10 +20,14 @@ import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
-  const { params } = routeInput(args);
+  const { params, searchParams } = routeInput(args);
 
   const workId = parseId((await params).workId);
-  const user = await requireAccountUser(runtime, `/me/uploads/${workId}`);
+  const fromGameDetail = (await searchParams).from === "game";
+  const user = await requireAccountUser(
+    runtime,
+    `/me/uploads/${workId}${fromGameDetail ? "?from=game" : ""}`,
+  );
   if (!hasPermission(user, "work.update_own")) throwNotFound();
   const work = await getOwnedWorkForEdit(runtime, workId, user);
   if (!work) throwNotFound();
@@ -33,6 +37,7 @@ export async function loader(args: LoaderFunctionArgs) {
     user: pickPageFields(user, ["id", "displayName", "permissionKeys"]),
     work,
     suggestions,
+    fromGameDetail,
   };
 }
 
@@ -48,11 +53,16 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function UploadedWorkPage() {
-  const { user, work, suggestions } = useLoaderData<typeof loader>();
+  const { user, work, suggestions, fromGameDetail } = useLoaderData<typeof loader>();
   return (
     <div key={`${user.id}:${work.id}`} data-account-full-width>
       <PageHeader
-        actions={<BackLink href="/me/uploads" label="返回我的上传" />}
+        actions={
+          <BackLink
+            href={fromGameDetail ? `/games/${work.id}` : "/me/uploads"}
+            label={fromGameDetail ? "返回作品详情" : "返回我的上传"}
+          />
+        }
         title={`编辑作品：${work.chineseTitle || work.originalTitle}`}
       />
       <UploadClient

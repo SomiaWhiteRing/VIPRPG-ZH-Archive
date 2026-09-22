@@ -4,7 +4,7 @@ import {
   searchCatalogsForOwner,
   listCatalogsContainingWork,
 } from "@/app/.server/db/catalogs";
-import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import { getGameWorkDetail, isWorkUploader } from "@/app/.server/db/game-library";
 import {
   getWorkCommunitySummary,
   canPinWorkComments,
@@ -31,6 +31,7 @@ import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
+import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type {
   GameTranslationRelation,
@@ -69,6 +70,15 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!work) throwNotFound();
 
   const currentUser = await getCurrentUser(runtime);
+  const canEditOwnWork =
+    currentUser &&
+    hasPermission(currentUser, "work.update_own") &&
+    (await isWorkUploader(runtime, id, currentUser.id));
+  const editInfoHref = canEditOwnWork
+    ? `/me/uploads/${id}?from=game`
+    : hasPermission(currentUser, "work.metadata.update_any")
+      ? `/admin/works/${id}`
+      : null;
   const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, id, currentUser);
   const title = work.chineseTitle || work.originalTitle;
   const current = work.archiveVersions[0] ?? null;
@@ -147,6 +157,7 @@ export async function loader(args: LoaderFunctionArgs) {
     userCatalogs,
     relationCards,
     showRelationEditor,
+    editInfoHref,
     externalLinks,
   };
 }
@@ -170,6 +181,7 @@ export default function GameDetailPage() {
     userCatalogs,
     relationCards,
     showRelationEditor,
+    editInfoHref,
     externalLinks,
   } = useLoaderData<typeof loader>();
   const relationGroups = new Map<string, typeof relationCards>();
@@ -432,6 +444,14 @@ export default function GameDetailPage() {
                         to={`/games/${work.id}/relations`}
                       >
                         编辑关联
+                      </Link>
+                    ) : null}
+                    {editInfoHref ? (
+                      <Link
+                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
+                        to={editInfoHref}
+                      >
+                        编辑信息
                       </Link>
                     ) : null}
                     <CatalogAddDialog

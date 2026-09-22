@@ -2,6 +2,7 @@ import { CreatorLinksEditor } from "@/app/components/creators/creator-links-edit
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
+import { BackLink } from "@/app/components/ui/back-link";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { FormField } from "@/app/components/ui/form-field";
@@ -11,7 +12,7 @@ import { Pane } from "@/app/components/ui/pane";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useToast } from "@/app/components/ui/toast";
 import { CREATOR_EDIT_LIMITS, creatorMetadataSnapshot, type CreatorMetadata } from "@/lib/creator-edit";
-import { ArrowLeft, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useBeforeUnload, useBlocker, useNavigate } from "react-router";
 
@@ -85,9 +86,7 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-10 pt-6">
-      <Link className="inline-flex min-h-9 items-center gap-1.5 text-sm text-muted hover:text-primary" to={detailPath}>
-        <ArrowLeft aria-hidden size={16} />返回作者资料
-      </Link>
+      <BackLink className="min-h-9" href={detailPath} label="返回作者资料" variant="text" />
       <header className="mb-6 mt-2">
         <h1 className="font-serif text-3xl font-bold">编辑作者资料</h1>
       </header>

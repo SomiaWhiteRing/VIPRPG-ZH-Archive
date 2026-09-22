@@ -1,6 +1,6 @@
 import { useConfirm } from "@/app/components/ui/confirm-provider";
+import { BackLink } from "@/app/components/ui/back-link";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -90,9 +90,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
   }
   return (
     <main>
-      <Link className="text-sm text-primary" to="/admin/resources">
-        ← 链接管理
-      </Link>
+      <BackLink href="/admin/resources" label="链接管理" variant="text" />
       <PageHeader
         compact
         title={resource.name}

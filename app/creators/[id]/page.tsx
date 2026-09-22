@@ -7,6 +7,7 @@ import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { BackLink } from "@/app/components/ui/back-link";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
@@ -23,7 +24,7 @@ import { canEditPublicCreator } from "@/lib/authz/creator-permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
 import { creatorRoleLabel } from "@/lib/labels";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -63,13 +64,7 @@ export default function CreatorDetailPage() {
   return (
     <DetailPageShell>
       <header className="pt-4">
-        <Link
-          className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-secondary"
-          to="/creators"
-        >
-          <ArrowLeft aria-hidden size={15} />
-          作者列表
-        </Link>
+        <BackLink href="/creators" label="作者列表" variant="text" />
         <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
           {creator.name}
         </h1>
