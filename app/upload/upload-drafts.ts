@@ -37,6 +37,20 @@ export async function listUploadDrafts(
   );
   return rows
     .filter((draft) => draft.accountId === accountId)
+    .map((draft) => {
+      // Older local drafts stored one name for both creation and appearance.
+      const credits = [
+        ...(draft.metadata?.characters ?? []),
+        ...(draft.formDraft?.form.characters ?? []),
+        ...(draft.formDraft?.associationDefaults.characters ?? []),
+      ];
+      for (const { selection } of credits) {
+        if (selection.kind === "new" && selection.primaryName === undefined) {
+          selection.primaryName = selection.displayName;
+        }
+      }
+      return draft;
+    })
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 

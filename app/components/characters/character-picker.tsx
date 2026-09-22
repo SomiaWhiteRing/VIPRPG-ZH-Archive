@@ -204,6 +204,7 @@ export function CharacterPicker({
     const selection: CharacterSelection = {
       kind: "new",
       originalName,
+      primaryName: displayName,
       displayName,
     };
     onChange([
@@ -515,7 +516,7 @@ export function CharacterPicker({
           >
             <Dialog.Title>编辑详细信息</Dialog.Title>
             <Dialog.Description className="sr-only">
-              设置角色在本作品中的别名和身份，随作品保存。
+              设置角色在本作品中的名称和身份，随作品保存。
             </Dialog.Description>
             <form className="grid gap-4" onSubmit={saveAlias}>
               <div className="grid gap-2">
@@ -523,9 +524,9 @@ export function CharacterPicker({
                   className="flex items-baseline gap-2"
                   htmlFor={`${id}-alias-name`}
                 >
-                  别名
+                  登场名称
                   <span className="text-xs font-normal text-muted">
-                    在本作中的名称
+                    仅用于本作
                   </span>
                 </Label>
                 <Input
@@ -665,7 +666,7 @@ export function CharacterPicker({
         description={
           <>
             未找到“{createQuery}
-            ”。若日语名已存在，中文名会成为该角色的别名；否则随作品创建新角色。
+            ”。若日语名已存在，将关联已有角色；否则随作品创建新角色。中文名作为初始登场名称，之后可单独修改。
           </>
         }
         initialOriginalName={createQuery}
