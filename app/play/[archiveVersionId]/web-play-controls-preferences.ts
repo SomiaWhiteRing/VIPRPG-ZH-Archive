@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type DisplayOrientation = "landscape" | "portrait";
-export const controlIds = ["dpad", "decision", "cancel", "shift", "menu", "debug", "log"] as const;
+export const controlIds = ["dpad", "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10", "screenshot"] as const;
 export type ControlId = typeof controlIds[number];
 export type ControlPlacement = { x: number; y: number; size: number; opacity: number; visible: boolean };
 export type ControlLayout = { screen: number; buttons: Record<ControlId, ControlPlacement> };
@@ -14,6 +14,9 @@ export const controlDefinitions = {
   menu: { label: "Menu", optional: true },
   debug: { label: "Debug", optional: true },
   log: { label: "log", optional: true },
+  fastForward3: { label: "x3", optional: true },
+  fastForward10: { label: "x10", optional: true },
+  screenshot: { label: "截图", optional: true },
 } as const;
 
 function createDefaultLayout(orientation: DisplayOrientation): ControlLayout {
@@ -22,9 +25,11 @@ function createDefaultLayout(orientation: DisplayOrientation): ControlLayout {
   const positions: Record<ControlId, [number, number]> = orientation === "landscape" ? {
     dpad: [0.03, 0.6], decision: [0.97, 0.42], cancel: [0.84, 0.65],
     shift: [0.35, 0.9], menu: [0.48, 0.9], debug: [0.61, 0.9], log: [0.74, 0.9],
+    fastForward3: [0.4, 0.08], fastForward10: [0.6, 0.08], screenshot: [0.95, 0.08],
   } : {
     dpad: [0.03, 0.82], decision: [0.97, 0.74], cancel: [0.7, 0.85],
     shift: [0.05, 0.97], menu: [0.35, 0.97], debug: [0.65, 0.97], log: [0.95, 0.97],
+    fastForward3: [0.3, 0.6], fastForward10: [0.65, 0.6], screenshot: [0.95, 0.5],
   };
   return {
     screen: 0,

@@ -1,5 +1,5 @@
 import { Button } from "@/app/components/ui/button";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Settings2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Camera, Settings2 } from "lucide-react";
 import type { KeyboardEvent, PointerEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { controlDefinitions, controlIds, defaultControlLayouts } from "./web-play-controls-preferences";
@@ -14,6 +14,8 @@ type Props = {
   rotation: number;
   layout: ControlLayout;
   onSaveLayout: (orientation: DisplayOrientation, layout: ControlLayout) => void;
+  onCaptureScreenshot: () => void;
+  captureDisabled: boolean;
   playerRef: RefObject<PlayerSession | null>;
   playerHostRef: RefObject<HTMLDivElement | null>;
   toolbar: ReactNode;
@@ -29,14 +31,14 @@ const directions = [
   { key: "right", label: "右", Icon: ArrowRight, className: "col-start-3 row-start-2" },
   { key: "down", label: "下", Icon: ArrowDown, className: "col-start-2 row-start-3" },
 ] as const;
-const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "log"];
+const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10"];
 const clampPosition = (value: number) => Math.max(0, Math.min(1, value));
 type Point = { x: number; y: number };
 type DragTarget = ControlId | "screen";
 
 export function WebPlaySurface({
   mobile, immersive, orientation, rotation, layout, onSaveLayout,
-  playerRef, playerHostRef, toolbar, placeholder, feedback,
+  playerRef, playerHostRef, toolbar, placeholder, feedback, onCaptureScreenshot, captureDisabled,
 }: Props) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,8 @@ export function WebPlaySurface({
     start: Point; position: Point; travel: Point;
   } | null>(null);
   const portrait = orientation === "portrait";
-  const editing = mobile && draft !== null;
+  const showControls = mobile && immersive;
+  const editing = showControls && draft !== null;
   const positions = editing ? draft : layout;
 
   const updatePointer = useCallback((id: number, buttons: PlayerButton[], element: HTMLElement, active = buttons.length > 0) => {
@@ -112,7 +115,7 @@ export function WebPlaySurface({
     ["top", "right", "bottom", "left"].forEach((edge, index) => {
       surface.style.setProperty(`--play-safe-${edge}`, `env(safe-area-inset-${edges[index]}, 0px)`);
     });
-    if (!mobile) return;
+    if (!showControls) return;
     const fit = () => {
       const { clientWidth: width, clientHeight: height } = area;
       const toolbarHeight = toolbarRef.current?.offsetHeight ?? 0;
@@ -127,9 +130,9 @@ export function WebPlaySurface({
         const id = element.dataset.playControl as ControlId;
         const control = positions.buttons[id];
         const base = baseSize * control.size;
-        const optional = controlDefinitions[id].optional;
-        const desiredWidth = base * (id === "dpad" ? 2.7 : optional ? 1.55 : 1);
-        const desiredHeight = base * (id === "dpad" ? 2.7 : optional ? 0.72 : 1);
+        const pill = controlDefinitions[id].optional && id !== "screenshot";
+        const desiredWidth = base * (id === "dpad" ? 2.7 : pill ? 1.55 : 1);
+        const desiredHeight = base * (id === "dpad" ? 2.7 : pill ? 0.72 : 1);
         const fitScale = desiredWidth && desiredHeight ? Math.min(1, width / desiredWidth, height / desiredHeight) : 1;
         const controlWidth = desiredWidth * fitScale;
         const controlHeight = desiredHeight * fitScale;
@@ -140,7 +143,7 @@ export function WebPlaySurface({
         element.style.setProperty("--control-width", `${controlWidth}px`);
         element.style.setProperty("--control-height", `${controlHeight}px`);
         element.style.setProperty("--control-opacity", String(control.opacity));
-        element.style.setProperty("--control-font-size", `${controlHeight * (optional ? 0.32 : 0.4)}px`);
+        element.style.setProperty("--control-font-size", `${controlHeight * (pill ? 0.32 : 0.4)}px`);
       }
     };
     fit();
@@ -148,7 +151,7 @@ export function WebPlaySurface({
     observer.observe(area);
     if (toolbarRef.current) observer.observe(toolbarRef.current);
     return () => observer.disconnect();
-  }, [mobile, portrait, rotation, positions]);
+  }, [showControls, portrait, rotation, positions]);
 
   function localPoint(event: PointerEvent<HTMLElement>): Point {
     return rotation === 90 ? { x: event.clientY, y: -event.clientX }
@@ -279,19 +282,19 @@ export function WebPlaySurface({
       ref={surfaceRef}
     >
       <div
-        className={mobile
+        className={showControls
           ? "absolute bottom-[max(0.75rem,var(--play-safe-bottom))] left-[max(0.75rem,var(--play-safe-left))] right-[max(0.75rem,var(--play-safe-right))] top-[max(0.75rem,var(--play-safe-top))]"
           : "absolute inset-0"}
         onContextMenu={(event) => { if (mobile) event.preventDefault(); }}
         ref={areaRef}
       >
-        <div className={mobile && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : "absolute inset-0 z-0"}>
+        <div className={showControls && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : "absolute inset-0 z-0"}>
           <div className={editing ? "pointer-events-none h-full w-full" : "h-full w-full"} id="web-player-host" ref={playerHostRef} />
           {dragHandle("screen", "游戏画面")}
         </div>
-        {placeholder}
+        {immersive ? placeholder : null}
 
-        {mobile ? controlIds.filter((id) => positions.buttons[id].visible).map((id) => (
+        {showControls ? controlIds.filter((id) => positions.buttons[id].visible).map((id) => (
           <div
             className={`absolute left-(--control-x) top-(--control-y) h-(--control-height) w-(--control-width) ${editing && selected === id ? "z-20" : "z-10"}`}
             data-play-control={id}
@@ -331,6 +334,16 @@ export function WebPlaySurface({
                 ))}
                 <div aria-hidden className="pointer-events-none col-start-2 row-start-2 bg-zinc-800" />
               </div>
+            ) : id === "screenshot" ? (
+              <Button
+                aria-label="截取图片"
+                className={`${controlButtonClass} opacity-(--control-opacity)`}
+                disabled={!editing && captureDisabled}
+                onClick={() => { if (!editing) onCaptureScreenshot(); }}
+                tabIndex={editing ? -1 : 0}
+                type="button"
+                variant="outline"
+              ><Camera aria-hidden /></Button>
             ) : (
               <Button
                 {...inputProps(id)}
@@ -344,9 +357,9 @@ export function WebPlaySurface({
           </div>
         )) : null}
 
-        {toolbar || mobile ? (
+        {immersive && (toolbar || showControls) ? (
           <div
-            className={`${editing ? "pointer-events-none invisible " : ""}${mobile
+            className={`${editing ? "pointer-events-none invisible " : ""}${showControls
               ? portrait
                 ? "absolute right-0 top-0 z-30 flex max-w-full flex-wrap justify-end gap-2"
                 : "absolute left-0 top-0 z-30 flex flex-col items-start gap-1"
@@ -354,7 +367,7 @@ export function WebPlaySurface({
             ref={toolbarRef}
           >
             {toolbar}
-            {mobile ? (
+            {showControls ? (
               <Button aria-label="调整按钮布局" className={overlayButtonClass} onClick={() => { setSelected("decision"); setDraft(layout); }} size="icon" title="调整布局" type="button" variant="outline">
                 <Settings2 aria-hidden />
               </Button>
@@ -374,7 +387,7 @@ export function WebPlaySurface({
             selected={selected}
           />
         ) : null}
-        {feedback}
+        {immersive ? feedback : null}
       </div>
     </div>
   );

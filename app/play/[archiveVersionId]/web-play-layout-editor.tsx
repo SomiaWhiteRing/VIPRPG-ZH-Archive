@@ -22,18 +22,24 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, o
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const control = layout.buttons[selected];
   const definition = controlDefinitions[selected];
+  const panelPosition = orientation === "portrait"
+    ? control.y < 0.5
+      ? "bottom-0 left-0 right-0 mx-auto max-h-[calc(50%-0.5rem)] w-[min(20rem,100%)]"
+      : "left-0 right-0 top-12 mx-auto max-h-[calc(50%-3.5rem)] w-[min(20rem,100%)]"
+    : control.x < 0.5
+      ? "right-0 top-12 max-h-[calc(100%-3rem)] w-[min(20rem,calc(50%-0.5rem))]"
+      : "left-0 top-12 max-h-[calc(100%-3rem)] w-[min(20rem,calc(50%-0.5rem))]";
   return (
     <div className={dragging ? "pointer-events-none invisible absolute inset-0 z-40" : "pointer-events-none absolute inset-0 z-40"}>
       <div className="pointer-events-auto absolute right-0 top-0 flex gap-1">
-        <Button aria-expanded={propertiesOpen} aria-controls="web-play-layout-properties" className={buttonClass} onClick={() => setPropertiesOpen(!propertiesOpen)} size="sm" type="button" variant="outline">属性</Button>
+        <Button aria-expanded={propertiesOpen} aria-controls="web-play-layout-properties" className={`${buttonClass} aria-expanded:border-yellow-300 aria-expanded:bg-zinc-700 aria-expanded:text-yellow-200 aria-expanded:ring-1 aria-expanded:ring-yellow-300`} onClick={() => setPropertiesOpen(!propertiesOpen)} size="sm" type="button" variant="outline">
+          属性<span aria-hidden className="text-[10px]">{propertiesOpen ? "▲" : "▼"}</span>
+        </Button>
         <Button className={buttonClass} onClick={onReset} size="sm" type="button" variant="outline">恢复默认</Button>
         <Button className={buttonClass} onClick={onCancel} size="sm" type="button" variant="outline">取消</Button>
         <Button className={buttonClass} onClick={onSave} size="sm" type="button" variant="outline">保存</Button>
       </div>
-      <div className={propertiesOpen ? "pointer-events-auto absolute right-0 top-12 max-h-[calc(100%-3rem)] w-[min(20rem,100%)] overflow-y-auto overscroll-contain rounded-lg border border-white/25 bg-zinc-950 p-3 text-white" : "hidden"} id="web-play-layout-properties">
-        <p className="m-0 mb-3 text-xs leading-relaxed" id="web-play-layout-help">
-          拖动按钮可自由移动；{orientation === "portrait" ? "画面只可上下移动。" : "横屏画面位置固定。"}收起属性可调整被面板遮挡的位置。
-        </p>
+      <div className={propertiesOpen ? `pointer-events-auto absolute ${panelPosition} overflow-y-auto overscroll-contain rounded-lg border border-white/25 bg-zinc-950 p-3 text-white` : "hidden"} id="web-play-layout-properties">
         <div aria-label="选择或添加按钮" className="mb-3 flex flex-wrap gap-1.5" role="group">
           {controlIds.map((id) => {
             const visible = layout.buttons[id].visible;
