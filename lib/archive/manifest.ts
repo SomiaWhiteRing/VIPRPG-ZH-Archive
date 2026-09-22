@@ -22,7 +22,7 @@ export type ArchiveManifest = {
     createdAt: string;
     filePolicyVersion: string;
     packerVersion: string;
-    sourceType: "browser_folder" | "browser_zip" | "preindexed_manifest";
+    sourceType: "browser_folder" | "browser_zip" | "browser_7z" | "preindexed_manifest";
     sourceFileCount: number;
     sourceSize: number;
     includedFileCount: number;

@@ -28,10 +28,9 @@ export function ArchiveSourcePicker({
   onCancel,
   onDrop,
   onFolder,
-  onModeChange,
   onRemoveExisting,
   onRestart,
-  onZip,
+  onArchive,
   sourceSummary,
   task,
 }: {
@@ -42,20 +41,19 @@ export function ArchiveSourcePicker({
   onCancel: () => void;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
   onFolder: (files: UploadSourceFile[], sourceName: string) => void;
-  onModeChange: (mode: UploadSourceKind) => void;
   onRemoveExisting?: () => void;
   onRestart: () => void;
-  onZip: (file: File) => void;
+  onArchive: (file: File) => void;
   sourceSummary: ArchiveSourceSummary | null;
   task: BrowserUploadTaskSnapshot | null;
 }) {
   const dragDepthRef = useRef(0);
   const instructionsId = useId();
   const [fileDragActive, setFileDragActive] = useState(false);
-  const zipInputRef = useRef<HTMLInputElement>(null);
+  const archiveInputRef = useRef<HTMLInputElement>(null);
 
-  function openZipPicker() {
-    if (!disabled) zipInputRef.current?.click();
+  function openArchivePicker() {
+    if (!disabled) archiveInputRef.current?.click();
   }
 
   function resetFileDrag() {
@@ -89,7 +87,7 @@ export function ArchiveSourcePicker({
           aria-label={
             fileDragActive
               ? "松开以上传游戏文件"
-              : "拖入游戏文件夹或 ZIP 压缩包"
+              : "拖入游戏文件夹、ZIP 或 7z 压缩包"
           }
           className={cn(
             "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -108,7 +106,7 @@ export function ArchiveSourcePicker({
               target.closest("[data-upload-picker]")
             )
               return;
-            openZipPicker();
+            openArchivePicker();
           }}
           onDragEnter={(event) => {
             if (!hasDraggedFiles(event)) return;
@@ -139,7 +137,7 @@ export function ArchiveSourcePicker({
             )
               return;
             event.preventDefault();
-            openZipPicker();
+            openArchivePicker();
           }}
           role="button"
           tabIndex={disabled ? -1 : 0}
@@ -147,22 +145,21 @@ export function ArchiveSourcePicker({
           <div className="grid justify-items-center gap-2">
             <Upload className="size-8 text-primary" />
             <strong aria-live="polite">
-              {fileDragActive ? "松开以上传" : "拖入游戏文件夹或 ZIP 压缩包"}
+              {fileDragActive ? "松开以上传" : "拖入游戏文件夹、ZIP 或 7z 压缩包"}
             </strong>
             <span className="text-sm text-muted" id={instructionsId}>
-              文件夹根目录或 ZIP 内须包含 RPG_RT.lmt
+              文件夹根目录或压缩包内须包含 RPG_RT.lmt
             </span>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <FilePicker
-                accept=".zip,application/zip"
+                accept=".zip,.7z,application/zip,application/x-7z-compressed"
                 disabled={disabled}
-                inputRef={zipInputRef}
-                label="选择 ZIP"
+                inputRef={archiveInputRef}
+                label="选择 ZIP / 7z"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
-                    onModeChange("zip");
-                    onZip(file);
+                    onArchive(file);
                   }
                 }}
               />
@@ -173,7 +170,6 @@ export function ArchiveSourcePicker({
                 multiple
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);
-                  onModeChange("folder");
                   onFolder(
                     files.map((file) => ({
                       file,
@@ -281,7 +277,7 @@ function UploadTaskCard({
           <span className="min-w-0">
             <strong className="block truncate">{sourceSummary.name}</strong>
             <span className="mt-0.5 block text-xs text-muted">
-              {mode === "folder" ? "文件夹" : "ZIP 压缩包"} ·{" "}
+              {mode === "folder" ? "文件夹" : mode === "7z" ? "7z 压缩包" : "ZIP 压缩包"} ·{" "}
               {sourceSummary.fileCount.toLocaleString("zh-CN")} 个文件 ·{" "}
               {formatBytes(sourceSummary.sizeBytes)}
             </span>

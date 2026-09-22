@@ -654,7 +654,7 @@ CREATE TABLE IF NOT EXISTS archive_versions (
   file_policy_version TEXT NOT NULL,
   packer_version TEXT NOT NULL,
   source_type TEXT NOT NULL CHECK (
-    source_type IN ('browser_folder', 'browser_zip', 'preindexed_manifest')
+    source_type IN ('browser_folder', 'browser_zip', 'browser_7z', 'preindexed_manifest')
   ),
   source_file_count INTEGER NOT NULL DEFAULT 0,
   source_size_bytes INTEGER NOT NULL DEFAULT 0,

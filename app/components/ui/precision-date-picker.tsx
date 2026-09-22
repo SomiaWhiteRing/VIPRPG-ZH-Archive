@@ -2,6 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import type { OriginalReleasePrecision } from "@/lib/original-release-date";
 import { parseOriginalReleaseDate } from "@/lib/original-release-date";
+import { parsePastedReleaseDates } from "@/lib/pasted-release-date";
 import { zhCN } from "date-fns/locale/zh-CN";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
@@ -43,7 +44,7 @@ export function PrecisionDatePicker({
   id,
   value,
   onChange,
-  placeholder = "选择日期",
+  placeholder = "选择或粘贴日期",
   disabled = false,
   required = false,
 }: {
@@ -57,26 +58,66 @@ export function PrecisionDatePicker({
   const parsed = parseOriginalReleaseDate(value);
   const pickerRef = useRef<DatePicker>(null);
   const [precision, setPrecision] = useState<DatePrecision>("year");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pasteCandidates, setPasteCandidates] = useState<string[]>([]);
+  const pasteGenerationRef = useRef(0);
   const selected = parsed?.value ? toLocalDate(parsed.value) : null;
-  const displayValue = parsed?.value
-    ? parsed.value
-        .split("-")
-        .map(
-          (part, index) =>
-            `${index === 0 ? part : Number(part)}${DATE_UNITS[index]}`,
-        )
-        .join("")
-    : "";
+  const displayValue = parsed?.value ? displayDateValue(parsed.value) : "";
+
+  function applyPastedDate(next: string) {
+    const pasted = parseOriginalReleaseDate(next);
+    if (!pasted?.value || pasted.precision === "unknown") return;
+    pasteGenerationRef.current += 1;
+    setPasteError(null);
+    setPasteCandidates([]);
+    setPrecision(pasted.precision);
+    onChange(pasted.value);
+    pickerRef.current?.setOpen(false);
+  }
 
   return (
     <div className="relative min-w-0">
       <DatePicker
+        ariaDescribedBy={pasteError ? `${id}-paste-error` : undefined}
         autoComplete="off"
         calendarClassName={calendarClassName}
         chooseDayAriaLabelPrefix="选择"
         customInput={
           <DateSegmentInput
             className="cursor-pointer pr-10 caret-transparent selection:bg-primary selection:text-primary-foreground"
+            onPaste={async (event) => {
+              event.preventDefault();
+              if (disabled) return;
+              const input = event.currentTarget;
+              const previousValue = input.value;
+              const text = event.clipboardData.getData("text/plain");
+              const generation = ++pasteGenerationRef.current;
+              setPasteError(null);
+              setPasteCandidates([]);
+              try {
+                const candidates = await parsePastedReleaseDates(text);
+                if (
+                  generation !== pasteGenerationRef.current ||
+                  input.disabled ||
+                  !input.isConnected ||
+                  input.value !== previousValue
+                ) return;
+                if (candidates.length === 1) {
+                  applyPastedDate(candidates[0]);
+                } else if (candidates.length > 1) {
+                  pickerRef.current?.setOpen(false);
+                  setPasteCandidates(candidates);
+                } else {
+                  setPasteError(
+                    "未识别到有效日期，请包含年份，或使用“今天”等相对日期。",
+                  );
+                }
+              } catch {
+                if (generation === pasteGenerationRef.current && input.isConnected) {
+                  setPasteError("日期识别暂时不可用，请重试或使用日历选择。");
+                }
+              }
+            }}
             onPrecisionChange={(next) => {
               setPrecision(next);
               pickerRef.current?.setOpen(true);
@@ -95,6 +136,9 @@ export function PrecisionDatePicker({
           if (!selection) event?.preventDefault();
         }}
         onSelect={(date) => {
+          pasteGenerationRef.current += 1;
+          setPasteError(null);
+          setPasteCandidates([]);
           onChange(
             date ? updateDatePart(date, precision, parsed?.value ?? "") : "",
           );
@@ -184,6 +228,36 @@ export function PrecisionDatePicker({
         aria-hidden
         className="pointer-events-none absolute right-3 top-3 size-4 text-muted"
       />
+      {pasteError ? (
+        <p
+          className="mt-1 text-sm text-red-700"
+          id={`${id}-paste-error`}
+          role="alert"
+        >
+          {pasteError}
+        </p>
+      ) : null}
+      {pasteCandidates.length ? (
+        <div aria-label="选择识别到的日期" className="mt-2 grid gap-2" role="group">
+          <p className="text-sm text-muted" role="status">
+            识别到多个可能的日期，请选择：
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {pasteCandidates.map((candidate) => (
+              <Button
+                disabled={disabled}
+                key={candidate}
+                onClick={() => applyPastedDate(candidate)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {displayDateValue(candidate)}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -220,6 +294,7 @@ const DateSegmentInput = forwardRef<HTMLInputElement, DateSegmentInputProps>(
       <Input
         {...props}
         inputMode="none"
+        onBeforeInput={(event) => event.preventDefault()}
         onBlur={(event) => {
           pointerFocus.current = false;
           onBlur?.(event);
@@ -262,7 +337,6 @@ const DateSegmentInput = forwardRef<HTMLInputElement, DateSegmentInputProps>(
         onPointerDown={() => {
           pointerFocus.current = true;
         }}
-        readOnly
         ref={(input) => {
           inputRef.current = input;
           if (typeof ref === "function") ref(input);
@@ -359,4 +433,10 @@ function formatDateValue(date: Date, precision: DatePrecision): string {
     : precision === "month"
       ? `${year}-${month}`
       : `${year}-${month}-${day}`;
+}
+
+function displayDateValue(value: string): string {
+  return value.split("-").map((part, index) =>
+    `${index === 0 ? part : Number(part)}${DATE_UNITS[index]}`,
+  ).join("");
 }

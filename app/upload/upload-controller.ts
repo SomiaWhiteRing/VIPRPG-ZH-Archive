@@ -12,15 +12,17 @@ import {
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
+  UploadFormDraft,
   UploadRecoveryDraft,
   UploadSourceFile,
   UploadSourceKind,
+  UploadSourcePrefill,
   UploadTaskCommitResult,
   UploadWorkerInput,
   UploadWorkerOutput,
 } from "@/app/upload/upload-types";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type PendingCancel = {
   promise: Promise<boolean>;
@@ -63,7 +65,9 @@ export function useUploadController(accountId: number) {
     setTask(nextTask);
   }
 
-  function createTaskWorker(): Worker {
+  function createTaskWorker(
+    onPrefill?: (prefill: UploadSourcePrefill) => void,
+  ): Worker {
     if (workerRef.current) throw new Error("当前标签页已有上传任务");
     const worker = new Worker(new URL("./upload-worker.ts", import.meta.url), {
       type: "module",
@@ -71,6 +75,11 @@ export function useUploadController(accountId: number) {
     worker.onmessage = (event: MessageEvent<UploadWorkerOutput>) => {
       const message = event.data;
       if (workerRef.current !== worker) return;
+
+      if (message.type === "source_prefill") {
+        onPrefill?.(message.prefill);
+        return;
+      }
 
       if (message.type === "task") {
         setStarting(false);
@@ -93,6 +102,11 @@ export function useUploadController(accountId: number) {
 
       if (message.type === "draft_saved") {
         setDrafts((current) => upsertDraft(current, message.draft));
+        return;
+      }
+
+      if (message.type === "draft_save_error") {
+        setControllerError(message.message);
         return;
       }
 
@@ -248,18 +262,21 @@ export function useUploadController(accountId: number) {
     };
   }, []);
 
-  function startSource(input: {
-    sourceKind: UploadSourceKind;
-    sourceName: string;
-    files: UploadSourceFile[];
-    targetWorkId: number | null;
-  }) {
+  function startSource(
+    input: {
+      sourceKind: UploadSourceKind;
+      sourceName: string;
+      files: UploadSourceFile[];
+      targetWorkId: number | null;
+    },
+    onPrefill?: (prefill: UploadSourcePrefill) => void,
+  ) {
     if (active || workerRef.current) return;
     setControllerError(null);
     const localTaskId = crypto.randomUUID();
     pendingLocalTaskIdRef.current = localTaskId;
     setStarting(true);
-    createTaskWorker().postMessage({
+    createTaskWorker(onPrefill).postMessage({
       type: "start_source",
       accountId,
       localTaskId,
@@ -297,10 +314,7 @@ export function useUploadController(accountId: number) {
     } satisfies UploadWorkerInput);
   }
 
-  async function restoreDraft(
-    draft: UploadRecoveryDraft,
-    options: { clearMetadata?: boolean } = {},
-  ): Promise<boolean> {
+  async function restoreDraft(draft: UploadRecoveryDraft): Promise<boolean> {
     if (active || workerRef.current) return false;
     setControllerError(null);
     if (committingDraftIds.includes(draft.serverImportJobId)) {
@@ -342,14 +356,7 @@ export function useUploadController(accountId: number) {
       return false;
     }
 
-    const restoredDraft = options.clearMetadata
-      ? {
-          ...result.draft,
-          metadata: null,
-          metadataBlobs: [],
-          metadataConfirmed: false,
-        }
-      : result.draft;
+    const restoredDraft = { ...result.draft, metadataConfirmed: false };
     try {
       await putUploadDraft(restoredDraft);
     } catch {
@@ -434,6 +441,17 @@ export function useUploadController(accountId: number) {
     return promise;
   }
 
+  const saveFormDraft = useCallback((formDraft: UploadFormDraft) => {
+    const task = taskRef.current;
+    const localTaskId = task?.localTaskId ?? pendingLocalTaskIdRef.current;
+    if (!localTaskId || !workerRef.current || task?.commitStarted) return;
+    workerRef.current.postMessage({
+      type: "save_form_draft",
+      localTaskId,
+      formDraft,
+    } satisfies UploadWorkerInput);
+  }, []);
+
   return {
     task,
     drafts,
@@ -445,6 +463,7 @@ export function useUploadController(accountId: number) {
     startSource,
     confirmMetadata,
     revokeMetadata,
+    saveFormDraft,
     restoreDraft,
     discardDraft,
     cancelTask,

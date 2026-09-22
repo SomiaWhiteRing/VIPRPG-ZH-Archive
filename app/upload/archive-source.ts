@@ -1,4 +1,6 @@
 import { inflate } from "fflate";
+import { enumerateSevenZipSourceFiles } from "./archive-7z";
+import { filesWithinArchiveGameRoot } from "./archive-game-root";
 import {
   contentTypeForArchivePath,
   normalizeArchivePath,
@@ -6,6 +8,7 @@ import {
 import type {
   UploadSourceFile,
   UploadSourceKind,
+  UploadSourcePrefill,
 } from "@/app/upload/upload-types";
 
 export type UploadSourceEntry = {
@@ -14,11 +17,6 @@ export type UploadSourceEntry = {
   mtimeMs: number | null;
   contentType: string;
   bytes: () => Promise<Uint8Array>;
-};
-
-export type UploadSourcePrefill = {
-  gameTitle: string | null;
-  titleImages: File[];
 };
 
 type ZipCentralEntry = {
@@ -50,6 +48,11 @@ export async function enumerateUploadSourceFiles(
   files: UploadSourceFile[],
   sourceKind: UploadSourceKind,
 ): Promise<UploadSourceEntry[]> {
+  if (sourceKind === "7z") {
+    const file = files[0]?.file;
+    if (!file) throw new Error("未选择 7z 文件");
+    return enumerateSevenZipSourceFiles(file);
+  }
   if (sourceKind === "zip") {
     return enumerateZipSourceFiles(files);
   }
@@ -73,10 +76,8 @@ export async function enumerateUploadSourceFiles(
 }
 
 export async function inspectUploadSource(
-  files: UploadSourceFile[],
-  sourceKind: UploadSourceKind,
+  entries: UploadSourceEntry[],
 ): Promise<UploadSourcePrefill> {
-  const entries = await enumerateUploadSourceFiles(files, sourceKind);
   const ini = entries.find((entry) => entry.path.toLowerCase() === "rpg_rt.ini");
   const titleEntries = entries
     .filter(isTitleImage)
@@ -185,25 +186,16 @@ async function enumerateZipSourceFiles(
   if (!zipFile) throw new Error("未选择 ZIP 文件");
 
   const entries = await readZipCentralDirectory(zipFile);
-  const gameRoot = findZipGameRoot(entries);
-  return entries
-    .flatMap((entry): UploadSourceEntry[] => {
-      const path = pathWithinZipGameRoot(entry.normalizedPath, gameRoot);
-      if (path === null) return [];
-
-      return [
-        {
-          path,
-          size: entry.uncompressedSize,
-          mtimeMs: entry.mtimeMs,
-          contentType: contentTypeForArchivePath(path),
-          bytes: async () => readZipEntryBytes(zipFile, entry),
-        },
-      ];
-    })
-    .sort((left, right) =>
-      left.path.toLowerCase().localeCompare(right.path.toLowerCase()),
-    );
+  return filesWithinArchiveGameRoot(
+    entries.map((entry) => ({
+      path: entry.normalizedPath,
+      size: entry.uncompressedSize,
+      mtimeMs: entry.mtimeMs,
+      contentType: contentTypeForArchivePath(entry.normalizedPath),
+      bytes: async () => readZipEntryBytes(zipFile, entry),
+    })),
+    "ZIP",
+  );
 }
 
 async function readZipCentralDirectory(
@@ -490,32 +482,6 @@ function readUint32(bytes: Uint8Array, offset: number): number {
     (bytes[offset + 2] << 16) |
     (bytes[offset + 3] << 24)
   ) >>> 0;
-}
-
-function findZipGameRoot(entries: ZipCentralEntry[]): string {
-  const mapTrees = entries.filter((entry) => {
-    const path = entry.normalizedPath.toLowerCase();
-    return path === "rpg_rt.lmt" || path.endsWith("/rpg_rt.lmt");
-  });
-  if (mapTrees.length === 0) {
-    throw new Error("ZIP 内未找到 RPG_RT.lmt，请选择包含游戏文件的压缩包。");
-  }
-  if (mapTrees.length > 1) {
-    throw new Error(
-      "ZIP 内找到多个 RPG_RT.lmt，无法确定游戏根目录；请每次只上传一个游戏。",
-    );
-  }
-  const path = mapTrees[0].normalizedPath;
-  const separator = path.lastIndexOf("/");
-  return separator < 0 ? "" : path.slice(0, separator);
-}
-
-function pathWithinZipGameRoot(path: string, gameRoot: string): string | null {
-  if (!gameRoot) return path;
-  const prefix = gameRoot + "/";
-  return path.toLowerCase().startsWith(prefix.toLowerCase())
-    ? path.slice(prefix.length)
-    : null;
 }
 
 function basename(path: string): string {
