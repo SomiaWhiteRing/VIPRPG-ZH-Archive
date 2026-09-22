@@ -16,7 +16,7 @@ export async function getWorkTranslators(
   const rows = await getD1(runtime)
     .prepare(
       `SELECT c.id,c.name,ws.display_name FROM work_staff ws
-    JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? AND ws.role_key='translator' ORDER BY c.id`,
+    JOIN creators c ON c.id=ws.creator_id WHERE ws.work_id=? AND ws.role_key='translator' ORDER BY ws.sort_order,c.id`,
     )
     .bind(workId)
     .all<{ id: number; name: string; display_name: string }>();
@@ -206,7 +206,7 @@ export async function prepareWorkStaffStatements(input: {
 
   const statements: D1PreparedStatement[] = [];
   const seen = new Set<string>();
-  for (const credit of credits) {
+  for (const [sortOrder, credit] of credits.entries()) {
     const identity = creatorSelectionKey(credit.selection);
     const key = `${identity}:${credit.roleKey}`;
     if (seen.has(key))
@@ -218,8 +218,8 @@ export async function prepareWorkStaffStatements(input: {
         input.database
           .prepare(
             `INSERT INTO work_staff(
-               work_id,creator_id,display_name,role_key,role_label,notes
-             ) VALUES(?,?,?,?,?,?)`,
+               work_id,creator_id,display_name,role_key,role_label,notes,sort_order
+             ) VALUES(?,?,?,?,?,?,?)`,
           )
           .bind(
             input.workId,
@@ -228,6 +228,7 @@ export async function prepareWorkStaffStatements(input: {
             credit.roleKey,
             credit.roleLabel,
             credit.notes,
+            sortOrder,
           ),
       );
       continue;
@@ -246,8 +247,8 @@ export async function prepareWorkStaffStatements(input: {
       input.database
         .prepare(
           `INSERT INTO work_staff(
-             work_id,creator_id,display_name,role_key,role_label,notes
-           ) SELECT ?,id,?,?,?,? FROM (
+             work_id,creator_id,display_name,role_key,role_label,notes,sort_order
+           ) SELECT ?,id,?,?,?,?,? FROM (
              SELECT id FROM creators WHERE name_key=?
              UNION SELECT creator_id AS id FROM creator_aliases WHERE name_key=?
            )`,
@@ -258,6 +259,7 @@ export async function prepareWorkStaffStatements(input: {
           credit.roleKey,
           credit.roleLabel,
           credit.notes,
+          sortOrder,
           nameKey,
           nameKey,
         ),

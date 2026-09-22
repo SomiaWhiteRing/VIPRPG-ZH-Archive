@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+Work staff and tag relations include `sort_order`, matching the initialization
+schema. Existing rows start at zero and retain their former name-based order
+until edited. Table contents and the single initialization migration ledger are
+preserved.
+
 The current application list contains six roles: 管理员, 维基人, 维护作者信息,
 维护角色信息, 维护作品信息 and 讨论版版主. All six require individual approval;
 administrator requests are visible to and processed only by the bootstrap

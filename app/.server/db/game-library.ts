@@ -1048,18 +1048,7 @@ export async function createExternalWork(
         actorUserId: input.user.id,
         requirePortrait: true,
       })),
-      ...tags.flatMap((name) => [
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO tags(name,namespace) VALUES(?, 'other')`,
-          )
-          .bind(name),
-        database
-          .prepare(
-            `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,'uploader' FROM tags WHERE name=? COLLATE NOCASE`,
-          )
-          .bind(workId, name),
-      ]),
+      ...workTagStatements(database, workId, tags, "uploader"),
       database
         .prepare(
           `INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?, '外部下载', ?, 'download_page')`,
@@ -1431,7 +1420,7 @@ async function hydrate(
             `SELECT wt.work_id,t.id,t.name,t.namespace
              FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
              WHERE wt.work_id IN (${placeholders})
-             ORDER BY wt.work_id,t.name`,
+             ORDER BY wt.work_id,wt.sort_order,t.name`,
           )
           .bind(...chunk),
       },
@@ -1458,7 +1447,7 @@ async function hydrate(
             `SELECT ws.work_id,c.id,c.name,ws.display_name,c.links_json,ws.role_key,ws.role_label,ws.notes
              FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
              WHERE ws.work_id IN (${placeholders})
-             ORDER BY ws.work_id,c.name`,
+             ORDER BY ws.work_id,ws.sort_order,c.name`,
           )
           .bind(...chunk),
       },
@@ -1612,7 +1601,7 @@ async function loadWorkCollections(
       .prepare(
         `SELECT t.id,t.name,t.namespace
          FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
-         WHERE wt.work_id=? ORDER BY t.name`,
+         WHERE wt.work_id=? ORDER BY wt.sort_order,t.name`,
       )
       .bind(workId),
     database
@@ -1631,7 +1620,7 @@ async function loadWorkCollections(
       .prepare(
         `SELECT c.id,c.name,ws.display_name,c.links_json,ws.role_key,ws.role_label,ws.notes
          FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
-         WHERE ws.work_id=? ORDER BY c.name`,
+         WHERE ws.work_id=? ORDER BY ws.sort_order,c.name`,
       )
       .bind(workId),
     database

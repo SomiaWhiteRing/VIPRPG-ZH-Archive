@@ -1116,6 +1116,7 @@ CREATE TABLE IF NOT EXISTS work_staff (
   ),
   role_label TEXT,
   notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
   PRIMARY KEY (work_id, creator_id, role_key)
 );
 
@@ -1157,6 +1158,7 @@ CREATE TABLE IF NOT EXISTS work_tags (
   tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   source TEXT NOT NULL CHECK (source IN ('admin', 'uploader', 'imported')) DEFAULT 'admin',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
   PRIMARY KEY (work_id, tag_id)
 );
 

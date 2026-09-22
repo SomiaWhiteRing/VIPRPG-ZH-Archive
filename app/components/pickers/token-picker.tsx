@@ -1,13 +1,11 @@
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
 import { TokenChip, TokenDragPreview } from "@/app/components/ui/token-input";
-import { cn } from "@/lib/ui/cn";
 import {
-  moveDragItem,
-  nearestDragSlot,
-  readDragSlots,
-  type DragSlot,
-} from "@/lib/ui/drag-reorder";
+  tokenDragHandleClassName,
+  useTokenReorder,
+} from "@/app/components/ui/use-token-reorder";
+import { cn } from "@/lib/ui/cn";
 import type { ReactNode } from "react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 export type TokenSuggestion = { value: string; meta: string };
@@ -57,23 +55,7 @@ export function TokenPicker({
   showHelp?: boolean;
   singleLineRecommendations?: boolean;
 }) {
-  const sortContainer = useRef<HTMLDivElement>(null);
-  const drag = useRef<{
-    value: string;
-    original: string[];
-    order: string[];
-    slots: DragSlot[];
-    x: number;
-    y: number;
-    chip: { left: number; top: number; width: number; height: number };
-    moved: boolean;
-  } | null>(null);
-  const [preview, setPreview] = useState<{
-    value: string;
-    order: string[];
-    original: string[];
-    chip: { left: number; top: number; width: number; height: number };
-  } | null>(null);
+  const reorder = useTokenReorder(values, onChange, disabled || !sortable);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const atLimit = maxValues !== undefined && values.length >= maxValues;
@@ -108,13 +90,6 @@ export function TokenPicker({
   const recommended = recommendations
     .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
     .slice(0, 6);
-  const visiblePreview =
-    !disabled && preview?.original === values ? preview : null;
-
-  function cancelDrag() {
-    drag.current = null;
-    setPreview(null);
-  }
 
   function add(rawValue: string, validateQuery = true) {
     if (disabled || atLimit) return;
@@ -158,53 +133,8 @@ export function TokenPicker({
       ) : null}
       <div
         className="relative"
-        ref={sortContainer}
-        onPointerMove={(event) => {
-          const current = drag.current;
-          if (!current || disabled || current.original !== values) return;
-          if (
-            !current.moved &&
-            Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
-          )
-            return;
-          current.moved = true;
-          const bounds = event.currentTarget.getBoundingClientRect();
-          const nearest = nearestDragSlot(
-            current.slots,
-            event.clientX - bounds.left,
-            event.clientY - bounds.top,
-          );
-          current.order = moveDragItem(
-            current.order,
-            current.order.indexOf(current.value),
-            nearest,
-          );
-          setPreview({
-            value: current.value,
-            order: current.order,
-            original: values,
-            chip: {
-              ...current.chip,
-              left: current.chip.left + event.clientX - current.x,
-              top: current.chip.top + event.clientY - current.y,
-            },
-          });
-        }}
-        onPointerUp={() => {
-          const current = drag.current;
-          cancelDrag();
-          if (current?.moved && !disabled && current.original === values)
-            onChange(current.order);
-        }}
-        onPointerCancel={cancelDrag}
-        onLostPointerCapture={cancelDrag}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && drag.current) {
-            event.preventDefault();
-            event.stopPropagation();
-            cancelDrag();
-          }
-        }}
+        ref={reorder.container}
+        {...reorder.containerProps}
       >
         <SearchComboBox
           id={id}
@@ -228,11 +158,11 @@ export function TokenPicker({
           onRemoveLast={() => {
             if (values.length) remove(values[values.length - 1]);
           }}
-          tokens={(visiblePreview?.order ?? values).map((value) => (
+          tokens={reorder.items.map(({ value, index }) => (
             <TokenChip
               data-sort-token=""
               className={
-                visiblePreview?.value === value ? "opacity-25" : undefined
+                reorder.preview?.index === index ? "opacity-25" : undefined
               }
               disabled={disabled}
               key={tokenKey(value)}
@@ -241,60 +171,13 @@ export function TokenPicker({
             >
               {sortable ? (
                 <Button
+                  {...reorder.handleProps(index)}
                   type="button"
                   variant="ghost"
                   size="sm"
                   disabled={disabled}
-                  className="min-h-7 min-w-0 shrink touch-none cursor-grab whitespace-normal rounded-none px-0 text-left text-xs text-primary hover:bg-transparent [overflow-wrap:anywhere] active:cursor-grabbing"
+                  className={tokenDragHandleClassName}
                   aria-label={`拖动排序 ${value}，也可按 Alt 加方向键调整`}
-                  onPointerDown={(event) => {
-                    if (disabled || event.button !== 0 || !event.isPrimary)
-                      return;
-                    const container = sortContainer.current;
-                    if (!container) return;
-                    const chip =
-                      event.currentTarget.closest("[data-sort-token]");
-                    if (!chip) return;
-                    const bounds = chip.getBoundingClientRect();
-                    event.preventDefault();
-                    container.setPointerCapture(event.pointerId);
-                    drag.current = {
-                      value,
-                      original: values,
-                      order: values,
-                      slots: readDragSlots(
-                        container.querySelectorAll("[data-sort-token]"),
-                      ),
-                      x: event.clientX,
-                      y: event.clientY,
-                      chip: {
-                        left: bounds.left,
-                        top: bounds.top,
-                        width: bounds.width,
-                        height: bounds.height,
-                      },
-                      moved: false,
-                    };
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      !event.altKey ||
-                      ![
-                        "ArrowLeft",
-                        "ArrowRight",
-                        "ArrowUp",
-                        "ArrowDown",
-                      ].includes(event.key)
-                    )
-                      return;
-                    event.preventDefault();
-                    const from = values.indexOf(value);
-                    const to =
-                      from +
-                      (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1);
-                    if (to >= 0 && to < values.length)
-                      onChange(moveDragItem(values, from, to));
-                  }}
                 >
                   {value}
                 </Button>
@@ -354,10 +237,10 @@ export function TokenPicker({
           ))}
         </RecommendationRow>
       ) : null}
-      {visiblePreview ? (
+      {reorder.preview ? (
         <TokenDragPreview
-          label={visiblePreview.value}
-          {...visiblePreview.chip}
+          label={values[reorder.preview.index]}
+          {...reorder.preview.chip}
         />
       ) : null}
     </div>
