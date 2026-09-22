@@ -55,7 +55,11 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     const cacheRequest = downloadCacheRequest(request, record);
     cacheKey = downloadBuildCacheKey(cacheRequest);
-    const bypassDownloadCache = shouldBypassDownloadCache(request, env);
+    const ifRange = request.headers.get("If-Range");
+    const currentEtag = `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}"`;
+    const rangeHeader = request.method === "GET" && (!ifRange || ifRange === currentEtag)
+      ? request.headers.get("Range") : null;
+    const bypassDownloadCache = Boolean(rangeHeader) || shouldBypassDownloadCache(request, env);
 
     if (request.method === "GET" && !bypassDownloadCache) {
       const cached = await caches.default.match(cacheRequest);
@@ -82,13 +86,26 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     const cacheStatus =
       request.method === "HEAD" || bypassDownloadCache ? "BYPASS" : "MISS";
     const headers = downloadHeaders(record, cacheStatus, zipSizeBytes);
+    const range = rangeHeader ? parseDownloadRange(rangeHeader, zipSizeBytes) : null;
+    if (rangeHeader && !range) {
+      return new Response(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${zipSizeBytes}`, "Cache-Control": "no-store" },
+      });
+    }
+    if (range) {
+      headers.set("Content-Range", `bytes ${range.start}-${range.end}/${zipSizeBytes}`);
+      headers.set("Content-Length", String(range.end - range.start + 1));
+      headers.set("Cache-Control", "no-store");
+    }
 
     if (request.method === "HEAD") {
       return new Response(null, { headers });
     }
 
-    const zipStream = createFixedLengthZipStream(zipEntries, zipSizeBytes);
+    const zipStream = createFixedLengthZipStream(zipEntries, zipSizeBytes, range);
     const response = new Response(zipStream.readable, {
+      status: range ? 206 : 200,
       headers,
     });
     ctx.waitUntil(
@@ -168,7 +185,10 @@ async function getDownloadRecord(db, archiveVersionId) {
         w.id AS work_id,
         w.original_title AS work_original_title,
         w.chinese_title AS work_chinese_title,
-        w.engine_family
+        w.engine_family,
+        (SELECT ma.blob_sha256 FROM work_media_assets wma
+         JOIN media_assets ma ON ma.id = wma.media_asset_id
+         WHERE wma.work_id = w.id AND wma.role = 'cover' LIMIT 1) AS cover_blob_sha256
       FROM archive_versions av
       JOIN works w ON w.id = av.work_id
       WHERE av.id = ?
@@ -186,6 +206,8 @@ async function getDownloadRecord(db, archiveVersionId) {
 
   return {
     id: row.id,
+    workId: row.work_id,
+    coverBlobSha256: row.cover_blob_sha256,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalSizeBytes: row.total_size_bytes,
@@ -213,7 +235,11 @@ async function kaiImportMetadata(request, bucket, record) {
   const body = JSON.stringify({
     schema: "viprpg-kai.import.v1",
     archiveVersionId: record.id,
+    workId: record.workId,
     title: record.workChineseTitle || record.workOriginalTitle,
+    coverUrl: record.coverBlobSha256
+      ? new URL(`/api/media/blobs/${record.coverBlobSha256}`, request.url).href
+      : null,
     engineFamily: record.engineFamily,
     manifestSha256: record.manifestSha256,
     downloadUrl: downloadUrl.href,
@@ -382,10 +408,20 @@ async function loadCorePackEntries(bucket, sha256) {
   return entries;
 }
 
-function createFixedLengthZipStream(entries, expectedLength) {
-  const { readable, writable } = new FixedLengthStream(expectedLength);
+function parseDownloadRange(value, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value);
+  if (!match || (!match[1] && !match[2])) return null;
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(size - 1, Number(match[2])) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+      (!match[1] && Number(match[2]) <= 0) || start < 0 || start >= size || end < start) return null;
+  return { start, end };
+}
+
+function createFixedLengthZipStream(entries, expectedLength, range) {
+  const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : expectedLength);
   const writer = writable.getWriter();
-  const completion = writeZip(writer, entries)
+  const completion = writeZip(writer, entries, range)
     .catch(async (error) => {
       await writer.abort(error).catch(() => undefined);
       throw error;
@@ -395,23 +431,31 @@ function createFixedLengthZipStream(entries, expectedLength) {
   return { readable, completion };
 }
 
-async function writeZip(writer, entries) {
+async function writeZip(writer, entries, range) {
   let offset = 0;
   const centralEntries = [];
   const openPromises = new Map();
   let nextToPrefetch = 0;
+  let prefetchOffset = 0;
 
   async function write(bytes) {
-    await writer.write(bytes);
+    const start = range ? Math.max(0, range.start - offset) : 0;
+    const end = range ? Math.min(bytes.byteLength, range.end + 1 - offset) : bytes.byteLength;
+    if (start < end) await writer.write(bytes.subarray(start, end));
     offset += bytes.byteLength;
   }
 
   function prefetchThrough(exclusiveIndex) {
     while (nextToPrefetch < entries.length && nextToPrefetch < exclusiveIndex) {
-      const promise = entries[nextToPrefetch].open();
-
-      promise.catch(() => undefined);
-      openPromises.set(nextToPrefetch, promise);
+      const entry = entries[nextToPrefetch];
+      const dataStart = prefetchOffset + 30 + textEncoder.encode(entry.path).byteLength;
+      const dataEnd = dataStart + entry.size;
+      if (!range || (dataStart <= range.end && dataEnd > range.start)) {
+        const promise = entry.open();
+        promise.catch(() => undefined);
+        openPromises.set(nextToPrefetch, promise);
+      }
+      prefetchOffset = dataEnd;
       nextToPrefetch += 1;
     }
   }
@@ -434,34 +478,40 @@ async function writeZip(writer, entries) {
 
       await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
-      let actualSize = 0;
-      const stream = await openPromises.get(index);
-      const reader = stream.getReader();
-      openPromises.delete(index);
+      let actualSize = entry.size;
+      if (openPromises.has(index)) {
+        actualSize = 0;
+        const stream = await openPromises.get(index);
+        const reader = stream.getReader();
+        openPromises.delete(index);
 
-      try {
-        while (true) {
-          const result = await reader.read();
+        try {
+          while (true) {
+            const result = await reader.read();
 
-          if (result.done) {
-            break;
+            if (result.done) {
+              break;
+            }
+
+            const chunk = normalizeChunk(result.value);
+            actualSize += chunk.byteLength;
+            await write(chunk);
           }
-
-          const chunk = normalizeChunk(result.value);
-          actualSize += chunk.byteLength;
-          await write(chunk);
+        } catch (error) {
+          await reader.cancel(error).catch(() => undefined);
+          throw error;
+        } finally {
+          reader.releaseLock();
         }
-      } catch (error) {
-        await reader.cancel(error).catch(() => undefined);
-        throw error;
-      } finally {
-        reader.releaseLock();
-      }
 
-      if (actualSize !== entry.size) {
-        throw new Error(
-          `ZIP entry size mismatch for ${entry.path}: expected ${entry.size}, got ${actualSize}`,
-        );
+        if (actualSize !== entry.size) {
+          throw new Error(
+            `ZIP entry size mismatch for ${entry.path}: expected ${entry.size}, got ${actualSize}`,
+          );
+        }
+      } else {
+        // The deterministic STORE ZIP lets resumed requests skip complete earlier files.
+        offset += entry.size;
       }
 
       centralEntries.push({
@@ -648,6 +698,7 @@ function downloadHeaders(record, cacheStatus, contentLength) {
   const headers = new Headers();
 
   headers.set("Content-Type", "application/zip");
+  headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Length", String(contentLength));
   headers.set("Content-Disposition", contentDisposition(downloadFileName(record)));
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
