@@ -127,27 +127,18 @@ export default function CreatorDetailPage() {
                         engineFamily={work.engineFamily}
                         language={work.language}
                       >
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {work.credits.map((credit) => (
-                            <Badge
-                              variant="credit"
-                              key={`${credit.roleKey}-${credit.displayName}`}
-                            >
+                        {work.credits.map((credit) => (
+                          <div
+                            className="mt-1.5 text-sm"
+                            key={`${credit.roleKey}-${credit.displayName}`}
+                          >
+                            <Badge variant="credit">
                               {credit.roleLabel ||
                                 creatorRoleLabel(credit.roleKey)}
                             </Badge>
-                          ))}
-                        </div>
-                        {work.credits.some(
-                          (credit) => credit.displayName !== creator.name,
-                        ) ? (
-                          <p className="m-0 mt-1.5 text-sm text-muted">
-                            本作署名：
-                            {unique(
-                              work.credits.map((credit) => credit.displayName),
-                            ).join(" · ")}
-                          </p>
-                        ) : null}
+                            <span className="ml-2 text-muted">{credit.displayName}</span>
+                          </div>
+                        ))}
                         {work.credits.some((credit) => credit.notes) ? (
                           <p className="m-0 mt-1 text-sm text-muted">
                             {unique(
