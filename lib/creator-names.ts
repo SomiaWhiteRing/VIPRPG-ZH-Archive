@@ -22,6 +22,7 @@ export type CreatorSelection =
       kind: "new";
       name: string;
       displayName: string;
+      sourceUserId?: number;
     };
 
 export function creatorNameKey(value: string): string {

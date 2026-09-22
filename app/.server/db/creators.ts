@@ -5,6 +5,7 @@ import type {
   CreatorSelection,
 } from "@/lib/creator-names";
 import { creatorNameKey, creatorSelectionKey } from "@/lib/creator-names";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
 import { isExtraStaffRole } from "@/lib/staff-credits";
@@ -60,7 +61,21 @@ export function parseCreatorSelection(value: unknown): CreatorSelection {
     return { kind: "existing", creatorId, name, displayName };
   }
   if (value.kind === "new") {
-    return { kind: "new", name, displayName };
+    if (
+      value.sourceUserId !== undefined &&
+      (!Number.isSafeInteger(value.sourceUserId) ||
+        Number(value.sourceUserId) <= 0)
+    ) {
+      throw new HttpError(400, "制作人员预填来源不合法。");
+    }
+    return {
+      kind: "new",
+      name,
+      displayName,
+      ...(value.sourceUserId !== undefined
+        ? { sourceUserId: Number(value.sourceUserId) }
+        : {}),
+    };
   }
   throw new HttpError(400, "制作人员选择类型不合法，请重新选择后再提交。");
 }
@@ -142,6 +157,10 @@ export async function prepareWorkStaffStatements(input: {
   database: D1Database;
   workId: number;
   credits: WorkStaffCreditInput[];
+  submitter?: {
+    user: Pick<ArchiveUser, "id" | "avatarBlobSha256">;
+    origin: string;
+  };
 }): Promise<D1PreparedStatement[]> {
   const credits = input.credits.map((credit) => ({
     ...credit,
@@ -204,6 +223,17 @@ export async function prepareWorkStaffStatements(input: {
     );
   }
 
+  // A self translator may also appear earlier in the list as an author.
+  const selfTranslatorNames = new Set(
+    credits.flatMap(({ selection, roleKey }) =>
+      input.submitter &&
+      roleKey === "translator" &&
+      selection.kind === "new" &&
+      selection.sourceUserId === input.submitter.user.id
+        ? [creatorNameKey(selection.name)]
+        : [],
+    ),
+  );
   const statements: D1PreparedStatement[] = [];
   const seen = new Set<string>();
   for (const [sortOrder, credit] of credits.entries()) {
@@ -235,15 +265,26 @@ export async function prepareWorkStaffStatements(input: {
     }
 
     const nameKey = creatorNameKey(selection.name);
+    const submitter = selfTranslatorNames.has(nameKey) ? input.submitter : null;
 
     statements.push(
       input.database
         .prepare(
-          `INSERT INTO creators(name,name_key,extra_json)
-           SELECT ?,?,'{}' WHERE NOT EXISTS (SELECT 1 FROM creator_aliases WHERE name_key=?)
+          `INSERT INTO creators(name,name_key,avatar_blob_sha256,extra_json)
+           SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM creator_aliases WHERE name_key=?)
            ON CONFLICT(name_key) DO NOTHING`,
         )
-        .bind(selection.name, nameKey, nameKey),
+        .bind(
+          selection.name,
+          nameKey,
+          submitter?.user.avatarBlobSha256 ?? null,
+          JSON.stringify(
+            submitter
+              ? { bio: `个人主页：${submitter.origin}/users/${submitter.user.id}` }
+              : {},
+          ),
+          nameKey,
+        ),
       input.database
         .prepare(
           `INSERT INTO work_staff(

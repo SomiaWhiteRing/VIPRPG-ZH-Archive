@@ -93,7 +93,21 @@ export default function CreatorDetailPage() {
               </h2>
               {creator.bio ? (
                 <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
-                  {creator.bio}
+                  {creator.bio
+                    .split(/(https?:\/\/[^\s<>"'，。！？、；：]+)/gu)
+                    .map((part, index) =>
+                      index % 2 === 1 ? (
+                        <a
+                          className="text-secondary underline underline-offset-2"
+                          href={part}
+                          key={index}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {part}
+                        </a>
+                      ) : part,
+                    )}
                 </p>
               ) : (
                 <p className="m-0 text-sm text-muted">暂无简介。</p>

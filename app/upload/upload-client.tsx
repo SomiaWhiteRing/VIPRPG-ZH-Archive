@@ -151,7 +151,7 @@ export function UploadClient({
   );
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [form, setForm] = useState<FlatMetadata>(() =>
-    initialForm(canArchiveUpload, currentUser.displayName, initialWork),
+    initialForm(canArchiveUpload, currentUser, initialWork),
   );
   const [associationDefaults, setAssociationDefaults] =
     useState<AssociationDefaults>(() =>
@@ -243,7 +243,12 @@ export function UploadClient({
         isTranslation: preference.isTranslation,
         translators: preference.translators?.length
           ? preference.translators
-          : [newTranslator(currentUser.displayName)],
+          : [
+              newTranslator({
+                id: currentUser.id,
+                displayName: currentUser.displayName,
+              }),
+            ],
       }));
     }, 0);
     return () => window.clearTimeout(timeoutId);
@@ -1516,8 +1521,15 @@ function ReadinessList({
   );
 }
 
-function newTranslator(name: string): CreatorSelection {
-  return { kind: "new", name, displayName: name };
+function newTranslator(
+  user: Pick<CurrentUser, "id" | "displayName">,
+): CreatorSelection {
+  return {
+    kind: "new",
+    name: user.displayName,
+    displayName: user.displayName,
+    sourceUserId: user.id,
+  };
 }
 
 function translatorStaff(
@@ -1542,7 +1554,7 @@ function translatorStaff(
 
 function initialForm(
   canArchiveUpload: boolean,
-  displayName: string,
+  user: CurrentUser,
   initialWork: UploadInitialWork | null,
 ): FlatMetadata {
   if (initialWork) {
@@ -1561,7 +1573,7 @@ function initialForm(
       moreInfo: moreInfoRows(initialWork.moreInfo),
       translators: initialWork.translators.length
         ? initialWork.translators.map((credit) => credit.selection)
-        : [newTranslator(displayName)],
+        : [newTranslator(user)],
       originalReleaseDate: initialWork.originalReleaseDate ?? "",
       isOriginal: initialWork.isOriginal,
       isTranslation: initialWork.isTranslation,
@@ -1583,7 +1595,7 @@ function initialForm(
     authors: [null],
     extraStaff: [],
     moreInfo: [],
-    translators: [newTranslator(displayName)],
+    translators: [newTranslator(user)],
     originalReleaseDate: "",
     isOriginal: false,
     isTranslation: false,

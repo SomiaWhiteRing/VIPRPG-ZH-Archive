@@ -713,6 +713,7 @@ export async function updateOwnedWork(
     ...(await prepareWorkStaffStatements({
       database,
       workId: input.workId,
+      submitter: { user: input.user, origin: runtime.origin },
       credits: [
         ...authorCredits,
         ...translatorCredits,
@@ -1045,6 +1046,7 @@ export async function createExternalWork(
         database,
         workId: workId as number,
         credits: staffCredits,
+        submitter: { user: input.user, origin: runtime.origin },
       })),
       ...(await prepareWorkCharacterStatements({
         database,
