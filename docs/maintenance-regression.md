@@ -59,6 +59,9 @@
 npx tsx scripts/fetch-easyrpg-testgame.ts
 npm run build
 npx tsx scripts/system-self-check.ts flow --game output/easyrpg/testgame.zip
+node scripts/easyrpg-worker-check.mjs
 ```
 
 此可选流程沿用独立临时 D1/R2，串行完成上传恢复、归档、原生下载、OPFS 安装，以及真实游戏菜单存档、IDBFS 持久化、离页/返回、读档、启动中离页、安装中离页确认与重装。`regression.json`、`runtime.log` 和截图记录实际结果。它不默认引入 CI 下载依赖，也不替代触屏及移动设备全屏验收。新增浏览器操作授权沿用本文的任务授权规则。
+
+`easyrpg-worker-check.mjs` 沿用已下载的官方游戏数据库，生成最小换图与音频事件，直接运行当前私有 Worker 运行包。它检查首次及重复换图不缺帧、运行期间资源读取不经过 HTTP、音频输出、画布与截图的颜色和方向，以及持久写入失败后保留数据并重试停止。帧间隔与音频欠载仅记录为本机采样，不作为跨设备性能承诺；报告在 `output/easyrpg/worker/report.json`。这两条浏览器检查串行运行。

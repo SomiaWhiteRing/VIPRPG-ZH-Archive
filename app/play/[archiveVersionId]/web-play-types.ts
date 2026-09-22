@@ -40,9 +40,7 @@ export type WebPlayInstallation = {
   workId?: number;
   archiveVersionId: number;
   manifestSha256: string;
-  downloadZipBuilderVersion: string;
   webPlayInstallerVersion: string;
-  easyRpgRuntimeVersion: string;
   title: string;
   status: WebPlayInstallStatus;
   phase: WebPlayInstallPhase;

@@ -129,6 +129,8 @@ export function WebPlayClient({
   const playerRef = useRef<PlayerSession | null>(null);
   const lifetimeRef = useRef<AbortController | null>(null);
   const startingRef = useRef(false);
+  const pendingLogs = useRef<WebPlayLog[]>([]);
+  const logTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     screenshots,
     loading: loadingScreenshots,
@@ -175,17 +177,20 @@ export function WebPlayClient({
 
   const addLog = useCallback(
     (level: WebPlayLog["level"], message: string) => {
-      setLogs((current) =>
-        [
-          {
-            id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
-            level,
-            message: message.slice(0, 16_000),
-            createdAt: new Date().toISOString(),
-          },
-          ...current,
-        ].slice(0, 300),
-      );
+      if (lifetimeRef.current?.signal.aborted) return;
+      pendingLogs.current.push({
+        id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
+        level,
+        message: message.slice(0, 16_000),
+        createdAt: new Date().toISOString(),
+      });
+      if (pendingLogs.current.length > 300) pendingLogs.current.shift();
+      // Per-frame engine warnings must not starve navigation transitions.
+      logTimer.current ??= setTimeout(() => {
+        const batch = pendingLogs.current.splice(0).reverse();
+        logTimer.current = null;
+        setLogs(current => [...batch, ...current].slice(0, 300));
+      }, 200);
     },
     [],
   );
@@ -207,6 +212,9 @@ export function WebPlayClient({
     lifetimeRef.current = lifetime;
     return () => {
       lifetime.abort();
+      if (logTimer.current !== null) clearTimeout(logTimer.current);
+      logTimer.current = null;
+      pendingLogs.current = [];
       playerRef.current?.dispose();
       playerRef.current = null;
       workerRef.current?.terminate();
@@ -216,9 +224,18 @@ export function WebPlayClient({
   }, []);
 
   const confirm = useConfirm();
-  useNavigationGuard(installSessionActive, () =>
-    confirm("游戏安装尚未完成，确定离开并中断安装吗？"),
-  );
+  useNavigationGuard(installSessionActive || running || playerStarting, async () => {
+    if (installSessionActive) return confirm("游戏安装尚未完成，确定离开并中断安装吗？");
+    try {
+      await playerRef.current?.dispose();
+      playerRef.current = null;
+      setRunning(false);
+      return true;
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "游戏存档尚未写入，请重试。");
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!diagnosticsOpen || installSessionActive) return;
@@ -264,42 +281,11 @@ export function WebPlayClient({
     };
   }, [addLog, metadata.playKey]);
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const message = event.data as {
-        type?: string;
-        playKey?: string;
-        path?: string;
-        message?: string;
-      };
-
-      if (message.type === "web-play-resource-locks-probe") {
-        event.ports[0]?.postMessage({ resourceLocks: true });
-        return;
-      }
-
-      if (
-        message.type !== "web-play-file-missing" ||
-        message.playKey !== metadata.playKey
-      ) {
-        return;
-      }
-
-      addLog("error", "游戏文件读取失败，请清理并重新安装。");
-    };
-
-    navigator.serviceWorker?.addEventListener("message", onMessage);
-
-    return () => {
-      navigator.serviceWorker?.removeEventListener("message", onMessage);
-    };
-  }, [addLog, metadata.playKey]);
 
   useEffect(() => {
     if (!installed || installSessionActive || running || playerStarting) return;
     let current = true;
     void (async () => {
-      await registerPlayServiceWorker(lifetimeRef.current!.signal);
       const { removed, deferred } = await cleanupObsoleteGameResources(metadata);
       if (!current) return;
       if (deferred) addLog("info", "其他游玩页面仍在使用资源或尚未响应，旧资源清理已延后。");
@@ -413,10 +399,9 @@ export function WebPlayClient({
       if (protectionStatus === "查询失败" || protectionStatus === "申请失败") {
         addLog("warning", `自动清理保护${protectionStatus}，仍可继续安装游戏。`);
       }
-      await registerPlayServiceWorker(signal);
       signal.throwIfAborted();
       if (!(await canManageGameResources())) {
-        throw new Error("请先关闭或刷新其他旧版在线游玩页面，再安装游戏资源。");
+        throw new Error("当前浏览器不支持安全管理本地游戏资源。");
       }
       signal.throwIfAborted();
       const worker = ensureWorker();
@@ -452,14 +437,12 @@ export function WebPlayClient({
         throw new Error("游戏运行中不能删除本地缓存。");
       }
 
-      await registerPlayServiceWorker(lifetimeRef.current!.signal);
       if (!(await canManageGameResources())) {
-        throw new Error("请先关闭或刷新其他旧版在线游玩页面，再删除游戏资源。");
+        throw new Error("当前浏览器不支持安全管理本地游戏资源。");
       }
       await withGameResourceWriteLock(metadata.playKey, async () => {
         await resetGameOpfsDirectory(metadata.playKey);
         await deleteWebPlayInstallation(metadata.playKey);
-        navigator.serviceWorker.controller?.postMessage({ type: "web-play-forget-pack-index", playKey: metadata.playKey });
       });
       setInstallation(null);
       setBrowserStorage(await readBrowserStorage());
@@ -485,10 +468,18 @@ export function WebPlayClient({
 
       startingRef.current = true;
       setPlayerStarting(true);
-      await registerPlayServiceWorker(signal);
       signal.throwIfAborted();
       if (!playerHostRef.current) return false;
-      const player = createPlayerSession(playerHostRef.current, metadata, addLog);
+      const player = createPlayerSession(playerHostRef.current, metadata, addLog, () => {
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+        else setPageFullscreen(value => !value);
+        focusPlayerCanvas();
+      }, () => {
+        playerRef.current = null;
+        setRunning(false);
+        setPageFullscreen(false);
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      });
       playerRef.current = player;
       await player.ready;
       signal.throwIfAborted();
@@ -601,13 +592,19 @@ export function WebPlayClient({
   const stopPlayer = useCallback(async () => {
     if (startingRef.current || !playerRef.current) return;
     setPlayerStopping(true);
-    playerRef.current.dispose();
-    playerRef.current = null;
-    await exitImmersive();
-    if (lifetimeRef.current?.signal.aborted) return;
-    setRunning(false);
-    setPlayerStopping(false);
-    addLog("info", "游戏已停止。");
+    try {
+      await playerRef.current.dispose();
+      playerRef.current = null;
+      await exitImmersive();
+      if (!lifetimeRef.current?.signal.aborted) setRunning(false);
+      addLog("info", "游戏已停止。");
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : "游戏停止失败。");
+    } finally {
+      if (!lifetimeRef.current?.signal.aborted) {
+        setPlayerStopping(false);
+      }
+    }
   }, [addLog, exitImmersive]);
 
   const startDefaultPlayer = useCallback(async () => {
@@ -1019,6 +1016,7 @@ export function WebPlayClient({
                               disabled={copyingLogs}
                               onClick={() => {
                                 setLogs([]);
+                                pendingLogs.current = [];
                               }}
                               size="sm"
                               type="button"
@@ -1171,52 +1169,6 @@ function unlockScreenOrientation(): void {
     | LockableScreenOrientation
     | undefined;
   orientation?.unlock?.();
-}
-
-async function registerPlayServiceWorker(signal: AbortSignal): Promise<void> {
-  signal.throwIfAborted();
-  if (!("serviceWorker" in navigator)) {
-    throw new Error("当前浏览器不支持在线游玩所需的后台功能。");
-  }
-
-  const registration = await navigator.serviceWorker.register("/play/sw.js", {
-    scope: "/play/",
-  });
-  await registration.update().catch(() => undefined);
-  signal.throwIfAborted();
-  // Play links load a document inside /play/. SPA navigation from another scope
-  // cannot give that document control, even when the registration is active.
-  const scriptUrl = new URL("/play/sw.js", window.location.origin).href;
-  const controlled = () =>
-    navigator.serviceWorker.controller?.scriptURL === scriptUrl;
-  if (controlled()) return;
-
-  await new Promise<void>((resolve, reject) => {
-    function cleanup() {
-      window.clearTimeout(timer);
-      navigator.serviceWorker.removeEventListener(
-        "controllerchange",
-        onControl,
-      );
-      signal.removeEventListener("abort", onAbort);
-    }
-    function onControl() {
-      if (!controlled()) return;
-      cleanup();
-      resolve();
-    }
-    function onAbort() {
-      cleanup();
-      reject(signal.reason);
-    }
-    const timer = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("在线游玩初始化超时，请刷新页面后重试。"));
-    }, 10_000);
-    navigator.serviceWorker.addEventListener("controllerchange", onControl);
-    signal.addEventListener("abort", onAbort, { once: true });
-    onControl();
-  });
 }
 
 function focusPlayerCanvas(): void {

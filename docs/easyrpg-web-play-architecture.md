@@ -16,11 +16,11 @@
 - 解包后的 Web Play 运行目录写入 OPFS；安装器跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。普通下载 ZIP 保留全部归档文件。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
-- Service Worker 把 EasyRPG 对 `/play/games/{playKey}/{path...}` 的请求映射到 OPFS pack 文件的 byte range。
-- 同时接受 runtime 相对路径 `/play/runtime/easyrpg/{version}/games/{playKey}/...`；只拦截这些同源路径，其他请求（包括 `/games/{id}.data`）由站点正常处理。
+- 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。
+- 引擎在 Worker 内同步读取本地文件，不发逐资源 HTTP 请求，不使用 Service Worker 资源桥，也不把整个游戏复制进 WASM 内存。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
 - 仓库和每次部署只包含当前一个 EasyRPG runtime；升级成功后清理旧版本目录，不提供多版本选择或旧版回退。
-- EasyRPG 在同源 `/play/player.html` iframe 内运行；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker，刷新或关页保留浏览器确认。
+- 同源 `/play/player.html` iframe 持有播放器 Worker、画布与音频设备；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker；运行中的站内导航先等待存档写入，刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
@@ -37,12 +37,13 @@
   -> 命中 Workers Cache/CDN 时不读 R2
   -> 顺序解析 ZIP local file header
   -> 边下载边把可运行 entry 追加写入少量 OPFS pack
-  -> 生成 EasyRPG index.json 和 pack-index.json
+  -> 生成 pack-index.json
   -> IndexedDB 标记 ready
-  -> 注册/确认 Service Worker
-  -> 加载自托管 EasyRPG Kai index.js/index.wasm/easyrpg-player.data
-  -> EasyRPG 请求 /play/games/{playKey}/...
-  -> Service Worker 从 OPFS pack 切片返回文件 Response
+  -> 取得资源共享锁，校验 pack 索引与文件长度
+  -> iframe 加载 index.js，创建专用播放器 Worker 与 AudioWorklet
+  -> Worker 加载 easyrpg-player.js/wasm/data，挂载 WORKERFS 与 IDBFS
+  -> IDBFS 恢复完成后启动；引擎同步读取本地 pack 切片
+  -> OffscreenCanvas 输出画面，AudioWorklet 输出混音块
 ```
 
 ## 3. URL 和版本键
@@ -53,10 +54,11 @@
 GET /play/{archiveVersionId}
 GET /play/player.html
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.js
-GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.wasm
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-worker.js
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-audio.js
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.js
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.wasm
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.data
-GET /play/games/{playKey}/index.json
-GET /play/games/{playKey}/{path...}
 ```
 
 `/play/runtime/easyrpg/{version}/` 由 `public/play/runtime/easyrpg/{version}/` 提供静态文件。[当前构建配置](../lib/archive/easyrpg-runtime.json)是页面和导入脚本共用的唯一版本来源，`easyRpgRuntimeBasePath` 据此生成资源路径。`public/play/runtime/easyrpg/` 只保留这一版；升级导入成功后删除其他版本目录。
@@ -65,23 +67,23 @@ GET /play/games/{playKey}/{path...}
 
 ### 3.2 Play key
 
-本地安装必须绑定完整版本键：
+本地安装只绑定游戏资源与本地格式：
 
 ```text
 archive_version_id
 manifest_sha256
-download_zip_builder_version
 web_play_installer_version
-easyrpg_runtime_version
 ```
 
 当前由 `lib/archive/web-play.ts` 的 `buildWebPlayKey()` 生成：
 
 ```text
-playKey = av-{archiveVersionId}-{manifestSha256Short}-{downloadZipBuilderVersion}-{webPlayInstallerVersion}-{easyrpgRuntimeVersion}
+playKey = av-{archiveVersionId}-{manifestSha256Short}-{webPlayInstallerVersion}
 ```
 
-任一版本键变化，都视为新的本地安装。当前页面只管理当前 `playKey`，不会自动复用旧版本的本地数据。
+归档、manifest 或本地安装格式变化时生成新安装。播放器版本和下载 ZIP 构建版本分别管理运行组件与传输缓存，不参与 `playKey`；兼容的播放器升级或 ZIP 打包实现更新直接复用已安装资源。若播放器变更要求新的本地格式或文件过滤规则，须同时提升 `webPlayInstallerVersion`。
+
+安装记录与 `pack-index.json` 不保存播放器或 ZIP 构建版本；页面每次从当前元数据取得运行组件 URL。资源锁和旧资源回收仍按 `playKey` 工作，存档与截图继续按 Work ID 独立保存。本次切换会让此前包含 runtime 的旧安装键失效，首次需重装一次；新安装完成后回收未被其他页面使用的旧资源，不删除存档和截图。
 
 ## 4. CDN ZIP Bootstrap
 
@@ -99,7 +101,7 @@ GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBu
 - Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装进度条的文件数和写入体积必须使用这个口径。
 - ZIP 下载进度来自 `Content-Length`；下载端必须继续保证固定长度响应。
 - 下载 ZIP 必须使用 STORE，并在 local file header 中写入明确 `crc32`、compressed size 和 uncompressed size；不能使用 data descriptor。这样浏览器安装器可以顺序解析 entry，不需要等待中央目录。
-- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe` 和普通 `.dll` entry 在本地写入和 EasyRPG 索引生成阶段跳过；五个根目录引擎/补丁识别 DLL 同时写入 pack 和 EasyRPG 索引。`b3101682f` Web runtime 会为索引中的前四种文件创建检测占位；`Destiny.dll` 不在其自动占位名单中，保留文件与索引不等于已验证 Destiny 自动识别或插件兼容性。
+- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe` 和普通 `.dll` entry 在本地写入阶段跳过；五个根目录引擎/补丁识别 DLL 写入 pack，供引擎读取真实文件。保留识别文件不等于支持执行原生插件。
 
 ## 5. OPFS 本地目录
 
@@ -110,7 +112,6 @@ OPFS/
   viprpg-archive/
     games/
       {playKey}/
-        index.json
         pack-index.json
         packs/
           assets-000.pack
@@ -121,9 +122,9 @@ OPFS/
 
 - 安装开始前将 `status` 写为 `installing`。
 - 安装过程中顺序写入 `games/{playKey}/packs/*.pack`。
-- 全部 entry 写入、`index.json` 和 `pack-index.json` 生成完成后，最后一次事务把 `status` 改为 `ready`。
+- 全部 entry 写入、`pack-index.json` 生成完成后，最后一次事务把 `status` 改为 `ready`。
 - 浏览器崩溃后，如果看到遗留的 `installing`，UI 提供“清理并重装”。
-- `ready` 之前 Service Worker 不把该目录当作可运行游戏。
+- `ready` 之前页面不能把该目录交给播放器。
 
 ## 6. IndexedDB 状态
 
@@ -135,9 +136,7 @@ OPFS/
 playKey
 archiveVersionId
 manifestSha256
-downloadZipBuilderVersion
 webPlayInstallerVersion
-easyrpgRuntimeVersion
 status: created | installing | ready | failed | deleted
 totalFiles
 totalSizeBytes
@@ -177,7 +176,7 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 - 使用响应 `Content-Length` 计算下载进度。
 - 下载阶段使用 `ReadableStream` 显示进度，并顺序解析 ZIP local file header。
 - 对每个 STORE entry 读取 local header 中的 size/CRC；如果发现 data descriptor flag，安装失败并提示下载 ZIP builder 不可流式安装。
-- 逐文件规范化路径，按共享本地安装策略过滤文件，生成 EasyRPG 索引，并把 entry 字节追加写入当前 OPFS pack。
+- 逐文件规范化路径，按共享本地安装策略过滤文件，并把 entry 字节追加写入当前 OPFS pack。
 - Pack 默认按约 256 MB 分段，例如 `assets-000.pack`、`assets-001.pack`；单个 entry 超过分段阈值时单独占用当前 pack。
 - 小于分段阈值的游戏生成 1 个 pack 是预期行为。Pack 的第一目标是减少 OPFS 文件数量和 `createWritable/close` 成本，不是按目录制造并行写入。
 - ZIP 网络流的 chunk 可能很碎，不能把每个 chunk 都直接 `writable.write()` 到 OPFS。安装器必须先在 Worker 内聚合到约 1 MB 再写入 pack，降低 OPFS write 调用次数和 backpressure。
@@ -187,63 +186,26 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 - 持续更新 IndexedDB 进度：已下载字节、已安装文件、当前文件。
 - 安装日志必须能区分 ZIP 响应头等待、CDN/Workers Cache 状态、ZIP 下载速率、本地写入速率、OPFS write 等待耗时、write 调用次数、IndexedDB 文件记录耗时和索引写入耗时。
 - ZIP fetch 或读取过程中出现 `network error`、`Failed to fetch`、HTTP 408/429/5xx、连接重置或 ZIP 截断这类可重试错误时，安装器最多自动重试 3 次。每次重试前必须清理半成品 OPFS 目录和 IndexedDB 文件记录；路径冲突、ZIP 格式不兼容、空间不足、取消安装等确定性错误不能自动重试。
-- 安装完成后生成 `index.json` 和 `pack-index.json`，再把安装状态改为 `ready`。
+- 安装完成后生成 `pack-index.json`，再把安装状态改为 `ready`。
 
 安装器不使用 `fflate` 的流式 unzip 处理下载 ZIP。下载 ZIP 已固定为 STORE + local header 明确 size/CRC，安装器只需要极小的顺序 ZIP parser，不需要完整 unzip 抽象。
 
-## 8. EasyRPG `index.json`
+## 8. 本地资源挂载
 
-EasyRPG Web Player 需要每个游戏目录提供 `index.json`。本站不依赖上传者提供该文件，而是由 archive manifest 或 ZIP entry 列表生成。
+安装器只写 `pack-index.json`，不生成另一份文件名索引。启动时校验安装版本、manifest 摘要、pack 长度、文件切片边界、重复路径、文件/目录冲突与 WORKERFS 不能安全表示的路径名，再传递 `{ blob: File, metadata: { files } }`。
 
-`index.json` 需要表达大小写无关索引和真实文件名映射，形态类似：
+WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 Worker 内的 `FileReaderSync` 取得所需字节。大小写、去扩展名和 NFKC 查找交由引擎现有的 FileFinder/DirectoryTree 处理，不再在安装器、Service Worker 和引擎之间复制三套名字映射。
 
-```json
-{
-  "cache": {
-    "rpg_rt.ldb": "RPG_RT.ldb",
-    "charset": {
-      "_dirname": "CharSet",
-      "hero": "Hero.png"
-    }
-  },
-  "metadata": {
-    "version": 3,
-    "storage": "pack-index"
-  }
-}
-```
+当前安装器版本为 `opfs-v12-workerfs`。安装身份变化需重新安装；存档身份仍为 Work ID。资源包就绪不代表每张图片已经解码，解码和引擎图片缓存仍按游戏需要发生。
 
-生成规则：
+## 9. Worker 运行边界
 
-- 每一级目录和文件名先转小写，再做 Unicode NFKC 规范化，与 liblcf `ReaderUtil::Normalize` 保持一致。例如 `フレイムⅡ` 的查找键为 `フレイムii`，全角括号、空格和半角假名也使用相同规则。
-- 原始目录名通过 `_dirname` 保存。
-- 值保存真实文件名。
-- 图像和音频资源需要额外写入去扩展名别名，例如 `system/sys-thin2 -> sys-thin2.png`、`music/ad astra -> Ad Astra.ogg`；EasyRPG 运行时通常用不带扩展名的资源名查询。
-- 路径必须来自 canonical ZIP entry，禁止接受 `..`、绝对路径、空路径和重复冲突路径。
-- 文件名仅因 NFKC 规范化重名时，采用官方 gencache 的后项覆盖规则，同时记录警告；完整文件名键与去扩展名别名指向同一原文件，pack 中保留全部原文件。原始路径大小写冲突、文件/目录冲突或目录规范化重名仍中止安装，避免混用不同目录的内容。
-- `pack-index.json` 与 Service Worker 继续按真实路径的小写键查找，不对存储路径做 NFKC；运行索引的值已还原真实路径。安装器版本为 `opfs-v11-patch-detection`，旧安装需要重新安装以补齐引擎识别文件并生成新索引；存档仍按 Work 保存。
-
-## 9. Service Worker OPFS 桥
-
-Service Worker scope 固定覆盖 `/play/`。
-
-拦截规则：
-
-```text
-/play/games/{playKey}/index.json
-/play/games/{playKey}/{path...}
-```
-
-响应规则：
-
-- 读取 IndexedDB，确认 `playKey` 为 `ready`。
-- 将 URL path 解码并规范化为 OPFS 相对路径。
-- 拒绝路径穿越、空路径、控制字符和绝对路径。
-- `index.json` 直接从 OPFS 根目录读取。
-- 其他路径读取 `pack-index.json`，按小写规范化路径定位 `{ pack, offset, length }`，再从 `packs/{pack}` 切片返回 `new Response(slice.stream(), headers)`。
-- 设置合适的 `Content-Type`；未知类型使用 `application/octet-stream`。
-- 缺失文件返回 404，并通知页面显示重新安装提示。
-- 不做按文件云端回退；避免用户以为已经本地安装完成但仍持续消耗 R2。
+- 一个专用 Worker 运行 C++/WASM 引擎、文件读取、软件绘制与音频混音；没有 pthread 或自建文件 RPC。
+- `OffscreenCanvas` 的 WebGL2 负责上传引擎帧缓冲并按最近邻显示；页面不逐帧搬运像素。
+- 页面收集键盘、鼠标、触控、标准手柄输入，通过消息交给引擎。移动虚拟控制器沿用网站已有界面。
+- AudioWorklet 消费有上限的 PCM 队列，不需要 SharedArrayBuffer、COOP 或 COEP。超长同步解码仍可能造成掉帧或音频欠载；本地同步读取消除的是资源异步完成前的缺图窗口，不承诺所有素材零耗时。
+- 视频以本地 Blob 交给页面的视频元素，不先把整段视频读入 WASM。
+- 网络只用于安装与加载固定运行组件；缺少游戏资源时由引擎记录缺失，不向云端逐文件回退。
 
 ## 10. 在线游玩页面
 
@@ -259,55 +221,44 @@ Service Worker scope 固定覆盖 `/play/`。
 - 安装失败：显示失败阶段、错误和“清理重装”。
 - 已安装：游玩操作只显示“启动游戏”。桌面端默认窗口游玩；移动端（无悬停且主指针为触摸）按本地保存的方向进入全屏，没有偏好时使用横屏。安装与启动统一使用 Rm2kButton。删除本地缓存、重新安装和日志留在诊断区；游戏启动中或运行中禁用删除和重新安装，避免 OPFS 读写竞争。
 - 运行中：桌面端在原启动位置并列显示“网页全屏”“全屏幕”和截取图片按钮；移动端仅显示“全屏幕”，截图改为可配置虚拟按钮。非全屏时游戏区域只显示 4:3 游戏画面，不显示控制器、工具栏、布局编辑、启动占位或提示叠加层；运行状态和错误仍可显示在游戏区域外。网页全屏让 iframe 铺满浏览器视口，在右上角显示恢复按钮；桌面端 canvas 保持 4:3 居中。全屏幕优先使用外层播放器容器的浏览器原生 fullscreen；浏览器拒绝时改为页面铺满，不调用 EasyRPG runtime 自带 fullscreen。移动端只有一个方向切换按钮，显示可切换到的方向；恢复窗口不会重建 iframe 或重启游戏。
-- 移动端全屏运行时默认显示十字键、A（键盘 Z，确认）和 B（键盘 X，取消／菜单）。Shift、Menu（F1）、Debug（F9）、log（反引号键）、x3（F）、x10（G）及相机图标的截图按钮默认隐藏，可在布局编辑中各自添加或删除。x3、x10 与 A、B、截图按钮使用圆形，大小调整时保持宽高相等。十字键可滑动换向、组合斜方向，也可与操作键同时按住；输入通过会话接口转成 iframe 内 SDL3 接收的键盘事件，截图按钮直接调用站点的截图保存流程。抬手、触控取消、失去捕获、窗口失焦、后台切换、方向／布局模式切换和会话销毁时释放相应输入。
+- 移动端全屏运行时默认显示十字键、A（键盘 Z，确认）和 B（键盘 X，取消／菜单）。Shift、Menu（F1）、Debug（F9）、log（反引号键）、x3（F）、x10（G）及相机图标的截图按钮默认隐藏，可在布局编辑中各自添加或删除。x3、x10 与 A、B、截图按钮使用圆形，大小调整时保持宽高相等。十字键可滑动换向、组合斜方向，也可与操作键同时按住；输入通过会话接口转成 iframe 内键盘事件，再由宿主转发到引擎 Worker，截图按钮直接调用站点的截图保存流程。抬手、触控取消、失去捕获、窗口失焦、后台切换、方向／布局模式切换和会话销毁时释放相应输入。
 - 移动端全屏横屏时，方向切换、恢复窗口和布局设置按钮位于左上纵列；竖屏保持右上横排。默认控制器布局参考 GBA／GBA SP：十字键在左，A 在右上、B 在左下，横屏分列画面两侧，竖屏放在画面下方。竖屏全屏游戏画面默认靠上，保持 4:3。虚拟按钮使用纯色，不使用毛玻璃效果。
 - 横竖屏均可编辑按钮布局。十字键整体移动，A、B 和每个可选功能键均独立定位；可在整个可用区域自由拖动，每个控件分别调整大小（50%–200%）和透明度（0%–100%）。只有游戏画面限制为竖屏上下移动，横屏画面位置固定。控件大小和位置会限制在安全区域内。属性面板不显示操作文字提示，横屏按选中按钮所在的左右半屏显示在另一侧，竖屏按上下半屏显示在另一侧；面板内容超出可用空间时滚动。属性按钮用上下三角表示展开状态，展开时高亮；拖动期间临时隐藏面板，完全透明的按钮仍有编辑边框和名称。
 - 布局编辑工具栏在“属性”左侧提供“触控”按钮，文字右侧显示复选框，默认未勾选，点击整颗按钮切换。开关即时保存至同一份本地配置的 `touchEnabled`，横竖屏共用；只在移动端生效。关闭时，窗口与全屏模式均屏蔽游戏 iframe 的直接点击／触摸，虚拟按钮输入不受影响；开启后恢复游戏画面的直接操作。布局编辑期间仍屏蔽游戏画面输入，拖动布局正常；桌面鼠标操作不受这项配置影响。
 - 布局支持保存、取消和恢复当前方向的默认值。编辑时拦截游戏触控；方向或窗口模式变化取消未保存的调整。方向偏好与布局统一保存在 `localStorage` 的 `viprpg:web-play:controls` 中，`layouts.portrait`、`layouts.landscape` 分开保存；各自记录画面位置以及每个按钮的位置、大小、透明度和显示状态。位置用各元素可移动距离的比例表示，适应视口变化；删除可选按钮保留其属性，重新添加可恢复。布局编辑的拖动与边界限制方式参考 [melonDS Android 的布局编辑器](https://github.com/rafaelvcaetano/melonDS-android/blob/master/app/src/main/java/me/magnum/melonds/ui/layouteditor/LayoutEditorView.kt)。
 - 收藏：在线游玩卡片在启动/全屏操作下显示收藏按钮，不再显示下载 ZIP 按钮；安装仍使用原 ZIP 下载接口。
-- 截图：桌面端窗口和全屏模式均提供截取图片按钮；移动端通过默认隐藏的可配置虚拟截图按钮触发，沿用相机图标，可分别调整位置、大小、透明度。移动端“截图已保存”成功提示显示 1 秒，错误提示保留较长时间。通过 EasyRPG 的 `postMainLoop` 在绘制结束后、WebGL 清空绘图缓冲区前截取原始分辨率 PNG。截图按 Work ID 存入独立 IndexedDB `viprpg_web_play_screenshots_v1`，同一游戏的各归档版本共用，清理安装缓存不会删除截图。已有截图时，在在线游玩卡片下方显示两列截图画廊，每页 6 张，支持翻页、灯箱缩放和单张 PNG 下载；可跨页勾选截图，按所选、本页或全部范围打包为 ZIP 下载。预览的 Blob URL 随页面卸载释放。
-- 本地数据与诊断：运行中提供“停止游戏”，销毁当前 iframe 并退出全屏，回到可再次启动的已安装状态；不删除本地游戏文件或已持久化存档。启动尚未完成时禁用停止按钮。
+- 截图：桌面端窗口和全屏模式均提供截取图片按钮；移动端通过默认隐藏的可配置虚拟截图按钮触发，沿用相机图标，可分别调整位置、大小、透明度。移动端“截图已保存”成功提示显示 1 秒，错误提示保留较长时间。通过 Worker 调用引擎的截图接口，从软件帧缓冲生成原始分辨率 PNG。截图按 Work ID 存入独立 IndexedDB `viprpg_web_play_screenshots_v1`，同一游戏的各归档版本共用，清理安装缓存不会删除截图。已有截图时，在在线游玩卡片下方显示两列截图画廊，每页 6 张，支持翻页、灯箱缩放和单张 PNG 下载；可跨页勾选截图，按所选、本页或全部范围打包为 ZIP 下载。预览的 Blob URL 随页面卸载释放。
+- 本地数据与诊断：运行中提供“停止游戏”，等待存档持久化后销毁 Worker 和 iframe 并退出全屏，回到可再次启动的已安装状态；写入失败时报告错误并保留重试机会。启动尚未完成时禁用停止按钮。
 - 自动清理保护：展开诊断时只调用 `persisted()` 查询当前状态并刷新存储估计；安装结束后展开中的诊断也刷新，不把安装记录中的旧快照当作实时授权。只在用户点击安装时由页面调用 `persist()` 申请，区分未获得、不支持、查询失败和申请失败；保护失败不阻止安装，Worker 不申请权限。存储估计不可用时显示“未知”。保护不代表云备份，也不能阻止手动清除站点数据。
 - “本站浏览器用量”使用当前 origin 的 `storage.estimate()`，不是当前游戏体积。清理后刷新估计。
 - 本地资源生命周期：运行前取得以 playKey 为粒度的 Web Locks 共享锁，并在锁内确认安装仍为 ready；销毁 iframe 后释放锁。安装 Worker、手动删除及旧资源回收使用同名排他锁，无法立即取得锁时不等待、不覆盖其他页面的数据。
 - 新版安装成功、停止游戏或再次进入已安装页面时尝试回收旧资源。回收前读取线上当前 Web Play 元数据，只有当前版本本地 ready 才清理同作品其他安装；旧记录缺少 workId 时只按相同 archiveVersionId 归属。失败安装、正在安装或运行的版本受到同一把锁保护，不删除存档数据库或截图数据库。
-- 已打开但不支持资源锁协议的旧页面无法补持锁。Service Worker 探测其他在线游玩页面；有页面未确认协议就延后回收，并拒绝破坏性重装/删除。关闭或刷新这些页面后，下次触发回收可继续。关闭或崩溃会由浏览器释放 Web Lock；不依赖持久化“运行中”标记，不保证网站关闭时仍能后台执行清理。
-- 运行日志：加载 runtime 前接入播放器 iframe 的 console.debug/log/info/warn/error，同时收集未捕获错误与 Promise 拒绝，保留浏览器控制台原输出。页面与剪贴板统一逐行使用 `[HH:mm:ss]内容` 格式，警告与错误通过颜色区分，不重复输出来源和级别文字；“清空”旁提供“复制”按钮，按显示顺序复制当前日志。保留最近 300 条（每条最多 16,000 字符），停止后可继续查看。当前 runtime 会覆盖 print/printErr 并直接调用 console，因此不依赖传入 print 回调。
+- 所有当前页面均使用相同 Web Locks 协议，不再用 Service Worker 探测页面。关闭或崩溃会由浏览器释放 Web Lock；不依赖持久化“运行中”标记，不保证网站关闭时仍能后台清理。
+- 运行日志：加载 runtime 前接入播放器 iframe 的 console.debug/log/info/warn/error，同时收集未捕获错误与 Promise 拒绝，保留浏览器控制台原输出。页面与剪贴板统一逐行使用 `[HH:mm:ss]内容` 格式，警告与错误通过颜色区分，不重复输出来源和级别文字；“清空”旁提供“复制”按钮，按显示顺序复制当前日志。保留最近 300 条（每条最多 16,000 字符），停止后可继续查看。Worker 将引擎日志发给 iframe，iframe 转发至 console 与页面；页面每 200 毫秒批量更新日志，避免高频警告阻塞导航。
 - 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
 本地缓存管理并入 `/play/{archiveVersionId}`。
 
 ## 11. EasyRPG runtime
 
-EasyRPG runtime 必须自托管：
+`public/play/runtime/easyrpg/{version}/` 只保留一套当前运行组件：
 
-```text
-public/play/runtime/easyrpg/{version}/index.js
-public/play/runtime/easyrpg/{version}/index.wasm
-public/play/runtime/easyrpg/{version}/easyrpg-player.data
-public/play/runtime/easyrpg/{version}/COPYING
-public/play/runtime/easyrpg/{version}/SOURCE.json
-```
+- `index.js`：播放器页面入口，原始构建文件名为 `player-host.js`。
+- `player-worker.js`、`player-audio.js`：引擎 Worker 与音频输出。
+- `easyrpg-player.js`、`easyrpg-player.wasm`、`easyrpg-player.data`：引擎及共用 SoundFont。
+- `COPYING`、`SOURCE.json`：许可证、来源、文件摘要。
 
-要求：
+React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首个游戏画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
 
-- `index.wasm` 返回 `Content-Type: application/wasm`。
-- runtime 文件使用长期 immutable 缓存；升级时生成新的 `{version}` 目录并清理旧目录，仓库和部署只保留当前一版。
-- React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，在该文档内加载 runtime 并调用 `createEasyRpgPlayer(...)`。
-- canvas、全局输入、音频和 WASM 循环归属于 iframe。离开页面或切换 playKey／账户时销毁该文档，安装 Worker 同步终止；同一页面的数据刷新不重建播放器。
-- 静态资源的缓存和 WASM 类型头由 [public/_headers](../public/_headers) 定义。调整内容安全策略时须允许同源 WASM 运行；运行兼容性仍需按受授权的浏览器验收确认。
+停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前固定为 EasyRPG Kai `0.8.1.1-kai-b3101682f`，来源为 [Kai 构建 35185078515](https://github.com/SomiaWhiteRing/Player/actions/runs/35185078515) 的 `nightly-web` 产物，对应提交 `b3101682f5cf0b193a01f915f32a6da04f4818b6`。不直接依赖会变化的 Nightly 下载地址；版本目录内的 `SOURCE.json` 记录来源与 SHA-256。
+当前构建、基线提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。工作树构建明确记录 `sourceState: working-tree`、源码快照摘要与 liblcf 提交，不能将其误称为基线提交的原始产物。源码快照与 Web ZIP 保存在 Player 的 `build/artifacts/`。
 
-导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本从[当前构建配置](../lib/archive/easyrpg-runtime.json)读取版本、提交、构建来源和摘要，校验固定 ZIP 与随附 SoundFont，保留原 WASM 和 `.data`，只在生成的 JS 中适配按 Work 挂载存档及 `index.wasm` 文件名。Web ZIP 不含许可证，脚本会通过 HTTPS 从同一固定提交获取 `COPYING` 并校验摘要，因此导入需要联网。
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont 与随包许可证的摘要，保留构建字节，只将入口文件重命名为 `index.js`；不在压缩后的生成代码中做字符串补丁，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
 
-全部校验和补丁适配通过后，脚本在临时目录写齐运行资源、`COPYING` 和 `SOURCE.json`，再将其重命名为当前版本目录，最后清理其他版本目录。同版本重复导入要求完整产物字节一致，否则拒绝覆盖并要求改用新版本号。校验、下载或临时写入失败时不删除已有运行时；清理失败则命令报错，修复后重新导入，成功后才能部署。临时目录仅用于导入，不是保留的可选运行时。
+运行组件的 immutable 缓存与 `application/wasm` 类型头由 [public/_headers](../public/_headers) 定义。内容安全策略需允许同源 Worker、AudioWorklet、WASM 及本地 Blob 视频。无需跨源隔离响应头。
 
-升级只修改上述构建配置中的版本、提交、来源与摘要，必要时调整脚本中的 JS 补丁，然后运行导入并同步本文中的当前构建说明。页面的运行时版本和安装键自动跟随配置；提交时应一并包含新资源和旧目录删除。历史版本通过 Git 历史追溯，不随站点静态资源发布。
-
-当前 Kai 构建已包含 Emscripten 4 的启动顺序修复：在 `preRun` 中建立游戏目录和默认 IDBFS，挂载后等待 `FS.syncfs(true)` 完成再启动。SDL3 初始化与窗口大小变化统一通过 `SDL_GetWindowSizeInPixels` 读取像素尺寸，避免给 `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` 的像素值重复乘 DPI 倍率，造成放大后视口超出画布。引擎更新替换唯一运行时并变更安装键，旧游戏资源需重新安装；存档身份仍按 Work 保留。启动 Promise 拒绝时，iframe 异常转换为父页面 Error 并保留错误堆栈，避免跨窗口 `instanceof Error` 丢失详情。
-
-Kai 默认启用「MIDI音效改良」和 FluidSynth，优先使用 `.data` 预加载的 `/builtin/recommended.sf2`。此音色库由播放器共用，不写入各游戏 ZIP、资源索引或 OPFS pack。启动脚本保留预加载回调，等待挂载完成后再启动；`locateFile` 同时将 WASM 和 `.data` 定位到当前 runtime 目录。此前已保存的播放器开关设置继续生效。MIDI 初始化成功后，运行日志会出现 `Fluidsynth: Using soundfont /builtin/recommended.sf2`。
+Kai 默认使用 FluidSynth 与 `.data` 中的 `/builtin/recommended.sf2`。音色库由播放器共用，不写入各游戏 pack。预加载和 IDBFS 恢复全部完成后再启动，已有播放器音频设置继续生效。
 
 ## 12. 存档策略
 
@@ -338,26 +289,39 @@ const persisted = await navigator.storage.persist();
 ## 14. 安全和兼容
 
 - ZIP entry 解包必须拒绝路径穿越。
-- 同一页面内同一 `playKey` 同时只能有一个安装任务；刷新或崩溃后的遗留 `installing` 状态按中断安装处理并清理重装。当前不提供跨标签页强锁，同时在多个标签安装同一 `playKey` 不属于支持场景。
+- 同一 `playKey` 的安装、删除与回收使用跨页面排他 Web Lock，与运行期间的共享锁互斥；无法立即取得锁时提示重试。遗留 `installing` 状态按中断安装处理并清理重装。
 - 安装完成前不能启动 EasyRPG。
 - `rpg_maker_2003_maniac` 作品允许在线游玩，但页面显示兼容性提示。
 - 非 UTF-8 路径问题会直接影响 EasyRPG 运行；真实样本出现路径损坏时，按[归档路径与编码](./archive-storage.md#路径与编码)核对 manifest、原始路径字节和 ZIP 输出。
-- Service Worker 和 OPFS 都是同源能力，跨域官方播放器无法访问本站 OPFS，因此不能用跨域 EasyRPG iframe。
-- Service Worker 对非法路径返回 400，对缺失文件返回 404 并通知页面；页面当前显示通用的重新安装提示，不承诺展示具体缺失路径。
+- OPFS 和 IDBFS 均为同源存储；当前构建只服务本站，不支持跨域官方播放器嵌入。
+- 本地索引、pack 长度或路径校验失败时中止启动并提示重装；引擎中的素材缺失通过运行日志诊断。
 
 ## 15. 当前验收边界
+
+2026-09-22 已在 Chromium 151.0.7922.34 验证当前 Worker 运行包 `2026.9.2-site-d65072755356`：
+
+- 安装键的定向检查通过：替换播放器版本或 ZIP 构建版本，安装键保持一致；替换归档、manifest 或本地格式，安装键改变。导入包与网站生产构建中的运行文件逐字节一致。
+- 隔离 D1/R2 的完整 `flow --game` 回归通过：官方 TestGame 实际菜单存档、IDBFS 写入、站内离页和返回、刷新读档、F4 网页全屏、WASM 加载中离页，以及中断安装后重装并保留存档。AudioWorklet 加载取消使用未完成的 `addModule()` Promise 注入，验证相同等待点的释放；浏览器请求拦截无法观测该加载。
+- 定向素材场景显示 24 张不同文件两轮（共 48 次显示，47 次换图）；逐帧采样未出现缺图，换图期间没有资源 HTTP 请求。覆盖非 ASCII 文件名、大小写和省略扩展名查找。
+- AudioWorklet 输出非零游戏音频；本次普通素材换图场景没有缓冲耗尽。采样 287 帧，帧间隔 P95 为 19.3 毫秒、最大 21 毫秒；这些是本机单次观测，不设跨设备门槛。引擎 PNG 和实际画布的像素颜色、方向均正确。
+- 注入 IDBFS 写入失败后，停止操作报告失败并保留 Worker 内数据；再次停止能写入 IndexedDB 后结束 Worker。
+- 移动触摸模拟完成 A/B/方向输入、全屏、方向切换、截图保存和停止；页面虚拟按钮不会使引擎误判失焦暂停。
+
+`scripts/easyrpg-flow-check.ts` 通过 Playwright 观察真实 Worker；`scripts/easyrpg-worker-check.mjs` 使用官方游戏数据库和生成的最小事件场景，性能采样只存在于测试中。运行方法见[维护与回归手册](./maintenance-regression.md#easyrpg-官方游戏回归)。报告与截图保存在忽略的 `output/easyrpg/`。
+
+上述结果证明当前方案在测试环境可玩，不是所有游戏或物理手机的兼容认证。超大图片首次解码仍可能卡帧或使音频欠载；尚未验证 Android 实机、非 Chromium 浏览器和所有 Maniac 扩展。
 
 - 已发布且存在当前已发布归档版本的作品显示在线游玩入口。
 - RPG Maker 2003 Maniac 作品显示兼容性提示。
 - 首次点击在线游玩时显示下载进度、解包进度、当前文件和本地缓存状态。
 - 下载 ZIP 复用现有下载 URL；命中 Workers Cache/CDN 时下载观测记录不增加 R2 Get。
-- 安装完成后 OPFS 中有 Web Play 运行目录、`index.json`、`pack-index.json` 和少量 `packs/*.pack`；不会出现完整 ZIP，也不会出现逐文件资源树。
-- `pack-index.json` 中不包含 `.txt`、`.exe` 和普通 `.dll` 文件；根目录的五个引擎/补丁识别 DLL 必须保留，并出现在 EasyRPG 索引中。
+- 安装完成后 OPFS 中有 `pack-index.json` 和少量 `packs/*.pack`，没有完整 ZIP 或逐文件资源树。
+- `pack-index.json` 中不包含 `.txt`、`.exe` 和普通 `.dll` 文件；根目录的五个引擎/补丁识别 DLL 必须保留，并在 WORKERFS 挂载的游戏目录中可见。
 - 刷新页面后无需重新请求云端即可启动已安装游戏。
 - 删除本地缓存后再次进入会重新安装。
 - 浏览器崩溃或安装中关闭页面后，再进入能清理并重新安装。
 - EasyRPG 能启动一个已知可玩的样本游戏。
-- 缺失文件会触发前端错误和重新安装提示。
+- 索引或 pack 不完整时拒绝启动；素材缺失由引擎记录，不向云端回退。
 - 运行中不能删除本地缓存或重新安装；重复点击启动不会重复加载 runtime。
 - 详情页和游玩页使用同一作品页头与侧栏；评论位于各自主栏正文末尾，游玩页评论紧接游戏画面。
 - 游戏画面保持 4:3；桌面端默认窗口游玩，启动后可分别进入网页全屏和全屏幕；移动端按缓存方向全屏，显示虚拟控制器，并提供单个横竖屏切换按钮与恢复窗口。横屏工具栏位于左上纵列，竖屏画面默认靠上且可上下移动；两个方向都能自由编辑各按钮的位置、大小、透明度与可选功能键。
@@ -365,19 +329,19 @@ const persisted = await navigator.storage.persist();
 
 ### 交互与兼容性核对
 
-文件跳过、pack 写入和资源别名分别以第 4、7、8 节为准；这里保留运行时交互需要单独核对的边界。
+文件跳过、pack 写入和资源挂载分别以第 4、7、8 节为准；这里保留运行时交互需要单独核对的边界。
 
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
-- iframe 的 canvas 尺寸由页面 CSS 以 `!important` 覆盖 SDL3 写入的固定内联宽高，按 4:3 等比放大到 iframe 视口可容纳的最大尺寸；不修改引擎绘图缓冲区分辨率。移动端竖屏通过外层画面容器控制高度和垂直位置，旋转降级时画面、控制器、工具栏一起旋转，触控坐标同步转换。截图始终只截取原始游戏 canvas。
+- iframe 的 canvas 由页面 CSS 按 4:3 等比放大到视口可容纳的最大尺寸；不修改引擎绘图缓冲区分辨率。移动端竖屏通过外层画面容器控制高度和垂直位置，旋转降级时画面、控制器、工具栏一起旋转，触控坐标同步转换。截图始终只截取原始游戏 canvas。
 - 播放器 iframe 内取消 `contextmenu` 默认行为，包括画布与黑边区域；保留鼠标按下、抬起等事件，游戏仍可接收右键。监听随播放器会话销毁，站点其他区域的右键菜单不受影响。
-- 全屏应让外层播放器容器进入浏览器原生 fullscreen。直接调用 EasyRPG/Emscripten runtime 的 fullscreen 路径会在当前 runtime 下造成 canvas 尺寸异常，表现为黑屏。
+- 全屏由网站控制外层播放器容器，引擎的全屏请求回调给页面；不调用 SDL/Emscripten 窗口全屏逻辑。
 - 移动端方向切换优先调用 Screen Orientation Lock；不可用或被拒绝时通过 CSS 旋转游玩界面并提示用户手动旋转设备，不能把方向锁定作为启动前提。
-- 当前兼容目标是支持 OPFS、Service Worker 和 WASM 的 Chromium 浏览器，并同时提供桌面和移动布局；不承诺 Firefox 和 Safari 的行为一致。
+- 当前兼容目标是支持 OPFS、Web Locks、Worker 内 OffscreenCanvas/WebGL2、AudioWorklet 和 WASM 的 Chromium 浏览器，提供桌面和移动布局；不承诺其他浏览器或未实测设备的行为。
 
 ## 16. 当前非目标
 
 - 独立的本地缓存管理页。
-- 跨标签页安装锁和半成品续传。
+- 半成品续传。
 - 按 `pack-index.json` 中的 CRC32 和 canonical manifest SHA-256 修复 pack 切片。
 - 存档导出、导入和云同步。
 - 超大游戏的排队安装和后台恢复。

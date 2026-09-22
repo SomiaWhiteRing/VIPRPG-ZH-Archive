@@ -180,7 +180,7 @@ published Work + published current ArchiveVersion
 
 在线游玩 fetch 与下载按钮相同的 ZIP URL。浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；R2 和 D1 不新增 Web Play 文件副本。
 
-本地安装的版本键、IndexedDB 状态、OPFS pack、Service Worker 桥、重试和存档策略由[EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)定义。存储层只保证下载 ZIP 与 manifest 可验证且字节稳定。
+本地安装的版本键、IndexedDB 状态、OPFS pack、Worker 本地播放器、重试和存档策略由[EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)定义。存储层只保证下载 ZIP 与 manifest 可验证且字节稳定。
 
 ## 8. 删除与垃圾回收
 

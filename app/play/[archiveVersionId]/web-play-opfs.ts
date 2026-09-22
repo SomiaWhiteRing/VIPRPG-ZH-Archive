@@ -1,6 +1,68 @@
 const APP_ROOT = "viprpg-archive";
 const GAMES_ROOT = "games";
 
+export type WebPlayPackage = {
+  blob: File;
+  metadata: { files: { filename: string; start: number; end: number }[] };
+};
+
+/** Mount installed bytes directly in the player's Worker, without resource HTTP requests. */
+export async function readGamePackages(
+  playKey: string,
+  archiveVersionId: number,
+  manifestSha256: string,
+  signal: AbortSignal,
+): Promise<WebPlayPackage[]> {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(playKey)) throw new Error("非法游戏安装标识。");
+  const root = await getGameRootDirectory(playKey, false);
+  signal.throwIfAborted();
+  const indexFile = await (await root.getFileHandle("pack-index.json")).getFile();
+  const index: unknown = JSON.parse(await indexFile.text());
+  if (!index || typeof index !== "object" || !("version" in index) || index.version !== 1 ||
+      !("archiveVersionId" in index) || index.archiveVersionId !== archiveVersionId ||
+      !("manifestSha256" in index) || index.manifestSha256 !== manifestSha256 ||
+      !("packs" in index) || !Array.isArray(index.packs) ||
+      !("files" in index) || !index.files || typeof index.files !== "object" || Array.isArray(index.files)) {
+    throw new Error("本地游戏索引不匹配，请重新安装游戏。");
+  }
+  const packsRoot = await root.getDirectoryHandle("packs");
+  const packages = new Map<string, WebPlayPackage>();
+  for (const pack of index.packs) {
+    signal.throwIfAborted();
+    if (!pack || typeof pack.name !== "string" || !Number.isSafeInteger(pack.size) || pack.size < 0 || packages.has(pack.name))
+      throw new Error("本地资源包索引无效。");
+    const blob = await (await packsRoot.getFileHandle(normalizePackName(pack.name))).getFile();
+    if (blob.size !== pack.size) throw new Error(`本地资源包不完整：${pack.name}`);
+    packages.set(pack.name, { blob, metadata: { files: [] } });
+  }
+  const paths = new Set<string>();
+  const directories = new Set<string>();
+  for (const record of Object.values(index.files)) {
+    if (!record || typeof record.path !== "string" || typeof record.pack !== "string" ||
+        !Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.length) ||
+        record.offset < 0 || record.length < 0) throw new Error("本地游戏文件索引无效。");
+    // WORKERFS builds a directory tree using ordinary JS objects.
+    if (record.path.includes("\\") || record.path.includes("\0") ||
+        record.path.split("/").some((part: string) => !part || part === "." || part === ".." ||
+          Object.prototype.hasOwnProperty.call(Object.prototype, part)) ||
+        paths.has(record.path) || directories.has(record.path)) throw new Error(`非法本地游戏路径：${record.path}`);
+    const parts = record.path.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      const directory = parts.slice(0, i).join("/");
+      if (paths.has(directory)) throw new Error(`本地游戏路径冲突：${record.path}`);
+      directories.add(directory);
+    }
+    const pack = packages.get(record.pack);
+    const end = record.offset + record.length;
+    if (!pack || !Number.isSafeInteger(end) || end > pack.blob.size)
+      throw new Error(`本地游戏文件范围无效：${record.path}`);
+    paths.add(record.path);
+    pack.metadata.files.push({ filename: `/${record.path}`, start: record.offset, end });
+  }
+  signal.throwIfAborted();
+  return [...packages.values()];
+}
+
 export async function ensureOpfsSupported(): Promise<void> {
   const storage = navigator.storage as StorageManager & {
     getDirectory?: () => Promise<FileSystemDirectoryHandle>;
@@ -35,13 +97,6 @@ export async function createGamePackWritable(
   });
 
   return file.createWritable();
-}
-
-export async function writeGameIndexJson(
-  playKey: string,
-  indexJson: string,
-): Promise<void> {
-  await writeGameRootTextFile(playKey, "index.json", indexJson);
 }
 
 export async function writeGamePackIndexJson(

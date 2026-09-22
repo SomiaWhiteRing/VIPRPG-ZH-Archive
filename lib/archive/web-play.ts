@@ -1,7 +1,7 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
 
-export const webPlayInstallerVersion = "opfs-v11-patch-detection";
+export const webPlayInstallerVersion = "opfs-v12-workerfs";
 export const easyRpgRuntimeVersion = easyRpgRuntime.version;
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 
@@ -15,13 +15,12 @@ export function buildWebPlayKey(input: {
   archiveVersionId: number;
   manifestSha256: string;
 }): string {
+  // Installed bytes depend on the archive and local format, not the player or ZIP transport.
   return [
     "av",
     String(input.archiveVersionId),
     input.manifestSha256.slice(0, 16),
-    normalizeKeyPart(downloadZipBuilderVersion),
     normalizeKeyPart(webPlayInstallerVersion),
-    normalizeKeyPart(easyRpgRuntimeVersion),
   ].join("-");
 }
 

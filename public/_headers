@@ -7,9 +7,6 @@
 /play/runtime/easyrpg/*.wasm
   Content-Type: application/wasm
 
-/play/sw.js
-  Cache-Control: no-store
-
 /play/player
   Cache-Control: no-store
 
