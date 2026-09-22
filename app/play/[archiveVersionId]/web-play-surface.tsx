@@ -14,6 +14,8 @@ type Props = {
   rotation: number;
   layout: ControlLayout;
   onSaveLayout: (orientation: DisplayOrientation, layout: ControlLayout) => void;
+  touchEnabled: boolean;
+  onTouchEnabledChange: (enabled: boolean) => void;
   onCaptureScreenshot: () => void;
   captureDisabled: boolean;
   playerRef: RefObject<PlayerSession | null>;
@@ -39,6 +41,7 @@ type DragTarget = ControlId | "screen";
 export function WebPlaySurface({
   mobile, immersive, orientation, rotation, layout, onSaveLayout,
   playerRef, playerHostRef, toolbar, placeholder, feedback, onCaptureScreenshot, captureDisabled,
+  touchEnabled, onTouchEnabledChange,
 }: Props) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -130,7 +133,7 @@ export function WebPlaySurface({
         const id = element.dataset.playControl as ControlId;
         const control = positions.buttons[id];
         const base = baseSize * control.size;
-        const pill = controlDefinitions[id].optional && id !== "screenshot";
+        const pill = id === "shift" || id === "menu" || id === "debug" || id === "log";
         const desiredWidth = base * (id === "dpad" ? 2.7 : pill ? 1.55 : 1);
         const desiredHeight = base * (id === "dpad" ? 2.7 : pill ? 0.72 : 1);
         const fitScale = desiredWidth && desiredHeight ? Math.min(1, width / desiredWidth, height / desiredHeight) : 1;
@@ -289,7 +292,7 @@ export function WebPlaySurface({
         ref={areaRef}
       >
         <div className={showControls && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : "absolute inset-0 z-0"}>
-          <div className={editing ? "pointer-events-none h-full w-full" : "h-full w-full"} id="web-player-host" ref={playerHostRef} />
+          <div className={editing || !touchEnabled ? "pointer-events-none h-full w-full" : "h-full w-full"} id="web-player-host" ref={playerHostRef} />
           {dragHandle("screen", "游戏画面")}
         </div>
         {immersive ? placeholder : null}
@@ -383,8 +386,10 @@ export function WebPlaySurface({
             onReset={() => { setSelected("decision"); setDraft(defaultControlLayouts[orientation]); }}
             onSave={() => finishEditing(true)}
             onSelect={setSelected}
+            onTouchEnabledChange={onTouchEnabledChange}
             orientation={orientation}
             selected={selected}
+            touchEnabled={touchEnabled}
           />
         ) : null}
         {immersive ? feedback : null}

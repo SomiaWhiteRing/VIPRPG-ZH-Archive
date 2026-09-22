@@ -1,6 +1,7 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { useState } from "react";
+import { Check } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { controlDefinitions, controlIds } from "./web-play-controls-preferences";
 import type { ControlId, ControlLayout, ControlPlacement, DisplayOrientation } from "./web-play-controls-preferences";
 
@@ -9,6 +10,8 @@ type Props = {
   layout: ControlLayout;
   selected: ControlId;
   dragging: boolean;
+  touchEnabled: boolean;
+  onTouchEnabledChange: (enabled: boolean) => void;
   onSelect: (id: ControlId) => void;
   onChange: (id: ControlId, change: Partial<ControlPlacement>) => void;
   onReset: () => void;
@@ -18,20 +21,39 @@ type Props = {
 
 const buttonClass = "border-white/40 bg-zinc-900 text-white hover:border-white hover:bg-zinc-700 hover:text-white";
 
-export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, onSelect, onChange, onReset, onCancel, onSave }: Props) {
+export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, touchEnabled, onTouchEnabledChange, onSelect, onChange, onReset, onCancel, onSave }: Props) {
   const [propertiesOpen, setPropertiesOpen] = useState(true);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const actions = actionsRef.current;
+    if (!actions) return;
+    const fit = () => editorRef.current?.style.setProperty("--layout-toolbar-offset", `${actions.offsetHeight + 12}px`);
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(actions);
+    return () => observer.disconnect();
+  }, []);
+
   const control = layout.buttons[selected];
   const definition = controlDefinitions[selected];
   const panelPosition = orientation === "portrait"
     ? control.y < 0.5
       ? "bottom-0 left-0 right-0 mx-auto max-h-[calc(50%-0.5rem)] w-[min(20rem,100%)]"
-      : "left-0 right-0 top-12 mx-auto max-h-[calc(50%-3.5rem)] w-[min(20rem,100%)]"
+      : "left-0 right-0 top-(--layout-toolbar-offset) mx-auto max-h-[max(0px,calc(50%-var(--layout-toolbar-offset)-0.5rem))] w-[min(20rem,100%)]"
     : control.x < 0.5
-      ? "right-0 top-12 max-h-[calc(100%-3rem)] w-[min(20rem,calc(50%-0.5rem))]"
-      : "left-0 top-12 max-h-[calc(100%-3rem)] w-[min(20rem,calc(50%-0.5rem))]";
+      ? "right-0 top-(--layout-toolbar-offset) max-h-[max(0px,calc(100%-var(--layout-toolbar-offset)))] w-[min(20rem,calc(50%-0.5rem))]"
+      : "left-0 top-(--layout-toolbar-offset) max-h-[max(0px,calc(100%-var(--layout-toolbar-offset)))] w-[min(20rem,calc(50%-0.5rem))]";
   return (
-    <div className={dragging ? "pointer-events-none invisible absolute inset-0 z-40" : "pointer-events-none absolute inset-0 z-40"}>
-      <div className="pointer-events-auto absolute right-0 top-0 flex gap-1">
+    <div className={dragging ? "pointer-events-none invisible absolute inset-0 z-40" : "pointer-events-none absolute inset-0 z-40"} ref={editorRef}>
+      <div className="pointer-events-auto absolute right-0 top-0 flex max-w-full flex-wrap justify-end gap-1" ref={actionsRef}>
+        <Button aria-checked={touchEnabled} className={buttonClass} onClick={() => onTouchEnabledChange(!touchEnabled)} role="checkbox" size="sm" type="button" variant="outline">
+          触控
+          <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-white/70">
+            {touchEnabled ? <Check /> : null}
+          </span>
+        </Button>
         <Button aria-expanded={propertiesOpen} aria-controls="web-play-layout-properties" className={`${buttonClass} aria-expanded:border-yellow-300 aria-expanded:bg-zinc-700 aria-expanded:text-yellow-200 aria-expanded:ring-1 aria-expanded:ring-yellow-300`} onClick={() => setPropertiesOpen(!propertiesOpen)} size="sm" type="button" variant="outline">
           属性<span aria-hidden className="text-[10px]">{propertiesOpen ? "▲" : "▼"}</span>
         </Button>

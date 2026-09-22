@@ -116,6 +116,7 @@ export function WebPlayClient({
   const {
     preferences: controlsPreferences,
     setOrientation: setDisplayOrientation,
+    setTouchEnabled,
     saveLayout,
     storageError: controlsStorageError,
   } = useWebPlayControlsPreferences();
@@ -700,10 +701,12 @@ export function WebPlayClient({
                     mobile={mobileControls && running}
                     onCaptureScreenshot={() => void captureScreenshot()}
                     onSaveLayout={saveLayout}
+                    onTouchEnabledChange={setTouchEnabled}
                     orientation={surfaceOrientation}
                     playerHostRef={playerHostRef}
                     playerRef={playerRef}
                     rotation={rotation}
+                    touchEnabled={!mobileControls || controlsPreferences.touchEnabled}
                     placeholder={!running ? (
                       <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
                         {playerStarting

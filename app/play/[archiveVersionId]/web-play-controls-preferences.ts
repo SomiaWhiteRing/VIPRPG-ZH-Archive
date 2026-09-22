@@ -48,12 +48,14 @@ export const defaultControlLayouts: Record<DisplayOrientation, ControlLayout> = 
 
 type ControlsPreferences = {
   orientation: DisplayOrientation;
+  touchEnabled: boolean;
   layouts: Record<DisplayOrientation, ControlLayout>;
 };
 
 const storageKey = "viprpg:web-play:controls";
 const defaultPreferences: ControlsPreferences = {
   orientation: "landscape",
+  touchEnabled: false,
   layouts: defaultControlLayouts,
 };
 
@@ -95,6 +97,7 @@ export function useWebPlayControlsPreferences() {
       if (value && typeof value === "object") {
         setPreferences({
           orientation: value.orientation === "portrait" ? "portrait" : "landscape",
+          touchEnabled: value.touchEnabled === true,
           layouts: {
             portrait: readLayout(value.layouts?.portrait, defaultControlLayouts.portrait),
             landscape: readLayout(value.layouts?.landscape, defaultControlLayouts.landscape),
@@ -121,6 +124,10 @@ export function useWebPlayControlsPreferences() {
     setPreferences((current) => current.orientation === orientation ? current : { ...current, orientation });
   }, []);
 
+  const setTouchEnabled = useCallback((touchEnabled: boolean) => {
+    setPreferences((current) => current.touchEnabled === touchEnabled ? current : { ...current, touchEnabled });
+  }, []);
+
   const saveLayout = useCallback((orientation: DisplayOrientation, layout: ControlLayout) => {
     setPreferences((current) => ({
       ...current,
@@ -128,5 +135,5 @@ export function useWebPlayControlsPreferences() {
     }));
   }, []);
 
-  return { preferences, setOrientation, saveLayout, storageError };
+  return { preferences, setOrientation, setTouchEnabled, saveLayout, storageError };
 }
