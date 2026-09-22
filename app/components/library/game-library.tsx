@@ -425,7 +425,7 @@ function FilterLink({
       aria-current={active ? "true" : undefined}
       className={
         active
-          ? "inline-flex min-h-8 items-center rounded-full bg-secondary px-2.5 text-sm font-bold text-secondary-foreground"
+          ? "inline-flex min-h-8 items-center rounded-md bg-primary px-2.5 text-sm font-bold text-primary-foreground"
           : "inline-flex min-h-8 items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10"
       }
       to={href}

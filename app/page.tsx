@@ -99,7 +99,7 @@ function HomeWorkGrid({
   if (!works.length) {
     return (
       <EmptyState
-        title={original ? "目前还没有公开原创作品。" : "目前还没有公开作品。"}
+        title={original ? "目前还没有公开的原创作品。" : "目前还没有公开的作品。"}
         variant="plain"
         className="py-6"
       />
