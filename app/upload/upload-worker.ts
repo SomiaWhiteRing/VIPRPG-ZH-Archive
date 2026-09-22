@@ -8,6 +8,7 @@ import {
 } from "@/lib/archive/file-policy";
 import {
   enumerateUploadSourceFiles,
+  inspectUploadSource,
   type UploadSourceEntry as SourceFile,
 } from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
@@ -23,6 +24,7 @@ import type {
   MetadataBlobUpload,
   PreparedArchiveSource,
   UploadRecoveryDraft,
+  UploadFormDraft,
   UploadSourceKind,
   UploadTaskCommitResult,
   UploadTaskPhase,
@@ -80,6 +82,7 @@ type ScanFileResult =
 type UploadRuntime = {
   task: BrowserUploadTaskSnapshot;
   preparedSource: PreparedArchiveSource | null;
+  formDraft?: UploadFormDraft;
   metadata: ArchiveCommitMetadata | null;
   metadataBlobs: MetadataBlobUpload[];
   joining: boolean;
@@ -120,6 +123,11 @@ const hashByteBudgetBytes = 256 * 1024 * 1024;
 
 self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
   const message = event.data;
+
+  if (message.type === "save_form_draft") {
+    void saveFormDraft(message);
+    return;
+  }
 
   if (message.type === "start_source") {
     void startSource(message);
@@ -176,6 +184,14 @@ async function startSource(
       message.sourceKind,
     );
     await waitForCancellation(runtime);
+    try {
+      const prefill = await inspectUploadSource(sourceFiles);
+      await waitForCancellation(runtime);
+      self.postMessage({ type: "source_prefill", prefill } satisfies UploadWorkerOutput);
+    } catch (error) {
+      if (error instanceof RuntimeSettledError) throw error;
+      // Optional title/cover defaults must not prevent an otherwise valid upload.
+    }
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
     task = {
@@ -278,6 +294,30 @@ async function startSource(
   }
 }
 
+async function saveFormDraft(
+  message: Extract<UploadWorkerInput, { type: "save_form_draft" }>,
+): Promise<void> {
+  const runtime = runtimeFor(message.localTaskId);
+  if (
+    !runtime ||
+    runtime.settled ||
+    runtime.cancelAttempt ||
+    runtime.task.commitStarted ||
+    runtime.task.metadataConfirmed ||
+    isTerminal(runtime.task.status)
+  )
+    return;
+  runtime.formDraft = message.formDraft;
+  try {
+    await saveRuntimeDraft(runtime);
+  } catch {
+    postMessage({
+      type: "draft_save_error",
+      message: "作品资料草稿自动保存失败，请勿刷新或关闭页面。",
+    } satisfies UploadWorkerOutput);
+  }
+}
+
 async function confirmMetadata(
   message: Extract<UploadWorkerInput, { type: "confirm_metadata" }>,
 ): Promise<void> {
@@ -338,11 +378,12 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
       status: "waiting",
       phase: "awaiting_metadata",
       sourceReady: true,
-      metadataConfirmed: draft.metadataConfirmed,
+      metadataConfirmed: false,
       stats: draft.preparedSource.stats,
       progress: { ...task.progress, percent: 100 },
     },
     preparedSource: draft.preparedSource,
+    formDraft: draft.formDraft,
     metadata: draft.metadata,
     metadataBlobs: draft.metadataBlobs,
     joining: false,
@@ -801,8 +842,7 @@ function buildSourceManifest(
     archiveVersion: {
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
-      sourceType:
-        source.sourceKind === "zip" ? "browser_zip" : "browser_folder",
+      sourceType: `browser_${source.sourceKind}`,
       sourceFileCount: source.stats.sourceFileCount,
       sourceSize: source.stats.sourceSizeBytes,
       includedFileCount: source.stats.includedFileCount,
@@ -1126,6 +1166,7 @@ async function saveRuntimeDraft(runtime: UploadRuntime): Promise<void> {
     serverImportJobId: task.serverImportJobId,
     targetWorkId: task.targetWorkId,
     preparedSource,
+    formDraft: runtime.formDraft,
     metadata: runtime.metadata,
     metadataBlobs: runtime.metadataBlobs,
     metadataConfirmed: task.metadataConfirmed,

@@ -107,7 +107,7 @@ R2 key 只由 `app/.server/storage/archive-keys.ts` 生成：
 ## 5. 上传流程
 
 ```text
-文件分支：选择文件夹或 ZIP
+文件分支：选择文件夹、ZIP 或 7z
   -> 浏览器 Worker 枚举路径、应用文件策略并计算 hash
   -> 生成 core pack
   -> 创建绑定上传者的 import job；已有作品的新版本同时绑定目标 Work
@@ -125,7 +125,11 @@ source ready + metadata confirmed
   -> 原子创建或更新 Work，创建 ArchiveVersion 和引用
 ```
 
-普通用户只在当前上传页看到任务进度，不提供跨页面任务管理器。source ready 后的草稿可以在同一浏览器、同一账号下跨刷新或浏览器重启恢复；草稿只保存路径/hash 描述、core pack 引用、统计和资料图片，不保存原始游戏文件。浏览器锁保证同一草稿只由一个标签页接管。source ready 前的中断、跨设备接力和长期任务历史不在恢复范围内，服务端陈旧任务在 24 小时后过期。
+普通用户只在当前上传页看到任务进度，不提供跨页面任务管理器。source ready 后的草稿可以在同一浏览器、同一账号下跨刷新或浏览器重启恢复；草稿保存路径/hash 描述、core pack 引用、统计，以及持续自动保存的表单原值和资料图片，不保存原始游戏文件。未确认、不完整的资料也会保存；恢复后必须重新确认资料才会提交。浏览器锁保证同一草稿只由一个标签页接管。source ready 前的中断、跨设备接力和长期任务历史不在恢复范围内，服务端陈旧任务在 24 小时后过期。
+
+ZIP 和 7z 都以唯一的 `RPG_RT.lmt` 所在目录为游戏根目录，仅处理该目录中的文件。7z 使用上传 Worker 内的 `7z-wasm` 解压，支持普通及固实压缩，暂不接受加密或分卷文件；内存不足时提示先解压后选择文件夹。标题、封面预读复用同一批文件，避免再次解压。7z 的 manifest / D1 来源标记为 `browser_7z`，下载仍按既有流程重组为 ZIP。
+
+`7z-wasm` 固定为 1.2.0，其 [源码及构建方法](https://github.com/use-strict/7z-wasm#building)由上游提供；随站点发布的许可见 `/licenses/7z-wasm/License.txt` 和 `/licenses/7z-wasm/unRarLicense.txt`。
 
 ### Preflight
 

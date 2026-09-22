@@ -14,7 +14,7 @@ export default defineConfig({
   optimizeDeps: {
     // Worker-only encoders are discovered too late by the page scan. Discovering
     // them on the first image selection otherwise reloads the page mid-draft.
-    include: ["upng-js", "@jsquash/jpeg/encode", "@jsquash/webp/encode"],
+    include: ["upng-js", "@jsquash/jpeg/encode", "@jsquash/webp/encode", "7z-wasm"],
   },
   server: {
     host: "127.0.0.1",

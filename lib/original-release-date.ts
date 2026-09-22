@@ -10,6 +10,7 @@ export function parseOriginalReleaseDate(value: string | null | undefined): {
 } | null {
   const date = value?.trim() ?? "";
   if (!date) return { value: null, precision: "unknown" };
+  if (/^0000(?:-|$)/.test(date)) return null;
   if (/^\d{4}$/.test(date)) return { value: date, precision: "year" };
 
   const month = /^(\d{4})-(\d{2})$/.exec(date);
@@ -26,7 +27,9 @@ export function parseOriginalReleaseDate(value: string | null | undefined): {
   const monthNumber = Number(day[2]);
   const dayNumber = Number(day[3]);
   if (monthNumber < 1 || monthNumber > 12) return null;
-  const daysInMonth = new Date(Date.UTC(yearNumber, monthNumber, 0)).getUTCDate();
+  const monthEnd = new Date(0);
+  monthEnd.setUTCFullYear(yearNumber, monthNumber, 0);
+  const daysInMonth = monthEnd.getUTCDate();
   return dayNumber >= 1 && dayNumber <= daysInMonth
     ? { value: date, precision: "day" }
     : null;

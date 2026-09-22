@@ -3,6 +3,51 @@ import type {
   ArchiveManifestFile,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
+import type { CharacterCreditSelection } from "@/lib/character-names";
+import type { CreatorSelection } from "@/lib/creator-names";
+import type { StaffRow } from "./staff-editor";
+import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
+
+export type UploadFormMetadata = {
+  usesUnsupportedManiac: boolean;
+  originalTitle: string;
+  chineseTitle: string;
+  aliasTitles: string[];
+  engineFamily: ArchiveCommitMetadata["game"]["engineFamily"];
+  description: string;
+  tags: string[];
+  characters: CharacterCreditSelection[];
+  authors: (CreatorSelection | null)[];
+  extraStaff: StaffRow[];
+  moreInfo: MoreInfoRow[];
+  translators: (CreatorSelection | null)[];
+  originalReleaseDate: string;
+  isOriginal: boolean;
+  isTranslation: boolean;
+  language: string;
+  archiveSourceUrl: string;
+  externalDownloadUrl: string;
+  status: "published" | "hidden";
+};
+
+export type UploadImageSelections = {
+  cover: File | null;
+  browsingImages: File[];
+  replacePreviews: boolean;
+};
+
+export type UploadAssociationDefaults = {
+  characters: NonNullable<ArchiveCommitMetadata["characters"]>;
+  authors: ArchiveCommitMetadata["workStaff"];
+  translators: ArchiveCommitMetadata["workStaff"];
+};
+
+export type UploadFormDraft = {
+  form: UploadFormMetadata;
+  associationDefaults: UploadAssociationDefaults;
+  imageSelections: UploadImageSelections;
+  characterFaceSheetFiles: Record<number, File[]>;
+};
 
 export type UploadTaskStatus =
   | "running"
@@ -24,7 +69,12 @@ export type UploadTaskPhase =
   | "committing"
   | "completed";
 
-export type UploadSourceKind = "folder" | "zip";
+export type UploadSourceKind = "folder" | "zip" | "7z";
+
+export type UploadSourcePrefill = {
+  gameTitle: string | null;
+  titleImages: File[];
+};
 
 export type UploadSourceFile = {
   file: File;
@@ -62,6 +112,7 @@ export type UploadRecoveryDraft = {
   serverImportJobId: number;
   targetWorkId: number | null;
   preparedSource: PreparedArchiveSource;
+  formDraft?: UploadFormDraft;
   metadata: ArchiveCommitMetadata | null;
   metadataBlobs: MetadataBlobUpload[];
   metadataConfirmed: boolean;
@@ -120,6 +171,7 @@ export type UploadTaskCommitResult = {
 };
 
 export type UploadWorkerInput =
+  | { type: "save_form_draft"; localTaskId: string; formDraft: UploadFormDraft }
   | {
       type: "start_source";
       accountId: number;
@@ -141,7 +193,9 @@ export type UploadWorkerInput =
 
 export type UploadWorkerOutput =
   | { type: "task"; task: BrowserUploadTaskSnapshot }
+  | { type: "source_prefill"; prefill: UploadSourcePrefill }
   | { type: "draft_saved"; draft: UploadRecoveryDraft }
+  | { type: "draft_save_error"; message: string }
   | {
       type: "settled";
       task: BrowserUploadTaskSnapshot;

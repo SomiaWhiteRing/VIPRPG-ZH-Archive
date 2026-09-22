@@ -601,7 +601,8 @@ function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
 
   const isBrowserUpload =
     manifest.archiveVersion.sourceType === "browser_folder" ||
-    manifest.archiveVersion.sourceType === "browser_zip";
+    manifest.archiveVersion.sourceType === "browser_zip" ||
+    manifest.archiveVersion.sourceType === "browser_7z";
   if (
     isBrowserUpload &&
     !manifest.files.some((file) => file.path.toLowerCase() === "rpg_rt.lmt")
@@ -649,7 +650,7 @@ export function parseArchiveSourceManifest(
   if (
     typeof archiveVersion.filePolicyVersion !== "string" ||
     typeof archiveVersion.packerVersion !== "string" ||
-    !["browser_folder", "browser_zip", "preindexed_manifest"].includes(
+    !["browser_folder", "browser_zip", "browser_7z", "preindexed_manifest"].includes(
       String(archiveVersion.sourceType),
     ) ||
     !isNonNegativeInteger(archiveVersion.sourceFileCount) ||

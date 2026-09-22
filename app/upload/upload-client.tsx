@@ -20,12 +20,10 @@ import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { LanguageField } from "@/app/components/work/language-field";
-import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 import {
   WorkMoreInfoEditor,
   moreInfoRows,
 } from "@/app/components/work/work-more-info-editor";
-import { inspectUploadSource } from "@/app/upload/archive-source";
 import {
   ArchiveSourcePicker,
   normalizeFolderSource as normalizeSharedFolderSource,
@@ -33,7 +31,6 @@ import {
   uploadPhaseLabel,
 } from "@/app/upload/archive-source-picker";
 import { EnginePicker } from "@/app/upload/engine-picker";
-import type { StaffRow } from "@/app/upload/staff-editor";
 import {
   StaffEditor,
   extraStaffCredits,
@@ -49,9 +46,13 @@ import { useUploadController } from "@/app/upload/upload-controller";
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
+  UploadAssociationDefaults as AssociationDefaults,
+  UploadFormMetadata as FlatMetadata,
+  UploadImageSelections as ImageSelections,
   UploadRecoveryDraft,
   UploadSourceFile,
   UploadSourceKind,
+  UploadSourcePrefill,
   UploadTaxonomySuggestion,
 } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
@@ -82,40 +83,12 @@ type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
 type WorkStaffCredit = ArchiveCommitMetadata["workStaff"][number];
 export type UploadStaffCredit = WorkStaffCredit;
-type AssociationDefaults = {
-  characters: CharacterCredit[];
-  authors: UploadStaffCredit[];
-  translators: UploadStaffCredit[];
-};
-type FlatMetadata = {
-  usesUnsupportedManiac: boolean;
-  originalTitle: string;
-  chineseTitle: string;
-  aliasTitles: string[];
-  engineFamily: EngineFamily;
-  description: string;
-  tags: string[];
-  characters: CharacterCreditSelection[];
-  authors: (CreatorSelection | null)[];
-  extraStaff: StaffRow[];
-  moreInfo: MoreInfoRow[];
-  translators: (CreatorSelection | null)[];
-  originalReleaseDate: string;
-  isOriginal: boolean;
-  isTranslation: boolean;
-  language: string;
-  archiveSourceUrl: string;
-  externalDownloadUrl: string;
-  status: "published" | "hidden";
-};
-
 type CurrentUser = {
   id: number;
   displayName: string;
   permissionKeys: string[];
 };
 
-type ImageSelections = { cover: File | null; browsingImages: File[]; replacePreviews: boolean };
 type PreparedImages = {
   hashes: { coverBlobSha256: string; previewBlobSha256s: string[] };
   blobs: MetadataBlobUpload[];
@@ -240,6 +213,24 @@ export function UploadClient({
       draft.targetWorkId === (initialWork?.id ?? null) &&
       draft.serverImportJobId !== upload.task?.serverImportJobId,
   );
+  const { saveFormDraft } = upload;
+  const localTaskId = upload.task?.localTaskId;
+
+  useEffect(() => {
+    saveFormDraft({
+      form,
+      associationDefaults,
+      imageSelections,
+      characterFaceSheetFiles,
+    });
+  }, [
+    form,
+    associationDefaults,
+    imageSelections,
+    characterFaceSheetFiles,
+    localTaskId,
+    saveFormDraft,
+  ]);
 
   useEffect(() => {
     if (initialWork) return;
@@ -322,40 +313,35 @@ export function UploadClient({
     );
   }
 
-  async function prefillSourceMetadata(
-    sourceKind: UploadSourceKind,
-    files: UploadSourceFile[],
-    canPrefillOriginalTitle: boolean,
+  function prefillSourceMetadata(
+    prefill: UploadSourcePrefill,
+    canPrefill: { originalTitle: boolean; chineseTitle: boolean },
     generation: number,
   ) {
-    try {
-      const prefill = await inspectUploadSource(files, sourceKind);
-      if (generation !== sourceInspectionGenerationRef.current) return;
-      setSourceCoverCandidates(prefill.titleImages);
-
-      if (canPrefillOriginalTitle && prefill.gameTitle) {
-        setForm((current) =>
-          current.originalTitle.trim()
-            ? current
-            : {
-                ...current,
-                originalTitle: prefill.gameTitle ?? current.originalTitle,
-              },
-        );
-      }
-
-      const latestTitleImage = prefill.titleImages[0];
-      if (!latestTitleImage || initialWork?.coverBlobSha256) return;
-
-      if (generation !== sourceInspectionGenerationRef.current) return;
-      setImageSelections((current) => {
-        if (current.cover) return current;
-        automaticCoverRef.current = latestTitleImage;
-        return { ...current, cover: latestTitleImage };
+    if (generation !== sourceInspectionGenerationRef.current) return;
+    setSourceCoverCandidates(prefill.titleImages);
+    const title = prefill.gameTitle;
+    if (title) {
+      setForm((current) => {
+        const field =
+          (current.language === "zh-CN" || current.language === "zh-TW") &&
+          !/[\p{Script=Hiragana}\p{Script=Katakana}ー]/u.test(title)
+            ? "chineseTitle"
+            : "originalTitle";
+        return canPrefill[field] && !current[field].trim()
+          ? { ...current, [field]: title }
+          : current;
       });
-    } catch {
-      // Source inspection only supplies defaults; the upload worker reports source errors.
     }
+
+    const latestTitleImage = prefill.titleImages[0];
+    if (!latestTitleImage || initialWork?.coverBlobSha256) return;
+
+    setImageSelections((current) => {
+      if (current.cover) return current;
+      automaticCoverRef.current = latestTitleImage;
+      return { ...current, cover: latestTitleImage };
+    });
   }
 
   async function startFolder(
@@ -386,7 +372,10 @@ export function UploadClient({
     files: UploadSourceFile[],
   ) {
     const sizeBytes = files.reduce((sum, item) => sum + item.file.size, 0);
-    const canPrefillOriginalTitle = !form.originalTitle.trim();
+    const canPrefill = {
+      originalTitle: !form.originalTitle.trim(),
+      chineseTitle: !form.chineseTitle.trim(),
+    };
     const generation = sourceInspectionGenerationRef.current + 1;
     sourceInspectionGenerationRef.current = generation;
     setSourceCoverCandidates([]);
@@ -401,18 +390,20 @@ export function UploadClient({
     }
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
-    upload.startSource({
-      sourceKind,
-      sourceName,
-      files,
-      targetWorkId: initialWork?.id ?? null,
-    });
-    void prefillSourceMetadata(
-      sourceKind,
-      files,
-      canPrefillOriginalTitle,
-      generation,
+    upload.startSource(
+      { sourceKind, sourceName, files, targetWorkId: initialWork?.id ?? null },
+      (prefill) => prefillSourceMetadata(prefill, canPrefill, generation),
     );
+  }
+
+  function startArchive(file: File) {
+    setSubmitError(null);
+    const extension = file.name.match(/\.(zip|7z)$/i)?.[1].toLowerCase();
+    if (extension !== "zip" && extension !== "7z") {
+      setSubmitError("请选择 ZIP 或 7z 压缩包；分卷压缩包请先解压后选择游戏文件夹。");
+      return;
+    }
+    startSource(extension, file.name, [{ file, relativePath: file.name }]);
   }
 
   async function onSourceDrop(event: DragEvent<HTMLDivElement>) {
@@ -433,11 +424,9 @@ export function UploadClient({
       if (
         files.length === 1 &&
         !entry?.isDirectory &&
-        /\.zip$/i.test(files[0].name)
+        /\.(?:zip|7z)(?:\.\d+)?$/i.test(files[0].name)
       ) {
-        startSource("zip", files[0].name, [
-          { file: files[0], relativePath: files[0].name },
-        ]);
+        startArchive(files[0]);
       } else {
         const dropped = await readSharedDroppedFolder(event.dataTransfer);
         await startFolder(dropped.files, dropped.sourceName);
@@ -636,16 +625,19 @@ export function UploadClient({
   }
 
   async function restore(draft: UploadRecoveryDraft) {
-    if (
-      !(await upload.restoreDraft(draft, {
-        clearMetadata: Boolean(initialWork),
-      }))
-    )
-      return;
+    if (!(await upload.restoreDraft(draft))) return;
     sourceInspectionGenerationRef.current += 1;
     automaticCoverRef.current = null;
     setSourceCoverCandidates([]);
-    if (draft.metadata && !initialWork) {
+    if (draft.formDraft) {
+      setForm(draft.formDraft.form);
+      setAssociationDefaults(draft.formDraft.associationDefaults);
+      setImageSelections(draft.formDraft.imageSelections);
+      setCharacterFaceSheetFiles(draft.formDraft.characterFaceSheetFiles);
+      setTranslatorError(null);
+      setStaffErrorsVisible(false);
+      setMoreInfoErrorsVisible(false);
+    } else if (draft.metadata && !initialWork) {
       setForm(formFromMetadata(draft.metadata));
       setTranslatorError(null);
       setAssociationDefaults(associationsFromMetadata(draft.metadata));
@@ -823,17 +815,12 @@ export function UploadClient({
                     onFolder={(files, sourceName) =>
                       void startFolder(files, sourceName)
                     }
-                    onModeChange={setMode}
                     onRemoveExisting={() => {
                       setExistingArchive(null);
                       setSubmitError(null);
                     }}
                     onRestart={restart}
-                    onZip={(file) =>
-                      startSource("zip", file.name, [
-                        { file, relativePath: file.name },
-                      ])
-                    }
+                    onArchive={startArchive}
                     sourceSummary={sourceSummary}
                     task={upload.task}
                   />
@@ -1213,7 +1200,7 @@ function MetadataFields({
             onChange={(value) =>
               setForm((current) => ({ ...current, originalReleaseDate: value }))
             }
-            placeholder="作品最初发表的日期"
+            placeholder="选择或粘贴作品最初发表的日期"
             required
             value={form.originalReleaseDate}
           />
