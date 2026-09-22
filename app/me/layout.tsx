@@ -18,7 +18,6 @@ export async function loader(args: LoaderFunctionArgs) {
     user: pickPageFields(user, [
       "avatarBlobSha256",
       "displayName",
-      "email",
       "id",
       "status",
       "permissionKeys",
@@ -37,17 +36,13 @@ export default function AccountLayout() {
       <div className="group/account has-[[data-account-full-width]]:block md:grid md:grid-cols-[232px_minmax(0,1fr)] md:gap-8">
         <div className="group-has-[[data-account-full-width]]/account:hidden sticky top-20 hidden self-start md:block">
           {user ? (
-            <div className="mb-5 flex min-w-0 items-center gap-3 px-2">
+            <div className="mb-3 flex min-w-0 items-center gap-3 px-2">
               <UserAvatar
                 avatarBlobSha256={user.avatarBlobSha256}
                 displayName={user.displayName}
+                size={36}
               />
-              <div className="min-w-0">
-                <strong className="block truncate">{user.displayName}</strong>
-                <span className="block truncate text-xs text-muted">
-                  {user.email}
-                </span>
-              </div>
+              <strong className="min-w-0 truncate text-sm font-medium">{user.displayName}</strong>
             </div>
           ) : null}
           <AccountNavigation

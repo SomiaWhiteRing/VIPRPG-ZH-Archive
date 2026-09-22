@@ -1,6 +1,6 @@
 import { ACCOUNT_NAVIGATION } from "@/lib/account-navigation";
 import { cn } from "@/lib/ui/cn";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router";
 
 export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
@@ -26,27 +26,32 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
         ? pathname === item.href
         : pathname.startsWith(`${item.href}/`) || pathname === item.href;
       return (
-        <Link
-          aria-current={active ? "page" : undefined}
-          className={cn(
-            "whitespace-nowrap rounded-md text-sm font-semibold transition-colors",
-            mobile ? "px-3 py-2" : "block px-3 py-2.5",
-            active
-              ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-muted/15",
-          )}
-          to={item.href}
-          key={item.href}
-        >
-          {item.label}
-        </Link>
+        <Fragment key={item.href}>
+          {!mobile && item.separatorBefore ? (
+            <hr aria-hidden="true" className="my-1 border-border" />
+          ) : null}
+          <Link
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "relative whitespace-nowrap rounded-md text-sm transition-colors",
+              mobile ? "px-3 py-2" : "flex min-h-8 items-center px-3 py-1.5 pointer-coarse:min-h-11",
+              active
+                ? "bg-primary/10 font-semibold text-[#1f6f67]"
+                : "text-foreground hover:bg-muted/15",
+              !mobile && active && "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-current",
+            )}
+            to={item.href}
+          >
+            {item.label}
+          </Link>
+        </Fragment>
       );
     });
 
   return (
     <>
       <aside className="hidden md:block" aria-label="个人中心导航">
-        <nav className="grid gap-1">{links(false)}</nav>
+        <nav className="grid gap-0.5">{links(false)}</nav>
       </aside>
       <nav
         aria-label="个人中心导航"

@@ -3,19 +3,20 @@ export type AccountNavigationItem = {
   label: string;
   exact?: boolean;
   requiresUpload?: boolean;
+  separatorBefore?: boolean;
 };
 
 export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me", label: "概览", exact: true },
-  { href: "/me/profile", label: "个人资料" },
-  { href: "/me/privacy", label: "隐私" },
-  { href: "/me/permissions", label: "权限申请" },
-  { href: "/me/favorites", label: "收藏" },
+  { href: "/me/favorites", label: "收藏", separatorBefore: true },
+  { href: "/me/catalogs", label: "我的目录" },
   { href: "/me/showcase", label: "喜爱展柜" },
   { href: "/me/emojis", label: "表情库" },
-  { href: "/me/catalogs", label: "我的目录" },
-  { href: "/me/history", label: "游玩历史" },
+  { href: "/me/history", label: "游玩历史", separatorBefore: true },
   { href: "/me/comments", label: "我的评论" },
   { href: "/me/discussions", label: "我的讨论" },
   { href: "/me/uploads", label: "我的上传", requiresUpload: true },
+  { href: "/me/profile", label: "个人资料", separatorBefore: true },
+  { href: "/me/privacy", label: "隐私" },
+  { href: "/me/permissions", label: "权限申请" },
 ] as const;
