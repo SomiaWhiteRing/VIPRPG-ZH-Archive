@@ -9,7 +9,10 @@ export type CharacterWorkCredit = {
   roleKey: CharacterRoleKey;
   spoilerLevel: number;
   notes: string | null;
+  authorName: string;
   releaseDate: string | null;
+  engineFamily: string;
+  language: string;
   coverBlobSha256: string | null;
 };
 

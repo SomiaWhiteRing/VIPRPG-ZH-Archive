@@ -32,7 +32,10 @@ type CreditRow = {
   role_key: string;
   role_label: string | null;
   notes: string | null;
+  author_name: string;
   original_release_date: string | null;
+  engine_family: string;
+  language: string;
   cover_blob_sha256: string | null;
   status: string;
 };
@@ -400,6 +403,14 @@ async function listCredits(
           ws.role_label,
           ws.notes,
           w.original_release_date,
+          w.engine_family,
+          w.language,
+          COALESCE((SELECT group_concat(author_name,'、') FROM (
+            SELECT trim(staff.display_name) AS author_name
+            FROM work_staff staff JOIN creators author ON author.id=staff.creator_id
+            WHERE staff.work_id=w.id AND staff.role_key='author' AND trim(staff.display_name)<>''
+            ORDER BY staff.sort_order,author.name
+          )),'') AS author_name,
           (
             SELECT ma.blob_sha256
             FROM work_media_assets wma
@@ -426,7 +437,10 @@ async function listCredits(
     roleKey: row.role_key,
     roleLabel: row.role_label,
     notes: row.notes,
+    authorName: row.author_name,
     originalReleaseDate: row.original_release_date,
+    engineFamily: row.engine_family,
+    language: row.language,
     coverBlobSha256: row.cover_blob_sha256,
     status: row.status,
   }));

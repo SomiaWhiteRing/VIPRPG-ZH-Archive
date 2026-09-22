@@ -215,7 +215,10 @@ function CharacterWorks({ works }: { works: CharacterWork[] }) {
             title={work.title}
             originalTitle={work.originalTitle}
             coverBlobSha256={work.coverBlobSha256}
+            authorName={work.authorName}
             releaseDate={work.releaseDate ?? "日期未知"}
+            engineFamily={work.engineFamily}
+            language={work.language}
           >
             {work.credits.map((credit) =>
               credit.spoilerLevel > 0 ? (

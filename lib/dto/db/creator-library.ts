@@ -8,7 +8,10 @@ export type CreatorWorkCredit = {
   roleKey: string;
   roleLabel: string | null;
   notes: string | null;
+  authorName: string;
   originalReleaseDate: string | null;
+  engineFamily: string;
+  language: string;
   coverBlobSha256: string | null;
   status: string;
 };
