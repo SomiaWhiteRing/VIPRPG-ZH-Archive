@@ -13,7 +13,7 @@ import {
 } from "react";
 
 const tokenChipClassName =
-  "inline-flex min-h-7 max-w-full select-none items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-foreground";
+  "inline-flex min-h-7 max-w-full select-none items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-secondary";
 
 export function TokenInput({
   children,
@@ -180,7 +180,7 @@ export function TokenChip({
       {children}
       <Button
         aria-label={`移除 ${label}`}
-        className="size-4 min-h-0 shrink-0 rounded-full p-0 hover:bg-primary/15"
+        className="size-4 min-h-0 shrink-0 rounded-full p-0 text-current hover:bg-primary/15"
         disabled={disabled}
         onClick={(event) => {
           event.stopPropagation();
@@ -197,35 +197,52 @@ export function TokenChip({
 }
 
 export function TokenDragPreview({
-  label,
+  element,
   left,
   top,
   width,
   height,
 }: {
-  label: string;
+  element: HTMLElement;
   left: number;
   top: number;
   width: number;
   height: number;
 }) {
+  const container = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const target = container.current;
+    if (!target) return;
+    // Reuse the rendered portrait and chip contents without loading local files again.
+    const snapshot = element.cloneNode(true) as HTMLElement;
+    Object.assign(snapshot.style, {
+      width: "100%", height: "100%", maxWidth: "none", minWidth: "0", opacity: "1",
+    });
+    snapshot.removeAttribute("id");
+    snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    const expansions = element.querySelectorAll<HTMLElement>("[data-token-hover-expansion]");
+    snapshot.querySelectorAll<HTMLElement>("[data-token-hover-expansion]").forEach((node, index) => {
+      const style = getComputedStyle(expansions[index]);
+      Object.assign(node.style, {
+        width: style.width, opacity: style.opacity, transform: style.transform, transition: "none",
+      });
+    });
+    target.replaceChildren(snapshot);
+    return () => target.replaceChildren();
+  }, [element]);
+
   return createPortal(
     <div
       aria-hidden="true"
+      inert
       className="pointer-events-none fixed left-0 top-0 z-[100] select-none rounded-full bg-card shadow-lg ring-1 ring-primary/20"
+      ref={container}
       style={{
         transform: `translate3d(${left}px, ${top}px, 0)`,
         width,
         height,
       }}
-    >
-      <span className={cn(tokenChipClassName, "h-full w-full")}>
-        <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
-        <span className="inline-flex size-4 shrink-0 items-center justify-center">
-          <X className="size-3" />
-        </span>
-      </span>
-    </div>,
+    />,
     document.body,
   );
 }

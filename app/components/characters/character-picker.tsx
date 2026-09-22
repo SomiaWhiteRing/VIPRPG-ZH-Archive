@@ -427,7 +427,7 @@ export function CharacterPicker({
                     <span
                       className={cn(
                         badgeVariants({ variant: "neutral" }),
-                        "ml-1.5 min-h-5 shrink-0 px-1.5 py-0 text-[10px] font-normal",
+                        "ml-1.5 min-h-5 shrink-0 px-1.5 py-0 text-[10px] font-normal text-secondary",
                       )}
                     >
                       {CHARACTER_ROLE_LABELS[credit.roleKey]}
@@ -700,7 +700,7 @@ export function CharacterPicker({
       </Dialog.Root>
 
       {reorder.preview ? (
-        <TokenDragPreview label={values[reorder.preview.index].selection.displayName} {...reorder.preview.chip} />
+        <TokenDragPreview element={reorder.preview.element} {...reorder.preview.chip} />
       ) : null}
       <CharacterCreateDialog
         description={

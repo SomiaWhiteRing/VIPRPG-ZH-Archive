@@ -203,7 +203,7 @@ export function CreatorTokenPicker({
         <span className="text-xs text-muted">输入后按 Enter 添加</span>
       </div>
       {reorder.preview ? (
-        <TokenDragPreview label={values[reorder.preview.index].displayName} {...reorder.preview.chip} />
+        <TokenDragPreview element={reorder.preview.element} {...reorder.preview.chip} />
       ) : null}
 
       <Dialog.Root

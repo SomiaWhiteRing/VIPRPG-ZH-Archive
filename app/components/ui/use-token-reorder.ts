@@ -10,11 +10,12 @@ type Preview<T> = {
   original: T[];
   order: number[];
   index: number;
+  element: HTMLElement;
   chip: { left: number; top: number; width: number; height: number };
 };
 
 export const tokenDragHandleClassName =
-  "h-auto min-h-7 min-w-0 shrink touch-none select-none cursor-grab whitespace-normal rounded-none px-0 text-left text-xs font-semibold text-foreground hover:bg-transparent [overflow-wrap:anywhere] active:cursor-grabbing";
+  "h-auto min-h-7 min-w-0 shrink touch-none select-none cursor-grab whitespace-normal rounded-none px-0 text-left text-xs font-semibold text-secondary hover:bg-transparent [overflow-wrap:anywhere] active:cursor-grabbing";
 
 export function useTokenReorder<T>(
   values: T[],
@@ -58,7 +59,12 @@ export function useTokenReorder<T>(
         Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5
       ) return;
       // Keep clicks on the handle; capture the container only once dragging starts.
-      if (!current.moved) event.currentTarget.setPointerCapture(event.pointerId);
+      if (!current.moved) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const bounds = current.element.getBoundingClientRect();
+        current.chip.width = bounds.width;
+        current.chip.height = bounds.height;
+      }
       current.moved = true;
       const bounds = event.currentTarget.getBoundingClientRect();
       const nearest = nearestDragSlot(
@@ -80,8 +86,12 @@ export function useTokenReorder<T>(
       if (!current?.moved) return;
       suppressClick.current = true;
       setTimeout(() => { suppressClick.current = false; }, 0);
+      pendingFocus.current = null;
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement && container.current?.contains(activeElement)) {
+        activeElement.blur();
+      }
       if (!disabled && matchesValues(current.original)) {
-        pendingFocus.current = current.order.indexOf(current.index);
         onChange(current.order.map((index) => values[index]));
       }
     },
@@ -110,7 +120,7 @@ export function useTokenReorder<T>(
       "data-token-drag-handle": "",
       onPointerDown(event) {
         if (disabled || event.button !== 0 || !event.isPrimary || !container.current) return;
-        const chip = event.currentTarget.closest("[data-sort-token]");
+        const chip = event.currentTarget.closest<HTMLElement>("[data-sort-token]");
         if (!chip) return;
         event.preventDefault();
         event.currentTarget.focus({ preventScroll: true });
@@ -118,6 +128,7 @@ export function useTokenReorder<T>(
         const bounds = chip.getBoundingClientRect();
         drag.current = {
           index,
+          element: chip,
           original: values,
           order: values.map((_, itemIndex) => itemIndex),
           slots: readDragSlots(container.current.querySelectorAll("[data-sort-token]")),

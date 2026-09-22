@@ -239,7 +239,7 @@ export function TokenPicker({
       ) : null}
       {reorder.preview ? (
         <TokenDragPreview
-          label={values[reorder.preview.index]}
+          element={reorder.preview.element}
           {...reorder.preview.chip}
         />
       ) : null}
