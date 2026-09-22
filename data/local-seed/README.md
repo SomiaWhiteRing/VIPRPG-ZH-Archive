@@ -1,5 +1,18 @@
 # Fixed Local Seed
 
+The current application list contains six roles: 管理员, 维基人, 维护作者信息,
+维护角色信息, 维护作品信息 and 讨论版版主. All six require individual approval;
+administrator requests are visible to and processed only by the bootstrap
+administrator. The wiki role combines the three information-maintenance roles.
+The existing creator_editor identity is retained and global access is closed.
+Uploader applications are closed; its existing global setting and all individual
+memberships are preserved. See [role definitions](../../docs/requestable-roles.md).
+The roles schema permits administrator applications while prohibiting global
+administrator grants. The single initialization migration ledger and unrelated
+business tables are preserved.
+
+Earlier snapshot changes:
+
 The public creator editing refresh moves the fixed user/uploader grant into the
 custom creator_editor role (作者资料编辑, priority 150). This role starts with
 applications and global availability enabled, preserving the existing access
@@ -47,6 +60,11 @@ The showcase portrait refresh adds an optional `portrait_ref_id` linked to the
 existing character portrait library, without changing captured content.
 The showcase privacy refresh adds `users.profile_show_showcase`, enabled by
 default. Empty showcases remain hidden on public profiles.
+
+The 2026-09-22 privacy refresh enables `users.profile_show_discussions` by
+default, so all seven profile visibility settings now start enabled. Existing
+account settings, all table contents and the single initialization migration
+ledger are preserved.
 
 The 2026-09-21 creator refresh grants public creator editing to the four built-in
 roles and replaces the single homepage column with an ordered `links_json`

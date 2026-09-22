@@ -7,7 +7,7 @@ import {
   PERMISSION_LIST,
 } from "@/lib/authz/permissions";
 import type { RoleKind, RoleStatus } from "@/lib/authz/roles";
-import { hasRoleAccess, isAdministrator, isCustomRolePriority, roleSupportsApplications, ROLE_TEMPLATES } from "@/lib/authz/roles";
+import { hasRoleAccess, isAdministrator, isCustomRolePriority, roleSupportsApplications, roleSupportsGlobalAccess, ROLE_TEMPLATES } from "@/lib/authz/roles";
 import type {
   Permission,
   RoleRequestSummary,
@@ -73,15 +73,20 @@ export function userManagementScopeSql(
       JOIN roles r ON r.id=tr.role_id AND r.status='active' WHERE tr.user_id=${target}),0))`;
 }
 
-export function administratorSql(userId: string): string {
+export function administratorSql(userId: string, requestedRoleKey?: string): string {
   return `EXISTS (SELECT 1 FROM users administrator JOIN user_roles membership ON membership.user_id=administrator.id
     JOIN roles admin_role ON admin_role.id=membership.role_id AND admin_role.status='active'
-    WHERE administrator.id=${userId} AND administrator.status='active' AND admin_role.key IN ('admin','super_admin'))`;
+    WHERE administrator.id=${userId} AND administrator.status='active' AND admin_role.key IN ('admin','super_admin')
+      ${requestedRoleKey ? `AND (${requestedRoleKey}<>'admin' OR admin_role.kind='bootstrap_admin')` : ""})`;
 }
 
 export function roleAccessSql(userId: string, roleId: string): string {
   return `(EXISTS (SELECT 1 FROM effective_user_roles granted WHERE granted.user_id=${userId} AND granted.role_id=${roleId})
-    OR (EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId})
+    OR ((SELECT key FROM roles WHERE id=${roleId})='admin' AND EXISTS (
+      SELECT 1 FROM effective_user_roles granted JOIN roles r ON r.id=granted.role_id
+      WHERE granted.user_id=${userId} AND r.kind='bootstrap_admin'))
+    OR ((SELECT key FROM roles WHERE id=${roleId})<>'admin'
+      AND EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId})
       AND NOT EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId}
         AND NOT EXISTS (SELECT 1 FROM effective_user_roles granted JOIN role_permissions p ON p.role_id=granted.role_id
           WHERE granted.user_id=${userId} AND p.permission_key=wanted.permission_key))))`;
@@ -201,7 +206,7 @@ export async function requestRole(
       SELECT 'role_change_request','pending',u.id,u.id,'user.role.assign',u.id,r.id,r.key,r.name,
         r.name || '权限申请',?,?
       FROM users u JOIN roles r ON r.id=? WHERE u.id=? AND u.status='active'
-        AND r.status='active' AND (r.key='uploader' OR r.kind='custom')
+        AND r.status='active' AND (r.key IN ('uploader','admin') OR r.kind='custom')
         AND r.application_enabled=1 AND r.available_to_all=0 AND NOT ${roleAccessSql("u.id", "r.id")}`)
       .bind(reason, eventKey, input.roleId, actor.id),
     requiredPreviousMutationAuditStatement(database, actor, "role_request_created", {
@@ -307,8 +312,10 @@ export async function updateRole(
     throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
   if (role.kind !== "custom" && (input.name !== role.name || input.priority !== role.priority || input.status !== role.status))
     throw new HttpError(403, "系统角色的名称、优先级和状态不可修改");
-  if (!roleSupportsApplications(role) && (input.applicationEnabled || input.availableToAll))
-    throw new HttpError(400, "此角色不能开放申请或向所有用户开放");
+  if (!roleSupportsApplications(role) && input.applicationEnabled)
+    throw new HttpError(400, "此角色不能开放申请");
+  if (!roleSupportsGlobalAccess(role) && input.availableToAll)
+    throw new HttpError(400, "此角色不能向所有用户开放");
   const eventKey = crypto.randomUUID();
   const closedReason = input.status === "disabled" ? "该角色已停用，申请已关闭。"
     : input.availableToAll ? "此权限已向所有用户开放，无需申请。"
@@ -829,8 +836,8 @@ function roleChangeAuditStatement(
           ? `AND EXISTS (SELECT 1 FROM inbox_items WHERE id=? AND type='role_change_request' AND status='pending'
         AND target_user_id=target.id AND requested_role_id=role.id)
         AND role.status='active' AND role.application_enabled=1 AND role.available_to_all=0
-        AND (role.key='uploader' OR role.kind='custom')
-        AND ${administratorSql("?")}
+        AND (role.key IN ('uploader','admin') OR role.kind='custom')
+        AND ${administratorSql("?", "role.key")}
         ${action === "assigned" ? `AND NOT ${roleAccessSql("target.id", "role.id")}` : ""}
         AND EXISTS (SELECT 1 FROM effective_user_roles ar JOIN roles r ON r.id=ar.role_id AND r.status='active'
           JOIN role_permissions p ON p.role_id=r.id WHERE ar.user_id=? AND p.permission_key='inbox.role_request.resolve')`
