@@ -374,7 +374,7 @@ export function CharacterPicker({
               const missingPortrait = !hasPortrait(credit, suggestion);
               return (
                 <TokenChip
-                  data-sort-token=""
+                  {...reorder.chipProps(index)}
                   className={cn(
                     missingPortrait && "bg-red-700/10",
                     reorder.preview?.index === index && "opacity-25",
