@@ -113,7 +113,7 @@ export default function AccountPermissionsPage() {
               <form className="grid gap-3 border-t border-border pt-5" onSubmit={submit}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label htmlFor="application-reason">
-                    申请理由<span className="font-normal text-muted">（选填）</span>
+                    申请理由
                   </Label>
                   <span id="application-reason-count" className="text-xs tabular-nums text-muted">
                     {(reasons[role.id] ?? "").length} / 2000
@@ -126,10 +126,10 @@ export default function AccountPermissionsPage() {
                   maxLength={2000}
                   rows={5}
                   disabled={busy}
+                  placeholder="请简要说明申请理由，例如你需要使用该权限的场景或目的。"
                   value={reasons[role.id] ?? ""}
                   onChange={(event) => setReasons((current) => ({ ...current, [role.id]: event.target.value }))}
                 />
-                <p id="application-reason-privacy" className="text-xs text-muted">仅你和管理员可见。</p>
                 <div className="flex justify-end pt-2">
                   <Rm2kButton type="submit" disabled={busy}>
                     {busy ? "提交中…" : role.request ? "重新提交申请" : "提交申请"}

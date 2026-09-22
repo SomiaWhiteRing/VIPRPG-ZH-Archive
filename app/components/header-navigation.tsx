@@ -2,7 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 export type HeaderNavigationLink = {
@@ -38,6 +38,11 @@ export function HeaderNavigation({
   mobileFooter,
 }: HeaderNavigationProps) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const openGroupRef = useRef(openGroup);
+
+  useEffect(() => {
+    openGroupRef.current = openGroup;
+  }, [openGroup]);
 
   useEffect(() => {
     setOpenGroup(null);
@@ -76,7 +81,13 @@ export function HeaderNavigation({
               key={entry.label}
               modal={false}
               open={openGroup === entry.label}
-              onOpenChange={(open) => setOpenGroup(open ? entry.label : null)}
+              onOpenChange={(open) => {
+                setOpenGroup((current) => {
+                  if (open) return entry.label;
+                  // A previous menu may dismiss after the next one opens.
+                  return current === entry.label ? null : current;
+                });
+              }}
             >
               <DropdownMenu.Trigger asChild>
                 <Button
@@ -99,6 +110,15 @@ export function HeaderNavigation({
                   aria-label={entry.label}
                   className="z-50 hidden max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface lg:block"
                   collisionPadding={16}
+                  onCloseAutoFocus={(event) => {
+                    // Radix restores focus asynchronously after unmounting.
+                    if (
+                      openGroupRef.current !== null &&
+                      openGroupRef.current !== entry.label
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
                   sideOffset={8}
                 >
                   {entry.links.map((link) => (
