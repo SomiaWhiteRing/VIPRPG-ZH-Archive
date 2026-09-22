@@ -16,8 +16,6 @@ export type WorkCharacterCreditInput = CharacterCreditSelection & {
 
 type ResolvedCharacter = {
   id: number;
-  original_name: string;
-  display_name: string | null;
   has_default_portrait: number;
 };
 
@@ -36,7 +34,7 @@ export function parseCharacterSelection(value: unknown): CharacterSelection {
     throw new HttpError(400, "角色选择格式不合法");
   }
   const originalName = requiredName(value.originalName, "角色日语名");
-  const displayName = requiredName(value.displayName, "角色中文名");
+  const displayName = requiredName(value.displayName, "角色登场名称");
   if (value.kind === "existing") {
     if (
       !Number.isSafeInteger(value.characterId) ||
@@ -51,7 +49,12 @@ export function parseCharacterSelection(value: unknown): CharacterSelection {
       displayName,
     };
   }
-  return { kind: "new", originalName, displayName };
+  return {
+    kind: "new",
+    originalName,
+    primaryName: requiredName(value.primaryName, "角色中文名"),
+    displayName,
+  };
 }
 
 export function parseCharacterCreditSelection(
@@ -143,25 +146,6 @@ export async function prepareWorkCharacterStatements(input: {
         `角色“${credit.selection.originalName}”需要选择头像`,
       );
     }
-    if (!character.display_name) {
-      const displayKey = characterNameKey(credit.selection.displayName);
-      setupStatements.push(
-        input.database
-          .prepare(
-            `INSERT OR IGNORE INTO character_aliases(
-               character_id,name,name_key,language,source
-             ) SELECT id,?,?,'zh',? FROM characters
-               WHERE id=? AND primary_name_key<>?`,
-          )
-          .bind(
-            credit.selection.displayName,
-            displayKey,
-            input.source,
-            character.id,
-            displayKey,
-          ),
-      );
-    }
     if (credit.portrait && sheet) {
       addPortraitReferenceStatements(
         setupStatements,
@@ -183,7 +167,7 @@ export async function prepareWorkCharacterStatements(input: {
         input.database,
         input.workId,
         character.id,
-        character.display_name ?? credit.selection.displayName,
+        credit.selection.displayName,
         credit,
       ),
     );
@@ -193,7 +177,6 @@ export async function prepareWorkCharacterStatements(input: {
     const selection = credit.selection;
     const existing = resolvedNewRows[index];
     const originalKey = characterNameKey(selection.originalName);
-    const displayKey = characterNameKey(selection.displayName);
     const sheet = validatePortraitChoice(credit, existing, sheets, input);
     validateFaceSheetBindings(credit, existing, sheets, input);
     if (
@@ -205,22 +188,6 @@ export async function prepareWorkCharacterStatements(input: {
     }
 
     if (existing) {
-      setupStatements.push(
-        input.database
-          .prepare(
-            `INSERT OR IGNORE INTO character_aliases(
-               character_id,name,name_key,language,source
-             ) SELECT id,?,?,'zh',? FROM characters
-               WHERE id=? AND primary_name_key<>?`,
-          )
-          .bind(
-            selection.displayName,
-            displayKey,
-            input.source,
-            existing.id,
-            displayKey,
-          ),
-      );
       if (credit.portrait && sheet) {
         addPortraitReferenceStatements(
           setupStatements,
@@ -257,24 +224,10 @@ export async function prepareWorkCharacterStatements(input: {
            ) VALUES(?,?,?,?,'{}')`,
         )
         .bind(
-          selection.displayName,
-          displayKey,
+          selection.primaryName,
+          characterNameKey(selection.primaryName),
           selection.originalName,
           originalKey,
-        ),
-      input.database
-        .prepare(
-          `INSERT OR IGNORE INTO character_aliases(
-             character_id,name,name_key,language,source
-           ) SELECT id,?,?,'zh',? FROM characters
-             WHERE original_name_key=? AND primary_name_key<>?`,
-        )
-        .bind(
-          selection.displayName,
-          displayKey,
-          input.source,
-          originalKey,
-          displayKey,
         ),
     );
     if (credit.portrait && sheet) {
@@ -323,22 +276,16 @@ async function resolveExistingCharacters(
 ): Promise<ResolvedCharacter[]> {
   if (!credits.length) return [];
   const results = await database.batch(
-    credits.map((credit) => {
-      const displayKey = characterNameKey(credit.selection.displayName);
-      return database
+    credits.map((credit) =>
+      database
         .prepare(
-          `SELECT c.id,c.original_name,
-                  CASE
-                    WHEN c.primary_name_key=? THEN c.primary_name
-                    ELSE (SELECT ca.name FROM character_aliases ca
-                          WHERE ca.character_id=c.id AND ca.language='zh' AND ca.name_key=? LIMIT 1)
-                  END AS display_name,
+          `SELECT c.id,
                   EXISTS(SELECT 1 FROM character_default_portraits cdp WHERE cdp.character_id=c.id)
                     AS has_default_portrait
            FROM characters c WHERE c.id=? LIMIT 1`,
         )
-        .bind(displayKey, displayKey, credit.selection.characterId);
-    }),
+        .bind(credit.selection.characterId),
+    ),
   );
   return results.map((result, index) => {
     const row = (result.results?.[0] ?? null) as ResolvedCharacter | null;
@@ -366,7 +313,7 @@ async function resolveNewCharacters(
       const originalKey = characterNameKey(credit.selection.originalName);
       return database
         .prepare(
-          `SELECT DISTINCT c.id,c.original_name,c.primary_name AS display_name,
+          `SELECT DISTINCT c.id,
                   EXISTS(SELECT 1 FROM character_default_portraits cdp WHERE cdp.character_id=c.id)
                     AS has_default_portrait
            FROM characters c

@@ -65,6 +65,7 @@ export type CharacterSelection =
   | {
       kind: "new";
       originalName: string;
+      primaryName: string;
       displayName: string;
     };
 
