@@ -110,7 +110,7 @@ export function GameLibrary({
                 aria-label="列表视图"
                 className={
                   view === "list"
-                    ? "inline-flex min-h-8 items-center gap-1.5 bg-foreground px-3 text-white"
+                    ? "inline-flex min-h-8 items-center gap-1.5 bg-secondary px-3 text-secondary-foreground"
                     : "inline-flex min-h-8 items-center gap-1.5 px-3 text-muted hover:text-foreground"
                 }
                 to={gamesHref({
@@ -127,7 +127,7 @@ export function GameLibrary({
                 aria-label="网格视图"
                 className={
                   view === "grid"
-                    ? "inline-flex min-h-8 items-center gap-1.5 border-l border-border bg-foreground px-3 text-white"
+                    ? "inline-flex min-h-8 items-center gap-1.5 border-l border-border bg-secondary px-3 text-secondary-foreground"
                     : "inline-flex min-h-8 items-center gap-1.5 border-l border-border px-3 text-muted hover:text-foreground"
                 }
                 to={gamesHref({
@@ -425,7 +425,7 @@ function FilterLink({
       aria-current={active ? "true" : undefined}
       className={
         active
-          ? "inline-flex min-h-8 items-center rounded-full bg-accent px-2.5 text-sm font-bold text-white"
+          ? "inline-flex min-h-8 items-center rounded-full bg-secondary px-2.5 text-sm font-bold text-secondary-foreground"
           : "inline-flex min-h-8 items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10"
       }
       to={href}

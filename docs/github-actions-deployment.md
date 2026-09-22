@@ -46,6 +46,8 @@ npx wrangler secret put AUTH_SECRET
 
 `npm run deploy:staging` 和 `npm run deploy` 自身负责目标环境的 Vite/SSR Worker 构建。CI 不应绕过 workflow 中 migration 之前的检查阶段。
 
+`CLOUDFLARE_ENV=staging` 仅用于构建时选择环境。Vite 生成的 `build/server/wrangler.json` 已包含 staging 的 Worker 名称和资源；部署该文件时必须清空 `CLOUDFLARE_ENV`，也不能再传 `--env staging`，否则 Wrangler 会重复追加 `-staging`，部署到没有运行时 secrets 的另一个 Worker。
+
 Cloudflare D1 文档说明，在 CI/CD 等非交互环境中执行 migration apply 时会跳过确认提示，但仍会捕获备份；失败的 migration 会回滚。
 
 ## Pull request 检查

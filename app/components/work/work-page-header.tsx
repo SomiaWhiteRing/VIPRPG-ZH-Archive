@@ -36,7 +36,7 @@ export function WorkPageHeader({
             />
           ) : null}
           <Link
-            className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-[#1f6f67]"
+            className="inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-secondary"
             to="/games"
           >
             <ArrowLeft aria-hidden size={15} />
@@ -60,7 +60,7 @@ export function WorkPageHeader({
             <span className="inline-flex min-h-[1.6rem] items-center rounded-full border border-rm2k-green-2 bg-rm2k-green-2 px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] text-white">
               {engineLabel(engineFamily)}
             </span>
-            <span className="inline-flex min-h-[1.6rem] items-center rounded-full border border-primary/40 bg-card px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] text-[#1f6f67]">
+            <span className="inline-flex min-h-[1.6rem] items-center rounded-full border border-primary/40 bg-card px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] text-secondary">
               {languageLabel(language)}
             </span>
           </div>

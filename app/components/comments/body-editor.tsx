@@ -77,7 +77,7 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
         <Button
           type="button"
           size="icon"
-          variant="secondary"
+          variant="neutral"
           className="absolute top-1 right-1"
           aria-label="删除选中图片"
           title="删除图片"

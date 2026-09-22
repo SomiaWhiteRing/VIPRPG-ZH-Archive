@@ -388,7 +388,7 @@ export function CharacterPicker({
                     <span className="truncate">{label}</span>
                     <span
                       className={cn(
-                        badgeVariants({ variant: "secondary" }),
+                        badgeVariants({ variant: "neutral" }),
                         "ml-1.5 min-h-5 shrink-0 px-1.5 py-0 text-[10px] font-normal",
                       )}
                     >

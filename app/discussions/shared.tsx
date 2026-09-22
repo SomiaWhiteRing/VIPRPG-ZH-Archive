@@ -150,7 +150,7 @@ export function TopicStatus({
     <div className="inline-flex flex-wrap gap-2">
       {topic.pinned ? <Badge>置顶</Badge> : null}
       {topic.featured ? <Badge>★ 精品</Badge> : null}
-      {topic.locked ? <Badge variant="secondary">已锁定</Badge> : null}
+      {topic.locked ? <Badge variant="neutral">已锁定</Badge> : null}
     </div>
   );
 }

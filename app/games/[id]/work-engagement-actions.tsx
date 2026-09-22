@@ -98,7 +98,7 @@ export function CatalogAddDialog({
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
         <Button
-          className="min-w-0 flex-1 shrink px-1 text-[#1f6f67] hover:bg-transparent hover:underline"
+          className="min-w-0 flex-1 shrink px-1 text-secondary hover:bg-transparent hover:underline"
           size="sm"
           type="button"
           variant="ghost"

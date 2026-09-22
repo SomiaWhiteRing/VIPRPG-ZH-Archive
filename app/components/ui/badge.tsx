@@ -10,7 +10,7 @@ export const badgeVariants = cva(
         subtle: "bg-primary/10 text-primary",
         credit: "border border-primary/30 bg-primary/5 text-primary",
         default: "bg-primary text-primary-foreground",
-        secondary: "bg-muted/15 text-foreground",
+        neutral: "bg-muted/15 text-foreground",
         outline: "border border-border bg-card text-foreground",
         pending: "bg-amber-100 text-amber-900",
         positive: "bg-emerald-100 text-emerald-800",

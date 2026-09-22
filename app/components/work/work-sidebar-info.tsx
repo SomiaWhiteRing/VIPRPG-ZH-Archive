@@ -77,7 +77,7 @@ export function WorkSidebarInfo({
                 label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
               >
                 <Link
-                  className="font-medium text-[#1f6f67] hover:underline"
+                  className="font-medium text-secondary hover:underline"
                   to={`/creators/${creator.id}`}
                 >
                   {creator.displayName}
@@ -131,7 +131,7 @@ export function WorkSidebarInfo({
                   <InfoRow label="上传者">
                     {current.uploaderId ? (
                       <Link
-                        className="font-medium text-[#1f6f67] hover:underline"
+                        className="font-medium text-secondary hover:underline"
                         to={`/games?uploader=${current.uploaderId}`}
                       >
                         {current.uploaderName}

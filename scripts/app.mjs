@@ -24,11 +24,14 @@ else if (command === "build") run(router, ["build"]);
 else if (command === "preview" || command === "deploy") {
   run(router, ["build"]);
   if (command === "preview") run(vite, ["preview", ...args]);
-  else
+  else {
+    // Vite already resolved the target environment in the generated config.
+    env.CLOUDFLARE_ENV = "";
     run("node_modules/wrangler/bin/wrangler.js", [
       "deploy",
       "--config",
       "build/server/wrangler.json",
       ...args,
     ]);
+  }
 } else throw new Error(`Unknown app command: ${command}`);

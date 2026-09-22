@@ -941,7 +941,7 @@ export function CharacterIndexEditor({
               <Button
                 type="button"
                 size="sm"
-                variant={unplacedOnly ? "secondary" : "ghost"}
+                variant={unplacedOnly ? "neutral" : "ghost"}
                 aria-pressed={unplacedOnly}
                 onClick={() => setUnplacedOnly(!unplacedOnly)}
                 disabled={busy}
