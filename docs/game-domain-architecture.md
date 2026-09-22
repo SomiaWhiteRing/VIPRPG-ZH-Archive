@@ -36,6 +36,8 @@ Work 回答“这是什么作品”。它拥有：
 
 `works.id` 是作品唯一身份。原名和中文名只用于展示与搜索，可以重复；公开路由使用永久不变的数值 ID。
 
+作品内的作者、译者、登场角色和标签保留提交顺序，分别保存到 `work_staff.sort_order`、`work_characters.sort_order` 和 `work_tags.sort_order`。排序属于作品关系，不修改人物或标签本身；读取作品资料和列表时沿用该顺序。
+
 所有保存入口使用同一日期解析器，接受真实有效的 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`，精度由输入推导。上传者必须填写；管理员可以清空为 `null + unknown`，不能单独修改精度。
 
 ### ArchiveVersion

@@ -90,8 +90,8 @@ export async function mergeCreators(
       .bind(target, source),
     db
       .prepare(
-        `INSERT OR IGNORE INTO work_staff(work_id,creator_id,display_name,role_key,role_label,notes)
-      SELECT work_id,?,display_name,role_key,role_label,notes FROM work_staff WHERE creator_id=?`,
+        `INSERT OR IGNORE INTO work_staff(work_id,creator_id,display_name,role_key,role_label,notes,sort_order)
+      SELECT work_id,?,display_name,role_key,role_label,notes,sort_order FROM work_staff WHERE creator_id=?`,
       )
       .bind(target, source),
     db
@@ -246,8 +246,8 @@ export async function mergeWorks(
   for (const [table, columns] of [
     ["work_uploaders", "user_id,created_at"],
     ["work_titles", "title,language,title_type,is_searchable,created_at"],
-    ["work_staff", "creator_id,display_name,role_key,role_label,notes"],
-    ["work_tags", "tag_id,source,created_at"],
+    ["work_staff", "creator_id,display_name,role_key,role_label,notes,sort_order"],
+    ["work_tags", "tag_id,source,created_at,sort_order"],
     ["catalog_items", "catalog_id,sort_order,note,created_at"],
   ]) {
     statements.push(

@@ -282,13 +282,22 @@ export function UploadClient({
     });
   }
 
-  function changeCharacters(characters: CharacterCreditSelection[]) {
+  function changeCharacters(
+    characters: CharacterCreditSelection[],
+    reorderedIndices?: number[],
+  ) {
     setCharacterFaceSheetFiles((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(
-          ([index]) => Number(index) < characters.length,
-        ),
-      ),
+      reorderedIndices
+        ? Object.fromEntries(
+            reorderedIndices.flatMap((oldIndex, index) =>
+              current[oldIndex] ? [[index, current[oldIndex]]] : [],
+            ),
+          )
+        : Object.fromEntries(
+            Object.entries(current).filter(
+              ([index]) => Number(index) < characters.length,
+            ),
+          ),
     );
     setForm((current) => ({ ...current, characters }));
   }
@@ -1078,7 +1087,10 @@ function MetadataFields({
 }: {
   characterFaceSheetFiles: CharacterFaceSheetFiles;
   changeCharacterFaceSheetFiles: (index: number, files: File[]) => void;
-  changeCharacters: (characters: CharacterCreditSelection[]) => void;
+  changeCharacters: (
+    characters: CharacterCreditSelection[],
+    reorderedIndices?: number[],
+  ) => void;
   changeOriginalDeclaration: (checked: boolean) => void;
   changeTranslationDeclaration: (checked: boolean) => void;
   changeTranslator: (value: (CreatorSelection | null)[]) => void;
@@ -1294,6 +1306,7 @@ function MetadataFields({
             onChange={(tags) => setForm((current) => ({ ...current, tags }))}
             placeholder="搜索或创建标签"
             recommendationLabel="推荐标签"
+            sortable
             suggestions={suggestions.tags}
             values={form.tags}
           />

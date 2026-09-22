@@ -41,9 +41,12 @@ export function workTagStatements(database: D1Database, workId: number, tags: st
     database.prepare(`DELETE FROM work_tags WHERE work_id=? AND tag_id NOT IN
       (SELECT t.id FROM tags t JOIN json_each(?) submitted ON t.name=submitted.value COLLATE NOCASE)`)
       .bind(workId, JSON.stringify(tags)),
-    ...tags.flatMap((tag) => [
+    ...tags.flatMap((tag, sortOrder) => [
       database.prepare("INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')").bind(tag),
-      database.prepare("INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT ?,id,? FROM tags WHERE name=? COLLATE NOCASE").bind(workId, source, tag),
+      database.prepare(`INSERT INTO work_tags(work_id,tag_id,source,sort_order)
+        SELECT ?,id,?,? FROM tags WHERE name=? COLLATE NOCASE
+        ON CONFLICT(work_id,tag_id) DO UPDATE SET sort_order=excluded.sort_order`)
+        .bind(workId, source, sortOrder, tag),
     ]),
   ];
 }

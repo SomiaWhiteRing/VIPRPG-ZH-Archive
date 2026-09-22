@@ -10,7 +10,11 @@ import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
-import { TokenChip } from "@/app/components/ui/token-input";
+import { TokenChip, TokenDragPreview } from "@/app/components/ui/token-input";
+import {
+  tokenDragHandleClassName,
+  useTokenReorder,
+} from "@/app/components/ui/use-token-reorder";
 import type {
   CharacterCreditSelection,
   CharacterFaceSheet,
@@ -63,7 +67,10 @@ export function CharacterPicker({
   disabled?: boolean;
   id: string;
   name?: string;
-  onChange: (values: CharacterCreditSelection[]) => void;
+  onChange: (
+    values: CharacterCreditSelection[],
+    reorderedIndices?: number[],
+  ) => void;
   onFaceSheetFilesChange?: (index: number, files: File[]) => void;
   onFaceSheetFilesRemove?: (index: number) => void;
   faceSheetFiles?: Record<number, File[]>;
@@ -295,6 +302,24 @@ export function CharacterPicker({
     setPortraitErrors((current) => omitKey(current, index));
   }
 
+  const reorder = useTokenReorder(
+    values,
+    (next) => {
+      const indices = next.map((credit) => values.indexOf(credit));
+      setPortraitErrors((current) => Object.fromEntries(
+        indices.flatMap((oldIndex, index) =>
+          current[oldIndex] ? [[index, current[oldIndex]]] : [],
+        ),
+      ));
+      setPortraitIndex((current) => current === null ? null : indices.indexOf(current));
+      setAliasEdit((current) => current === null ? null : {
+        ...current, index: indices.indexOf(current.index),
+      });
+      onChange(next, indices);
+    },
+    disabled,
+  );
+
   return (
     <>
       <div className={cn("grid gap-2", disabled && "opacity-60")}>
@@ -306,7 +331,7 @@ export function CharacterPicker({
             value={JSON.stringify(values)}
           />
         ) : null}
-        <div className="relative">
+        <div className="relative" ref={reorder.container} {...reorder.containerProps}>
           <SearchComboBox
             id={id}
             query={query}
@@ -338,7 +363,7 @@ export function CharacterPicker({
             onRemoveLast={() => {
               if (values.length) remove(values.length - 1);
             }}
-            tokens={values.map((credit, index) => {
+            tokens={reorder.items.map(({ value: credit, index }) => {
               const selection = credit.selection;
               const label = selection.displayName;
               const suggestion =
@@ -349,9 +374,11 @@ export function CharacterPicker({
               const missingPortrait = !hasPortrait(credit, suggestion);
               return (
                 <TokenChip
-                  className={
-                    missingPortrait ? "bg-red-700/10 text-red-700" : undefined
-                  }
+                  data-sort-token=""
+                  className={cn(
+                    missingPortrait && "bg-red-700/10",
+                    reorder.preview?.index === index && "opacity-25",
+                  )}
                   disabled={disabled}
                   key={`${characterSelectionKey(selection)}:${index}`}
                   label={label}
@@ -386,7 +413,17 @@ export function CharacterPicker({
                     </span>
                   </Button>
                   <span className="group/character-name inline-flex min-w-0 items-center">
-                    <span className="truncate">{label}</span>
+                    <Button
+                      {...reorder.handleProps(index)}
+                      className={tokenDragHandleClassName}
+                      aria-label={`拖动排序 ${label}，也可按 Alt 加方向键调整`}
+                      disabled={disabled}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                    >
+                      <span className="truncate">{label}</span>
+                    </Button>
                     <span
                       className={cn(
                         badgeVariants({ variant: "neutral" }),
@@ -424,7 +461,7 @@ export function CharacterPicker({
                     ) : null}
                   </span>
                   {missingPortrait ? (
-                    <span className="shrink-0 font-normal">待选头像</span>
+                    <span className="shrink-0 font-normal text-red-700">待选头像</span>
                   ) : null}
                 </TokenChip>
               );
@@ -662,6 +699,9 @@ export function CharacterPicker({
         </Dialog.Portal>
       </Dialog.Root>
 
+      {reorder.preview ? (
+        <TokenDragPreview label={values[reorder.preview.index].selection.displayName} {...reorder.preview.chip} />
+      ) : null}
       <CharacterCreateDialog
         description={
           <>

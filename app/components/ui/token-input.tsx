@@ -13,7 +13,7 @@ import {
 } from "react";
 
 const tokenChipClassName =
-  "inline-flex min-h-7 max-w-full items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary";
+  "inline-flex min-h-7 max-w-full select-none items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-foreground";
 
 export function TokenInput({
   children,

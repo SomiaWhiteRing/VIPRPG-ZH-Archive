@@ -923,7 +923,7 @@ async function mergeTag(
   await database.batch([
     database
       .prepare(
-        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source) SELECT work_id,?,source FROM work_tags WHERE tag_id=?`,
+        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source,sort_order) SELECT work_id,?,source,sort_order FROM work_tags WHERE tag_id=?`,
       )
       .bind(target.id, id),
     database.prepare(`DELETE FROM work_tags WHERE tag_id=?`).bind(id),

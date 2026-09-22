@@ -6,7 +6,11 @@ import {
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
-import { TokenChip } from "@/app/components/ui/token-input";
+import { TokenChip, TokenDragPreview } from "@/app/components/ui/token-input";
+import {
+  tokenDragHandleClassName,
+  useTokenReorder,
+} from "@/app/components/ui/use-token-reorder";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey, creatorSelectionKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
@@ -111,10 +115,19 @@ export function CreatorTokenPicker({
     setEditing(null);
   }
 
+  const reorder = useTokenReorder(
+    values,
+    (next) => {
+      setEditing(null);
+      onChange(next);
+    },
+    disabled,
+  );
+
   return (
     <>
       <div className={cn("grid gap-2", disabled && "opacity-60")}>
-        <div className="relative">
+        <div className="relative" ref={reorder.container} {...reorder.containerProps}>
           <SearchComboBox
             id={id}
             query={query}
@@ -134,8 +147,10 @@ export function CreatorTokenPicker({
             onRemoveLast={() => {
               if (values.length) onChange(values.slice(0, -1));
             }}
-            tokens={values.map((value, index) => (
+            tokens={reorder.items.map(({ value, index }) => (
               <TokenChip
+                data-sort-token=""
+                className={reorder.preview?.index === index ? "opacity-25" : undefined}
                 disabled={disabled}
                 key={`${creatorSelectionKey(value)}:${index}`}
                 label={value.displayName}
@@ -144,10 +159,12 @@ export function CreatorTokenPicker({
                 }
               >
                 <Button
+                  {...reorder.handleProps(index)}
                   aria-controls={`${id}-edit-dialog`}
                   aria-haspopup="dialog"
                   aria-label={`编辑${label} ${value.displayName}`}
-                  className="h-auto min-h-7 min-w-0 px-0 text-xs font-semibold hover:bg-transparent"
+                  aria-description="拖动排序，或按 Alt 加方向键调整顺序"
+                  className={tokenDragHandleClassName}
                   disabled={disabled}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget;
@@ -185,6 +202,9 @@ export function CreatorTokenPicker({
         </div>
         <span className="text-xs text-muted">输入后按 Enter 添加</span>
       </div>
+      {reorder.preview ? (
+        <TokenDragPreview label={values[reorder.preview.index].displayName} {...reorder.preview.chip} />
+      ) : null}
 
       <Dialog.Root
         open={editing !== null}
