@@ -271,7 +271,7 @@ export async function commitArchiveImport(
     missingBlobCount: missingBlobs.length,
     missingCorePackCount: missingCorePacks.length,
     excludedFileTypes: input.excludedFileTypes,
-    actorUserId: input.user.id,
+    user: input.user,
   });
 
   return {
@@ -1187,7 +1187,7 @@ async function finalizeArchiveCommit(
     missingBlobCount: number;
     missingCorePackCount: number;
     excludedFileTypes: ExcludedFileTypeSummary[];
-    actorUserId: number;
+    user: ArchiveUser;
   },
 ): Promise<void> {
   const database = getD1(runtime);
@@ -1265,6 +1265,7 @@ async function finalizeArchiveCommit(
       database,
       workId: input.workId,
       credits: input.metadata.workStaff,
+      submitter: { user: input.user, origin: runtime.origin },
     })),
   );
 
@@ -1274,7 +1275,7 @@ async function finalizeArchiveCommit(
       workId: input.workId,
       credits: characters,
       source: "user",
-      actorUserId: input.actorUserId,
+      actorUserId: input.user.id,
       requirePortrait: true,
     })),
   );
