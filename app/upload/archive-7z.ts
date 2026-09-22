@@ -47,12 +47,15 @@ export async function enumerateSevenZipSourceFiles(
   }
 
   try {
-    const listing = run(["l", "-t7z", "-slt", "-ba", "-sccUTF-8", "--", "/input/source.7z"]);
+    // Emscripten treats stdout as a terminal: progress can prefix the first Path field.
+    const listing = run([
+      "l", "-t7z", "-slt", "-ba", "-bd", "-bsp0", "-sccUTF-8", "--", "/input/source.7z",
+    ]);
     const entries = filesWithinArchiveGameRoot(parseSevenZipEntries(listing), "7z");
     fs.writeFile("/selected.txt", entries.map((entry) => entry.archivePath).join("\n"));
     // Extract a solid archive once. Reading individual members repeatedly would decode its blocks again.
     run([
-      "x", "-t7z", "-y", "-bd", "-bb0", "-bso0", "-bse1", "-spd",
+      "x", "-t7z", "-y", "-bd", "-bsp0", "-bb0", "-bso0", "-bse1", "-spd",
       "-scsUTF-8", "-i@/selected.txt", "-o/output", "--", "/input/source.7z",
     ]);
     return entries.map((entry) => {
@@ -90,7 +93,8 @@ export async function enumerateSevenZipSourceFiles(
 function parseSevenZipEntries(listing: string): SevenZipEntry[] {
   const entries: SevenZipEntry[] = [];
   const paths = new Set<string>();
-  for (const block of listing.trim().split(/\r?\n\s*\r?\n/)) {
+  // Empty values still end in " = "; trim only line breaks, not their delimiter.
+  for (const block of listing.replace(/^[\r\n]+|[\r\n]+$/g, "").split(/\r?\n\s*\r?\n/)) {
     if (!block) continue;
     const fields = new Map<string, string>();
     for (const line of block.split(/\r?\n/)) {
