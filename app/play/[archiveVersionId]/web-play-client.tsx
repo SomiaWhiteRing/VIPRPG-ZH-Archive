@@ -153,9 +153,10 @@ export function WebPlayClient({
 
   useEffect(() => {
     if (!screenshotFeedback) return;
-    const timer = setTimeout(() => setScreenshotFeedback(null), screenshotFeedback.ok ? 5000 : 12000);
+    const duration = screenshotFeedback.ok ? (mobileControls ? 1000 : 5000) : 12000;
+    const timer = setTimeout(() => setScreenshotFeedback(null), duration);
     return () => clearTimeout(timer);
-  }, [screenshotFeedback]);
+  }, [mobileControls, screenshotFeedback]);
 
   const screenshotMessage = screenshotFeedback?.message ?? screenshotLoadError;
   const captureScreenshot = useCallback(async () => {
@@ -164,12 +165,12 @@ export function WebPlayClient({
     focusPlayerCanvas();
     const result = await capture(player);
     if (result) {
-      if (immersiveRef.current) setScreenshotFeedback(result);
+      if (mobileControls || immersiveRef.current) setScreenshotFeedback(result);
       else if (result.ok) toast.success(result.message);
       else toast.error(result.message);
     }
     if (playerRef.current === player) focusPlayerCanvas();
-  }, [capture, captureDisabled, toast]);
+  }, [capture, captureDisabled, mobileControls, toast]);
 
   const addLog = useCallback(
     (level: WebPlayLog["level"], message: string) => {
@@ -683,7 +684,7 @@ export function WebPlayClient({
                   {running ? "运行中" : playerStarting ? "启动中" : "待机"}
                 </span>
               </div>
-              <div className={mobileControls && running && viewportPortrait ? "aspect-3/5 w-full" : "aspect-4/3 w-full"}>
+              <div className="aspect-4/3 w-full">
                 <div
                   className={
                     immersive
@@ -693,9 +694,11 @@ export function WebPlayClient({
                   id="web-player-frame"
                 >
                   <WebPlaySurface
+                    captureDisabled={captureDisabled}
                     immersive={immersive}
                     layout={controlsPreferences.layouts[surfaceOrientation]}
                     mobile={mobileControls && running}
+                    onCaptureScreenshot={() => void captureScreenshot()}
                     onSaveLayout={saveLayout}
                     orientation={surfaceOrientation}
                     playerHostRef={playerHostRef}
@@ -738,18 +741,20 @@ export function WebPlayClient({
                           <Minimize2 aria-hidden />
                           恢复
                         </Button>
-                        <Button
-                          aria-label={capturing ? "正在截取图片" : "截取图片"}
-                          className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                          disabled={captureDisabled}
-                          onClick={() => void captureScreenshot()}
-                          size="icon"
-                          title="截取图片"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Camera aria-hidden />
-                        </Button>
+                        {!mobileControls ? (
+                          <Button
+                            aria-label={capturing ? "正在截取图片" : "截取图片"}
+                            className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                            disabled={captureDisabled}
+                            onClick={() => void captureScreenshot()}
+                            size="icon"
+                            title="截取图片"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Camera aria-hidden />
+                          </Button>
+                        ) : null}
                       </>
                     ) : null}
                     feedback={immersive && (displayMessage || screenshotMessage || controlsStorageMessage) ? (
@@ -767,8 +772,8 @@ export function WebPlayClient({
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-                {!immersive && screenshotLoadError ? (
-                  <span role="alert">{screenshotLoadError}</span>
+                {!immersive && screenshotMessage ? (
+                  <span role={screenshotFeedback?.ok ? "status" : "alert"}>{screenshotMessage}</span>
                 ) : null}
                 {!immersive && displayMessage ? (
                   <span role="status">{displayMessage}</span>
@@ -867,7 +872,7 @@ export function WebPlayClient({
                       {playerStarting ? "正在启动…" : "启动游戏"}
                     </Rm2kButton>
                   ) : (
-                    <div className={mobileControls ? "grid grid-cols-[minmax(0,1fr)_2.5rem] gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"}>
+                    <div className={mobileControls ? "grid grid-cols-1 gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"}>
                       {!mobileControls ? (
                         <Button
                           className="min-w-0 gap-1.5 px-2"
@@ -890,17 +895,19 @@ export function WebPlayClient({
                         <Expand aria-hidden />
                         全屏幕
                       </Button>
-                      <Button
-                        aria-label={capturing ? "正在截取图片" : "截取图片"}
-                        disabled={captureDisabled}
-                        onClick={() => void captureScreenshot()}
-                        size="icon"
-                        title="截取图片"
-                        type="button"
-                        variant="outline"
-                      >
-                        <Camera aria-hidden />
-                      </Button>
+                      {!mobileControls ? (
+                        <Button
+                          aria-label={capturing ? "正在截取图片" : "截取图片"}
+                          disabled={captureDisabled}
+                          onClick={() => void captureScreenshot()}
+                          size="icon"
+                          title="截取图片"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Camera aria-hidden />
+                        </Button>
+                      ) : null}
                     </div>
                   )
                 ) : (

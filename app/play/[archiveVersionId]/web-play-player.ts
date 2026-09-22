@@ -26,6 +26,8 @@ const playerButtons = {
   menu: { key: "F1", code: "F1", keyCode: 112 },
   debug: { key: "F9", code: "F9", keyCode: 120 },
   log: { key: "`", code: "Backquote", keyCode: 192 },
+  fastForward3: { key: "f", code: "KeyF", keyCode: 70 },
+  fastForward10: { key: "g", code: "KeyG", keyCode: 71 },
 } as const;
 
 export type PlayerButton = keyof typeof playerButtons;
