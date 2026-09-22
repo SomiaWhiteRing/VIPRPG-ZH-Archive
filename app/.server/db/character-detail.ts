@@ -63,7 +63,13 @@ export async function getPublicCharacterDetail(
         .prepare(
           `SELECT w.id,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
       wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
-      w.original_release_date AS releaseDate,
+      w.original_release_date AS releaseDate,w.engine_family AS engineFamily,w.language,
+      COALESCE((SELECT group_concat(author_name,'、') FROM (
+        SELECT trim(staff.display_name) AS author_name
+        FROM work_staff staff JOIN creators author ON author.id=staff.creator_id
+        WHERE staff.work_id=w.id AND staff.role_key='author' AND trim(staff.display_name)<>''
+        ORDER BY staff.sort_order,author.name
+      )),'') AS authorName,
       (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
        WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS coverBlobSha256
       FROM work_characters wc JOIN works w ON w.id=wc.work_id

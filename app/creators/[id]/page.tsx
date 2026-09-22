@@ -127,7 +127,10 @@ export default function CreatorDetailPage() {
                         title={work.workTitle}
                         originalTitle={work.workOriginalTitle}
                         coverBlobSha256={work.coverBlobSha256}
+                        authorName={work.authorName}
                         releaseDate={work.originalReleaseDate ?? "日期未知"}
+                        engineFamily={work.engineFamily}
+                        language={work.language}
                       >
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {work.credits.map((credit) => (
