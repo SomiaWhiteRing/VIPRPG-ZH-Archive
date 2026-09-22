@@ -138,7 +138,7 @@ export default function MePage() {
           <AccountWorkGrid items={played.items} showPlayedAt />
         ) : (
           <AccountEmpty>
-            暂无游玩记录 · <Link to="/games">作品库</Link>
+            暂无游玩记录
           </AccountEmpty>
         )}
       </AccountSection>
@@ -155,7 +155,7 @@ export default function MePage() {
           <AccountWorkGrid items={favorites.items} />
         ) : (
           <AccountEmpty>
-            暂无收藏 · <Link to="/games">作品库</Link>
+            暂无收藏
           </AccountEmpty>
         )}
       </AccountSection>

@@ -49,7 +49,6 @@ export default function RegisterPage() {
   return (
     <AuthPageShell
       title="注册"
-      subtitle="注册后需要管理员批准才可以上传游戏。"
       footer={
         <>
           <Link to={`/login?next=${encodeURIComponent(nextPath)}`}>
@@ -110,7 +109,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
           id="register-field-1"
           name="email"
           defaultValue={email}
-          placeholder="name@example.com"
+          placeholder={undefined}
           required
         />
       </FormField>
@@ -119,6 +118,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
           id="register-field-2"
           purpose="new"
           name="password"
+          placeholder="8到20位的数字、字母或符号"
           required
         />
       </FormField>

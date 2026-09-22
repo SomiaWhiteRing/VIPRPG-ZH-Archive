@@ -27,13 +27,13 @@ export async function POST(
     ) {
       return json({ ok: false, error: "Invalid permissions" }, { status: 400 });
     }
-    await replaceRolePermissions(runtime, {
+    const role = await replaceRolePermissions(runtime, {
       actor: auth.user,
       roleId,
       permissionKeys: body.permissionKeys,
       expected: body.expected,
     });
-    return json({ ok: true });
+    return json({ ok: true, role });
   } catch (error) {
     if (error instanceof RoleConflictError)
       return json(

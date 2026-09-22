@@ -31,7 +31,6 @@ export type RoleRequestSummary = {
 export type AccountRoleOption = Pick<RoleSummary,
   "id" | "key" | "name" | "description" | "status" | "applicationEnabled" | "availableToAll"
 > & {
-  permissions: Permission[];
   individuallyAssigned: boolean;
   granted: boolean;
   request: RoleRequestSummary | null;

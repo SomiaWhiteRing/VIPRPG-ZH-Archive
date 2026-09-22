@@ -22,6 +22,10 @@ import {
   passwordHashNeedsUpgrade,
   verifyPassword,
 } from "@/app/.server/auth/password";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/auth/password-rules";
 import { hasPermission } from "@/lib/authz/permissions";
 
 import { getD1 } from "@/app/.server/db/d1";
@@ -267,7 +271,8 @@ export async function authenticateUser(
   }
 
   const passwordLengthValid =
-    input.password.length >= 12 && input.password.length <= 256;
+    input.password.length >= PASSWORD_MIN_LENGTH &&
+    input.password.length <= PASSWORD_MAX_LENGTH;
   const verified = await verifyPassword(
     passwordLengthValid ? input.password : "invalid-password-placeholder",
     row.password_hash,
@@ -429,7 +434,9 @@ export async function verifyOwnPassword(
   password: string,
 ): Promise<void> {
   const row = await findUserAuthRowById(runtime, userId);
-  const validLength = password.length >= 12 && password.length <= 256;
+  const validLength =
+    password.length >= PASSWORD_MIN_LENGTH &&
+    password.length <= PASSWORD_MAX_LENGTH;
   const valid = await verifyPassword(
     validLength ? password : "invalid-password-placeholder",
     row?.password_hash ?? null,
@@ -448,8 +455,14 @@ export async function changeOwnPassword(
   },
 ): Promise<void> {
   await verifyOwnPassword(runtime, input.user.id, input.currentPassword);
-  if (input.newPassword.length < 12 || input.newPassword.length > 256)
-    throw new HttpError(400, "新密码长度必须为 12 至 256 个字符");
+  if (
+    input.newPassword.length < PASSWORD_MIN_LENGTH ||
+    input.newPassword.length > PASSWORD_MAX_LENGTH
+  )
+    throw new HttpError(
+      400,
+      `新密码长度必须为 ${PASSWORD_MIN_LENGTH} 至 ${PASSWORD_MAX_LENGTH} 个字符`,
+    );
   const passwordHash = await hashPassword(input.newPassword);
   await getD1(runtime).batch([
     getD1(runtime)

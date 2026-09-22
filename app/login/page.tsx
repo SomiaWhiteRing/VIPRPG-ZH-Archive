@@ -62,7 +62,7 @@ export default function LoginPage() {
             id="login-field-1"
             defaultValue={params.email ?? ""}
             name="email"
-            placeholder="name@example.com"
+            placeholder={undefined}
             required
           />
         </FormField>

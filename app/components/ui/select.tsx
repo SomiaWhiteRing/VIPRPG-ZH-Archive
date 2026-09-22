@@ -35,7 +35,8 @@ export const SelectContent = forwardRef<
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         className={cn(
-          "z-50 flex max-h-[var(--radix-select-content-available-height)] min-w-32 flex-col overflow-hidden rounded-md border border-border bg-card text-foreground shadow-surface",
+          "z-50 flex max-h-[var(--radix-select-content-available-height)] min-w-[max(8rem,var(--radix-select-trigger-width,0px))] flex-col overflow-hidden rounded-md border border-border bg-card text-foreground shadow-surface",
+          "data-[side=top]:[--select-roll-inset:100%_0_0_0] motion-safe:data-[state=open]:animate-select-roll-open motion-safe:data-[state=closed]:animate-select-roll-closed",
           className,
         )}
         position="popper"

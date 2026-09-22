@@ -33,7 +33,7 @@ export async function PATCH(
     ) {
       return json({ ok: false, error: "Invalid role update" }, { status: 400 });
     }
-    await updateRole(runtime, {
+    const role = await updateRole(runtime, {
       actor: auth.user,
       roleId,
       name: body.name,
@@ -44,7 +44,7 @@ export async function PATCH(
       availableToAll: body.availableToAll,
       expected: body.expected,
     });
-    return json({ ok: true });
+    return json({ ok: true, role });
   } catch (error) {
     if (error instanceof RoleConflictError)
       return json(

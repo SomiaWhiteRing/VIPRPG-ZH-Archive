@@ -28,6 +28,15 @@ const schema = readFileSync(resolve(root, "migrations/0001_init_archive_schema.s
 selected.exec(schema);
 
 try {
+  const customRoles = source.prepare("SELECT * FROM roles WHERE kind='custom' ORDER BY id").all();
+  const customRoleIds = new Set(customRoles.map((row) => row.id));
+  const customRolePermissions = source.prepare("SELECT * FROM role_permissions ORDER BY role_id,permission_key").all()
+    .filter((row) => customRoleIds.has(row.role_id));
+  for (const role of customRoles) {
+    const existing = selected.prepare("SELECT id,key,kind FROM roles WHERE id=? OR key=?").all(role.id, role.key);
+    if (existing.some((row) => row.id !== role.id || row.key !== role.key || row.kind !== "custom"))
+      throw new Error(`Custom role identity conflicts with initialization schema: ${role.key}`);
+  }
   const approvedSheets = source.prepare("SELECT * FROM face_sheets WHERE library_status='approved' ORDER BY id").all();
   const approvedIds = new Set(approvedSheets.map((row) => row.id));
   const resources = source.prepare("SELECT * FROM resources WHERE visibility='published' ORDER BY sort_order,id").all();
@@ -52,6 +61,8 @@ try {
   ) SELECT c.* FROM hierarchy h JOIN character_categories c ON c.id=h.id ORDER BY h.depth,c.id`).all();
   if (categories.length !== source.prepare("SELECT count(*) n FROM character_categories").get().n) throw new Error("Category hierarchy is incomplete.");
   const rowsByTable = new Map([
+    ["roles", customRoles],
+    ["role_permissions", customRolePermissions],
     ["blobs", blobs.map((row) => ({ ...row, first_seen_archive_version_id: null }))],
     ["characters", source.prepare("SELECT * FROM characters ORDER BY id").all()],
     ["character_aliases", source.prepare("SELECT * FROM character_aliases ORDER BY id").all()],
@@ -70,10 +81,18 @@ try {
   ]);
   const statements = [];
   selected.exec("BEGIN");
+  if (customRoles.length) {
+    const clearGrants = `DELETE FROM role_permissions WHERE role_id IN (SELECT value FROM json_each(${literal(JSON.stringify([...customRoleIds]))})) AND role_id IN (SELECT id FROM roles WHERE kind='custom');`;
+    selected.exec(clearGrants);
+    statements.push(clearGrants);
+  }
   for (const [table, rows] of rowsByTable) {
     if (!rows.length) continue;
     const columns = selected.prepare(`PRAGMA table_info(${quote(table)})`).all().map((row) => row.name);
-    const insert = selected.prepare(`INSERT INTO ${quote(table)} (${columns.map(quote).join(",")}) VALUES (${columns.map(() => "?").join(",")})`);
+    const suffix = table === "roles"
+      ? ` ON CONFLICT(id) DO UPDATE SET ${columns.filter((column) => !["id", "key", "kind"].includes(column)).map((column) => `${quote(column)}=excluded.${quote(column)}`).join(",")}`
+      : "";
+    const insert = selected.prepare(`INSERT INTO ${quote(table)} (${columns.map(quote).join(",")}) VALUES (${columns.map(() => "?").join(",")})${suffix}`);
     // Bound SQL size and row count to stay within D1's parser memory limit.
     const prefix = `INSERT INTO ${quote(table)} (${columns.map(quote).join(",")}) VALUES `;
     let tuples = [], size = Buffer.byteLength(prefix);
@@ -83,11 +102,11 @@ try {
       insert.run(...cells);
       const tuple = `(${cells.map(literal).join(",")})`;
       const bytes = Buffer.byteLength(tuple) + 2;
-      if (bytes + Buffer.byteLength(prefix) > 90000) throw new Error(`Oversized seed row in ${table}.`);
-      if (size + bytes > 90000 || tuples.length >= 100) { statements.push(`${prefix}${tuples.join(",\n")};`); tuples = []; size = Buffer.byteLength(prefix); }
+      if (bytes + Buffer.byteLength(prefix + suffix) > 90000) throw new Error(`Oversized seed row in ${table}.`);
+      if (size + bytes + Buffer.byteLength(suffix) > 90000 || tuples.length >= 100) { statements.push(`${prefix}${tuples.join(",\n")}${suffix};`); tuples = []; size = Buffer.byteLength(prefix); }
       tuples.push(tuple); size += bytes;
     }
-    if (tuples.length) statements.push(`${prefix}${tuples.join(",\n")};`);
+    if (tuples.length) statements.push(`${prefix}${tuples.join(",\n")}${suffix};`);
   }
   selected.exec("COMMIT");
   const violations = selected.prepare("PRAGMA foreign_key_check").all();
@@ -121,7 +140,8 @@ try {
     sqlSha256: hash(sql), tables: populated, objects,
     validation: { foreignKeyViolations: 0, integrity: "ok", users: 0, works: 0 },
   }, null, 2) + "\n");
-  console.log(JSON.stringify({ output: relative(root, output), characters: populated.characters, categories: populated.character_categories,
+  console.log(JSON.stringify({ output: relative(root, output), customRoles: customRoles.length, customRolePermissions: customRolePermissions.length,
+    characters: populated.characters, categories: populated.character_categories,
     defaultPortraits: populated.character_default_portraits, defaultEmojis: populated.default_face_emojis, resources: populated.resources,
     objects: objects.length, bytes: objects.reduce((sum, item) => sum + item.size, 0), sqlStatements: statements.length, users: 0, works: 0 }));
 } finally { source.close(); selected.close(); }

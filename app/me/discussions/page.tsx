@@ -38,7 +38,6 @@ export default function DiscussionsPage() {
     <div>
       <PageHeader
         title="我的讨论"
-        subtitle="公开主题与回复（含楼中楼）"
       />
       <DiscussionList items={result.items} />
       <PaginationLinks
