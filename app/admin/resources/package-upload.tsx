@@ -5,6 +5,8 @@ import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
+import { Textarea } from "@/app/components/ui/textarea";
+import { readWindyFile, type WindyBuildInfo } from "@/lib/windy-package";
 import {
   MAX_TOOL_BYTES,
   type ResourceEditorData,
@@ -21,13 +23,17 @@ export function PackageUpload({
   onData,
 }: {
   data: ResourceEditorData;
-  releaseId: string;
+  releaseId?: string;
   existing?: ToolArtifact;
   busy: boolean;
   setBusy: (value: boolean) => void;
   onData: (data: ResourceEditorData) => void;
 }) {
   const toast = useToast();
+  const windy = data.resource.slug === "windy-translator";
+  const [build, setBuild] = useState<WindyBuildInfo | null>(null);
+  const [version, setVersion] = useState("");
+  const selection = useRef(0);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(""),
     [file, setFile] = useState<File | null>(null);
@@ -41,10 +47,24 @@ export function PackageUpload({
       return;
     }
     const form = new FormData(event.currentTarget);
+    const format = file.name.toLowerCase().split(".").pop();
+    const target = existing?.target ?? (windy ? "windows-x64" : form.get("target"));
+    if (
+      !((target === "windows-x64" && (format === "zip" || format === "exe")) ||
+        (target === "android-universal" && format === "apk"))
+    ) {
+      setError("Windows 请选择 ZIP 或 EXE 文件，Android 请选择 APK 文件");
+      return;
+    }
+    if (data.resource.slug === "windy-translator" && (target !== "windows-x64" || format !== "zip")) {
+      setError("Windy 更新仅支持 Windows x64 ZIP");
+      return;
+    }
     setBusy(true);
     setError("");
     setProgress("正在计算 SHA-256…");
     try {
+      const metadata = windy ? await readWindyFile(file) : null;
       const sha256 = await new Promise<string>((resolve, reject) => {
         const worker = new Worker(
           new URL("./hash-worker.ts", import.meta.url),
@@ -83,15 +103,28 @@ export function PackageUpload({
             {
               revision: data.resource.revision,
               releaseId,
-              target: form.get("target"),
-              format: form.get("format"),
+              target,
+              version: form.get("version") || metadata?.version,
+              notes: form.get("notes") || "",
               filename: file.name,
               sizeBytes: file.size,
               sha256,
-              applicationBuildId: form.get("applicationBuildId") || "",
+              applicationBuildId: metadata?.applicationBuildId ?? (form.get("applicationBuildId") || ""),
             },
           );
       onData(registered);
+      const artifact = registered.artifacts.find((a) => a.id === registered.artifactId);
+      const savedRelease = registered.releases.find((r) => r.id === artifact?.release_id);
+      if (artifact) requestAnimationFrame(() => {
+        const element = document.getElementById(`release-${artifact.release_id}`);
+        element?.setAttribute("open", "");
+        element?.scrollIntoView({ block: "center" });
+      });
+      if (artifact?.storage_status === "ready" || savedRelease?.status !== "draft") {
+        setProgress("此安装包已上传，已定位原版本");
+        return;
+      }
+      if (artifact && artifact.storage_status !== "pending") throw new Error("此安装包已登记，请在原版本中确认上传结果");
       setProgress("正在上传…");
       const result = await new Promise<ResourceEditorData>(
         (resolve, reject) => {
@@ -155,7 +188,7 @@ export function PackageUpload({
       <h3 className="font-semibold">
         {existing ? "重新上传同一文件" : "添加安装包"}
       </h3>
-      {!existing ? (
+      {!existing && !windy ? (
         <>
           <Label className="grid gap-2">
             平台
@@ -169,37 +202,51 @@ export function PackageUpload({
               ]}
             />
           </Label>
-          <Label className="grid gap-2">
-            文件格式
-            <SelectField
-              name="format"
-              defaultValue="zip"
-              disabled={busy}
-              options={[
-                { value: "zip", label: "ZIP 便携包" },
-                { value: "exe", label: "EXE 程序" },
-                { value: "apk", label: "APK 安装包" },
-              ]}
-            />
-          </Label>
-          <Label className="grid gap-2">
-            构建标识（Windy 使用 build-info.json 中的 applicationBuildId）
-            <Input name="applicationBuildId" maxLength={200} disabled={busy} />
-          </Label>
+          <details className="rounded border border-border p-2">
+            <summary className="cursor-pointer text-sm">可选：软件更新识别</summary>
+            <p className="mt-2 text-sm text-muted">
+              普通下载无需填写。供客户端识别已安装版本；留空仍可上传和下载，但无法自动判断是否有新版。
+            </p>
+            <Label className="mt-2 grid gap-2">
+              构建标识（Windy 可从 build-info.json 的 applicationBuildId 获取）
+              <Input name="applicationBuildId" maxLength={200} disabled={busy} />
+            </Label>
+          </details>
         </>
       ) : null}
       <Label className="grid gap-2">
-        安装包（最多 95 MB）
+        {windy ? "GitHub 发行 ZIP（最多 95 MB）" : "安装包（ZIP、EXE 或 APK，最多 95 MB）"}
         <input
           type="file"
-          accept=".zip,.exe,.apk"
+          accept={windy ? ".zip" : ".zip,.exe,.apk"}
           required
           disabled={busy}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={async (e) => {
+            const selected = e.target.files?.[0] ?? null;
+            const token = ++selection.current;
+            setFile(selected);
+            setBuild(null);
+            setError("");
+            setProgress("");
+            if (windy && selected) {
+              try {
+                const info = await readWindyFile(selected);
+                if (token !== selection.current) return;
+                setBuild(info);
+                setVersion(info.version);
+              } catch (error) {
+                if (token === selection.current) setError(error instanceof Error ? error.message : String(error));
+              }
+            }
+          }}
         />
       </Label>
+      {windy && build && !releaseId ? <>
+        <Label className="grid gap-2">版本名<Input name="version" value={version} onChange={(e) => setVersion(e.target.value)} required maxLength={100} disabled={busy} /></Label>
+        <Label className="grid gap-2">更新说明<Textarea name="notes" maxLength={30000} disabled={busy} /></Label>
+      </> : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={busy || !file} size="sm">
+        <Button disabled={busy || !file || (windy && !build)} size="sm">
           上传并校验
         </Button>
         {cancel.current ? (

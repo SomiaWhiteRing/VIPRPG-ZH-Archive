@@ -10,6 +10,7 @@ import { HttpError } from "@/lib/http";
 import { MAX_RESOURCE_ICON_BYTES, type ToolArtifact } from "@/lib/resources";
 import { getArtifact, getResource } from "./data";
 import { batchMutation, type Actor } from "./mutations";
+import { verifyWindyArtifact } from "./windy";
 
 function checksumHex(value: ArrayBuffer | undefined) {
   return value
@@ -128,6 +129,7 @@ async function finishUpload(
   if (row.upload_token !== token)
     throw new HttpError(409, "上传结果请重新确认");
   await verifyArtifactObject(runtime, row);
+  await verifyWindyArtifact(runtime, row);
   await batchMutation(
     runtime,
     actor,
@@ -269,6 +271,7 @@ export async function confirmArtifact(
     return;
   }
   assertArtifactObject(row, object);
+  await verifyWindyArtifact(runtime, row);
   await batchMutation(
     runtime,
     actor,

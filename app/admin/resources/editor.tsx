@@ -45,6 +45,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
     [formKey, setFormKey] = useState(0);
   const { resource } = data,
     base = `/api/admin/resources/${resource.id}`;
+  const windy = resource.slug === "windy-translator";
   async function run(
     operation: () => Promise<ResourceEditorData>,
     success = "已保存",
@@ -206,7 +207,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         <>
           <section className="grid gap-3 rounded-md border border-border bg-card p-4">
             <h2 className="text-lg font-bold">当前推荐</h2>
-            {RESOURCE_TARGETS.map((target) => {
+            {RESOURCE_TARGETS.filter((target) => !windy || target === "windows-x64").map((target) => {
               const channel = data.channels.find((c) => c.target === target);
               const artifact = data.artifacts.find(
                 (a) => a.id === channel?.artifact_id,
@@ -243,7 +244,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               );
             })}
           </section>
-          <form
+          {windy ? <PackageUpload data={data} busy={busy} setBusy={setBusy} onData={setData} /> : <form
             onSubmit={(e) => {
               e.preventDefault();
               const form = e.currentTarget,
@@ -270,9 +271,10 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             <Button disabled={busy} className="justify-self-start">
               创建版本草稿
             </Button>
-          </form>
+          </form>}
           {data.releases.map((release) => (
             <details
+              id={`release-${release.id}`}
               key={`${release.id}-${formKey}`}
               open={release.status === "draft"}
               className="rounded-md border border-border bg-card p-4"
@@ -284,15 +286,22 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                     release.status
                   ]
                 }
-                {release.release_sequence
+                {!windy && release.release_sequence
                   ? ` · 本站序号 ${release.release_sequence}`
                   : ""}
               </summary>
               <div className="mt-4 grid gap-4">
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     const values = new FormData(e.currentTarget);
+                    if (windy && release.status === "draft") {
+                      await confirm(`发布更新「${values.get("version")}」？用户将在下次启动温蒂时收到更新提示。`, {
+                        title: "发布更新", confirmLabel: "发布更新",
+                        action: () => action({ action: "publish", releaseId: release.id, version: values.get("version"), notes: values.get("notes"), recommend: true, visible: true }, true),
+                      });
+                      return;
+                    }
                     void action({
                       action: "saveRelease",
                       releaseId: release.id,
@@ -320,12 +329,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                     />
                   </Field>
                   <Button
-                    disabled={busy}
+                    disabled={busy || (windy && release.status === "draft" && !data.artifacts.some((a) => a.release_id === release.id && a.storage_status === "ready"))}
                     size="sm"
                     variant="outline"
                     className="justify-self-start"
                   >
-                    保存版本说明
+                    {windy && release.status === "draft" ? "发布更新" : "保存版本说明"}
                   </Button>
                 </form>
                 {data.artifacts
@@ -438,18 +447,19 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                   ))}
                 {release.status === "draft" ? (
                   <>
-                    <PackageUpload
+                    <div hidden={windy && data.artifacts.some((a) => a.release_id === release.id && a.storage_status !== "cleaned")}><PackageUpload
                       data={data}
                       releaseId={release.id}
                       busy={busy}
                       setBusy={setBusy}
                       onData={setData}
-                    />
-                    <PublishRelease
+                    /></div>
+                    {!windy ? <PublishRelease
+                      ready={data.artifacts.some((a) => a.release_id === release.id && a.storage_status === "ready")}
                       release={release}
                       busy={busy}
                       action={action}
-                    />
+                    /> : null}
                   </>
                 ) : null}
                 {release.status === "published" ? (
@@ -489,10 +499,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
   );
 }
 function PublishRelease({
+  ready = true,
   release,
   busy,
   action,
 }: {
+  ready?: boolean;
   release: ToolRelease;
   busy: boolean;
   action: (values: Record<string, unknown>, propagateError?: boolean) => Promise<void>;
@@ -521,7 +533,7 @@ function PublishRelease({
         <Checkbox name="visible" defaultChecked disabled={busy} />
         同时公开链接
       </Label>
-      <Button disabled={busy} className="justify-self-start">
+      <Button disabled={busy || !ready} className="justify-self-start">
         发布版本
       </Button>
     </form>

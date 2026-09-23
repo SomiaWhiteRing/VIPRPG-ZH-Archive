@@ -170,6 +170,7 @@ export async function updateManifest(
     ).href,
     artifact: {
       id: row.id,
+      applicationBuildId: row.application_build_id,
       url: new URL(`/api/tool-artifacts/${row.id}/download`, runtime.origin)
         .href,
       filename: row.filename,

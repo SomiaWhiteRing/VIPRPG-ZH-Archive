@@ -9,6 +9,7 @@ import {
 } from "@/lib/resources";
 import { getArtifact, getResource } from "./data";
 import { verifyArtifactObject } from "./objects";
+import { verifyWindyArtifact } from "./windy";
 import { parseResourceContent } from "@/lib/resource-content";
 
 export type Actor = Pick<ArchiveUser, "id" | "email">;
@@ -270,6 +271,9 @@ export async function editResource(
         if (release.status === "published") return;
         if (release.status !== "draft")
           throw new HttpError(409, "撤回的版本不能重新发布");
+        if (resource.slug === "windy-translator" && data.version !== undefined) {
+          statements.push(db.prepare("UPDATE tool_releases SET version_label=?,notes=? WHERE id=?").bind(textField(data, "version", 100, true), textField(data, "notes", 30000), releaseId));
+        }
         const artifacts = (
           await db
             .prepare(
@@ -284,6 +288,7 @@ export async function editResource(
           if (a.storage_status !== "ready")
             throw new HttpError(409, "所有安装包均需校验完成");
           await verifyArtifactObject(runtime, a);
+          await verifyWindyArtifact(runtime, a);
         }
         if (data.visible === true && !resource.icon_blob_sha256)
           throw new HttpError(400, "公开链接前请上传图标");
@@ -362,18 +367,21 @@ export async function registerArtifact(
   data: Record<string, unknown>,
 ) {
   const resource = await getResource(runtime, id);
-  const releaseId = textField(data, "releaseId", 80, true);
-  const release = await runtime.db
+  if (resource.kind !== "tool") throw new HttpError(400, "网站链接没有安装包");
+  let releaseId = textField(data, "releaseId", 80);
+  const statements: D1PreparedStatement[] = [];
+  if (!releaseId && resource.slug !== "windy-translator") throw new HttpError(400, "请选择版本草稿");
+  const release = releaseId ? await runtime.db
     .prepare(
       "SELECT id FROM tool_releases WHERE id=? AND resource_id=? AND status='draft'",
     )
     .bind(releaseId, id)
-    .first();
-  if (!release) throw new HttpError(409, "草稿不存在");
+    .first() : null;
+  if (releaseId && !release) throw new HttpError(409, "草稿不存在");
   const target = textField(data, "target", 40, true),
-    format = textField(data, "format", 10, true),
     sha = textField(data, "sha256", 64, true);
   const filename = textField(data, "filename", 180, true),
+    format = filename.toLowerCase().split(".").pop() || "",
     buildId = textField(data, "applicationBuildId", 200) || null;
   if (
     !/^[a-f0-9]{64}$/.test(sha) ||
@@ -385,9 +393,25 @@ export async function registerArtifact(
     throw new HttpError(400, "平台、文件格式或摘要不正确");
   if (
     resource.slug === "windy-translator" &&
-    (target !== "windows-x64" || format !== "zip")
+    (target !== "windows-x64" || format !== "zip" || !buildId || !/^windy:[A-Za-z0-9:.-]{1,194}$/.test(buildId))
   )
     throw new HttpError(400, "Windy 更新仅支持 Windows x64 ZIP");
+  if (resource.slug === "windy-translator") {
+    const duplicate = await runtime.db.prepare(`SELECT a.id,a.sha256,a.size_bytes FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id WHERE r.resource_id=? AND a.application_build_id=? AND a.storage_status<>'cleaned' LIMIT 1`).bind(id, buildId).first<{ id: string; sha256: string; size_bytes: number }>();
+    if (duplicate) {
+      if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, "同一温蒂构建已登记不同文件，请上传原始 ZIP");
+      return duplicate.id;
+    }
+    if (!releaseId) {
+      releaseId = crypto.randomUUID();
+      const version = textField(data, "version", 100, true);
+      const names = new Set((await runtime.db.prepare("SELECT version_label FROM tool_releases WHERE resource_id=?").bind(id).all<{ version_label: string }>()).results.map((r) => r.version_label));
+      let label = version;
+      let suffix = 1;
+      while (names.has(label)) label = `${version.slice(0, 70)} (${new Date().toISOString().slice(0, 10)}${suffix++ > 1 ? `-${suffix - 1}` : ""})`;
+      statements.push(runtime.db.prepare("INSERT INTO tool_releases(id,resource_id,version_label,notes) VALUES(?,?,?,?)").bind(releaseId, id, label, textField(data, "notes", 30000)));
+    }
+  }
   if (
     /[<>:"/\\|?*]/.test(filename) ||
     Array.from(filename).some((character) => character.charCodeAt(0) < 32) ||
@@ -406,6 +430,7 @@ export async function registerArtifact(
     integer(data.revision, 1),
     "artifact_register",
     [
+      ...statements,
       runtime.db
         .prepare(
           `INSERT INTO tool_artifacts(id,release_id,target,format,application_build_id,filename,object_key,size_bytes,sha256,upload_actor_id)
