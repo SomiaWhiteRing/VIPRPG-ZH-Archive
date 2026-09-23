@@ -20,6 +20,7 @@ import { runtimeContext } from "./.server/router-context";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
+import { GameStorageBoundary } from "./components/game-storage-boundary";
 import { DiscussionVisitBoundary } from "./discussions/visit";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
@@ -89,6 +90,7 @@ export default function App() {
   return (
     <>
       <DiscussionVisitBoundary />
+      <GameStorageBoundary />
       <SiteHeaderNav
         session={session}
         loginLink={

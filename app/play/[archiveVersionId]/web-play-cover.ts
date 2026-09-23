@@ -1,5 +1,11 @@
 const coverCacheName = "viprpg-web-play-covers-v1";
 
+export async function readCachedWebPlayCover(sha256: string): Promise<Blob | null> {
+  const cache = await caches.open(coverCacheName);
+  const response = await cache.match(coverUrl(sha256));
+  return response ? response.blob() : null;
+}
+
 function coverUrl(sha256: string): string {
   if (!/^[a-f0-9]{64}$/i.test(sha256)) throw new Error("Invalid cover hash");
   return `/api/media/blobs/${sha256.toLowerCase()}`;

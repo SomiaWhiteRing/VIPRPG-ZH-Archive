@@ -3,7 +3,6 @@ import {
   deleteWebPlayInstallation,
   getWebPlayInstallation,
   listWebPlayInstallations,
-  markWebPlayLastPlayed,
   saveWebPlayInstallation,
 } from "@/app/play/[archiveVersionId]/web-play-db";
 import { useWebPlayControlsPreferences } from "@/app/play/[archiveVersionId]/web-play-controls-preferences";
@@ -88,7 +87,7 @@ export function OfflineApp() {
         const installation = installations.find((item) => item.playKey === playKey);
         if (!installation) continue;
         await withGameResourceWriteLock(playKey, async () => {
-          await resetGameOpfsDirectory(playKey);
+          await resetGameOpfsDirectory(installation);
           await deleteWebPlayInstallation(playKey);
         });
         removed.push(installation);
@@ -311,7 +310,6 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
     playerRef.current = session;
     void session.ready.then(async () => {
       setStarting(false);
-      await markWebPlayLastPlayed(installation.playKey);
       host.querySelector("iframe")?.contentDocument?.querySelector("canvas")?.focus();
     }).catch((reason) => { setStarting(false); setError(message(reason)); });
     return () => { void session.dispose(); };

@@ -26,14 +26,14 @@ import type { DisplayOrientation } from "./web-play-controls-preferences";
 import { WebPlayScreenshotGallery } from "./web-play-screenshot-gallery";
 import { useWebPlayScreenshots } from "./web-play-screenshots";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
+import { useClientEnvironment } from "@/app/components/use-client-environment";
+import { Link } from "react-router";
 import {
-  deleteWebPlayInstallation,
   getWebPlayInstallation,
-  markWebPlayLastPlayed,
 } from "@/app/play/[archiveVersionId]/web-play-db";
-import { resetGameOpfsDirectory } from "@/app/play/[archiveVersionId]/web-play-opfs";
-import { canManageGameResources, cleanupObsoleteGameResources } from "./web-play-cleanup";
-import { withGameResourceWriteLock } from "./web-play-locks";
+import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
+import { chooseGameStorage } from "./web-play-storage";
+import { subscribeGameResourcesChanged } from "./web-play-events";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,
@@ -93,6 +93,7 @@ export function WebPlayClient({
   stats,
 }: WebPlayClientProps) {
   const toast = useToast();
+  const environment = useClientEnvironment();
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(
     null,
   );
@@ -248,38 +249,37 @@ export function WebPlayClient({
 
   useEffect(() => {
     let mounted = true;
-
-    getWebPlayInstallation(metadata.playKey)
-      .then((value) => {
-        if (mounted) {
-          setInstallation(value);
-
-          if (value?.status === "installing") {
-            addLog(
-              "warning",
-              "检测到上次安装未完成。浏览器刷新或崩溃后，当前版本会清理并重新安装。",
-            );
-          }
+    const refresh = async () => {
+      if (installSessionActive || playerBusy) return;
+      try {
+        await cleanupExpiredGameResources().catch(error => {
+          if (mounted) addLog("warning", error instanceof Error ? error.message : "本地资源暂未清理。");
+        });
+        const value = await getWebPlayInstallation(metadata.playKey);
+        if (!mounted) return;
+        setInstallation(value);
+        if (value?.status === "installing") {
+          addLog("warning", "检测到安装尚未完成。如果其他页面仍在安装，请等待完成后刷新。");
         }
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (mounted) {
-          addLog(
-            "warning",
-            error instanceof Error ? error.message : "读取本地安装状态失败。",
-          );
+          addLog("warning", error instanceof Error ? error.message : "读取本地安装状态失败。");
         }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoadingLocalState(false);
-        }
-      });
+      } finally {
+        if (mounted) setLoadingLocalState(false);
+      }
+    };
+    void refresh();
+    const onVisible = () => { if (!document.hidden) void refresh(); };
+    const unsubscribe = subscribeGameResourcesChanged(onVisible);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       mounted = false;
+      unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [addLog, metadata.playKey]);
+  }, [addLog, metadata.playKey, installSessionActive, playerBusy]);
 
 
   useEffect(() => {
@@ -393,6 +393,10 @@ export function WebPlayClient({
 
       setInstallSessionActive(true);
       setBrowserStorage(null);
+      await cleanupExpiredGameResources().catch(error => {
+        addLog("warning", error instanceof Error ? error.message : "部分旧资源暂未清理。");
+      });
+      signal.throwIfAborted();
       const { protectionStatus, ...storageSnapshot } = await readBrowserStorage(true);
       signal.throwIfAborted();
       setBrowserStorage({ protectionStatus, ...storageSnapshot });
@@ -409,6 +413,7 @@ export function WebPlayClient({
       worker.postMessage({
         type: "install",
         metadata,
+        storageKind: chooseGameStorage(),
         storageSnapshot,
       } satisfies WebPlayInstallWorkerInput);
       addLog("info", "开始下载并安装到浏览器本地。");
@@ -440,10 +445,7 @@ export function WebPlayClient({
       if (!(await canManageGameResources())) {
         throw new Error("当前浏览器不支持安全管理本地游戏资源。");
       }
-      await withGameResourceWriteLock(metadata.playKey, async () => {
-        await resetGameOpfsDirectory(metadata.playKey);
-        await deleteWebPlayInstallation(metadata.playKey);
-      });
+      await deleteLocalGame(metadata.playKey);
       setInstallation(null);
       setBrowserStorage(await readBrowserStorage());
       addLog("info", "已删除本地游戏文件。游戏存档不受影响。");
@@ -485,7 +487,6 @@ export function WebPlayClient({
       signal.throwIfAborted();
       setRunning(true);
       focusPlayerCanvas();
-      await markWebPlayLastPlayed(metadata.playKey);
       signal.throwIfAborted();
       if (isAuthenticated) {
         void fetch(`/api/works/${metadata.workId}/played`, {
@@ -504,6 +505,9 @@ export function WebPlayClient({
       setOperationError(message);
       addLog("error", message);
       setRunning(false);
+      await cleanupExpiredGameResources().catch(() => {});
+      const current = await getWebPlayInstallation(metadata.playKey).catch(() => null);
+      if (!signal.aborted) setInstallation(current);
       return false;
     } finally {
       startingRef.current = false;
@@ -637,8 +641,8 @@ export function WebPlayClient({
     return [
       { label: "本地状态", value: installation ? installStatusLabel(installation.status) : "未安装" },
       {
-        label: "自动清理保护",
-        info: "未获得保护仍可正常保存游戏和存档，但浏览器可能在空间不足时自动清理。已获得保护也无法阻止手动清除站点数据。",
+        label: "存档保护",
+        info: "保护用于存档等站点数据，不延长游戏资源的保留期限，也无法阻止手动清除站点数据。",
         value: browserStorage?.protectionStatus ?? "查询中…",
       },
       {
@@ -922,6 +926,10 @@ export function WebPlayClient({
                 )}
 
                 {engagement}
+
+                {environment === "browser" ? (
+                  <Link className="text-sm text-primary hover:underline" to="/installed">管理已安装游戏</Link>
+                ) : null}
 
                 <details
                   className="border-t border-border pt-3"

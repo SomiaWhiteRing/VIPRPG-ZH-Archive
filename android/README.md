@@ -4,6 +4,8 @@ Android WebView 的「主站」页直接使用网站；底栏「离线游玩」�
 
 作品封面在安装时缓存到 WebView 的 Cache Storage，与游戏清单同源；断网时仍能显示新安装作品的封面。旧安装记录没有封面哈希时显示文字占位。作品库支持搜索、安装状态筛选、排序以及批量删除游戏文件，删除不涉及存档和截图。
 
+主站以原生注入的 `VIPRPGAndroid` 识别本 App：继续使用原 OPFS 目录，不启用普通浏览器的 7 天资源清理，不显示头像菜单「已安装游戏」。旧 APK 内置的离线页也能继续读取主站新安装的游戏。手机上的普通浏览器仍采用浏览器保留策略，详见[浏览器存储说明](../docs/browser-game-storage.md)。
+
 原生版本页调用站点 `/api/tools/viprpg-android/updates/stable/android-universal?applicationBuildId=org.viprpg.archive:<versionCode>`。超管须在目标站点的软件管理后台创建固定 slug 为 `viprpg-android` 的软件，上传 Android universal APK，并发布、推荐 stable 渠道；每个安装包填写相应的构建标识（当前代码为 `org.viprpg.archive:2`），才能准确比较本站发布序号。未配置时版本页显示暂无更新，未知构建只允许手动下载，不假定已是最新版。内部构建标识只用于请求，不显示在版本界面。下载走站点同源 HTTPS 安装包接口并交给系统浏览器；安装由用户按 Android 系统提示完成，不进行静默安装。正式发布仍需使用持续有效的相同签名证书并递增 `versionCode`。
 
 ## Docker Desktop 打包

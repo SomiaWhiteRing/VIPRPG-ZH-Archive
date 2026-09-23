@@ -27,6 +27,7 @@ export default [
   route("games/:id/relations", "games/[id]/relations/page.tsx"),
   route("inbox", "inbox/page.tsx"),
   route("inbox/:itemId", "inbox/[itemId]/page.tsx"),
+  route("installed", "installed/page.tsx"),
   route("login", "login/page.tsx"),
   index("page.tsx"),
   route("play/:archiveVersionId", "play/[archiveVersionId]/page.tsx"),
