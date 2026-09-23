@@ -26,8 +26,6 @@ import type { DisplayOrientation } from "./web-play-controls-preferences";
 import { WebPlayScreenshotGallery } from "./web-play-screenshot-gallery";
 import { useWebPlayScreenshots } from "./web-play-screenshots";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
-import { useClientEnvironment } from "@/app/components/use-client-environment";
-import { Link } from "react-router";
 import {
   getWebPlayInstallation,
 } from "@/app/play/[archiveVersionId]/web-play-db";
@@ -95,7 +93,6 @@ export function WebPlayClient({
   stats,
 }: WebPlayClientProps) {
   const toast = useToast();
-  const environment = useClientEnvironment();
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(
     null,
   );
