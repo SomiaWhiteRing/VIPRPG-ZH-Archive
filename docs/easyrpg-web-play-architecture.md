@@ -6,6 +6,7 @@
 
 - [RPG Maker 2000/2003 去重存储架构](./archive-storage.md)
 - [Workers 与 React Router 运行手册](./workers-development.md)
+- [浏览器已安装游戏与自动清理](./browser-game-storage.md)：普通浏览器的 7 天资源桶与 Android 套壳存储分流。
 
 ## 1. 固定结论
 
@@ -282,6 +283,7 @@ const persisted = await navigator.storage.persist();
 
 - OPFS、IndexedDB、Cache API 和 EasyRPG IDBFS 共享同一个 origin 存储额度。
 - `persist()` 只能请求浏览器尽量不要自动清理本站数据，不保证成功。
+- 普通浏览器优先将游戏资源放入独立 Storage Bucket，按最后游玩后 7 天到期；不支持时使用 OPFS 并在访问时清理。存档仍保留在默认存储中，游戏桶不申请持久化。Android 套壳继续使用原 OPFS 目录，不设置 7 天期限。详见[浏览器存储说明](./browser-game-storage.md)。
 - 持久化请求应在页面主线程发起；Worker 只接收主线程传入的结果并负责安装。
 - UI 必须显示已用空间、估算额度和本游戏预计安装大小。
 - 空间不足或 `QuotaExceededError` 时，安装失败并引导用户删除其他本地缓存。

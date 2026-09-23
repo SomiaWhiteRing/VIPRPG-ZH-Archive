@@ -2,6 +2,7 @@
 
 import {
   clearWebPlayFileRecords,
+  getWebPlayInstallation,
   saveWebPlayFileRecords,
   saveWebPlayInstallation,
 } from "@/app/play/[archiveVersionId]/web-play-db";
@@ -18,11 +19,14 @@ import type {
   WebPlayInstallWorkerOutput,
   WebPlayMetadata,
   WebPlayStorageSnapshot,
+  WebPlayStorageKind,
 } from "@/app/play/[archiveVersionId]/web-play-types";
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { withGameResourceWriteLock } from "./web-play-locks";
 import { cacheWebPlayCover } from "./web-play-cover";
+import { renewGameBucket } from "./web-play-storage";
+import { notifyGameResourcesChanged } from "./web-play-events";
 
 type LocalZipEntry = {
   name: string;
@@ -84,8 +88,9 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
   if (message.type === "install") {
     canceledPlayKeys.delete(message.metadata.playKey);
     withGameResourceWriteLock(message.metadata.playKey, () =>
-      runInstall(message.metadata, message.storageSnapshot),
+      runInstall(message.metadata, message.storageKind, message.storageSnapshot),
     ).then(() => {
+      notifyGameResourcesChanged();
       postMessage({ type: "install-finished" } satisfies WebPlayInstallWorkerOutput);
     }).catch((error: unknown) => {
       postMessage({
@@ -103,11 +108,16 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
 
 async function runInstall(
   metadata: WebPlayMetadata,
+  storageKind: WebPlayStorageKind,
   storageSnapshot?: WebPlayStorageSnapshot,
 ): Promise<void> {
-  let installation = createInitialInstallation(metadata);
+  let installation: WebPlayInstallation = { ...createInitialInstallation(metadata), storageKind };
 
   try {
+    const previous = await getWebPlayInstallation(metadata.playKey);
+    if (previous) await resetGameOpfsDirectory(previous);
+    // Persist the resource location before writing any files or caching a cover.
+    await saveWebPlayInstallation(installation);
     if (metadata.coverBlobSha256) {
       await cacheWebPlayCover(metadata.coverBlobSha256).catch(() => {});
     }
@@ -147,7 +157,7 @@ async function runInstall(
   } catch (error) {
     const message = error instanceof Error ? error.message : "安装失败";
     const failed: WebPlayInstallation = {
-      ...installation,
+      ...((await getWebPlayInstallation(metadata.playKey)) ?? installation),
       status: canceledPlayKeys.has(metadata.playKey) ? "deleted" : "failed",
       updatedAt: new Date().toISOString(),
       error: message,
@@ -180,7 +190,7 @@ async function runInstallAttempt(input: {
     );
   }
 
-  await resetGameOpfsDirectory(metadata.playKey);
+  await resetGameOpfsDirectory(installation);
   await clearWebPlayFileRecords(metadata.playKey);
 
   installation = await persistAndPost(
@@ -234,7 +244,7 @@ async function runInstallAttempt(input: {
     },
     true,
   );
-  await writeGamePackIndexJson(metadata.playKey, JSON.stringify(result.packIndex));
+  await writeGamePackIndexJson(installation, JSON.stringify(result.packIndex));
 
   installation = await persistAndPost(
     {
@@ -319,7 +329,7 @@ async function streamZipToPacks(input: {
   let lastDiagnosticAt = nowMs();
   let progressWrite = Promise.resolve();
   const fileRecords: WebPlayFileRecord[] = [];
-  const packWriter = new PackWriter(input.metadata.playKey);
+  const packWriter = new PackWriter(installation);
   const packIndex: WebPlayPackIndex = {
     version: 1,
     archiveVersionId: input.metadata.archiveVersionId,
@@ -513,7 +523,7 @@ class PackWriter {
   private pendingBytes = 0;
   private nextPackIndex = 0;
 
-  constructor(private readonly playKey: string) {}
+  constructor(private readonly installation: WebPlayInstallation) {}
 
   async beginEntry(length: number): Promise<PackEntryLocation> {
     if (
@@ -569,7 +579,7 @@ class PackWriter {
     this.nextPackIndex += 1;
     this.currentPack = { name, size: 0 };
     this.packs.push(this.currentPack);
-    this.writable = await createGamePackWritable(this.playKey, name);
+    this.writable = await createGamePackWritable({ ...this.installation, updatedAt: new Date().toISOString() }, name);
   }
 
   private async flush(): Promise<void> {
@@ -752,6 +762,8 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     manifestSha256: metadata.manifestSha256,
     webPlayInstallerVersion: metadata.webPlayInstallerVersion,
     title: metadata.title,
+    originalTitle: metadata.originalTitle,
+    engineFamily: metadata.engineFamily,
     coverBlobSha256: metadata.coverBlobSha256,
     status: "created",
     phase: "metadata",
@@ -794,6 +806,7 @@ async function persistAndPost(
 
   lastEmitAt.set(installation.playKey, now);
   await saveWebPlayInstallation(installation);
+  if (installation.status === "ready") await renewGameBucket(installation);
   postMessage({
     type: "installation",
     installation,

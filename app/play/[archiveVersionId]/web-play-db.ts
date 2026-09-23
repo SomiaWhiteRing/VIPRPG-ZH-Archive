@@ -65,10 +65,13 @@ export async function deleteWebPlayInstallation(playKey: string): Promise<void> 
   db.close();
 }
 
-export async function markWebPlayLastPlayed(playKey: string): Promise<void> {
+export async function markWebPlayLastPlayed(playKey: string): Promise<WebPlayInstallation | null> {
   const db = await openWebPlayDb();
-  await updateLastPlayed(db, playKey);
-  db.close();
+  try {
+    return await updateLastPlayed(db, playKey);
+  } finally {
+    db.close();
+  }
 }
 
 function openWebPlayDb(): Promise<IDBDatabase> {
@@ -156,20 +159,22 @@ function deleteInstallationData(db: IDBDatabase, playKey: string): Promise<void>
   });
 }
 
-function updateLastPlayed(db: IDBDatabase, playKey: string): Promise<void> {
+function updateLastPlayed(db: IDBDatabase, playKey: string): Promise<WebPlayInstallation | null> {
   return new Promise((resolve, reject) => {
+    let updated: WebPlayInstallation | null = null;
     const tx = db.transaction(STORE_INSTALLATIONS, "readwrite");
     const store = tx.objectStore(STORE_INSTALLATIONS);
     const request = store.get(playKey);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const existing = request.result as WebPlayInstallation | undefined;
-      if (!existing) return;
+      if (!existing || existing.status !== "ready") return;
       const now = new Date().toISOString();
-      store.put({ ...existing, lastPlayedAt: now, updatedAt: now });
+      updated = { ...existing, lastPlayedAt: now, updatedAt: now };
+      store.put(updated);
     };
     tx.onerror = () => reject(tx.error);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => resolve(updated);
   });
 }
 

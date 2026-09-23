@@ -8,6 +8,7 @@ export function WorkListRow({
   title,
   originalTitle,
   coverBlobSha256,
+  coverSrc,
   authorName,
   releaseDate,
   engineFamily,
@@ -20,6 +21,7 @@ export function WorkListRow({
   title: string;
   originalTitle?: string | null;
   coverBlobSha256?: string | null;
+  coverSrc?: string | null;
   authorName?: string;
   releaseDate?: string | null;
   engineFamily?: string;
@@ -49,6 +51,7 @@ export function WorkListRow({
       >
         <WorkThumbnail
           blobSha256={coverBlobSha256}
+          src={coverSrc}
           width={128}
           height={96}
           imageClassName="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"

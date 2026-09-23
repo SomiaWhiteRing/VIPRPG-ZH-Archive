@@ -1,3 +1,6 @@
+import { deleteGameBucket, openGameBucket, validatePlayKey } from "./web-play-storage";
+import type { WebPlayInstallation } from "./web-play-types";
+
 const APP_ROOT = "viprpg-archive";
 const GAMES_ROOT = "games";
 
@@ -8,13 +11,12 @@ export type WebPlayPackage = {
 
 /** Mount installed bytes directly in the player's Worker, without resource HTTP requests. */
 export async function readGamePackages(
-  playKey: string,
+  installation: WebPlayInstallation,
   archiveVersionId: number,
   manifestSha256: string,
   signal: AbortSignal,
 ): Promise<WebPlayPackage[]> {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(playKey)) throw new Error("非法游戏安装标识。");
-  const root = await getGameRootDirectory(playKey, false);
+  const root = await getGameRootDirectory(installation, false);
   signal.throwIfAborted();
   const indexFile = await (await root.getFileHandle("pack-index.json")).getFile();
   const index: unknown = JSON.parse(await indexFile.text());
@@ -73,12 +75,17 @@ export async function ensureOpfsSupported(): Promise<void> {
   }
 }
 
-export async function resetGameOpfsDirectory(playKey: string): Promise<void> {
+export async function resetGameOpfsDirectory(installation: WebPlayInstallation): Promise<void> {
+  validatePlayKey(installation.playKey);
+  if (installation.storageKind === "browser-bucket") {
+    await deleteGameBucket(installation.playKey);
+    return;
+  }
   await ensureOpfsSupported();
   const gamesRoot = await getGamesRootDirectory(true);
 
   await gamesRoot
-    .removeEntry(playKey, { recursive: true })
+    .removeEntry(installation.playKey, { recursive: true })
     .catch((error: unknown) => {
       if (!(error instanceof DOMException && error.name === "NotFoundError")) {
         throw error;
@@ -87,10 +94,10 @@ export async function resetGameOpfsDirectory(playKey: string): Promise<void> {
 }
 
 export async function createGamePackWritable(
-  playKey: string,
+  installation: WebPlayInstallation,
   packName: string,
 ): Promise<FileSystemWritableFileStream> {
-  const gameRoot = await getGameRootDirectory(playKey, true);
+  const gameRoot = await getGameRootDirectory(installation, true);
   const packsRoot = await gameRoot.getDirectoryHandle("packs", { create: true });
   const file = await packsRoot.getFileHandle(normalizePackName(packName), {
     create: true,
@@ -100,18 +107,18 @@ export async function createGamePackWritable(
 }
 
 export async function writeGamePackIndexJson(
-  playKey: string,
+  installation: WebPlayInstallation,
   indexJson: string,
 ): Promise<void> {
-  await writeGameRootTextFile(playKey, "pack-index.json", indexJson);
+  await writeGameRootTextFile(installation, "pack-index.json", indexJson);
 }
 
 async function writeGameRootTextFile(
-  playKey: string,
+  installation: WebPlayInstallation,
   fileName: string,
   text: string,
 ): Promise<void> {
-  const gameRoot = await getGameRootDirectory(playKey, true);
+  const gameRoot = await getGameRootDirectory(installation, true);
   const file = await gameRoot.getFileHandle(fileName, { create: true });
   const writable = await file.createWritable();
 
@@ -130,12 +137,28 @@ async function getGamesRootDirectory(create: boolean): Promise<FileSystemDirecto
 }
 
 async function getGameRootDirectory(
-  playKey: string,
+  installation: WebPlayInstallation,
   create: boolean,
 ): Promise<FileSystemDirectoryHandle> {
+  validatePlayKey(installation.playKey);
+  if (installation.storageKind === "browser-bucket") {
+    return (await openGameBucket(installation, create)).getDirectory();
+  }
   const gamesRoot = await getGamesRootDirectory(create);
 
-  return gamesRoot.getDirectoryHandle(playKey, { create });
+  return gamesRoot.getDirectoryHandle(installation.playKey, { create });
+}
+
+/** A cheap availability check; the player validates the index and packs on startup. */
+export async function hasGameResources(installation: WebPlayInstallation, requireIndex = true): Promise<boolean> {
+  try {
+    const root = await getGameRootDirectory(installation, false);
+    if (!requireIndex) return true;
+    return (await (await root.getFileHandle("pack-index.json")).getFile()).size > 0;
+  } catch (error) {
+    if (error instanceof DOMException && ["NotFoundError", "InvalidStateError"].includes(error.name)) return false;
+    throw error;
+  }
 }
 
 function normalizePackName(name: string): string {

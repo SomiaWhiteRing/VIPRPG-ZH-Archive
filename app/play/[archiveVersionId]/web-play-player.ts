@@ -1,7 +1,9 @@
 import type { WebPlayMetadata } from "./web-play-types";
-import { readGamePackages } from "./web-play-opfs";
+import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { acquireGameResourceReadLock } from "./web-play-locks";
-import { getWebPlayInstallation } from "./web-play-db";
+import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
+import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
+import { notifyGameResourcesChanged } from "./web-play-events";
 import playerStyles from "../player.css?inline";
 
 type PlayerWindow = Window & {
@@ -76,10 +78,33 @@ export function createPlayerSession(
   let runtimeCreation: Promise<NonNullable<typeof runtime>> | undefined;
   let disposing: Promise<void> | undefined;
   let releaseResources: (() => void) | undefined;
+  let played = false;
+  let renewalTimer: ReturnType<typeof setInterval> | undefined;
+  let renewal = Promise.resolve();
   const frame = document.createElement("iframe");
   frame.title = `${metadata.title} 游戏画面`;
   frame.className = "block h-full w-full border-0";
   frame.allow = "autoplay; fullscreen";
+
+  function touchResources(): Promise<void> {
+    renewal = renewal.catch(() => {}).then(async () => {
+      const current = await getWebPlayInstallation(metadata.playKey);
+      const expires = current && gameResourceExpiresAt(current);
+      if (!current || current.status !== "ready" || (expires != null && expires <= Date.now()) || !await hasGameResources(current)) {
+        throw new Error("本地游戏资源已清理，请重新安装。存档和截图保留。");
+      }
+      const updated = await markWebPlayLastPlayed(metadata.playKey);
+      if (updated) await renewGameBucket(updated);
+    });
+    return renewal;
+  }
+
+  function refreshResources() {
+    void touchResources().catch(error => {
+      onLog("error", formatLogValue(error));
+      void dispose().then(onExit).catch(() => {});
+    });
+  }
 
   function setButtonPressed(button: PlayerButton, pressed: boolean) {
     if (lifetime.signal.aborted || heldButtons.has(button) === pressed) return;
@@ -112,12 +137,16 @@ export function createPlayerSession(
         disposing = undefined;
         throw error;
       }
+      clearInterval(renewalTimer);
+      document.removeEventListener("visibilitychange", refreshResources);
+      if (played) await touchResources().catch(error => onLog("warning", formatLogValue(error)));
       disconnectLogs?.();
       disconnectLogs = undefined;
       frame.remove();
       resourceLifetime.abort();
       releaseResources?.();
       releaseResources = undefined;
+      notifyGameResourcesChanged();
     })();
     // Cleanup on unmount cannot await; retain an error report for failed saves.
     void disposing.catch(error => onLog("error", formatLogValue(error)));
@@ -127,11 +156,13 @@ export function createPlayerSession(
   const ready = (async () => {
     releaseResources = await acquireGameResourceReadLock(metadata.playKey, resourceLifetime.signal);
     lifetime.signal.throwIfAborted();
-    if ((await getWebPlayInstallation(metadata.playKey))?.status !== "ready") {
+    const installation = await getWebPlayInstallation(metadata.playKey);
+    const expires = installation && gameResourceExpiresAt(installation);
+    if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
       throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
     }
     const packages = await readGamePackages(
-      metadata.playKey, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
+      installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
     );
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
@@ -178,6 +209,13 @@ export function createPlayerSession(
       onExit: () => { void dispose().then(onExit).catch(() => {}); },
     });
     runtime = await untilAborted(runtimeCreation, lifetime.signal);
+    lifetime.signal.throwIfAborted();
+    await touchResources();
+    lifetime.signal.throwIfAborted();
+    played = true;
+    renewalTimer = setInterval(refreshResources, 60_000);
+    document.addEventListener("visibilitychange", refreshResources);
+    notifyGameResourcesChanged();
   })().catch((error: unknown) => {
     const failure = new Error(formatLogValue(error));
     void dispose();

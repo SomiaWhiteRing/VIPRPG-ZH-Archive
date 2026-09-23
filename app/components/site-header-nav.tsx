@@ -4,6 +4,7 @@ import type {
 } from "@/app/components/header-navigation";
 import { HeaderNavigation } from "@/app/components/header-navigation";
 import { InboxIndicator } from "@/app/components/inbox-indicator";
+import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -415,6 +416,7 @@ function UserMenu({
   inAdmin: boolean;
   session: Session;
 }) {
+  const environment = useClientEnvironment();
   const consoleHref = getAdminLandingHref(getAdminNavigation(session));
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const itemClass =
@@ -494,6 +496,11 @@ function UserMenu({
                 ) : null}
               </Link>
             </DropdownMenu.Item>
+            {environment === "browser" ? (
+              <DropdownMenu.Item asChild>
+                <Link className={itemClass} to="/installed" prefetch="none">已安装游戏</Link>
+              </DropdownMenu.Item>
+            ) : null}
             {inAdmin ? (
               <DropdownMenu.Item asChild>
                 <Link className={itemClass} to="/">
