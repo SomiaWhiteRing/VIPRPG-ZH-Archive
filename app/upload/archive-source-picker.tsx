@@ -1,6 +1,8 @@
 import { Notice } from "@/app/components/ui/notice";
 
 import { Button } from "@/app/components/ui/button";
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { Label } from "@/app/components/ui/label";
 import { Progress } from "@/app/components/ui/progress";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes } from "@/lib/format";
@@ -53,6 +55,7 @@ export function ArchiveSourcePicker({
 }) {
   const dragDepthRef = useRef(0);
   const instructionsId = useId();
+  const cleanupRtpId = useId();
   const [fileDragActive, setFileDragActive] = useState(false);
   const archiveInputRef = useRef<HTMLInputElement>(null);
 
@@ -188,12 +191,13 @@ export function ArchiveSourcePicker({
         </div>
       )}
       {!sourceSummary && !existingSource ? (
-        <label className="mt-3 flex items-start gap-2 text-sm">
-          <input checked={cleanupRtp} disabled={disabled} onChange={(event) => onCleanupRtpChange(event.target.checked)} type="checkbox" />
-          <span>清理未使用的原版 RTP
-            <span className="block text-xs text-muted">仅排除确认未引用的原版素材；自定义、修改过或用途不明的素材保留。</span>
-          </span>
-        </label>
+        <div className="mt-3 flex items-start gap-2 text-sm">
+          <Checkbox id={cleanupRtpId} aria-describedby={`${cleanupRtpId}-description`} checked={cleanupRtp} disabled={disabled} onCheckedChange={(checked) => onCleanupRtpChange(checked === true)} />
+          <div>
+            <Label htmlFor={cleanupRtpId}>清理未使用的原版 RTP</Label>
+            <p className="text-xs text-muted" id={`${cleanupRtpId}-description`}>仅排除确认未引用的原版素材；自定义、修改过或用途不明的素材保留。</p>
+          </div>
+        </div>
       ) : null}
     </div>
   );

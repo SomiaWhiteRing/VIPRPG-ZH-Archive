@@ -1,5 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
 import { diagnosticUrl, environment, errorFields, TRACE_MESSAGE } from "./protocol";
 import type { TraceBatch, TraceEvent } from "./protocol";
 
@@ -177,9 +179,9 @@ export function InstallDiagnosticsPanel() {
         }}>清空记录</Button>
       </div>
       {notice ? <p role="status" className="mt-2">{notice}</p> : null}
-      {text ? <label className="mt-2 block">诊断 JSON（只读，可全选复制）
-        <textarea className="mt-1 block w-full rounded border border-border p-2 font-mono text-xs" readOnly rows={10} value={text} />
-      </label> : null}
+      {text ? <Label className="mt-2 block">诊断 JSON（只读，可全选复制）
+        <Textarea className="mt-1 font-mono text-xs" readOnly rows={10} value={text} />
+      </Label> : null}
     </details>
   );
 }
