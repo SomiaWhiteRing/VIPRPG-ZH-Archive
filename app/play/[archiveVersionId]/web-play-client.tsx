@@ -34,8 +34,8 @@ import {
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
 import { subscribeGameResourcesChanged } from "./web-play-events";
-// For temporary detailed tracing, change the path below to "./diagnostics/client".
-import { createInstallWorker, InstallDiagnosticsPanel } from "./web-play-install-worker-entry";
+// Temporary staging diagnostics; restore "./web-play-install-worker-entry" after investigation.
+import { createInstallWorker, InstallDiagnosticsPanel } from "./diagnostics/client";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,
