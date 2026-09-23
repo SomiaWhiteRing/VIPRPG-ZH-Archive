@@ -14,6 +14,6 @@ export async function verifyWindyArtifact(runtime: AppRuntime, row: ToolArtifact
     });
     if (row.target !== info.target || row.format !== "zip" || row.application_build_id !== info.applicationBuildId) throw new Error("包内身份与登记内容不符");
   } catch (error) {
-    throw new HttpError(400, error instanceof Error ? error.message : "温蒂安装包校验失败");
+    throw new HttpError(400, error instanceof Error ? error.message : "WindyTranslator 安装包校验失败");
   }
 }
