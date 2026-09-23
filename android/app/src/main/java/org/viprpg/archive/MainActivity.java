@@ -333,7 +333,7 @@ public final class MainActivity extends Activity {
                 if (isFinishing() || isDestroyed()) return;
                 checkingUpdates = false;
                 checkUpdate.setEnabled(true);
-                checkUpdate.setText(R.string.check_again);
+                checkUpdate.setText(R.string.check_update);
                 if (failureMessage != null) {
                     updateStatus.setText("暂时无法检查更新");
                     updateDetail.setText("请稍后再试。");
@@ -368,8 +368,9 @@ public final class MainActivity extends Activity {
             updateDetail.setText("推荐版本 " + result.version + "，无法确认是否已安装。");
             downloadUpdate.setText("下载此版本");
         } else if (result.isNewer()) {
-            updateStatus.setText("发现新版本");
-            updateDetail.setText("版本 " + result.version + "，下载后按照系统提示安装。");
+            updateStatus.setText("发现新版本 " + result.version);
+            updateDetail.setText("");
+            updateDetail.setVisibility(View.GONE);
             downloadUpdate.setText(R.string.download_update);
         } else {
             showUpToDate();
@@ -381,7 +382,7 @@ public final class MainActivity extends Activity {
             releaseNotes.setVisibility(View.VISIBLE);
         }
         downloadUpdate.setVisibility(View.VISIBLE);
-        setCheckButtonSecondary(true);
+        checkUpdate.setVisibility(View.GONE);
     }
 
     private void showUpToDate() {
@@ -389,6 +390,9 @@ public final class MainActivity extends Activity {
         updateStatusIcon.setImageResource(R.drawable.ic_check_circle);
         updateDetail.setText("");
         updateDetail.setVisibility(View.GONE);
+        checkUpdate.setVisibility(View.VISIBLE);
+        checkUpdate.setText(R.string.check_update);
+        setCheckButtonSecondary(false);
     }
 
     private void showPendingUpdate() {
@@ -396,12 +400,14 @@ public final class MainActivity extends Activity {
         pendingUpdatePrompt = false;
         if (version || currentUpdate == null || !getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true)) return;
         UpdateChecker.Result update = currentUpdate;
-        new AlertDialog.Builder(this)
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this)
             .setTitle("发现新版本 " + update.version)
-            .setMessage((update.notes == null || update.notes.trim().isEmpty() ? "" : update.notes + "\n\n") + "下载后按照 Android 系统提示安装，已有游戏和存档会保留。")
-            .setPositiveButton("下载更新", (dialog, which) -> openExternal(update.download))
-            .setNegativeButton("稍后", null)
-            .show();
+            .setPositiveButton("下载更新", (ignored, which) -> openExternal(update.download))
+            .setNegativeButton("稍后", null);
+        if (update.notes != null && !update.notes.trim().isEmpty()) {
+            dialog.setMessage(update.notes);
+        }
+        dialog.show();
     }
 
     private void setCheckButtonSecondary(boolean secondary) {
