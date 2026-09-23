@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
     private ScrollView versionPanel;
     private TextView installedVersion;
     private TextView updateStatus;
+    private ImageView updateStatusIcon;
     private TextView updateDetail;
     private TextView releaseNotesHeading;
     private TextView releaseNotes;
@@ -88,6 +89,7 @@ public final class MainActivity extends Activity {
         versionPanel = findViewById(R.id.version_panel);
         installedVersion = findViewById(R.id.installed_version);
         updateStatus = findViewById(R.id.update_status);
+        updateStatusIcon = findViewById(R.id.update_status_icon);
         updateDetail = findViewById(R.id.update_detail);
         releaseNotesHeading = findViewById(R.id.release_notes_heading);
         releaseNotes = findViewById(R.id.release_notes);
@@ -229,7 +231,7 @@ public final class MainActivity extends Activity {
         libraryTab.setOnClickListener(view -> showLibrary());
         versionTab.setOnClickListener(view -> showVersion());
         if (savedInstanceState == null || browser.restoreState(savedInstanceState) == null) {
-            showLibrary();
+            showOnline();
         } else {
             library = isOffline(Uri.parse(browser.getUrl()));
             if (savedInstanceState.getBoolean("version")) showVersion();
@@ -310,6 +312,8 @@ public final class MainActivity extends Activity {
         checkUpdate.setText("检查中…");
         setCheckButtonSecondary(false);
         updateStatus.setText("正在检查更新");
+        updateStatusIcon.setImageResource(R.drawable.ic_version);
+        updateDetail.setVisibility(View.VISIBLE);
         updateDetail.setText("请稍候…");
         releaseNotesHeading.setVisibility(View.GONE);
         releaseNotes.setVisibility(View.GONE);
@@ -357,8 +361,7 @@ public final class MainActivity extends Activity {
             return;
         }
         if (result.versionCode <= BuildConfig.VERSION_CODE) {
-            updateStatus.setText("当前无需更新");
-            updateDetail.setText("可以继续使用当前版本。");
+            showUpToDate();
             return;
         } else if (result.installedSequence < 0) {
             updateStatus.setText("有可下载的版本");
@@ -369,8 +372,7 @@ public final class MainActivity extends Activity {
             updateDetail.setText("版本 " + result.version + "，下载后按照系统提示安装。");
             downloadUpdate.setText(R.string.download_update);
         } else {
-            updateStatus.setText("当前无需更新");
-            updateDetail.setText("可以继续使用当前版本。");
+            showUpToDate();
             return;
         }
         if (result.notes != null && !result.notes.trim().isEmpty()) {
@@ -380,6 +382,13 @@ public final class MainActivity extends Activity {
         }
         downloadUpdate.setVisibility(View.VISIBLE);
         setCheckButtonSecondary(true);
+    }
+
+    private void showUpToDate() {
+        updateStatus.setText(R.string.up_to_date);
+        updateStatusIcon.setImageResource(R.drawable.ic_check_circle);
+        updateDetail.setText("");
+        updateDetail.setVisibility(View.GONE);
     }
 
     private void showPendingUpdate() {
