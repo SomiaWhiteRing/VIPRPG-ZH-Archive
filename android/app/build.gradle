@@ -10,8 +10,8 @@ if (siteUri.scheme != 'https' || !siteUri.host || siteUri.port != -1 || siteUri.
     throw new GradleException('siteOrigin must be an HTTPS origin without a path or port')
 }
 def runtimeVersion = new JsonSlurper().parse(file('../../lib/archive/easyrpg-runtime.json')).version
-def appVersionCode = providers.environmentVariable('ANDROID_VERSION_CODE').getOrElse('3').toInteger()
-def appVersionName = providers.environmentVariable('ANDROID_VERSION_NAME').getOrElse('0.3.0')
+def appVersionCode = providers.environmentVariable('ANDROID_VERSION_CODE').getOrElse('4').toInteger()
+def appVersionName = providers.environmentVariable('ANDROID_VERSION_NAME').getOrElse('0.3.3')
 if (appVersionCode < 1 || appVersionCode > 2100000000 || !(appVersionName ==~ /[A-Za-z0-9.+-]{1,100}/)) {
     throw new GradleException('Invalid Android version code or name')
 }
