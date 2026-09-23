@@ -22,14 +22,20 @@ final class UpdateChecker {
         final long releaseSequence;
         final long installedSequence;
         final Uri download;
+        final long versionCode;
 
-        Result(String status, String version, String notes, long releaseSequence, long installedSequence, Uri download) {
+        Result(String status, String version, String notes, long releaseSequence, long installedSequence, Uri download, long versionCode) {
             this.status = status;
             this.version = version;
             this.notes = notes;
             this.releaseSequence = releaseSequence;
             this.installedSequence = installedSequence;
             this.download = download;
+            this.versionCode = versionCode;
+        }
+
+        boolean isNewer() {
+            return installedSequence > 0 && releaseSequence > installedSequence && versionCode > BuildConfig.VERSION_CODE;
         }
     }
 
@@ -44,7 +50,7 @@ final class UpdateChecker {
         connection.setRequestProperty("Cache-Control", "no-cache");
         try {
             int code = connection.getResponseCode();
-            if (code == 404) return new Result("unconfigured", null, null, -1, -1, null);
+            if (code == 404) return new Result("unconfigured", null, null, -1, -1, null, -1);
             if (code != 200) throw new IOException("更新服务返回 " + code);
             JSONObject data = new JSONObject(readLimited(connection.getInputStream()));
             if (data.optInt("schemaVersion") != 1 || !TOOL.equals(data.optString("tool"))
@@ -52,7 +58,7 @@ final class UpdateChecker {
                 throw new IOException("更新数据格式不受支持");
             }
             if ("paused".equals(data.optString("status"))) {
-                return new Result("paused", null, null, -1, -1, null);
+                return new Result("paused", null, null, -1, -1, null, -1);
             }
             if (!"available".equals(data.optString("status"))) throw new IOException("更新状态无效");
             JSONObject artifact = data.getJSONObject("artifact");
@@ -68,10 +74,14 @@ final class UpdateChecker {
             }
             long sequence = data.optLong("releaseSequence", -1);
             if (sequence <= 0) throw new IOException("更新序号无效");
+            String artifactBuild = artifact.optString("applicationBuildId");
+            if (!artifactBuild.matches("org\\.viprpg\\.archive:[1-9][0-9]{0,9}")) throw new IOException("安装包版本标识无效");
+            long versionCode = Long.parseLong(artifactBuild.substring(artifactBuild.indexOf(':') + 1));
+            if (versionCode > 2100000000L) throw new IOException("安装包版本号无效");
             JSONObject installed = data.optJSONObject("installedRelease");
             long installedSequence = installed != null && buildId.equals(installed.optString("applicationBuildId"))
                 ? installed.optLong("releaseSequence", -1) : -1;
-            return new Result("available", data.getString("version"), data.optString("notes"), sequence, installedSequence, download);
+            return new Result("available", data.getString("version"), data.optString("notes"), sequence, installedSequence, download, versionCode);
         } finally {
             connection.disconnect();
         }

@@ -6,6 +6,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
+import { readAndroidFile, type AndroidBuildInfo } from "@/lib/android-package";
 import { readWindyFile, type WindyBuildInfo } from "@/lib/windy-package";
 import {
   MAX_TOOL_BYTES,
@@ -31,7 +32,10 @@ export function PackageUpload({
 }) {
   const toast = useToast();
   const windy = data.resource.slug === "windy-translator";
-  const [build, setBuild] = useState<WindyBuildInfo | null>(null);
+  const android = data.resource.slug === "viprpg-android";
+  const automaticPackage = windy || android;
+  const readPackage = android ? readAndroidFile : readWindyFile;
+  const [build, setBuild] = useState<WindyBuildInfo | AndroidBuildInfo | null>(null);
   const [version, setVersion] = useState("");
   const selection = useRef(0);
   const [error, setError] = useState("");
@@ -48,7 +52,7 @@ export function PackageUpload({
     }
     const form = new FormData(event.currentTarget);
     const format = file.name.toLowerCase().split(".").pop();
-    const target = existing?.target ?? (windy ? "windows-x64" : form.get("target"));
+    const target = existing?.target ?? (automaticPackage ? (android ? "android-universal" : "windows-x64") : form.get("target"));
     if (
       !((target === "windows-x64" && (format === "zip" || format === "exe")) ||
         (target === "android-universal" && format === "apk"))
@@ -64,7 +68,7 @@ export function PackageUpload({
     setError("");
     setProgress("正在计算 SHA-256…");
     try {
-      const metadata = windy ? await readWindyFile(file) : null;
+      const metadata = automaticPackage ? await readPackage(file) : null;
       const sha256 = await new Promise<string>((resolve, reject) => {
         const worker = new Worker(
           new URL("./hash-worker.ts", import.meta.url),
@@ -188,7 +192,7 @@ export function PackageUpload({
       <h3 className="font-semibold">
         {existing ? "重新上传同一文件" : "添加安装包"}
       </h3>
-      {!existing && !windy ? (
+      {!existing && !automaticPackage ? (
         <>
           <Label className="grid gap-2">
             平台
@@ -208,17 +212,17 @@ export function PackageUpload({
               普通下载无需填写。供客户端识别已安装版本；留空仍可上传和下载，但无法自动判断是否有新版。
             </p>
             <Label className="mt-2 grid gap-2">
-              构建标识（Windy 可从 build-info.json 的 applicationBuildId 获取）
+              构建标识
               <Input name="applicationBuildId" maxLength={200} disabled={busy} />
             </Label>
           </details>
         </>
       ) : null}
       <Label className="grid gap-2">
-        {windy ? "GitHub 发行 ZIP（最多 95 MB）" : "安装包（ZIP、EXE 或 APK，最多 95 MB）"}
+        {android ? "GitHub 发布 APK（最多 95 MB）" : windy ? "GitHub 发行 ZIP（最多 95 MB）" : "安装包（ZIP、EXE 或 APK，最多 95 MB）"}
         <input
           type="file"
-          accept={windy ? ".zip" : ".zip,.exe,.apk"}
+          accept={android ? ".apk" : windy ? ".zip" : ".zip,.exe,.apk"}
           required
           disabled={busy}
           onChange={async (e) => {
@@ -228,9 +232,9 @@ export function PackageUpload({
             setBuild(null);
             setError("");
             setProgress("");
-            if (windy && selected) {
+            if (automaticPackage && selected) {
               try {
-                const info = await readWindyFile(selected);
+                const info = await readPackage(selected);
                 if (token !== selection.current) return;
                 setBuild(info);
                 setVersion(info.version);
@@ -241,12 +245,12 @@ export function PackageUpload({
           }}
         />
       </Label>
-      {windy && build && !releaseId ? <>
+      {automaticPackage && build && !releaseId ? <>
         <Label className="grid gap-2">版本名<Input name="version" value={version} onChange={(e) => setVersion(e.target.value)} required maxLength={100} disabled={busy} /></Label>
         <Label className="grid gap-2">更新说明<Textarea name="notes" maxLength={30000} disabled={busy} /></Label>
       </> : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={busy || !file || (windy && !build)} size="sm">
+        <Button disabled={busy || !file || (automaticPackage && !build)} size="sm">
           上传并校验
         </Button>
         {cancel.current ? (

@@ -1,0 +1,152 @@
+name: Android Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Different pushes all build; reruns of the same run cannot publish concurrently.
+concurrency:
+  group: android-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      # Current verified site; changing this origin isolates existing offline data.
+      SITE_ORIGIN: https://staging.viprpg.org
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Prepare release identity
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          code=$((100000 + GITHUB_RUN_NUMBER))
+          version="0.3.${GITHUB_RUN_NUMBER}"
+          tag="android-${code}"
+          echo "ANDROID_VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Published assets stay immutable, including when a workflow is rerun.
+          if release=$(gh release view "$tag" --json isDraft); then
+            if [[ "$(jq -r .isDraft <<< "$release")" == false ]]; then
+              echo "published=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Restore fixed signing key
+        if: steps.release.outputs.published != 'true'
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${KEYSTORE_BASE64:?Configure ANDROID_KEYSTORE_BASE64}"
+          : "${KEYSTORE_PASSWORD:?Configure ANDROID_KEYSTORE_PASSWORD}"
+          : "${KEY_ALIAS:?Configure ANDROID_KEY_ALIAS}"
+          : "${KEY_PASSWORD:?Configure ANDROID_KEY_PASSWORD}"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/archive.jks"
+
+      - name: Set up Node.js
+        if: steps.release.outputs.published != 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Java
+        if: steps.release.outputs.published != 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        if: steps.release.outputs.published != 'true'
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.13'
+
+      - name: Install Android SDK components
+        if: steps.release.outputs.published != 'true'
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build signed APK
+        if: steps.release.outputs.published != 'true'
+        run: bash android/build-apk.sh release
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/archive.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Verify package and record checksum
+        if: steps.release.outputs.published != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$signer" verify --verbose output/android/viprpg-release.apk
+          expected=$(openssl x509 -in android/release-certificate.pem -outform DER | sha256sum | cut -d ' ' -f 1)
+          actual=$("$signer" verify --print-certs output/android/viprpg-release.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          [[ "$actual" == "$expected" ]] || { echo 'Release signing certificate does not match'; exit 1; }
+          node --import tsx scripts/inspect-android-package.ts output/android/viprpg-release.apk
+          cd output/android
+          sha256sum viprpg-release.apk > SHA256SUMS.txt
+
+      - name: Save release artifacts
+        if: steps.release.outputs.published != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: viprpg-android-${{ env.ANDROID_VERSION_CODE }}
+          path: |
+            output/android/viprpg-release.apk
+            output/android/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish complete release
+        if: steps.release.outputs.published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/android-release.md"
+          printf 'Android %s\n\nCommit: %s\n\n站点：https://staging.viprpg.org\n\n下载 viprpg-release.apk。此包使用固定发布签名；可覆盖安装较早的同签名版本。网站后台选择此 APK 即可自动识别版本，发布后向客户端推荐更新。\n\n' "$ANDROID_VERSION_NAME" "$GITHUB_SHA" > "$notes"
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" -f target_commitish="$GITHUB_SHA" --jq .body >> "$notes"
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft); then
+            # A maintainer may have published the draft while the build was running.
+            [[ "$(jq -r .isDraft <<< "$release")" == true ]] || exit 0
+          else
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft --prerelease \
+              --title "Android $ANDROID_VERSION_NAME" --notes-file "$notes"
+          fi
+          gh release upload "$RELEASE_TAG" output/android/viprpg-release.apk output/android/SHA256SUMS.txt --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false --notes-file "$notes"
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/archive.jks"

@@ -10,4 +10,5 @@
     <string name="check_update">检查更新</string>
     <string name="check_again">重新检查</string>
     <string name="download_update">下载新版本</string>
+    <string name="auto_check_updates">启动时检查更新</string>
 </resources>

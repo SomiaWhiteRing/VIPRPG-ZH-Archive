@@ -67,6 +67,12 @@ WindyTranslator 浏览器上传自动读取 `WindyTranslator/_internal/build-inf
 
 客户端要求说明和文件地址均为同源 HTTPS。HTTP 本地开发可查看页面和接口，真实 Windy 联调须使用符合要求的 HTTPS 站点。WindyTranslator 新客户端默认仅启动时检查一次，开关留在更新窗口；只提示更高发布序号。点击更新锁定主窗口、校验并准备完整 ZIP，由独立更新助手在原进程退出后备份、替换、重启，失败恢复原文件。配置、字典、Works、自装工具与额外文件受保护。首个完整支持自动安装的客户端须手动安装一次。当前双方按用户确认连接 staging；正式域名尚待核实。本功能不改变网站 Web 播放器 runtime，也不提供 Kai APK 自动覆盖安装。
 
+## VIPRPG Android 更新
+
+固定 slug `viprpg-android` 沿用同一更新协议，目标为 `android-universal`。后台选择原始发布 APK 后自动读取真实 `AndroidManifest.xml` 中的版本名、`versionCode` 与包名，无需手填平台或构建标识；构建标识为 `org.viprpg.archive:<versionCode>`。上传、恢复确认和发布时，服务器以范围读取独立解析并核对登记身份，同时拒绝其他包名和 debug 包。与 WindyTranslator 共用有上限的 ZIP 目录读取，不把整个 APK 载入 Worker 内存；APK 签名有效性由 CI 和 Android 系统负责。
+
+上传自动创建草稿，同一构建重复上传定位原记录，不同文件不能复用构建号；点击「发布更新」同时保存版本名和说明、发布、公开并设为 Android 推荐。客户端默认启动检查，可在版本页关闭，只对站内序号与 APK 版本号都更高的版本提示，防止重新推荐旧包时引导降级。下载后由用户完成系统安装。GitHub 自动打包及签名配置见 [Android 说明](../android/README.md#应用更新与发布)，不自动替代站内发布，也不改变 Kai APK 更新行为。
+
 ## 管理 API、审计与维护
 
 管理端点位于 `app/.server/resources/api.ts`，由主 Hono API 挂载。管理页不向公共页面泄漏 object key；根管理员可读取上传详情与存储报告。
