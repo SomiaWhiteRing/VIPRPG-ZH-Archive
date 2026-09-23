@@ -59,6 +59,7 @@ export async function GET(
       title: record.workChineseTitle || record.workOriginalTitle,
       originalTitle: record.workOriginalTitle,
       chineseTitle: record.workChineseTitle,
+      coverBlobSha256: record.workCoverBlobSha256,
       manifestSha256: record.manifestSha256,
       downloadZipBuilderVersion,
       webPlayInstallerVersion,

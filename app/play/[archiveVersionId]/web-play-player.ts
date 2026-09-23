@@ -56,10 +56,14 @@ export type PlayerScreenshot = {
   height: number;
 };
 
+type PlayerMetadata = Pick<WebPlayMetadata,
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath"
+>;
+
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
 export function createPlayerSession(
   host: HTMLElement,
-  metadata: WebPlayMetadata,
+  metadata: PlayerMetadata,
   onLog: PlayerLogHandler,
   onFullscreen: () => void,
   onExit: () => void,

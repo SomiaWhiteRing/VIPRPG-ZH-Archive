@@ -47,6 +47,8 @@ D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`。`ARCHIVE_BUCK
 
 ## 发布和回滚
 
+远端入口及 production／staging 配置来源见[部署环境](./staging-deployment.md#环境地址与配置来源)。Worker 名称是部署标识，不用于推导站点 URL；顶层配置与 `env.staging` 属于不同目标。
+
 发布前完成 `npm run verify:preprod`，核对目标域名、bindings、邮件、限流与 secrets。推送到 `main` 会自动发布 staging；production 需手动选择。具体门禁与顺序见[GitHub Actions 自动部署](./github-actions-deployment.md)。
 
 保留切换前 Worker 版本及对应静态资源，回滚时恢复完整应用版本，并确认该版本与目标数据库结构兼容。远程 migration 与部署按目标环境串行执行；数据库备份、重建和恢复属于独立运维操作，不随应用发布或回滚自动执行。

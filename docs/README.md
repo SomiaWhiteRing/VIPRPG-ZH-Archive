@@ -10,6 +10,7 @@
 - [资源与软件托管](./resources.md)：根管理员资源管理、原始包发布、平台推荐、下载与本站 Windy 更新协议
 - [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
 - [提醒产品与界面契约](./inbox-design.md)：讨论互动、角色申请、已读状态与未读入口
+- [可申请角色配置](./requestable-roles.md)：固定种子的申请组、权限边界与环境差异
 - [认证与权限基线](./authentication-authorization.md)：认证、角色、授权和审计边界
 - [游戏领域架构](./game-domain-architecture.md)：Work、ArchiveVersion、关系、目录和公开查询
 - [上传资料、发布声明与制作署名](./upload-metadata.md)：上传表单、署名、更多信息、偏好与恢复
@@ -23,6 +24,7 @@
 ## 运行手册
 
 - [Workers 与 React Router](./workers-development.md)：本地运行、binding、构建、部署和故障定位
+- [预生产初始化与验收](./staging-deployment.md)：当前访问入口、环境配置来源、干净种子与首次发布顺序
 - [GitHub Actions 自动部署](./github-actions-deployment.md)：CI 前置配置、触发方式和发布边界
 - [维护与回归](./maintenance-regression.md)：最小检查选择、故障归因与回归入口
 - [本地展示数据](./local-demo-data.md)：固定种子、演示账号、备份和恢复；快照格式见[种子说明](../data/local-seed/README.md)
@@ -42,6 +44,7 @@
 
 ## 维护方式
 
+- 环境地址以[预生产手册](./staging-deployment.md#环境地址与配置来源)为入口；代码白名单、被忽略的本地配置和历史发版记录不能证明域名已部署或可访问。
 - 行为变更直接修订对应章节，删除被替代的描述，不在文末叠加纠正旧文的补丁说明。
 - 命令与依赖以 [package.json](../package.json) 为准，路由以 [app/routes.ts](../app/routes.ts) 和 [Hono API](../app/.server/api.ts) 为准，结构以[统一初始化 SQL](../migrations/0001_init_archive_schema.sql)为准。
 - 已完成计划中仍有效的规则并入现行文档；只有独有的来源、决策或操作证据进入归档，纯重复记录由 Git 历史保留。

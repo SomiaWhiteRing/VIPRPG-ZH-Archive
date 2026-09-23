@@ -4,6 +4,8 @@
 
 | 记录 | 保留价值 | 当前入口 |
 | --- | --- | --- |
+| [展柜选择器试点](./2026-09-showcase-combobox-evaluation.md) | 试点前后对比及当时异常 | [共享选择器](../ui-feedback.md#共享选择器) |
+| [复杂选择器迁移](./2026-09-complex-picker-evaluation.md) | 迁移范围、交互复测与未测边界 | [共享选择器](../ui-feedback.md#共享选择器) |
 | [公共组件整理](./2026-09-shared-components.md) | 重构范围、快照基线及当时的静态检查 | [运行与架构](../workers-development.md)、`app/components/` |
 | [论坛本地开发](./2026-09-forum-local-development.md) | 图片模型切换范围、演示数据来源及当时的核对结果 | [论坛维护](../forum-maintenance.md)、[固定种子](../local-demo-data.md) |
 | [角色数据整理](./2026-09-character-data.md) | 分类转换、名称选择与补全的历史范围及证据位置 | [角色分类](../character-index.md)、[素材库](../character-material-library.md) |

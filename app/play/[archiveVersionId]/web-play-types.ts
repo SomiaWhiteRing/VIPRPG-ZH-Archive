@@ -5,6 +5,7 @@ export type WebPlayMetadata = {
   title: string;
   originalTitle: string;
   chineseTitle: string | null;
+  coverBlobSha256: string | null;
   manifestSha256: string;
   downloadZipBuilderVersion: string;
   webPlayInstallerVersion: string;
@@ -42,6 +43,7 @@ export type WebPlayInstallation = {
   manifestSha256: string;
   webPlayInstallerVersion: string;
   title: string;
+  coverBlobSha256?: string | null;
   status: WebPlayInstallStatus;
   phase: WebPlayInstallPhase;
   createdAt: string;

@@ -40,6 +40,10 @@ Thumbs.db
 /audit-*.png
 /baseline-*.png
 /output/
+/android/build-assets/
+/android/build-res/
+/android/.gradle/
+/android/app/build/
 
 # Local importer samples
 tools/rpgm-archive-importer/samples/*.local.json
