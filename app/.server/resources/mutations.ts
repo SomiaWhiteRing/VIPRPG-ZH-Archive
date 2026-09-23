@@ -399,7 +399,7 @@ export async function registerArtifact(
   if (resource.slug === "windy-translator") {
     const duplicate = await runtime.db.prepare(`SELECT a.id,a.sha256,a.size_bytes FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id WHERE r.resource_id=? AND a.application_build_id=? AND a.storage_status<>'cleaned' LIMIT 1`).bind(id, buildId).first<{ id: string; sha256: string; size_bytes: number }>();
     if (duplicate) {
-      if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, "同一温蒂构建已登记不同文件，请上传原始 ZIP");
+      if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, "同一 WindyTranslator 构建已登记不同文件，请上传原始 ZIP");
       return duplicate.id;
     }
     if (!releaseId) {

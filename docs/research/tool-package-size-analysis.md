@@ -11,7 +11,7 @@
 | Kai Android | 126,835,404 字节 | 56,739,901 字节 | [58a912e59](https://github.com/SomiaWhiteRing/Player/commit/58a912e59a3b1db3cf3a348269b36873cb9e996c)；[Nightly](https://github.com/SomiaWhiteRing/Player/releases/tag/nightly) |
 | WindyTranslator Windows | 144,158,333 字节 | 80,378,895 字节 | [e648f6f](https://github.com/SomiaWhiteRing/WindyTranslator/commit/e648f6f18c1783e85fa0d39eacde9b47fe88f7b7)；[Nightly](https://github.com/SomiaWhiteRing/WindyTranslator/releases/tag/nightly) |
 
-两条 GitHub 发版流程均成功，并在发布前检查了 100 MB 上限。温蒂现有相关检查通过；“安装乱码 RTP”通过现有工具宿主的命令行入口完成 465 个文件、13,696,720 字节的安装，重复执行也成功。未进行 UI 或 Android 实机验收。
+两条 GitHub 发版流程均成功，并在发布前检查了 100 MB 上限。WindyTranslator 现有相关检查通过；“安装乱码 RTP”通过现有工具宿主的命令行入口完成 465 个文件、13,696,720 字节的安装，重复执行也成功。未进行 UI 或 Android 实机验收。
 
 ## 后续发版流程改造
 

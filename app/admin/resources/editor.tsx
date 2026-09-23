@@ -296,7 +296,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                     e.preventDefault();
                     const values = new FormData(e.currentTarget);
                     if (windy && release.status === "draft") {
-                      await confirm(`发布更新「${values.get("version")}」？用户将在下次启动温蒂时收到更新提示。`, {
+                      await confirm(`发布更新「${values.get("version")}」？用户将在下次启动 WindyTranslator 时收到更新提示。`, {
                         title: "发布更新", confirmLabel: "发布更新",
                         action: () => action({ action: "publish", releaseId: release.id, version: values.get("version"), notes: values.get("notes"), recommend: true, visible: true }, true),
                       });
