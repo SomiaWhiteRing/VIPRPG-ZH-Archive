@@ -34,6 +34,8 @@ const files = unzipSync(archive);
 const runtimeFiles = [
   "easyrpg-player.js", "easyrpg-player.wasm", "easyrpg-player.data",
   "player-worker.js", "player-audio.js",
+  "player-movie.js", "player-movie-worker.js", "movie-decoder.js", "movie-decoder.wasm",
+  "movie-decoder.LICENSE.txt", "web-movies.md",
 ];
 for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);
@@ -42,6 +44,8 @@ if (sha256(files["easyrpg-player.data"]) !== soundfontSha256)
 const license = files.COPYING;
 if (sha256(license) !== licenseSha256)
   throw new Error("Kai license does not match the pinned digest");
+if (sha256(files["movie-decoder.LICENSE.txt"]) !== runtime.movieDecoder.licenseSha256)
+  throw new Error("Movie decoder license does not match the pinned digest");
 
 // Runtime source owns the site API and Work-based saves; import preserves every byte.
 const output = {
@@ -65,6 +69,7 @@ const source =
       liblcfRevision: runtime.liblcfRevision ?? null,
       emscriptenVersion: runtime.emscriptenVersion ?? null,
       buildscriptsRevision: runtime.buildscriptsRevision ?? null,
+      movieDecoder: runtime.movieDecoder,
       patches: [],
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),

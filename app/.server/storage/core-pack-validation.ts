@@ -30,6 +30,7 @@ export async function validateCorePackReferences(
   runtime: AppRuntime,
   manifest: Pick<ArchiveManifest, "files" | "corePacks">,
   metadataBySha256: ReadonlyMap<string, CorePackMetadata>,
+  onVerifiedEntry?: (path: string, bytes: Uint8Array) => void,
 ): Promise<void> {
   const expectedByPack = validateCorePackMetadataAndEntries(
     manifest,
@@ -52,11 +53,12 @@ export async function validateCorePackReferences(
 
     try {
       if (object.body) {
-        await verifyZipStream(object.body, expected);
+        await verifyZipStream(object.body, expected, onVerifiedEntry);
       } else {
         await verifyZipBytes(
           new Uint8Array(await object.arrayBuffer()),
           expected,
+          onVerifiedEntry,
         );
       }
     } catch (error) {
@@ -146,6 +148,7 @@ function validateCorePackMetadataAndEntries(
 async function verifyZipStream(
   body: ReadableStream<Uint8Array>,
   expected: Map<string, ExpectedEntry>,
+  onVerifiedEntry?: (path: string, bytes: Uint8Array) => void,
 ): Promise<void> {
   const checks: Promise<void>[] = [];
   const seen = new Set<string>();
@@ -199,7 +202,7 @@ async function verifyZipStream(
       if (data) chunks.push(data.slice());
       if (!final) return;
 
-      void verifyEntryBytes(entry, chunks)
+      void verifyEntryBytes(entry, chunks, onVerifiedEntry)
         .then(resolveCheck)
         .catch(rejectCheck);
     };
@@ -237,6 +240,7 @@ async function verifyZipStream(
 async function verifyZipBytes(
   bytes: Uint8Array,
   expected: Map<string, ExpectedEntry>,
+  onVerifiedEntry?: (path: string, bytes: Uint8Array) => void,
 ): Promise<void> {
   let error: unknown = null;
   await verifyZipStream(
@@ -247,6 +251,7 @@ async function verifyZipBytes(
       },
     }),
     expected,
+    onVerifiedEntry,
   ).catch((caught) => {
     error = caught;
   });
@@ -256,6 +261,7 @@ async function verifyZipBytes(
 async function verifyEntryBytes(
   entry: ExpectedEntry,
   chunks: Uint8Array[],
+  onVerifiedEntry?: (path: string, bytes: Uint8Array) => void,
 ): Promise<void> {
   const bytes = concatChunks(chunks);
   if (bytes.byteLength !== entry.size || crc32(bytes) !== entry.crc32) {
@@ -273,6 +279,7 @@ async function verifyEntryBytes(
   if (actualSha256 !== entry.sha256) {
     throw new HttpError(400, `Core-pack entry SHA-256 mismatch: ${entry.path}`);
   }
+  onVerifiedEntry?.(entry.path, bytes);
 }
 
 function concatChunks(chunks: Uint8Array[]): Uint8Array {

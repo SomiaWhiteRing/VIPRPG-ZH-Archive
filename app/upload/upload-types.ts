@@ -5,6 +5,7 @@ import type {
 } from "@/lib/archive/manifest";
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
+import type { RtpCleanupReport } from "@/lib/archive/rtp-cleanup";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 
@@ -59,6 +60,7 @@ export type UploadTaskStatus =
 export type UploadTaskPhase =
   | "enumerating"
   | "hashing"
+  | "analyzing_rtp"
   | "building_core_pack"
   | "creating_import_job"
   | "preflighting"
@@ -158,6 +160,7 @@ export type UploadTaskStats = {
   corePackZipSizeBytes: number;
   estimatedR2GetCount: number;
   excludedFileTypes: ExcludedFileTypeSummary[];
+  rtpCleanup: RtpCleanupReport | null;
 };
 
 export type UploadTaskCommitResult = {
@@ -178,6 +181,7 @@ export type UploadWorkerInput =
       localTaskId: string;
       sourceKind: UploadSourceKind;
       sourceName: string;
+      cleanupRtp: boolean;
       files: UploadSourceFile[];
       targetWorkId: number | null;
     }

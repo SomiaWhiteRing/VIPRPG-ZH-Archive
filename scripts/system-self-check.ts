@@ -1,18 +1,20 @@
 import { unzipSync, zipSync } from "fflate";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
 import { spawn, spawnSync } from "node:child_process";
 import {
   createWriteStream,
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
@@ -21,6 +23,8 @@ import { downloadZipBuilderVersion } from "../lib/archive/download";
 import { easyRpgRuntimeBasePath } from "../lib/archive/web-play";
 import { runWrangler } from "./run-wrangler.mjs";
 import { verifyEasyRpgGame } from "./easyrpg-flow-check";
+import { classifyArchivePath } from "../lib/archive/file-policy";
+import { RtpReferenceScan } from "../lib/archive/rtp-cleanup";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-system-test-"));
@@ -36,6 +40,11 @@ const wranglerCli = resolve(
 const testMode = process.argv[2] ?? "contract";
 const gameIndex = process.argv.indexOf("--game");
 const gamePath = gameIndex >= 0 ? process.argv[gameIndex + 1] : undefined;
+const archiveOnly = process.argv.includes("--archive-only");
+const keepRtp = process.argv.includes("--keep-rtp");
+const reportIndex = process.argv.indexOf("--report");
+const reportPath = reportIndex >= 0 ? resolve(process.argv[reportIndex + 1]) : null;
+const measurements: Record<string, unknown> = { testedAt: new Date().toISOString(), gamePath, keepRtp };
 if (gameIndex >= 0)
   assert.ok(
     testMode === "flow" && gamePath,
@@ -62,6 +71,12 @@ const sourceFiles = gamePath
       "Picture/system-test.png": coverBytes,
     };
 const sourceZip = zipSync(sourceFiles, { level: 0 });
+const allowedFiles = Object.entries(sourceFiles).filter(([path]) => classifyArchivePath(path).included);
+const referenceScan = new RtpReferenceScan(allowedFiles.map(([path, bytes]) => ({ path, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") })));
+for (const [path, bytes] of allowedFiles) referenceScan.consume(path, bytes);
+const expectedCleanup = keepRtp ? null : referenceScan.finish();
+const expectedExcluded = new Set(expectedCleanup?.excluded.map((file) => file.path));
+const expectedFiles = Object.fromEntries(allowedFiles.filter(([path]) => !expectedExcluded.has(path)));
 const catalogWorkIds = [101, 102] as const;
 const managedChildren = new Set<ChildProcess>();
 
@@ -94,10 +109,19 @@ const watchdog = setTimeout(() => {
 try {
   await run();
   passed = true;
+  if (reportPath) {
+    mkdirSync(dirname(reportPath), { recursive: true });
+    writeFileSync(reportPath, JSON.stringify({ ...measurements, passed, cleanup: expectedCleanup }, null, 2));
+  }
   console.log(`${testMode} self-check passed`);
 } catch (error) {
   await captureFailure(page);
   const message = error instanceof Error ? error.message : String(error);
+  writeFileSync(join(tempDir, "failure.txt"), error instanceof Error ? error.stack ?? message : message);
+  if (reportPath) {
+    mkdirSync(dirname(reportPath), { recursive: true });
+    writeFileSync(reportPath, JSON.stringify({ ...measurements, passed: false, error: message }, null, 2));
+  }
   throw new Error(`${message}\nSystem-test artifacts: ${tempDir}`, {
     cause: error,
   });
@@ -288,10 +312,26 @@ async function run(): Promise<void> {
   );
 
   browser = await chromium.launch({ headless: true });
-  await verifyEditorNavigation(browser, origin, adminCookie);
-  await verifyPermissionHistory(browser, origin);
+  if (!archiveOnly) {
+    await verifyEditorNavigation(browser, origin, adminCookie);
+    await verifyPermissionHistory(browser, origin);
+  }
   stage("recover a real browser upload");
   context = await browser.newContext();
+  if (reportPath) await context.addInitScript(() => {
+    const OriginalWorker = window.Worker;
+    const phases: Array<{ phase: string; ms: number }> = [];
+    (window as unknown as { uploadPhaseMeasurements: typeof phases }).uploadPhaseMeasurements = phases;
+    window.Worker = class extends OriginalWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        this.addEventListener("message", (event) => {
+          const phase = event.data?.type === "task" ? event.data.task.phase : null;
+          if (phase && phases.at(-1)?.phase !== phase) phases.push({ phase, ms: performance.now() });
+        });
+      }
+    };
+  });
   page = await context.newPage();
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.setDefaultTimeout(10_000);
@@ -307,19 +347,42 @@ async function run(): Promise<void> {
     (cookie) => cookie.name === "viprpg_session",
   );
   assert.ok(browserSession?.httpOnly && browserSession.sameSite === "Lax");
-  await verifyForumNavigation(page, origin);
+  if (!archiveOnly) await verifyForumNavigation(page, origin);
   await page.goto(`${origin}/upload`, { waitUntil: "networkidle" });
   const zipInput = page.locator(
-    'input[type="file"][accept=".zip,application/zip"]',
+    'input[type="file"][accept*=".zip"]',
   );
-  await zipInput.setInputFiles({
+  if (keepRtp) await page.getByRole("checkbox", { name: "清理未使用的原版 RTP" }).uncheck();
+  let putCount = 0;
+  const countUpload = (request: import("playwright").Request) => {
+    if (request.method() === "PUT" && /\/api\/(?:blobs|core-packs)\//.test(request.url())) putCount++;
+  };
+  page.on("request", countUpload);
+  const readyResponse = page.waitForResponse((response) => response.url().endsWith("/source-ready"), { timeout: 120_000 });
+  void readyResponse.catch(() => undefined);
+  const uploadStarted = performance.now();
+  await zipInput.setInputFiles(gamePath ? resolve(gamePath) : {
     name: "system-archive.zip",
     mimeType: "application/zip",
     buffer: Buffer.from(sourceZip),
   });
   await page
     .locator('[data-upload-phase="awaiting_metadata"]')
-    .waitFor({ timeout: 45_000 });
+    .waitFor({ timeout: 120_000 });
+  measurements.sourceReadyMs = performance.now() - uploadStarted;
+  page.off("request", countUpload);
+  measurements.uploadPutCount = putCount;
+  if (reportPath) {
+    const phases = await page.evaluate(() => (window as unknown as { uploadPhaseMeasurements: Array<{ phase: string; ms: number }> }).uploadPhaseMeasurements);
+    measurements.clientPhaseMs = Object.fromEntries(phases.slice(0, -1).map((entry, index) => [entry.phase, phases[index + 1].ms - entry.ms]));
+  }
+  const ready = await readyResponse;
+  assert.equal(ready.status(), 200, await ready.text());
+  const actualSource = ready.request().postDataJSON() as import("../lib/archive/manifest").ArchiveSourceManifest;
+  assert.deepEqual(actualSource.archiveVersion.rtpCleanup, expectedCleanup);
+  assert.deepEqual(actualSource.files.map((file) => file.path).sort(), Object.keys(expectedFiles).sort());
+  measurements.sourceManifestBytes = Buffer.byteLength(ready.request().postData()!);
+  measurements.archive = actualSource.archiveVersion;
   const importJobId = await waitForUploadDraft(page);
   const competingTab = await context.newPage();
   await competingTab.goto(`${origin}/upload`, { waitUntil: "networkidle" });
@@ -344,18 +407,14 @@ async function run(): Promise<void> {
     .getByText(String(new Date().getFullYear()), { exact: true })
     .click();
   await page.locator("#upload-release-date").press("Escape");
-  await page
-    .locator('input[type="file"][accept="image/*"][required]')
-    .setInputFiles({
-      name: "cover.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(coverBytes),
-    });
-  await page.getByRole("button", { name: "选择封面", exact: true }).click();
-  await page.getByRole("button", { name: "使用此封面", exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "设置封面" })
-    .waitFor({ state: "hidden" });
+  // Real games can supply their own title image before the restored form opens.
+  const missingCover = page.locator('input[type="file"][accept="image/*"][required]');
+  if (await missingCover.count()) {
+    await missingCover.setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: Buffer.from(coverBytes) });
+    await page.getByRole("button", { name: "选择封面", exact: true }).click();
+    await page.getByRole("button", { name: "使用此封面", exact: true }).click();
+    await page.getByRole("dialog", { name: "设置封面" }).waitFor({ state: "hidden" });
+  }
   assert.equal(
     await page
       .locator("[data-upload-phase] form")
@@ -383,14 +442,14 @@ async function run(): Promise<void> {
   };
   const { workId, archiveVersionId } = commitPayload.result;
   assert.ok(workId > 0 && archiveVersionId > 0);
-  assert.equal(commitPayload.result.fileCount, Object.keys(sourceFiles).length);
+  assert.equal(commitPayload.result.fileCount, Object.keys(expectedFiles).length);
   await waitForNoUploadDrafts(page);
 
   stage("verify cancel-on-leave releases the upload draft");
   await page.goto(`${origin}/upload`);
   await page
-    .locator('input[type="file"][accept=".zip,application/zip"]')
-    .setInputFiles({
+    .locator('input[type="file"][accept*=".zip"]')
+    .setInputFiles(gamePath ? resolve(gamePath) : {
       name: "cancel-archive.zip",
       mimeType: "application/zip",
       buffer: Buffer.from(sourceZip),
@@ -470,6 +529,7 @@ async function run(): Promise<void> {
   assert.equal(gc.archiveVersions.failedCount, 0);
   assert.equal(gc.blobs.failedCount, 0);
   assert.equal(gc.corePacks.failedCount, 0);
+  const downloadStarted = performance.now();
   const download = await fetch(
     `${workerOrigin}/api/archive-versions/${archiveVersionId}/download?zip_builder=${encodeURIComponent(downloadZipBuilderVersion)}`,
   );
@@ -487,12 +547,14 @@ async function run(): Promise<void> {
     downloadZipBuilderVersion,
   );
   const nativeZip = new Uint8Array(await download.arrayBuffer());
+  measurements.downloadMs = performance.now() - downloadStarted;
+  measurements.downloadZipBytes = nativeZip.length;
   const extracted = unzipSync(nativeZip);
   assert.deepEqual(
     Object.keys(extracted).sort(),
-    Object.keys(sourceFiles).sort(),
+    Object.keys(expectedFiles).sort(),
   );
-  for (const [path, bytes] of Object.entries(sourceFiles)) {
+  for (const [path, bytes] of Object.entries(expectedFiles)) {
     assert.deepEqual(extracted[path], bytes, `downloaded bytes for ${path}`);
   }
   await stopProcess(worker);
@@ -504,11 +566,14 @@ async function run(): Promise<void> {
   await page.goto(`${origin}/games/${workId}`);
   await page.locator(`a[href="/play/${archiveVersionId}"]`).first().click();
   await page.waitForURL(`${origin}/play/${archiveVersionId}`);
+  const installStarted = performance.now();
   await page.locator('[data-web-play-action="install"]').click();
   await page
     .locator('[data-web-play-status="ready"]')
     .waitFor({ timeout: 45_000 });
+  measurements.installMs = performance.now() - installStarted;
   const opfs = await inspectOpfs(page, webPlay.playKey);
+  measurements.opfsPackBytes = opfs.packBytes;
   assert.deepEqual(opfs.rootEntries, [
     "pack-index.json",
     "packs",
@@ -541,7 +606,7 @@ async function run(): Promise<void> {
     [],
     "hydration and browser Workers have no uncaught errors",
   );
-  if (gamePath) {
+  if (gamePath && !archiveOnly) {
     stage(
       "run the official EasyRPG game, save/load, and verify player/installer lifetimes",
     );
@@ -551,6 +616,33 @@ async function run(): Promise<void> {
       [],
       "real-game flow has no uncaught browser errors",
     );
+  }
+  if (gamePath && archiveOnly) {
+    stage("launch the uploaded game without fixture-specific save/menu actions");
+    const log: string[] = [];
+    page.on("console", (message) => log.push(message.text()));
+    await page.locator('[data-web-play-action="start"]').click();
+    await page.waitForFunction(() => {
+      const frame = document.querySelector<HTMLIFrameElement>("#web-player-host iframe");
+      return Boolean(frame?.contentDocument?.querySelector("canvas"));
+    }, undefined, { timeout: 45_000 });
+    await page.getByText("运行中", { exact: true }).waitFor({ timeout: 45_000 });
+    await page.waitForTimeout(6000);
+    if (reportPath) {
+      mkdirSync(dirname(reportPath), { recursive: true });
+      await page.screenshot({ path: reportPath.replace(/\.json$/, ".png"), fullPage: true });
+    }
+    const gameFrame = page.frames().find((frame) => frame.url().includes("/play/player"));
+    assert.ok(gameFrame, "player iframe exists");
+    await gameFrame.locator("canvas").focus();
+    await page.keyboard.press("Enter", { delay: 100 });
+    await page.waitForTimeout(2000);
+    if (reportPath) {
+      await page.screenshot({ path: reportPath.replace(/\.json$/, ".started.png"), fullPage: true });
+      writeFileSync(reportPath.replace(/\.json$/, ".runtime.log"), log.join("\n"));
+    }
+    measurements.runtimeWarnings = log.filter((line) => /not found|cannot find|couldn't|missing|error|failed|out of bounds/i.test(line));
+    assert.deepEqual(browserErrors, [], "game startup has no uncaught browser errors");
   }
 }
 
@@ -1332,16 +1424,42 @@ async function waitForNoUploadDrafts(currentPage: Page): Promise<void> {
 
 async function inspectOpfs(currentPage: Page, playKey: string) {
   return currentPage.evaluate(async (key) => {
-    let directory = await navigator.storage.getDirectory();
-    for (const part of ["viprpg-archive", "games", key]) {
-      directory = await directory.getDirectoryHandle(part);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("viprpg_web_play_v1", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const installation = await new Promise<import("../app/play/[archiveVersionId]/web-play-types").WebPlayInstallation>((resolve, reject) => {
+      const request = database.transaction("web_play_installations").objectStore("web_play_installations").get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    let directory: FileSystemDirectoryHandle;
+    if (installation.storageKind === "browser-bucket") {
+      const manager = (navigator as Navigator & { storageBuckets: {
+        keys(): Promise<string[]>;
+        open(name: string, options: { expires: number; persisted: false }): Promise<{ getDirectory(): Promise<FileSystemDirectoryHandle> }>;
+      } }).storageBuckets;
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+      const name = "viprpg-game-" + Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 48);
+      if (!(await manager.keys()).includes(name)) throw new Error("Installed game bucket is missing");
+      const expires = Date.parse(installation.lastPlayedAt ?? installation.readyAt ?? installation.createdAt) + 7 * 24 * 60 * 60 * 1000;
+      directory = await (await manager.open(name, { expires, persisted: false })).getDirectory();
+    } else {
+      directory = await navigator.storage.getDirectory();
+      for (const part of ["viprpg-archive", "games", key]) directory = await directory.getDirectoryHandle(part);
     }
     const rootEntries: string[] = [];
     for await (const name of directory.keys()) rootEntries.push(name);
     const packs = await directory.getDirectoryHandle("packs");
     const packEntries: string[] = [];
-    for await (const name of packs.keys()) packEntries.push(name);
-    return { rootEntries: rootEntries.sort(), packEntries: packEntries.sort() };
+    let packBytes = 0;
+    for await (const name of packs.keys()) {
+      packEntries.push(name);
+      packBytes += (await (await packs.getFileHandle(name)).getFile()).size;
+    }
+    return { rootEntries: rootEntries.sort(), packEntries: packEntries.sort(), packBytes };
   }, playKey);
 }
 

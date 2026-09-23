@@ -1,5 +1,6 @@
 import { deleteGameBucket, openGameBucket, validatePlayKey } from "./web-play-storage";
 import type { WebPlayInstallation } from "./web-play-types";
+import { observeInstallTask } from "./web-play-install-observer";
 
 const APP_ROOT = "viprpg-archive";
 const GAMES_ROOT = "games";
@@ -97,13 +98,13 @@ export async function createGamePackWritable(
   installation: WebPlayInstallation,
   packName: string,
 ): Promise<FileSystemWritableFileStream> {
-  const gameRoot = await getGameRootDirectory(installation, true);
-  const packsRoot = await gameRoot.getDirectoryHandle("packs", { create: true });
-  const file = await packsRoot.getFileHandle(normalizePackName(packName), {
+  const gameRoot = await observeInstallTask("opfs.game-directory", () => getGameRootDirectory(installation, true));
+  const packsRoot = await observeInstallTask("opfs.packs-directory", () => gameRoot.getDirectoryHandle("packs", { create: true }));
+  const file = await observeInstallTask("opfs.file-handle", () => packsRoot.getFileHandle(normalizePackName(packName), {
     create: true,
-  });
+  }), { pack: packName });
 
-  return file.createWritable();
+  return observeInstallTask("opfs.create-writable", () => file.createWritable(), { pack: packName });
 }
 
 export async function writeGamePackIndexJson(
