@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/app.mjs dev",
     "build": "node scripts/app.mjs build",
+    "android:web:build": "vite build --config android/vite.config.ts && node scripts/build-android-assets.mjs",
     "preview": "node scripts/app.mjs preview",
     "deploy": "node scripts/app.mjs deploy",
     "deploy:staging": "node scripts/app.mjs deploy --env staging",

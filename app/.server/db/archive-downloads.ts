@@ -11,6 +11,7 @@ type DownloadRow = {
   estimated_r2_get_count: number;
   work_original_title: string;
   work_chinese_title: string | null;
+  work_cover_blob_sha256: string | null;
   engine_family: string;
 };
 type TotalsRow = {
@@ -28,6 +29,7 @@ export type ArchiveDownloadRecord = {
   workId: number;
   workOriginalTitle: string;
   workChineseTitle: string | null;
+  workCoverBlobSha256: string | null;
   engineFamily: string;
 };
 export type WebPlayInstallTargetTotals = {
@@ -71,6 +73,8 @@ export async function getPublishedArchiveDownloadRecord(
           av.estimated_r2_get_count,
           w.original_title AS work_original_title,
           w.chinese_title AS work_chinese_title,
+          (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
+           WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS work_cover_blob_sha256,
           w.engine_family
        FROM archive_versions av
        JOIN works w ON w.id = av.work_id
@@ -93,6 +97,7 @@ export async function getPublishedArchiveDownloadRecord(
     workId: row.work_id,
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
+    workCoverBlobSha256: row.work_cover_blob_sha256 ?? null,
     engineFamily: row.engine_family,
   };
 }

@@ -1,0 +1,12 @@
+html, body, #root { min-height: 100%; margin: 0; }
+body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
+.offline-game { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #000; }
+.offline-toolbar-button { border: 1px solid #8b949e; background: #17212bcc; color: white; }
+
+html[data-android-touch="true"] :is(button, a, select, input[type="checkbox"]):focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+html[data-android-touch="true"] .offline-search:focus-within {
+  box-shadow: none !important;
+}

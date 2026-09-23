@@ -1,5 +1,6 @@
 # Project constraints
 
+- 远端访问入口与配置来源见 [docs/staging-deployment.md](docs/staging-deployment.md#环境地址与配置来源)。不要从 Worker 名称、历史白名单或本地顶层配置推断当前站点地址。
 - 当前项目处于上线前阶段。没有真实数据或外部契约需要保护时，使用唯一当前模型，不为废弃内部模型新增兼容层。
 - EasyRPG Web runtime 只保留 `lib/archive/easyrpg-runtime.json` 指定的当前版本；升级使用导入脚本清理旧目录，保留版本化 URL 以隔离缓存，不并存发布旧运行时。
 - 上线前 D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`，直接修改最终结构与内置权限，不累积过渡迁移；涉及固定开发种子时同步对齐其 schema 和迁移账本。已有数据库的备份、重建另行按授权执行。

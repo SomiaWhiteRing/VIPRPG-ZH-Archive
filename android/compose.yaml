@@ -1,0 +1,19 @@
+services:
+  apk:
+    build:
+      context: ..
+      dockerfile: android/Dockerfile
+    working_dir: /workspace
+    environment:
+      GRADLE_USER_HOME: /gradle-cache
+      SITE_ORIGIN: ${SITE_ORIGIN:-https://staging.viprpg.org}
+    volumes:
+      - ..:/workspace
+      - android-node-modules:/workspace/node_modules
+      - android-gradle-cache:/gradle-cache
+      - android-debug-key:/root/.android
+
+volumes:
+  android-node-modules:
+  android-gradle-cache:
+  android-debug-key:

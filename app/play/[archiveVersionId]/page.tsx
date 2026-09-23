@@ -89,6 +89,7 @@ export async function loader(args: LoaderFunctionArgs) {
     title: record.workChineseTitle || record.workOriginalTitle,
     originalTitle: record.workOriginalTitle,
     chineseTitle: record.workChineseTitle,
+    coverBlobSha256: work.coverBlobSha256,
     manifestSha256: record.manifestSha256,
     downloadZipBuilderVersion,
     webPlayInstallerVersion,

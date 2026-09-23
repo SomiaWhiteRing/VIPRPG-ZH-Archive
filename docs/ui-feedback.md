@@ -7,6 +7,12 @@
 - 文本输入框、文本域和可编辑内容保留聚焦时的编辑提示；现有 `focus-within` 编辑区、游戏输入区域和菜单项高亮仍表示实际操作状态。服务端渲染和 hydration 完成前保留浏览器原生焦点提示。
 - 保留 Radix 的焦点管理、Escape 回焦和对话框焦点约束，不通过全局 `blur()`、拦截鼠标默认行为或取消所有自动回焦隐藏样式。原生 `:focus-visible` 对脚本聚焦的判断可能显示鼠标操作后的圆环，见 [Radix Select 问题记录](https://github.com/radix-ui/primitives/issues/1803)；因此由交互方式决定焦点装饰，实际焦点位置仍由组件管理。
 
+## 共享选择器
+
+平面搜索使用 `app/components/ui/search-combobox.tsx` 的 React Aria ComboBox，集中处理列表键盘导航、焦点、弹层、Enter 提交保护与 token 输入接入。过滤、身份去重、创建与保存规则由领域组件负责。弹层位于选择器容器内，以支持 Radix 对话框中的操作。
+
+角色素材工作台的树搜索使用 React Aria Tree；分类成员选择使用 Autocomplete + ListBox。不要根据早期展柜试点记录重新实现一套方向键或 activeIndex 管理。迁移过程和当时的浏览器结果放在[历史目录](./archive/README.md)，不能替代本次变更的验收。
+
 ## 通知
 
 全局 `ToastProvider` 挂在 `app/root.tsx` 的根布局中，使用 React-Toastify 管理通知生命周期、排队、计时和离场补位。客户端事件处理器通过 `app/components/ui/toast.tsx` 的 `useToast()` 调用 `toast.success(message)`、`toast.error(message)` 或 `toast.info(message)`。站内导航不会卸载通知区。使用 `react-toastify/unstyled` 入口，在 `app/globals.css` 显式加载库样式和本站 `toast.css`，避免运行时重复注入样式。
@@ -15,7 +21,7 @@
 
 - Toast 固定在右上角，不占正文高度；窄屏限制宽度，长文本换行，堆叠超出视口时可滚动。
 - 入场从右侧滑入并渐显，离场向右滑出并渐隐；离场动画完成后由库收拢原高度及间距，其下通知平滑上移，不提前卸载卡片留下跳变。系统要求减少动态效果时取消滑动，保留正常关闭生命周期。
-- 成功提示显示 2 秒，信息和操作错误显示 4 秒（参考 [react-hot-toast 默认时长](https://github.com/timolins/react-hot-toast/blob/main/src/core/store.ts)）；底部细线框内的进度线随剩余时间缩短、渐淡。进度动画本身驱动自动关闭，悬停、键盘聚焦和窗口失焦时暂停同一动画，不使用第二套计时器。
+- 成功提示显示 2 秒，信息和操作错误显示 4 秒（时长以 `app/components/ui/toast.tsx` 的配置为准）；底部细线框内的进度线随剩余时间缩短、渐淡。进度动画本身驱动自动关闭，悬停、键盘聚焦和窗口失焦时暂停同一动画，不使用第二套计时器。
 - 提供关闭按钮、Alt+T 聚焦、聚焦通知时 Escape 关闭、触摸滑动关闭和辅助技术播报。
 - 按到达顺序从上到下显示，最多同时显示 3 条，多余通知排队，出现后才开始倒计时。相同类型和文字的重复通知合并（包括等待队列），不重复弹出或延长倒计时。需要长期保留的信息不能只放在 toast 中。
 - 不因普通分页、筛选、点赞成功持续弹出通知；加载状态由按钮、结果区 `aria-busy` 或无障碍状态文本表达。

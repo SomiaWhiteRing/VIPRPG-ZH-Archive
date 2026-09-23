@@ -22,6 +22,7 @@ import type {
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { withGameResourceWriteLock } from "./web-play-locks";
+import { cacheWebPlayCover } from "./web-play-cover";
 
 type LocalZipEntry = {
   name: string;
@@ -107,6 +108,9 @@ async function runInstall(
   let installation = createInitialInstallation(metadata);
 
   try {
+    if (metadata.coverBlobSha256) {
+      await cacheWebPlayCover(metadata.coverBlobSha256).catch(() => {});
+    }
     installation = await requestStorage(installation, storageSnapshot);
 
     for (let attempt = 1; attempt <= maxInstallAttempts; attempt += 1) {
@@ -748,6 +752,7 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     manifestSha256: metadata.manifestSha256,
     webPlayInstallerVersion: metadata.webPlayInstallerVersion,
     title: metadata.title,
+    coverBlobSha256: metadata.coverBlobSha256,
     status: "created",
     phase: "metadata",
     createdAt: now,

@@ -2,6 +2,20 @@
 
 预生产入口为 `https://staging.viprpg.org`，允许匿名浏览。staging 配置必须设定 `SITE_NOINDEX="true"`：Worker 返回 `X-Robots-Tag: noindex, nofollow`，`/robots.txt` 禁止抓取。此设置不限制访问；需要保密时另行配置 Cloudflare Access。
 
+## 环境地址与配置来源
+
+| 环境 | 访问入口 | 配置来源 |
+| --- | --- | --- |
+| 本地开发 | `npm run dev` 输出的 `Local` 地址 | Vite 实际监听端口与请求 origin |
+| staging | `https://staging.viprpg.org` | 本地 `wrangler.jsonc` 的 `env.staging`；CI 使用 staging environment 的 `WRANGLER_CONFIG_JSONC` |
+| production | 上线前须单独核实，本文不声明已有正式入口 | 本地 Wrangler 顶层；CI 使用 production environment 的部署配置 |
+
+staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Workers.dev 入口已弃用，不作为检查失败时的备用地址，也不从 Worker 名称拼接 URL。`scripts/smoke.mjs` 默认访问 staging；参数和 `SMOKE_BASE_URL` 可覆盖目标，运行前核对实际值。
+
+`wrangler.example.jsonc` 是结构模板，其中域名和资源 ID 是占位符。被忽略的 `wrangler.jsonc` 只描述本机配置，不证明线上绑定；CI 由 `scripts/prepare-wrangler-config.mjs` 合成配置。修改本地文件不会同步 GitHub secret；生成的 `build/server/wrangler.json` 只代表那次构建所选环境。
+
+2026-09-23 文档核对发现，本机 Wrangler 顶层 `APP_ORIGIN` 和网站 Android 导入按钮的来源白名单仍有旧地址。它们是待清理的实现／环境残留，不能作为正式入口依据。Android 接入边界见[导入说明](./easyrpg-android-import.md)；正式域名启用时需核对网站与 APK 两端来源，不能只修改文档。
+
 ## 干净种子
 
 不要把本地开发数据库整体上传到远端。准备独立的预生产导入包：
@@ -19,7 +33,7 @@ npm run db:staging:prepare -- --output output/staging-seed/candidate
 ## 配置与发布
 
 1. 在被忽略的 `wrangler.jsonc` 中配置 staging 的独立 D1/R2、`staging.viprpg.org` custom domain、对应 `APP_ORIGIN`、`EMAIL_FROM=noreply@viprpg.org`；关闭 staging 的 `workers_dev` 和 `preview_urls`。
-2. 启用 viprpg.org 的 Email Sending，核实 DKIM、SPF、DMARC 和 return-path DNS。为 staging 设置独立的 `AUTH_SECRET`；不导入开发账号。由站点负责人完成首个账号的邮箱验证与注册，该账号自动获得 `super_admin`。验收时核对其角色和后台访问。
+2. 启用 viprpg.org 的 Email Sending，核实 DKIM、SPF、DMARC 和 return-path DNS。为 staging 设置独立的 `AUTH_SECRET`；不导入开发账号。首个账号在步骤 4 部署完成后由站点负责人完成邮箱验证与注册，自动获得 `super_admin`；随后核对其角色和后台访问。
 3. 执行 `npm run verify:preprod`。共享状态的检查串行运行；失败按[维护手册](maintenance-regression.md)分类处理。
 4. 执行 `npm run deploy:staging`；核实构建产物 `build/server/wrangler.json` 中的 Worker、D1、R2、域名和 noindex 设置均属于 staging。
 5. 执行 `npm run smoke:staging`，然后检查 TLS、robots/noindex、匿名权限、角色图片及素材、八个精选链接及其图标、空作品和讨论列表、桌面及移动端页面。验证码实际到达邮箱须单独记录，不能由 DNS 检查代替。

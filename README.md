@@ -69,6 +69,8 @@ npm run preview         # 自动构建并在 workerd 中预览生产产物
 
 ## Cloudflare 部署
 
+当前预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)。环境地址与配置来源见[部署环境](docs/staging-deployment.md#环境地址与配置来源)；不要从 Worker 名称或历史记录拼接访问地址。
+
 部署前先配置 Cloudflare 凭据和远端 secrets，并运行预生产验收：
 
 ```powershell
