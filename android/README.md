@@ -2,6 +2,8 @@
 
 Android WebView 的「主站」页直接使用网站；默认打开「主站」，网络不可用时回到本地游戏；底栏「离线游玩」加载 APK 内的 `/_android/` 页面。两个页面使用**同一个 HTTPS 来源和同一个 WebView 数据目录**，因此安装清单、OPFS 资源包、存档和截图无需迁移。`/play/player.html` 与当前 `lib/archive/easyrpg-runtime.json` 对应的运行组件也从 APK 提供，断网重新打开 App 仍可启动。手机浏览器与本 App 的数据目录不共享。首页和作品库固定竖屏，离线游戏按控制偏好切换方向；底栏另有原生「版本信息」页。
 
+旧格式视频共用 Web runtime 的精简 FFmpeg/WASM 解码器，浏览器原生播放失败时按需加载。`npm run android:web:build` 会连同视频 Worker、解码器 JS/WASM 和许可证完整复制当前 runtime；现有 WebView 配置已支持该加载方式，无需增加原生解码库、权限或跨源隔离。更新网站 runtime 后须重新构建并安装 APK，已安装 APK 的离线副本不会随网站部署更新。实际播放能力仍依赖系统 WebView 和设备性能，构建通过不代表完成手机播放验收。
+
 作品封面在安装时缓存到 WebView 的 Cache Storage，与游戏清单同源；断网时仍能显示新安装作品的封面。旧安装记录没有封面哈希时显示文字占位。作品库支持搜索、安装状态筛选、排序以及批量删除游戏文件，删除不涉及存档和截图。
 
 主站以原生注入的 `VIPRPGAndroid` 识别本 App：继续使用原 OPFS 目录，不启用普通浏览器的 7 天资源清理，不显示头像菜单「已安装游戏」。旧 APK 内置的离线页也能继续读取主站新安装的游戏。手机上的普通浏览器仍采用浏览器保留策略，详见[浏览器存储说明](../docs/browser-game-storage.md)。

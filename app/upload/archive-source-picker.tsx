@@ -22,6 +22,8 @@ export type ArchiveSourceSummary = {
 
 export function ArchiveSourcePicker({
   canceling,
+  cleanupRtp,
+  onCleanupRtpChange,
   disabled,
   existingSource = null,
   mode,
@@ -35,6 +37,8 @@ export function ArchiveSourcePicker({
   task,
 }: {
   canceling: boolean;
+  cleanupRtp: boolean;
+  onCleanupRtpChange: (value: boolean) => void;
   disabled: boolean;
   existingSource?: ArchiveSourceSummary | null;
   mode: UploadSourceKind;
@@ -183,6 +187,14 @@ export function ArchiveSourcePicker({
           </div>
         </div>
       )}
+      {!sourceSummary && !existingSource ? (
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input checked={cleanupRtp} disabled={disabled} onChange={(event) => onCleanupRtpChange(event.target.checked)} type="checkbox" />
+          <span>清理未使用的原版 RTP
+            <span className="block text-xs text-muted">仅排除确认未引用的原版素材；自定义、修改过或用途不明的素材保留。</span>
+          </span>
+        </label>
+      ) : null}
     </div>
   );
 }
@@ -301,6 +313,21 @@ function UploadTaskCard({
           <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">
             {task.error}
           </Notice>
+        ) : null}
+        {task?.stats.rtpCleanup ? (
+          <details className="mt-3 text-sm" data-rtp-cleanup={task.stats.rtpCleanup.status}>
+            <summary className="cursor-pointer">
+              {task.stats.rtpCleanup.status === "no_candidates" ? "未发现可清理的原版 RTP" :
+                `RTP 检查：排除 ${task.stats.rtpCleanup.excluded.length} 个文件，减少 ${formatBytes(task.stats.rtpCleanup.excluded.reduce((sum, file) => sum + file.size, 0))}`}
+            </summary>
+            <p className="mt-2 text-xs text-muted">非 RTP 文件不参与此项清理。无法确定用途的 RTP 已保留。</p>
+            {task.stats.rtpCleanup.reasons.map((reason) => <p className="mt-1 text-xs text-muted" key={reason}>{reason}</p>)}
+            {task.stats.rtpCleanup.excluded.length ? (
+              <ul className="mt-2 max-h-48 overflow-auto text-xs">
+                {task.stats.rtpCleanup.excluded.map((file) => <li key={file.path}>{file.path} · {formatBytes(file.size)}</li>)}
+              </ul>
+            ) : null}
+          </details>
         ) : null}
       </div>
       {showCancel || canRestart ? (
@@ -491,6 +518,7 @@ export function uploadPhaseLabel(phase: string): string {
   const labels: Record<string, string> = {
     enumerating: "读取文件",
     hashing: "校验文件",
+    analyzing_rtp: "检查 RTP 引用",
     building_core_pack: "整理公共文件",
     creating_import_job: "创建上传任务",
     preflighting: "检查已有对象",

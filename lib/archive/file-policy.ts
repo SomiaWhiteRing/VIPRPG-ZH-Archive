@@ -1,4 +1,4 @@
-export const FILE_POLICY_VERSION = "rpgm2000-2003-whitelist-v3";
+export const FILE_POLICY_VERSION = "rpgm2000-2003-rtp-v4";
 export const PACKER_VERSION = "browser-upload-phase-d-2026-05";
 
 export type ArchiveFileRole =

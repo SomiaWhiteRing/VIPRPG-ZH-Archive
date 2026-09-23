@@ -1,14 +1,21 @@
 {
-  "version": "2026.9.2-site-d65072755356",
-  "revision": "83343219e2671e27de5b7ca647d75a6f53183b65",
-  "build": "local-emscripten-5.0.5-2026-09-22",
+  "version": "2026.9.2-site-295cdebf557d",
+  "revision": "bec5c46f2043334329a9b6c4dcf4ed660c81d553",
+  "build": "local-emscripten-5.0.5-2026-09-23-web-movies",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "working-tree",
-  "sourceSnapshot": "site-web-source-1615be6797dd.zip",
-  "sourceSnapshotSha256": "f11f7ab463deeb5dbba5cad906b96b7fec7352593a38d1a386169b5b95229e8d",
+  "sourceSnapshot": "site-web-movies-source-fc88c7981cbd.zip",
+  "sourceSnapshotSha256": "fc88c7981cbdbad44321189f46277d1bffd27586fc2c5760ccba98a13a26625e",
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
-  "archiveSha256": "d65072755356151bccd649365cf70b3a8f3136d9bb7f4b4759deb5d990134b6c",
+  "archiveSha256": "295cdebf557d3c31fc94d3034419a50e38519a20da6eaca715cd03bc28c82acd",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
-  "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b"
+  "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
+  "movieDecoder": {
+    "name": "FFmpeg",
+    "version": "7.1.5",
+    "source": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+    "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
+    "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+  }
 }

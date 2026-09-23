@@ -1,0 +1,74 @@
+{
+  "repository": "https://github.com/SomiaWhiteRing/Player",
+  "revision": "bec5c46f2043334329a9b6c4dcf4ed660c81d553",
+  "version": "2026.9.2-site-295cdebf557d",
+  "build": "local-emscripten-5.0.5-2026-09-23-web-movies",
+  "artifact": "EasyRPG-Player-Kai-web-movies.zip",
+  "archiveSha256": "295cdebf557d3c31fc94d3034419a50e38519a20da6eaca715cd03bc28c82acd",
+  "source": "https://github.com/SomiaWhiteRing/Player/tree/bec5c46f2043334329a9b6c4dcf4ed660c81d553",
+  "license": "https://github.com/SomiaWhiteRing/Player/blob/bec5c46f2043334329a9b6c4dcf4ed660c81d553/COPYING",
+  "sourceState": "working-tree",
+  "sourceSnapshot": "site-web-movies-source-fc88c7981cbd.zip",
+  "sourceSnapshotSha256": "fc88c7981cbdbad44321189f46277d1bffd27586fc2c5760ccba98a13a26625e",
+  "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
+  "emscriptenVersion": "5.0.5",
+  "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
+  "movieDecoder": {
+    "name": "FFmpeg",
+    "version": "7.1.5",
+    "source": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+    "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
+    "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+  },
+  "patches": [],
+  "files": {
+    "index.js": {
+      "size": 12621,
+      "sha256": "31ab1c6c31698fea828e289d909b4c75e9820ef4d36d656eb3d262552d3e90a6"
+    },
+    "easyrpg-player.js": {
+      "size": 124399,
+      "sha256": "f6e102412ccc6b2d9ed7063717afc46d48b687b2747be874b3b163fa12ff08c1"
+    },
+    "easyrpg-player.wasm": {
+      "size": 9552976,
+      "sha256": "fa918fa1bfdfcee36f30b464b8a4f44aa63a7339e2217e6078bd27e31d64a719"
+    },
+    "easyrpg-player.data": {
+      "size": 7557598,
+      "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
+    },
+    "player-worker.js": {
+      "size": 5764,
+      "sha256": "5601a6b7b589e1067df92146b8bea6edf6d42ae6a6df8bea94c1bd10dad0b96e"
+    },
+    "player-audio.js": {
+      "size": 1060,
+      "sha256": "4b4f0509f0bf01c86e03add64ac81cada75561ecb2f0ba9ec1b8f6d53901dba7"
+    },
+    "player-movie.js": {
+      "size": 8085,
+      "sha256": "ec655806cee6e7e55defd58871571caa416ba303a775658ea8edd90670bcb1a2"
+    },
+    "player-movie-worker.js": {
+      "size": 1837,
+      "sha256": "57e5baffa00a12ed59a21a116c70868a3d7fdd007700619e94f32d1f11408e45"
+    },
+    "movie-decoder.js": {
+      "size": 70869,
+      "sha256": "d5dbaf60ae93e4c11e8826b614fdc220788e4cf7cfcd993683229370bafeeb6e"
+    },
+    "movie-decoder.wasm": {
+      "size": 2019933,
+      "sha256": "fb569312cb3cb74e33cfc0811f2db964be55b1e7c9c25390d638ae88c7f199b0"
+    },
+    "movie-decoder.LICENSE.txt": {
+      "size": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    "web-movies.md": {
+      "size": 4585,
+      "sha256": "16d96bf93784fbc87bfe34767c9aa8d36c15fa02ce0c041c1e7f310cfa8df25c"
+    }
+  }
+}

@@ -2,6 +2,7 @@ import type {
   WebPlayFileRecord,
   WebPlayInstallation,
 } from "@/app/play/[archiveVersionId]/web-play-types";
+import { installObserver, observeInstallTask } from "./web-play-install-observer";
 
 const DB_NAME = "viprpg_web_play_v1";
 const DB_VERSION = 1;
@@ -75,8 +76,9 @@ export async function markWebPlayLastPlayed(playKey: string): Promise<WebPlayIns
 }
 
 function openWebPlayDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  return observeInstallTask("idb.open", () => new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onblocked = () => installObserver?.event("idb.blocked", { database: DB_NAME, version: DB_VERSION });
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -93,18 +95,18 @@ function openWebPlayDb(): Promise<IDBDatabase> {
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-  });
+  }), { database: DB_NAME, version: DB_VERSION });
 }
 
 function putValue(db: IDBDatabase, storeName: string, value: unknown): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return observeInstallTask("idb.transaction", () => new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, "readwrite");
     const request = tx.objectStore(storeName).put(value);
 
     request.onerror = () => reject(request.error);
     tx.onerror = () => reject(tx.error);
     tx.oncomplete = () => resolve();
-  });
+  }), { store: storeName, mode: "readwrite", records: 1 });
 }
 
 function putValues(
@@ -112,7 +114,7 @@ function putValues(
   storeName: string,
   values: unknown[],
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return observeInstallTask("idb.transaction", () => new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
 
@@ -122,7 +124,7 @@ function putValues(
 
     tx.onerror = () => reject(tx.error);
     tx.oncomplete = () => resolve();
-  });
+  }), { store: storeName, mode: "readwrite", records: values.length });
 }
 
 function getValue<T>(

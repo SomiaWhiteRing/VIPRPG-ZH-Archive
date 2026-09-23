@@ -100,7 +100,9 @@ self.onmessage = async ({data}) => {
         if (engine.stopped) engine.syncSaves().then(() => postMessage({type: 'stopped'})).catch(() => {});
         else engine._web_stop();
       }
-      else if (data.type === 'movie-state') Object.assign(engine.webMovie, data.state);
+      else if (data.type === 'movie-state') {
+        if (engine.webMovie?.id === data.id) Object.assign(engine.webMovie, data.state);
+      }
       else if (data.type === 'upload') {
         // A file picker can finish after exit, including while a save flush is being retried.
         if (engine.stopping || engine.stopped) return;

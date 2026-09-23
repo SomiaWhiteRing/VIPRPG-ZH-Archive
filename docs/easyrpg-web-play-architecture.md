@@ -247,6 +247,8 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 - `index.js`：播放器页面入口，原始构建文件名为 `player-host.js`。
 - `player-worker.js`、`player-audio.js`：引擎 Worker 与音频输出。
 - `easyrpg-player.js`、`easyrpg-player.wasm`、`easyrpg-player.data`：引擎及共用 SoundFont。
+- `player-movie.js`、`player-movie-worker.js`、`movie-decoder.js`、`movie-decoder.wasm`：按需加载的视频播放与精简 FFmpeg 解码器。
+- `movie-decoder.LICENSE.txt`、`web-movies.md`：解码器许可及构建、格式范围说明。
 - `COPYING`、`SOURCE.json`：许可证、来源、文件摘要。
 
 React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首个游戏画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
@@ -255,7 +257,11 @@ React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-
 
 当前构建、基线提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。工作树构建明确记录 `sourceState: working-tree`、源码快照摘要与 liblcf 提交，不能将其误称为基线提交的原始产物。源码快照与 Web ZIP 保存在 Player 的 `build/artifacts/`。
 
-导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont 与随包许可证的摘要，保留构建字节，只将入口文件重命名为 `index.js`；不在压缩后的生成代码中做字符串补丁，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player 与解码器随包许可证的摘要，保留构建字节，只将入口文件重命名为 `index.js`；不在压缩后的生成代码中做字符串补丁，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
+
+视频优先走浏览器原生播放；媒体格式失败时才加载独立 FFmpeg/WASM Worker，补充 DivX/Xvid、Microsoft Video 1、MPEG-1/2 等旧编码。解码器按本地 Blob 切片读取，逐帧解码，并用当前 AudioContext 调度声音；不修改游戏 pack，也不改变安装键或存档目录。源码版本、上游下载摘要和解码器许可证摘要记录在运行时配置及 `SOURCE.json` 的 `movieDecoder` 字段中。具体格式子集、内存限制见随包 `web-movies.md`。
+
+Android 套壳共用这套 Web 解码器。`android:web:build` 会完整复制当前 runtime，Gradle 同步读取版本号；现有 WebView 已启用 JavaScript、媒体播放，并为 WASM 提供正确 MIME 类型，不需新增原生解码库或权限。升级运行时后必须重新打包 APK，才能更新 APK 内离线运行组件；只部署网站不能更新已安装 APK 的离线副本。
 
 运行组件的 immutable 缓存与 `application/wasm` 类型头由 [public/_headers](../public/_headers) 定义。内容安全策略需允许同源 Worker、AudioWorklet、WASM 及本地 Blob 视频。无需跨源隔离响应头。
 

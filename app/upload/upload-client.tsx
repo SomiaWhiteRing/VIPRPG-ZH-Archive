@@ -150,6 +150,7 @@ export function UploadClient({
     currentUser.permissionKeys.includes(key),
   );
   const [mode, setMode] = useState<UploadSourceKind>("folder");
+  const [cleanupRtp, setCleanupRtp] = useState(true);
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser, initialWork),
   );
@@ -405,7 +406,7 @@ export function UploadClient({
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
     upload.startSource(
-      { sourceKind, sourceName, files, targetWorkId: initialWork?.id ?? null },
+      { sourceKind, sourceName, files, cleanupRtp, targetWorkId: initialWork?.id ?? null },
       (prefill) => prefillSourceMetadata(prefill, canPrefill, generation),
     );
   }
@@ -816,6 +817,8 @@ export function UploadClient({
                 {archiveMode ? (
                   <ArchiveSourcePicker
                     canceling={upload.canceling}
+                    cleanupRtp={cleanupRtp}
+                    onCleanupRtpChange={setCleanupRtp}
                     disabled={
                       !canArchiveUpload ||
                       preparing ||

@@ -27,6 +27,7 @@ import { withGameResourceWriteLock } from "./web-play-locks";
 import { cacheWebPlayCover } from "./web-play-cover";
 import { renewGameBucket } from "./web-play-storage";
 import { notifyGameResourcesChanged } from "./web-play-events";
+import { finishInstallObservation, installObserver, observeInstallTask, startInstallObservation } from "./web-play-install-observer";
 
 type LocalZipEntry = {
   name: string;
@@ -86,13 +87,17 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
   const message = event.data;
 
   if (message.type === "install") {
+    startInstallObservation(message);
     canceledPlayKeys.delete(message.metadata.playKey);
-    withGameResourceWriteLock(message.metadata.playKey, () =>
-      runInstall(message.metadata, message.storageKind, message.storageSnapshot),
-    ).then(() => {
+    observeInstallTask("install.lock-and-run", () => withGameResourceWriteLock(message.metadata.playKey, () => {
+      installObserver?.event("lock.acquired");
+      return runInstall(message.metadata, message.storageKind, message.storageSnapshot);
+    }), { playKey: message.metadata.playKey }).then(() => {
       notifyGameResourcesChanged();
+      finishInstallObservation("finished");
       postMessage({ type: "install-finished" } satisfies WebPlayInstallWorkerOutput);
     }).catch((error: unknown) => {
+      finishInstallObservation("rejected");
       postMessage({
         type: "install-rejected",
         message: error instanceof Error ? error.message : "安装失败",
@@ -102,6 +107,7 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
   }
 
   if (message.type === "cancel") {
+    installObserver?.event("cancel.received", { playKey: message.playKey });
     canceledPlayKeys.add(message.playKey);
   }
 };
@@ -114,16 +120,17 @@ async function runInstall(
   let installation: WebPlayInstallation = { ...createInitialInstallation(metadata), storageKind };
 
   try {
-    const previous = await getWebPlayInstallation(metadata.playKey);
-    if (previous) await resetGameOpfsDirectory(previous);
+    const previous = await observeInstallTask("idb.previous-installation", () => getWebPlayInstallation(metadata.playKey));
+    if (previous) await observeInstallTask("opfs.reset-previous", () => resetGameOpfsDirectory(previous));
     // Persist the resource location before writing any files or caching a cover.
-    await saveWebPlayInstallation(installation);
+    await observeInstallTask("idb.initial-installation", () => saveWebPlayInstallation(installation));
     if (metadata.coverBlobSha256) {
-      await cacheWebPlayCover(metadata.coverBlobSha256).catch(() => {});
+      await observeInstallTask("cover.cache", () => cacheWebPlayCover(metadata.coverBlobSha256!)).catch(() => {});
     }
     installation = await requestStorage(installation, storageSnapshot);
 
     for (let attempt = 1; attempt <= maxInstallAttempts; attempt += 1) {
+      installObserver?.event("attempt.start", { attempt, maxInstallAttempts });
       try {
         installation = await runInstallAttempt({
           metadata,
@@ -132,6 +139,7 @@ async function runInstall(
         });
         return;
       } catch (error) {
+        installObserver?.event("attempt.error", { attempt, error, retryable: isRetryableInstallError(error), canceled: canceledPlayKeys.has(metadata.playKey) });
         if (canceledPlayKeys.has(metadata.playKey) || !isRetryableInstallError(error)) {
           throw error;
         }
@@ -150,20 +158,21 @@ async function runInstall(
             delayMs,
           )} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
         );
-        await delay(delayMs);
+        await observeInstallTask("retry.wait", () => delay(delayMs), { attempt, nextAttempt: attempt + 1, delayMs, restartsFromZero: true });
         assertNotCanceled(metadata.playKey);
       }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "安装失败";
     const failed: WebPlayInstallation = {
-      ...((await getWebPlayInstallation(metadata.playKey)) ?? installation),
+      ...((await observeInstallTask("idb.failed-read", () => getWebPlayInstallation(metadata.playKey))) ?? installation),
       status: canceledPlayKeys.has(metadata.playKey) ? "deleted" : "failed",
       updatedAt: new Date().toISOString(),
       error: message,
     };
 
-    await saveWebPlayInstallation(failed);
+    await observeInstallTask("idb.failed-save", () => saveWebPlayInstallation(failed));
+    installObserver?.event("installation", { ...failed });
     postMessage({
       type: "installation",
       installation: failed,
@@ -190,8 +199,8 @@ async function runInstallAttempt(input: {
     );
   }
 
-  await resetGameOpfsDirectory(installation);
-  await clearWebPlayFileRecords(metadata.playKey);
+  await observeInstallTask("opfs.reset-attempt", () => resetGameOpfsDirectory(installation), { attempt });
+  await observeInstallTask("idb.clear-files", () => clearWebPlayFileRecords(metadata.playKey));
 
   installation = await persistAndPost(
     {
@@ -209,9 +218,9 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  const response = await fetch(metadata.downloadUrl, {
+  const response = await observeInstallTask("network.headers", () => fetch(metadata.downloadUrl, {
     credentials: "same-origin",
-  });
+  }), { url: metadata.downloadUrl });
 
   if (!response.ok) {
     throw new Error(`下载游戏文件失败（状态码 ${response.status}），请重试。`);
@@ -244,7 +253,7 @@ async function runInstallAttempt(input: {
     },
     true,
   );
-  await writeGamePackIndexJson(installation, JSON.stringify(result.packIndex));
+  await observeInstallTask("opfs.write-index", () => writeGamePackIndexJson(installation, JSON.stringify(result.packIndex)), { files: Object.keys(result.packIndex.files).length });
 
   installation = await persistAndPost(
     {
@@ -272,16 +281,16 @@ async function requestStorage(
   installation: WebPlayInstallation,
   storageSnapshot?: WebPlayStorageSnapshot,
 ): Promise<WebPlayInstallation> {
-  await ensureOpfsSupported();
+  await observeInstallTask("storage.support", () => ensureOpfsSupported());
   let snapshot = storageSnapshot;
 
   if (!snapshot) {
     const storage = navigator.storage;
-    const estimate = await storage.estimate().catch(() => null);
+    const estimate = await observeInstallTask("storage.estimate", () => storage.estimate()).catch(() => null);
     // Permission requests belong to the window; the worker only reads status.
     const persisted =
       typeof storage.persisted === "function"
-        ? await storage.persisted().catch(() => null)
+        ? await observeInstallTask("storage.persisted", () => storage.persisted()).catch(() => null)
         : null;
 
     snapshot = {
@@ -328,6 +337,7 @@ async function streamZipToPacks(input: {
   let lastProgressAt = 0;
   let lastDiagnosticAt = nowMs();
   let progressWrite = Promise.resolve();
+  let pendingProgressWrites = 0;
   const fileRecords: WebPlayFileRecord[] = [];
   const packWriter = new PackWriter(installation);
   const packIndex: WebPlayPackIndex = {
@@ -355,19 +365,28 @@ async function streamZipToPacks(input: {
       updatedAt: new Date().toISOString(),
     };
 
+    pendingProgressWrites += 1;
+    const queuedAt = installObserver ? performance.now() : 0;
+    installObserver?.event("progress.queued", { queueDepth: pendingProgressWrites, ...snapshot });
     progressWrite = progressWrite.then(async () => {
-      installation = await persistAndPost(
-        {
-          ...installation,
-          phase: "extracting_zip",
-          downloadedBytes: snapshot.downloadedBytes,
-          installedFiles: snapshot.installedFiles,
-          installedBytes: snapshot.installedBytes,
-          currentPath: snapshot.currentPath,
-          updatedAt: snapshot.updatedAt,
-        },
-        true,
-      );
+      installObserver?.event("progress.dequeued", { queueDepth: pendingProgressWrites, waitMs: performance.now() - queuedAt });
+      try {
+        installation = await persistAndPost(
+          {
+            ...installation,
+            phase: "extracting_zip",
+            downloadedBytes: snapshot.downloadedBytes,
+            installedFiles: snapshot.installedFiles,
+            installedBytes: snapshot.installedBytes,
+            currentPath: snapshot.currentPath,
+            updatedAt: snapshot.updatedAt,
+          },
+          true,
+        );
+      } finally {
+        pendingProgressWrites -= 1;
+        installObserver?.event("progress.settled", { queueDepth: pendingProgressWrites });
+      }
     });
   };
 
@@ -395,7 +414,7 @@ async function streamZipToPacks(input: {
   let body: ReadableStream<ByteChunk> | null = input.response.body;
 
   if (!body) {
-    const bytes = new Uint8Array(await input.response.arrayBuffer());
+    const bytes = new Uint8Array(await observeInstallTask("network.array-buffer-fallback", () => input.response.arrayBuffer()));
     downloadedBytes = bytes.byteLength;
     queueProgress(true);
     body = streamBytes(bytes);
@@ -420,13 +439,14 @@ async function streamZipToPacks(input: {
   try {
     while (true) {
       assertNotCanceled(input.metadata.playKey);
-      const entry = await reader.readNextEntry();
+      const entry = await observeInstallTask("zip.header", () => reader.readNextEntry(), { offset: reader.offset });
 
       if (!entry) {
-        await reader.drainToEnd();
+        await observeInstallTask("zip.drain", () => reader.drainToEnd(), { offset: reader.offset });
         break;
       }
       const normalizedPath = normalizeZipEntryPath(entry.name);
+      installObserver?.event("zip.entry", { path: normalizedPath ?? entry.name, dataOffset: reader.offset, ...entry, installedFiles });
 
       if (entry.compression !== zipMethodStore) {
         throw new Error(`游戏压缩包使用了暂不支持的压缩方式：${normalizedPath ?? entry.name}`);
@@ -437,13 +457,13 @@ async function streamZipToPacks(input: {
       }
 
       if (!normalizedPath) {
-        await reader.discardBytes(entry.compressedSize);
+        await observeInstallTask("zip.skip", () => reader.discardBytes(entry.compressedSize), { path: entry.name, bytes: entry.compressedSize, reason: "directory-or-empty-path" });
         logDiagnostics();
         continue;
       }
 
       if (shouldSkipWebPlayLocalWrite(normalizedPath)) {
-        await reader.discardBytes(entry.compressedSize);
+        await observeInstallTask("zip.skip", () => reader.discardBytes(entry.compressedSize), { path: normalizedPath, bytes: entry.compressedSize, reason: "local-file-policy" });
         logDiagnostics();
         continue;
       }
@@ -458,9 +478,9 @@ async function streamZipToPacks(input: {
         throw new Error(`游戏文件路径冲突：${normalizedPath}`);
       }
 
-      await reader.pipeBytes(entry.compressedSize, async (chunk) => {
+      await observeInstallTask("zip.install-entry", () => reader.pipeBytes(entry.compressedSize, async (chunk) => {
         await packWriter.write(chunk);
-      });
+      }), { path: normalizedPath, bytes: entry.compressedSize, ...location });
 
       packIndex.files[lookupKey] = {
         path: normalizedPath,
@@ -487,11 +507,11 @@ async function streamZipToPacks(input: {
     }
   } finally {
     await packWriter.close();
-    await progressWrite.catch(() => undefined);
+    await observeInstallTask("progress.drain-finally", () => progressWrite, { queueDepth: pendingProgressWrites }).catch(() => undefined);
   }
 
   queueProgress(true);
-  await progressWrite;
+  await observeInstallTask("progress.drain", () => progressWrite, { queueDepth: pendingProgressWrites });
   await saveFileRecordsInBatches(fileRecords);
   logDiagnostics(true);
 
@@ -565,10 +585,11 @@ class PackWriter {
 
     await this.flush();
     const writable = this.writable;
+    const pack = this.currentPack;
 
     this.writable = null;
     this.currentPack = null;
-    await writable.close();
+    await observeInstallTask("opfs.close", () => writable.close(), { pack: pack?.name, bytes: pack?.size });
   }
 
   private async rotatePack(): Promise<void> {
@@ -579,7 +600,7 @@ class PackWriter {
     this.nextPackIndex += 1;
     this.currentPack = { name, size: 0 };
     this.packs.push(this.currentPack);
-    this.writable = await createGamePackWritable({ ...this.installation, updatedAt: new Date().toISOString() }, name);
+    this.writable = await observeInstallTask("opfs.create-pack", () => createGamePackWritable({ ...this.installation, updatedAt: new Date().toISOString() }, name), { pack: name });
   }
 
   private async flush(): Promise<void> {
@@ -591,12 +612,15 @@ class PackWriter {
       return;
     }
 
+    const coalesceStarted = installObserver ? performance.now() : 0;
     const bytes = coalesceChunks(this.pendingChunks, this.pendingBytes);
+    installObserver?.event("buffer.coalesce", { bytes: bytes.byteLength, chunks: this.pendingChunks.length, durationMs: performance.now() - coalesceStarted });
 
     this.pendingChunks = [];
     this.pendingBytes = 0;
 
-    await this.writable.write(bytes);
+    const writable = this.writable;
+    await observeInstallTask("opfs.write", () => writable.write(bytes), { pack: this.currentPack?.name, bytes: bytes.byteLength, packBytes: this.currentPack?.size });
   }
 }
 
@@ -605,6 +629,10 @@ class ZipStreamReader {
   private buffer: ByteChunk = new Uint8Array(0);
   private done = false;
   private downloadedBytes = 0;
+
+  get offset(): number {
+    return this.downloadedBytes - this.buffer.byteLength;
+  }
 
   constructor(
     private readonly playKey: string,
@@ -734,7 +762,7 @@ class ZipStreamReader {
       return;
     }
 
-    const result = await this.reader.read();
+    const result = await observeInstallTask("network.read", () => this.reader.read(), { downloadedBytes: this.downloadedBytes, bufferedBytes: this.buffer.byteLength, offset: this.offset });
 
     if (result.done) {
       this.done = true;
@@ -789,7 +817,8 @@ async function saveFileRecordsInBatches(
   records: WebPlayFileRecord[],
 ): Promise<void> {
   for (let offset = 0; offset < records.length; offset += fileRecordBatchSize) {
-    await saveWebPlayFileRecords(records.slice(offset, offset + fileRecordBatchSize));
+    const batch = records.slice(offset, offset + fileRecordBatchSize);
+    await observeInstallTask("idb.file-records", () => saveWebPlayFileRecords(batch), { offset, count: batch.length });
   }
 }
 
@@ -805,8 +834,9 @@ async function persistAndPost(
   }
 
   lastEmitAt.set(installation.playKey, now);
-  await saveWebPlayInstallation(installation);
-  if (installation.status === "ready") await renewGameBucket(installation);
+  await observeInstallTask("idb.installation", () => saveWebPlayInstallation(installation), { phase: installation.phase, status: installation.status, downloadedBytes: installation.downloadedBytes });
+  if (installation.status === "ready") await observeInstallTask("storage.renew-bucket", () => renewGameBucket(installation));
+  installObserver?.event("installation", { ...installation });
   postMessage({
     type: "installation",
     installation,

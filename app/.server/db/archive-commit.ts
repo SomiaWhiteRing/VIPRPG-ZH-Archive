@@ -24,6 +24,7 @@ import {
   validateCorePackReferences,
 } from "@/app/.server/storage/core-pack-validation";
 import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
+import { RtpReferenceScan, validateRtpCleanupReport } from "@/lib/archive/rtp-cleanup";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
@@ -319,7 +320,16 @@ export async function verifyArchiveSourceManifest(
   }
 
   validateBlobReferences(manifest, objectLedger.blobs);
-  await validateCorePackReferences(runtime, manifest, objectLedger.corePacks);
+  const cleanup = manifest.archiveVersion.rtpCleanup;
+  const scan = cleanup?.excluded.length ? new RtpReferenceScan([...manifest.files, ...cleanup.excluded]) : null;
+  await validateCorePackReferences(runtime, manifest, objectLedger.corePacks,
+    scan ? (path, bytes) => scan.consume(path, bytes) : undefined);
+  if (scan && cleanup) {
+    const allowed = new Set(scan.finish().excluded.map((file) => file.path));
+    if (cleanup.excluded.some((file) => !allowed.has(file.path))) {
+      throw new HttpError(400, "RTP 排除清单未通过服务器引用复核，请重新上传并保留 RTP");
+    }
+  }
   return archiveSourceManifestSha256(manifest);
 }
 
@@ -338,6 +348,7 @@ function sourceManifestFromArchive(
       includedSize: manifest.archiveVersion.includedSize,
       excludedFileCount: manifest.archiveVersion.excludedFileCount,
       excludedSize: manifest.archiveVersion.excludedSize,
+      rtpCleanup: manifest.archiveVersion.rtpCleanup,
     },
     corePacks: manifest.corePacks,
     files: manifest.files,
@@ -521,6 +532,14 @@ function validateManifest(
 }
 
 function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
+  validateRtpCleanupReport(manifest.archiveVersion.rtpCleanup);
+  const removedRtp = manifest.archiveVersion.rtpCleanup?.excluded ?? [];
+  const keptPaths = new Set(manifest.files.map((file) => file.path.normalize("NFC").toLowerCase()));
+  if (removedRtp.some((file) => keptPaths.has(file.path.normalize("NFC").toLowerCase())) ||
+      removedRtp.length > manifest.archiveVersion.excludedFileCount ||
+      removedRtp.reduce((sum, file) => sum + file.size, 0) > manifest.archiveVersion.excludedSize) {
+    throw new Error("RTP 排除清单与归档统计不一致");
+  }
   if (manifest.schema !== "viprpg-archive.manifest.v1") {
     throw new Error("Unsupported manifest schema");
   }

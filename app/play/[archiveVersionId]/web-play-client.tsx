@@ -34,6 +34,8 @@ import {
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
 import { subscribeGameResourcesChanged } from "./web-play-events";
+// For temporary detailed tracing, change the path below to "./diagnostics/client".
+import { createInstallWorker, InstallDiagnosticsPanel } from "./web-play-install-worker-entry";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,
@@ -348,12 +350,7 @@ export function WebPlayClient({
       return workerRef.current;
     }
 
-    const worker = new Worker(
-      new URL("./web-play-install-worker.ts", import.meta.url),
-      {
-        type: "module",
-      },
-    );
+    const worker = createInstallWorker();
 
     worker.onmessage = (event: MessageEvent<WebPlayInstallWorkerOutput>) => {
       const message = event.data;
@@ -375,7 +372,7 @@ export function WebPlayClient({
         return;
       }
 
-      addLog(message.level, message.message);
+      if (message.type === "log") addLog(message.level, message.message);
     };
     workerRef.current = worker;
 
@@ -1056,6 +1053,8 @@ export function WebPlayClient({
                     </div>
                   </div>
                 </details>
+
+                <InstallDiagnosticsPanel />
 
                 <AlertDialog
                   onOpenChange={setDeleteDialogOpen}

@@ -1,5 +1,6 @@
 import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
+import type { RtpCleanupReport } from "./rtp-cleanup";
 
 import type {
   CharacterPortraitChoice,
@@ -29,6 +30,7 @@ export type ArchiveManifest = {
     includedSize: number;
     excludedFileCount: number;
     excludedSize: number;
+    rtpCleanup?: RtpCleanupReport | null;
   };
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
@@ -47,6 +49,7 @@ export type ArchiveSourceManifest = {
     | "includedSize"
     | "excludedFileCount"
     | "excludedSize"
+    | "rtpCleanup"
   >;
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];

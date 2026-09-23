@@ -12,8 +12,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   const worker = new Worker(new URL('player-worker.js', base));
   let node, keys = {}, width = 320, height = 240, gamepadFrame = 0;
   let readyResolve, readyReject, stoppedResolve, stoppedReject, screenshot;
-  let closed = false, started = false, stopPromise;
-  let video, movieUrl;
+  let closed = false, started = false, stopping = false, stopPromise;
+  let movie, movieId, movieRect, movieLoadTimer;
   const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
   // Cancellation can arrive while the audio module is still being fetched.
   void ready.catch(() => {});
@@ -36,8 +36,37 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const stopMovie = () => {
-    if (video) { video.pause(); video.removeAttribute('src'); video.load(); video.remove(); video = undefined; }
-    if (movieUrl) { URL.revokeObjectURL(movieUrl); movieUrl = undefined; }
+    clearTimeout(movieLoadTimer);
+    movieId = undefined;
+    movie?.stop();
+    movie = undefined;
+    movieRect = undefined;
+  };
+  const openMovie = async data => {
+    if (closed || stopping) return;
+    stopMovie();
+    movieId = data.id;
+    const state = state => {
+      if (!closed && movieId === data.id) send({type: 'movie-state', id: data.id, state});
+    };
+    movieLoadTimer = setTimeout(() => {
+      if (movieId !== data.id) return;
+      state({playing: false, error: 'Movie playback module load timed out'});
+      stopMovie();
+    }, 60000);
+    try {
+      const {MoviePlayback} = await import(new URL('player-movie.js', base).href);
+      if (closed || stopping || movieId !== data.id) return;
+      clearTimeout(movieLoadTimer);
+      movie = new MoviePlayback({canvas, context, base, state});
+      movie.start(data.blob, data.path);
+      if (movieRect) movie.updateRect(movieRect);
+    } catch (error) {
+      if (movieId !== data.id) return;
+      console.error(`Movie playback failed: ${data.path}: ${error}`);
+      state({playing: false, error: String(error)});
+      stopMovie();
+    }
   };
   worker.onmessage = ({data}) => {
     if (data.type === 'ready') {
@@ -55,6 +84,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       options.onError?.(new Error(data.message));
     }
     else if (data.type === 'stopped') {
+      stopping = true;
+      stopMovie();
       if (stoppedResolve) stoppedResolve();
       else if (started) options.onExit?.();
       else readyReject(new Error('播放器在游戏启动前退出，请检查运行日志。'));
@@ -80,30 +111,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         if (url.protocol === 'https:' || url.protocol === 'http:') window.open(url.href, '_blank', 'noopener,noreferrer');
       } catch { /* Invalid game-supplied URL. */ }
     } else if (data.type === 'movie-open') {
-      stopMovie();
-      video = document.createElement('video');
-      video.playsInline = true;
-      Object.assign(video.style, {position: 'absolute', pointerEvents: 'none', background: 'black', zIndex: '1'});
-      canvas.parentNode.appendChild(video);
-      const currentVideo = video;
-      const state = error => {
-        if (video !== currentVideo) return;
-        send({type: 'movie-state', state: {
-          playing: !error && !currentVideo.ended, error: error || '', width: currentVideo.videoWidth, height: currentVideo.videoHeight,
-        }});
-      };
-      video.onloadedmetadata = () => state('');
-      video.onended = () => { state(''); currentVideo.style.display = 'none'; };
-      video.onerror = () => state(`Video error ${currentVideo.error?.code}`);
-      movieUrl = URL.createObjectURL(data.blob);
-      video.src = movieUrl;
-      video.play().catch(error => state(String(error)));
-    } else if (data.type === 'movie-stop') stopMovie();
-    else if (data.type === 'movie-rect' && video) {
-      const rect = canvas.getBoundingClientRect(), parent = canvas.parentNode.getBoundingClientRect();
-      Object.assign(video.style, {left: `${rect.left-parent.left+data.x*rect.width/width}px`,
-        top: `${rect.top-parent.top+data.y*rect.height/height}px`,
-        width: `${data.width*rect.width/width}px`, height: `${data.height*rect.height/height}px`});
+      void openMovie(data);
+    } else if (data.type === 'movie-stop' && data.id === movieId) stopMovie();
+    else if (data.type === 'movie-rect' && data.id === movieId) {
+      movieRect = {...data, screenWidth: width, screenHeight: height};
+      movie?.updateRect(movieRect);
     }
   };
   worker.onerror = event => report(event.message);
@@ -221,6 +233,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     },
     stop() {
       return stopPromise ||= (async () => {
+        stopping = true;
+        stopMovie();
         const stopped = new Promise((resolve, reject) => { stoppedResolve = resolve; stoppedReject = reject; });
         send({type: 'stop'});
         const timeout = setTimeout(() => stoppedReject(new Error('等待存档写入超时。')), 15000);
