@@ -1,4 +1,6 @@
-# 上传时清理未引用的 RTP
+# RTP-only 清理历史记录（2026-09-23）
+
+当前上传已改为默认全素材清理，见 [resource-cleanup.md](resource-cleanup.md)。本文保留此前实现与测量口径；下文的默认行为和命令描述对应历史版本。
 
 全素材清理的独立实验及三组对照见 [resource-cleanup-experiment.md](resource-cleanup-experiment.md)，不改变这里的默认上传策略。
 

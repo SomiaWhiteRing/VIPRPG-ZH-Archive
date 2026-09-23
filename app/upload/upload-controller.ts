@@ -265,7 +265,7 @@ export function useUploadController(accountId: number) {
   function startSource(
     input: {
       sourceKind: UploadSourceKind;
-      cleanupRtp: boolean;
+      cleanupResources: boolean;
       sourceName: string;
       files: UploadSourceFile[];
       targetWorkId: number | null;

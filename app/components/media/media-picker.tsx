@@ -464,9 +464,6 @@ export function CoverPicker({
         required={required && !blobSha256s.length && !file}
         type="file"
       />
-      {includeSelectedFileCandidate && file ? (
-        <span className="truncate text-xs text-muted">{file.name}</span>
-      ) : null}
     </div>
   );
 }

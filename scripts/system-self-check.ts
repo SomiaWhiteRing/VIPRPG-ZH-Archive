@@ -24,7 +24,7 @@ import { easyRpgRuntimeBasePath } from "../lib/archive/web-play";
 import { runWrangler } from "./run-wrangler.mjs";
 import { verifyEasyRpgGame } from "./easyrpg-flow-check";
 import { classifyArchivePath } from "../lib/archive/file-policy";
-import { RtpReferenceScan } from "../lib/archive/rtp-cleanup";
+import { ResourceReferenceScan } from "../lib/archive/resource-cleanup";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-system-test-"));
@@ -41,10 +41,10 @@ const testMode = process.argv[2] ?? "contract";
 const gameIndex = process.argv.indexOf("--game");
 const gamePath = gameIndex >= 0 ? process.argv[gameIndex + 1] : undefined;
 const archiveOnly = process.argv.includes("--archive-only");
-const keepRtp = process.argv.includes("--keep-rtp");
+const keepResources = process.argv.includes("--keep-resources");
 const reportIndex = process.argv.indexOf("--report");
 const reportPath = reportIndex >= 0 ? resolve(process.argv[reportIndex + 1]) : null;
-const measurements: Record<string, unknown> = { testedAt: new Date().toISOString(), gamePath, keepRtp };
+const measurements: Record<string, unknown> = { testedAt: new Date().toISOString(), gamePath, keepResources };
 if (gameIndex >= 0)
   assert.ok(
     testMode === "flow" && gamePath,
@@ -72,9 +72,9 @@ const sourceFiles = gamePath
     };
 const sourceZip = zipSync(sourceFiles, { level: 0 });
 const allowedFiles = Object.entries(sourceFiles).filter(([path]) => classifyArchivePath(path).included);
-const referenceScan = new RtpReferenceScan(allowedFiles.map(([path, bytes]) => ({ path, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") })));
+const referenceScan = new ResourceReferenceScan(allowedFiles.map(([path, bytes]) => ({ path, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") })));
 for (const [path, bytes] of allowedFiles) referenceScan.consume(path, bytes);
-const expectedCleanup = keepRtp ? null : referenceScan.finish();
+const expectedCleanup = keepResources ? null : referenceScan.finish();
 const expectedExcluded = new Set(expectedCleanup?.excluded.map((file) => file.path));
 const expectedFiles = Object.fromEntries(allowedFiles.filter(([path]) => !expectedExcluded.has(path)));
 const catalogWorkIds = [101, 102] as const;
@@ -352,7 +352,30 @@ async function run(): Promise<void> {
   const zipInput = page.locator(
     'input[type="file"][accept*=".zip"]',
   );
-  if (keepRtp) await page.getByRole("checkbox", { name: "清理未使用的原版 RTP" }).uncheck();
+  const cleanupOption = page.locator("[data-resource-cleanup-option]");
+  const cleanupCheckbox = cleanupOption.getByRole("checkbox");
+  assert.equal(await cleanupCheckbox.isChecked(), true, "resource cleanup defaults on");
+  let unexpectedFileChoosers = 0;
+  const recordChooser = () => { unexpectedFileChoosers++; };
+  page.on("filechooser", recordChooser);
+  await cleanupOption.getByRole("button", { name: "查看说明" }).focus();
+  await page.getByRole("tooltip").waitFor();
+  if (reportPath) {
+    mkdirSync(dirname(reportPath), { recursive: true });
+    await page.screenshot({ path: reportPath.replace(/\.json$/, ".options.png"), fullPage: true });
+  }
+  await page.keyboard.press("Escape");
+  await cleanupOption.locator("label").click();
+  assert.equal(await cleanupCheckbox.isChecked(), false);
+  assert.equal(unexpectedFileChoosers, 0, "option and tooltip never open file chooser");
+  page.off("filechooser", recordChooser);
+  await page.reload({ waitUntil: "networkidle" });
+  assert.equal(await cleanupCheckbox.isChecked(), false, "disabled preference survives reload");
+  await cleanupCheckbox.check();
+  await page.reload({ waitUntil: "networkidle" });
+  assert.equal(await cleanupCheckbox.isChecked(), true, "enabled preference survives reload");
+  if (keepResources) await cleanupCheckbox.uncheck();
+  measurements.cleanupPreferenceVerified = true;
   let putCount = 0;
   const countUpload = (request: import("playwright").Request) => {
     if (request.method() === "PUT" && /\/api\/(?:blobs|core-packs)\//.test(request.url())) putCount++;
@@ -379,7 +402,7 @@ async function run(): Promise<void> {
   const ready = await readyResponse;
   assert.equal(ready.status(), 200, await ready.text());
   const actualSource = ready.request().postDataJSON() as import("../lib/archive/manifest").ArchiveSourceManifest;
-  assert.deepEqual(actualSource.archiveVersion.rtpCleanup, expectedCleanup);
+  assert.deepEqual(actualSource.archiveVersion.resourceCleanup, expectedCleanup);
   assert.deepEqual(actualSource.files.map((file) => file.path).sort(), Object.keys(expectedFiles).sort());
   measurements.sourceManifestBytes = Buffer.byteLength(ready.request().postData()!);
   measurements.archive = actualSource.archiveVersion;

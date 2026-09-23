@@ -12,7 +12,7 @@ import {
   type UploadSourceEntry as SourceFile,
 } from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
-import { RtpReferenceScan } from "@/lib/archive/rtp-cleanup";
+import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
@@ -101,7 +101,7 @@ const stageWeights: Record<UploadTaskPhase, { base: number; weight: number }> =
   {
     enumerating: { base: 0, weight: 5 },
     hashing: { base: 5, weight: 35 },
-    analyzing_rtp: { base: 40, weight: 5 },
+    analyzing_resources: { base: 40, weight: 5 },
     building_core_pack: { base: 45, weight: 20 },
     creating_import_job: { base: 65, weight: 3 },
     preflighting: { base: 68, weight: 5 },
@@ -208,7 +208,7 @@ async function startSource(
     task = setPhase(task, "hashing", 0, null);
     runtime.task = task = emitTask(task, true);
 
-    const scan = await scanAndHash(task, sourceFiles, message.cleanupRtp);
+    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
 
@@ -616,7 +616,7 @@ function terminalTaskFromState(
 async function scanAndHash(
   initialTask: BrowserUploadTaskSnapshot,
   sourceFiles: SourceFile[],
-  cleanupRtp: boolean,
+  cleanupResources: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -674,29 +674,29 @@ async function scanAndHash(
 
   await recordResult;
 
-  if (cleanupRtp) {
-    task = emitTask(setPhase(task, "analyzing_rtp", 0, null), true);
-    const references = new RtpReferenceScan(includedFiles);
+  if (cleanupResources) {
+    task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
+    const references = new ResourceReferenceScan(includedFiles);
     for (let index = 0; index < includedFiles.length && references.needsScan; index++) {
       const file = includedFiles[index];
       if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || file.path.toLowerCase() === "rpg_rt.ini") {
         assertRuntimeActive(task.localTaskId);
         references.consume(file.path, file.cachedBytes ?? await file.source.bytes());
-        task = emitTask(setPhase(task, "analyzing_rtp", (index + 1) / includedFiles.length, file.path));
+        task = emitTask(setPhase(task, "analyzing_resources", (index + 1) / includedFiles.length, file.path));
         // Let cancellation messages run even when all core bytes are already cached.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     }
-    const rtpCleanup = references.finish();
-    const removed = new Set(rtpCleanup.excluded.map((file) => file.path));
+    const resourceCleanup = references.finish();
+    const removed = new Set(resourceCleanup.excluded.map((file) => file.path));
     for (const file of includedFiles) {
       if (!removed.has(file.path)) continue;
       includedSize -= file.size;
       excludedSize += file.size;
-      addExcluded(excluded, "unused-rtp", file.source);
+      addExcluded(excluded, "unused-resource", file.source);
     }
     includedFiles = includedFiles.filter((file) => !removed.has(file.path));
-    task = { ...task, stats: { ...task.stats, rtpCleanup } };
+    task = { ...task, stats: { ...task.stats, resourceCleanup } };
   }
 
   includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
@@ -877,7 +877,7 @@ function buildSourceManifest(
       includedSize: source.stats.includedSizeBytes,
       excludedFileCount: source.stats.excludedFileCount,
       excludedSize: source.stats.excludedSizeBytes,
-      rtpCleanup: source.stats.rtpCleanup,
+      resourceCleanup: source.stats.resourceCleanup,
     },
     corePacks: [
       {
@@ -1372,7 +1372,7 @@ function emptyStats(): UploadTaskStats {
     corePackZipSizeBytes: 0,
     estimatedR2GetCount: 0,
     excludedFileTypes: [],
-    rtpCleanup: null,
+    resourceCleanup: null,
   };
 }
 

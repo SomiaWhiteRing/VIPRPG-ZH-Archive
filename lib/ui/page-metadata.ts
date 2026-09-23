@@ -2,8 +2,8 @@ import { isRouteErrorResponse } from "react-router";
 import type { MetaDescriptor } from "react-router";
 
 const SITE_NAME = "VIPRPG.org";
-const SITE_TAGLINE = "RPG Maker 作品发现与游玩";
-const SITE_DESCRIPTION = "RPG Maker 作品发现、游玩与下载空间";
+const SITE_TAGLINE = "VIPRPG中文保管库";
+const SITE_DESCRIPTION = "VIPRPG中文保管库";
 
 export type PageMetadata = {
   title?: string | string[];

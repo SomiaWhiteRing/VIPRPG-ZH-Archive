@@ -639,7 +639,7 @@ export function WebPlayClient({
       { label: "本地状态", value: installation ? installStatusLabel(installation.status) : "未安装" },
       {
         label: "存档保护",
-        info: "保护用于存档等站点数据，不延长游戏资源的保留期限，也无法阻止手动清除站点数据。",
+        info: "防止存档被浏览器自动清理的功能，浏览器会对常访问的网站自动分配。",
         value: browserStorage?.protectionStatus ?? "查询中…",
       },
       {
@@ -923,10 +923,6 @@ export function WebPlayClient({
                 )}
 
                 {engagement}
-
-                {environment === "browser" ? (
-                  <Link className="text-sm text-primary hover:underline" to="/installed">管理已安装游戏</Link>
-                ) : null}
 
                 <details
                   className="border-t border-border pt-3"
