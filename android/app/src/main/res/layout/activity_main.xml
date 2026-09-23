@@ -147,6 +147,14 @@
                         android:text="@string/check_update"
                         android:textColor="#FFFFFF"
                         android:textAllCaps="false" />
+                    <Switch
+                        android:id="@+id/auto_check_updates"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/auto_check_updates"
+                        android:textColor="#58686A" />
                 </LinearLayout>
             </ScrollView>
         </FrameLayout>

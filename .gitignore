@@ -45,6 +45,10 @@ Thumbs.db
 /android/.gradle/
 /android/app/build/
 
+# Android private signing material (public release certificate is tracked)
+*.jks
+*.keystore
+
 # Local importer samples
 tools/rpgm-archive-importer/samples/*.local.json
 tools/rpgm-archive-importer/samples/*.staging.json

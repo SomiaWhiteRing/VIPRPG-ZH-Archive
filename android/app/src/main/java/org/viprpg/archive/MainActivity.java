@@ -1,6 +1,7 @@
 package org.viprpg.archive;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -27,6 +28,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.Switch;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -60,6 +62,10 @@ public final class MainActivity extends Activity {
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
     private UpdateChecker.Result currentUpdate;
     private boolean checkedUpdates;
+    private boolean checkingUpdates;
+    private static boolean startupChecked;
+    private boolean pendingUpdatePrompt;
+    private boolean resumed;
     private ProgressBar progress;
     private FrameLayout root;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
@@ -91,6 +97,10 @@ public final class MainActivity extends Activity {
         browser = findViewById(R.id.browser);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);
         checkUpdate.setOnClickListener(view -> checkForUpdate());
+        Switch autoCheck = findViewById(R.id.auto_check_updates);
+        autoCheck.setChecked(getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true));
+        autoCheck.setOnCheckedChangeListener((button, enabled) ->
+            getPreferences(MODE_PRIVATE).edit().putBoolean("autoCheckUpdates", enabled).apply());
         downloadUpdate.setOnClickListener(view -> {
             if (currentUpdate != null && currentUpdate.download != null) openExternal(currentUpdate.download);
         });
@@ -225,6 +235,10 @@ public final class MainActivity extends Activity {
             if (savedInstanceState.getBoolean("version")) showVersion();
             updateNavigation();
         }
+        if (!startupChecked) {
+            startupChecked = true;
+            if (autoCheck.isChecked()) checkForUpdate(true);
+        }
     }
 
     private boolean sameOrigin(Uri url) {
@@ -266,6 +280,7 @@ public final class MainActivity extends Activity {
         playing = value;
         setRequestedOrientation(value ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         updateNavigation();
+        if (!value) showPendingUpdate();
     }
 
     private void showVersion() {
@@ -284,6 +299,12 @@ public final class MainActivity extends Activity {
     }
 
     private void checkForUpdate() {
+        checkForUpdate(false);
+    }
+
+    private void checkForUpdate(boolean automatic) {
+        if (checkingUpdates) return;
+        checkingUpdates = true;
         checkedUpdates = true;
         checkUpdate.setEnabled(false);
         checkUpdate.setText("检查中…");
@@ -306,6 +327,7 @@ public final class MainActivity extends Activity {
             String failureMessage = error;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
+                checkingUpdates = false;
                 checkUpdate.setEnabled(true);
                 checkUpdate.setText(R.string.check_again);
                 if (failureMessage != null) {
@@ -313,6 +335,10 @@ public final class MainActivity extends Activity {
                     updateDetail.setText("请稍后再试。");
                 } else if (update != null) {
                     showUpdateResult(update);
+                    if (automatic && update.isNewer()) {
+                        pendingUpdatePrompt = true;
+                        showPendingUpdate();
+                    }
                 }
             });
         });
@@ -330,11 +356,15 @@ public final class MainActivity extends Activity {
             updateDetail.setText("你可以稍后重新检查。");
             return;
         }
-        if (result.installedSequence < 0) {
+        if (result.versionCode <= BuildConfig.VERSION_CODE) {
+            updateStatus.setText("当前无需更新");
+            updateDetail.setText("可以继续使用当前版本。");
+            return;
+        } else if (result.installedSequence < 0) {
             updateStatus.setText("有可下载的版本");
             updateDetail.setText("推荐版本 " + result.version + "，无法确认是否已安装。");
             downloadUpdate.setText("下载此版本");
-        } else if (result.releaseSequence > result.installedSequence) {
+        } else if (result.isNewer()) {
             updateStatus.setText("发现新版本");
             updateDetail.setText("版本 " + result.version + "，下载后按照系统提示安装。");
             downloadUpdate.setText(R.string.download_update);
@@ -350,6 +380,19 @@ public final class MainActivity extends Activity {
         }
         downloadUpdate.setVisibility(View.VISIBLE);
         setCheckButtonSecondary(true);
+    }
+
+    private void showPendingUpdate() {
+        if (!pendingUpdatePrompt || !resumed || playing || fullscreenView != null || isFinishing() || isDestroyed()) return;
+        pendingUpdatePrompt = false;
+        if (version || currentUpdate == null || !getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true)) return;
+        UpdateChecker.Result update = currentUpdate;
+        new AlertDialog.Builder(this)
+            .setTitle("发现新版本 " + update.version)
+            .setMessage((update.notes == null || update.notes.trim().isEmpty() ? "" : update.notes + "\n\n") + "下载后按照 Android 系统提示安装，已有游戏和存档会保留。")
+            .setPositiveButton("下载更新", (dialog, which) -> openExternal(update.download))
+            .setNegativeButton("稍后", null)
+            .show();
     }
 
     private void setCheckButtonSecondary(boolean secondary) {
@@ -451,6 +494,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        resumed = false;
         browser.onPause();
         super.onPause();
     }
@@ -459,6 +503,8 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         browser.onResume();
+        resumed = true;
+        showPendingUpdate();
     }
 
     @Override
