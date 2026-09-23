@@ -4,15 +4,15 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { unzipSync, zipSync } from "fflate";
 import { classifyArchivePath } from "../lib/archive/file-policy";
-import { isExactRtpFile, LcfReferenceScan, RtpReferenceScan, type ResourceReferenceReport, type RtpFile } from "../lib/archive/rtp-cleanup";
+import { isExactRtpFile, RtpReferenceScan, type RtpFile } from "../lib/archive/rtp-cleanup";
+import type { ResourceReferenceReport } from "../lib/archive/lcf-reference-scan";
+import { isResourceCleanupCandidate, ResourceReferenceScan } from "../lib/archive/resource-cleanup";
 import { shouldSkipWebPlayLocalWrite } from "../lib/archive/web-play-local-policy";
 
 // This command only writes separate experimental ZIPs, never the game's files.
 // Core, executable, font, logo, readme and translation files have implicit uses;
 // candidates are media in the standard engine resource directories only.
-const mediaDirectories = new Set("backdrop battle battle2 battlecharset battleweapon charset chipset faceset gameover monster movie music panorama picture sound system system2 title".split(" "));
-const mediaExtension = /\.(?:png|bmp|xyz|jpg|jpeg|gif|wav|mid|midi|mp3|ogg|oga|flac|opus|wma|avi|mpg|mpeg)$/i;
-const isMediaCandidate = (file: RtpFile) => mediaDirectories.has(file.path.replaceAll("\\", "/").split("/")[0].toLowerCase()) && mediaExtension.test(file.path);
+const isMediaCandidate = isResourceCleanupCandidate;
 assert.ok(process.argv[2], "usage: tsx scripts/resource-cleanup-experiment.ts <game directory> <output directory>");
 const game = resolve(process.argv[2]);
 const output = resolve(process.argv[3] ?? "output/resource-cleanup-experiment");
@@ -40,7 +40,7 @@ visit(game);
 const readAndHashMs = performance.now() - readStart;
 function analyze(scope: "rtp" | "all") {
   const start = performance.now();
-  const scan = scope === "rtp" ? new RtpReferenceScan(entries) : new LcfReferenceScan(entries, isMediaCandidate);
+  const scan = scope === "rtp" ? new RtpReferenceScan(entries) : new ResourceReferenceScan(entries);
   for (const file of entries) scan.consume(file.path, file.bytes);
   return { report: scan.finish(), ms: performance.now() - start };
 }

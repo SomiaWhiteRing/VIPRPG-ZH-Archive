@@ -342,6 +342,7 @@ const persisted = await navigator.storage.persist();
 - EasyRPG canvas 必须可聚焦，并在启动和全屏切换后主动聚焦；否则方向键和确认键可能落到页面而不是游戏。
 - iframe 的 canvas 由页面 CSS 按 4:3 等比放大到视口可容纳的最大尺寸；不修改引擎绘图缓冲区分辨率。移动端竖屏通过外层画面容器控制高度和垂直位置，旋转降级时画面、控制器、工具栏一起旋转，触控坐标同步转换。截图始终只截取原始游戏 canvas。
 - 播放器 iframe 内取消 `contextmenu` 默认行为，包括画布与黑边区域；保留鼠标按下、抬起等事件，游戏仍可接收右键。监听随播放器会话销毁，站点其他区域的右键菜单不受影响。
+- 移动端游戏按键通过原生、非被动的 `touchstart` 监听取消默认行为，在 Chrome 识别原生长按手势前阻止其触觉反馈；按键输入仍由 Pointer Events 处理。监听仅在显示移动控制器时启用并随之清理，截图按钮与工具栏保留默认点击行为。实际震动效果需在 Android 手机验证。
 - 全屏由网站控制外层播放器容器，引擎的全屏请求回调给页面；不调用 SDL/Emscripten 窗口全屏逻辑。
 - 移动端方向切换优先调用 Screen Orientation Lock；不可用或被拒绝时通过 CSS 旋转游玩界面并提示用户手动旋转设备，不能把方向锁定作为启动前提。
 - 当前兼容目标是支持 OPFS、Web Locks、Worker 内 OffscreenCanvas/WebGL2、AudioWorklet 和 WASM 的 Chromium 浏览器，提供桌面和移动布局；不承诺其他浏览器或未实测设备的行为。

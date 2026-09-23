@@ -107,6 +107,23 @@ export function WebPlaySurface({
     };
   }, [mobile, immersive, orientation, rotation, editing, releaseInput]);
 
+  useEffect(() => {
+    const area = areaRef.current;
+    if (!showControls || !area) return;
+    const preventLongPress = (event: TouchEvent) => {
+      const control = event.target instanceof Element
+        ? event.target.closest("[data-play-control]")
+        : null;
+      // Screenshot uses click; game buttons receive input through pointer events.
+      if (!control || control.getAttribute("data-play-control") === "screenshot") return;
+      if (event.cancelable) event.preventDefault();
+    };
+    // Cancel native long-press gestures before Chrome triggers haptic feedback.
+    // React's touch listeners are passive, so this needs a native listener.
+    area.addEventListener("touchstart", preventLongPress, { passive: false });
+    return () => area.removeEventListener("touchstart", preventLongPress);
+  }, [showControls]);
+
   useLayoutEffect(() => {
     const surface = surfaceRef.current;
     const area = areaRef.current;

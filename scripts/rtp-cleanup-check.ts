@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import catalog from "../lib/archive/rtp-catalog.json";
 import { isExactRtpFile, LcfReferenceScan, RtpReferenceScan, validateRtpCleanupReport, type RtpFile } from "../lib/archive/rtp-cleanup";
+import { isResourceCleanupCandidate, ResourceReferenceScan, validateResourceCleanupReport } from "../lib/archive/resource-cleanup";
 
 const text = (value: string) => new TextEncoder().encode(value);
 const concat = (...parts: Uint8Array[]) => Uint8Array.from(parts.flatMap((part) => [...part]));
@@ -72,12 +73,27 @@ for (const unknown of [false, true]) {
   const database = common(command(unknown ? 99999 : 11550, "custom-referenced", [100, 100, 50]));
   const files = [customReferenced, customUnused, blank, { ...blank, path: "RPG_RT.ldb", size: database.length }];
   const experiment = new LcfReferenceScan(files, (file) => /\.(?:wav|png)$/.test(file.path));
-  const production = new RtpReferenceScan(files);
-  for (const scanner of [experiment, production]) {
+  const production = new ResourceReferenceScan(files);
+  const rtpOnly = new RtpReferenceScan(files);
+  for (const scanner of [experiment, production, rtpOnly]) {
     scanner.consume("RPG_RT.ldb", database);
     scanner.consume("RPG_RT.lmt", lmt);
   }
   assert.deepEqual(experiment.finish().excluded.map((file) => file.path), unknown ? [] : [customUnused.path]);
-  assert.equal(production.finish().excluded.length, 0, "production never prunes custom media");
+  assert.deepEqual(production.finish().excluded, experiment.finish().excluded);
+  validateResourceCleanupReport(production.finish());
+  assert.equal(rtpOnly.finish().excluded.length, 0, "RTP comparison mode never prunes custom media");
 }
+for (const path of ["RPG_RT.ldb", "Map0001.lmu", "RPG_RT.ini", "Player.exe", "Font/Font.ttf", "Logo/LOGO1.png", "readme.txt", "StringScripts/Map0001.txt", "Picture/../RPG_RT.ini", "Picture/./a.png", "Picture//a.png", "Picture/a.png\u0000", "Picture/a:b.png"]) {
+  assert.equal(isResourceCleanupCandidate({ path }), false, path);
+}
+const fullScanner = new ResourceReferenceScan([customUnused, blank, { ...blank, path: "RPG_RT.ldb" }]);
+fullScanner.consume("RPG_RT.ldb", ldb());
+fullScanner.consume("RPG_RT.lmt", lmt);
+const validFull = fullScanner.finish();
+validateResourceCleanupReport(validFull);
+assert.throws(() => validateResourceCleanupReport({ ...validFull, excluded: [{ ...customUnused, path: "RPG_RT.ldb" }] }));
+assert.throws(() => validateResourceCleanupReport({ ...validFull, excluded: [{ ...customUnused, sha256: "bad" }] }));
+assert.throws(() => validateResourceCleanupReport({ ...validFull, status: "preserved" }));
+assert.throws(() => validateResourceCleanupReport({ ...validFull, version: "old" }));
 console.log("RTP cleanup boundaries passed: exact identity, non-RTP preservation, database/map/move/common-event references, dynamic and unknown fallback, invalid reports.");

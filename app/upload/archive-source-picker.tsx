@@ -2,6 +2,7 @@ import { Notice } from "@/app/components/ui/notice";
 
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { Label } from "@/app/components/ui/label";
 import { Progress } from "@/app/components/ui/progress";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
@@ -24,8 +25,8 @@ export type ArchiveSourceSummary = {
 
 export function ArchiveSourcePicker({
   canceling,
-  cleanupRtp,
-  onCleanupRtpChange,
+  cleanupResources,
+  onCleanupResourcesChange,
   disabled,
   existingSource = null,
   mode,
@@ -39,8 +40,8 @@ export function ArchiveSourcePicker({
   task,
 }: {
   canceling: boolean;
-  cleanupRtp: boolean;
-  onCleanupRtpChange: (value: boolean) => void;
+  cleanupResources: boolean;
+  onCleanupResourcesChange: (value: boolean) => void;
   disabled: boolean;
   existingSource?: ArchiveSourceSummary | null;
   mode: UploadSourceKind;
@@ -55,7 +56,7 @@ export function ArchiveSourcePicker({
 }) {
   const dragDepthRef = useRef(0);
   const instructionsId = useId();
-  const cleanupRtpId = useId();
+  const cleanupResourcesId = useId();
   const [fileDragActive, setFileDragActive] = useState(false);
   const archiveInputRef = useRef<HTMLInputElement>(null);
 
@@ -108,12 +109,8 @@ export function ArchiveSourcePicker({
           data-file-drag-active={fileDragActive || undefined}
           onClick={(event) => {
             const target = event.target;
-            if (
-              target instanceof Element &&
-              target.closest("[data-upload-picker]")
-            )
-              return;
-            openArchivePicker();
+            if (target instanceof Element && event.currentTarget.contains(target) &&
+                !target.closest("button, [data-upload-picker]")) openArchivePicker();
           }}
           onDragEnter={(event) => {
             if (!hasDraggedFiles(event)) return;
@@ -137,26 +134,25 @@ export function ArchiveSourcePicker({
             resetFileDrag();
             if (!disabled && hasFiles) void onDrop(event);
           }}
-          onKeyDown={(event) => {
-            if (
-              event.target !== event.currentTarget ||
-              (event.key !== "Enter" && event.key !== " ")
-            )
-              return;
-            event.preventDefault();
-            openArchivePicker();
-          }}
-          role="button"
-          tabIndex={disabled ? -1 : 0}
+          role="group"
         >
-          <div className="grid justify-items-center gap-2">
-            <Upload className="size-8 text-primary" />
-            <strong aria-live="polite">
-              {fileDragActive ? "松开以上传" : "拖入游戏文件夹、ZIP 或 7z 压缩包"}
-            </strong>
-            <span className="text-sm text-muted" id={instructionsId}>
-              文件夹根目录或压缩包内须包含 RPG_RT.lmt
-            </span>
+          <div className="grid w-full justify-items-center gap-2">
+            <Button
+              aria-describedby={instructionsId}
+              className="grid min-h-0 w-full justify-items-center whitespace-normal p-0 text-base font-normal hover:bg-transparent [&_svg]:size-8"
+              disabled={disabled}
+              onClick={openArchivePicker}
+              type="button"
+              variant="ghost"
+            >
+              <Upload className="size-8 text-primary" />
+              <strong aria-live="polite">
+                {fileDragActive ? "松开以上传" : "拖入游戏文件夹、ZIP 或 7z 压缩包"}
+              </strong>
+              <span className="text-sm text-muted" id={instructionsId}>
+                文件夹根目录或压缩包内须包含 RPG_RT.lmt
+              </span>
+            </Button>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <FilePicker
                 accept=".zip,.7z,application/zip,application/x-7z-compressed"
@@ -187,18 +183,27 @@ export function ArchiveSourcePicker({
                 }}
               />
             </div>
+            <div className="mt-3 flex items-center gap-2 text-left text-sm" data-upload-picker data-resource-cleanup-option>
+              <Checkbox
+                id={cleanupResourcesId}
+                checked={cleanupResources}
+                disabled={disabled}
+                onCheckedChange={(checked) => onCleanupResourcesChange(checked === true)}
+              />
+              <Label htmlFor={cleanupResourcesId}>清理未引用素材</Label>
+              <InfoTooltip>
+                <div className="space-y-2 text-left">
+                  <p>上传前检查数据库、全部地图和事件，排除标准素材目录中未被引用的图片、音频和视频，包括 RTP、自定义素材及改名副本。</p>
+                  <p>保留程序、地图、数据库、字体、配置、说明和翻译文本。遇到动态加载、插件或无法完整分析的格式时，保留相关素材。</p>
+                  <p>只精简上传归档，不修改本地原文件。网站下载和在线游玩共用精简后的文件，可在处理结果中查看排除明细。</p>
+                  <p>静态检查无法保证识别所有自定义补丁或旧存档的资源需求。需要完整保留素材时请取消勾选；恢复被排除素材需重新选择原文件并关闭清理。原有文件类型规则仍适用。</p>
+                  <p>默认开启，浏览器会记住你的选择；更改只对下一次选择的游戏文件生效。</p>
+                </div>
+              </InfoTooltip>
+            </div>
           </div>
         </div>
       )}
-      {!sourceSummary && !existingSource ? (
-        <div className="mt-3 flex items-start gap-2 text-sm">
-          <Checkbox id={cleanupRtpId} aria-describedby={`${cleanupRtpId}-description`} checked={cleanupRtp} disabled={disabled} onCheckedChange={(checked) => onCleanupRtpChange(checked === true)} />
-          <div>
-            <Label htmlFor={cleanupRtpId}>清理未使用的原版 RTP</Label>
-            <p className="text-xs text-muted" id={`${cleanupRtpId}-description`}>仅排除确认未引用的原版素材；自定义、修改过或用途不明的素材保留。</p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -318,17 +323,18 @@ function UploadTaskCard({
             {task.error}
           </Notice>
         ) : null}
-        {task?.stats.rtpCleanup ? (
-          <details className="mt-3 text-sm" data-rtp-cleanup={task.stats.rtpCleanup.status}>
+        {task?.stats.resourceCleanup ? (
+          <details className="mt-3 text-sm" data-resource-cleanup={task.stats.resourceCleanup.status}>
             <summary className="cursor-pointer">
-              {task.stats.rtpCleanup.status === "no_candidates" ? "未发现可清理的原版 RTP" :
-                `RTP 检查：排除 ${task.stats.rtpCleanup.excluded.length} 个文件，减少 ${formatBytes(task.stats.rtpCleanup.excluded.reduce((sum, file) => sum + file.size, 0))}`}
+              {task.stats.resourceCleanup.status === "no_candidates" ? "未发现可分析的素材" :
+                task.stats.resourceCleanup.status === "preserved" ? "素材检查：无法完整判断，已全部保留" :
+                `素材检查：排除 ${task.stats.resourceCleanup.excluded.length} 个文件，减少 ${formatBytes(task.stats.resourceCleanup.excluded.reduce((sum, file) => sum + file.size, 0))}`}
             </summary>
-            <p className="mt-2 text-xs text-muted">非 RTP 文件不参与此项清理。无法确定用途的 RTP 已保留。</p>
-            {task.stats.rtpCleanup.reasons.map((reason) => <p className="mt-1 text-xs text-muted" key={reason}>{reason}</p>)}
-            {task.stats.rtpCleanup.excluded.length ? (
+            <p className="mt-2 text-xs text-muted">只清理标准素材目录中未引用的图片、音频和视频；用途无法确定时保留。本地原文件不受影响。</p>
+            {task.stats.resourceCleanup.reasons.map((reason) => <p className="mt-1 text-xs text-muted" key={reason}>{reason}</p>)}
+            {task.stats.resourceCleanup.excluded.length ? (
               <ul className="mt-2 max-h-48 overflow-auto text-xs">
-                {task.stats.rtpCleanup.excluded.map((file) => <li key={file.path}>{file.path} · {formatBytes(file.size)}</li>)}
+                {task.stats.resourceCleanup.excluded.map((file) => <li key={file.path}>{file.path} · {formatBytes(file.size)}</li>)}
               </ul>
             ) : null}
           </details>
@@ -522,7 +528,7 @@ export function uploadPhaseLabel(phase: string): string {
   const labels: Record<string, string> = {
     enumerating: "读取文件",
     hashing: "校验文件",
-    analyzing_rtp: "检查 RTP 引用",
+    analyzing_resources: "检查素材引用",
     building_core_pack: "整理公共文件",
     creating_import_job: "创建上传任务",
     preflighting: "检查已有对象",
