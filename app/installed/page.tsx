@@ -148,8 +148,7 @@ function InstalledGames() {
       </div>
       <div className="mb-5 flex items-center gap-1 text-xs text-muted">
         <Clock3 aria-hidden className="mr-0.5 hidden size-3.5 sm:block" />
-        <span>{supportsGameBuckets() ? "7 天未游玩自动清理，保留存档和截图" : "7 天未游玩，下次访问时清理；存档和截图保留"}</span>
-        <InfoTooltip>到期后由浏览器择机清理，或在下次访问时清理。尚未游玩的游戏从安装完成时起算。</InfoTooltip>
+        <span>为节约存储空间，会自动清理 7 天以上未游玩的游戏。</span>
       </div>
       {error ? <Notice className="mb-5 whitespace-pre-wrap">{error}</Notice> : null}
       {managing && rows.length ? (

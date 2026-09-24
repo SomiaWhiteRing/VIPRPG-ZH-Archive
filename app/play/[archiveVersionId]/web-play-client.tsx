@@ -25,6 +25,7 @@ import { useWebPlayControlsPreferences } from "./web-play-controls-preferences";
 import type { DisplayOrientation } from "./web-play-controls-preferences";
 import { WebPlayScreenshotGallery } from "./web-play-screenshot-gallery";
 import { useWebPlayScreenshots } from "./web-play-screenshots";
+import { WebPlaySaveExport } from "./web-play-save-export";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   getWebPlayInstallation,
@@ -51,6 +52,7 @@ import {
   Play,
   RectangleHorizontal,
   RectangleVertical,
+  Settings,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -156,10 +158,10 @@ export function WebPlayClient({
 
   useEffect(() => {
     if (!screenshotFeedback) return;
-    const duration = screenshotFeedback.ok ? (mobileControls ? 1000 : 5000) : 12000;
+    const duration = immersive ? 1000 : screenshotFeedback.ok ? (mobileControls ? 1000 : 5000) : 12000;
     const timer = setTimeout(() => setScreenshotFeedback(null), duration);
     return () => clearTimeout(timer);
-  }, [mobileControls, screenshotFeedback]);
+  }, [immersive, mobileControls, screenshotFeedback]);
 
   const screenshotMessage = screenshotFeedback?.message ?? screenshotLoadError;
   const captureScreenshot = useCallback(async () => {
@@ -174,6 +176,15 @@ export function WebPlayClient({
     }
     if (playerRef.current === player) focusPlayerCanvas();
   }, [capture, captureDisabled, mobileControls, toast]);
+
+  const openPlayerSettings = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || !running || playerStopping) return;
+    focusPlayerCanvas();
+    player.setButtonPressed("menu", true);
+    // Hold across engine frames so the Worker observes a complete F1 press.
+    setTimeout(() => player.setButtonPressed("menu", false), 100);
+  }, [running, playerStopping]);
 
   const addLog = useCallback(
     (level: WebPlayLog["level"], message: string) => {
@@ -382,7 +393,7 @@ export function WebPlayClient({
 
     try {
       if (playerBusy) {
-        throw new Error("游戏运行中不能重装本地缓存。");
+        throw new Error("游戏运行中不能安装游戏。");
       }
 
       setInstallSessionActive(true);
@@ -433,7 +444,7 @@ export function WebPlayClient({
 
     try {
       if (playerBusy) {
-        throw new Error("游戏运行中不能删除本地缓存。");
+        throw new Error("游戏运行中不能卸载游戏。");
       }
 
       if (!(await canManageGameResources())) {
@@ -442,10 +453,10 @@ export function WebPlayClient({
       await deleteLocalGame(metadata.playKey);
       setInstallation(null);
       setBrowserStorage(await readBrowserStorage());
-      addLog("info", "已删除本地游戏文件。游戏存档不受影响。");
+      addLog("info", "已卸载游戏。游戏存档不受影响。");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "删除本地缓存失败。";
+        error instanceof Error ? error.message : "卸载游戏失败。";
       setOperationError(message);
       addLog("error", message);
     }
@@ -715,6 +726,20 @@ export function WebPlayClient({
                     ) : null}
                     toolbar={immersive ? (
                       <>
+                        {running && !mobileControls ? (
+                          <Button
+                            aria-label="游戏设置（F1）"
+                            className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
+                            disabled={playerStopping}
+                            onClick={openPlayerSettings}
+                            size="icon"
+                            title="游戏设置（F1）"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Settings aria-hidden />
+                          </Button>
+                        ) : null}
                         {mobileControls && running ? (
                           <Button
                             aria-label={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
@@ -870,7 +895,7 @@ export function WebPlayClient({
                       {playerStarting ? "正在启动…" : "启动游戏"}
                     </Rm2kButton>
                   ) : (
-                    <div className={mobileControls ? "grid grid-cols-1 gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"}>
+                    <div className={mobileControls ? "grid grid-cols-[minmax(0,1fr)_2.5rem] gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem_2.5rem] gap-2"}>
                       {!mobileControls ? (
                         <Button
                           className="min-w-0 gap-1.5 px-2"
@@ -892,6 +917,17 @@ export function WebPlayClient({
                       >
                         <Expand aria-hidden />
                         全屏幕
+                      </Button>
+                      <Button
+                        aria-label="游戏设置（F1）"
+                        disabled={playerStopping}
+                        onClick={openPlayerSettings}
+                        size="icon"
+                        title="游戏设置（F1）"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Settings aria-hidden />
                       </Button>
                       {!mobileControls ? (
                         <Button
@@ -968,20 +1004,10 @@ export function WebPlayClient({
                           {playerStopping ? "正在停止…" : "停止游戏"}
                         </Button>
                       ) : null}
-                      {installed || failed || interruptedInstalling ? (
-                        <Button
-                          disabled={playerBusy}
-                          onClick={startInstall}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          重新安装
-                        </Button>
-                      ) : null}
+                      <WebPlaySaveExport key={metadata.workId} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
                       {installation ? (
                         <Button
-                          aria-controls="delete-local-cache-dialog"
+                          aria-controls="uninstall-game-dialog"
                           aria-expanded={deleteDialogOpen}
                           aria-haspopup="dialog"
                           ref={deleteButtonRef}
@@ -991,7 +1017,7 @@ export function WebPlayClient({
                           type="button"
                           variant="outline"
                         >
-                          删除本地缓存
+                          卸载游戏
                         </Button>
                       ) : null}
                     </div>
@@ -1054,13 +1080,13 @@ export function WebPlayClient({
                   open={deleteDialogOpen}
                 >
                   <AlertDialogContent
-                    id="delete-local-cache-dialog"
+                    id="uninstall-game-dialog"
                     onCloseAutoFocus={(event) => {
                       event.preventDefault();
                       deleteButtonRef.current?.focus();
                     }}
                   >
-                    <AlertDialogTitle>删除本地游戏缓存？</AlertDialogTitle>
+                    <AlertDialogTitle>卸载游戏？</AlertDialogTitle>
                     <AlertDialogDescription>
                       已下载的本地游戏文件将被删除，浏览器存档不会受到影响。之后需要重新安装才能在线游玩。
                     </AlertDialogDescription>
@@ -1076,7 +1102,7 @@ export function WebPlayClient({
                           }}
                           variant="destructive"
                         >
-                          删除缓存
+                          卸载游戏
                         </Button>
                       </AlertDialogAction>
                     </AlertDialogFooter>
