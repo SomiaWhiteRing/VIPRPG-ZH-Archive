@@ -316,7 +316,9 @@ export function WebPlayClient({
     const onFullscreenChange = () => {
       const active = document.fullscreenElement === frame;
       setNativeFullscreen(active);
-      if (!active) {
+      if (active) {
+        setPageFullscreen(false);
+      } else {
         unlockScreenOrientation();
         setOrientationLockActive(false);
       }
@@ -561,8 +563,6 @@ export function WebPlayClient({
       if (document.fullscreenEnabled && frame.requestFullscreen) {
         try {
           await frame.requestFullscreen({ navigationUI: "hide" });
-          setNativeFullscreen(true);
-          setPageFullscreen(false);
           if (mobileControls) await lockOrientation(next);
           focusPlayerCanvas();
           return true;
@@ -571,7 +571,6 @@ export function WebPlayClient({
         }
       }
 
-      setNativeFullscreen(false);
       setPageFullscreen(true);
       if (mobileControls) await lockOrientation(next);
       focusPlayerCanvas();
@@ -591,7 +590,6 @@ export function WebPlayClient({
       await document.exitFullscreen().catch(() => undefined);
     }
     setPageFullscreen(false);
-    setNativeFullscreen(false);
     unlockScreenOrientation();
     setOrientationLockActive(false);
     setDisplayMessage(null);
@@ -694,7 +692,7 @@ export function WebPlayClient({
               <div className="aspect-4/3 w-full">
                 <div
                   className={
-                    immersive
+                    pageFullscreen
                       ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden border-0 bg-black focus-within:ring-2 focus-within:ring-accent"
                       : "relative h-full w-full overflow-hidden rounded-lg border border-border bg-black focus-within:ring-2 focus-within:ring-accent"
                   }
