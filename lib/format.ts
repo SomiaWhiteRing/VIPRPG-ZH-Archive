@@ -2,8 +2,10 @@ export function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
 }
 
+export const DISPLAY_TIME_ZONE = "Asia/Shanghai";
+
 const timestampFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Hong_Kong",
+  timeZone: DISPLAY_TIME_ZONE,
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
@@ -14,6 +16,7 @@ const timestampFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 export function parseTimestamp(value: string): Date {
+  // Database timestamps without an offset are stored in UTC.
   const normalized = value.trim().replace(" ", "T");
   return new Date(
     /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
@@ -26,6 +29,11 @@ function timestampParts(date: Date) {
   return Object.fromEntries(
     timestampFormatter.formatToParts(date).map(({ type, value }) => [type, value]),
   );
+}
+
+export function formatDateKey(date: Date): string {
+  const p = timestampParts(date);
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
 export function formatExactTimestamp(value: string): string {
@@ -67,11 +75,12 @@ export function formatDate(value: string | null, options?: { time?: boolean }): 
   if (!value) {
     return "";
   }
-  const date = new Date(value);
+  const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
   return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: DISPLAY_TIME_ZONE,
     dateStyle: "medium",
     ...(options?.time !== false && { timeStyle: "short" }),
   }).format(date);

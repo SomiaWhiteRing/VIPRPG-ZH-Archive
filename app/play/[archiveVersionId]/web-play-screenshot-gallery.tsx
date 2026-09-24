@@ -5,6 +5,7 @@ import { useToast } from "@/app/components/ui/toast";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
+import { DISPLAY_TIME_ZONE, parseTimestamp } from "@/lib/format";
 import { zipSync, type Zippable } from "fflate";
 import { ChevronLeft, ChevronRight, Download, LoaderCircle, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -118,7 +119,7 @@ export function WebPlayScreenshotGallery({
       </div>
       <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0">
         {pageScreenshots.map((screenshot) => {
-          const capturedAt = new Date(screenshot.createdAt).toLocaleString("zh-CN", { hour12: false });
+          const capturedAt = parseTimestamp(screenshot.createdAt).toLocaleString("zh-CN", { timeZone: DISPLAY_TIME_ZONE, hour12: false });
           const label = `${title} · ${capturedAt}`;
           return (
             <li className="min-w-0" key={screenshot.id}>

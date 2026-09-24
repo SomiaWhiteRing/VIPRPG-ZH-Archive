@@ -42,7 +42,7 @@ import type {
   WebPlayMetadata,
   WebPlayStorageSnapshot,
 } from "@/app/play/[archiveVersionId]/web-play-types";
-import { formatBytes } from "@/lib/format";
+import { DISPLAY_TIME_ZONE, formatBytes, parseTimestamp } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
 import {
   Camera,
@@ -1181,7 +1181,8 @@ function logTone(level: WebPlayLog["level"]): string {
 }
 
 function formatLog(log: WebPlayLog): string {
-  const time = new Date(log.createdAt).toLocaleTimeString("zh-CN", {
+  const time = parseTimestamp(log.createdAt).toLocaleTimeString("zh-CN", {
+    timeZone: DISPLAY_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
