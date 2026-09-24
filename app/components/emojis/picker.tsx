@@ -40,12 +40,14 @@ export function EmojiPicker({
   onSelect,
   disabled,
   onOpenChange,
+  onMobilePanelOpenChange,
   onClose,
   children,
 }: {
   onSelect: (emoji: FaceEmoji, options: { focus: boolean }) => void;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onMobilePanelOpenChange?: (open: boolean) => void;
   onClose?: () => void;
   children: (trigger: ReactNode) => ReactNode;
 }) {
@@ -62,6 +64,14 @@ export function EmojiPicker({
   const [mobileHost, setMobileHost] = useState<HTMLElement | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // Track the space actually occupied by the mobile panel, including viewport
+  // changes, disabled state, library dialogs and picker unmounts.
+  const mobileSpacer = useCallback(
+    (node: HTMLDivElement | null) => {
+      onMobilePanelOpenChange?.(node !== null);
+    },
+    [onMobilePanelOpenChange],
+  );
   const scrollTop = useRef(0);
   const restoreScroll = useCallback((node: HTMLDivElement | null) => {
     if (node) node.scrollTop = scrollTop.current;
@@ -351,7 +361,7 @@ export function EmojiPicker({
         <>
           <HeightBox
             aria-hidden="true"
-            data-mobile-emoji-spacer
+            ref={mobileSpacer}
             className="shrink-0"
             height={mobileHeight}
           />

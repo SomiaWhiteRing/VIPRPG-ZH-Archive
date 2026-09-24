@@ -26,7 +26,7 @@ import {
   type BodyEditorHandle,
 } from "@/app/components/comments/body-editor";
 import { ForumModal, ForumTagEditor } from "./shared";
-import { ForumReplyFullscreenContext } from "./reply-bar";
+import { ForumReplyLayoutContext } from "./reply-bar";
 
 export function ForumEditor({
   draft,
@@ -66,9 +66,9 @@ export function ForumEditor({
   const section = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
   const originalHeight = useRef(0);
-  const fullScreenControl = useContext(ForumReplyFullscreenContext);
-  const fullscreen = fullScreenControl?.fullscreen ?? false;
-  const setFullscreen = fullScreenControl?.setFullscreen;
+  const replyLayout = useContext(ForumReplyLayoutContext);
+  const fullscreen = replyLayout?.fullscreen ?? false;
+  const setFullscreen = replyLayout?.setFullscreen;
   const [overflowing, setOverflowing] = useState(false);
   const composing = useRef(false);
   const topic = draft.mode === "topic";
@@ -388,6 +388,7 @@ export function ForumEditor({
         <EmojiPicker
           disabled={busy}
           onOpenChange={setEmojiOpen}
+          onMobilePanelOpenChange={replyLayout?.setMobileEmojiOpen}
           onSelect={(emoji, options) =>
             mixed.current?.insertEmoji(emoji, options)
           }

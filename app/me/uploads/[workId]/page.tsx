@@ -55,7 +55,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function UploadedWorkPage() {
   const { user, work, suggestions, fromGameDetail } = useLoaderData<typeof loader>();
   return (
-    <div key={`${user.id}:${work.id}`} data-account-full-width>
+    <div key={`${user.id}:${work.id}`}>
       <PageHeader
         actions={
           <BackLink

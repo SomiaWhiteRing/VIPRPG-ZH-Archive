@@ -3,9 +3,10 @@ import type { ForumViewer } from "@/lib/forum";
 import type { ReactNode } from "react";
 import { createContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-export const ForumReplyFullscreenContext = createContext<{
+export const ForumReplyLayoutContext = createContext<{
   fullscreen: boolean;
   setFullscreen: (value: boolean) => void;
+  setMobileEmojiOpen: (value: boolean) => void;
 } | null>(null);
 
 // Measure the occupied viewport so content and scroll targets clear the bottom bar.
@@ -23,6 +24,7 @@ export function ForumReplyBar({
   const surface = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [mobileEmojiOpen, setMobileEmojiOpen] = useState(false);
   const fullscreenMode = useRef({ active: false, restoring: false });
   const scheduleMeasurement = useRef(() => {});
   const finishAnimation = useRef(() => {});
@@ -237,12 +239,14 @@ export function ForumReplyBar({
         ref={ref}
         data-forum-reply-bar
         data-fullscreen={fullscreen}
-        className="border-b border-border bg-card data-[fullscreen=true]:relative data-[fullscreen=true]:z-[60] data-[docked=true]:fixed data-[docked=true]:inset-x-0 data-[docked=true]:bottom-0 data-[docked=true]:z-40 data-[docked=true]:data-[fullscreen=true]:z-[60] data-[docked=true]:border-t data-[docked=true]:pb-[env(safe-area-inset-bottom)] data-[docked=true]:has-[[data-mobile-emoji-spacer]]:pb-0 data-[docked=true]:shadow-surface"
+        data-mobile-emoji-open={mobileEmojiOpen}
+        className="border-b border-border bg-card data-[fullscreen=true]:relative data-[fullscreen=true]:z-[60] data-[docked=true]:fixed data-[docked=true]:inset-x-0 data-[docked=true]:bottom-0 data-[docked=true]:z-40 data-[docked=true]:data-[fullscreen=true]:z-[60] data-[docked=true]:border-t data-[docked=true]:pb-[env(safe-area-inset-bottom)] data-[docked=true]:data-[mobile-emoji-open=true]:pb-0 data-[docked=true]:shadow-surface"
       >
         <div ref={surface}>
           <div
             ref={content}
-            className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3 has-[[data-mobile-emoji-spacer]]:pb-0"
+            data-mobile-emoji-open={mobileEmojiOpen}
+            className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3 data-[mobile-emoji-open=true]:pb-0"
           >
             {viewer ? (
               <UserAvatar
@@ -252,9 +256,9 @@ export function ForumReplyBar({
               />
             ) : null}
             <div className="min-w-0 flex-1">
-              <ForumReplyFullscreenContext.Provider value={{ fullscreen, setFullscreen }}>
+              <ForumReplyLayoutContext.Provider value={{ fullscreen, setFullscreen, setMobileEmojiOpen }}>
                 {children}
-              </ForumReplyFullscreenContext.Provider>
+              </ForumReplyLayoutContext.Provider>
             </div>
           </div>
         </div>
