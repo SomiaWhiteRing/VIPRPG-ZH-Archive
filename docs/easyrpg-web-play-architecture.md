@@ -41,10 +41,10 @@
   -> 生成 pack-index.json
   -> IndexedDB 标记 ready
   -> 取得资源共享锁，校验 pack 索引与文件长度
-  -> iframe 加载 index.js，创建专用播放器 Worker 与 AudioWorklet
-  -> Worker 加载 easyrpg-player.js/wasm/data，挂载 WORKERFS 与 IDBFS
+  -> iframe 加载 index.js，创建游戏 Worker、音频 Worker 与 AudioWorklet
+  -> 两个 Worker 加载同一 JS/wasm/data，分别挂载 WORKERFS；只有游戏 Worker 挂载 IDBFS
   -> IDBFS 恢复完成后启动；引擎同步读取本地 pack 切片
-  -> OffscreenCanvas 输出画面，AudioWorklet 输出混音块
+  -> OffscreenCanvas 输出画面；音频 Worker 独立解码混音，经 MessagePort 直接供给 AudioWorklet
 ```
 
 ## 3. URL 和版本键
@@ -57,6 +57,8 @@ GET /play/player.html
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-worker.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-audio.js
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-audio-worker.js
+GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-files.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.wasm
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/easyrpg-player.data
@@ -246,13 +248,18 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 `public/play/runtime/easyrpg/{version}/` 只保留一套当前运行组件：
 
 - `index.js`：播放器页面入口，原始构建文件名为 `player-host.js`。
-- `player-worker.js`、`player-audio.js`：引擎 Worker 与音频输出。
+- `player-worker.js`、`player-audio-worker.js`、`player-audio.js`：游戏 Worker、原生解码与混音 Worker、音频输出。
+- `player-files.js`、`web-audio.md`：有容量上限的本地文件缓存及音频架构说明。
 - `easyrpg-player.js`、`easyrpg-player.wasm`、`easyrpg-player.data`：引擎及共用 SoundFont。
 - `player-movie.js`、`player-movie-worker.js`、`movie-decoder.js`、`movie-decoder.wasm`：按需加载的视频播放与精简 FFmpeg 解码器。
 - `movie-decoder.LICENSE.txt`、`web-movies.md`：解码器许可及构建、格式范围说明。
 - `COPYING`、`SOURCE.json`：许可证、来源、文件摘要。
 
 React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首个游戏画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
+
+音频 Worker 运行同一个 WASM 模块的独立实例，复用 C++ 解码器、混音器和音效缓存，不启动游戏、不挂载存档。音频指令与 MIDI 播放状态走 Worker 间 MessagePort；PCM 由音频 Worker 直接发给 AudioWorklet，不经过游戏或网页转发。音色库在启动阶段初始化。停止时两个 Worker 一同释放；运行组件升级不改变安装键、pack 或存档格式。
+
+两个实例各有 32 MiB 的原文件字节 LRU 缓存：不超过 16 MiB 的文件整文件读取，大文件按 512 KiB 分块；解码器的小读取直接命中内存，缓存淘汰不改变已打开文件的位置。音频队列最多 3 个已排队或在途的 1024 帧块，48 kHz 下约 64 ms；欠载恢复等待两个块并以 64 个样本渐入/渐出。独立供音能够隔离游戏和网页停顿，但音频线程自身的昂贵解码仍需实机测量，不能承诺任意设备零停顿。
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
@@ -308,7 +315,7 @@ const persisted = await navigator.storage.persist();
 
 ## 15. 当前验收边界
 
-2026-09-22 已在 Chromium 151.0.7922.34 验证当前 Worker 运行包 `2026.9.2-site-d65072755356`：
+2026-09-22 在 Chromium 151.0.7922.34 验证了首版 Worker 运行包 `2026.9.2-site-d65072755356`：
 
 - 安装键的定向检查通过：替换播放器版本或 ZIP 构建版本，安装键保持一致；替换归档、manifest 或本地格式，安装键改变。导入包与网站生产构建中的运行文件逐字节一致。
 - 隔离 D1/R2 的完整 `flow --game` 回归通过：官方 TestGame 实际菜单存档、IDBFS 写入、站内离页和返回、刷新读档、F4 网页全屏、WASM 加载中离页，以及中断安装后重装并保留存档。AudioWorklet 加载取消使用未完成的 `addModule()` Promise 注入，验证相同等待点的释放；浏览器请求拦截无法观测该加载。
@@ -319,7 +326,15 @@ const persisted = await navigator.storage.persist();
 
 `scripts/easyrpg-flow-check.ts` 通过 Playwright 观察真实 Worker；`scripts/easyrpg-worker-check.mjs` 使用官方游戏数据库和生成的最小事件场景，性能采样只存在于测试中。运行方法见[维护与回归手册](./maintenance-regression.md#easyrpg-官方游戏回归)。报告与截图保存在忽略的 `output/easyrpg/`。
 
-上述结果证明当前方案在测试环境可玩，不是所有游戏或物理手机的兼容认证。超大图片首次解码仍可能卡帧或使音频欠载；尚未验证 Android 实机、非 Chromium 浏览器和所有 Maniac 扩展。
+2026-09-24 音频独立 Worker 版本 `2026.9.2-site-8f05deecdd5c` 完成以下定向验证：
+
+- 当前网站包连续换图 47 次没有缺图帧，运行期间没有素材 HTTP 请求；采样 288 帧，帧间隔 P95 为 19.6 毫秒、最大 23.1 毫秒。
+- 分别在游戏 Worker、页面线程注入 500 毫秒忙等待后，音频仍持续输出，欠载计数为 0。退出时两个 Worker 均释放；存档失败保留会话并允许重试。
+- 使用预生产作品 2 的 WAV、OGG、MP3 原始音频和官方 TestGame 的 MIDI，在隔离场景中验证首次播放、重复切换、暂停恢复、音量与 SoundFont 切换。该轮欠载为 0，排除故意注入停顿后的最大帧间隔为 24.5 毫秒。原始文件 SHA-256 已与游戏清单核对；这不是原游戏所有场景的逐一实玩。
+- 缓存单元检查覆盖小读取合并、随机定位、跨块读取、EOF 和 32 MiB 上限下的淘汰重读；供音检查覆盖欠载淡出和恢复水位。
+- 当前包的隔离 D1/R2 完整 `flow --game` 回归通过：游戏菜单存档、IDBFS 写入、离页释放两个 Worker、返回与刷新读档、全屏、WASM/AudioWorklet 启动取消、卸载后中断安装及重装保留存档。旧检查中的固定标题、已移除的重装按钮和中断安装状态等待已与当前界面对齐。
+
+上述结果是本机观测，不是所有游戏或物理手机的兼容认证。超大图片首次解码仍可能卡帧；音频已独立，但非常昂贵的音频解码仍可能耗尽供音缓冲。尚未验证 Android 实机、非 Chromium 浏览器和所有 Maniac 扩展。
 
 - 已发布且存在当前已发布归档版本的作品显示在线游玩入口。
 - RPG Maker 2003 Maniac 作品显示兼容性提示。

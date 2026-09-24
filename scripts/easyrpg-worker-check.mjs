@@ -133,6 +133,7 @@ try {
                         window.audioStats = event.data;
                     }
                 });
+                this.port.start();
             }
         };
     });
@@ -181,6 +182,17 @@ try {
     assert.ok(changes.length >= 47, 'all cold and warm pictures displayed');
     assert.equal(bad.length, 0, 'no missing picture frames');
     assert.deepEqual(report.requestsDuringSwitch, [], 'game reads remain local');
+    // The audio producer must remain independent of BOTH the game and the page.
+    const mixer = page.workers().find(w => w.url().endsWith('/player-audio-worker.js'));
+    assert.ok(mixer, 'dedicated native audio mixer');
+    const beforeStall = await page.evaluate(() => window.audioStats);
+    await worker.evaluate(() => { const end = performance.now() + 500; while (performance.now() < end) { /* Deliberate CPU stall. */ } });
+    await page.evaluate(() => { const end = performance.now() + 500; while (performance.now() < end) { /* Deliberate CPU stall. */ } });
+    await page.waitForTimeout(400);
+    const afterStall = await page.evaluate(() => window.audioStats);
+    assert.equal(afterStall.underruns, beforeStall.underruns, 'stalled game/page does not starve audio');
+    assert.ok(afterStall.nonzero - beforeStall.nonzero > 300, 'audio continues across stalled game/page');
+    report.audioIsolation = { before: beforeStall, after: afterStall };
     const screenshot = await page.evaluate(async () => { const result = await window.player.captureScreenshot(); return { width: result.width, height: result.height, bytes: Array.from(new Uint8Array(await result.blob.arrayBuffer())) }; });
     assert.equal(screenshot.width, 320);
     assert.equal(screenshot.height, 240);
@@ -205,7 +217,7 @@ try {
     const failure = await page.evaluate(() => window.player.stop().then(() => '', error => error.message));
     assert.match(failure, /injected write failure/);
     assert.deepEqual(await worker.evaluate(() => Array.from(engine.FS.readFile('/work-saves/99991/retry-check'))), [17, 29, 43]);
-    const closed = worker.waitForEvent('close');
+    const closed = Promise.all([worker, mixer].map(w => w.waitForEvent('close')));
     await page.evaluate(() => window.player.stop());
     await closed;
     const persisted = await page.evaluate(() => new Promise((resolve, reject) => {

@@ -1,15 +1,15 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/Player",
   "revision": "bec5c46f2043334329a9b6c4dcf4ed660c81d553",
-  "version": "2026.9.2-site-295cdebf557d",
-  "build": "local-emscripten-5.0.5-2026-09-23-web-movies",
-  "artifact": "EasyRPG-Player-Kai-web-movies.zip",
-  "archiveSha256": "295cdebf557d3c31fc94d3034419a50e38519a20da6eaca715cd03bc28c82acd",
+  "version": "2026.9.2-site-8f05deecdd5c",
+  "build": "local-emscripten-5.0.5-2026-09-24-audio-worker",
+  "artifact": "EasyRPG-Player-Kai-web-audio.zip",
+  "archiveSha256": "8f05deecdd5cc760870ab1d47623d480f751ed048e22e8825d6dbf52c06a575a",
   "source": "https://github.com/SomiaWhiteRing/Player/tree/bec5c46f2043334329a9b6c4dcf4ed660c81d553",
   "license": "https://github.com/SomiaWhiteRing/Player/blob/bec5c46f2043334329a9b6c4dcf4ed660c81d553/COPYING",
   "sourceState": "working-tree",
-  "sourceSnapshot": "site-web-movies-source-fc88c7981cbd.zip",
-  "sourceSnapshotSha256": "fc88c7981cbdbad44321189f46277d1bffd27586fc2c5760ccba98a13a26625e",
+  "sourceSnapshot": "site-web-audio-source-e6f569838a8e.zip",
+  "sourceSnapshotSha256": "e6f569838a8e207c791ea352c3bdab3f351b0a84df0c656f316dd4c08011f1d3",
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
@@ -23,28 +23,40 @@
   "patches": [],
   "files": {
     "index.js": {
-      "size": 12621,
-      "sha256": "31ab1c6c31698fea828e289d909b4c75e9820ef4d36d656eb3d262552d3e90a6"
+      "size": 13767,
+      "sha256": "c9923fa93706ab31b778fd442151bbbe32cd3fb1f3cab584e76685b1ec533ab3"
     },
     "easyrpg-player.js": {
-      "size": 124399,
-      "sha256": "f6e102412ccc6b2d9ed7063717afc46d48b687b2747be874b3b163fa12ff08c1"
+      "size": 125364,
+      "sha256": "59c94ada9fccd77e7794dc01d53f78b4a7ce8e8b9403e4228258cbd953c6d27b"
     },
     "easyrpg-player.wasm": {
-      "size": 9552976,
-      "sha256": "fa918fa1bfdfcee36f30b464b8a4f44aa63a7339e2217e6078bd27e31d64a719"
+      "size": 9600965,
+      "sha256": "b9a490a245cd4f733c095138303ab19989998dc754f5da99ca707c16e48e69f0"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "player-worker.js": {
-      "size": 5764,
-      "sha256": "5601a6b7b589e1067df92146b8bea6edf6d42ae6a6df8bea94c1bd10dad0b96e"
+      "size": 6579,
+      "sha256": "490d3793f98ef40dbd15ff8da9a782d6db6cd1b974aeac8edd481b92a776ec49"
     },
     "player-audio.js": {
-      "size": 1060,
-      "sha256": "4b4f0509f0bf01c86e03add64ac81cada75561ecb2f0ba9ec1b8f6d53901dba7"
+      "size": 1858,
+      "sha256": "6174d3e6fe61fd9f970942a94a8045a64dbe568a314073e6b464a82a89d5c9e2"
+    },
+    "player-audio-worker.js": {
+      "size": 2347,
+      "sha256": "827ab32b8418c9d7cf4a90d4074b9aa49b130f351ad487178daca1ec0be78608"
+    },
+    "player-files.js": {
+      "size": 1939,
+      "sha256": "3cd9c38df18437e730535caf7b966e5c002e89b3384d580b759f3b1db9304f45"
+    },
+    "web-audio.md": {
+      "size": 2869,
+      "sha256": "0c6ad362cb851f51f529ffb891842ae5f696093bbdd6afb69bcf8a5b5756ff45"
     },
     "player-movie.js": {
       "size": 8085,
@@ -67,8 +79,8 @@
       "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
     },
     "web-movies.md": {
-      "size": 4585,
-      "sha256": "16d96bf93784fbc87bfe34767c9aa8d36c15fa02ce0c041c1e7f310cfa8df25c"
+      "size": 4647,
+      "sha256": "96ea57e1c216f79733d8f4b28591265e3b0884ca560d5ff47e15f5a728ad712f"
     }
   }
 }

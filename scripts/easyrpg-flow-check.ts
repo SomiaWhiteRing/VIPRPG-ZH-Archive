@@ -118,13 +118,20 @@ export async function verifyEasyRpgGame(
     throw new Error(`No save created: ${path}`);
   }, savePath);
   const leavePlayer = async () => {
+    const title = await page.getByRole("heading", { level: 1 }).innerText();
+    const closed = Promise.all(page.workers()
+      .filter(worker => /\/player-(?:audio-)?worker\.js$/.test(worker.url()))
+      .map(worker => worker.waitForEvent("close")));
     const documentData = page.waitForResponse(response =>
       new URL(response.url()).pathname === `/games/${workId}.data`,
     );
     await page.locator(`a[href="/games/${workId}"]`).first().click();
     assert.equal((await documentData).status(), 200, "application page data remains available");
     await page.waitForURL(`${origin}/games/${workId}`);
-    await page.getByRole("heading", { name: "System Archive", exact: true }).waitFor();
+    const heading = page.getByRole("heading", { level: 1 });
+    await heading.waitFor();
+    assert.equal(await heading.innerText(), title, "detail and play pages show the same work title");
+    await closed;
   };
 
   try {
@@ -262,6 +269,11 @@ export async function verifyEasyRpgGame(
     await page.goto(playUrl);
     await page.locator('[data-web-play-status="ready"]').waitFor();
     await page.locator("summary").filter({ hasText: "本地数据与诊断" }).click();
+    await page.getByRole("button", { name: "卸载游戏", exact: true }).click();
+    const uninstall = page.getByRole("alertdialog", { name: "卸载游戏？" });
+    await uninstall.getByRole("button", { name: "卸载游戏", exact: true }).click();
+    await uninstall.waitFor({ state: "hidden" });
+    await page.locator('[data-web-play-action="install"]').waitFor();
     let releaseDownload!: () => void;
     const downloadHold = new Promise<void>((resolve) => {
       releaseDownload = resolve;
@@ -271,9 +283,10 @@ export async function verifyEasyRpgGame(
       await downloadHold;
       await route.abort().catch(() => undefined);
     });
-    const workerReady = page.waitForEvent("worker");
-    await page.getByRole("button", { name: "重新安装", exact: true }).click();
-    const installer = await workerReady;
+    const [installer] = await Promise.all([
+      page.waitForEvent("worker"),
+      page.locator('[data-web-play-action="install"]').click(),
+    ]);
     await page.locator('[data-web-play-status="installing"]').waitFor();
     await page.locator(`a[href="/games/${workId}"]`).first().click();
     const confirmation = page.getByRole("alertdialog");
@@ -292,7 +305,8 @@ export async function verifyEasyRpgGame(
     releaseDownload();
     await page.context().unroute(downloadRoute);
     await page.goBack();
-    await page.locator('[data-web-play-status="installing"]').waitFor();
+    // Interrupted storage buckets can already have been cleaned on re-entry.
+    await page.locator('[data-web-play-action="install"]').waitFor();
     await page.locator('[data-web-play-action="install"]').click();
     await page
       .locator('[data-web-play-status="ready"]')
@@ -320,11 +334,13 @@ export async function verifyEasyRpgGame(
             "game save",
             "IDBFS persistence",
             "SPA exit",
+            "game and audio Workers close on exit",
             "Back/reenter",
             "document reload and load-game-id",
             "F4 page fullscreen enter/exit",
             "WASM and AudioWorklet startup exit",
             "install leave/cancel",
+            "uninstall and install through current UI",
             "reinstall with save preserved",
           ],
         },

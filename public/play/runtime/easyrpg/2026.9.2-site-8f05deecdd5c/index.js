@@ -10,6 +10,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   const page = window.parent;
   const context = new AudioContext({latencyHint: 'interactive'});
   const worker = new Worker(new URL('player-worker.js', base));
+  const audioWorker = new Worker(new URL('player-audio-worker.js', base));
+  let audioReadyResolve, audioReadyReject;
+  const audioReady = new Promise((resolve, reject) => { audioReadyResolve = resolve; audioReadyReject = reject; });
+  void audioReady.catch(() => {});
   let node, keys = {}, width = 320, height = 240, gamepadFrame = 0;
   let readyResolve, readyReject, stoppedResolve, stoppedReject, screenshot;
   let closed = false, started = false, stopping = false, stopPromise;
@@ -22,6 +26,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     console.error(message);
     const error = new Error(message);
     readyReject(error); stoppedReject?.(error); screenshot?.reject(error);
+    audioReadyReject(error);
     screenshot = undefined;
     options.onError?.(error);
   };
@@ -75,7 +80,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       node.port.postMessage({type: 'start'});
       readyResolve();
     } else if (data.type === 'size') { width = data.width; height = data.height; }
-    else if (data.type === 'audio') node.port.postMessage(data, [data.pcm.buffer]);
     else if (data.type === 'log') (console[data.level] || console.log)(data.message);
     else if (data.type === 'error') report(data.message);
     else if (data.type === 'save-error') {
@@ -118,6 +122,12 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       movie?.updateRect(movieRect);
     }
   };
+  audioWorker.onmessage = ({data}) => {
+    if (data.type === 'ready') audioReadyResolve(data.capabilities);
+    else if (data.type === 'log') (console[data.level] || console.log)(data.message);
+    else if (data.type === 'error') report(data.message);
+  };
+  audioWorker.onerror = event => report(event.message || '音频组件启动失败');
   worker.onerror = event => report(event.message);
   worker.onmessageerror = () => report('播放器消息无法读取。');
 
@@ -203,17 +213,25 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   const shutdown = async () => {
     closed = true; controller.abort(); cancelAnimationFrame(gamepadFrame); stopMovie(); node?.disconnect();
     screenshot?.reject(new Error('游戏已停止。')); screenshot = undefined;
-    try { await context.close(); } finally { worker.terminate(); }
+    try { await context.close(); } finally { worker.terminate(); audioWorker.terminate(); }
   };
   try {
     // Cancel/timeout must also end startup while the audio module is loading.
     await Promise.race([context.audioWorklet.addModule(new URL('player-audio.js', base)), ready]);
     node = new AudioWorkletNode(context, 'easyrpg-audio', {numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]});
-    node.port.onmessage = () => send({type: 'audio'});
+    const audioChannel = new MessageChannel();
+    const controlChannel = new MessageChannel();
+    node.port.postMessage({type: 'connect', port: audioChannel.port1}, [audioChannel.port1]);
     node.connect(context.destination);
+    audioWorker.postMessage({type: 'start', runtimeBase: base, packages: options.packages,
+      workId: options.workId, sampleRate: context.sampleRate,
+      audioPort: audioChannel.port2, controlPort: controlChannel.port1},
+      [audioChannel.port2, controlChannel.port1]);
+    const audioCapabilities = await Promise.race([audioReady, ready]);
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, packages: options.packages,
-      workId: options.workId, sampleRate: context.sampleRate, arguments: options.arguments || []}, [offscreen]);
+      workId: options.workId, sampleRate: context.sampleRate, arguments: options.arguments || [],
+      audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);
     await ready;
     focus();
     gamepadFrame = requestAnimationFrame(pollGamepad);
