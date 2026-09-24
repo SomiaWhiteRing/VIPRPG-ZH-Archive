@@ -69,7 +69,6 @@ import { formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
-  ORIGINAL_RELEASE_DATE_REQUIRED_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { cn } from "@/lib/ui/cn";
@@ -515,12 +514,8 @@ export function UploadClient({
       return;
     }
     const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
-    if (!releaseDate?.value) {
-      setSubmitError(
-        releaseDate
-          ? ORIGINAL_RELEASE_DATE_REQUIRED_ERROR
-          : ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
-      );
+    if (!releaseDate) {
+      setSubmitError(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
       document.getElementById("upload-release-date")?.focus();
       return;
     }
@@ -1213,7 +1208,6 @@ function MetadataFields({
           className="md:col-span-2"
           controlId="upload-release-date"
           label="发布日期"
-          required
         >
           <PrecisionDatePicker
             disabled={disabled}
@@ -1221,8 +1215,7 @@ function MetadataFields({
             onChange={(value) =>
               setForm((current) => ({ ...current, originalReleaseDate: value }))
             }
-            placeholder="选择或粘贴作品最初发表的日期"
-            required
+            placeholder="选择或粘贴作品最初发表的日期（可留空）"
             value={form.originalReleaseDate}
           />
         </WorkbenchField>
@@ -1676,7 +1669,6 @@ function buildMetadata(
 ): ArchiveCommitMetadata {
   const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
   if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  if (!releaseDate.value) throw new Error(ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
   const characterDefaults = groupCharacterDefaults(defaults.characters);
   const characters = form.characters.map((credit, index) => {
     const selection = credit.selection;
