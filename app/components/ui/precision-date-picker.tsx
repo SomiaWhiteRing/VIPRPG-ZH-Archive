@@ -4,7 +4,7 @@ import type { OriginalReleasePrecision } from "@/lib/original-release-date";
 import { parseOriginalReleaseDate } from "@/lib/original-release-date";
 import { parsePastedReleaseDates } from "@/lib/pasted-release-date";
 import { zhCN } from "date-fns/locale/zh-CN";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
@@ -224,10 +224,31 @@ export function PrecisionDatePicker({
         value={displayValue}
         wrapperClassName="w-full"
       />
-      <CalendarDays
-        aria-hidden
-        className="pointer-events-none absolute right-3 top-3 size-4 text-muted"
-      />
+      {!required && value ? (
+        <Button
+          aria-label="清除日期"
+          className="absolute right-1 top-1 size-8 text-muted"
+          disabled={disabled}
+          onClick={() => {
+            pasteGenerationRef.current += 1;
+            setPasteError(null);
+            setPasteCandidates([]);
+            setPrecision("year");
+            onChange("");
+            pickerRef.current?.setOpen(false);
+          }}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <X aria-hidden className="size-4" />
+        </Button>
+      ) : (
+        <CalendarDays
+          aria-hidden
+          className="pointer-events-none absolute right-3 top-3 size-4 text-muted"
+        />
+      )}
       {pasteError ? (
         <p
           className="mt-1 text-sm text-red-700"

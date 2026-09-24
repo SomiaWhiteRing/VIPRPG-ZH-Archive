@@ -68,7 +68,6 @@ import {
 } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
-  ORIGINAL_RELEASE_DATE_REQUIRED_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import type { StaffCredit } from "@/lib/staff-credits";
@@ -550,8 +549,6 @@ export async function updateOwnedWork(
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate)
     throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  if (!releaseDate.value)
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
   if (!(["published", "hidden"] as const).includes(input.status)) {
     throw new HttpError(400, "作品状态不合法");
   }
@@ -967,8 +964,6 @@ export async function createExternalWork(
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate)
     throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  if (!releaseDate.value)
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
   if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
   const downloadUrl = normalizeHttpUrl(input.downloadUrl, "外部下载地址");
   if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空");

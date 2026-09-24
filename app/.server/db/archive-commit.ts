@@ -39,7 +39,6 @@ import { HttpError } from "@/lib/http";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
-  ORIGINAL_RELEASE_DATE_REQUIRED_ERROR,
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 
@@ -838,9 +837,6 @@ function normalizeMetadata(
     throw new HttpError(400, "Unsupported game language");
   }
   const releaseDate = parseOriginalReleaseDate(game.originalReleaseDate);
-  if (releaseDate && !releaseDate.value) {
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_REQUIRED_ERROR);
-  }
   if (!releaseDate || releaseDate.precision !== game.originalReleasePrecision) {
     throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
   }
