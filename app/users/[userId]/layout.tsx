@@ -32,9 +32,14 @@ export default function PublicUserLayout() {
           size={80}
         />
         <div className="min-w-0">
-          <h1 className="m-0 truncate text-2xl font-extrabold">
-            {user.displayName}
-          </h1>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="m-0 min-w-0 truncate text-2xl font-extrabold">
+              {user.displayName}
+            </h1>
+            <span className="shrink-0 whitespace-nowrap text-xs text-muted">
+              UID：{user.id}
+            </span>
+          </div>
           {user.profileVisibility.bio ? (
             <p className="mt-2 whitespace-pre-wrap text-sm text-muted">
               {user.bio || "这位用户还没有填写简介。"}

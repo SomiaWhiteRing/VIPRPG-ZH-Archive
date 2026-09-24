@@ -116,9 +116,14 @@ export default function MePage() {
             size={64}
           />
           <div className="min-w-0">
-            <strong className="block truncate text-lg">
-              {user.displayName}
-            </strong>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <strong className="min-w-0 truncate text-lg">
+                {user.displayName}
+              </strong>
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted">
+                UID：{user.id}
+              </span>
+            </div>
             <p className="mt-1 line-clamp-2 text-sm text-muted">
               {user.bio || "还没有填写简介。"}
             </p>
