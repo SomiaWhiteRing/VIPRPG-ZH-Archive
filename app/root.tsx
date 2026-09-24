@@ -21,7 +21,6 @@ import { SiteFooter } from "./components/site-footer";
 import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
 import { GameStorageBoundary } from "./components/game-storage-boundary";
-import { DiscussionVisitBoundary } from "./discussions/visit";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
 import "./globals.css";
@@ -89,7 +88,6 @@ export default function App() {
   const { session } = useLoaderData<typeof loader>();
   return (
     <>
-      <DiscussionVisitBoundary />
       <GameStorageBoundary />
       <SiteHeaderNav
         session={session}

@@ -305,10 +305,12 @@ CREATE TABLE IF NOT EXISTS works (
 CREATE INDEX IF NOT EXISTS idx_works_original_title
   ON works(original_title);
 
-CREATE TABLE IF NOT EXISTS work_engagement_stats (
-  work_id INTEGER PRIMARY KEY REFERENCES works(id) ON DELETE CASCADE,
-  view_count INTEGER NOT NULL DEFAULT 0 CHECK (view_count >= 0),
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- Rare administrative transfers only; all actual view statistics live in the DO.
+CREATE TABLE IF NOT EXISTS view_stat_merges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id INTEGER NOT NULL,
+  target_id INTEGER NOT NULL,
+  CHECK (source_id <> target_id)
 );
 
 CREATE TABLE IF NOT EXISTS user_work_entries (
@@ -1340,7 +1342,6 @@ CREATE TABLE forum_topics (
   pinned_at TEXT,
   featured_at TEXT,
   featured_by INTEGER REFERENCES users(id),
-  view_count INTEGER NOT NULL DEFAULT 0 CHECK(view_count >= 0),
   next_post_number INTEGER NOT NULL DEFAULT 2 CHECK(next_post_number >= 2),
   revision TEXT NOT NULL,
   write_token TEXT NOT NULL,

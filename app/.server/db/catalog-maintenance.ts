@@ -1,3 +1,4 @@
+import { drainViewMerges } from "@/app/.server/views/service";
 import { getD1 } from "@/app/.server/db/d1";
 import { findUserByEmail } from "@/app/.server/db/users";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -277,13 +278,9 @@ export async function mergeWorks(
     db.prepare(`UPDATE user_showcase_entries SET work_id=? WHERE work_id=?`).bind(target, source),
     db
       .prepare(
-        `INSERT INTO work_engagement_stats(work_id,view_count) SELECT ?,view_count FROM work_engagement_stats WHERE work_id=?
-      ON CONFLICT(work_id) DO UPDATE SET view_count=view_count+excluded.view_count`,
+        `INSERT INTO view_stat_merges(source_id,target_id) VALUES(?,?)`,
       )
-      .bind(target, source),
-    db
-      .prepare(`DELETE FROM work_engagement_stats WHERE work_id=?`)
-      .bind(source),
+      .bind(source, target),
     db
       .prepare(`UPDATE comments SET work_id=? WHERE work_id=?`)
       .bind(target, source),
@@ -346,6 +343,9 @@ export async function mergeWorks(
       );
     throw error;
   }
+  runtime.execution.waitUntil(drainViewMerges(runtime.env).catch(() => {
+    console.error("View merge deferred to scheduled retry");
+  }));
 }
 
 async function assertWorkMergeDeclarations(

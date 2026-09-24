@@ -92,7 +92,7 @@ type Props = {
   viewer: ForumViewer;
   emojis: FaceEmoji[];
   initialDetail?: ForumDetail;
-  topics?: ForumPage<ForumTopic>;
+  topics?: ForumPage<ForumTopic & { views: number }>;
   selected?: ForumTag[];
   popular?: ForumTag[];
   featured?: boolean;

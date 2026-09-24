@@ -47,6 +47,14 @@
         "limit": 5,
         "period": 60
       }
+    },
+    {
+      "name": "VIEW_RATE_LIMITER",
+      "namespace_id": "<production-view-rate-limit-namespace-id>",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
     }
   ],
   "vars": {
@@ -96,6 +104,14 @@
             "limit": 5,
             "period": 60
           }
+        },
+        {
+          "name": "VIEW_RATE_LIMITER",
+          "namespace_id": "<staging-view-rate-limit-namespace-id>",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
         }
       ],
       "vars": {
@@ -106,7 +122,29 @@
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.25
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "VIEW_STATS",
+            "class_name": "ViewStats"
+          }
+        ]
       }
     }
+  },
+  "exports": {
+    "ViewStats": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "VIEW_STATS",
+        "class_name": "ViewStats"
+      }
+    ]
   }
 }

@@ -84,7 +84,6 @@ export type ForumTopic = {
   updatedAt: string;
   activeAt: string;
   replies: number;
-  views: number;
   lastAuthor: ForumAuthor | null;
   revision: string;
   capabilities: ForumCapabilities;

@@ -1,5 +1,5 @@
 import { assertSameOrigin, SameOriginError } from "@/app/.server/auth/origin";
-import { recordWorkView } from "@/app/.server/db/work-community";
+import { recordView } from "@/app/.server/views/service";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { jsonError } from "@/lib/http";
@@ -11,8 +11,9 @@ export async function POST(
 ) {
   try {
     assertSameOrigin(runtime, request);
-    await recordWorkView(
+    await recordView(
       runtime,
+      "work",
       parsePositiveId((await context.params).workId, "work id"),
     );
     return new Response(null, { status: 204 });

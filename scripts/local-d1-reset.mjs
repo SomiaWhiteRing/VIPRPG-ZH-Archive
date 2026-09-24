@@ -1,11 +1,15 @@
 import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { resolve, sep } from "node:path";
 import { runWrangler } from "./run-wrangler.mjs";
 
 const databaseName = process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod";
-// ponytail: delete the generated local D1 directory so cyclic foreign keys do not
-// make a table-by-table reset unreliable; this never touches remote databases.
-rmSync(join(".wrangler", "state", "v3", "d1"), { recursive: true, force: true });
+// Reset content IDs and their anonymous counters together. R2 is retained.
+const localState = resolve(".wrangler", "state", "v3");
+for (const kind of ["d1", "do"]) {
+  const target = resolve(localState, kind);
+  if (!target.startsWith(localState + sep)) throw new Error("Invalid local reset path");
+  rmSync(target, { recursive: true, force: true });
+}
 
 await runWrangler([
   "d1",

@@ -30,6 +30,13 @@ function configure(resources, base) {
   const result = { ...base };
   for (const key of infrastructure)
     if (key in resources) result[key] = resources[key];
+  for (const required of base.ratelimits ?? []) {
+    const actual = result.ratelimits?.find((binding) => binding.name === required.name);
+    if (!actual || !/^\d+$/.test(actual.namespace_id))
+      throw new Error(`Configure an account-unique namespace_id for ${required.name}`);
+    // The view policy belongs to the application; namespace IDs remain private configuration.
+    if (required.name === "VIEW_RATE_LIMITER") actual.simple = required.simple;
+  }
   return result;
 }
 const result = configure(resourceConfig, template);
