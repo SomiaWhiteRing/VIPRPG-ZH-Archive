@@ -32,6 +32,7 @@ import type {
 } from "@/lib/dto/db/work-community";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
+import { viewCounts } from "@/app/.server/views/service";
 
 export type { CommentTarget } from "@/lib/comment-target";
 
@@ -59,23 +60,6 @@ type CommentRow = {
   liked_by_me?: number;
   root_status?: "published" | "hidden" | "deleted" | null;
 };
-
-export async function recordWorkView(
-  runtime: AppRuntime,
-  workId: number,
-): Promise<void> {
-  const result = await getD1(runtime)
-    .prepare(
-      `INSERT INTO work_engagement_stats(work_id, view_count, updated_at)
-       SELECT id,1,CURRENT_TIMESTAMP FROM public_works WHERE id=?
-       ON CONFLICT(work_id) DO UPDATE SET
-         view_count = work_engagement_stats.view_count + 1,
-         updated_at = CURRENT_TIMESTAMP`,
-    )
-    .bind(workId)
-    .run();
-  if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
-}
 
 export async function recordWorkPlayed(
   runtime: AppRuntime,
@@ -140,7 +124,6 @@ export async function getWorkCommunitySummary(
   const row = await getD1(runtime)
     .prepare(
       `SELECT
-         COALESCE((SELECT view_count FROM work_engagement_stats WHERE work_id = w.id), 0) AS view_count,
          (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS player_count,
          (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
@@ -149,14 +132,13 @@ export async function getWorkCommunitySummary(
     )
     .bind(userId ?? 0, workId)
     .first<{
-      view_count: number;
       player_count: number;
       comment_count: number;
       favorited_by_me: number;
     }>();
   if (!row) throw new HttpError(404, "作品不存在");
   return {
-    viewCount: row.view_count,
+    viewCount: (await viewCounts(runtime, "work", [workId]))[workId],
     playerCount: row.player_count,
     commentCount: row.comment_count,
     favoritedByMe: row.favorited_by_me === 1,

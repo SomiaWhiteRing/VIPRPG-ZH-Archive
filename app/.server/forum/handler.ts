@@ -28,9 +28,9 @@ import {
   rawContent,
   unavailable,
 } from "./queries";
-import type { ForumRequestRuntime } from "./request";
 import { assertForumOrigin, readForumJson, requireForumUser } from "./request";
 import { forumTagRecommendations } from "./tag-heat";
+import { recordView, topicViews } from "@/app/.server/views/service";
 
 function result(data: object) {
   return Response.json(
@@ -39,7 +39,8 @@ function result(data: object) {
   );
 }
 
-async function read(ctx: ForumRequestRuntime, request: Request) {
+async function read(runtime: AppRuntime, request: Request) {
+  const ctx = getForumRequestRuntime(runtime);
   const p = new URL(request.url).searchParams;
   const id = (key: string) => parsePositiveId(p.get(key) ?? "");
   const tags = p.getAll("tag").map((v) => parsePositiveId(v));
@@ -69,14 +70,14 @@ async function read(ctx: ForumRequestRuntime, request: Request) {
         ),
       });
     }
-    case "list":
-      return result(
-        await publicTopicList(ctx, {
-          tags,
-          featured: p.get("featured") === "1",
-          page: forumPage(p.get("page")),
-        }),
-      );
+    case "list": {
+      const page = await publicTopicList(ctx, {
+        tags,
+        featured: p.get("featured") === "1",
+        page: forumPage(p.get("page")),
+      });
+      return result({ ...page, items: await topicViews(runtime, page.items) });
+    }
     case "search":
       return result(
         await indexedForumSearch(ctx, {
@@ -132,17 +133,13 @@ async function read(ctx: ForumRequestRuntime, request: Request) {
   }
 }
 
-async function write(ctx: ForumRequestRuntime, request: Request) {
+async function write(runtime: AppRuntime, request: Request) {
+  const ctx = getForumRequestRuntime(runtime);
   assertForumOrigin(ctx, request);
   const input = await readForumJson(request);
   if (input.op === "view") {
     const topicId = parsePositiveId(String(input.topicId));
-    await ctx.db
-      .prepare(
-        `UPDATE forum_topics SET view_count=view_count+1 WHERE id=? AND EXISTS(SELECT 1 FROM forum_public_topics t WHERE t.id=forum_topics.id)`,
-      )
-      .bind(topicId)
-      .run();
+    await recordView(runtime, "topic", topicId);
     return result({});
   }
   const { user } = await requireForumUser(ctx, request);
@@ -191,7 +188,7 @@ async function write(ctx: ForumRequestRuntime, request: Request) {
 
 export async function GET(runtime: AppRuntime, request: Request) {
   try {
-    return await read(getForumRequestRuntime(runtime), request);
+    return await read(runtime, request);
   } catch (error) {
     return jsonError("论坛请求失败。", error);
   }
@@ -199,7 +196,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
-    return await write(getForumRequestRuntime(runtime), request);
+    return await write(runtime, request);
   } catch (error) {
     return jsonError("论坛请求失败。", error);
   }

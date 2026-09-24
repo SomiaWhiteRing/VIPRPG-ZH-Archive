@@ -7,6 +7,9 @@ import { runtimeContext } from "./app/.server/router-context";
 import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
+import { drainViewMerges } from "./app/.server/views/service";
+
+export { ViewStats } from "./app/.server/views/durable-object";
 
 const render = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -65,6 +68,9 @@ app.all("*", async (c) => {
 export default {
   fetch: app.fetch,
   scheduled(controller, env, ctx) {
+    ctx.waitUntil(drainViewMerges(env).catch(() => {
+      console.error("Scheduled view merge retry failed");
+    }));
     ctx.waitUntil(
       runScheduledArchiveGc(env, {
         trigger: "scheduled",

@@ -27,7 +27,6 @@ export type TopicRow = {
   locked: number;
   featured_at: string | null;
   pinned_at: string | null;
-  view_count: number;
   revision: string;
   tag_snapshot: string;
   created_at: string;
@@ -175,7 +174,6 @@ export function mapTopic(
     updatedAt: row.updated_at,
     activeAt: row.active_at,
     replies: row.replies,
-    views: row.view_count,
     lastAuthor: row.last_user_id
       ? author(
           row.last_user_id,

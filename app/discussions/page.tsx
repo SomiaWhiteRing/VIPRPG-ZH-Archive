@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getForumRequestRuntime } from "@/app/.server/forum/context";
 import { publicTopicList } from "@/app/.server/forum/public-queries";
+import { topicViews } from "@/app/.server/views/service";
 import { forumViewer, resolveTags } from "@/app/.server/forum/queries";
 import { forumTagHeat } from "@/app/.server/forum/tag-heat";
 import { routeInput } from "@/app/.server/route-input";
@@ -39,7 +40,10 @@ export async function loader(args: LoaderFunctionArgs) {
     });
     topics = {
       ...result,
-      items: result.items.map((topic) => interactiveTopic(topic, viewer)),
+      items: await topicViews(
+        runtime,
+        result.items.map((topic) => interactiveTopic(topic, viewer)),
+      ),
     };
   } catch (error) {
     if (!(error instanceof HttpError) || error.status !== 400) throw error;

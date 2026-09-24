@@ -1,13 +1,7 @@
-import { useEffect } from "react";
+import { useContentView } from "@/app/components/use-content-view";
 
 export function WorkViewTracker({ workId }: { workId: number }) {
-  useEffect(() => {
-    void fetch(`/api/works/${workId}/view`, {
-      method: "POST",
-      credentials: "same-origin",
-      keepalive: true,
-    }).catch(() => undefined);
-  }, [workId]);
+  useContentView("work", workId);
 
   return null;
 }
