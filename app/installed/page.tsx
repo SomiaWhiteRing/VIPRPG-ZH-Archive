@@ -2,7 +2,6 @@ import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
 import { PageContainer } from "@/app/components/ui/page-container";
@@ -14,9 +13,9 @@ import { busyGameResourceKeys, cleanupExpiredGameResources, deleteLocalGame } fr
 import { readCachedWebPlayCover } from "@/app/play/[archiveVersionId]/web-play-cover";
 import { listWebPlayInstallations } from "@/app/play/[archiveVersionId]/web-play-db";
 import { subscribeGameResourcesChanged } from "@/app/play/[archiveVersionId]/web-play-events";
-import { gameResourceExpiresAt, supportsGameBuckets } from "@/app/play/[archiveVersionId]/web-play-storage";
+import { gameResourceExpiresAt } from "@/app/play/[archiveVersionId]/web-play-storage";
 import type { WebPlayInstallation } from "@/app/play/[archiveVersionId]/web-play-types";
-import { formatBytes } from "@/lib/format";
+import { DISPLAY_TIME_ZONE, formatBytes, formatDateKey, parseTimestamp } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { Check, Clock3, HardDrive, ListChecks, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -214,27 +213,28 @@ function InstalledGameRow({ item, active, actions }: { item: WebPlayInstallation
   );
 }
 
-function dateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 function dateLabel(date: Date): string {
-  return new Intl.DateTimeFormat("zh-CN", { ...(date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {}), month: "long", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: DISPLAY_TIME_ZONE,
+    ...(formatDateKey(date).slice(0, 4) !== formatDateKey(new Date()).slice(0, 4) ? { year: "numeric" as const } : {}),
+    month: "long",
+    day: "numeric",
+  }).format(date);
 }
 
 function groupInstallations(rows: WebPlayInstallation[]) {
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const todayKey = formatDateKey(today);
+  const yesterdayKey = formatDateKey(new Date(today.getTime() - 86_400_000));
   const groups = new Map<string, { key: string; label: string; detail?: string; items: WebPlayInstallation[] }>();
   const sorted = [...rows].sort((a, b) => {
     const rank = (row: WebPlayInstallation) => row.status !== "ready" ? 2 : row.lastPlayedAt ? 0 : 1;
     return rank(a) - rank(b) || (b.lastPlayedAt ?? b.readyAt ?? b.updatedAt).localeCompare(a.lastPlayedAt ?? a.readyAt ?? a.updatedAt);
   });
   for (const row of sorted) {
-    const date = row.lastPlayedAt ? new Date(row.lastPlayedAt) : null;
-    const key = row.status !== "ready" ? "incomplete" : date ? dateKey(date) : "unplayed";
-    const relative = key === dateKey(today) ? "今天" : key === dateKey(yesterday) ? "昨天" : null;
+    const date = row.lastPlayedAt ? parseTimestamp(row.lastPlayedAt) : null;
+    const key = row.status !== "ready" ? "incomplete" : date ? formatDateKey(date) : "unplayed";
+    const relative = key === todayKey ? "今天" : key === yesterdayKey ? "昨天" : null;
     const label = key === "incomplete" ? "未完成安装" : key === "unplayed" ? "尚未游玩" : relative ?? dateLabel(date!);
     if (!groups.has(key)) groups.set(key, { key, label, detail: relative ? dateLabel(date!) : undefined, items: [] });
     groups.get(key)!.items.push(row);

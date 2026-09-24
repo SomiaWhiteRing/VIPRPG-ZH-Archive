@@ -15,7 +15,7 @@ import { useWebPlayScreenshots } from "@/app/play/[archiveVersionId]/web-play-sc
 import { WebPlaySurface } from "@/app/play/[archiveVersionId]/web-play-surface";
 import type { WebPlayInstallation } from "@/app/play/[archiveVersionId]/web-play-types";
 import { easyRpgRuntimeBasePath } from "@/lib/archive/web-play";
-import { formatBytes } from "@/lib/format";
+import { formatBytes, formatDate } from "@/lib/format";
 import { ArrowLeft, CheckSquare2, Gamepad2, HardDrive, Play, RectangleHorizontal, RectangleVertical, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -174,7 +174,7 @@ export function OfflineApp() {
                 <Cover installation={item} />
                 <div className="min-w-0 flex-1">
                   <p className="m-0 truncate font-semibold">{item.title}</p>
-                  <p className="m-0 mt-1 text-xs text-muted">{item.status === "ready" ? formatBytes(item.installedBytes) : "未完成安装"}{item.lastPlayedAt ? ` · ${new Date(item.lastPlayedAt).toLocaleDateString("zh-CN")}` : ""}</p>
+                  <p className="m-0 mt-1 text-xs text-muted">{item.status === "ready" ? formatBytes(item.installedBytes) : "未完成安装"}{item.lastPlayedAt ? ` · ${formatDate(item.lastPlayedAt, { time: false })}` : ""}</p>
                 </div>
                 {!managing && item.status === "ready" ? <Button aria-label={`游玩 ${item.title}`} disabled={!item.workId} onClick={() => setSelected(item)} size="icon" title="离线游玩" type="button"><Play aria-hidden /></Button> : null}
                 {!managing && item.status !== "ready" ? <a className="shrink-0 text-sm text-primary underline" href={`/play/${item.archiveVersionId}`}>重新安装</a> : null}
