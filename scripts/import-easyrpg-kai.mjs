@@ -34,6 +34,7 @@ const files = unzipSync(archive);
 const runtimeFiles = [
   "easyrpg-player.js", "easyrpg-player.wasm", "easyrpg-player.data",
   "player-worker.js", "player-audio.js",
+  "player-audio-worker.js", "player-files.js", "web-audio.md",
   "player-movie.js", "player-movie-worker.js", "movie-decoder.js", "movie-decoder.wasm",
   "movie-decoder.LICENSE.txt", "web-movies.md",
 ];

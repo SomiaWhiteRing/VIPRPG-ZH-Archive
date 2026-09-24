@@ -55,6 +55,7 @@ The source archive and objects remain under the build's `movie-decoder-build/`.
 Deploy the entire Web ZIP at one immutable runtime URL, including:
 
 - `player-host.js`, `player-worker.js`, `player-audio.js`
+- `player-audio-worker.js`, `player-files.js`, `web-audio.md`
 - `easyrpg-player.js`, `easyrpg-player.wasm`, `easyrpg-player.data`
 - `player-movie.js`, `player-movie-worker.js`
 - `movie-decoder.js`, `movie-decoder.wasm`, `movie-decoder.LICENSE.txt`
