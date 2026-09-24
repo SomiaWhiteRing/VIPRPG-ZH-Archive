@@ -1,0 +1,100 @@
+/* Apply native fullscreen geometry in the browser's fullscreen style update,
+   without waiting for React's fullscreenchange state update. */
+#web-player-frame:fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+#web-player-frame::backdrop {
+  background: #000;
+}
+
+/* React Aria tracks pointer, keyboard and assistive-technology interactions.
+   Keep the native fallback before hydration and editing feedback for text fields.
+   Apply the same policy to every focus-visible utility, including portal content. */
+@custom-variant focus-visible {
+  &:focus-visible:where(:root:not([data-focus-visible]) *),
+  &:focus:where(:root[data-focus-visible="true"] *),
+  &:focus:where(
+    input:not([type="button"], [type="checkbox"], [type="color"], [type="file"], [type="hidden"], [type="image"], [type="radio"], [type="range"], [type="reset"], [type="submit"]),
+    textarea,
+    [contenteditable]:not([contenteditable="false"])
+  ) {
+    @slot;
+  }
+}
+
+@layer base {
+  :focus {
+    @apply outline-none;
+
+    @variant focus-visible {
+      @apply outline-solid outline-2 outline-accent outline-offset-2;
+    }
+  }
+}
+
+@theme {
+  --animate-select-roll-open: select-roll-open 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-select-roll-closed: select-roll-closed 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
+  --animate-site-toast-reduced-motion: site-toast-reduced-motion 1ms both;
+
+  /* Reveal from the trigger without scaling text; leave room for the shadow. */
+  @keyframes select-roll-open {
+    from { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
+    to { clip-path: inset(-1rem); }
+  }
+  @keyframes select-roll-closed {
+    from { clip-path: inset(-1rem); }
+    to { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
+  }
+  @keyframes site-toast-slide-in {
+    from { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes site-toast-slide-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+  }
+  @keyframes site-toast-countdown {
+    from { transform: scaleX(1); opacity: 0.85; }
+    to { transform: scaleX(0); opacity: 0.2; }
+  }
+  /* Animation end events must still complete entry and exit with reduced motion. */
+  @keyframes site-toast-reduced-motion {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+
+  --color-background: #f5f4ef;
+  --color-foreground: #17212b;
+  --color-card: #ffffff;
+  --color-card-foreground: #17212b;
+  --color-muted: #68737d;
+  --color-muted-foreground: #68737d;
+  --color-border: #d9ddd9;
+  --color-input: #d9ddd9;
+  --color-primary: #2f9f92;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1f6f67;
+  --color-secondary-foreground: #ffffff;
+  --color-accent: #d7652d;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #b42318;
+  --color-destructive-foreground: #ffffff;
+  --color-rm2k-green-1: #507d5f;
+  --color-rm2k-green-2: #1a4729;
+  --font-sans: "Inter", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+  --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
+  --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
+}
