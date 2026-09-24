@@ -3,12 +3,54 @@ name: Android Release
 on:
   push:
     branches: [main]
+    # Keep shared imports and Tailwind sources in sync with android/web and the build scripts.
+    paths:
+      - '.github/workflows/android.yml'
+      - 'android/**'
+      - '!android/**/*.md'
+      - 'scripts/build-android-assets.mjs'
+      - 'scripts/inspect-android-package.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.npmrc'
+      - '.gitignore'
+      - 'tsconfig.json'
+      - 'postcss.config.mjs'
+      - 'app/shared.css'
+      - 'app/components/ui/button.tsx'
+      - 'app/components/ui/input.tsx'
+      - 'app/play/player.css'
+      - 'app/play/*/web-play-controls-preferences.ts'
+      - 'app/play/*/web-play-cover.ts'
+      - 'app/play/*/web-play-db.ts'
+      - 'app/play/*/web-play-events.ts'
+      - 'app/play/*/web-play-install-observer.ts'
+      - 'app/play/*/web-play-layout-editor.tsx'
+      - 'app/play/*/web-play-locks.ts'
+      - 'app/play/*/web-play-opfs.ts'
+      - 'app/play/*/web-play-player.ts'
+      - 'app/play/*/web-play-screenshot-db.ts'
+      - 'app/play/*/web-play-screenshots.ts'
+      - 'app/play/*/web-play-storage.ts'
+      - 'app/play/*/web-play-surface.tsx'
+      - 'app/play/*/web-play-types.ts'
+      - 'lib/archive/download.ts'
+      - 'lib/archive/easyrpg-runtime.json'
+      - 'lib/archive/web-play.ts'
+      - 'lib/browser/client-environment.ts'
+      - 'lib/format.ts'
+      - 'lib/ui/cn.ts'
+      - 'lib/android-package.ts'
+      - 'lib/package-zip.ts'
+      - 'lib/resources.ts'
+      - 'public/play/**'
+      - 'public/icon/windI.png'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Different pushes all build; reruns of the same run cannot publish concurrently.
+# Relevant pushes all build; reruns of the same run cannot publish concurrently.
 concurrency:
   group: android-${{ github.run_id }}
   cancel-in-progress: false

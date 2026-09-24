@@ -1,4 +1,8 @@
-@import "../../app/globals.css";
+@import "tailwindcss" source(none);
+@import "../../app/shared.css";
+/* Only scan components bundled into the APK; mirror these paths in android.yml. */
 @source "./";
-@source "../../app/play";
+@source "../../app/play/*/web-play-surface.tsx";
+@source "../../app/play/*/web-play-layout-editor.tsx";
 @source "../../app/components/ui/button.tsx";
+@source "../../app/components/ui/input.tsx";

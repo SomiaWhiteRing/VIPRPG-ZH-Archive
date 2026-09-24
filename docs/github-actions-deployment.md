@@ -10,7 +10,7 @@
 
 production 只允许显式选择 `target=production` 的手动发布；该 job 会在部署前执行远程 D1 migration。
 
-Android 打包与网站部署独立：[android.yml](../.github/workflows/android.yml) 在每次推送 `main` 后自动构建固定签名 APK、验证包内版本和签名、附加 SHA-256 并生成 GitHub 预发布 Release，也支持手动运行。当前 APK 连接 staging；发布到网站更新渠道仍需后台选择 APK 并点击「发布更新」。版本号规则、四项 Android Secrets 与覆盖安装边界见 [Android 说明](../android/README.md#应用更新与发布)。
+Android 打包与网站部署独立：[android.yml](../.github/workflows/android.yml) 仅在推送 `main` 且改动涉及 Android 或其构建依赖时自动构建固定签名 APK、验证包内版本和签名、附加 SHA-256 并生成 GitHub 预发布 Release，也支持手动强制打包。普通网站页面、服务端、数据库、部署配置或文档改动不会单独触发 APK 构建；共用 npm 依赖清单和锁文件改动仍会触发。当前 APK 连接 staging；发布到网站更新渠道仍需后台选择 APK 并点击「发布更新」。具体触发范围、版本号规则、四项 Android Secrets 与覆盖安装边界见 [Android 说明](../android/README.md#应用更新与发布)。
 
 ## GitHub Secrets
 
