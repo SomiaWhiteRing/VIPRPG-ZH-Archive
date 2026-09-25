@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'status/**'
+      - 'public/icon/windI.png'
       - '.github/workflows/status-deploy.yml'
   workflow_dispatch:
 
@@ -34,6 +35,8 @@ jobs:
         run: npm ci
       - name: Check
         run: npx tsc --noEmit --project status/tsconfig.json
+      - name: Sync main site icon
+        run: node status/scripts/sync-brand-asset.mjs
       - name: Set D1 binding
         run: node status/scripts/set-d1-id.mjs
       - name: Apply status D1 migrations
