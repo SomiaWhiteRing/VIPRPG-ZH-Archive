@@ -8,6 +8,7 @@
 - `src/index.ts` 执行检查、保存结果并提供 `/api/status` 与 `/api/health`。
 - `migrations/0001_init_status.sql` 是此服务的独立数据库结构。
 - `public/` 是静态状态页；全部时间按北京时间（UTC+8）显示。
+- 页眉和 favicon 使用主站的 `public/icon/windI.png`；部署前通过 `scripts/sync-brand-asset.mjs` 同步。配色和字体按主站 `app/globals.css` 的当前设计令牌设置，操作状态图标采用与主站一致的线条样式。
 
 一次失败显示“性能波动”，连续两次失败显示“服务中断”并产生事件；恢复时关闭事件。每天保存聚合结果 30 天，每分钟原始检查保留 48 小时，已恢复事件保留 90 天。超过 3 分钟没有新检查时页面显示“监控数据暂不可用”，避免把定时任务故障误报为正常。
 
