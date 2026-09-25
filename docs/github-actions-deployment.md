@@ -1,10 +1,11 @@
 # GitHub Actions 自动部署
 
-本仓库使用 Cloudflare Vite 插件、React Router SSR 和 Wrangler 构建 Cloudflare Workers 部署。自动部署的唯一步骤定义位于 `.github/workflows/deploy.yml`；本文只说明触发方式和前置配置，不记录某次环境是否已经上线。
+主站使用 Cloudflare Vite 插件、React Router SSR 和 Wrangler 构建 Cloudflare Workers 部署，步骤定义位于 `.github/workflows/deploy.yml`。独立状态服务的部署见 `.github/workflows/status-deploy.yml` 与 [状态服务说明](../status/README.md)。
 
 ## 当前策略
 
-- 推送到 `main`：自动部署到 staging。
+- 推送到 `main` 且涉及主站：自动部署到 staging。纯 `status/**` 改动不会触发主站部署。
+- 推送到 `main` 且涉及 `status/**`：自动部署到 `status.viprpg.org`。
 - 手动运行 `Deploy` workflow 且 `target=staging`：部署到 staging。
 - 手动运行 `Deploy` workflow 且 `target=production`：部署到 production。
 
