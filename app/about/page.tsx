@@ -15,57 +15,49 @@ export default function AboutPage() {
     <PageContainer className="space-y-5">
       <PageHeader compact title="关于本站" />
 
-      <Pane heading="项目目标">
+      <Pane heading="这里是哪里？">
         <p>
-          VIPRPG.org 收录 VIPRPG 祭典相关的 RPG Maker 作品，
-          包括不同语言和本站原创作品；2000/2003
-          系游戏提供本站归档，其他引擎提供外部下载入口。
+          VIPRPG中文保管库，或者说VIPRPG.org（以下称作“本站”），是由中文VIPRPG爱好者开发、面向华语社区的作品保存库。
+          本站点<span style={{ textDecoration: "line-through" }}>因为懒得折腾备案</span>自豪地使用Cloudflare提供的网络服务！
+          大概在大陆是能用吧，不能用的区域就请各凭本事了……
         </p>
       </Pane>
 
-      <Pane heading="资料与索引">
+      <Pane heading="这里能做什么？">
         <p>
-          每个游戏有独立资料页。本站归档的作品公开当前可下载版本，历史版本仅供管理和校对；翻译关系和其他关联连接不同游戏。
+          身为保管库，本站理所当然的提供RPG Maker 2000系作品的存档与下载。
+          无论是汉化作品、原创作品、还是原版作品的保存，甚至是VIPRPG以外的RM2K作品，本站都非常欢迎。
         </p>
         <p>
-          作者与制作人员、登场角色、标签、目录分别独立索引，可以在
-          <Link to="/creators">作者目录</Link>、
-          <Link to="/characters">角色目录</Link>、
-          <Link to="/tags">标签目录</Link>、<Link to="/catalogs">目录</Link>{" "}
-          中按任一维度反查游戏。
-        </p>
-      </Pane>
-
-      <Pane heading="归档与下载">
-        <p>
-          上传 RPG Maker 2000/2003
-          游戏时，浏览器会先检查文件，只上传本站尚未保存的内容。
-          文件按内容去重保存；下载时再按该版本的文件清单生成完整
-          ZIP，并缓存重复下载。
-        </p>
-        <p>
-          在线游玩会把所需内容安装到当前浏览器的本地存储。删除本地游戏缓存不会同时删除
-          EasyRPG 存档。
+          除此之外，本站还提供了许多<span style={{ textDecoration: "line-through" }}>老实说多到莫名其妙</span>的功能。
+          不仅可以在作品上标记登场角色、作者、标签等信息，还留下了评论、收藏和目录系统，来方便管理和检索作品；
+          提供了作品的在线游玩，以及（在Android设备上）导入到EasyRPG的功能。
+          另外还做了收集各种链接的导航页，再加上老实说完全没想过有没有人会用的讨论版……
+          之类的请自行探索相关功能吧！（忘了自己都做过什么）
         </p>
       </Pane>
 
-      <Pane heading="保存边界">
-        <ul>
-          <li>仅保存与 VIPRPG 系活动、社区相关的 RPG Maker 作品。</li>
-          <li>对原作权利人提出删除/限制要求的内容，会从公开列表移除。</li>
-          <li>
-            使用了 EasyRPG 不支持的 Maniac 语法的作品可能无法正常游玩，请留意作品页面的提示。
-          </li>
-          <li>
-            本站不会修改原始文件；不同语言的作品以独立游戏条目保存，并通过翻译关联连接。
-          </li>
-        </ul>
+      <Pane heading="这里是如何存储作品的？">
+        <p>
+          在VIPRPG的世界里，作品的素材有着极高的重合度。同一张シバルバー的黑市脸图可能会在1000个ksg里出现500次。
+          针对这种现象，本站设计了一套让不同作品共享相同素材的存储系统。
+          地图、游戏数据库等核心文件会被打包保存，脸图、音乐等素材则按内容去重：
+          内容相同的素材只保存一份，可以理解成站点自己的“RTP”。
+          下载作品时，再根据每部作品的文件清单取回所需内容，重新打包成ZIP。
+        </p>
+        <p>
+          通过这一设计，本站得以大幅降低每部作品的存储占用。
+          相对的缺点也很明显——无法存储RPGMaker2000系以外的作品。
+          为此，本站提供了外链机制。可以使用自己的网盘来提交2K系以外的作品。
+          推荐使用<Link to="https://www.lanzou.com/">蓝奏云</Link>，<Link to="https://mega.nz/">MEGA</Link>或<Link to="https://drive.google.com/">Google Drive</Link>来提交外链。
+        </p>
       </Pane>
 
-      <Pane heading="反馈与贡献">
+      <Pane heading="鸣谢">
         <p>
-          补充作品、纠正资料或申请上传权限，可先 <Link to="/login">登录</Link>，
-          再前往 <Link to="/me">我的账户</Link>。
+          本站的设计参考了H5mota，Bangumi，Mastodon，Ticalc，Bilibili，百度贴吧，NGA国家地理等项目的优秀实现。
+          本站的开发使用了EasyRPG项目的开发者们创造的出色Web Player与liblcf库。
+          本站的创建离不开中文社区与本土的每一位VIPRPG爱好者。
         </p>
       </Pane>
     </PageContainer>
