@@ -143,6 +143,7 @@ export function BodyEditor({
   ref,
   textOnly = false,
   maxLength,
+  enforceMaxLength = true,
   inputId = "forum-body",
   placeholder = "写下正文……",
   autoFocus = false,
@@ -150,6 +151,7 @@ export function BodyEditor({
 }: {
   textOnly?: boolean;
   maxLength?: number;
+  enforceMaxLength?: boolean;
   inputId?: string;
   placeholder?: string;
   autoFocus?: boolean;
@@ -223,7 +225,7 @@ export function BodyEditor({
                 if (!transaction.docChanged) return true;
                 const value = readDocument(transaction.doc, assets);
                 return (
-                  bodyLength(value.body) <= limit &&
+                  (!enforceMaxLength || bodyLength(value.body) <= limit) &&
                   value.images.length <= FORUM_IMAGE_COUNT &&
                   new Set(value.images.map((image) => image.key)).size ===
                     value.images.length
@@ -366,7 +368,7 @@ export function BodyEditor({
       );
       transaction.replaceSelection(slice).scrollIntoView();
       const result = readDocument(transaction.doc, assets);
-      if (bodyLength(result.body) > limit)
+      if (enforceMaxLength && bodyLength(result.body) > limit)
         throw new Error("正文超过单帖限制，请减少后再插入。");
       editor.view.dispatch(transaction);
       editor.view.dispatch(closeHistory(editor.state.tr));

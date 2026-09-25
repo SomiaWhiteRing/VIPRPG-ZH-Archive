@@ -16,6 +16,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -46,7 +47,7 @@ export default function ProfilePage() {
       <PageHeader title="个人资料" />
       <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
 
-      <form action="/api/account/profile" method="post">
+      <RedirectForm action="/api/account/profile" method="post">
         <div className="divide-y divide-border border-y border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
             <Label htmlFor="profile-display-name">显示名</Label>
@@ -106,7 +107,7 @@ export default function ProfilePage() {
         <div className="mt-5 flex justify-end">
           <Rm2kButton type="submit">保存资料</Rm2kButton>
         </div>
-      </form>
+      </RedirectForm>
       {!user.isBootstrapAdmin ? (
         <section className="mt-8 border-t border-border pt-5">
           <h2 className="text-lg font-semibold">注销账户</h2>

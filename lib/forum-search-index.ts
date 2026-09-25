@@ -17,7 +17,9 @@ export function forumSearchTokens(value: string): string {
 export function forumSearchPhrase(value: string): string {
   const normalized = value.normalize("NFKC").toLowerCase().trim();
   const length = Array.from(normalized).length;
-  if (length < 2 || length > FORUM_SEARCH_QUERY_LENGTH)
-    throw new HttpError(400, "搜索词需要 2–64 个字符。", "forum_search_length");
+  if (length < 2)
+    throw new HttpError(400, "请至少输入 2 个字符。", "forum_search_length");
+  if (length > FORUM_SEARCH_QUERY_LENGTH)
+    throw new HttpError(400, `搜索词最多 ${FORUM_SEARCH_QUERY_LENGTH} 个字符。`, "forum_search_length");
   return `"${forumSearchTokens(normalized)}"`;
 }

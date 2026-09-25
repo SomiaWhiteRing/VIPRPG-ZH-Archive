@@ -16,6 +16,7 @@ import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const { searchParams } = routeInput(args);
@@ -56,7 +57,7 @@ export default function ResetPasswordPage() {
         </Notice>
       ) : null}
       <RedirectFeedback />
-      <form
+      <RedirectForm
         action="/api/auth/password-reset/confirm"
         method="post"
         className="grid gap-4"
@@ -87,7 +88,7 @@ export default function ResetPasswordPage() {
           />
         </FormField>
         <Button type="submit">更新密码</Button>
-      </form>
+      </RedirectForm>
     </AuthPageShell>
   );
 }

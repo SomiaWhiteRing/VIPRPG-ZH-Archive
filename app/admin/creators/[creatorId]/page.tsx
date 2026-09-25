@@ -21,6 +21,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -83,7 +84,7 @@ export default function AdminCreatorEditPage() {
         />
       </Pane>
 
-      <form
+      <RedirectForm
         action={`/api/admin/creators/${creator.id}/update`}
         className="grid gap-4"
         method="post"
@@ -139,7 +140,7 @@ export default function AdminCreatorEditPage() {
         <StickySaveBar>
           <Button type="submit">保存作者资料</Button>
         </StickySaveBar>
-      </form>
+      </RedirectForm>
       {hasPermission(adminUser, "creator.merge_any") ? (
         <Pane heading="合并重复人物" tone="danger">
           <ConfirmingForm

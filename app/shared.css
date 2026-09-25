@@ -14,6 +14,32 @@
   background: #000;
 }
 
+/* Client-side navigation keeps the old page visible, so show a slim progress
+   bar only when the request lasts long enough to be noticeable. */
+.site-navigation-progress {
+  opacity: 0;
+  transform: scaleX(0);
+  animation: site-navigation-progress 8s cubic-bezier(0.12, 0.5, 0.2, 1) 500ms forwards;
+}
+
+@keyframes site-navigation-progress {
+  from { opacity: 1; transform: scaleX(0.06); }
+  20% { transform: scaleX(0.42); }
+  60% { transform: scaleX(0.78); }
+  to { opacity: 1; transform: scaleX(0.93); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-navigation-progress {
+    animation: site-navigation-progress-reduced 1ms linear 500ms forwards;
+  }
+
+  @keyframes site-navigation-progress-reduced {
+    from { opacity: 1; transform: scaleX(0.5); }
+    to { opacity: 1; transform: scaleX(0.5); }
+  }
+}
+
 /* React Aria tracks pointer, keyboard and assistive-technology interactions.
    Keep the native fallback before hydration and editing feedback for text fields.
    Apply the same policy to every focus-visible utility, including portal content. */

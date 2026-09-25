@@ -9,6 +9,7 @@ import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -67,7 +68,7 @@ export default function PrivacyPage() {
       <PageHeader title="隐私" />
       <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。" }} />
 
-      <form action="/api/account/privacy" method="post">
+      <RedirectForm action="/api/account/privacy" method="post">
         <div className="divide-y divide-border border-y border-border">
           {settings.map((setting) => (
             <div className="py-2" key={setting.name}>
@@ -82,7 +83,7 @@ export default function PrivacyPage() {
         <div className="mt-5">
           <Rm2kButton type="submit">保存隐私设置</Rm2kButton>
         </div>
-      </form>
+      </RedirectForm>
     </div>
   );
 }

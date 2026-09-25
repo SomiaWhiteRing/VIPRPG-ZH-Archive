@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -13,7 +13,6 @@ export function ResourceManager({
 }: {
   resources: ResourceRecord[];
 }) {
-  const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<{
@@ -32,10 +31,9 @@ export function ResourceManager({
         Object.fromEntries(form),
       );
       toast.success("链接草稿已创建。");
-      await navigate(`/admin/resources/${data.resource.id}`);
+      window.location.assign(`/admin/resources/${data.resource.id}`);
     } catch (error) {
       toast.error(String(error instanceof Error ? error.message : error));
-    } finally {
       setBusy(false);
     }
   }
@@ -77,6 +75,7 @@ export function ResourceManager({
       </div>
       <form
         onSubmit={create}
+        aria-busy={busy}
         className="grid gap-3 rounded-md border border-border bg-card p-4"
       >
         <h2 className="text-lg font-bold">新增链接</h2>

@@ -9,6 +9,7 @@ import { AccountField } from "@/app/components/profile/account-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -29,7 +30,7 @@ export default function PasswordPage() {
       <PageHeader title="修改密码" />
       <RedirectFeedback success={{ passwordUpdated: "密码已更新，其他设备已登出。" }} />
 
-      <form action="/api/account/password" className="grid gap-4" method="post">
+      <RedirectForm action="/api/account/password" className="grid gap-4" method="post">
         <AccountField htmlFor="password-current" label="当前密码">
           <PasswordInput
             id="password-current"
@@ -56,7 +57,7 @@ export default function PasswordPage() {
         <div className="flex justify-end">
           <Rm2kButton type="submit">修改密码</Rm2kButton>
         </div>
-      </form>
+      </RedirectForm>
     </div>
   );
 }

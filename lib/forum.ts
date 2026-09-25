@@ -166,8 +166,9 @@ export function forumTagError(value: string): string | null {
   const length = Array.from(
     new Intl.Segmenter("zh", { granularity: "grapheme" }).segment(name),
   ).length;
-  if (length < 1 || length > FORUM_TAG_LENGTH)
-    return `TAG 需要 1–${FORUM_TAG_LENGTH} 个字符。`;
+  if (length < 1) return "请输入 TAG。";
+  if (length > FORUM_TAG_LENGTH)
+    return `TAG 最多 ${FORUM_TAG_LENGTH} 个字符。`;
   if (
     /^[\p{P}\p{Z}\s]+$/u.test(name) ||
     FORUM_RESERVED_TAGS.includes(forumTagKey(name))

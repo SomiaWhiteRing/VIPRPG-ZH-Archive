@@ -79,6 +79,9 @@ export function ForumEditor({
     : topic
       ? FORUM_BODY_LENGTH
       : FORUM_POST_BODY_LENGTH;
+  const remaining = limit - bodyLength(draft.body);
+  const showRemaining = remaining <= Math.ceil(limit * 0.1);
+  const canSubmit = (!!draft.body.trim() || draft.images.length > 0) && remaining >= 0;
   const label = draft.target
     ? "保存修改"
     : topic
@@ -245,7 +248,8 @@ export function ForumEditor({
         }
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && !conflict && !draft.currentVersion) onSubmit();
+          if (!busy && !conflict && !draft.currentVersion && canSubmit)
+            onSubmit();
         }}
       >
         <div
@@ -340,6 +344,7 @@ export function ForumEditor({
               topic={topic}
               textOnly={inline}
               maxLength={limit}
+              enforceMaxLength={false}
               autoFocus={!topic && !isCollapsed}
               emojis={emojis}
               onBusyChange={setProcessingImages}
@@ -427,11 +432,6 @@ export function ForumEditor({
                   </Button>
                 </>
               ) : null}
-              <span className="font-mono text-xs text-muted">
-                <span className="sr-only">正文字数：</span>
-                {bodyLength(draft.body)}
-                <span className="hidden sm:inline"> / {limit}</span>
-              </span>
               <div className="ml-auto flex items-center gap-1">
                 {setFullscreen && (overflowing || fullscreen) ? (
                   <Button
@@ -485,10 +485,25 @@ export function ForumEditor({
                   </Button>
                 ) : null}
                 <Button
-                  disabled={busy || conflict || !!draft.currentVersion}
+                  disabled={busy || conflict || !!draft.currentVersion || !canSubmit}
                   type="submit"
+                  variant={remaining < 0 ? "neutral" : undefined}
+                  className={remaining < 0 ? "disabled:opacity-100" : undefined}
+                  aria-label={
+                    showRemaining
+                      ? `${label}，${remaining < 0 ? `超出上限 ${-remaining}` : `还可输入 ${remaining}`} 个字符`
+                      : undefined
+                  }
                 >
                   {submitting ? "正在保存…" : label}
+                  {showRemaining ? (
+                    <span
+                      aria-hidden="true"
+                      className={`font-mono tabular-nums ${remaining < 0 ? "text-destructive" : ""}`}
+                    >
+                      {remaining}
+                    </span>
+                  ) : null}
                 </Button>
               </div>
             </div>
