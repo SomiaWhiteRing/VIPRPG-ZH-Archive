@@ -13,13 +13,6 @@ type CheckResult = {
   error: string | null;
 };
 
-type StoredState = {
-  last_status: "operational" | "degraded" | "outage";
-  consecutive_failures: number;
-  last_checked_at: string;
-  last_success_at: string | null;
-};
-
 const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
@@ -81,62 +74,73 @@ async function check(monitor: Monitor, checkedAt: string): Promise<CheckResult> 
 
 async function saveResult(db: D1Database, result: CheckResult): Promise<void> {
   const { monitor, checkedAt, success, latencyMs, error } = result;
-  const previous = await db.prepare(
-    "SELECT last_status, consecutive_failures, last_checked_at, last_success_at FROM monitor_state WHERE monitor_id = ?",
-  ).bind(monitor.id).first<StoredState>();
-
-  // A scheduled invocation may overlap a prior one. Replaying the same minute
-  // must not increase the failure count or create a second incident.
-  if (previous && previous.last_checked_at >= checkedAt) return;
-
-  const failures = success ? 0 : (previous?.consecutive_failures ?? 0) + 1;
-  const status = success ? "operational" : failures >= 2 ? "outage" : "degraded";
-  const statements = [
+  // D1 executes the batch in order inside one transaction. The result key
+  // makes replaying a scheduled minute harmless, while the state UPSERT only
+  // accepts a newer timestamp. Failure counts are calculated in SQLite so
+  // overlapping invocations cannot race on a JavaScript read.
+  await db.batch([
     db.prepare(
-      "INSERT INTO check_results (monitor_id, checked_at, success, latency_ms, error) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO check_results (monitor_id, checked_at, success, latency_ms, error) VALUES (?, ?, ?, ?, ?)",
     ).bind(monitor.id, checkedAt, success ? 1 : 0, latencyMs, error),
     db.prepare(
-      `INSERT INTO monitor_state
-        (monitor_id, last_status, consecutive_failures, last_checked_at, last_success_at, latency_ms, last_error)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(monitor_id) DO UPDATE SET
-         last_status = excluded.last_status,
-         consecutive_failures = excluded.consecutive_failures,
-         last_checked_at = excluded.last_checked_at,
-         last_success_at = excluded.last_success_at,
-         latency_ms = excluded.latency_ms,
-         last_error = excluded.last_error`,
-    ).bind(
-      monitor.id,
-      status,
-      failures,
-      checkedAt,
-      success ? checkedAt : previous?.last_success_at ?? null,
-      latencyMs,
-      error,
-    ),
-    db.prepare(
       `INSERT INTO daily_rollups (monitor_id, day_bjt, checks, successful, latency_sum_ms)
-       VALUES (?, ?, 1, ?, ?)
+       SELECT ?, ?, 1, ?, ? WHERE changes() = 1
        ON CONFLICT(monitor_id, day_bjt) DO UPDATE SET
          checks = checks + 1,
          successful = successful + excluded.successful,
          latency_sum_ms = latency_sum_ms + excluded.latency_sum_ms`,
     ).bind(monitor.id, beijingDay(checkedAt), success ? 1 : 0, success ? latencyMs : 0),
-  ];
-
-  if (status === "outage" && previous?.last_status !== "outage") {
-    statements.push(db.prepare(
-      "INSERT INTO incidents (monitor_id, started_at, summary) VALUES (?, ?, ?)",
-    ).bind(monitor.id, previous?.last_status === "degraded"
-      ? previous.last_checked_at : checkedAt, `${monitor.name} 连续两次检查失败`));
-  } else if (success && previous?.last_status === "outage") {
-    statements.push(db.prepare(
-      "UPDATE incidents SET resolved_at = ? WHERE monitor_id = ? AND resolved_at IS NULL",
-    ).bind(checkedAt, monitor.id));
-  }
-
-  await db.batch(statements);
+    db.prepare(
+      `INSERT INTO monitor_state
+        (monitor_id, last_status, consecutive_failures, last_checked_at, last_success_at, latency_ms, last_error)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(monitor_id) DO UPDATE SET
+         last_status = CASE
+           WHEN excluded.last_error IS NULL THEN 'operational'
+           WHEN monitor_state.consecutive_failures >= 1 THEN 'outage'
+           ELSE 'degraded'
+         END,
+         consecutive_failures = CASE
+           WHEN excluded.last_error IS NULL THEN 0
+           ELSE monitor_state.consecutive_failures + 1
+         END,
+         last_checked_at = excluded.last_checked_at,
+         last_success_at = CASE
+           WHEN excluded.last_error IS NULL THEN excluded.last_checked_at
+           ELSE monitor_state.last_success_at
+         END,
+         latency_ms = excluded.latency_ms,
+         last_error = excluded.last_error
+       WHERE excluded.last_checked_at > monitor_state.last_checked_at`,
+    ).bind(
+      monitor.id,
+      success ? "operational" : "degraded",
+      success ? 0 : 1,
+      checkedAt,
+      success ? checkedAt : null,
+      latencyMs,
+      error,
+    ),
+    db.prepare(
+      `UPDATE incidents SET resolved_at = ?
+       WHERE monitor_id = ? AND resolved_at IS NULL
+       AND EXISTS (
+         SELECT 1 FROM monitor_state WHERE monitor_id = ?
+           AND last_checked_at = ? AND last_status = 'operational'
+       )`,
+    ).bind(checkedAt, monitor.id, monitor.id, checkedAt),
+    db.prepare(
+      `INSERT INTO incidents (monitor_id, started_at, summary)
+       SELECT ?, ?, ?
+       WHERE EXISTS (
+         SELECT 1 FROM monitor_state WHERE monitor_id = ?
+           AND last_checked_at = ? AND last_status = 'outage'
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM incidents WHERE monitor_id = ? AND resolved_at IS NULL
+       )`,
+    ).bind(monitor.id, checkedAt, `${monitor.name} 连续两次检查失败`, monitor.id, checkedAt, monitor.id),
+  ]);
 }
 
 async function runChecks(db: D1Database, scheduledTime: number): Promise<void> {

@@ -13,7 +13,7 @@
 
 ## 本地与发布
 
-在 `status/` 下运行 `npm ci`、`npm run check`。首次发布前创建独立 D1，把 ID 写入 `wrangler.jsonc` 的 `database_id`；CI 同样通过 `STATUS_D1_DATABASE_ID` 写入该字段，不在仓库保存真实 ID。先运行 `npm run migrate`，再运行 `npm run deploy`。域名由 Wrangler 的 Worker Custom Domain 配置创建。
+状态服务与 Android 一样复用仓库根目录的工具链。在仓库根目录运行 `npm ci`、`npx tsc --noEmit --project status/tsconfig.json`。首次发布前创建独立 D1，把 ID 写入 `status/wrangler.status.jsonc` 的 `database_id`；CI 同样通过 `STATUS_D1_DATABASE_ID` 写入该字段，不在仓库保存真实 ID。先运行 `npx wrangler d1 migrations apply STATUS_DB --remote --config status/wrangler.status.jsonc`，再运行 `npx wrangler deploy --config status/wrangler.status.jsonc`。域名由 Wrangler 的 Worker Custom Domain 配置创建。
 
 状态服务只使用 Cloudflare API Token、账号 ID 和 D1 ID；密钥由 GitHub Actions 的 `status` environment secrets 持有。所需名称：`CLOUDFLARE_STATUS_DEPLOY_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`STATUS_D1_DATABASE_ID`。本地 `.env.local` 中的同名令牌仅供受控终端操作；不要提交或在日志中打印它。
 

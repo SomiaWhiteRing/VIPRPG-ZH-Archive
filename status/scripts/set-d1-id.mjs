@@ -5,8 +5,8 @@ if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.tes
   throw new Error("STATUS_D1_DATABASE_ID must be a D1 database UUID");
 }
 
-const config = await readFile("wrangler.jsonc", "utf8");
+const config = await readFile("status/wrangler.status.jsonc", "utf8");
 if (!config.includes("STATUS_DATABASE_ID")) {
   throw new Error("D1 ID placeholder was not found");
 }
-await writeFile("wrangler.jsonc", config.replace("STATUS_DATABASE_ID", id));
+await writeFile("status/wrangler.status.jsonc", config.replace("STATUS_DATABASE_ID", id));
