@@ -1,0 +1,50 @@
+name: Deploy Status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'status/**'
+      - 'public/icon/windI.png'
+      - '.github/workflows/status-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-status
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: status
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_STATUS_DEPLOY_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      STATUS_D1_DATABASE_ID: ${{ secrets.STATUS_D1_DATABASE_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check
+        run: npx tsc --noEmit --project status/tsconfig.json
+      - name: Sync main site icon
+        run: node status/scripts/sync-brand-asset.mjs
+      - name: Set D1 binding
+        run: node status/scripts/set-d1-id.mjs
+      - name: Apply status D1 migrations
+        run: npx wrangler d1 migrations apply STATUS_DB --remote --config status/wrangler.status.jsonc
+      - name: Deploy status Worker
+        run: npx wrangler deploy --config status/wrangler.status.jsonc
+      - name: Verify live service
+        run: |
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors https://status.viprpg.org/ > /dev/null
+          curl --fail --silent --show-error https://status.viprpg.org/api/health | jq -e '.ok == true'
+          curl --fail --silent --show-error https://status.viprpg.org/api/status | jq -e '.monitors | length == 4'
