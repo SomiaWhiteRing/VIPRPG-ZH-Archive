@@ -8,6 +8,31 @@ const stamp = new Intl.DateTimeFormat("zh-CN", {
   hour12: false,
 });
 
+// Match the outline icon language used by the main site's Lucide icons.
+const iconShapes = {
+  operational: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "m8 12 2.5 2.5L16 9" }]],
+  degraded: [["path", { d: "m10.3 3.8-8.2 14.3A2 2 0 0 0 3.8 21h16.4a2 2 0 0 0 1.7-2.9L13.7 3.8a2 2 0 0 0-3.4 0Z" }], ["path", { d: "M12 9v4" }], ["path", { d: "M12 17h.01" }]],
+  outage: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "M12 8v4" }], ["path", { d: "M12 16h.01" }]],
+  pending: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "M12 6v6l4 2" }]],
+};
+
+function icon(kind) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  for (const [tag, attributes] of iconShapes[kind]) {
+    const shape = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, value);
+    svg.append(shape);
+  }
+  return svg;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -52,9 +77,7 @@ function renderOverall(data, stateMap) {
       : statuses.includes("pending") ? "pending" : "operational";
   const panel = document.getElementById("overall");
   panel.className = `overall ${overall}`;
-  panel.querySelector(".overall-icon").textContent = {
-    operational: "✓", degraded: "!", outage: "!", pending: "…",
-  }[overall];
+  panel.querySelector(".overall-icon").replaceChildren(icon(overall));
   document.getElementById("overall-title").textContent = {
     operational: "所有系统运行正常",
     degraded: "部分服务出现波动",
@@ -88,7 +111,9 @@ function renderServices(data, stateMap) {
       const title = el("div");
       title.append(el("div", "service-name", monitor.name));
       title.append(el("div", "service-description", monitor.description));
-      main.append(title, el("span", `service-status ${current}`, statusLabel(current)));
+      const badge = el("span", `service-status ${current}`);
+      badge.append(icon(current), document.createTextNode(statusLabel(current)));
+      main.append(title, badge);
       const history = el("div", "history");
       history.setAttribute("aria-label", `${monitor.name}近 30 天检查记录`);
       let total = 0;
@@ -123,7 +148,9 @@ function renderIncidents(data) {
   container.replaceChildren();
   if (!data.incidents.length) {
     const empty = el("div", "empty-incidents");
-    empty.append(el("span", "empty-icon", "✓"));
+    const emptyIcon = el("span", "empty-icon");
+    emptyIcon.append(icon("operational"));
+    empty.append(emptyIcon);
     const body = el("div");
     body.append(el("strong", "", "近期没有服务中断事件"));
     body.append(el("p", "", "服务检查结果会在这里自动形成事件记录。"));
@@ -157,7 +184,7 @@ async function refresh() {
   } catch {
     const overall = document.getElementById("overall");
     overall.className = "overall pending";
-    overall.querySelector(".overall-icon").textContent = "…";
+    overall.querySelector(".overall-icon").replaceChildren(icon("pending"));
     document.getElementById("overall-title").textContent = "状态数据暂不可用";
     document.getElementById("overall-description").textContent = "状态服务无法读取检查记录，请稍后刷新。";
     document.getElementById("last-check").textContent = "—";

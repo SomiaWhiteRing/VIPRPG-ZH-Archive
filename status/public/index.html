@@ -3,34 +3,31 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f7f8fc">
+    <meta name="theme-color" content="#f5f4ef">
     <meta name="description" content="VIPRPG 服务状态与关键依赖可用性">
     <title>服务状态 · VIPRPG.org</title>
+    <link rel="icon" href="/icon/windI.png">
     <link rel="stylesheet" href="/status.css">
     <script src="/status.js" defer></script>
   </head>
   <body>
     <div class="page">
       <header class="site-header">
-        <div class="identity">
-          <span class="brand-mark" aria-hidden="true">V</span>
-          <div>
-            <div class="brand-name">VIPRPG<span>.</span>ORG</div>
-            <div class="brand-subtitle">服务状态</div>
-          </div>
-        </div>
+        <a class="identity" href="https://staging.viprpg.org/" aria-label="VIPRPG.org 档案站">
+          <img class="brand-mark" src="/icon/windI.png" width="32" height="32" alt="">
+          <span class="brand-name">VIPRPG.org</span>
+        </a>
         <nav class="site-nav" aria-label="页面导航">
-          <a href="#services">服务概览</a>
+          <a class="active" href="#services" aria-current="page">服务概览</a>
           <a href="#incidents">历史事件</a>
-          <span class="nav-divider" aria-hidden="true"></span>
-          <a href="https://staging.viprpg.org/">返回档案站 ↗</a>
+          <a class="return-link" href="https://staging.viprpg.org/">返回档案站 <span aria-hidden="true">↗</span></a>
         </nav>
       </header>
 
       <main>
         <div class="page-intro">
           <div>
-            <p class="eyebrow">VIPRPG SERVICE STATUS</p>
+            <p class="eyebrow">VIPRPG · SERVICE STATUS</p>
             <h1>运行状态</h1>
             <p class="intro-copy">查看档案站和关键依赖的可用性、近期检查及事件记录。</p>
           </div>
@@ -38,7 +35,7 @@
         </div>
 
         <section id="overall" class="overall pending" aria-label="当前整体状态" aria-live="polite">
-          <span class="overall-icon" aria-hidden="true">…</span>
+          <span class="overall-icon" aria-hidden="true"></span>
           <div class="overall-text">
             <h2 id="overall-title">正在读取运行状态</h2>
             <p id="overall-description">连接状态服务中。</p>
@@ -64,7 +61,7 @@
         </section>
       </main>
 
-      <footer class="site-footer"><span>VIPRPG 服务状态</span><span>所有时间以北京时间（UTC+8）显示</span></footer>
+      <footer class="site-footer"><span>© 2026 VIPRPG.org · 服务状态</span><span>所有时间以北京时间（UTC+8）显示</span></footer>
     </div>
   </body>
 </html>
