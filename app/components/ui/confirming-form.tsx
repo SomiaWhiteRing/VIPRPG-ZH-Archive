@@ -17,8 +17,6 @@ import { apiConfirmationFromError, requestJson } from "@/lib/ui/api-response";
 import type { FormEvent, ReactNode } from "react";
 import { useRef, useState } from "react";
 
-import { useNavigate, useRevalidator } from "react-router";
-
 type ConfirmingFormProps = {
   action: string;
   children: ReactNode;
@@ -45,8 +43,6 @@ export function ConfirmingForm({
   description,
 }: ConfirmingFormProps) {
   const toast = useToast();
-  const navigate = useNavigate();
-  const revalidator = useRevalidator();
   const formRef = useRef<HTMLFormElement>(null);
   const submitterRef = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
@@ -97,10 +93,7 @@ export function ConfirmingForm({
       }
       setOpen(false);
       setRetryConfirmation(null);
-      if (target.href === window.location.href) await revalidator.revalidate();
-      else await navigate(target.pathname + target.search + target.hash);
-      submittingRef.current = false;
-      setSubmitting(false);
+      window.location.assign(target.href);
     } catch (error) {
       submittingRef.current = false;
       setSubmitting(false);
@@ -128,7 +121,9 @@ export function ConfirmingForm({
         onSubmit={handleSubmit}
         ref={formRef}
       >
-        {children}
+        <fieldset className="contents" disabled={submitting}>
+          {children}
+        </fieldset>
       </form>
       <AlertDialog onOpenChange={setOpen} open={open}>
         <AlertDialogContent
@@ -149,7 +144,7 @@ export function ConfirmingForm({
                 onClick={() => void submit(formRef.current)}
                 variant="destructive"
               >
-                {submitting ? "提交中…" : "确认继续"}
+                确认继续
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -181,7 +176,7 @@ export function ConfirmingForm({
                 onClick={() => void submit(formRef.current, retryConfirmation)}
                 variant="destructive"
               >
-                {submitting ? "提交中…" : retryConfirmation?.confirmLabel}
+                {retryConfirmation?.confirmLabel}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

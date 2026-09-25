@@ -17,6 +17,7 @@ import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -53,7 +54,7 @@ export default function EmailPage() {
           <span className="font-semibold text-foreground">{user.email}</span>
         </p>
         {params.emailSent && params.newEmail ? (
-          <form
+          <RedirectForm
             action="/api/account/email/confirm"
             className="grid gap-4"
             method="post"
@@ -72,9 +73,9 @@ export default function EmailPage() {
             <div className="flex justify-end">
               <Rm2kButton type="submit">确认修改邮箱</Rm2kButton>
             </div>
-          </form>
+          </RedirectForm>
         ) : (
-          <form
+          <RedirectForm
             action="/api/account/email/start"
             className="grid gap-4"
             method="post"
@@ -97,7 +98,7 @@ export default function EmailPage() {
             <div className="flex justify-end">
               <Rm2kButton type="submit">发送验证码</Rm2kButton>
             </div>
-          </form>
+          </RedirectForm>
         )}
       </div>
     </div>

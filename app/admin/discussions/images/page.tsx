@@ -12,6 +12,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { ImageCleanupButton } from "./cleanup-button";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { searchParams } = routeInput(args);
@@ -73,13 +74,13 @@ export default function ForumImageCleanup() {
               )}
             </div>
             {row.status === "uploading" || row.status === "uncertain" ? (
-              <form action="/api/admin/discussions/images" method="post">
+              <RedirectForm action="/api/admin/discussions/images" method="post">
                 <Input type="hidden" name="id" value={row.id} />
                 <Input type="hidden" name="op" value="reconcile" />
                 <Button type="submit" variant="outline">
                   核对上传状态
                 </Button>
-              </form>
+              </RedirectForm>
             ) : (
               <ImageCleanupButton
                 id={row.id}

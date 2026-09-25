@@ -32,6 +32,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { StructuredWorkFields } from "../structured-work-fields";
 import { WorkStaffFields } from "../work-staff-fields";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -98,7 +99,7 @@ export default function AdminWorkEditPage() {
         title={work.chineseTitle || work.originalTitle}
         actions={<BackLink href="/admin/works" label="返回游戏维护" />}
       />
-      <form
+      <RedirectForm
         action={`/api/admin/works/${work.id}/update`}
         className="grid gap-4"
         method="post"
@@ -272,7 +273,7 @@ export default function AdminWorkEditPage() {
             </Link>
           ) : null}
         </StickySaveBar>
-      </form>
+      </RedirectForm>
       {hasPermission(adminUser, "work.maintainer.manage_any") ? (
         <Pane heading="作品维护者">
           <ul className="grid gap-2">

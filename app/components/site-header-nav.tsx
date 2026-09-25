@@ -23,6 +23,7 @@ import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 type Session = {
   id: number;
@@ -419,6 +420,7 @@ function UserMenu({
   const environment = useClientEnvironment();
   const consoleHref = getAdminLandingHref(getAdminNavigation(session));
   const logoutFormRef = useRef<HTMLFormElement>(null);
+  const [logoutBusy, setLogoutBusy] = useState(false);
   const itemClass =
     "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15";
 
@@ -517,6 +519,7 @@ function UserMenu({
             <DropdownMenu.Separator className="my-1 h-px bg-border" />
             <DropdownMenu.Item
               className={itemClass}
+              disabled={logoutBusy}
               onSelect={(event) => {
                 event.preventDefault();
                 logoutFormRef.current?.requestSubmit();
@@ -527,14 +530,15 @@ function UserMenu({
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      <form
+      <RedirectForm
         action="/api/auth/logout"
         className="hidden"
         method="post"
+        onBusyChange={setLogoutBusy}
         ref={logoutFormRef}
       >
         <input name="next" type="hidden" value="/" />
-      </form>
+      </RedirectForm>
     </>
   );
 }

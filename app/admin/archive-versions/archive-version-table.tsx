@@ -9,6 +9,7 @@ import type { AdminArchiveVersion } from "@/lib/dto/db/archive-maintenance";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
 import { languageLabel } from "@/lib/labels";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export function ArchiveVersionTable({
   actor,
@@ -118,13 +119,13 @@ function ArchiveActions({
     }
 
     return (
-      <form
+      <RedirectForm
         action={`/api/admin/archive-versions/${archiveVersion.id}/restore`}
         method="post"
         className="inline-flex"
       >
         <Button type="submit">还原</Button>
-      </form>
+      </RedirectForm>
     );
   }
 
@@ -147,7 +148,7 @@ function ArchiveActions({
       {canSetCurrent &&
       archiveVersion.status === "published" &&
       !archiveVersion.isCurrent ? (
-        <form
+        <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
           method="post"
           className="inline-flex"
@@ -155,10 +156,10 @@ function ArchiveActions({
           <Button variant="outline" type="submit">
             设为当前
           </Button>
-        </form>
+        </RedirectForm>
       ) : null}
       {canDelete ? (
-        <form
+        <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/delete`}
           method="post"
           className="inline-flex"
@@ -166,7 +167,7 @@ function ArchiveActions({
           <Button variant="outline" type="submit">
             删除
           </Button>
-        </form>
+        </RedirectForm>
       ) : null}
     </div>
   );

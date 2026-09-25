@@ -23,6 +23,7 @@ import { formatDate } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RoleAssignmentControl } from "./role-assignment-control";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 const PAGE_SIZE = 50;
 
@@ -213,7 +214,7 @@ export default function AdminUsersPage() {
                       />
                     ) : null}
                     {canUpdateStatus && user.status !== "deleted" ? (
-                      <form
+                      <RedirectForm
                         action={`/api/admin/users/${user.id}/status`}
                         method="post"
                         className="inline-flex"
@@ -228,7 +229,7 @@ export default function AdminUsersPage() {
                         <Button variant="outline" type="submit">
                           {user.status === "active" ? "禁用" : "启用"}
                         </Button>
-                      </form>
+                      </RedirectForm>
                     ) : null}
                   </div>
                 </td>

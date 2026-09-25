@@ -13,6 +13,7 @@ import { FormField } from "@/app/components/ui/form-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -55,7 +56,7 @@ export default function LoginPage() {
     >
       <RedirectFeedback success={{ reset: "密码已更新，请重新登录。" }} />
 
-      <form action="/api/auth/login" method="post" className="grid gap-4">
+      <RedirectForm action="/api/auth/login" method="post" className="grid gap-4">
         <input type="hidden" name="next" value={nextPath} />
         <FormField controlId="login-field-1" label="邮箱">
           <EmailInput
@@ -70,7 +71,7 @@ export default function LoginPage() {
           <PasswordInput id="login-field-2" name="password" required />
         </FormField>
         <Rm2kButton type="submit">登录</Rm2kButton>
-      </form>
+      </RedirectForm>
     </AuthPageShell>
   );
 }

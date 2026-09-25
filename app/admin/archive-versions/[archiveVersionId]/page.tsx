@@ -20,6 +20,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatBytes, formatDate, formatNumber } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -84,7 +85,7 @@ export default function AdminArchiveVersionEditPage() {
           </>
         }
       />
-      <form
+      <RedirectForm
         action={`/api/admin/archive-versions/${archiveVersion.id}/update`}
         className="grid gap-4"
         method="post"
@@ -149,11 +150,11 @@ export default function AdminArchiveVersionEditPage() {
             </Button>
           ) : null}
         </StickySaveBar>
-      </form>
+      </RedirectForm>
       {hasPermission(adminUser, "archive_version.set_current") &&
       archiveVersion.status === "published" &&
       !archiveVersion.isCurrent ? (
-        <form
+        <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
           id="set-current-archive-version"
           method="post"

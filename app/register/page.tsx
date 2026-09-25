@@ -20,6 +20,7 @@ import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -77,7 +78,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
   displayName: string;
 }) {
   return (
-    <form
+    <RedirectForm
       action="/api/auth/register/start"
       method="post"
       className="grid gap-4"
@@ -131,7 +132,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
         />
       </FormField>
       <Button type="submit">发送验证码</Button>
-    </form>
+    </RedirectForm>
   );
 }
 
@@ -143,7 +144,7 @@ function VerificationForm({
   nextPath: string;
 }) {
   return (
-    <form
+    <RedirectForm
       action="/api/auth/register/verify"
       method="post"
       className="grid gap-4"
@@ -157,6 +158,6 @@ function VerificationForm({
         <VerificationCodeInput id="register-field-3" name="code" required />
       </FormField>
       <Button type="submit">完成注册</Button>
-    </form>
+    </RedirectForm>
   );
 }

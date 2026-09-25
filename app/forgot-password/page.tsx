@@ -10,6 +10,7 @@ import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { Link } from "react-router";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const { searchParams } = routeInput(args);
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
       }
     >
       <RedirectFeedback />
-      <form
+      <RedirectForm
         action="/api/auth/password-reset/start"
         method="post"
         className="grid gap-4"
@@ -58,7 +59,7 @@ export default function ForgotPasswordPage() {
           />
         </FormField>
         <Button type="submit">发送验证码</Button>
-      </form>
+      </RedirectForm>
     </AuthPageShell>
   );
 }
