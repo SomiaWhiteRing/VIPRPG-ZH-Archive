@@ -31,7 +31,7 @@ production Environment 配置负责人本人为 required reviewer，允许本人
 
 ## 运行时与首次上线
 
-AUTH_SECRET 等 Worker runtime secrets 不由 workflow 写入；正式与 staging 分开设置。正式域名、邮件、资源初始化和根账户注册先按[正式部署手册](./production-deployment.md#首次正式初始化)准备并确认。第一个验证注册者会获得根权限，首次注册必须在受控访问下完成。
+AUTH_SECRET 等 Worker runtime secrets 不由 workflow 写入；正式与 staging 分开设置。正式域名、邮件、资源初始化和根账户注册先按[正式部署手册](./production-deployment.md#首次正式初始化)准备并确认。正式站不会给首个注册者根权限；负责人注册后按其确认的邮箱显式初始化根账户。
 
 npm run deploy:staging 和 npm run deploy:production 自身负责 Vite/SSR 构建。构建选 staging 时设置 CLOUDFLARE_ENV=staging，部署已生成的 build/server/wrangler.json 时必须清空该变量，不再传 --env staging，避免重复追加 Worker 名称。
 
