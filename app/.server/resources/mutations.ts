@@ -11,6 +11,7 @@ import { getArtifact, getResource } from "./data";
 import { verifyArtifactObject } from "./objects";
 import { verifyPackageArtifact } from "./packages";
 import { parseResourceContent } from "@/lib/resource-content";
+import { downloadFilenameTemplateError, MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH } from "@/lib/resource-filename";
 
 export type Actor = Pick<ArchiveUser, "id" | "email">;
 const rootSql = `EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
@@ -158,6 +159,11 @@ export async function editResource(
   const statements: D1PreparedStatement[] = [];
   const detail: Record<string, unknown> = {};
   if (action === "save") {
+    const downloadFilenameTemplate = resource.kind === "tool" && data.downloadFilenameTemplate !== undefined
+      ? textField(data, "downloadFilenameTemplate", MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH)
+      : resource.download_filename_template;
+    const templateError = downloadFilenameTemplateError(downloadFilenameTemplate);
+    if (templateError) throw new HttpError(400, templateError);
     const visibility = textField(data, "visibility", 20, true);
     if (!["draft", "published", "hidden"].includes(visibility))
       throw new HttpError(400, "显示状态不正确");
@@ -189,7 +195,7 @@ export async function editResource(
     statements.push(
       db
         .prepare(
-          `UPDATE resources SET name=?,summary_json=?,links_json=?,windows_button_label=?,android_button_label=?,source_url=?,sort_order=?,visibility=? WHERE id=?`,
+          `UPDATE resources SET name=?,summary_json=?,links_json=?,windows_button_label=?,android_button_label=?,download_filename_template=?,source_url=?,sort_order=?,visibility=? WHERE id=?`,
         )
         .bind(
           textField(data, "name", 100, true),
@@ -197,6 +203,7 @@ export async function editResource(
           JSON.stringify(links),
           resource.kind === "tool" ? textField(data, "windowsButtonLabel", Infinity, true) : resource.windows_button_label,
           resource.kind === "tool" ? textField(data, "androidButtonLabel", Infinity, true) : resource.android_button_label,
+          downloadFilenameTemplate,
           webUrl(textField(data, "sourceUrl", 2048)),
           integer(data.sortOrder, -100000, 100000),
           visibility,
@@ -204,6 +211,8 @@ export async function editResource(
         ),
     );
     detail.visibility = visibility;
+    if (downloadFilenameTemplate !== resource.download_filename_template)
+      detail.downloadFilenameTemplate = { before: resource.download_filename_template, after: downloadFilenameTemplate };
   } else {
     if (resource.kind !== "tool")
       throw new HttpError(400, "网站链接没有软件版本");

@@ -11,6 +11,7 @@ export type ResourceRecord = {
   links_json: string;
   windows_button_label: string;
   android_button_label: string;
+  download_filename_template: string;
   source_url: string;
   icon_blob_sha256: string | null;
   visibility: "draft" | "published" | "hidden";

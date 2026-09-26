@@ -20,6 +20,7 @@ import {
 import { PackageUpload } from "./package-upload";
 import { ResourceContentEditor } from "./content-editor";
 import { ResourceLinksEditor } from "./links-editor";
+import { DownloadFilenameTemplate } from "./filename-template";
 import { postJson, requestJson } from "./client";
 const statusLabels = {
   pending: "待上传",
@@ -166,6 +167,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             <Field label="Android 下载按钮文案">
               <Input name="androidButtonLabel" defaultValue={resource.android_button_label} required disabled={busy} />
             </Field>
+            <DownloadFilenameTemplate data={data} disabled={busy} />
             <Field label="项目网站（可选）">
               <Input
                 type="url"
