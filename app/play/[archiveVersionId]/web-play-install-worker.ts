@@ -230,7 +230,7 @@ async function runInstallAttempt(input: {
   installation = await persistAndPost(
     {
       ...installation,
-      downloadBytesTotal: headerLength ?? metadata.totalSizeBytes,
+      downloadBytesTotal: headerLength ?? metadata.installTotalSizeBytes,
       updatedAt: new Date().toISOString(),
     },
     true,
@@ -402,7 +402,7 @@ async function streamZipToPacks(input: {
       input.metadata.playKey,
       "info",
       `正在安装游戏文件：已下载 ${formatBytes(downloadedBytes)} / ${formatBytes(
-        installation.downloadBytesTotal || input.metadata.totalSizeBytes,
+        installation.downloadBytesTotal || input.metadata.installTotalSizeBytes,
       )}；已安装 ${installedFiles.toLocaleString(
         "zh-CN",
       )} / ${input.metadata.installTotalFiles.toLocaleString("zh-CN")} 个文件。`,

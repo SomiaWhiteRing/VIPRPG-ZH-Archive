@@ -349,13 +349,13 @@ export function UploadClient({
       });
     }
 
-    const latestTitleImage = prefill.titleImages[0];
-    if (!latestTitleImage || initialWork?.coverBlobSha256) return;
+    const earliestTitleImage = prefill.titleImages[0];
+    if (!earliestTitleImage || initialWork?.coverBlobSha256) return;
 
     setImageSelections((current) => {
       if (current.cover) return current;
-      automaticCoverRef.current = latestTitleImage;
-      return { ...current, cover: latestTitleImage };
+      automaticCoverRef.current = earliestTitleImage;
+      return { ...current, cover: earliestTitleImage };
     });
   }
 

@@ -6,7 +6,7 @@ import {
 import type { AppRuntime } from "@/app/.server/runtime";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
-  buildArchiveDownloadUrl,
+  buildWebPlayDownloadUrl,
   buildWebPlayKey,
   easyRpgRuntimeBasePath,
   easyRpgRuntimeVersion,
@@ -66,7 +66,7 @@ export async function GET(
       easyRpgRuntimeVersion,
       runtimeBasePath: easyRpgRuntimeBasePath,
       playKey,
-      downloadUrl: buildArchiveDownloadUrl(record.id),
+      downloadUrl: buildWebPlayDownloadUrl(record.id),
       totalFiles: record.totalFiles,
       totalSizeBytes: record.totalSizeBytes,
       installTotalFiles: installTarget.totalFiles,

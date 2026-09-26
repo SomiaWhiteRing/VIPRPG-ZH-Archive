@@ -949,7 +949,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    安装到浏览器 · {formatBytes(metadata.totalSizeBytes)}
+                    安装到浏览器 · {formatBytes(metadata.installTotalSizeBytes)}
                   </Rm2kButton>
                 )}
 

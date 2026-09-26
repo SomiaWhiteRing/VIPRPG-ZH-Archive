@@ -1,6 +1,10 @@
 import { unzipSync } from "fflate";
+import { downloadZipBuilderVersion } from "../lib/archive/download.ts";
+import {
+  shouldSkipWebPlayLocalWrite,
+  webPlayDownloadProfile,
+} from "../lib/archive/web-play-local-policy.ts";
 
-const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
 const localFileHeaderSignature = 0x04034b50;
@@ -37,6 +41,14 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     });
   }
 
+  const profile = match[2] === "download" ? url.searchParams.get("profile") : null;
+  if (profile !== null && profile !== webPlayDownloadProfile) {
+    return new Response(request.method === "HEAD" ? null : "Unsupported download profile", {
+      status: 400,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   let record = null;
   let cacheKey = null;
 
@@ -53,10 +65,10 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       return await kaiImportMetadata(request, env.ARCHIVE_BUCKET, record);
     }
 
-    const cacheRequest = downloadCacheRequest(request, record);
+    const cacheRequest = downloadCacheRequest(request, record, profile);
     cacheKey = downloadBuildCacheKey(cacheRequest);
     const ifRange = request.headers.get("If-Range");
-    const currentEtag = `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}"`;
+    const currentEtag = downloadEtag(record, profile);
     const rangeHeader = request.method === "GET" && (!ifRange || ifRange === currentEtag)
       ? request.headers.get("Range") : null;
     const bypassDownloadCache = Boolean(rangeHeader) || shouldBypassDownloadCache(request, env);
@@ -65,6 +77,10 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       const cached = await caches.default.match(cacheRequest);
 
       if (cached) {
+        record = {
+          ...record,
+          estimatedR2GetCount: numberHeader(cached.headers.get("X-Estimated-R2-Get-Count")) ?? record.estimatedR2GetCount,
+        };
         ctx.waitUntil(
           recordDownloadAccess(env.DB, {
             record,
@@ -81,11 +97,17 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     }
 
     const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
-    const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET);
+    const files = profile === webPlayDownloadProfile
+      ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
+      : manifest.files;
+    if (profile === webPlayDownloadProfile) {
+      record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) };
+    }
+    const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET, files);
     const zipSizeBytes = estimateZipStreamSize(zipEntries);
     const cacheStatus =
       request.method === "HEAD" || bypassDownloadCache ? "BYPASS" : "MISS";
-    const headers = downloadHeaders(record, cacheStatus, zipSizeBytes);
+    const headers = downloadHeaders(record, cacheStatus, zipSizeBytes, profile);
     const range = rangeHeader ? parseDownloadRange(rangeHeader, zipSizeBytes) : null;
     if (rangeHeader && !range) {
       return new Response(null, {
@@ -130,7 +152,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       ),
     );
 
-    if (!bypassDownloadCache && shouldTryWorkersCache(record.totalSizeBytes)) {
+    if (!bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
@@ -277,11 +299,22 @@ async function loadManifest(bucket, manifestSha256) {
   return manifest;
 }
 
-function buildZipEntries(manifest, bucket) {
+function estimateR2GetCount(manifest, files) {
+  const blobs = new Set();
+  const packIds = new Set();
+  for (const { storage } of files) {
+    if (storage.kind === "blob") blobs.add(storage.blobSha256);
+    else packIds.add(storage.packId);
+  }
+  const packs = new Set(manifest.corePacks.filter((pack) => packIds.has(pack.id)).map((pack) => pack.sha256));
+  return blobs.size + packs.size;
+}
+
+function buildZipEntries(manifest, bucket, files = manifest.files) {
   const corePackCache = new Map();
   const blobReadCache = new BlobReadCache(bucket);
 
-  return manifest.files
+  return files
     .slice()
     .sort(compareManifestFiles)
     .map((file) => ({
@@ -694,7 +727,11 @@ function streamBytes(bytes) {
   });
 }
 
-function downloadHeaders(record, cacheStatus, contentLength) {
+function downloadEtag(record, profile) {
+  return `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}${profile ? `-${profile}` : ""}"`;
+}
+
+function downloadHeaders(record, cacheStatus, contentLength, profile) {
   const headers = new Headers();
 
   headers.set("Content-Type", "application/zip");
@@ -702,7 +739,7 @@ function downloadHeaders(record, cacheStatus, contentLength) {
   headers.set("Content-Length", String(contentLength));
   headers.set("Content-Disposition", contentDisposition(downloadFileName(record)));
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  headers.set("ETag", `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}"`);
+  headers.set("ETag", downloadEtag(record, profile));
   headers.set("X-Archive-Version-Id", String(record.id));
   headers.set("X-Manifest-SHA256", record.manifestSha256);
   headers.set("X-Estimated-R2-Get-Count", String(record.estimatedR2GetCount));
@@ -733,11 +770,12 @@ function encodeRFC5987(value) {
   );
 }
 
-function downloadCacheRequest(request, record) {
+function downloadCacheRequest(request, record, profile) {
   const url = new URL(request.url);
 
   url.search = "";
   url.pathname = `/api/archive-versions/${record.id}/download/cache/${record.manifestSha256}/${record.packerVersion}/${downloadZipBuilderVersion}`;
+  if (profile) url.pathname += `/${profile}`;
 
   return new Request(url.toString(), { method: "GET" });
 }
