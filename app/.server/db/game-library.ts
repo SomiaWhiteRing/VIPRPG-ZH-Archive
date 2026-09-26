@@ -611,8 +611,8 @@ export async function updateOwnedWork(
       };
     },
   );
-  if (input.isTranslation !== translatorCredits.length > 0)
-    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
+  if (!input.isTranslation && translatorCredits.length > 0)
+    throw new HttpError(400, "非翻译作品不能填写译者。");
   const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s);
   await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s]);
   const downloadUrl =
@@ -802,10 +802,10 @@ export async function updateWorkForAdmin(
   if (!canUpdateStatus) input.status = currentStatus.status;
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   if (
-    input.isTranslation !==
+    !input.isTranslation &&
     input.workStaff.some((credit) => credit.roleKey === "translator")
   ) {
-    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。");
   }
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
@@ -1004,8 +1004,8 @@ export async function createExternalWork(
       notes: null,
     }),
   );
-  if (input.isTranslation !== translatorCredits.length > 0)
-    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
+  if (!input.isTranslation && translatorCredits.length > 0)
+    throw new HttpError(400, "非翻译作品不能填写译者。");
   const staffCredits = [
     ...translatorCredits,
     ...(input.extraStaff ?? []),

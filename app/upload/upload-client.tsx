@@ -249,7 +249,7 @@ export function UploadClient({
         ...current,
         isOriginal: false,
         isTranslation: preference.isTranslation,
-        translators: preference.translators?.length
+        translators: preference.translators !== null
           ? preference.translators
           : [
               newTranslator({
@@ -513,8 +513,7 @@ export function UploadClient({
     }
     if (
       form.isTranslation &&
-      (!form.translators.length ||
-        form.translators.some((item) => !item?.displayName.trim()))
+      form.translators.some((item) => item !== null && !item.displayName.trim())
     ) {
       setTranslatorError("请填写译者。");
       document.getElementById("upload-translator")?.focus();
@@ -1203,7 +1202,7 @@ function MetadataFields({
           />
         </WorkbenchField>
         {form.isTranslation ? (
-          <WorkbenchField controlId="upload-translator" label="译者" required>
+          <WorkbenchField controlId="upload-translator" label="译者">
             <div className="grid gap-1.5">
               <CreatorTokenPicker
                 disabled={disabled}
@@ -1567,7 +1566,9 @@ function translatorStaff(
   const existing = new Map(
     defaults.map((credit) => [creatorSelectionKey(credit.selection), credit]),
   );
-  return form.translators.map((selection) => {
+  return form.translators.filter(
+    (selection): selection is CreatorSelection => selection !== null,
+  ).map((selection) => {
     if (!selection?.displayName.trim()) throw new Error("请填写译者。");
     const credit = existing.get(creatorSelectionKey(selection));
     return {
@@ -1598,9 +1599,7 @@ function initialForm(
         : [null],
       extraStaff: staffRows(initialWork.extraStaff),
       moreInfo: moreInfoRows(initialWork.moreInfo),
-      translators: initialWork.translators.length
-        ? initialWork.translators.map((credit) => credit.selection)
-        : [newTranslator(user)],
+      translators: initialWork.translators.map((credit) => credit.selection),
       originalReleaseDate: initialWork.originalReleaseDate ?? "",
       isOriginal: initialWork.isOriginal,
       isTranslation: initialWork.isTranslation,
