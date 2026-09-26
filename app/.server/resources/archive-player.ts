@@ -7,10 +7,12 @@ export async function getSharedArchivePlayer(db: D1Database, artifactId: string 
     JOIN tool_releases r ON r.resource_id=p.id
     JOIN tool_artifacts a ON a.release_id=r.id
     WHERE p.slug='easyrpg-kai' AND p.kind='tool' AND p.visibility='published'
-      AND r.status='published' AND r.channel='stable' AND a.storage_status='ready'
+      AND r.status='published' AND r.channel='stable'
       AND a.target='windows-x64' AND a.id=${artifactId ? "?" : "(SELECT c.artifact_id FROM tool_channels c WHERE c.resource_id=p.id AND c.channel='stable' AND c.target='windows-x64')"}`)
     .bind(...(artifactId ? [artifactId] : [])).first<ToolArtifact>();
-  if (!row || row.format !== "exe") throw new HttpError(503, "共享 Kai 播放器不可用，请在“链接”中发布并推荐 Windows EXE 安装包。");
+  if (row && ["cleanup", "cleaned"].includes(row.storage_status))
+    throw new HttpError(410, "此下载使用的旧播放器已回收，请从游戏页面重新下载。");
+  if (!row || row.format !== "exe" || row.storage_status !== "ready") throw new HttpError(503, "共享 Kai 播放器不可用，请在“链接”中发布并推荐 Windows EXE 安装包。");
   return row;
 }
 

@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The software package cleanup refresh applies `0005_tool_artifact_gc.sql`,
+retaining all release/build identities while allowing scheduled reclamation of
+superseded package objects. The seed schema and migration ledger include it;
+existing business records and R2 objects are preserved.
+
 The shared player refresh applies `0003_shared_archive_player.sql` after 0002,
 adding the archive download policy projection and nullable tool CRC32 metadata.
 All existing game snapshots, tool identities, business rows and R2 objects are

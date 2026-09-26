@@ -407,12 +407,14 @@ export async function registerArtifact(
     throw new HttpError(400, "Windy 更新仅支持 Windows x64 ZIP");
   if (resource.slug === "viprpg-android" && (target !== "android-universal" || format !== "apk" || !buildId || !/^org\.viprpg\.archive:[1-9][0-9]{0,9}$/.test(buildId) || Number(buildId.split(":")[1]) > 2100000000))
     throw new HttpError(400, "VIPRPG Android 更新仅支持本站发布 APK");
-  if (["windy-translator", "viprpg-android"].includes(resource.slug)) {
-    const duplicate = await runtime.db.prepare(`SELECT a.id,a.sha256,a.size_bytes FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id WHERE r.resource_id=? AND a.application_build_id=? AND a.storage_status<>'cleaned' LIMIT 1`).bind(id, buildId).first<{ id: string; sha256: string; size_bytes: number }>();
+  if (buildId) {
+    const duplicate = await runtime.db.prepare(`SELECT a.id,a.sha256,a.size_bytes FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id WHERE r.resource_id=? AND a.target=? AND a.application_build_id=? AND (a.storage_status<>'cleaned' OR r.published_at IS NOT NULL) LIMIT 1`).bind(id, target, buildId).first<{ id: string; sha256: string; size_bytes: number }>();
     if (duplicate) {
       if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, "同一构建已登记不同文件，请上传原始安装包");
       return duplicate.id;
     }
+  }
+  if (["windy-translator", "viprpg-android"].includes(resource.slug)) {
     if (!releaseId) {
       releaseId = crypto.randomUUID();
       const version = textField(data, "version", 100, true);

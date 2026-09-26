@@ -299,7 +299,7 @@ export async function cleanupArtifact(
 ) {
   const row = await getArtifact(runtime, id);
   if (row.published_at !== null)
-    throw new HttpError(409, "已发布历史文件不允许物理删除");
+    throw new HttpError(409, "已发布安装包由自动清理回收，不能手动删除");
   if (uploadRecent(row))
     throw new HttpError(409, "上传仍在进行，十五分钟后再清理中断的请求");
   await batchMutation(
