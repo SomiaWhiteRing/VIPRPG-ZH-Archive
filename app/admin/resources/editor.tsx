@@ -276,6 +276,9 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               创建版本草稿
             </Button>
           </form>}
+          <p className="text-sm text-muted">
+            自动清理按平台保留最新已发布安装包和当前推荐包，回收其他旧包；版本说明和更新识别记录会保留。已回收的旧包不能再下载或设为推荐。
+          </p>
           {data.releases.map((release) => (
             <details
               id={`release-${release.id}`}
@@ -345,7 +348,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                   .filter(
                     (a) =>
                       a.release_id === release.id &&
-                      a.storage_status !== "cleaned",
+                      (a.storage_status !== "cleaned" || release.published_at !== null),
                   )
                   .map((a) => (
                     <div
@@ -357,6 +360,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                         {fileSize(a.size_bytes)} ·{" "}
                         {statusLabels[a.storage_status]}
                       </p>
+                      {release.published_at !== null && ["cleanup", "cleaned"].includes(a.storage_status) ? (
+                        <p className="break-all text-sm text-muted">
+                          旧安装包已停止下载，保留版本记录。SHA-256：{a.sha256}
+                          {a.application_build_id ? ` · 构建标识：${a.application_build_id}` : ""}
+                        </p>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                         {a.storage_status === "ready" ? (
                           <Button
@@ -418,7 +427,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                               移除并清理
                             </Button>
                           </>
-                        ) : release.status === "published" ? (
+                        ) : release.status === "published" && a.storage_status === "ready" ? (
                           <Button
                             disabled={
                               busy ||

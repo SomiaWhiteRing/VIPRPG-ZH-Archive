@@ -53,6 +53,10 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const gcMetrics: Array<[string, string]> = [
     [
+      "自动回收旧软件包",
+      `${formatNumber(gcDryRun.toolArtifacts.eligibleCount)} / ${formatBytes(gcDryRun.toolArtifacts.eligibleSizeBytes)}`,
+    ],
+    [
       "可最终清理的文件版本",
       `${formatNumber(gcDryRun.archiveVersions.eligibleCount)} 个快照 / ${formatNumber(gcDryRun.archiveVersions.eligibleFileCount)} 个文件 / ${formatBytes(gcDryRun.archiveVersions.eligibleSizeBytes)}`,
     ],
@@ -115,6 +119,7 @@ export default function AdminMaintenancePage() {
         <Pane heading="清理预演">
           <p className="text-sm text-muted">
             预演不会删除对象。回收站默认保留 {gcDryRun.graceDays} 天。
+            旧软件包由定时任务回收，不适用回收站保留天数；最新已发布包和当前推荐包会保留。
           </p>
           <StatList
             items={gcMetrics.map(([label, value]) => ({ label, value }))}

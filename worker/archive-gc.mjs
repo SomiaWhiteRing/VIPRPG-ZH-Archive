@@ -1,3 +1,5 @@
+import { sweepToolArtifacts } from "./tool-artifact-gc.mjs";
+
 const defaultGcGraceDays = 7;
 const processingExpiryHours = 24;
 const scheduledGcLimitPerType = 1000;
@@ -42,6 +44,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     sweepRows(env, "blob", blobRows, graceDays),
     sweepRows(env, "core_pack", corePackRows, graceDays),
   ]);
+  const toolArtifacts = await sweepToolArtifacts(env, limitPerType);
   const report = {
     checkedAt: new Date().toISOString(),
     trigger: input.trigger ?? "scheduled",
@@ -53,6 +56,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     archiveVersions,
     blobs,
     corePacks,
+    toolArtifacts,
   };
 
   await writeGcAuditLog(env.DB, report);
@@ -619,6 +623,10 @@ async function writeGcAuditLog(db, report) {
         purgedCorePackSizeBytes: report.corePacks.purgedSizeBytes,
         failedBlobCount: report.blobs.failedCount,
         failedCorePackCount: report.corePacks.failedCount,
+        purgedToolArtifactCount: report.toolArtifacts.purgedCount,
+        purgedToolArtifactSizeBytes: report.toolArtifacts.purgedSizeBytes,
+        failedToolArtifactCount: report.toolArtifacts.failedCount,
+        failedToolArtifacts: report.toolArtifacts.failed,
       }),
     )
     .run();

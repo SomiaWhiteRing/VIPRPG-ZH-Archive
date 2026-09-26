@@ -69,6 +69,11 @@ export type GcDryRunReport = {
   archiveVersions: GcArchiveVersionPurgeSummary;
   blobs: GcObjectSummary;
   corePacks: GcObjectSummary;
+  toolArtifacts: {
+    eligibleCount: number;
+    eligibleSizeBytes: number;
+    sample: Array<{ id: string; resource_id: string; version_label: string; target: string; filename: string; size_bytes: number; storage_status: string }>;
+  };
 };
 
 export type GcSweepReport = {
@@ -283,6 +288,9 @@ export async function runGcDryRun(
     eligibleGcSummaryStatement(database, "core_pack", graceDays),
     deletedOnlyGcSummaryStatement(database, "core_pack"),
     gcCandidateRowsStatement(database, "core_pack", sampleLimit),
+    database.prepare("SELECT count(*) AS count,coalesce(sum(size_bytes),0) AS size_bytes FROM tool_artifact_gc_candidates"),
+    database.prepare(`SELECT id,resource_id,version_label,target,filename,size_bytes,storage_status
+      FROM tool_artifact_gc_candidates ORDER BY updated_at,id LIMIT ?`).bind(sampleLimit),
   ]);
   const archiveVersionSummary = mapArchiveVersionPurgeSummary(
     (results[0].results?.[0] ?? {}) as GcArchiveVersionPurgeSummaryRow,
@@ -302,6 +310,7 @@ export async function runGcDryRun(
     normalizeGcCandidateRows((results[7].results ?? []) as GcCandidateRow[]),
     graceDays,
   );
+  const toolArtifactSummary = (results[8].results?.[0] ?? {}) as GcSummaryRow;
 
   return {
     checkedAt: new Date().toISOString(),
@@ -310,6 +319,11 @@ export async function runGcDryRun(
     archiveVersions: archiveVersionSummary,
     blobs: blobSummary,
     corePacks: corePackSummary,
+    toolArtifacts: {
+      eligibleCount: Number(toolArtifactSummary.count ?? 0),
+      eligibleSizeBytes: Number(toolArtifactSummary.size_bytes ?? 0),
+      sample: (results[9].results ?? []) as GcDryRunReport["toolArtifacts"]["sample"],
+    },
   };
 }
 

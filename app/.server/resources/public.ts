@@ -12,11 +12,14 @@ export async function downloadArtifact(
   const row = await runtime.db
     .prepare(
       `SELECT a.*,r.version_label,p.download_filename_template FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id JOIN resources p ON p.id=r.resource_id
-    WHERE a.id=? AND a.storage_status='ready' AND r.status='published' AND p.visibility='published'`,
+    WHERE a.id=? AND r.status='published' AND p.visibility='published'`,
     )
     .bind(id)
     .first<ToolArtifact & Pick<ToolRelease, "version_label"> & Pick<ResourceRecord, "download_filename_template">>();
   if (!row) throw new HttpError(404, "安装包不可用");
+  if (["cleanup", "cleaned"].includes(row.storage_status))
+    throw new HttpError(410, "旧安装包已回收，请前往链接页面下载当前版本");
+  if (row.storage_status !== "ready") throw new HttpError(404, "安装包不可用");
   const object = await verifyArtifactObject(runtime, row);
   const etag = `"sha256-${row.sha256}"`;
   const filename = resourceDownloadFilename(row.download_filename_template, row, row.version_label);
