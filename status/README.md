@@ -18,4 +18,4 @@
 
 状态服务只使用 Cloudflare API Token、账号 ID 和 D1 ID；密钥由 GitHub Actions 的 `status` environment secrets 持有。所需名称：`CLOUDFLARE_STATUS_DEPLOY_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`STATUS_D1_DATABASE_ID`。本地 `.env.local` 中的同名令牌仅供受控终端操作；不要提交或在日志中打印它。
 
-状态服务只通过手动运行 Deploy Status 发布；类型检查完成后，在 status Environment 由负责人本人批准，允许自审，不要求第二人。apply_migrations 默认关闭，勾选后才执行 D1 迁移。发布、正式主站和正式 Android 共用 production-maintenance 互斥组；主站 workflow 仍忽略纯状态服务变更。首次创建 D1、域名与数据初始化单独按[正式手册](../docs/production-deployment.md)确认。
+状态服务只通过手动运行 Deploy Status 发布；类型检查完成后，在 status Environment 由负责人本人批准，允许自审，不要求第二人。发布确认包含候选中待执行的 D1 迁移，部署前由 Wrangler 自动检测并应用，无需手动勾选；无待执行迁移时继续部署，迁移失败则停止发布。发布、正式主站和正式 Android 共用 production-maintenance 互斥组；主站 workflow 仍忽略纯状态服务变更。首次创建 D1、域名与数据初始化单独按[正式手册](../docs/production-deployment.md)确认。

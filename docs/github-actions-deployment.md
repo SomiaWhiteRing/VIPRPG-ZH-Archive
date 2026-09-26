@@ -12,7 +12,7 @@
 
 主站 candidate 使用隔离配置运行 check 和既有 test:flow，固定本次 SHA。手动选择 production 并运行 workflow 即确认发布；production job 在 candidate 成功后直接执行，不再等待 Review deployments。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。Codex 代为触发须有用户对本次正式发布的明确授权。
 
-staging 继续自动应用迁移。production 的 apply_migrations 默认 false：只读核对账本，有待应用迁移就停止；勾选时才在发布前应用本次候选的待执行文件。数据修复、导入、重建和恢复不属于普通发布步骤。状态服务的 apply_migrations 也需显式选择。
+staging、production 和状态服务均在发布前自动检测并应用待执行的 D1 迁移，无需手动勾选。没有待执行迁移时直接继续部署，已应用文件不会重跑；迁移失败则停止发布。手动确认发布包含本次候选的待执行迁移。数据修复、导入、重建和恢复不属于普通发布步骤。
 
 主站正式发布、状态服务和正式 Android 使用 production-maintenance 互斥组，不在远端写入过程中自动取消；staging 与自动 Android 构建保留自己的队列。本地维护需避免与远端有状态任务并发。
 

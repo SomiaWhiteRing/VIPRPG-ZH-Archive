@@ -2,12 +2,6 @@ name: Deploy Status
 
 on:
   workflow_dispatch:
-    inputs:
-      apply_migrations:
-        description: Also apply pending status database migrations
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -33,10 +27,8 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit --project status/tsconfig.json
       - name: Candidate summary
-        env:
-          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
         run: |
-          printf 'Status candidate: %s\n\nApply migrations: %s\n' "$GITHUB_SHA" "$APPLY_MIGRATIONS" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Status candidate: %s\n\nPending D1 migrations will be detected and applied automatically before deployment.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           sha256sum status/migrations/*.sql >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -60,8 +52,7 @@ jobs:
       - run: npm ci
       - run: node status/scripts/sync-brand-asset.mjs
       - run: node status/scripts/set-d1-id.mjs
-      - name: Apply approved status D1 migrations
-        if: inputs.apply_migrations
+      - name: Detect and apply pending status D1 migrations
         run: npx wrangler d1 migrations apply STATUS_DB --remote --config status/wrangler.status.jsonc
       - name: Deploy status Worker
         run: npx wrangler deploy --config status/wrangler.status.jsonc
