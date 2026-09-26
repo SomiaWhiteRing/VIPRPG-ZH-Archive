@@ -445,6 +445,7 @@ async function run(): Promise<void> {
     true,
     "complete upload metadata fixture",
   );
+  stage("verify browser upload commit and persisted result");
   const [commitResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -455,17 +456,26 @@ async function run(): Promise<void> {
     ),
     page.locator('[data-upload-phase] form button[type="submit"]').click(),
   ]);
-  if (commitResponse.status() !== 200) {
-    throw new Error(
-      `archive commit: ${commitResponse.status()} ${await commitResponse.text()}`,
-    );
-  }
-  const commitPayload = (await commitResponse.json()) as {
-    result: { workId: number; archiveVersionId: number; fileCount: number };
-  };
-  const { workId, archiveVersionId } = commitPayload.result;
+  assert.equal(commitResponse.status(), 200, "archive commit HTTP status");
+  // The upload worker terminates after settling, closing the CDP session used
+  // by Playwright to read its response body. Read the durable result via Node.
+  const committed = await jsonResponse<{
+    importJob: {
+      status: string;
+      result: { workId: number; archiveVersionId: number; fileCount: number } | null;
+    };
+  }>(
+    "completed upload",
+    origin,
+    `/api/imports/${importJobId}`,
+    { headers: { cookie: userCookie }, signal: AbortSignal.timeout(10_000) },
+    200,
+  );
+  assert.equal(committed.importJob.status, "completed");
+  assert.ok(committed.importJob.result, "completed upload has a persisted result");
+  const { workId, archiveVersionId, fileCount } = committed.importJob.result;
   assert.ok(workId > 0 && archiveVersionId > 0);
-  assert.equal(commitPayload.result.fileCount, Object.keys(expectedFiles).length);
+  assert.equal(fileCount, Object.keys(expectedFiles).length);
   await waitForNoUploadDrafts(page);
 
   stage("verify cancel-on-leave releases the upload draft");
