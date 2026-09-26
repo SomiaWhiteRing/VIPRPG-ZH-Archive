@@ -126,7 +126,7 @@ export default function AdminAuditPage() {
                     {event.action === "assigned" ? "分配" : "移除"}{" "}
                     {event.role.name}
                     {event.reason ? (
-                      <span className="text-sm text-muted">{event.reason}</span>
+                      <span className="whitespace-pre-wrap wrap-anywhere text-sm text-muted">{event.reason}</span>
                     ) : null}
                   </td>
                   <td>

@@ -33,8 +33,7 @@ import {
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
 import { subscribeGameResourcesChanged } from "./web-play-events";
-// Temporary staging diagnostics; restore "./web-play-install-worker-entry" after investigation.
-import { createInstallWorker, InstallDiagnosticsPanel } from "./diagnostics/client";
+import { createInstallWorker, InstallDiagnosticsPanel } from "./web-play-install-worker-entry";
 import type {
   WebPlayInstallation,
   WebPlayInstallWorkerInput,

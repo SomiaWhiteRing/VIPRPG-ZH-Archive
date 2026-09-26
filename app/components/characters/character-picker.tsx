@@ -259,7 +259,9 @@ export function CharacterPicker({
             onQueryChange={setQuery}
             disabled={disabled}
             items={options}
-            enterSelectsFirst
+            isDefaultOption={(option) =>
+              option.kind === "create" || option.rank === 0
+            }
             label="登场角色"
             placeholder={
               values.length ? "添加更多" : "本作的主要角色（或更多）"

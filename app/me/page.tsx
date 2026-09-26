@@ -124,7 +124,7 @@ export default function MePage() {
                 UID：{user.id}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-sm text-muted">
+            <p className="mt-1 line-clamp-2 whitespace-pre-wrap wrap-anywhere text-sm text-muted">
               {user.bio || "还没有填写简介。"}
             </p>
           </div>

@@ -143,7 +143,7 @@ export function AdminDiscussions({
                       {row.featured ? " · 精品" : ""}
                     </p>
                   ) : null}
-                  <p className="line-clamp-2 break-words text-xs text-muted">
+                  <p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-muted">
                     {row.body}
                   </p>
                   <p className="mt-2 text-xs md:hidden">
@@ -163,7 +163,7 @@ export function AdminDiscussions({
                     ] ??
                     row.state}
                   {row.explanation ? (
-                    <p className="line-clamp-2 max-w-52 text-xs">
+                    <p className="line-clamp-2 max-w-52 whitespace-pre-wrap break-words text-xs">
                       {row.explanation}
                     </p>
                   ) : null}

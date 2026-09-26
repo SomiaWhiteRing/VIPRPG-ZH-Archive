@@ -187,14 +187,6 @@ async function startSource(
       message.sourceKind,
     );
     await waitForCancellation(runtime);
-    try {
-      const prefill = await inspectUploadSource(sourceFiles);
-      await waitForCancellation(runtime);
-      self.postMessage({ type: "source_prefill", prefill } satisfies UploadWorkerOutput);
-    } catch (error) {
-      if (error instanceof RuntimeSettledError) throw error;
-      // Optional title/cover defaults must not prevent an otherwise valid upload.
-    }
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
     task = {
@@ -220,6 +212,19 @@ async function startSource(
     const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
+
+    try {
+      // Choose covers only after cleanup; title and face-sheet metadata still use the original source.
+      const prefill = await inspectUploadSource(
+        sourceFiles,
+        message.cleanupResources ? scan.includedFiles.map((file) => file.source) : sourceFiles,
+      );
+      await waitForCancellation(runtime);
+      self.postMessage({ type: "source_prefill", prefill } satisfies UploadWorkerOutput);
+    } catch (error) {
+      if (error instanceof RuntimeSettledError) throw error;
+      // Optional title/cover defaults must not prevent an otherwise valid upload.
+    }
 
     const corePack = await buildCorePack(task, scan.coreFiles);
     runtime.task = task = corePack.task;

@@ -134,7 +134,9 @@ export function CreatorTokenPicker({
             onQueryChange={setQuery}
             disabled={disabled}
             items={options}
-            enterSelectsFirst
+            isDefaultOption={(option) =>
+              creatorNameKey(option.selection.displayName) === creatorNameKey(query)
+            }
             label={label}
             placeholder={values.length ? "继续添加" : `搜索或新建${label}`}
             invalid={invalid}

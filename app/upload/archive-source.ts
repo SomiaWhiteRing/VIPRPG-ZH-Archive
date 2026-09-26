@@ -78,9 +78,10 @@ export async function enumerateUploadSourceFiles(
 
 export async function inspectUploadSource(
   entries: UploadSourceEntry[],
+  coverEntries: UploadSourceEntry[] = entries,
 ): Promise<UploadSourcePrefill> {
   const ini = entries.find((entry) => entry.path.toLowerCase() === "rpg_rt.ini");
-  const titleEntries = entries
+  const titleEntries = coverEntries
     .filter(isTitleImage)
     .sort(
       (left, right) =>

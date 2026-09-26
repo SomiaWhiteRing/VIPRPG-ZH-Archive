@@ -35,7 +35,6 @@ import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { CHARACTER_ROLE_LABELS, getPublicRelationCards } from "./public-relations";
-import { publicCopy } from "@/lib/public-copy";
 import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
@@ -235,8 +234,8 @@ export default function GameDetailPage() {
                 </div>
               ) : null}
               {work.description ? (
-                <p className="m-0 leading-[1.85] wrap-anywhere">
-                  {publicCopy(work.description)}
+                <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
+                  {work.description}
                 </p>
               ) : (
                 <p className="text-sm text-muted">暂无简介。</p>
