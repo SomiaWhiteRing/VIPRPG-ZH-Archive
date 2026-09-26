@@ -7,7 +7,6 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
-import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
@@ -115,7 +114,6 @@ export function RelationCreateForm({
   );
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   const menuOpen = open && !busy;
   const excludedIds = new Set([workId, ...excludedWorkIds]);
@@ -176,18 +174,18 @@ export function RelationCreateForm({
   async function createRelation() {
     if (busy) return;
     if (!selected) {
-      setMessage("请先查找并选择关联对象。");
+      toast.error("请先查找并选择关联对象。");
       return;
     }
     if (excludedIds.has(selected.id)) {
-      setMessage("该作品已在关联列表中。");
+      toast.error("该作品已在关联列表中。");
       return;
     }
     if (
       relationChoice.startsWith("translation:") &&
       selected.language === language
     ) {
-      setMessage("原版和译版语言必须不同。");
+      toast.error("原版和译版语言必须不同。");
       return;
     }
 
@@ -211,7 +209,6 @@ export function RelationCreateForm({
         };
 
     setBusy(true);
-    setMessage(null);
     try {
       const response = await fetch(path, {
         method: "POST",
@@ -273,12 +270,10 @@ export function RelationCreateForm({
               setResult(null);
               setSearching(false);
               setSearchError("");
-              setMessage(null);
             }}
             onQueryChange={(value) => {
               setQuery(value);
               setSelected(null);
-              setMessage(null);
               setSearchError("");
               setSearching(Boolean(value.trim()));
             }}
@@ -296,7 +291,6 @@ export function RelationCreateForm({
               setResult({ query: candidate.title, candidates });
               setSearching(false);
               setSearchError("");
-              setMessage(null);
             }}
             itemClassName="min-h-16 justify-start"
             renderItem={(candidate) => (
@@ -350,7 +344,6 @@ export function RelationCreateForm({
             disabled={busy}
             onValueChange={(value) => {
               setRelationChoice(value as RelationChoice);
-              setMessage(null);
             }}
             options={relationOptions}
             value={relationChoice}
@@ -365,7 +358,6 @@ export function RelationCreateForm({
           {busy ? "正在添加…" : "添加关联"}
         </Button>
       </div>
-      {message ? <Notice>{message}</Notice> : null}
     </div>
   );
 }

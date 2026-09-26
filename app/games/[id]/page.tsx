@@ -34,15 +34,7 @@ import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import type {
-  GameTranslationRelation,
-  GameWorkRelation,
-} from "@/lib/dto/db/game-library";
-import {
-  WORK_RELATION_TYPES,
-  languageLabel,
-  relationLabel,
-} from "@/lib/labels";
+import { CHARACTER_ROLE_LABELS, getPublicRelationCards } from "./public-relations";
 import { publicCopy } from "@/lib/public-copy";
 import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -53,14 +45,6 @@ import {
   WorkEngagementActions,
 } from "./work-engagement-actions";
 import { WorkMediaGallery } from "./work-media-gallery";
-
-const CHARACTER_ROLE_LABELS: Record<string, string> = {
-  main: "主角",
-  supporting: "配角",
-  cameo: "客串",
-  mentioned: "提及",
-  other: "其他",
-};
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -112,31 +96,7 @@ export async function loader(args: LoaderFunctionArgs) {
       listCatalogsContainingWork(runtime, work.id),
     ]);
   const userCatalogs = catalogs;
-  const relatedTranslations = dedupeTranslations([
-    ...work.translations,
-    ...work.parallelTranslations,
-  ]).sort(compareTranslations);
-  const orderedRelations = WORK_RELATION_TYPES.flatMap((type) =>
-    work.relations
-      .filter((relation) => relation.relationType === type)
-      .sort(compareRelatedWorks),
-  );
-  const relationCards = [
-    ...relatedTranslations.map((item) => ({
-      key: `translation-${item.workId}`,
-      href: `/games/${item.workId}`,
-      type: `${item.role === "original" ? "原版" : "译版"} · ${languageLabel(item.language)}`,
-      title: item.title,
-      coverBlobSha256: item.coverBlobSha256 ?? null,
-    })),
-    ...orderedRelations.map((item) => ({
-      key: `relation-${item.id}`,
-      href: `/games/${item.workId}`,
-      type: relationLabel(item.relationType),
-      title: item.title,
-      coverBlobSha256: item.coverBlobSha256 ?? null,
-    })),
-  ];
+  const relationCards = getPublicRelationCards(work);
   const showRelationEditor =
     relationCapabilities.canCreateRelation ||
     relationCapabilities.canCreateTranslation ||
@@ -324,9 +284,13 @@ export default function GameDetailPage() {
                   <h2 className="m-0 text-base font-bold" id="cast-title">
                     登场角色
                   </h2>
-                  <span className="font-mono text-xs text-muted max-[560px]:text-left">
-                    {work.characters.length} 项
-                  </span>
+                  <Link
+                    aria-label="查看全部登场角色"
+                    className="text-sm font-medium text-secondary hover:underline"
+                    to={`/games/${work.id}/characters`}
+                  >
+                    更多
+                  </Link>
                 </div>
                 <div
                   aria-label="角色列表"
@@ -334,7 +298,7 @@ export default function GameDetailPage() {
                 >
                   {work.characters.map((character, index) => (
                     <Link
-                      className="group grid basis-29 shrink-0 content-start gap-1 text-foreground max-[560px]:basis-27"
+                      className="group grid basis-24 shrink-0 content-start gap-1 text-foreground"
                       to={`/characters/${character.id}`}
                       key={`${character.id}:${index}`}
                     >
@@ -342,7 +306,7 @@ export default function GameDetailPage() {
                         className="w-full text-2xl transition-shadow duration-150 group-hover:shadow-[0_3px_10px_rgb(23_33_43/14%)]"
                         displayName={character.displayName}
                         portrait={character.portrait}
-                        size={116}
+                        size={96}
                         toneKey={index}
                       />
                       <span className="text-sm font-semibold wrap-anywhere">
@@ -371,9 +335,13 @@ export default function GameDetailPage() {
                     关联作品
                   </h2>
                   {relationCards.length ? (
-                    <span className="font-mono text-xs text-muted max-[560px]:text-left">
-                      {relationCards.length} 项
-                    </span>
+                    <Link
+                      aria-label="查看全部关联作品"
+                      className="text-sm font-medium text-secondary hover:underline"
+                      to={`/games/${work.id}/related`}
+                    >
+                      更多
+                    </Link>
                   ) : null}
                 </div>
                 {relationCards.length ? (
@@ -550,38 +518,5 @@ export default function GameDetailPage() {
         }
       />
     </DetailPageShell>
-  );
-}
-
-function dedupeTranslations(
-  items: GameTranslationRelation[],
-): GameTranslationRelation[] {
-  const seen = new Set<number>();
-  return items.filter((item) => {
-    if (seen.has(item.workId)) return false;
-    seen.add(item.workId);
-    return true;
-  });
-}
-
-function compareRelatedWorks(
-  left: GameWorkRelation,
-  right: GameWorkRelation,
-): number {
-  return (
-    left.title.localeCompare(right.title, "zh-CN") || left.workId - right.workId
-  );
-}
-
-function compareTranslations(
-  left: GameTranslationRelation,
-  right: GameTranslationRelation,
-): number {
-  const roleOrder =
-    Number(left.role === "translation") - Number(right.role === "translation");
-  return (
-    roleOrder ||
-    left.title.localeCompare(right.title, "zh-CN") ||
-    left.workId - right.workId
   );
 }

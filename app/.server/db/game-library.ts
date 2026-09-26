@@ -198,6 +198,23 @@ export async function listGameWorks(
   return hydrate(runtime, rows.results ?? []);
 }
 
+export async function getPublicGameWorkSummaries(
+  runtime: AppRuntime,
+  workIds: number[],
+): Promise<GameWorkSummary[]> {
+  const rows: SummaryRow[] = [];
+  for (const ids of chunkArray([...new Set(workIds)], 100)) {
+    const result = await getD1(runtime)
+      .prepare(
+        `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id IN (${ids.map(() => "?").join(",")}) AND w.id IN (SELECT id FROM public_works) GROUP BY w.id`,
+      )
+      .bind(...ids)
+      .all<SummaryRow>();
+    rows.push(...(result.results ?? []));
+  }
+  return hydrate(runtime, rows);
+}
+
 export async function searchUserWorks(
   runtime: AppRuntime,
   input: {
