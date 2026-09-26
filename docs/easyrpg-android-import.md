@@ -12,7 +12,7 @@ APK 内的来源白名单不可被链接参数扩充，HTTP、跨源及重定向
 
 `GET/HEAD /api/archive-versions/:id/kai-import` 由 `worker.ts` 注册，复用 `worker/archive-download.mjs` 的发布状态查询、原归档清单哈希校验和 ZIP 大小计算。无需登录；只有已发布作品的已发布当前快照可获取。不存在／隐藏／不再当前返回 404，不支持的引擎或超限快照返回 422，其他方法返回 405。
 
-返回 `Cache-Control: no-store` 的 `viprpg-kai.import.v1` JSON：`archiveVersionId`、`workId`、`title`、同源 `coverUrl`（无封面为 `null`）、`engineFamily`、`manifestSha256`、同源 `downloadUrl`、`zipSizeBytes` 和 `files: [{path,size,sha256}]`。不暴露 R2 对象键或管理凭据，也不增加 D1 表。下载复用现有 `/download`，保留其状态验证、缓存、统计及响应头。
+返回 `Cache-Control: no-store` 的 `viprpg-kai.import.v1` JSON：`archiveVersionId`、`workId`、`title`、同源 `coverUrl`（无封面为 `null`）、`engineFamily`、`manifestSha256`、同源 `downloadUrl`、`zipSizeBytes` 和 `files: [{path,size,sha256}]`。不暴露 R2 对象键或管理凭据，也不增加 D1 表。下载复用在线游玩的 `/download?profile=web-play-v1`，保留状态验证、缓存、统计及响应头。清单文件列表和 ZIP 大小同步按 `shouldSkipWebPlayLocalWrite` 过滤：排除 EXE、普通 DLL 和 TXT，保留规定的根目录引擎识别 DLL；共享 Windows Player.exe 不补入此 ZIP。过滤适用于已有归档，不重写其 manifest；`manifestSha256` 仍表示原归档身份。更改前已入队的下载仍沿其保存的完整清单和原下载地址完成，新导入才使用过滤 ZIP。
 
 限制为 1 GiB ZIP、50,000 文件、8 MiB 导入清单，必须包含根目录 `RPG_RT.ldb` 和 `RPG_RT.lmt`。使用当前网站生成的 UTF-8 STORE ZIP。客户端核对下载长度、`X-Manifest-SHA256`、`X-Download-Zip-Builder` 和全部文件 SHA-256，拒绝额外／重复／大小写冲突条目、越界路径和异常大小。manifestSha256 是原归档清单身份，不是重新打包 ZIP 的哈希。
 

@@ -13,6 +13,9 @@ type Props = {
     downloadHref: string;
     totalFiles: number;
     totalSizeBytes: number;
+    downloadSizeBytes: number | null;
+    webPlayFileCount: number;
+    webPlaySizeBytes: number;
   } | null;
   externalDownload: { url: string } | null;
 };
@@ -53,11 +56,11 @@ export function WorkActionBar({
               <Download aria-hidden />
               下载 ZIP
               <span className="text-xs text-muted">
-                {formatBytes(archive.totalSizeBytes)}
+                {archive.downloadSizeBytes === null ? "共享播放器暂不可用" : formatBytes(archive.downloadSizeBytes)}
               </span>
             </a>
             {["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
-              archive.totalSizeBytes <= 1024 ** 3 && archive.totalFiles <= 50000 ? (
+              archive.webPlaySizeBytes <= 1024 ** 3 && archive.webPlayFileCount <= 50000 ? (
                 <KaiImportLink archiveVersionId={archive.id} />
               ) : null}
           </div>

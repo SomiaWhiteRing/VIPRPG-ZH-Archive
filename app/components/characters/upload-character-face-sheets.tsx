@@ -190,7 +190,7 @@ export function UploadCharacterFaceSheets({
           ) : null}
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3">
-          <span className="text-xs text-muted">选中后添加，或将整张脸图拖到右侧。</span>
+          <span className="text-xs text-muted">选中后添加，或拖拽脸图。</span>
           <Button type="button" size="sm" variant="outline" disabled={busy || !activeSheet || assignedHashes.has(activeSheet.sha256)} onClick={() => activeSheet && addSheets([activeSheet])}>
             {activeSheet && assignedHashes.has(activeSheet.sha256) ? "已添加" : "添加选中脸图"}<ArrowRight className="size-4" />
           </Button>

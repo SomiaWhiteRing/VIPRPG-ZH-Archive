@@ -11,6 +11,7 @@ import { MAX_RESOURCE_ICON_BYTES, type ToolArtifact } from "@/lib/resources";
 import { getArtifact, getResource } from "./data";
 import { batchMutation, type Actor } from "./mutations";
 import { verifyPackageArtifact } from "./packages";
+import { artifactCrc32 } from "./archive-player";
 
 function checksumHex(value: ArrayBuffer | undefined) {
   return value
@@ -130,6 +131,7 @@ async function finishUpload(
     throw new HttpError(409, "上传结果请重新确认");
   await verifyArtifactObject(runtime, row);
   await verifyPackageArtifact(runtime, row);
+  const crc = row.format === "exe" ? row.crc32 ?? await artifactCrc32(runtime.bucket, row) : null;
   await batchMutation(
     runtime,
     actor,
@@ -140,9 +142,9 @@ async function finishUpload(
       runtime.db
         .prepare(
           `UPDATE tool_artifacts SET storage_status=CASE WHEN upload_token=? AND storage_status IN ('uploading','uncertain','pending') THEN 'ready' ELSE NULL END,
-      updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      crc32=COALESCE(crc32,?),updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         )
-        .bind(token, id),
+        .bind(token, crc, id),
     ],
     { artifactId: id, sha256: row.sha256 },
   );
@@ -272,6 +274,7 @@ export async function confirmArtifact(
   }
   assertArtifactObject(row, object);
   await verifyPackageArtifact(runtime, row);
+  const crc = row.format === "exe" ? row.crc32 ?? await artifactCrc32(runtime.bucket, row) : null;
   await batchMutation(
     runtime,
     actor,
@@ -281,9 +284,9 @@ export async function confirmArtifact(
     [
       runtime.db
         .prepare(
-          "UPDATE tool_artifacts SET storage_status='ready',updated_at=CURRENT_TIMESTAMP WHERE id=?",
+          "UPDATE tool_artifacts SET storage_status='ready',crc32=COALESCE(crc32,?),updated_at=CURRENT_TIMESTAMP WHERE id=?",
         )
-        .bind(id),
+        .bind(crc, id),
     ],
     { artifactId: id, sha256: row.sha256 },
   );

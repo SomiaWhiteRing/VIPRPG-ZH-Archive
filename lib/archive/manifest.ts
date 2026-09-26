@@ -1,6 +1,7 @@
 import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import type { ResourceCleanupReport } from "./resource-cleanup";
+import type { SharedPlayerReplacement } from "./shared-player";
 
 import type {
   CharacterPortraitChoice,
@@ -31,6 +32,7 @@ export type ArchiveManifest = {
     excludedFileCount: number;
     excludedSize: number;
     resourceCleanup?: ResourceCleanupReport | null;
+    sharedPlayer?: SharedPlayerReplacement | null;
   };
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
@@ -50,6 +52,7 @@ export type ArchiveSourceManifest = {
     | "excludedFileCount"
     | "excludedSize"
     | "resourceCleanup"
+    | "sharedPlayer"
   >;
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];

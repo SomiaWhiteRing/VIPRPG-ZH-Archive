@@ -29,7 +29,7 @@
 
 结构由 migrations 中的首发基线及有序增量迁移维护；正式初始化后不改写已应用文件。图标复用 `blobs`，公开媒体查询、SQL 防清理触发器、手动 GC 和定时 GC 均保护链接图标的有效引用，包括隐藏／草稿链接。图标支持 PNG、GIF 和 JPG／JPEG、最多 512 KiB，宽高各为 1–512px；根据文件内容识别格式，原样存储，保留透明背景和动画，后台草稿通过根管理员接口预览。
 
-软件原始包存入私有 R2 的 `tools/artifacts/<artifactId>/<sha256>`。不走游戏 import job、文件白名单、解包重组或 core pack。工具对象由链接后台独立检查，通用归档扫描不再将此命名空间报告为异常游戏对象。
+软件原始包存入私有 R2 的 `tools/artifacts/<artifactId>/<sha256>`。不走游戏 import job、文件白名单、解包重组或 core pack。工具对象由链接后台独立检查，通用归档扫描不再将此命名空间报告为异常游戏对象。开启共享播放器的游戏在下载时直接将 Kai Windows EXE 原始字节写入 ZIP，不产生新的 R2 文件副本。
 
 支持 Windows x64 的 ZIP／EXE 和 Android universal APK。Windy 固定为 `windows-x64`／ZIP，以匹配现有客户端。平台与格式分别保存；同一版本、同一平台只允许一个未清理的安装包。
 
@@ -38,6 +38,8 @@
 单文件必须大于 0 且不超过 **95,000,000 字节**。浏览器在独立 Worker 中计算 SHA-256，然后登记不可变的文件身份；首期浏览器哈希读取整个文件，但不占用 UI 主线程计算。XHR 提供发送进度与取消，原始字节通过有长度限制的 `FixedLengthStream` 交给 R2；Worker 不将完整安装包读入 ArrayBuffer。
 
 R2 `put` 同时使用 SHA-256 校验和条件写入，完成后检查 R2 实际长度与 checksum，再标记 ready。不能用自定义元数据中的摘要代替存储校验结果。
+
+EXE 上传完成／恢复确认时，服务器额外流式计算 CRC32，保存于 `tool_artifacts.crc32`，供游戏下载重组 ZIP 使用；已保存的 CRC32 不可修改。历史包的空值不阻止原始文件下载，共享游戏下载可只读计算并缓存，或在草稿确认时补齐。此扩展由 `0003_shared_archive_player.sql` 增量迁移提供，不改变现有更新 JSON 协议。
 
 上传状态为 pending、uploading、uncertain、ready、cleanup、cleaned。中断后先重新读取，再确认上传结果：已完整落盘的文件恢复 ready；没有对象且活动上传已超时的记录回到 pending，可重选同一文件上传。当前上传的保护窗口为十五分钟，期间不允许竞争上传或清理。重传文件必须匹配登记的长度和摘要。
 

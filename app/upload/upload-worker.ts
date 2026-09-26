@@ -13,6 +13,7 @@ import {
 } from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
+import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
@@ -208,7 +209,15 @@ async function startSource(
     task = setPhase(task, "hashing", 0, null);
     runtime.task = task = emitTask(task, true);
 
-    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources);
+    if (message.useSharedPlayer && sourceFiles.some((file) => isSharedPlayerPath(file.path))) {
+      const selection = await jsonFetch<{ status: string; artifact?: { format: string } }>(
+        "/api/tools/easyrpg-kai/updates/stable/windows-x64", { method: "GET" },
+      );
+      if (selection.status !== "available" || selection.artifact?.format !== "exe") {
+        throw new Error("共享 Kai 播放器不可用，请先在“链接”中推荐 Windows EXE，或关闭共享播放器选项。");
+      }
+    }
+    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
 
@@ -267,6 +276,7 @@ async function startSource(
     runtime.task = task;
     await waitForCancellation(runtime);
     const preparedSource: PreparedArchiveSource = {
+      useSharedPlayer: message.useSharedPlayer,
       sourceKind: message.sourceKind,
       sourceName: task.sourceName,
       files: toManifestFiles(scan.includedFiles),
@@ -617,6 +627,7 @@ async function scanAndHash(
   initialTask: BrowserUploadTaskSnapshot,
   sourceFiles: SourceFile[],
   cleanupResources: boolean,
+  useSharedPlayer: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -624,6 +635,10 @@ async function scanAndHash(
   blobObjects: Map<string, BlobObject>;
 }> {
   let task = initialTask;
+  const players = useSharedPlayer ? sourceFiles.filter((file) => isSharedPlayerPath(file.path)) : [];
+  if (players.length > 1) throw new Error("根目录存在多个大小写不同的 Player.exe，请先保留一个再上传。");
+  const player = players[0];
+  task = { ...task, stats: { ...task.stats, sharedPlayer: player ? { path: player.path, size: player.size } : null } };
   let includedFiles: IncludedFile[] = [];
   const coreFiles: IncludedFile[] = [];
   const blobObjects = new Map<string, BlobObject>();
@@ -638,7 +653,9 @@ async function scanAndHash(
     sourceFiles,
     resolveHashConcurrency(),
     hashByteBudgetBytes,
-    async (source) => scanOneFile(task.localTaskId, source),
+    async (source): Promise<ScanFileResult> => source === player
+      ? { kind: "excluded", source, fileType: "shared-player" }
+      : scanOneFile(task.localTaskId, source),
     async (result) => {
       recordResult = recordResult.then(async () => {
         processedFiles += 1;
@@ -878,6 +895,7 @@ function buildSourceManifest(
       excludedFileCount: source.stats.excludedFileCount,
       excludedSize: source.stats.excludedSizeBytes,
       resourceCleanup: source.stats.resourceCleanup,
+      ...(source.stats.sharedPlayer ? { sharedPlayer: source.stats.sharedPlayer } : {}),
     },
     corePacks: [
       {

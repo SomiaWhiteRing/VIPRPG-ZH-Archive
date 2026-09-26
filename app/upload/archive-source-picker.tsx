@@ -8,7 +8,16 @@ import { Progress } from "@/app/components/ui/progress";
 import { normalizeArchivePath } from "@/lib/archive/file-policy";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
-import { FileArchive, FolderOpen, LoaderCircle, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  FileArchive,
+  FolderOpen,
+  LoaderCircle,
+  SlidersHorizontal,
+  Upload,
+  X,
+} from "lucide-react";
+import { Popover } from "radix-ui";
 import type { ChangeEvent, DragEvent, RefObject } from "react";
 import { useId, useRef, useState } from "react";
 import type {
@@ -27,6 +36,8 @@ export function ArchiveSourcePicker({
   canceling,
   cleanupResources,
   onCleanupResourcesChange,
+  useSharedPlayer,
+  onUseSharedPlayerChange,
   disabled,
   existingSource = null,
   mode,
@@ -41,6 +52,8 @@ export function ArchiveSourcePicker({
 }: {
   canceling: boolean;
   cleanupResources: boolean;
+  useSharedPlayer: boolean;
+  onUseSharedPlayerChange: (value: boolean) => void;
   onCleanupResourcesChange: (value: boolean) => void;
   disabled: boolean;
   existingSource?: ArchiveSourceSummary | null;
@@ -56,7 +69,6 @@ export function ArchiveSourcePicker({
 }) {
   const dragDepthRef = useRef(0);
   const instructionsId = useId();
-  const cleanupResourcesId = useId();
   const [fileDragActive, setFileDragActive] = useState(false);
   const archiveInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,8 +83,16 @@ export function ArchiveSourcePicker({
 
   return (
     <div>
-      <header className="mb-4">
+      <header className="mb-3 flex items-center justify-between gap-3">
         <h2 className="m-0 text-lg font-bold">游戏文件</h2>
+        <ArchiveAdvancedOptions
+          cleanupResources={cleanupResources}
+          disabled={disabled}
+          onCleanupResourcesChange={onCleanupResourcesChange}
+          onUseSharedPlayerChange={onUseSharedPlayerChange}
+          task={sourceSummary ? task : null}
+          useSharedPlayer={useSharedPlayer}
+        />
       </header>
       {sourceSummary ? (
         <UploadTaskCard
@@ -183,25 +203,150 @@ export function ArchiveSourcePicker({
                 }}
               />
             </div>
-            <div className="mt-3 flex items-center gap-2 text-left text-sm" data-upload-picker data-resource-cleanup-option>
-              <Checkbox
-                id={cleanupResourcesId}
-                checked={cleanupResources}
-                disabled={disabled}
-                onCheckedChange={(checked) => onCleanupResourcesChange(checked === true)}
-              />
-              <Label htmlFor={cleanupResourcesId}>清理未引用素材</Label>
-              <InfoTooltip>
-                <div className="space-y-2 text-left">
-                  <p>上传时会自动对文件进行分析，排除掉素材文件夹未实际使用的素材进行上传。</p>
-                  <p>启用该选项能够有效减少游戏的ZIP大小，减少上传和下载时间。但如果游戏有在素材文件夹藏东西让玩家自己在游戏外挖掘的做法可能会被误删。</p>
-                </div>
-              </InfoTooltip>
-            </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function ArchiveAdvancedOptions({
+  cleanupResources,
+  disabled,
+  onCleanupResourcesChange,
+  onUseSharedPlayerChange,
+  task,
+  useSharedPlayer,
+}: {
+  cleanupResources: boolean;
+  disabled: boolean;
+  onCleanupResourcesChange: (value: boolean) => void;
+  onUseSharedPlayerChange: (value: boolean) => void;
+  task: BrowserUploadTaskSnapshot | null;
+  useSharedPlayer: boolean;
+}) {
+  const cleanupResourcesId = useId();
+  const sharedPlayerId = useId();
+
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <Button
+          className="group gap-1.5 text-muted data-[state=open]:bg-primary/10 data-[state=open]:text-primary"
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <SlidersHorizontal aria-hidden />
+          高级选项
+          <ChevronDown aria-hidden className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+        </Button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          aria-label="游戏文件高级选项"
+          className="z-50 w-96 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-3 text-card-foreground shadow-surface data-[side=top]:[--popover-slide-offset:0.5rem] motion-safe:data-[state=open]:animate-popover-slide-open motion-safe:data-[state=closed]:animate-popover-slide-closed"
+          collisionPadding={12}
+          side="bottom"
+          sideOffset={6}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">高级选项</h3>
+            <Popover.Close asChild>
+              <Button
+                aria-label="关闭高级选项"
+                className="size-7 text-muted pointer-coarse:size-9"
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <X aria-hidden />
+              </Button>
+            </Popover.Close>
+          </div>
+          <div className="grid gap-1">
+            <div className="flex min-h-7 items-center gap-2" data-resource-cleanup-option>
+              <Checkbox
+                checked={cleanupResources}
+                disabled={disabled}
+                id={cleanupResourcesId}
+                onCheckedChange={(checked) => onCleanupResourcesChange(checked === true)}
+              />
+              <Label className="flex-1 py-1.5" htmlFor={cleanupResourcesId}>清理未引用素材</Label>
+              <InfoTooltip>排除游戏未使用的素材，减小上传与下载体积。</InfoTooltip>
+            </div>
+            <div className="flex min-h-7 items-center gap-2">
+              <Checkbox
+                checked={useSharedPlayer}
+                disabled={disabled}
+                id={sharedPlayerId}
+                onCheckedChange={(checked) => onUseSharedPlayerChange(checked === true)}
+              />
+              <Label className="flex-1 py-1.5" htmlFor={sharedPlayerId}>使用共享EasyRPG</Label>
+              <InfoTooltip>移除根目录中的Player.exe，下载时使用最新的EasyRPG Player Kai。</InfoTooltip>
+            </div>
+          </div>
+          <UploadCleanupLog task={task} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) {
+  const headingId = useId();
+  const cleanup = task?.stats.resourceCleanup;
+  const sharedPlayer = task?.stats.sharedPlayer;
+  const files = [
+    ...(sharedPlayer ? [{ ...sharedPlayer, reason: "共享播放器" }] : []),
+    ...(cleanup?.excluded.map((file) => ({ ...file, reason: "未引用素材" })) ?? []),
+  ];
+  const excludedSize = files.reduce((sum, file) => sum + file.size, 0);
+  const summary = files.length
+    ? `已排除 ${files.length} 个文件 · 减少 ${formatBytes(excludedSize)}`
+    : cleanup?.status === "no_candidates"
+      ? "未发现可分析的素材"
+      : cleanup?.status === "preserved"
+        ? "无法完整判断，已保留全部素材"
+        : cleanup
+          ? "素材检查完成，没有需要清理的文件"
+          : task?.sourceReady
+            ? "本次上传没有清理记录"
+            : task
+              ? "文件检查完成后显示清理记录"
+              : "选择文件后，清理记录会显示在这里";
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="mt-3 border-t border-border pt-3"
+      data-resource-cleanup={cleanup?.status}
+    >
+      <h3 className="text-sm font-semibold" id={headingId}>清理日志</h3>
+      <p aria-live="polite" className="mt-1 text-xs text-muted">{summary}</p>
+      {files.length || cleanup?.reasons.length ? (
+        <div
+          aria-label="清理日志明细"
+          className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs"
+          role="region"
+          tabIndex={0}
+        >
+          <ul className="grid gap-1 whitespace-nowrap">
+            {cleanup?.reasons.map((reason) => (
+              <li className="min-w-max text-muted" key={reason}>{reason}</li>
+            ))}
+            {files.map((file) => (
+              <li className="flex min-w-max items-center gap-3" key={file.path}>
+                <span className="flex-1">{file.path}</span>
+                <span className="text-muted">{file.reason}</span>
+                <span className="text-muted tabular-nums">{formatBytes(file.size)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -319,21 +464,6 @@ function UploadTaskCard({
           <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">
             {task.error}
           </Notice>
-        ) : null}
-        {task?.stats.resourceCleanup ? (
-          <details className="mt-3 text-sm" data-resource-cleanup={task.stats.resourceCleanup.status}>
-            <summary className="cursor-pointer">
-              {task.stats.resourceCleanup.status === "no_candidates" ? "未发现可分析的素材" :
-                task.stats.resourceCleanup.status === "preserved" ? "素材检查：无法完整判断，已全部保留" :
-                `素材检查：排除 ${task.stats.resourceCleanup.excluded.length} 个文件，减少 ${formatBytes(task.stats.resourceCleanup.excluded.reduce((sum, file) => sum + file.size, 0))}`}
-            </summary>
-            {task.stats.resourceCleanup.reasons.map((reason) => <p className="mt-1 text-xs text-muted" key={reason}>{reason}</p>)}
-            {task.stats.resourceCleanup.excluded.length ? (
-              <ul className="mt-2 max-h-48 overflow-auto text-xs">
-                {task.stats.resourceCleanup.excluded.map((file) => <li key={file.path}>{file.path} · {formatBytes(file.size)}</li>)}
-              </ul>
-            ) : null}
-          </details>
         ) : null}
       </div>
       {showCancel || canRestart ? (
