@@ -1,6 +1,6 @@
 import { open } from "node:fs/promises";
 import { readAndroidPackage } from "../lib/android-package";
-import { MAX_TOOL_BYTES } from "../lib/resources";
+import { MAX_TOOL_BYTES } from "../lib/resource-limits";
 
 const path = process.argv[2];
 if (!path) throw new Error("Usage: tsx scripts/inspect-android-package.ts <release.apk>");

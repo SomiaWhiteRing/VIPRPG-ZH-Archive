@@ -3,3 +3,85 @@
 @import "react-datepicker/dist/react-datepicker.css" layer(components);
 @import "./shared.css";
 @source "../lib";
+
+/* Website-only theme and component animations. Cross-platform rules live in shared.css. */
+@theme {
+  --color-card-foreground: #17212b;
+  --color-muted-foreground: #68737d;
+  --color-secondary: #1f6f67;
+  --color-secondary-foreground: #ffffff;
+  --color-accent-foreground: #ffffff;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
+  --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
+
+  --animate-select-roll-open: select-roll-open 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-select-roll-closed: select-roll-closed 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-popover-slide-open: popover-slide-open 180ms ease-out both;
+  --animate-popover-slide-closed: popover-slide-closed 120ms ease-in both;
+  --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
+  --animate-site-toast-reduced-motion: site-toast-reduced-motion 1ms both;
+
+  /* Reveal from the trigger without scaling text; leave room for the shadow. */
+  @keyframes select-roll-open {
+    from { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
+    to { clip-path: inset(-1rem); }
+  }
+  @keyframes select-roll-closed {
+    from { clip-path: inset(-1rem); }
+    to { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
+  }
+  @keyframes popover-slide-open {
+    from { opacity: 0; transform: translateY(var(--popover-slide-offset, -0.5rem)); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes popover-slide-closed {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(var(--popover-slide-offset, -0.5rem)); }
+  }
+  @keyframes site-toast-slide-in {
+    from { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes site-toast-slide-out {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(calc(100% + 1rem)); }
+  }
+  @keyframes site-toast-countdown {
+    from { transform: scaleX(1); opacity: 0.85; }
+    to { transform: scaleX(0); opacity: 0.2; }
+  }
+  /* Animation end events must still complete entry and exit with reduced motion. */
+  @keyframes site-toast-reduced-motion {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+}
+
+/* Client-side navigation keeps the old page visible, so show a slim progress
+   bar only when the request lasts long enough to be noticeable. */
+.site-navigation-progress {
+  opacity: 0;
+  transform: scaleX(0);
+  animation: site-navigation-progress 8s cubic-bezier(0.12, 0.5, 0.2, 1) 500ms forwards;
+}
+
+@keyframes site-navigation-progress {
+  from { opacity: 1; transform: scaleX(0.06); }
+  20% { transform: scaleX(0.42); }
+  60% { transform: scaleX(0.78); }
+  to { opacity: 1; transform: scaleX(0.93); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-navigation-progress {
+    animation: site-navigation-progress-reduced 1ms linear 500ms forwards;
+  }
+
+  @keyframes site-navigation-progress-reduced {
+    from { opacity: 1; transform: scaleX(0.5); }
+    to { opacity: 1; transform: scaleX(0.5); }
+  }
+}

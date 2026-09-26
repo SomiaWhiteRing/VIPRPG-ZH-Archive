@@ -352,6 +352,8 @@ async function run(): Promise<void> {
   const zipInput = page.locator(
     'input[type="file"][accept*=".zip"]',
   );
+  const advancedOptionsButton = page.getByRole("button", { name: "高级选项", exact: true });
+  await advancedOptionsButton.click();
   const cleanupOption = page.locator("[data-resource-cleanup-option]");
   const cleanupCheckbox = cleanupOption.getByRole("checkbox");
   assert.equal(await cleanupCheckbox.isChecked(), true, "resource cleanup defaults on");
@@ -365,16 +367,20 @@ async function run(): Promise<void> {
     await page.screenshot({ path: reportPath.replace(/\.json$/, ".options.png"), fullPage: true });
   }
   await page.keyboard.press("Escape");
+  await page.getByRole("tooltip").waitFor({ state: "hidden" });
   await cleanupOption.locator("label").click();
   assert.equal(await cleanupCheckbox.isChecked(), false);
   assert.equal(unexpectedFileChoosers, 0, "option and tooltip never open file chooser");
   page.off("filechooser", recordChooser);
   await page.reload({ waitUntil: "networkidle" });
+  await advancedOptionsButton.click();
   assert.equal(await cleanupCheckbox.isChecked(), false, "disabled preference survives reload");
   await cleanupCheckbox.check();
   await page.reload({ waitUntil: "networkidle" });
+  await advancedOptionsButton.click();
   assert.equal(await cleanupCheckbox.isChecked(), true, "enabled preference survives reload");
   if (keepResources) await cleanupCheckbox.uncheck();
+  await page.getByRole("button", { name: "关闭高级选项", exact: true }).click();
   measurements.cleanupPreferenceVerified = true;
   let putCount = 0;
   const countUpload = (request: import("playwright").Request) => {

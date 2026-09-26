@@ -1,8 +1,8 @@
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import { MAX_TOOL_BYTES } from "@/lib/resource-limits";
 import {
-  MAX_TOOL_BYTES,
   RESOURCE_TARGETS,
   type ResourceLink,
   type ToolRelease,

@@ -22,7 +22,9 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 自动触发范围包括 Android 原生代码与离线页、离线页实际引用的共用游玩模块和 UI 组件、共用样式、EasyRPG 运行组件及其版本配置、应用图标，以及构建／验包脚本、依赖清单和锁文件、构建配置与 Android workflow。普通网站页面、服务端 API、数据库迁移、部署配置和文档更新不会单独触发打包；`android/` 内的 Markdown 文档也排除在外。`package.json` 或 `package-lock.json` 改动仍会触发，因为 Android 与网站共用 npm 安装环境。
 
-网站和离线页通过 `app/shared.css` 共用主题与基础样式，Android 的 Tailwind 只扫描离线页和包内组件，不扫描整个网站。新增或调整离线页的共用依赖时，须同步维护 workflow 的 `on.push.paths`；新增共用 UI 组件还须更新 `android/web/styles.css` 的 `@source`。
+网站和离线页通过 `app/shared.css` 共用主题与基础样式，网站专用样式放在 `app/globals.css`。Android 的 Tailwind 只扫描离线页和包内组件，不扫描整个网站。验包大小限制与网站上传组件共用 `lib/resource-limits.ts`，不依赖网站资源类型所在的 `lib/resources.ts`；只修改网站专用样式或资源类型不会触发 Android 构建。新增或调整离线页的共用依赖时，须同步维护 workflow 的 `on.push.paths`；新增共用 UI 组件还须更新 `android/web/styles.css` 的 `@source`。
+
+共享样式的准入条件见 [AGENTS.md](../AGENTS.md)：须核实网站与 APK 离线页两端的实际消费者，并在样式块注释中记录。网站组件之间的复用不等于跨端共享；导航进度条、网站选择器和通知动画均留在网站样式入口。
 
 - CI 版本名为 `0.3.<run_number>`，`versionCode = 100000 + run_number`；递增由 workflow 负责，不用逐次修改 Gradle。不要重建 workflow 或降低此序号基数；手动重建旧提交使用新的运行序号。
 - tag 为 `android-<staging|production>-<versionCode>`，附件包含 `viprpg-release.apk` 与 `SHA256SUMS.txt`，说明自动结算该次提交的 GitHub release notes。所有附件就绪后才公开 Release；已经发布的运行重跑时跳过打包，避免同一构建身份对应不同文件。

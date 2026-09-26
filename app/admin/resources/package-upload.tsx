@@ -8,11 +8,8 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { readAndroidFile, type AndroidBuildInfo } from "@/lib/android-package";
 import { readWindyFile, type WindyBuildInfo } from "@/lib/windy-package";
-import {
-  MAX_TOOL_BYTES,
-  type ResourceEditorData,
-  type ToolArtifact,
-} from "@/lib/resources";
+import { MAX_TOOL_BYTES } from "@/lib/resource-limits";
+import type { ResourceEditorData, ToolArtifact } from "@/lib/resources";
 import { postJson } from "./client";
 
 export function PackageUpload({

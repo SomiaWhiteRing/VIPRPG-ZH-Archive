@@ -42,7 +42,7 @@ on:
       - 'lib/ui/cn.ts'
       - 'lib/android-package.ts'
       - 'lib/package-zip.ts'
-      - 'lib/resources.ts'
+      - 'lib/resource-limits.ts'
       - 'public/play/**'
       - 'public/icon/windI.png'
   workflow_dispatch:
