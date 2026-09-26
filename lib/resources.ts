@@ -1,4 +1,3 @@
-export const MAX_TOOL_BYTES = 95_000_000;
 export const MAX_RESOURCE_ICON_BYTES = 512 * 1024;
 export const RESOURCE_TARGETS = ["windows-x64", "android-universal"] as const;
 export type ResourceTarget = (typeof RESOURCE_TARGETS)[number];

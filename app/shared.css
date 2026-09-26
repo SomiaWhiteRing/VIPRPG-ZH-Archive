@@ -1,4 +1,10 @@
-/* Apply native fullscreen geometry in the browser's fullscreen style update,
+/* Cross-platform styles only: app/globals.css and android/web/styles.css.
+   Each block must identify real website and APK offline consumers (see AGENTS.md).
+   Website-only rules belong in globals.css or a website component stylesheet;
+   Android-only rules belong in android/web/. */
+
+/* Consumers: app/play/[archiveVersionId]/web-play-client.tsx and android/web/offline-app.tsx.
+   Apply native fullscreen geometry in the browser's fullscreen style update,
    without waiting for React's fullscreenchange state update. */
 #web-player-frame:fullscreen {
   position: fixed;
@@ -14,34 +20,9 @@
   background: #000;
 }
 
-/* Client-side navigation keeps the old page visible, so show a slim progress
-   bar only when the request lasts long enough to be noticeable. */
-.site-navigation-progress {
-  opacity: 0;
-  transform: scaleX(0);
-  animation: site-navigation-progress 8s cubic-bezier(0.12, 0.5, 0.2, 1) 500ms forwards;
-}
-
-@keyframes site-navigation-progress {
-  from { opacity: 1; transform: scaleX(0.06); }
-  20% { transform: scaleX(0.42); }
-  60% { transform: scaleX(0.78); }
-  to { opacity: 1; transform: scaleX(0.93); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .site-navigation-progress {
-    animation: site-navigation-progress-reduced 1ms linear 500ms forwards;
-  }
-
-  @keyframes site-navigation-progress-reduced {
-    from { opacity: 1; transform: scaleX(0.5); }
-    to { opacity: 1; transform: scaleX(0.5); }
-  }
-}
-
-/* React Aria tracks pointer, keyboard and assistive-technology interactions.
-   Keep the native fallback before hydration and editing feedback for text fields.
+/* Consumers: shared Button/Input in website pages and the Android offline player/layout editor.
+   React Aria tracks interaction mode via app/root.tsx on the website.
+   Keep the native fallback for Android and before website hydration, plus editing feedback.
    Apply the same policy to every focus-visible utility, including portal content. */
 @custom-variant focus-visible {
   &:focus-visible:where(:root:not([data-focus-visible]) *),
@@ -65,72 +46,22 @@
   }
 }
 
+/* Consumers: website pages, android/web/offline-app.tsx and offline.css,
+   shared Button/Input variants, and Tailwind base typography in both entry points. */
 @theme {
-  --animate-select-roll-open: select-roll-open 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  --animate-select-roll-closed: select-roll-closed 160ms cubic-bezier(0.4, 0, 1, 1) both;
-  --animate-popover-slide-open: popover-slide-open 180ms ease-out both;
-  --animate-popover-slide-closed: popover-slide-closed 120ms ease-in both;
-  --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
-  --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
-  --animate-site-toast-reduced-motion: site-toast-reduced-motion 1ms both;
-
-  /* Reveal from the trigger without scaling text; leave room for the shadow. */
-  @keyframes select-roll-open {
-    from { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
-    to { clip-path: inset(-1rem); }
-  }
-  @keyframes select-roll-closed {
-    from { clip-path: inset(-1rem); }
-    to { clip-path: inset(var(--select-roll-inset, 0 0 100% 0)); }
-  }
-  @keyframes popover-slide-open {
-    from { opacity: 0; transform: translateY(var(--popover-slide-offset, -0.5rem)); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes popover-slide-closed {
-    from { opacity: 1; transform: translateY(0); }
-    to { opacity: 0; transform: translateY(var(--popover-slide-offset, -0.5rem)); }
-  }
-  @keyframes site-toast-slide-in {
-    from { opacity: 0; transform: translateX(calc(100% + 1rem)); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes site-toast-slide-out {
-    from { opacity: 1; transform: translateX(0); }
-    to { opacity: 0; transform: translateX(calc(100% + 1rem)); }
-  }
-  @keyframes site-toast-countdown {
-    from { transform: scaleX(1); opacity: 0.85; }
-    to { transform: scaleX(0); opacity: 0.2; }
-  }
-  /* Animation end events must still complete entry and exit with reduced motion. */
-  @keyframes site-toast-reduced-motion {
-    from { opacity: 1; }
-    to { opacity: 1; }
-  }
-
   --color-background: #f5f4ef;
   --color-foreground: #17212b;
   --color-card: #ffffff;
-  --color-card-foreground: #17212b;
   --color-muted: #68737d;
-  --color-muted-foreground: #68737d;
   --color-border: #d9ddd9;
   --color-input: #d9ddd9;
   --color-primary: #2f9f92;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #1f6f67;
-  --color-secondary-foreground: #ffffff;
   --color-accent: #d7652d;
-  --color-accent-foreground: #ffffff;
   --color-destructive: #b42318;
   --color-destructive-foreground: #ffffff;
   --color-rm2k-green-1: #507d5f;
   --color-rm2k-green-2: #1a4729;
   --font-sans: "Inter", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
   --font-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
-  --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
-  --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
 }
