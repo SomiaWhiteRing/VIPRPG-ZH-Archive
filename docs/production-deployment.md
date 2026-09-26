@@ -58,9 +58,11 @@ npm run db:production:migrate -- --apply
 
 ## 首次正式初始化
 
-2026-09-26 只读核对发现：现有 `viprpg-zh-archive` Worker 仍绑定旧 Workers.dev origin 和名为 prod 的既有 D1/R2；Cloudflare 尚无 viprpg.org custom domain。其资源名称不能证明为空库或已与当前 schema 对齐。上线前重新核实，不覆盖、删除或重建这些旧资源。
+2026-09-26 已按负责人本次部署授权完成首次上线：`viprpg-zh-archive` 绑定 viprpg.org，新 D1/R2 均名为 `viprpg-archive-production`。初始干净数据包括 930 个角色、132 个分类及 17,173 个对象（150,282,413 字节），不含开发用户和作品；schema、迁移账本、外键、逐表数量及全量对象大小／摘要已核对。首次数据清单和旧 Worker 版本／绑定记录位于本机忽略目录 `output/production-setup/`。
 
-首次发布单独准备并批准以下批次：
+旧 `viprpg-archive-prod` D1/R2 和 staging 资源保持原状，不能当作当前正式数据源。当前正式身份来自部署绑定及 production Environment 配置。旧 Worker 版本使用旧 schema／origin，不应直接回滚它来服务新正式库；首发候选及之后的兼容版本才是正式回滚基线。
+
+首次初始化采用以下步骤；日常部署不重复导入种子：
 
 1. 确定正式 Worker、独立空 D1/R2、DO、限流 namespace 与 AUTH_SECRET；保存旧资源身份、Worker 版本和恢复方案。核实 TLS、邮件域验证、EMAIL binding 和 `noreply@viprpg.org` 实际发信。
 2. 应用完整迁移链，记录首发 SHA、文件校验和与账本。用[干净种子](./staging-deployment.md#干净种子)准备经过审核的数据，只上传 manifest 指定对象；不导入本地／staging 的用户、会话或整库。软件包和更新频道另列发布清单。

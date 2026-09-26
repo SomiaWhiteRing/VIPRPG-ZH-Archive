@@ -8,13 +8,13 @@
 | --- | --- | --- |
 | 本地开发 | `npm run dev` 输出的 `Local` 地址 | Vite 实际监听端口与请求 origin |
 | staging | `https://staging.viprpg.org` | 本地 `wrangler.jsonc` 的 `env.staging`；CI 使用 staging environment 的 `WRANGLER_CONFIG_JSONC` |
-| production | 目标为 `https://viprpg.org`；实际首次发布另行确认 | 本地 Wrangler 顶层；production Environment 的 `PRODUCTION_WRANGLER_CONFIG_JSONC`，见[正式手册](./production-deployment.md) |
+| production | `https://viprpg.org`（2026-09-26 首次上线） | 本地 Wrangler 顶层；production Environment 的 `PRODUCTION_WRANGLER_CONFIG_JSONC`，见[正式手册](./production-deployment.md) |
 
 staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Workers.dev 入口已弃用，不作为检查失败时的备用地址，也不从 Worker 名称拼接 URL。`smoke:staging` 固定 staging origin，`smoke:production` 固定正式 origin；不匹配的 `SMOKE_BASE_URL` 覆盖会被拒绝。
 
 `wrangler.example.jsonc` 是结构模板，其中域名是当前目标，资源 ID 和名称保留占位符。被忽略的 `wrangler.jsonc` 只描述本机配置，不证明线上绑定；CI 由 `scripts/prepare-wrangler-config.mjs` 合成配置。修改本地文件不会同步 GitHub secret；生成的 `build/server/wrangler.json` 只代表那次构建所选环境。
 
-正式目标和网站 Kai 来源已配置为 viprpg.org；这不代表域名或 APK 已发布。旧远端 Worker 与历史资源的实际状态见[正式手册](./production-deployment.md#首次正式初始化)。Android 接入仍须核对网站与 APK 两端来源，见[导入说明](./easyrpg-android-import.md)。
+正式站已在 viprpg.org 上线，网站与 Kai 当前客户端来源白名单均包含正式域名。历史 APK 不会自动更新白名单，须安装新版；旧远端资源继续保留，见[正式手册](./production-deployment.md#首次正式初始化)。Android 接入及具体构建来源见[导入说明](./easyrpg-android-import.md)。
 
 ## 干净种子
 
