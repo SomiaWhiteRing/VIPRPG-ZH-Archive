@@ -35,9 +35,9 @@ export const LANGUAGE_OPTIONS = [
 ] as const;
 
 export const ENGINE_OPTIONS = [
-  { value: "rpg_maker_2000", label: "RPG Maker 2000", shortLabel: "2000", distribution: "archive" },
-  { value: "rpg_maker_2003", label: "RPG Maker 2003", shortLabel: "2003", distribution: "archive" },
-  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac", shortLabel: "2003 Maniac", distribution: "archive" },
+  { value: "rpg_maker_2000", label: "RPG Maker 2000", shortLabel: "2k", distribution: "archive" },
+  { value: "rpg_maker_2003", label: "RPG Maker 2003", shortLabel: "2k3", distribution: "archive" },
+  { value: "rpg_maker_2003_maniac", label: "RPG Maker 2003 Maniac", shortLabel: "2k3 Maniac", distribution: "archive" },
   { value: "rpg_maker_xp", label: "RPG Maker XP", shortLabel: "XP", distribution: "external" },
   { value: "rpg_maker_vx", label: "RPG Maker VX", shortLabel: "VX", distribution: "external" },
   { value: "rpg_maker_vx_ace", label: "RPG Maker VX Ace", shortLabel: "VX Ace", distribution: "external" },

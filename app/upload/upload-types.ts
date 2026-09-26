@@ -6,6 +6,7 @@ import type {
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
 import type { ResourceCleanupReport } from "@/lib/archive/resource-cleanup";
+import type { SharedPlayerReplacement } from "@/lib/archive/shared-player";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 
@@ -99,6 +100,7 @@ export type UploadTaxonomySuggestion = {
 };
 
 export type PreparedArchiveSource = {
+  useSharedPlayer?: boolean;
   sourceKind: UploadSourceKind;
   sourceName: string;
   files: ArchiveManifestFile[];
@@ -165,6 +167,7 @@ export type UploadTaskStats = {
   estimatedR2GetCount: number;
   excludedFileTypes: ExcludedFileTypeSummary[];
   resourceCleanup: ResourceCleanupReport | null;
+  sharedPlayer?: SharedPlayerReplacement | null;
 };
 
 export type UploadTaskCommitResult = {
@@ -186,6 +189,7 @@ export type UploadWorkerInput =
       sourceKind: UploadSourceKind;
       sourceName: string;
       cleanupResources: boolean;
+      useSharedPlayer: boolean;
       files: UploadSourceFile[];
       targetWorkId: number | null;
     }

@@ -25,6 +25,8 @@ import {
 } from "@/app/.server/storage/core-pack-validation";
 import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { ResourceReferenceScan, validateResourceCleanupReport } from "@/lib/archive/resource-cleanup";
+import { isSharedPlayerPath } from "@/lib/archive/shared-player";
+import { assertSharedPlayerObject, getSharedArchivePlayer } from "@/app/.server/resources/archive-player";
 import type {
   ArchiveCommitMetadata,
   ArchiveManifest,
@@ -133,6 +135,7 @@ export async function commitArchiveImport(
   }
 
   const sourceManifest = sourceManifestFromArchive(manifest);
+  await verifySharedPlayerAvailability(runtime, sourceManifest);
   const sourceManifestSha256 =
     await archiveSourceManifestSha256(sourceManifest);
   if (
@@ -290,6 +293,7 @@ export async function verifyArchiveSourceManifest(
   manifest: ArchiveSourceManifest,
 ): Promise<string> {
   validateArchiveSourceManifest(manifest);
+  await verifySharedPlayerAvailability(runtime, manifest);
   const blobHashes = unique(
     manifest.files.flatMap((file) =>
       file.storage.kind === "blob"
@@ -348,6 +352,7 @@ function sourceManifestFromArchive(
       excludedFileCount: manifest.archiveVersion.excludedFileCount,
       excludedSize: manifest.archiveVersion.excludedSize,
       resourceCleanup: manifest.archiveVersion.resourceCleanup,
+      ...(manifest.archiveVersion.sharedPlayer !== undefined ? { sharedPlayer: manifest.archiveVersion.sharedPlayer } : {}),
     },
     corePacks: manifest.corePacks,
     files: manifest.files,
@@ -530,13 +535,28 @@ function validateManifest(
   }
 }
 
+async function verifySharedPlayerAvailability(runtime: AppRuntime, manifest: ArchiveSourceManifest): Promise<void> {
+  if (!manifest.archiveVersion.sharedPlayer) return;
+  const player = await getSharedArchivePlayer(runtime.db);
+  assertSharedPlayerObject(player, await runtime.bucket.head(player.object_key));
+}
+
 function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
+  const sharedPlayer = manifest.archiveVersion.sharedPlayer;
+  if (sharedPlayer != null && (
+    !isRecord(sharedPlayer) || typeof sharedPlayer.path !== "string" ||
+    !isSharedPlayerPath(sharedPlayer.path) || !isNonNegativeInteger(sharedPlayer.size) ||
+    manifest.files.some((file) => isSharedPlayerPath(file.path)) ||
+    manifest.archiveVersion.excludedFileCount < 1 ||
+    manifest.archiveVersion.excludedSize < sharedPlayer.size
+  )) throw new Error("共享播放器替换记录与归档不一致");
   validateResourceCleanupReport(manifest.archiveVersion.resourceCleanup);
   const removedResources = manifest.archiveVersion.resourceCleanup?.excluded ?? [];
   const keptPaths = new Set(manifest.files.map((file) => file.path.normalize("NFC").toLowerCase()));
   if (removedResources.some((file) => keptPaths.has(file.path.normalize("NFC").toLowerCase())) ||
-      removedResources.length > manifest.archiveVersion.excludedFileCount ||
-      removedResources.reduce((sum, file) => sum + file.size, 0) > manifest.archiveVersion.excludedSize) {
+      removedResources.some((file) => sharedPlayer && isSharedPlayerPath(file.path)) ||
+      removedResources.length + (sharedPlayer ? 1 : 0) > manifest.archiveVersion.excludedFileCount ||
+      removedResources.reduce((sum, file) => sum + file.size, sharedPlayer?.size ?? 0) > manifest.archiveVersion.excludedSize) {
     throw new Error("素材排除清单与归档统计不一致");
   }
   if (manifest.schema !== "viprpg-archive.manifest.v1") {
@@ -1437,10 +1457,11 @@ async function insertArchiveVersion(
         estimated_r2_get_count,
         web_play_file_count,
         web_play_size_bytes,
+        uses_shared_player,
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'processing')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'processing')`,
     )
     .bind(
       input.workId,
@@ -1462,6 +1483,7 @@ async function insertArchiveVersion(
       input.estimatedR2GetCount,
       webPlayTotals.fileCount,
       webPlayTotals.sizeBytes,
+      manifest.archiveVersion.sharedPlayer ? 1 : 0,
       input.uploaderId,
     )
     .run();

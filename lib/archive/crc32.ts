@@ -1,13 +1,23 @@
 const crcTable = buildCrcTable();
 
 export function crc32(bytes: Uint8Array): number {
-  let value = 0xffffffff;
+  const checksum = new Crc32();
+  checksum.update(bytes);
+  return checksum.digest();
+}
 
-  for (const byte of bytes) {
-    value = crcTable[(value ^ byte) & 0xff] ^ (value >>> 8);
+export class Crc32 {
+  private value = 0xffffffff;
+
+  update(bytes: Uint8Array): void {
+    let value = this.value;
+    for (const byte of bytes) value = crcTable[(value ^ byte) & 0xff] ^ (value >>> 8);
+    this.value = value;
   }
 
-  return (value ^ 0xffffffff) >>> 0;
+  digest(): number {
+    return (this.value ^ 0xffffffff) >>> 0;
+  }
 }
 
 function buildCrcTable(): Uint32Array {

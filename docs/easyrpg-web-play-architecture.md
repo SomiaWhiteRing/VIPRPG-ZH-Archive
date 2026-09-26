@@ -14,7 +14,7 @@
 - R2 仍然只保存 canonical 数据：`blobs/`、`core-packs/`、`manifests/` 和元数据资产。
 - 完整游戏 ZIP 只允许作为响应流、Workers Cache/CDN 边缘缓存，或浏览器下载过程中的临时数据存在。
 - 浏览器拿到 ZIP 后在本地解包，解包完成后丢弃 ZIP，不长期保存完整 ZIP。
-- 解包后的 Web Play 运行目录写入 OPFS；服务端下载过滤和安装器共用 `shouldSkipWebPlayLocalWrite`，跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。普通下载 ZIP 保留全部归档文件。
+- 解包后的 Web Play 运行目录写入 OPFS；服务端下载过滤和安装器共用 `shouldSkipWebPlayLocalWrite`，跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。Android Kai 导入复用同一过滤 ZIP，文件清单和大小也按同一规则生成。普通下载 ZIP 保留全部归档文件；启用共享播放器的归档额外补入当前推荐的 Kai Windows Player.exe。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。

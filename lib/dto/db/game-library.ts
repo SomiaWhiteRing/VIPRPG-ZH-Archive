@@ -51,6 +51,9 @@ export type GameExternalLink = {
 };
 
 export type GameArchiveVersionDetail = {
+  usesSharedPlayer: boolean;
+  webPlayFileCount: number;
+  webPlaySizeBytes: number;
   id: number;
   language: string;
   isCurrent: boolean;

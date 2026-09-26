@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The shared player refresh applies `0003_shared_archive_player.sql` after 0002,
+adding the archive download policy projection and nullable tool CRC32 metadata.
+All existing game snapshots, tool identities, business rows and R2 objects are
+preserved; old archives keep `uses_shared_player=0`.
+
 Production starts from the reviewed 0001 baseline; after initialization, applied migrations are immutable and upgrades use ordered incremental migrations. Seed restoration applies pending migrations after restoring the snapshot; clean seed preparation builds the complete migration chain and records its hashes. This development snapshot must never contain real production accounts or sessions. See [production operations](../../docs/production-deployment.md).
 
 The 2026-09-26 account deletion refresh applies

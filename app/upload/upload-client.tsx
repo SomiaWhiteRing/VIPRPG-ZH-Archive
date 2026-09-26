@@ -151,6 +151,7 @@ export function UploadClient({
   );
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [cleanupResources, setCleanupResources] = useResourceCleanupPreference();
+  const [useSharedPlayer, setUseSharedPlayer] = useState(true);
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser, initialWork),
   );
@@ -416,7 +417,7 @@ export function UploadClient({
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
     upload.startSource(
-      { sourceKind, sourceName, files, cleanupResources, targetWorkId: initialWork?.id ?? null },
+      { sourceKind, sourceName, files, cleanupResources, useSharedPlayer, targetWorkId: initialWork?.id ?? null },
       (prefill) => prefillSourceMetadata(prefill, canPrefill, generation),
     );
   }
@@ -687,6 +688,7 @@ export function UploadClient({
       );
     }
     setMode(draft.preparedSource.sourceKind);
+    setUseSharedPlayer(draft.preparedSource.useSharedPlayer ?? false);
     setSourceSummary({
       name: draft.preparedSource.sourceName,
       fileCount: draft.preparedSource.stats.sourceFileCount,
@@ -829,6 +831,8 @@ export function UploadClient({
                     canceling={upload.canceling}
                     cleanupResources={cleanupResources}
                     onCleanupResourcesChange={setCleanupResources}
+                    useSharedPlayer={useSharedPlayer}
+                    onUseSharedPlayerChange={setUseSharedPlayer}
                     disabled={
                       !canArchiveUpload ||
                       preparing ||

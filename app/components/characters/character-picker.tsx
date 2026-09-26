@@ -989,7 +989,7 @@ function optionForSuggestion(
     )[0];
   if (!match) return null;
   const displayName =
-    match.language === "zh" ? match.name : suggestion.primaryName;
+    match.order >= 2 || match.language === "zh" ? match.name : suggestion.primaryName;
   return {
     kind: "existing",
     selection: {

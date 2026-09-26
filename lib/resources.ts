@@ -30,6 +30,7 @@ export type ToolRelease = {
   published_at: string | null;
 };
 export type ToolArtifact = {
+  crc32: number | null;
   id: string;
   release_id: string;
   target: ResourceTarget;

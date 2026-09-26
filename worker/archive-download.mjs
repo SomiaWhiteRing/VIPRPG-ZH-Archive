@@ -1,5 +1,7 @@
 import { unzipSync } from "fflate";
 import { downloadZipBuilderVersion } from "../lib/archive/download.ts";
+import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
+import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
   shouldSkipWebPlayLocalWrite,
   webPlayDownloadProfile,
@@ -29,7 +31,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
   if (!match) {
     return null;
   }
-  const importHeaders = match[2] === "kai-import" ? { "Cache-Control": "no-store" } : {};
+  const importHeaders = { "Cache-Control": "no-store" };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", {
@@ -51,6 +53,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
   let record = null;
   let cacheKey = null;
+  let player = null;
 
   try {
     record = await getDownloadRecord(env.DB, Number(match[1]));
@@ -63,6 +66,27 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     if (match[2] === "kai-import") {
       return await kaiImportMetadata(request, env.ARCHIVE_BUCKET, record);
+    }
+
+    if (url.searchParams.has("player") && (profile || !record.usesSharedPlayer || !url.searchParams.get("player"))) {
+      return new Response(request.method === "HEAD" ? null : "Unsupported player selection", { status: 400, headers: importHeaders });
+    }
+    if (record.usesSharedPlayer && !profile) {
+      player = await getSharedArchivePlayer(env.DB, url.searchParams.get("player"));
+      // Recheck publication and storage before a cache hit as well as a cold build.
+      assertSharedPlayerObject(player, await env.ARCHIVE_BUCKET.head(player.object_key));
+      if (!url.searchParams.has("player")) {
+        // A floating URL without a validator cannot safely resume across a recommendation change.
+        if (request.headers.has("Range") && !request.headers.has("If-Range")) {
+          return new Response(request.method === "HEAD" ? null : "请使用首次下载重定向后的固定地址续传，或重新开始下载。", {
+            status: 409, headers: importHeaders,
+          });
+        }
+        url.searchParams.set("player", player.id);
+        url.searchParams.set("zip_builder", downloadZipBuilderVersion);
+        return new Response(null, { status: 307, headers: { Location: url.href, "Cache-Control": "no-store" } });
+      }
+      record = { ...record, playerSha256: player.sha256 };
     }
 
     const cacheRequest = downloadCacheRequest(request, record, profile);
@@ -92,11 +116,14 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
           }),
         );
 
-        return cached;
+        return player ? withDownloadCacheHeader(cached, "HIT", "no-store, no-transform") : cached;
       }
     }
 
     const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
+    if (Boolean(manifest.archiveVersion.sharedPlayer) !== record.usesSharedPlayer) {
+      throw new Error("Shared player policy does not match archive record");
+    }
     const files = profile === webPlayDownloadProfile
       ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
       : manifest.files;
@@ -104,6 +131,22 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) };
     }
     const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET, files);
+    if (player) {
+      if (files.some((file) => isSharedPlayerPath(file.path))) throw new Error("Shared player path conflicts with archive files");
+      zipEntries.push({
+        path: "Player.exe",
+        size: player.size_bytes,
+        crc32: await sharedPlayerCrc32(request, env.ARCHIVE_BUCKET, player, ctx),
+        mtimeMs: Date.UTC(1980, 0, 1),
+        open: async () => {
+          const object = await env.ARCHIVE_BUCKET.get(player.object_key);
+          assertSharedPlayerObject(player, object);
+          return object.body;
+        },
+      });
+      zipEntries.sort(compareManifestFiles);
+      record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) + 1 };
+    }
     const zipSizeBytes = estimateZipStreamSize(zipEntries);
     const cacheStatus =
       request.method === "HEAD" || bypassDownloadCache ? "BYPASS" : "MISS";
@@ -155,7 +198,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     if (!bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default
-          .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT"))
+          .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT", "public, max-age=31536000, immutable"))
           .catch((error) => {
             console.warn("Native download cache put failed", error?.message ?? error);
           }),
@@ -178,14 +221,14 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     console.error("Native archive download failed", error?.message ?? error);
 
     return request.method === "HEAD"
-      ? new Response(null, { status: 500, headers: importHeaders })
+      ? new Response(null, { status: error?.status ?? 500, headers: importHeaders })
       : Response.json(
           {
             ok: false,
             error: "Archive download failed",
             ...(match[2] === "download" ? { detail: error?.message ?? "Unknown error" } : {}),
           },
-          { status: 500, headers: importHeaders },
+          { status: error?.status ?? 500, headers: importHeaders },
         );
   }
 }
@@ -204,6 +247,7 @@ async function getDownloadRecord(db, archiveVersionId) {
         av.total_files,
         av.total_size_bytes,
         av.estimated_r2_get_count,
+        av.uses_shared_player,
         w.id AS work_id,
         w.original_title AS work_original_title,
         w.chinese_title AS work_chinese_title,
@@ -234,6 +278,7 @@ async function getDownloadRecord(db, archiveVersionId) {
     packerVersion: row.packer_version,
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,
+    usesSharedPlayer: row.uses_shared_player === 1,
     workOriginalTitle: row.work_original_title,
     workChineseTitle: row.work_chinese_title,
     engineFamily: row.engine_family,
@@ -246,14 +291,16 @@ async function kaiImportMetadata(request, bucket, record) {
     return Response.json({ error: "This engine is not supported by Kai" }, { status: 422, headers });
   }
   const manifest = await loadManifest(bucket, record.manifestSha256);
-  const zipSizeBytes = estimateZipStreamSize(buildZipEntries(manifest, bucket));
-  const paths = new Set(manifest.files.map((file) => file.path.toLowerCase()));
-  if (zipSizeBytes > 1024 ** 3 || manifest.files.length > 50000 ||
+  const files = manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path));
+  const zipSizeBytes = estimateZipStreamSize(buildZipEntries(manifest, bucket, files));
+  const paths = new Set(files.map((file) => file.path.toLowerCase()));
+  if (zipSizeBytes > 1024 ** 3 || files.length > 50000 ||
       !paths.has("rpg_rt.ldb") || !paths.has("rpg_rt.lmt")) {
     return Response.json({ error: "This archive cannot be imported by Kai" }, { status: 422, headers });
   }
   const downloadUrl = new URL(`/api/archive-versions/${record.id}/download`, request.url);
   downloadUrl.searchParams.set("zip_builder", downloadZipBuilderVersion);
+  downloadUrl.searchParams.set("profile", webPlayDownloadProfile);
   const body = JSON.stringify({
     schema: "viprpg-kai.import.v1",
     archiveVersionId: record.id,
@@ -266,7 +313,7 @@ async function kaiImportMetadata(request, bucket, record) {
     manifestSha256: record.manifestSha256,
     downloadUrl: downloadUrl.href,
     zipSizeBytes,
-    files: manifest.files.map(({ path, size, sha256 }) => ({ path, size, sha256 })),
+    files: files.map(({ path, size, sha256 }) => ({ path, size, sha256 })),
   });
   if (textEncoder.encode(body).byteLength > 8 * 1024 ** 2) {
     return Response.json({ error: "Import metadata is too large" }, { status: 422, headers });
@@ -728,7 +775,7 @@ function streamBytes(bytes) {
 }
 
 function downloadEtag(record, profile) {
-  return `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}${profile ? `-${profile}` : ""}"`;
+  return `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}${profile ? `-${profile}` : ""}${record.playerSha256 ? `-${record.playerSha256}` : ""}"`;
 }
 
 function downloadHeaders(record, cacheStatus, contentLength, profile) {
@@ -738,7 +785,8 @@ function downloadHeaders(record, cacheStatus, contentLength, profile) {
   headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Length", String(contentLength));
   headers.set("Content-Disposition", contentDisposition(downloadFileName(record)));
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", record.playerSha256 ? "no-store, no-transform" : "public, max-age=31536000, immutable");
+  if (record.playerSha256) headers.set("X-Player-SHA256", record.playerSha256);
   headers.set("ETag", downloadEtag(record, profile));
   headers.set("X-Archive-Version-Id", String(record.id));
   headers.set("X-Manifest-SHA256", record.manifestSha256);
@@ -776,6 +824,7 @@ function downloadCacheRequest(request, record, profile) {
   url.search = "";
   url.pathname = `/api/archive-versions/${record.id}/download/cache/${record.manifestSha256}/${record.packerVersion}/${downloadZipBuilderVersion}`;
   if (profile) url.pathname += `/${profile}`;
+  if (record.playerSha256) url.pathname += `/player/${record.playerSha256}`;
 
   return new Request(url.toString(), { method: "GET" });
 }
@@ -908,16 +957,34 @@ async function recordDownloadFailure(db, input) {
     });
 }
 
-function withDownloadCacheHeader(response, cacheStatus) {
+function withDownloadCacheHeader(response, cacheStatus, cacheControl) {
   const headers = new Headers(response.headers);
 
   headers.set("X-Download-Cache", cacheStatus);
+  if (cacheControl) headers.set("Cache-Control", cacheControl);
 
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+}
+
+async function sharedPlayerCrc32(request, bucket, player, ctx) {
+  if (Number.isInteger(player.crc32) && player.crc32 >= 0 && player.crc32 <= uint32Max) return player.crc32;
+  // Older published artifacts have no CRC32. Read once per edge cache lifetime;
+  // this never mutates their database identity or requires a replacement upload.
+  const key = new Request(new URL(`/internal/archive-player-crc32/${player.sha256}`, request.url));
+  const cached = await caches.default.match(key);
+  if (cached) {
+    const value = Number(await cached.text());
+    if (Number.isInteger(value) && value >= 0 && value <= uint32Max) return value;
+  }
+  const value = await artifactCrc32(bucket, player);
+  ctx.waitUntil(caches.default.put(key, new Response(String(value), {
+    headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+  })).catch(() => undefined));
+  return value;
 }
 
 function blobKey(sha256) {

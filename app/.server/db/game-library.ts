@@ -1646,6 +1646,7 @@ async function loadWorkCollections(
     database
       .prepare(
         `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
+                av.uses_shared_player,av.web_play_file_count,av.web_play_size_bytes,
                 av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name
          FROM archive_versions av
          JOIN works w ON w.id=av.work_id
@@ -1753,6 +1754,9 @@ async function loadWorkCollections(
         linkType: row.link_type,
       })),
     archives: batchRows<{
+      uses_shared_player: number;
+      web_play_file_count: number;
+      web_play_size_bytes: number;
       id: number;
       language: string;
       is_current: number;
@@ -1763,6 +1767,9 @@ async function loadWorkCollections(
       uploader_id: number | null;
       uploader_name: string | null;
     }>(results[6]).map((row) => ({
+      usesSharedPlayer: row.uses_shared_player === 1,
+      webPlayFileCount: row.web_play_file_count,
+      webPlaySizeBytes: row.web_play_size_bytes,
       id: row.id,
       language: row.language,
       isCurrent: row.is_current === 1,
