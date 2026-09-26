@@ -18,8 +18,10 @@ const tempDir = mkdtempSync(join(tmpdir(), "viprpg-bootstrap-rotation-"));
 const sqlPath = join(tempDir, "rotate.sql");
 
 try {
+  // Remote D1 file imports are atomic and reject explicit transaction statements.
+  // Local SQLite execution still needs its own transaction wrapper.
   writeFileSync(sqlPath, `
-BEGIN TRANSACTION;
+${target.local ? "BEGIN TRANSACTION;" : ""}
 
 UPDATE user_sessions
 SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
@@ -69,7 +71,7 @@ SELECT u.id, u.email, 'bootstrap_admin_rotated', json_object(
 )
 FROM users u WHERE u.email = ${quotedEmail};
 
-COMMIT;
+${target.local ? "COMMIT;" : ""}
 `, "utf8");
 
   console.log(JSON.stringify({ environment: target.label, database: target.identity ?? target.database, email,
