@@ -83,7 +83,8 @@ export async function inspectUploadSource(
     .filter(isTitleImage)
     .sort(
       (left, right) =>
-        (right.mtimeMs ?? 0) - (left.mtimeMs ?? 0) ||
+        (left.mtimeMs ?? Number.POSITIVE_INFINITY) -
+          (right.mtimeMs ?? Number.POSITIVE_INFINITY) ||
         left.path.localeCompare(right.path),
     );
 

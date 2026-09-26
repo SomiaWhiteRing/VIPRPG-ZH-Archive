@@ -193,11 +193,8 @@ export function ArchiveSourcePicker({
               <Label htmlFor={cleanupResourcesId}>清理未引用素材</Label>
               <InfoTooltip>
                 <div className="space-y-2 text-left">
-                  <p>上传前检查数据库、全部地图和事件，排除标准素材目录中未被引用的图片、音频和视频，包括 RTP、自定义素材及改名副本。</p>
-                  <p>保留程序、地图、数据库、字体、配置、说明和翻译文本。遇到动态加载、插件或无法完整分析的格式时，保留相关素材。</p>
-                  <p>只精简上传归档，不修改本地原文件。网站下载和在线游玩共用精简后的文件，可在处理结果中查看排除明细。</p>
-                  <p>静态检查无法保证识别所有自定义补丁或旧存档的资源需求。需要完整保留素材时请取消勾选；恢复被排除素材需重新选择原文件并关闭清理。原有文件类型规则仍适用。</p>
-                  <p>默认开启，浏览器会记住你的选择；更改只对下一次选择的游戏文件生效。</p>
+                  <p>上传时会自动对文件进行分析，排除掉素材文件夹未实际使用的素材进行上传。</p>
+                  <p>启用该选项能够有效减少游戏的ZIP大小，减少上传和下载时间。但如果游戏有在素材文件夹藏东西让玩家自己在游戏外挖掘的做法可能会被误删。</p>
                 </div>
               </InfoTooltip>
             </div>
@@ -330,7 +327,6 @@ function UploadTaskCard({
                 task.stats.resourceCleanup.status === "preserved" ? "素材检查：无法完整判断，已全部保留" :
                 `素材检查：排除 ${task.stats.resourceCleanup.excluded.length} 个文件，减少 ${formatBytes(task.stats.resourceCleanup.excluded.reduce((sum, file) => sum + file.size, 0))}`}
             </summary>
-            <p className="mt-2 text-xs text-muted">只清理标准素材目录中未引用的图片、音频和视频；用途无法确定时保留。本地原文件不受影响。</p>
             {task.stats.resourceCleanup.reasons.map((reason) => <p className="mt-1 text-xs text-muted" key={reason}>{reason}</p>)}
             {task.stats.resourceCleanup.excluded.length ? (
               <ul className="mt-2 max-h-48 overflow-auto text-xs">

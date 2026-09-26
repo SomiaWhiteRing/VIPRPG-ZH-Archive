@@ -28,7 +28,7 @@ import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-typ
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
-  buildArchiveDownloadUrl,
+  buildWebPlayDownloadUrl,
   buildWebPlayKey,
   easyRpgRuntimeBasePath,
   easyRpgRuntimeVersion,
@@ -99,7 +99,7 @@ export async function loader(args: LoaderFunctionArgs) {
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,
     }),
-    downloadUrl: buildArchiveDownloadUrl(record.id),
+    downloadUrl: buildWebPlayDownloadUrl(record.id),
     totalFiles: record.totalFiles,
     totalSizeBytes: record.totalSizeBytes,
     installTotalFiles: installTarget.totalFiles,

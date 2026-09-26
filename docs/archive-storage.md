@@ -21,7 +21,7 @@
 - 不把完整游戏 ZIP、源 ZIP 或上传暂存包保存到 R2。
 - 不以文件名、R2 key、ETag 或数据库自增 ID 作为内容身份。
 - 不让 D1 成为第二份 manifest。
-- 不为网页在线游玩生成另一套 ZIP 或 canonical 文件。
+- 不为网页在线游玩保存另一套 canonical 文件；过滤 ZIP 只作为响应流或边缘缓存存在。
 - 不保留已废弃的文件行模型、旧对象路径或兼容写入。
 
 ## 2. Canonical 对象
@@ -184,7 +184,9 @@ published Work + published current ArchiveVersion
 
 ## 7. 在线游玩
 
-在线游玩 fetch 与下载按钮相同的 ZIP URL。浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；R2 和 D1 不新增 Web Play 文件副本。
+在线游玩通过下载接口的 `profile=web-play-v1` 获取过滤 ZIP，服务端按 `shouldSkipWebPlayLocalWrite` 排除 `.exe`、`.txt` 和普通 `.dll`，保留五个根目录引擎/补丁识别 DLL。过滤发生在打开文件对象之前，减少不需要的对象读取和网络传输；如果保留文件位于 core pack 中，仍需读取该 pack。普通下载和 Kai 导入继续取得完整归档。两种响应使用不同的 cache key 和 ETag，`Content-Length` 与 Range 均按各自的 ZIP 计算。
+
+浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；R2 和 D1 不新增 Web Play 文件副本，`download_builds` 仍只记录各自的缓存和观测数据。过滤响应按实际入选文件引用的 blob/core pack 估算 R2 GET 数。
 
 本地安装的版本键、IndexedDB 状态、OPFS pack、Worker 本地播放器、重试和存档策略由[EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)定义。存储层只保证下载 ZIP 与 manifest 可验证且字节稳定。
 
@@ -206,7 +208,7 @@ GC 实现位于 `app/.server/storage/admin-storage-checks.ts` 和 `worker/archiv
 
 - 上传、preflight、commit 和对象 PUT 都绑定当前用户及 owned import job。
 - 文件类型白名单不等于内容安全；ZIP、路径、hash、大小和计数仍需独立验证。
-- `.exe`、`.dll` 等运行时可以为离线归档保留，但在线游玩本地安装会跳过不需要的运行时文件。
+- `.exe`、`.dll` 等运行时可以为离线归档保留，但在线游玩下载和本地安装会跳过不需要的运行时文件。
 - 来源属于 ArchiveVersion 元数据；系统不因技术上可去重就推断内容可分发。
 - 媒体、下载和在线游玩入口只读取完整 published 引用链。
 - 高成本操作必须有数量、大小或批次上限，并留下可查询的失败状态。

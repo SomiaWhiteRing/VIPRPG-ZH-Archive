@@ -1,3 +1,6 @@
+// Bump when the filtered ZIP contents change so transport caches stay isolated.
+export const webPlayDownloadProfile = "web-play-v1";
+
 export const webPlayLocalSkippedExtensions = ["dll", "exe", "txt"] as const;
 
 const skippedExtensionSet = new Set<string>(webPlayLocalSkippedExtensions);

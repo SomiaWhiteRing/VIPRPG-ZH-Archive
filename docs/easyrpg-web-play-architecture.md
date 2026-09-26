@@ -10,11 +10,11 @@
 
 ## 1. 固定结论
 
-- 在线游玩复用现有下载 ZIP，不能生成另一套 Web Play 专用 ZIP。
+- 在线游玩复用现有下载接口和 canonical 对象，按安装规则输出过滤 ZIP；不在 R2 保存派生 ZIP。
 - R2 仍然只保存 canonical 数据：`blobs/`、`core-packs/`、`manifests/` 和元数据资产。
 - 完整游戏 ZIP 只允许作为响应流、Workers Cache/CDN 边缘缓存，或浏览器下载过程中的临时数据存在。
 - 浏览器拿到 ZIP 后在本地解包，解包完成后丢弃 ZIP，不长期保存完整 ZIP。
-- 解包后的 Web Play 运行目录写入 OPFS；安装器跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。普通下载 ZIP 保留全部归档文件。
+- 解包后的 Web Play 运行目录写入 OPFS；服务端下载过滤和安装器共用 `shouldSkipWebPlayLocalWrite`，跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写）。普通下载 ZIP 保留全部归档文件。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。
@@ -34,7 +34,7 @@
   -> RPG Maker 2003 Maniac 作品显示兼容性提示
   -> 检查 IndexedDB 是否已有 ready 安装
   -> 没有 ready 安装时启动 Web Worker
-  -> Web Worker fetch 现有下载 ZIP URL
+  -> Web Worker fetch 带 Web Play profile 的下载 ZIP URL
   -> 命中 Workers Cache/CDN 时不读 R2
   -> 顺序解析 ZIP local file header
   -> 边下载边把可运行 entry 追加写入少量 OPFS pack
@@ -90,21 +90,21 @@ playKey = av-{archiveVersionId}-{manifestSha256Short}-{webPlayInstallerVersion}
 
 ## 4. CDN ZIP Bootstrap
 
-在线游玩必须 fetch 与下载按钮相同的下载 URL，复用同一份 ZIP 字节和同一个 Workers Cache/CDN cache key。
+在线游玩使用现有下载接口的过滤 profile，与普通下载共用 canonical 对象和 ZIP 构建器；响应字节不同，因此使用独立的 Workers Cache/CDN cache key 和 ETag。
 
 ```text
-GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBuilderVersion}
+GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBuilderVersion}&profile=web-play-v1
 ```
 
 注意：
 
-- `Content-Disposition: attachment` 不影响 `fetch()` 读取响应体，不需要为了 Web Play 改出另一条 URL。
-- 不要添加 `web_play=1` 之类会改变 cache key 的查询参数，除非下载端显式把它归一化到同一 cache key。
-- Web Play 下载 URL 不改变，普通下载 ZIP 仍包含 `RPG_RT.exe`、DLL 和 `.txt` 文件；OPFS 本地运行目录会跳过 `.txt`、`.exe` 和普通 `.dll` 文件，但保留根目录的 `accord.dll`、`ultimate_rt_eb.dll`、`harmony.dll`、`dynloader.dll`、`Destiny.dll` 供 EasyRPG 识别引擎与补丁（文件名忽略大小写），减少不参与 EasyRPG Web 运行的本地写入。
-- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明下载 ZIP 的完整内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装进度条的文件数和写入体积必须使用这个口径。
-- ZIP 下载进度来自 `Content-Length`；下载端必须继续保证固定长度响应。
+- `Content-Disposition: attachment` 不影响 `fetch()` 读取响应体。
+- `buildWebPlayDownloadUrl()` 在普通下载 URL 上加入 `webPlayDownloadProfile`；服务端只接受当前 profile，未知值返回 400。缓存路径和 ETag 包含 profile，不得把过滤响应归一化到完整 ZIP 的 cache key。过滤内容变化时提升 profile 版本。
+- 过滤发生在打开文件对象之前，`.txt`、`.exe` 和普通 `.dll` 不进入传输 ZIP，五个根目录引擎/补丁识别 DLL 仍保留。普通下载和 Kai 导入不带 profile，继续取得完整归档；旧页面仍可安装完整 ZIP，本地过滤继续生效。
+- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明完整归档内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装按钮与进度条的文件数和写入体积必须使用这个口径。仅将既有过滤提前到传输阶段，不改变本地安装规则，无需重算或重装。
+- ZIP 下载进度来自 `Content-Length`，包含过滤后的文件与 ZIP 头部；下载端必须继续保证固定长度响应，HEAD 和 Range 使用同一过滤内容计算长度与偏移。
 - 下载 ZIP 必须使用 STORE，并在 local file header 中写入明确 `crc32`、compressed size 和 uncompressed size；不能使用 data descriptor。这样浏览器安装器可以顺序解析 entry，不需要等待中央目录。
-- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。`.txt`、`.exe` 和普通 `.dll` entry 在本地写入阶段跳过；五个根目录引擎/补丁识别 DLL 写入 pack，供引擎读取真实文件。保留识别文件不等于支持执行原生插件。
+- ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。安装器继续跳过 `.txt`、`.exe` 和普通 `.dll` entry，以兼容完整 ZIP；五个根目录引擎/补丁识别 DLL 写入 pack，供引擎读取真实文件。保留识别文件不等于支持执行原生插件。
 
 ## 5. OPFS 本地目录
 
@@ -231,7 +231,7 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 - 横竖屏均可编辑按钮布局。十字键整体移动，A、B 和每个可选功能键均独立定位；可在整个可用区域自由拖动，每个控件分别调整大小（50%–200%）和透明度（0%–100%）。只有游戏画面限制为竖屏上下移动，横屏画面位置固定。控件大小和位置会限制在安全区域内。属性面板不显示操作文字提示，横屏按选中按钮所在的左右半屏显示在另一侧，竖屏按上下半屏显示在另一侧；面板内容超出可用空间时滚动。属性按钮用上下三角表示展开状态，展开时高亮；拖动期间临时隐藏面板，完全透明的按钮仍有编辑边框和名称。
 - 布局编辑工具栏在“属性”左侧提供“触控”按钮，文字右侧显示复选框，默认未勾选，点击整颗按钮切换。开关即时保存至同一份本地配置的 `touchEnabled`，横竖屏共用；只在移动端生效。关闭时，窗口与全屏模式均屏蔽游戏 iframe 的直接点击／触摸，虚拟按钮输入不受影响；开启后恢复游戏画面的直接操作。布局编辑期间仍屏蔽游戏画面输入，拖动布局正常；桌面鼠标操作不受这项配置影响。
 - 布局支持保存、取消和恢复当前方向的默认值。编辑时拦截游戏触控；方向或窗口模式变化取消未保存的调整。方向偏好与布局统一保存在 `localStorage` 的 `viprpg:web-play:controls` 中，`layouts.portrait`、`layouts.landscape` 分开保存；各自记录画面位置以及每个按钮的位置、大小、透明度和显示状态。位置用各元素可移动距离的比例表示，适应视口变化；删除可选按钮保留其属性，重新添加可恢复。布局编辑的拖动与边界限制方式参考 [melonDS Android 的布局编辑器](https://github.com/rafaelvcaetano/melonDS-android/blob/master/app/src/main/java/me/magnum/melonds/ui/layouteditor/LayoutEditorView.kt)。
-- 收藏：在线游玩卡片在启动/全屏操作下显示收藏按钮，不再显示下载 ZIP 按钮；安装仍使用原 ZIP 下载接口。
+- 收藏：在线游玩卡片在启动/全屏操作下显示收藏按钮，不再显示下载 ZIP 按钮；安装使用 ZIP 下载接口的 Web Play profile。
 - 截图：桌面端窗口和全屏模式均提供截取图片按钮；移动端通过默认隐藏的可配置虚拟截图按钮触发，沿用相机图标，可分别调整位置、大小、透明度。全屏时截图成功与失败反馈均显示 1 秒；移动端窗口模式的成功提示显示 1 秒，错误提示保留较长时间。通过 Worker 调用引擎的截图接口，从软件帧缓冲生成原始分辨率 PNG。截图按 Work ID 存入独立 IndexedDB `viprpg_web_play_screenshots_v1`，同一游戏的各归档版本共用，清理安装缓存不会删除截图。已有截图时，在在线游玩卡片下方显示两列截图画廊，每页 6 张，支持翻页、灯箱缩放和单张 PNG 下载；可跨页勾选截图，按所选、本页或全部范围打包为 ZIP 下载。预览的 Blob URL 随页面卸载释放。
 - 本地数据与诊断：运行中提供“停止游戏”，等待存档持久化后销毁 Worker 和 iframe 并退出全屏，回到可再次启动的已安装状态；写入失败时报告错误并保留重试机会。启动尚未完成时禁用停止按钮。
 - 自动清理保护：展开诊断时只调用 `persisted()` 查询当前状态并刷新存储估计；安装结束后展开中的诊断也刷新，不把安装记录中的旧快照当作实时授权。只在用户点击安装时由页面调用 `persist()` 申请，区分未获得、不支持、查询失败和申请失败；保护失败不阻止安装，Worker 不申请权限。存储估计不可用时显示“未知”。保护不代表云备份，也不能阻止手动清除站点数据。
