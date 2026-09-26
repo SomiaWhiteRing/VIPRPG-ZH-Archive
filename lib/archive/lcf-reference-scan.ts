@@ -127,14 +127,17 @@ export class LcfReferenceScan {
     if (this.reasons.size < 20) this.reasons.add(reason);
   }
 
-  private string(bytes: Uint8Array): void {
+  private string(bytes: Uint8Array, allowsExFont = false): void {
     if (!bytes.length) return;
     if (bytes.length > 1024 * 1024) throw new Error("字符串超过分析大小限制");
     for (const decoder of decoders) {
       let value: string;
       try { value = decoder.decode(bytes); } catch { continue; }
-      // Some patches interpret sound names / comments as commands.
-      if (/^\s*[@$]/.test(value)) this.protect("*", `${this.currentPath}：存在扩展命令字符串`);
+      // Standard message text and skill/item names can start with $A..$Z/$a..$z
+      // (ExFont glyphs). Keep the patch heuristic for other strings, especially
+      // sound names and comments, and for nonstandard prefixes such as $[x,y].
+      const startsWithExFont = allowsExFont && /^\s*\$[A-Za-z]/.test(value);
+      if (!startsWithExFont && /^\s*[@$]/.test(value)) this.protect("*", `${this.currentPath}：存在扩展命令字符串`);
       const base = normalize(value).split("/").at(-1)!;
       for (const name of [base, base.replace(/\.[^.]*$/, "")]) {
         for (const file of this.names.get(name) ?? []) this.referenced.add(file.path);
@@ -159,7 +162,7 @@ export class LcfReferenceScan {
       const block = new Reader(reader.take(reader.integer()));
       const kind = fields[id];
       if (!kind) throw new Error(`未支持的字段：${type}/${id}`);
-      if (kind === "string") this.string(block.take(block.remaining));
+      if (kind === "string") this.string(block.take(block.remaining), id === 1 && (type === "Skill" || type === "Item"));
       else if (kind === "commands") this.commands(block);
       else if (kind === "moves") this.moves(block);
       else if (kind.startsWith("array:")) this.array(block, kind.slice(6), depth + 1);
@@ -193,7 +196,7 @@ export class LcfReferenceScan {
         return;
       }
       reader.integer(); // indentation
-      this.string(reader.take(reader.integer()));
+      this.string(reader.take(reader.integer()), code === 10110 || code === 20110);
       const count = reader.integer();
       if (count > reader.remaining || count > 100_000) throw new Error("事件参数数量无效");
       const parameters = Array.from({ length: count }, () => reader.integer());

@@ -1,7 +1,7 @@
 import { LcfReferenceScan, type ResourceFile, type ResourceReferenceReport } from "./lcf-reference-scan";
 import { classifyArchivePath } from "./file-policy";
 
-export const RESOURCE_CLEANUP_VERSION = "resources-static-v1";
+export const RESOURCE_CLEANUP_VERSION = "resources-static-v2";
 export type ResourceCleanupReport = ResourceReferenceReport & { version: string };
 
 const mediaDirectories = new Set("backdrop battle battle2 battlecharset battleweapon charset chipset faceset gameover monster movie music panorama picture sound system system2 title".split(" "));

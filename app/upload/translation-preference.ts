@@ -58,9 +58,9 @@ function preferenceKey(userId: number): string {
 }
 
 export function rememberPublishedTranslators(userId: number, translators: ConfirmedCreatorSelection[]): void {
-  updateTranslationPreference(userId, translators.length
-    ? { isTranslation: true, translators }
-    : { isTranslation: false });
+  // Declarations and explicitly cleared selections are saved by the form.
+  // An empty result can also be a non-translation; it must not change either preference.
+  if (translators.length) updateTranslationPreference(userId, { translators });
 }
 
 function isSelection(value: unknown): value is ConfirmedCreatorSelection {

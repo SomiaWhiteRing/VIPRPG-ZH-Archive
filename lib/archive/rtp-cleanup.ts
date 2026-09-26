@@ -2,7 +2,7 @@ import catalog from "./rtp-catalog.json";
 import { LcfReferenceScan } from "./lcf-reference-scan";
 export { LcfReferenceScan } from "./lcf-reference-scan";
 
-export const RTP_CLEANUP_VERSION = "rtp-exact-static-v1";
+export const RTP_CLEANUP_VERSION = "rtp-exact-static-v2";
 export const RTP_CATALOG_SHA256 = catalog.sourceSha256;
 
 export type RtpFile = { path: string; size: number; sha256: string };

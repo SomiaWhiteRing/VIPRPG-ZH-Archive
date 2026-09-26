@@ -993,10 +993,10 @@ function normalizeMetadata(
     })
     .filter(uniqueStaffEntry());
   if (
-    game.isTranslation !==
+    !game.isTranslation &&
     workStaff.some((staff) => staff.roleKey === "translator")
   ) {
-    throw new HttpError(400, "翻译作品必须填写译者，非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。");
   }
 
   if (!game.originalTitle.trim()) {
