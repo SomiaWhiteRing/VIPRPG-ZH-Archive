@@ -14,16 +14,18 @@
 - 网站 Kai 导入来源包含 viprpg.org，移除旧 Workers.dev 来源；本站 Android 区分 staging 自动预发布和 production 手动发布。
 - 状态页增加独立正式 monitor ID，保留 staging 历史；状态服务改为本人确认后发布。正式 smoke 使用明确目标、超时和禁止重定向。
 
-## 外部状态与上线边界
+## 2026-09-26 正式上线
 
-只读核对时，本地和 GitHub main 基线为 ce2288d42425e5fbacadfd62f2ced70641f80859。GitHub 仅有 staging/status Environment；main 未设置保护。Cloudflare 的旧正式 Worker 仍使用 Workers.dev origin，存在既有 prod D1/R2，但 viprpg.org 尚未绑定，不能认定这些数据库为空或已适配当前 schema。
+负责人随后明确授权正式部署，并同步 Kai 与 RPGRewriter-Ownuse 的导入／更新指向。首发代码为 `f056fb8cc0cefd0d95c90dc40760fade016f0326`，通过 production Environment 的本人确认发布至 [viprpg.org](https://viprpg.org)。[发布运行](https://github.com/SomiaWhiteRing/VIPRPG-ZH-Archive/actions/runs/36208034503)保留候选、审批、部署与 smoke 记录；初次绑定域名后立即运行的 smoke 连接失败，域名生效后本机九个 smoke 路径均返回 200，重跑同一候选的发布 job 后 CI 全部通过。
 
-已通过 GitHub API 创建 production 并更新 status Environment：唯一确认人为 SomiaWhiteRing，允许本人自审、禁止绕过确认、只允许 main 发布；staging 无审批保护，main 仍未增加分支保护或 PR 限制。未运行任何发布 workflow。
+GitHub production/status 的唯一确认人为 SomiaWhiteRing，允许本人自审、禁止绕过确认、只允许 main 发布；staging 无审批保护，main 没有增加分支保护或 PR 限制。production 三项专用名称的 secrets 已填入正式配置；移除了无消费者的旧仓库级 CLOUDFLARE_API_TOKEN 和 WRANGLER_CONFIG_JSONC，staging/status Environment 保留各自配置。正式 AUTH_SECRET 独立生成；部署 API token 沿用现有可用凭据，当前凭据无 token 管理权限，未声称已经实现 Cloudflare token 的逐资源权限隔离。
 
-production 的三项专用 secrets 尚未填入：需先确认实际首发资源与专用 token，再配置。旧仓库及 staging/status 凭据保持原状，未复制旧 prod 配置来启用正式发布；生产 job 缺少专用凭据时会停止。实际首发的资源／凭据设置属于下一次明确批准的上线批次。
+新建独立 D1/R2 `viprpg-archive-production`，保留旧 prod 和 staging 资源。应用 0001 首发基线后导入干净种子：930 个角色、132 个分类、887 个默认头像、30 个默认表情、8 个链接，17,173 个对象共 150,282,413 字节；用户和作品为零。逐表数量、完整 schema、外键及迁移账本一致；本地 SHA-256 与全量远端对象大小／MD5 ETag 一致。资源身份、旧版本绑定、种子及校验报告保存在本机 `output/production-setup/`，其中 source.sqlite 含完整开发快照，只用于本地准备，没有上传。
 
-旧 prod 库的只读账本核对返回已登记 0001、没有其他待应用文件；这仅核对名称，不证明历史同名 schema 与当前基线一致。已有资源保留到明确批准初始化方案后再处理。
+正式 robots 允许索引，staging 保留 noindex；注册页和资源页返回 200，匿名后台重定向登录，抽查公开素材字节和 SHA-256 一致。负责人选择上线后自行注册，因此正式注册不会按先后顺序赋予根权限；注册后按负责人确认的邮箱显式初始化根账户。邮件发送域与绑定已核实，真实验证码送达随负责人注册验证。
 
-首次上线尚需确定正式数据基线、备份恢复方案和受控根账户初始化，确认实际邮件送达；正式网站、状态服务、Android Release 与网站软件频道分别按已批准范围执行。独立 Kai 项目的 APK 白名单与设备验收不由本仓库修改自动完成。
+[状态页](https://status.viprpg.org)已发布正式站的四项监控，网页、API、D1、R2 均记录为 operational，预生产监控及历史保留。[状态页发布运行](https://github.com/SomiaWhiteRing/VIPRPG-ZH-Archive/actions/runs/36208394737)在首次部署后的即时检查仍读到边缘节点旧配置，确认新配置和实际监控正常后重跑同一候选。
 
-本次未运行人工 UI／浏览器操作或新增测试用例，未部署 Worker、发布 APK、迁移或编辑线上业务数据。已运行定向 lint、主站和状态服务类型检查、由隔离目标配置生成的 staging／production 两种构建和最终绑定校验，以及干净种子准备；种子候选在忽略的 output/production-setup/seed-candidate，用户和作品均为零。构建、只读计划和 GitHub 设置各自记录实际结果，不代表完整线上／设备验收。
+Kai 独立仓库提交 `0b5aabae5` 将 Android 来源切到 viprpg.org 并保留 staging；`c4bd3179e` 修复旧仓库路径的 Windows 构建缓存。WindyTranslator 提交 `1695373` 同步修改默认地址、构建元数据和 CI 变量，并已发布新版 Nightly。两个项目均保持人工版本号 2026.9.2，不覆盖已有正式版本；旧安装包需手动更新一次。网站软件版本、安装包与更新频道没有随种子导入，仍由负责人注册后在后台上传并发布；未配置频道的更新 API 返回 404。
+
+主站定向 lint、类型检查、安全／UI 静态检查、正式构建及 CI 既有候选检查通过；Kai 本地 Android Java／资源编译通过，Windy 的 Python 编译、版本校验、构建元数据与 Windows 打包通过。没有新增测试用例或进行人工浏览器／真机交互，不将这些证据描述为真机验收。

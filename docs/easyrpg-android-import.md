@@ -6,7 +6,7 @@
 
 正式目标为 [viprpg.org](https://viprpg.org)，预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)，环境来源见[部署手册](./staging-deployment.md#环境地址与配置来源)。不要把来源白名单当作已部署站点清单。
 
-网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`。它允许 viprpg.org 和 staging.viprpg.org，旧 Workers.dev 来源已移除。来源支持不代表正式网站或 APK 已发布。
+网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`。它允许 viprpg.org 和 staging.viprpg.org，旧 Workers.dev 来源已移除。正式网站已于 2026-09-26 上线；独立 Kai 项目的 `0b5aabae5` 提交同步更新了 Android 白名单，本地 Java／资源编译通过。后续 `c4bd3179e` 修复仓库改名后的 Windows CI 缓存，使同一轮多平台 Nightly 能正常构建。APK 应使用包含这些提交的新 Nightly，历史安装包需手动更新。
 
 APK 内的来源白名单不可被链接参数扩充，HTTP、跨源及重定向均拒绝。客户端代码与发行包位于独立 Kai 项目，本仓库不能证明用户安装包的实际白名单。更换域名须核对网站与 APK 两端并发布支持该来源的 APK；只改网站文档或配置不能使旧 APK 获得接收能力。
 
