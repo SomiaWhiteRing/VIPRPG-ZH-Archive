@@ -18,7 +18,7 @@ export default function AboutPage() {
       <Pane heading="这里是哪里？">
         <p>
           VIPRPG中文保管库，或者说VIPRPG.org（以下称作“本站”），是由中文VIPRPG爱好者开发、面向华语社区的作品保存库。
-          本站点<span style={{ textDecoration: "line-through" }}>因为懒得折腾备案</span>自豪地使用Cloudflare提供的网络服务！
+          本站点<span className="line-through">因为懒得折腾备案</span>自豪地使用Cloudflare提供的网络服务！
           大概在大陆是能用吧，不能用的区域就请各凭本事了……
         </p>
       </Pane>
@@ -29,7 +29,7 @@ export default function AboutPage() {
           无论是汉化作品、原创作品、还是原版作品的保存，甚至是VIPRPG以外的RM2K作品，本站都非常欢迎。
         </p>
         <p>
-          除此之外，本站还提供了许多<span style={{ textDecoration: "line-through" }}>老实说多到莫名其妙</span>的功能。
+          除此之外，本站还提供了许多<span className="line-through">老实说多到莫名其妙</span>的功能。
           不仅可以在作品上标记登场角色、作者、标签等信息，还留下了评论、收藏和目录系统，来方便管理和检索作品；
           提供了作品的在线游玩，以及（在Android设备上）导入到EasyRPG的功能。
           另外还做了收集各种链接的导航页，再加上老实说完全没想过有没有人会用的讨论版……
