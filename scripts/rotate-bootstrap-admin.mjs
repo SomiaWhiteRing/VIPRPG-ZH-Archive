@@ -2,11 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runWrangler } from "./run-wrangler.mjs";
+import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const email = normalizeEmail(options.email);
 const target = resolveTarget(options);
-if (!target.local && options.confirm !== email) {
+if (!target.local && options.apply && options.confirm !== email) {
   throw new Error(`Remote rotation requires --confirm ${email}`);
 }
 
@@ -71,8 +72,14 @@ FROM users u WHERE u.email = ${quotedEmail};
 COMMIT;
 `, "utf8");
 
-  await runWrangler(["d1", "execute", target.database, ...target.args, "--file", sqlPath]);
-  console.log(`bootstrap admin rotated to ${email} on ${target.label}; all affected sessions revoked`);
+  console.log(JSON.stringify({ environment: target.label, database: target.identity ?? target.database, email,
+    effects: ["Move bootstrap admin role", "Revoke old and new administrator sessions", "Write role and authentication audit events"],
+    apply: !options.plan && (target.local || options.apply === true) }, null, 2));
+  if (!options.plan && (target.local || options.apply)) {
+    process.env.CLOUDFLARE_ENV = "";
+    await runWrangler(["d1", "execute", target.database, "--config", "wrangler.jsonc", ...target.args, "--file", sqlPath]);
+    console.log(`bootstrap admin rotated to ${email} on ${target.label}; all affected sessions revoked`);
+  } else console.log("Plan only. Remote rotation requires owner approval, --apply and --confirm <target-email>.");
 } finally {
   rmSync(tempDir, { recursive: true, force: true });
 }
@@ -81,7 +88,7 @@ function parseArgs(args) {
   const result = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "--local" || arg === "--staging" || arg === "--production") {
+    if (["--local", "--staging", "--production", "--plan", "--apply"].includes(arg)) {
       result[arg.slice(2)] = true;
       continue;
     }
@@ -101,14 +108,16 @@ function resolveTarget(options) {
     return {
       local: true,
       label: "local D1",
-      database: process.env.LOCAL_D1_DATABASE || "viprpg-archive-prod",
+      database: process.env.LOCAL_D1_DATABASE || "DB",
       args: ["--local"],
     };
   }
-  if (options.staging) {
-    return { local: false, label: "staging", database: "viprpg-archive-staging", args: ["--remote", "--env", "staging"] };
-  }
-  return { local: false, label: "production", database: "viprpg-archive-prod", args: ["--remote"] };
+  const config = readConfig();
+  const environment = options.staging ? "staging" : "production";
+  const selected = validateDeployment(selectDeployment(config, environment), environment);
+  validateIsolation(config);
+  return { local: false, label: environment, database: "DB", identity: selected.d1_databases.find((binding) => binding.binding === "DB"),
+    args: options.staging ? ["--remote", "--env", "staging"] : ["--remote"] };
 }
 
 function normalizeEmail(value) {

@@ -26,8 +26,9 @@
 | npm run preview | 构建并预览生产产物 |
 | npm test | 构建后在临时 D1/R2 中验证 HTTP、SSR 与权限契约 |
 | npm run test:flow | 构建后串行运行浏览器、上传、归档与 OPFS 流程 |
-| npm run deploy:staging | 构建时选择 staging，然后部署该产物 |
-| npm run deploy | 构建 production，然后部署该产物 |
+| npm run deploy:staging -- --apply-migrations | 构建 staging，应用迁移并部署该产物 |
+| npm run deploy:production -- --plan | 显示正式配置和迁移清单，不写远端 |
+| npm run deploy:production | 明确确认后构建和发布正式产物；迁移另行选中 |
 
 scripts/app.mjs 在 Windows 和 Linux 使用同一 Node 启动路径，通过 CLOUDFLARE_ENV 选择构建环境。不要将已按一个环境生成的产物改用另一个环境部署。preview 使用 Vite 预览端口；可通过 --port 指定。
 
@@ -45,13 +46,13 @@ DB 提供 D1，ARCHIVE_BUCKET 保存 canonical 对象，ASSETS 提供构建后�
 
 修改配置后运行 npm run cf-typegen。cloudflare-env.d.ts 为生成文件。CI 使用 scripts/prepare-wrangler-config.mjs 从 WRANGLER_CONFIG_JSONC 提取环境资源配置，Worker 入口与资源路由由仓库模板决定。
 
-D1 schema 统一维护 `migrations/0001_init_archive_schema.sql`。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `app/.server/storage/archive-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。
+D1 schema 来自 migrations 中的首发基线及有序增量迁移，正式初始化后不改写已应用文件。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `app/.server/storage/archive-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。
 
 ## 发布和回滚
 
 远端入口及 production／staging 配置来源见[部署环境](./staging-deployment.md#环境地址与配置来源)。Worker 名称是部署标识，不用于推导站点 URL；顶层配置与 `env.staging` 属于不同目标。
 
-发布前完成 `npm run verify:preprod`，核对目标域名、bindings、邮件、限流与 secrets。推送到 `main` 会自动发布 staging；production 需手动选择。具体门禁与顺序见[GitHub Actions 自动部署](./github-actions-deployment.md)。
+发布前完成 `npm run verify:preprod`，核对目标域名、bindings、邮件、限流与 secrets。推送到 `main` 会自动发布 staging；production 需手动选择并由负责人本人批准，默认不执行数据迁移；见[正式手册](./production-deployment.md)。具体门禁与顺序见[GitHub Actions 自动部署](./github-actions-deployment.md)。
 
 保留切换前 Worker 版本及对应静态资源，回滚时恢复完整应用版本，并确认该版本与目标数据库结构兼容。远程 migration 与部署按目标环境串行执行；数据库备份、重建和恢复属于独立运维操作，不随应用发布或回滚自动执行。
 

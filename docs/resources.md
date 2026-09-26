@@ -27,7 +27,7 @@
 | `tool_artifacts` | 原始文件、平台、格式、长度、SHA-256、构建标识及上传状态 |
 | `tool_channels` | 每个软件／渠道／平台的推荐文件与 selection revision，空文件指针表示暂停 |
 
-结构统一维护在 `migrations/0001_init_archive_schema.sql`。图标复用 `blobs`，公开媒体查询、SQL 防清理触发器、手动 GC 和定时 GC 均保护链接图标的有效引用，包括隐藏／草稿链接。图标支持 PNG、GIF 和 JPG／JPEG、最多 512 KiB，宽高各为 1–512px；根据文件内容识别格式，原样存储，保留透明背景和动画，后台草稿通过根管理员接口预览。
+结构由 migrations 中的首发基线及有序增量迁移维护；正式初始化后不改写已应用文件。图标复用 `blobs`，公开媒体查询、SQL 防清理触发器、手动 GC 和定时 GC 均保护链接图标的有效引用，包括隐藏／草稿链接。图标支持 PNG、GIF 和 JPG／JPEG、最多 512 KiB，宽高各为 1–512px；根据文件内容识别格式，原样存储，保留透明背景和动画，后台草稿通过根管理员接口预览。
 
 软件原始包存入私有 R2 的 `tools/artifacts/<artifactId>/<sha256>`。不走游戏 import job、文件白名单、解包重组或 core pack。工具对象由链接后台独立检查，通用归档扫描不再将此命名空间报告为异常游戏对象。
 

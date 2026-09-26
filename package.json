@@ -10,7 +10,9 @@
     "preview": "node scripts/app.mjs preview",
     "deploy": "node scripts/app.mjs deploy",
     "deploy:staging": "node scripts/app.mjs deploy --env staging",
-    "db:local:migrate": "wrangler d1 migrations apply viprpg-archive-prod --local",
+    "deploy:production": "node scripts/app.mjs deploy --env production",
+    "db:production:migrate": "node scripts/production-migrations.mjs",
+    "db:local:migrate": "wrangler d1 migrations apply DB --local",
     "db:local:reset": "node scripts/local-d1-reset.mjs",
     "db:local:seed": "node scripts/dev-seed.mjs",
     "db:local:seed:capture": "node scripts/dev-seed.mjs --capture",
@@ -26,7 +28,8 @@
     "regression": "node scripts/regression.mjs",
     "verify:preprod": "npm run check && npm run test:flow",
     "auth:calibrate-password": "tsx scripts/password-calibration.ts",
-    "smoke:staging": "node scripts/smoke.mjs",
+    "smoke:staging": "node scripts/smoke.mjs --env staging",
+    "smoke:production": "node scripts/smoke.mjs --env production",
     "db:staging:prepare": "node scripts/prepare-staging-seed.mjs"
   },
   "dependencies": {

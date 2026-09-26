@@ -4,9 +4,9 @@
 
 按钮使用 `intent://import?manifest=<编码后的清单地址>#Intent;scheme=easyrpg-kai;package=org.easyrpg.player.kai;S.browser_fallback_url=<编码后的资源页地址>;end`。未安装时支持 Intent 的浏览器回退到 `/resources#easyrpg-kai`；页面同时保留安装／更新链接和普通 ZIP 下载。浏览器支持情况仍需设备验收。
 
-当前站点访问入口为 [staging.viprpg.org](https://staging.viprpg.org)，环境来源见[部署手册](./staging-deployment.md#环境地址与配置来源)。不要把来源白名单当作已部署站点清单。
+正式目标为 [viprpg.org](https://viprpg.org)，预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)，环境来源见[部署手册](./staging-deployment.md#环境地址与配置来源)。不要把来源白名单当作已部署站点清单。
 
-网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`。2026-09-23 静态核对时，它允许 staging，同时仍保留已弃用的 Workers.dev 来源；后者是实现残留，不是正式入口或备用地址。本文不据此声明 production 已上线。
+网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`。它允许 viprpg.org 和 staging.viprpg.org，旧 Workers.dev 来源已移除。来源支持不代表正式网站或 APK 已发布。
 
 APK 内的来源白名单不可被链接参数扩充，HTTP、跨源及重定向均拒绝。客户端代码与发行包位于独立 Kai 项目，本仓库不能证明用户安装包的实际白名单。更换域名须核对网站与 APK 两端并发布支持该来源的 APK；只改网站文档或配置不能使旧 APK 获得接收能力。
 

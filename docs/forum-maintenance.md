@@ -12,7 +12,7 @@
 
 ## 初始化与备份
 
-空库由 `migrations/0001_init_archive_schema.sql` 一次创建当前论坛结构、图片位置、楼内编号、统计字段和 FTS 索引。旧论坛模型的离线转换已移除。旧开发库按[本地展示数据](./local-demo-data.md) 的备份与重建流程处理；Wrangler 不会重新应用已经登记的同名初始化文件。
+空库从 `0001_init_archive_schema.sql` 开始，按完整迁移链创建当前论坛结构、图片位置、楼内编号、统计字段和 FTS 索引。旧论坛模型的离线转换已移除。旧开发库按[本地展示数据](./local-demo-data.md) 的备份与重建流程处理；Wrangler 不会重新应用已经登记的同名初始化文件。
 
 本地初始化使用 `npm run db:local:seed` 恢复固定快照；已有数据时拒绝覆盖。人工编辑后的数据可用 `npm run db:local:seed:capture` 固化为新版种子，详见[本地展示数据](./local-demo-data.md)。
 

@@ -55,6 +55,7 @@ npm run regression      # 需要回归时串行运行 check + test，保留报�
 npm run test:flow       # 预生产关键流程：Chromium、Worker、R2/OPFS
 npm run verify:preprod  # check + test:flow（流程入口含构建）
 npm run smoke:staging   # 已部署 staging 的最小健康检查
+npm run smoke:production # 正式入口的只读 HTTP 检查
 npm run build           # Vite 浏览器资源与 SSR Worker 构建
 npm run preview         # 自动构建并在 workerd 中预览生产产物
 ```
@@ -69,7 +70,7 @@ npm run preview         # 自动构建并在 workerd 中预览生产产物
 
 ## Cloudflare 部署
 
-当前预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)。环境地址与配置来源见[部署环境](docs/staging-deployment.md#环境地址与配置来源)；不要从 Worker 名称或历史记录拼接访问地址。
+正式目标入口为 [viprpg.org](https://viprpg.org)，预生产为 [staging.viprpg.org](https://staging.viprpg.org)。正式发布与维护数据由负责人本人确认，见[正式部署手册](docs/production-deployment.md)。环境地址与配置来源见[部署环境](docs/staging-deployment.md#环境地址与配置来源)；不要从 Worker 名称或历史记录拼接访问地址。
 
 部署前先配置 Cloudflare 凭据和远端 secrets，并运行预生产验收：
 
@@ -84,7 +85,7 @@ npm run verify:preprod
 - `app/`：React Router 页面、loader、组件；`app/.server/`：Hono API、认证与业务服务
 - `lib/`：共享 DTO、领域规则和浏览器纯函数
 - `worker.ts`：Hono、SSR 与 scheduled 事件入口
-- `migrations/`：D1 统一初始化（上线前仅维护 `0001_init_archive_schema.sql`）
+- `migrations/`：D1 首发基线与后续有序增量迁移，正式初始化后不改写已应用文件
 - `public/play/`：EasyRPG Web Player 运行时
 - `scripts/`：本地数据库、种子数据、构建和 smoke test 脚本
 - `docs/`：产品、领域、存储、部署和运行手册

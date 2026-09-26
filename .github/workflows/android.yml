@@ -46,26 +46,39 @@ on:
       - 'public/play/**'
       - 'public/icon/windI.png'
   workflow_dispatch:
+    inputs:
+      target:
+        description: APK site and release channel
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
 
 permissions:
   contents: read
 
 # Relevant pushes all build; reruns of the same run cannot publish concurrently.
 concurrency:
-  group: android-${{ github.run_id }}
+  group: ${{ inputs.target == 'production' && 'production-maintenance' || format('android-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version_code: ${{ steps.release.outputs.version_code }}
+      version_name: ${{ steps.release.outputs.version_name }}
+      published: ${{ steps.release.outputs.published }}
     permissions:
-      contents: write
+      contents: read
     env:
       GH_REPO: ${{ github.repository }}
-      # Current verified site; changing this origin isolates existing offline data.
-      SITE_ORIGIN: https://staging.viprpg.org
+      # Production is manual and owner-approved; pushes continue to build staging.
+      SITE_ORIGIN: ${{ inputs.target == 'production' && 'https://viprpg.org' || 'https://staging.viprpg.org' }}
+      RELEASE_TARGET: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v6
@@ -82,10 +95,12 @@ jobs:
           set -euo pipefail
           code=$((100000 + GITHUB_RUN_NUMBER))
           version="0.3.${GITHUB_RUN_NUMBER}"
-          tag="android-${code}"
+          tag="android-${RELEASE_TARGET}-${code}"
           echo "ANDROID_VERSION_CODE=$code" >> "$GITHUB_ENV"
           echo "ANDROID_VERSION_NAME=$version" >> "$GITHUB_ENV"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version_code=$code" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version" >> "$GITHUB_OUTPUT"
           # Published assets stay immutable, including when a workflow is rerun.
           if release=$(gh release view "$tag" --json isDraft); then
             if [[ "$(jq -r .isDraft <<< "$release")" == false ]]; then
@@ -161,22 +176,55 @@ jobs:
         if: steps.release.outputs.published != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: viprpg-android-${{ env.ANDROID_VERSION_CODE }}
+          name: viprpg-android-${{ env.RELEASE_TARGET }}-${{ env.ANDROID_VERSION_CODE }}
           path: |
             output/android/viprpg-release.apk
             output/android/SHA256SUMS.txt
           if-no-files-found: error
 
-      - name: Publish complete release
+      - name: Candidate summary
         if: steps.release.outputs.published != 'true'
+        shell: bash
+        run: |
+          printf 'Android candidate: %s (%s)\n\nCommit: %s\n\nOrigin: %s\n\n' "$ANDROID_VERSION_NAME" "$RELEASE_TARGET" "$GITHUB_SHA" "$SITE_ORIGIN" >> "$GITHUB_STEP_SUMMARY"
+          cat output/android/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/archive.jks"
+
+  publish:
+    needs: build
+    if: needs.build.outputs.published != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      SITE_ORIGIN: ${{ inputs.target == 'production' && 'https://viprpg.org' || 'https://staging.viprpg.org' }}
+      RELEASE_TARGET: ${{ inputs.target == 'production' && 'production' || 'staging' }}
+      ANDROID_VERSION_CODE: ${{ needs.build.outputs.version_code }}
+      ANDROID_VERSION_NAME: ${{ needs.build.outputs.version_name }}
+    steps:
+      - name: Download the verified APK candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: viprpg-android-${{ env.RELEASE_TARGET }}-${{ env.ANDROID_VERSION_CODE }}
+          path: output/android
+      - name: Verify downloaded candidate
+        working-directory: output/android
+        run: sha256sum --check SHA256SUMS.txt
+      - name: Publish complete release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
         run: |
           set -euo pipefail
           notes="$RUNNER_TEMP/android-release.md"
-          printf 'Android %s\n\nCommit: %s\n\n站点：https://staging.viprpg.org\n\n下载 viprpg-release.apk。此包使用固定发布签名；可覆盖安装较早的同签名版本。网站后台选择此 APK 即可自动识别版本，发布后向客户端推荐更新。\n\n' "$ANDROID_VERSION_NAME" "$GITHUB_SHA" > "$notes"
+          printf 'Android %s (%s)\n\nCommit: %s\n\n站点：%s\n\n下载 viprpg-release.apk。此包使用固定发布签名；可覆盖安装较早的同签名版本。更换站点来源后，旧来源的离线安装与存档不会自动迁移。网站更新频道仍须单独发布。\n\n' "$ANDROID_VERSION_NAME" "$RELEASE_TARGET" "$GITHUB_SHA" "$SITE_ORIGIN" > "$notes"
           gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
             -f tag_name="$RELEASE_TAG" -f target_commitish="$GITHUB_SHA" --jq .body >> "$notes"
           if release=$(gh release view "$RELEASE_TAG" --json isDraft); then
@@ -184,11 +232,9 @@ jobs:
             [[ "$(jq -r .isDraft <<< "$release")" == true ]] || exit 0
           else
             gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft --prerelease \
-              --title "Android $ANDROID_VERSION_NAME" --notes-file "$notes"
+              --title "Android $ANDROID_VERSION_NAME ($RELEASE_TARGET)" --notes-file "$notes"
           fi
           gh release upload "$RELEASE_TAG" output/android/viprpg-release.apk output/android/SHA256SUMS.txt --clobber
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false --notes-file "$notes"
-
-      - name: Remove signing key
-        if: always()
-        run: rm -f -- "$RUNNER_TEMP/archive.jks"
+          prerelease=true
+          if [[ "$RELEASE_TARGET" == 'production' ]]; then prerelease=false; fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease" --latest=false --notes-file "$notes"
