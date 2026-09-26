@@ -7,7 +7,7 @@ const serverOrigin = () => "";
 function androidOrigin() {
   return /Android/i.test(navigator.userAgent) &&
     [
-      "https://viprpg-zh-archive.q578235562.workers.dev",
+      "https://viprpg.org",
       "https://staging.viprpg.org",
     ].includes(window.location.origin)
     ? window.location.origin

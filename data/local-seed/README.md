@@ -1,5 +1,7 @@
 # Fixed Local Seed
 
+Production starts from the reviewed 0001 baseline; after initialization, applied migrations are immutable and upgrades use ordered incremental migrations. Seed restoration applies pending migrations after restoring the snapshot; clean seed preparation builds the complete migration chain and records its hashes. This development snapshot must never contain real production accounts or sessions. See [production operations](../../docs/production-deployment.md).
+
 Work staff and tag relations include `sort_order`, matching the initialization
 schema. Existing rows start at zero and retain their former name-based order
 until edited. Table contents and the single initialization migration ledger are

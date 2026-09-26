@@ -5,6 +5,11 @@ plugins {
 import groovy.json.JsonSlurper
 
 def siteOrigin = providers.gradleProperty('siteOrigin').getOrElse('https://staging.viprpg.org')
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') } && !providers.gradleProperty('siteOrigin').isPresent()) {
+        throw new GradleException('Release builds require an explicit -PsiteOrigin')
+    }
+}
 def siteUri = new URI(siteOrigin)
 if (siteUri.scheme != 'https' || !siteUri.host || siteUri.port != -1 || siteUri.rawPath || siteUri.rawQuery || siteUri.rawFragment) {
     throw new GradleException('siteOrigin must be an HTTPS origin without a path or port')

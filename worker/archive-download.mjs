@@ -767,7 +767,7 @@ function shouldBypassDownloadCache(request, env) {
 
   return (
     url.searchParams.get("debug_download_cache") === "bypass" &&
-    String(env.APP_ORIGIN ?? "").includes("staging")
+    env.APP_ORIGIN === "https://staging.viprpg.org"
   );
 }
 

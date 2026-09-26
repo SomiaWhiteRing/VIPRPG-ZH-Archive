@@ -26,6 +26,8 @@
 - [Workers 与 React Router](./workers-development.md)：本地运行、binding、构建、部署和故障定位
 - [预生产初始化与验收](./staging-deployment.md)：当前访问入口、环境配置来源、干净种子与首次发布顺序
 - [GitHub Actions 自动部署](./github-actions-deployment.md)：CI 前置配置、触发方式和发布边界
+- [正式部署与数据维护](./production-deployment.md)：单人确认、正式候选、迁移、首次初始化和恢复
+- [正式上线调整记录](./production-readiness.md)：已落实调整及外部状态、待上线事项
 - [维护与回归](./maintenance-regression.md)：最小检查选择、故障归因与回归入口
 - [本地展示数据](./local-demo-data.md)：固定种子、演示账号、备份和恢复；快照格式见[种子说明](../data/local-seed/README.md)
 - [论坛开发与数据维护](./forum-maintenance.md)：论坛契约检查与离线导出
@@ -46,6 +48,6 @@
 
 - 环境地址以[预生产手册](./staging-deployment.md#环境地址与配置来源)为入口；代码白名单、被忽略的本地配置和历史发版记录不能证明域名已部署或可访问。
 - 行为变更直接修订对应章节，删除被替代的描述，不在文末叠加纠正旧文的补丁说明。
-- 命令与依赖以 [package.json](../package.json) 为准，路由以 [app/routes.ts](../app/routes.ts) 和 [Hono API](../app/.server/api.ts) 为准，结构以[统一初始化 SQL](../migrations/0001_init_archive_schema.sql)为准。
+- 命令与依赖以 [package.json](../package.json) 为准，路由以 [app/routes.ts](../app/routes.ts) 和 [Hono API](../app/.server/api.ts) 为准，结构以 [migrations](../migrations/) 中的首发基线和有序迁移链为准。
 - 已完成计划中仍有效的规则并入现行文档；只有独有的来源、决策或操作证据进入归档，纯重复记录由 Git 历史保留。
 - 文档移动或删除时同步修正链接和章节锚点。静态核对、历史验收和本次实际运行的检查分别说明，不能相互替代。

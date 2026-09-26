@@ -1,53 +1,43 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
+import { parseArgs } from "node:util";
 import { parse } from "jsonc-parser";
+import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
-// Deployment resources stay private; application entry and asset routing follow the repository.
+const { values } = parseArgs({ options: { env: { type: "string" } } });
+const template = readConfig("wrangler.example.jsonc");
+const base = selectDeployment(template, values.env);
 const source = process.env.WRANGLER_CONFIG_JSONC;
 if (!source) throw new Error("WRANGLER_CONFIG_JSONC is required");
 const errors = [];
-const resourceConfig = parse(source, errors, { allowTrailingComma: true });
-if (errors.length || !resourceConfig || typeof resourceConfig !== "object")
+const resources = parse(source, errors, { allowTrailingComma: true });
+if (errors.length || !resources || Array.isArray(resources) || typeof resources !== "object")
   throw new Error("Invalid WRANGLER_CONFIG_JSONC");
-const template = parse(
-  readFileSync(new URL("../wrangler.example.jsonc", import.meta.url), "utf8"),
-);
-const infrastructure = [
-  "name",
-  "routes",
-  "workers_dev",
-  "preview_urls",
-  "d1_databases",
-  "r2_buckets",
-  "send_email",
-  "ratelimits",
-  "vars",
-  "triggers",
-  "observability",
-  "limits",
-  "placement",
-];
-function configure(resources, base) {
-  const result = { ...base };
-  for (const key of infrastructure)
-    if (key in resources) result[key] = resources[key];
-  for (const required of base.ratelimits ?? []) {
-    const actual = result.ratelimits?.find((binding) => binding.name === required.name);
-    if (!actual || !/^\d+$/.test(actual.namespace_id))
-      throw new Error(`Configure an account-unique namespace_id for ${required.name}`);
-    // The view policy belongs to the application; namespace IDs remain private configuration.
-    if (required.name === "VIEW_RATE_LIMITER") actual.simple = required.simple;
-  }
-  return result;
+// Select from a full local config, or use an environment's own resource object.
+const selected = values.env === "staging" && resources.env ? resources.env.staging : resources;
+if (!selected) throw new Error(`Missing deployment environment: ${values.env}`);
+const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_databases", "r2_buckets",
+  "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement"];
+const target = structuredClone(base);
+for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
+for (const required of base.ratelimits) {
+  const actual = target.ratelimits?.find((binding) => binding.name === required.name);
+  if (actual) actual.simple = required.simple;
 }
-const result = configure(resourceConfig, template);
-result.env = Object.fromEntries(
-  Object.entries(template.env).map(([name, base]) => {
-    const resources = resourceConfig.env?.[name];
-    if (!resources) throw new Error(`Missing deployment environment: ${name}`);
-    return [name, configure(resources, base)];
-  }),
-);
-writeFileSync(
-  new URL("../wrangler.jsonc", import.meta.url),
-  `${JSON.stringify(result, null, 2)}\n`,
-);
+validateDeployment(target, values.env);
+if (resources.env) validateIsolation(resources);
+// Vite validates the top-level config even when staging is selected. Leave no
+// remote bindings in that unselected config, rather than invalid placeholders.
+if (values.env === "staging") {
+  template.env.staging = target;
+  template.name = "viprpg-deployment-disabled";
+  for (const key of ["d1_databases", "r2_buckets", "send_email", "ratelimits", "routes"]) template[key] = [];
+  template.durable_objects = { bindings: [] };
+  template.triggers = { crons: [] };
+  template.vars = { APP_ORIGIN: "http://127.0.0.1:3000", EMAIL_FROM: "noreply@viprpg.org", SITE_NOINDEX: "true" };
+} else {
+  delete target.env;
+  Object.assign(template, target);
+  delete template.env;
+}
+writeFileSync("wrangler.jsonc", `${JSON.stringify(template, null, 2)}\n`);
+console.log(`Prepared ${values.env}: ${target.name} at ${target.vars.APP_ORIGIN}`);

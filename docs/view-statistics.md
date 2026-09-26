@@ -29,6 +29,6 @@
 
 `VIEW_RATE_LIMITER` 使用独立的、账号内唯一的数字 `namespace_id`，每个 IP 在每个 Cloudflare 机房每分钟最多 120 次上报；不能与认证邮件限流共用 namespace。部署 secrets 中的 `WRANGLER_CONFIG_JSONC` 也必须包含此绑定，配置生成脚本会检查。仓库固定限流策略，私有配置提供 namespace ID。部署前按[环境配置来源](./staging-deployment.md#环境地址与配置来源)核对账号中的实际 ID。
 
-上线前直接使用 `0001_init_archive_schema.sql` 当前结构，不保留 D1 旧计数表、主题旧计数字段、双写、兼容读取或历史浏览量导入。固定开发种子同步移除旧浏览量，其他内容保留；DO 从零开始。`db:local:reset` 一并清理本地 D1 和 DO，避免重用内容 ID 时串入旧计数；固定种子不包含 DO 计数。已存在的数据库需要另行重建，这不是普通代码部署自动执行的步骤。
+首发使用 `0001_init_archive_schema.sql` 基线及后续有序迁移，正式初始化后不改写已应用文件；现行模型不保留废弃 D1 计数表或双写。固定开发种子不包含 DO 计数。`db:local:reset` 一并清理本地 D1 和 DO，避免重用内容 ID 时串入旧计数；该开发规则不能用于清除正式累计量。正式 DO 身份、计数、备份／恢复与迁移须单独列入批准范围，D1 备份不涵盖 DO；见[正式手册](./production-deployment.md)。
 
 实现依据：[DO SQLite](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/)、[Alarms](https://developers.cloudflare.com/durable-objects/api/alarms/)、[声明式 exports](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/)、[环境隔离](https://developers.cloudflare.com/durable-objects/reference/environments/)、[Rate Limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)、[DO 定价](https://developers.cloudflare.com/durable-objects/platform/pricing/)。

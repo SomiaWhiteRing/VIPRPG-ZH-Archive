@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { parseArgs } from "node:util";
+import { migrationManifest } from "./deployment-config.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { values } = parseArgs({ options: { output: { type: "string" } } });
@@ -24,8 +25,8 @@ const sourcePath = resolve(output, "source.sqlite");
 writeFileSync(sourcePath, sourceBytes);
 const source = new DatabaseSync(sourcePath, { readOnly: true });
 const selected = new DatabaseSync(":memory:");
-const schema = readFileSync(resolve(root, "migrations/0001_init_archive_schema.sql"), "utf8");
-selected.exec(schema);
+const migrations = migrationManifest();
+for (const migration of migrations) selected.exec(readFileSync(resolve(root, "migrations", migration.name), "utf8"));
 
 try {
   const customRoles = source.prepare("SELECT * FROM roles WHERE kind='custom' ORDER BY id").all();
@@ -136,7 +137,7 @@ try {
   writeFileSync(resolve(output, "statements.json"), JSON.stringify(statements) + "\n");
   writeFileSync(resolve(output, "manifest.json"), JSON.stringify({
     schema: "viprpg-staging-seed.v1", preparedAt: new Date().toISOString(),
-    sourceDatabaseSha256: sourceManifest.database.sha256, schemaSha256: hash(schema),
+    sourceDatabaseSha256: sourceManifest.database.sha256, migrations,
     sqlSha256: hash(sql), tables: populated, objects,
     validation: { foreignKeyViolations: 0, integrity: "ok", users: 0, works: 0 },
   }, null, 2) + "\n");

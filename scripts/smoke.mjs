@@ -1,6 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { parseArgs } from "node:util";
+import { deploymentOrigins } from "./deployment-config.mjs";
 
-const baseUrl = process.argv[2] || process.env.SMOKE_BASE_URL || "https://staging.viprpg.org";
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { env: { type: "string" } } });
+if (values.env !== undefined && !Object.hasOwn(deploymentOrigins, values.env)) throw new Error("Unknown smoke environment");
+const baseUrl = positionals[0] || process.env.SMOKE_BASE_URL || deploymentOrigins[values.env ?? "staging"];
+if (values.env && new URL(baseUrl).origin !== deploymentOrigins[values.env])
+  throw new Error(`Smoke target does not match ${values.env}`);
+console.log(`Smoke target: ${baseUrl}`);
 
 if (!baseUrl) {
   console.error("Usage: node scripts/smoke.mjs <base-url>");
@@ -52,6 +59,8 @@ async function smokeFetch(url) {
       headers: {
         "user-agent": "viprpg-smoke/1.0",
       },
+      signal: AbortSignal.timeout(30000),
+      redirect: "error",
     });
   } catch (error) {
     if (process.platform !== "win32") {
@@ -63,7 +72,7 @@ async function smokeFetch(url) {
       [
         "-NoProfile",
         "-Command",
-        "$response = Invoke-WebRequest -Uri $env:SMOKE_URL -UseBasicParsing -TimeoutSec 30; [Console]::Write($response.StatusCode)",
+        "$response = Invoke-WebRequest -Uri $env:SMOKE_URL -UseBasicParsing -TimeoutSec 30 -MaximumRedirection 0 -ErrorAction Stop; [Console]::Write($response.StatusCode)",
       ],
       {
         env: {

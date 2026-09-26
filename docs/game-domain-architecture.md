@@ -1,6 +1,6 @@
 # 游戏领域架构
 
-本文定义作品资料、作品关系、目录和归档版本的领域边界。D1 的当前字段、索引和 trigger 以 `migrations/0001_init_archive_schema.sql` 为准；本文不复制完整 SQL。
+本文定义作品资料、作品关系、目录和归档版本的领域边界。D1 的当前字段、索引和 trigger 以 migrations 中的首发基线及有序增量迁移为准；本文不复制完整 SQL。
 
 归档对象与文件完整性见[去重存储架构](./archive-storage.md)，认证和 ownership 规则见[认证与权限基线](./authentication-authorization.md)。
 
@@ -254,7 +254,7 @@ commit 的 schema 与校验由 `lib/archive/manifest.ts` 和 `app/.server/db/arc
 - 类型、静态架构或权限规则变化运行 `npm run check`
 - 数据约束或稳定领域契约变化运行 `npm test`
 - 模型调整时用 `rg` 扫描废弃表、字段、路由和类型残留，结果仅作为当次变更证据
-- 对照 `migrations/0001_init_archive_schema.sql` 检查本文不变量，而不是复制 SQL
+- 对照 migrations 中的完整迁移链检查本文不变量，而不是复制 SQL
 
 预生产或发布前统一运行 `npm run verify:preprod`；流程测试和生产构建不作为每次领域编辑的固定门槛。
 

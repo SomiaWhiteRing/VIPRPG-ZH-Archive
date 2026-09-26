@@ -17,7 +17,7 @@
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
 | `npm run regression` | 明确需要综合回归时使用 | 串行运行 `check` → `test`，保留报告和阶段日志 |
 | `npm run regression -- --flow --build` | 预生产或发布前完整候选 | 额外运行浏览器/Worker 流程和生产构建，耗时较长 |
-| `npm run smoke:staging` | 已部署 staging 的健康入口 | 只在已有部署上执行，不替代本地回归 |
+| `npm run smoke:staging` / `smoke:production` | 对应环境的只读 HTTP 健康入口 | 固定 origin，不写业务数据；不替代 schema、邮件或 UI 验收 |
 
 `npm run regression` 发现的证据目录是 `output/regression/<timestamp>/`：`report.json` 保存工作树快照、阶段状态、退出码和日志路径；每个阶段的 `.log` 保存原始 stdout/stderr。成功时目录仍被保留但不进入 Git；失败时先看报告和最后一个失败阶段的日志，再决定是否需要修产品代码。
 
@@ -32,7 +32,7 @@
 
 ## 环境与数据边界
 
-- 本项目尚未正式上线；没有真实数据或外部契约需要保护时，废弃内部模型直接收敛到当前模型，不添加 `legacy_*`、旧端点别名、双写或浏览器状态兼容层。
+- 使用当前领域模型，并保护正式数据、已发布契约和用户存档。首发后冻结已应用迁移，以增量迁移升级；不以清理废弃模型为由删除真实数据所需的升级支持。正式部署、数据维护和回退由负责人本人确认，见[正式手册](./production-deployment.md)，不要求多人评审。
 - 本地开发数据的重建是破坏性操作：`npm run db:local:reset` 后按需 `npm run db:local:seed`，只影响 Wrangler 本地状态，不代表远端迁移。
 - `npm test` 和 `npm run test:flow` 自行创建临时状态；不要与本地 D1 reset/seed 或另一条有状态检查并行。
 - 在线游玩、上传和发布的自动检查通过，不等于人工移动端、全屏、文件选择或真实用户路径验收；这些仍须用户明确授权后单独执行。
