@@ -1,7 +1,7 @@
 # Project constraints
 
 - 远端访问入口与配置来源见 [docs/staging-deployment.md](docs/staging-deployment.md#环境地址与配置来源)。不要从 Worker 名称、历史白名单或本地顶层配置推断当前站点地址。
-- 本项目由一人维护。正式发布由负责人本人确认，允许本人批准自己的发布；不要求第二位审核人、强制 PR 或多人评审。预生产继续随 main 推送自动发布。
+- 本项目由一人维护。主站正式发布由负责人手动选择 `target=production` 并运行 workflow 即完成确认，候选检查通过后直接发布，不再要求 `Review deployments`；production Environment 不配置 required reviewers。Codex 代为触发仍须本次任务已有明确部署授权，不因技术上可运行而自行发布。不要求第二位审核人、强制 PR 或多人评审。预生产继续随 main 推送自动发布。
 - 正式目标为 `https://viprpg.org`。Codex 执行正式部署、回滚、配置或凭据变更，以及 D1、R2、DO、后台/API 的数据写入、导入、修复、清理、恢复或根账户轮换前，必须取得用户对具体目标和操作范围的明确确认。先完成候选、适用检查、目标和影响预览；确认可覆盖明确批次，范围未变时不重复询问。修改代码或推送 main 不自动授权正式发布或正式数据操作；token、会话、`--confirm` 和 `CI=true` 不代替用户确认。具体入口见 [正式部署手册](docs/production-deployment.md)。
 - 网站正常业务与已批准的既有自动任务仍按原权限及策略运行，不增加逐次运维审批。Codex 手动触发清理或修改自动任务策略仍遵守正式操作确认边界。
 - 使用唯一当前领域模型；保护真实数据、已发布 API/manifest/更新协议和用户存档。为实际升级或回退所需的兼容不能当作废弃内部实现直接删除。

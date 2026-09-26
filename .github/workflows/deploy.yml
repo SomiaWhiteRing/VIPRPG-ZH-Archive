@@ -86,7 +86,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # The sole owner may approve their own candidate after the checks above.
+    # Manual production dispatch is the confirmation; no Environment review gate.
     environment:
       name: production
       url: https://viprpg.org

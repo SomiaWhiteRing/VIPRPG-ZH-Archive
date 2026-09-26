@@ -1,6 +1,6 @@
 # 正式部署与数据维护
 
-本项目由一人维护。负责人本人确认正式操作即可，允许自己批准自己的发布；不要求第二位审核人、强制 PR 或禁止直接推送 main。main 推送继续自动发布预生产。
+本项目由一人维护。负责人在 GitHub 手动选择 `target=production` 并运行 workflow 即确认本次正式发布，检查通过后直接部署，无需再点击 `Review deployments`；不要求第二位审核人、强制 PR 或禁止直接推送 main。main 推送继续自动发布预生产。
 
 ## 环境与授权
 
@@ -12,11 +12,11 @@
 
 ## 单人 GitHub 发布
 
-`Deploy` 的 `candidate` job 使用隔离配置执行既有检查，没有正式写凭据。手动选择 `target=production` 后，候选摘要记录固定 SHA、迁移清单及规范化 LF 后的 SHA-256；检查通过后等待 `production` Environment 的负责人本人批准。正式 job 签出同一 SHA，生成并核对资源配置，构建、发布，最后执行正式 smoke。
+`Deploy` 的 `candidate` job 使用隔离配置执行既有检查，没有正式写凭据。手动选择 `target=production` 并点击 `Run workflow` 即确认发布该次固定 SHA；候选摘要记录 SHA、迁移清单及规范化 LF 后的 SHA-256。检查通过后直接进入正式 job，签出同一 SHA，生成并核对资源配置，构建、发布，最后执行正式 smoke。检查失败会停止发布，没有第二次 Environment 审批。Codex 代为触发须已获得用户对本次发布的明确授权。
 
 `apply_migrations` 默认关闭。关闭时，正式 job 只读核对迁移账本；有待应用迁移就停止本次发布。账本按文件名核对，不能证明历史同名 SQL 的内容一致，首发前仍须核对实际 schema。开启代表本次批准同时包含候选中待应用的迁移；它不包含数据修复、seed 导入或重建数据库。迁移发生在 Worker 发布前，需兼容短暂继续运行的旧 Worker；不兼容变更应单独安排停写窗口。
 
-production Environment 使用唯一负责人作为 required reviewer，`prevent_self_review=false`；只允许 main 发布，关闭审批绕过。这里限制的是发布来源，不限制负责人直接提交 main，也不增加 PR 评审人数。正式主站、状态服务和正式 Android workflow 使用 `production-maintenance` 互斥组；本地／API 维护仍需人工确保不与其并发。
+production Environment 不配置 required reviewers，继续保存正式 secrets 并限制只有 main 可以发布。主站正式 job 仅在手动选择 production 且候选成功时执行；共用该 Environment 的正式 Android Release 也在手动启动、构建校验通过后直接发布。独立 status Environment 保留现有审批配置。正式主站、状态服务和正式 Android workflow 使用 `production-maintenance` 互斥组；本地／API 维护仍需人工确保不与其并发。
 
 正式 secrets 使用独立名称，避免回落到旧仓库级配置：
 
@@ -26,7 +26,7 @@ production Environment 使用唯一负责人作为 required reviewer，`prevent_
 | `PRODUCTION_CLOUDFLARE_API_TOKEN` | 正式部署所需 token，只在受保护 job 中注入 |
 | `PRODUCTION_WRANGLER_CONFIG_JSONC` | 仅含正式资源的 JSONC，结构为本地 Wrangler 顶层 |
 
-staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`WRANGLER_CONFIG_JSONC`。配置生成器接受目标资源对象，也可从完整本地配置选择 staging；输出不携带另一环境的实际资源；staging 构建的未选中顶层不绑定远端资源，正式构建移除 staging 段。生产 token 不应另存无审批的仓库级副本。旧仓库凭据先核对消费者和权限，再迁移或撤销，不能盲删仍在使用的凭据。
+staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`WRANGLER_CONFIG_JSONC`。配置生成器接受目标资源对象，也可从完整本地配置选择 staging；输出不携带另一环境的实际资源；staging 构建的未选中顶层不绑定远端资源，正式构建移除 staging 段。生产 token 不应另存绕过环境隔离的仓库级副本。旧仓库凭据先核对消费者和权限，再迁移或撤销，不能盲删仍在使用的凭据。
 
 ## 本地准备与执行
 
@@ -54,7 +54,7 @@ npm run deploy:production -- --apply-migrations
 npm run db:production:migrate -- --apply
 ```
 
-交互终端显示目标后要求输入 `viprpg.org`。已取得用户确认的非交互执行使用 `--confirm viprpg.org`；CI 只在 Environment 批准后传入此参数。`CI=true` 本身不放行。裸 `npm run deploy` 拒绝执行，必须指定目标。预生产用 `npm run deploy:staging -- --apply-migrations`。
+交互终端显示目标后要求输入 `viprpg.org`。已取得用户确认的非交互执行使用 `--confirm viprpg.org`；CI 在手动 production 运行的候选检查通过后传入此参数，不再等待 Environment 审批。`CI=true` 本身不放行。裸 `npm run deploy` 拒绝执行，必须指定目标。预生产用 `npm run deploy:staging -- --apply-migrations`。
 
 ## 首次正式初始化
 
