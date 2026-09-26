@@ -1,8 +1,9 @@
 import { timingSafeEqualString } from "@/app/.server/crypto/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { HttpError } from "@/lib/http";
 
-export type ChallengePurpose = "register" | "password_reset" | "email_change";
+export type ChallengePurpose = "register" | "password_reset" | "email_change" | "account_delete";
 
 export type EmailVerificationChallenge = {
   id: number;
@@ -55,7 +56,7 @@ export async function assertEmailChallengeQuota(
     .first<CountRow>();
 
   if ((row?.count ?? 0) >= 5) {
-    throw new Error("验证码发送过于频繁，请稍后再试");
+    throw new HttpError(429, "验证码发送过于频繁，请稍后再试");
   }
 }
 
@@ -141,38 +142,44 @@ export async function consumeLatestEmailChallenge(
       WHERE email = ?
         AND purpose = ?
         AND user_id IS ?
-        AND consumed_at IS NULL
-        AND expires_at > CURRENT_TIMESTAMP
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT 1`,
     )
     .bind(input.email, input.purpose, input.userId ?? null)
     .first<ChallengeRow>();
 
-  if (!row) {
-    throw new Error("验证码不存在或已失效");
+  if (!row || row.expires_at <= new Date().toISOString().slice(0, 19).replace("T", " ")) {
+    throw new HttpError(400, "验证码不存在或已失效");
+  }
+
+  if (row.consumed_at) {
+    throw new HttpError(400, "验证码已被使用，请重新获取");
   }
 
   if (row.attempt_count >= 5) {
-    throw new Error("验证码尝试次数过多，请重新获取");
+    throw new HttpError(400, "验证码尝试次数过多，请重新获取");
   }
 
   if (!timingSafeEqualString(row.code_hash, input.codeHash)) {
     await incrementChallengeAttempts(runtime, row.id);
-    throw new Error("验证码不正确");
+    throw new HttpError(400, "验证码不正确");
   }
 
   const consumed = await getD1(runtime)
     .prepare(
       `UPDATE email_verification_challenges
       SET consumed_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND consumed_at IS NULL`,
+      WHERE id = ? AND consumed_at IS NULL
+        AND expires_at > CURRENT_TIMESTAMP AND attempt_count < 5
+        AND id = (SELECT id FROM email_verification_challenges
+          WHERE email = ? AND purpose = ? AND user_id IS ?
+          ORDER BY created_at DESC, id DESC LIMIT 1)`,
     )
-    .bind(row.id)
+    .bind(row.id, input.email, input.purpose, input.userId ?? null)
     .run();
 
   if (Number(consumed.meta.changes ?? 0) !== 1) {
-    throw new Error("验证码已被使用");
+    throw new HttpError(400, "验证码已失效，请重新获取");
   }
 
   return mapChallengeRow({

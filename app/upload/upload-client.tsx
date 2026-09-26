@@ -171,6 +171,8 @@ export function UploadClient({
   });
   const [characterFaceSheetFiles, setCharacterFaceSheetFiles] =
     useState<CharacterFaceSheetFiles>({});
+  const [sourceFaceSheetFiles, setSourceFaceSheetFiles] = useState<File[]>([]);
+  const [sourceFaceSheetWarnings, setSourceFaceSheetWarnings] = useState<string[]>([]);
   const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>(
     [],
   );
@@ -223,12 +225,16 @@ export function UploadClient({
       associationDefaults,
       imageSelections,
       characterFaceSheetFiles,
+      sourceFaceSheetFiles,
+      sourceFaceSheetWarnings,
     });
   }, [
     form,
     associationDefaults,
     imageSelections,
     characterFaceSheetFiles,
+    sourceFaceSheetFiles,
+    sourceFaceSheetWarnings,
     localTaskId,
     saveFormDraft,
   ]);
@@ -335,6 +341,8 @@ export function UploadClient({
   ) {
     if (generation !== sourceInspectionGenerationRef.current) return;
     setSourceCoverCandidates(prefill.titleImages);
+    setSourceFaceSheetFiles(prefill.faceSheetFiles);
+    setSourceFaceSheetWarnings(prefill.faceSheetWarnings);
     const title = prefill.gameTitle;
     if (title) {
       setForm((current) => {
@@ -394,6 +402,8 @@ export function UploadClient({
     const generation = sourceInspectionGenerationRef.current + 1;
     sourceInspectionGenerationRef.current = generation;
     setSourceCoverCandidates([]);
+    setSourceFaceSheetFiles([]);
+    setSourceFaceSheetWarnings([]);
     const previousAutomaticCover = automaticCoverRef.current;
     automaticCoverRef.current = null;
     if (previousAutomaticCover) {
@@ -640,6 +650,8 @@ export function UploadClient({
     sourceInspectionGenerationRef.current += 1;
     automaticCoverRef.current = null;
     setSourceCoverCandidates([]);
+    setSourceFaceSheetFiles(draft.formDraft?.sourceFaceSheetFiles ?? []);
+    setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
       setForm(draft.formDraft.form);
       setAssociationDefaults(draft.formDraft.associationDefaults);
@@ -685,6 +697,8 @@ export function UploadClient({
   function restart() {
     sourceInspectionGenerationRef.current += 1;
     setSourceCoverCandidates([]);
+    setSourceFaceSheetFiles([]);
+    setSourceFaceSheetWarnings([]);
     const previousAutomaticCover = automaticCoverRef.current;
     automaticCoverRef.current = null;
     if (previousAutomaticCover) {
@@ -876,6 +890,9 @@ export function UploadClient({
                 ) : (
                   <MetadataFields
                     characterFaceSheetFiles={characterFaceSheetFiles}
+                    sourceFaceSheetFiles={sourceFaceSheetFiles}
+                    sourceFaceSheetWarnings={sourceFaceSheetWarnings}
+                    sourceFaceSheetsLoading={upload.active && (!upload.task || upload.task.phase === "enumerating")}
                     changeOriginalDeclaration={changeOriginalDeclaration}
                     changeCharacterFaceSheetFiles={
                       changeCharacterFaceSheetFiles
@@ -1072,6 +1089,9 @@ function ExternalSourceSection({
 
 function MetadataFields({
   characterFaceSheetFiles,
+  sourceFaceSheetFiles,
+  sourceFaceSheetWarnings,
+  sourceFaceSheetsLoading,
   changeCharacterFaceSheetFiles,
   changeCharacters,
   changeOriginalDeclaration,
@@ -1090,6 +1110,9 @@ function MetadataFields({
   moreInfoErrorsVisible,
 }: {
   characterFaceSheetFiles: CharacterFaceSheetFiles;
+  sourceFaceSheetFiles: File[];
+  sourceFaceSheetWarnings: string[];
+  sourceFaceSheetsLoading: boolean;
   changeCharacterFaceSheetFiles: (index: number, files: File[]) => void;
   changeCharacters: (
     characters: CharacterCreditSelection[],
@@ -1321,6 +1344,9 @@ function MetadataFields({
           <CharacterPicker
             disabled={disabled}
             faceSheetFiles={characterFaceSheetFiles}
+            sourceFaceSheetFiles={sourceFaceSheetFiles}
+            sourceFaceSheetWarnings={sourceFaceSheetWarnings}
+            sourceFaceSheetsLoading={sourceFaceSheetsLoading}
             id="upload-characters"
             onChange={changeCharacters}
             onFaceSheetFilesChange={changeCharacterFaceSheetFiles}

@@ -5,6 +5,7 @@ import * as creatorUpdateEndpoint from "@/app/.server/endpoints/api/creators/[cr
 import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
 import * as endpoint0 from "@/app/.server/endpoints/api/account/avatar/route";
 import * as endpoint1 from "@/app/.server/endpoints/api/account/delete/route";
+import * as accountDeleteStartEndpoint from "@/app/.server/endpoints/api/account/delete/start/route";
 import * as endpoint2 from "@/app/.server/endpoints/api/account/email/confirm/route";
 import * as endpoint3 from "@/app/.server/endpoints/api/account/email/start/route";
 import * as endpoint4 from "@/app/.server/endpoints/api/account/password/route";
@@ -152,6 +153,15 @@ api.all("/api/account/delete", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
     Allow: "POST, OPTIONS",
   }),
+);
+api.post("/api/account/delete/start", (c) =>
+  accountDeleteStartEndpoint.POST(c.get("runtime"), c.req.raw),
+);
+api.options("/api/account/delete/start", (c) =>
+  c.body(null, 204, { Allow: "POST, OPTIONS" }),
+);
+api.all("/api/account/delete/start", (c) =>
+  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }),
 );
 api.on("POST", "/api/account/email/confirm", (c) =>
   endpoint2.POST(c.get("runtime"), c.req.raw),

@@ -81,6 +81,7 @@ export default [
     index("me/page.tsx"),
     route("privacy", "me/privacy/page.tsx"),
     route("permissions", "me/permissions/page.tsx"),
+    route("profile/delete", "me/profile/delete/page.tsx"),
     route("profile/email", "me/profile/email/page.tsx"),
     route("profile", "me/profile/page.tsx"),
     route("profile/password", "me/profile/password/page.tsx"),

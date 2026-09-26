@@ -48,6 +48,8 @@ export type UploadFormDraft = {
   associationDefaults: UploadAssociationDefaults;
   imageSelections: UploadImageSelections;
   characterFaceSheetFiles: Record<number, File[]>;
+  sourceFaceSheetFiles?: File[];
+  sourceFaceSheetWarnings?: string[];
 };
 
 export type UploadTaskStatus =
@@ -76,6 +78,8 @@ export type UploadSourceKind = "folder" | "zip" | "7z";
 export type UploadSourcePrefill = {
   gameTitle: string | null;
   titleImages: File[];
+  faceSheetFiles: File[];
+  faceSheetWarnings: string[];
 };
 
 export type UploadSourceFile = {

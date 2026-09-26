@@ -54,7 +54,7 @@ export default function LoginPage() {
         </>
       }
     >
-      <RedirectFeedback success={{ reset: "密码已更新，请重新登录。" }} />
+      <RedirectFeedback success={{ reset: "密码已更新，请重新登录。", accountDeleted: "账号已注销。" }} />
 
       <RedirectForm action="/api/auth/login" method="post" className="grid gap-4">
         <input type="hidden" name="next" value={nextPath} />

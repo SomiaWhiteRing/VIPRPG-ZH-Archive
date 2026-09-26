@@ -7,8 +7,6 @@ import { useLoaderData } from "react-router";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
-import { Button } from "@/app/components/ui/button";
-import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
@@ -87,7 +85,7 @@ export default function ProfilePage() {
               <span className="min-w-0 break-all text-sm">
                 邮箱：{user.email}
               </span>
-              <div className="ml-auto flex shrink-0 items-center gap-4 text-sm font-semibold">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-4 text-sm font-semibold">
                 <Link
                   className="text-primary hover:underline"
                   to="/me/profile/email"
@@ -100,6 +98,14 @@ export default function ProfilePage() {
                 >
                   修改密码
                 </Link>
+                {!user.isBootstrapAdmin ? (
+                  <Link
+                    className="text-destructive hover:underline"
+                    to="/me/profile/delete"
+                  >
+                    注销账号
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
@@ -108,32 +114,6 @@ export default function ProfilePage() {
           <Rm2kButton type="submit">保存资料</Rm2kButton>
         </div>
       </RedirectForm>
-      {!user.isBootstrapAdmin ? (
-        <section className="mt-8 border-t border-border pt-5">
-          <h2 className="text-lg font-semibold">注销账户</h2>
-          <ConfirmingForm
-            action="/api/account/delete"
-            confirmField="confirm"
-            title="确认注销账户？"
-            description="注销后无法登录，名称改为“账户已注销”，头像恢复默认，个人主页内容全部设为不可见。已上传作品、评论和其他公共贡献会保留。此操作无法撤销。"
-          >
-            <input name="confirm" type="hidden" value="delete" />
-            <Label htmlFor="delete-account-password">当前密码</Label>
-            <Input
-              autoComplete="current-password"
-              id="delete-account-password"
-              name="password"
-              type="password"
-              required
-            />
-            <div className="mt-3 flex justify-end">
-              <Button type="submit" variant="destructive">
-                注销账户
-              </Button>
-            </div>
-          </ConfirmingForm>
-        </section>
-      ) : null}
     </div>
   );
 }

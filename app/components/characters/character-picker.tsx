@@ -1,6 +1,7 @@
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import type { CharacterNameInput } from "@/app/components/characters/character-create-dialog";
 import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
+import { UploadCharacterFaceSheets } from "@/app/components/characters/upload-character-face-sheets";
 import { badgeVariants } from "@/app/components/ui/badge";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
@@ -49,6 +50,8 @@ type ExistingOption = {
 type CreateOption = { kind: "create"; query: string };
 type CharacterOption = ExistingOption | CreateOption;
 const EMPTY_FACE_SHEET_FILES: Record<number, File[]> = {};
+const EMPTY_FILES: File[] = [];
+const EMPTY_WARNINGS: string[] = [];
 const CHARACTER_ROLE_OPTIONS = Object.entries(CHARACTER_ROLE_LABELS).map(
   ([value, label]) => ({ value, label }),
 );
@@ -61,6 +64,9 @@ export function CharacterPicker({
   onFaceSheetFilesChange,
   onFaceSheetFilesRemove,
   faceSheetFiles = EMPTY_FACE_SHEET_FILES,
+  sourceFaceSheetFiles = EMPTY_FILES,
+  sourceFaceSheetWarnings = EMPTY_WARNINGS,
+  sourceFaceSheetsLoading = false,
   suggestions,
   values,
 }: {
@@ -74,6 +80,9 @@ export function CharacterPicker({
   onFaceSheetFilesChange?: (index: number, files: File[]) => void;
   onFaceSheetFilesRemove?: (index: number) => void;
   faceSheetFiles?: Record<number, File[]>;
+  sourceFaceSheetFiles?: File[];
+  sourceFaceSheetWarnings?: string[];
+  sourceFaceSheetsLoading?: boolean;
   suggestions: CharacterSuggestion[];
   values: CharacterCreditSelection[];
 }) {
@@ -206,6 +215,17 @@ export function CharacterPicker({
     setQuery("");
     portraitReturnFocusRef.current = document.getElementById(id);
     setPortraitIndex(values.length);
+  }
+
+  function confirmPortrait({ files, portrait, faceSheetBlobSha256s }: PortraitDraft) {
+    if (disabled || portraitIndex === null) return;
+    onFaceSheetFilesChange?.(portraitIndex, files);
+    onChange(
+      values.map((item, index) =>
+        index === portraitIndex ? { ...item, portrait, faceSheetBlobSha256s } : item,
+      ),
+    );
+    setPortraitIndex(null);
   }
 
   const reorder = useTokenReorder(
@@ -561,25 +581,25 @@ export function CharacterPicker({
                 </Button>
               </Dialog.Close>
             </div>
-            {activeCredit ? (
+            {activeCredit?.selection.kind === "new" && onFaceSheetFilesChange ? (
+              <UploadCharacterFaceSheets
+                credit={activeCredit}
+                disabled={disabled}
+                files={faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES}
+                key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
+                onConfirm={confirmPortrait}
+                sourceFiles={sourceFaceSheetFiles}
+                sourceLoading={sourceFaceSheetsLoading}
+                sourceWarnings={sourceFaceSheetWarnings}
+              />
+            ) : activeCredit ? (
               <PortraitSelectionWorkbench
                 canUpload={Boolean(onFaceSheetFilesChange)}
                 credit={activeCredit}
                 disabled={disabled}
                 files={faceSheetFiles[portraitIndex ?? -1] ?? []}
                 key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
-                onConfirm={({ files, portrait, faceSheetBlobSha256s }) => {
-                  if (disabled || portraitIndex === null) return;
-                  onFaceSheetFilesChange?.(portraitIndex, files);
-                  onChange(
-                    values.map((item, index) =>
-                      index === portraitIndex
-                        ? { ...item, portrait, faceSheetBlobSha256s }
-                        : item,
-                    ),
-                  );
-                  setPortraitIndex(null);
-                }}
+                onConfirm={confirmPortrait}
                 suggestion={activeSuggestion}
               />
             ) : null}

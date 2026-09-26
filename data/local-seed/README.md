@@ -2,6 +2,11 @@
 
 Production starts from the reviewed 0001 baseline; after initialization, applied migrations are immutable and upgrades use ordered incremental migrations. Seed restoration applies pending migrations after restoring the snapshot; clean seed preparation builds the complete migration chain and records its hashes. This development snapshot must never contain real production accounts or sessions. See [production operations](../../docs/production-deployment.md).
 
+The 2026-09-26 account deletion refresh applies
+`0002_account_deletion_email_challenge.sql` and records it after 0001 in the
+migration ledger. It adds the `account_delete` email challenge purpose while
+preserving all existing business records and R2 objects.
+
 Work staff and tag relations include `sort_order`, matching the initialization
 schema. Existing rows start at zero and retain their former name-based order
 until edited. Table contents and the single initialization migration ledger are

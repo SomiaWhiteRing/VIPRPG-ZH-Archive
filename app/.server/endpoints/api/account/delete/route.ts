@@ -11,14 +11,11 @@ export async function POST(runtime: AppRuntime, request: Request) {
     const auth = await getAuthContext(runtime);
     if (!auth) throw new HttpError(401, "请先登录");
     const form = await request.formData();
-    if (form.get("confirm") !== "delete")
-      throw new HttpError(400, "请确认注销账户");
-    await deleteOwnAccount(
-      runtime,
-      auth.user,
-      String(form.get("password") ?? ""),
-    );
-    const response = json({ ok: true, redirectTo: "/login" });
+    await deleteOwnAccount(runtime, auth.user, {
+      acknowledgement: String(form.get("acknowledgement") ?? ""),
+      code: String(form.get("code") ?? "").trim(),
+    });
+    const response = json({ ok: true, redirectTo: "/login?accountDeleted=1" });
     response.headers.append(
       "Set-Cookie",
       createClearSessionCookie(request.url),

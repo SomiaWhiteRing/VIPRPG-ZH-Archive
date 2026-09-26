@@ -34,6 +34,9 @@ import {
   userManagementScopeSql,
 } from "@/app/.server/db/permissions";
 import { HttpError } from "@/lib/http";
+import { assertAccountDeletionRequest } from "@/app/.server/auth/account-deletion";
+import { hashVerificationCode } from "@/app/.server/auth/tokens";
+import { consumeLatestEmailChallenge } from "@/app/.server/db/auth-challenges";
 
 type UserAuthRow = UserRow & {
   password_hash: string | null;
@@ -828,11 +831,21 @@ function emailToExternalAuthId(email: string): string {
 export async function deleteOwnAccount(
   runtime: AppRuntime,
   user: ArchiveUser,
-  password: string,
+  input: { acknowledgement: string; code: string },
 ): Promise<void> {
-  if (user.isBootstrapAdmin)
-    throw new HttpError(400, "请先轮换根账户，再注销此账户");
-  await verifyOwnPassword(runtime, user.id, password);
+  assertAccountDeletionRequest(user, input.acknowledgement);
+  if (!/^[0-9]{6}$/.test(input.code)) {
+    throw new HttpError(400, "请输入 6 位邮箱验证码");
+  }
+  const challenge = {
+    userId: user.id,
+    email: user.email,
+    purpose: "account_delete" as const,
+  };
+  await consumeLatestEmailChallenge(runtime, {
+    ...challenge,
+    codeHash: await hashVerificationCode(runtime, { ...challenge, code: input.code }),
+  });
   const db = getD1(runtime);
   await db.batch([
     db.prepare("DELETE FROM user_showcase_entries WHERE user_id=?").bind(user.id),
