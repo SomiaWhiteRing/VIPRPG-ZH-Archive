@@ -39,8 +39,9 @@ type SearchComboBoxProps<T> = {
   onOpenChange?: (open: boolean) => void;
   onRemoveLast?: () => void;
   onCommit?: () => void;
-  /** Token entry retains its existing type-and-Enter shortcut. */
   enterSelectsFirst?: boolean;
+  /** Default Enter target when the user has not focused a search result. */
+  isDefaultOption?: (item: T) => boolean;
   isItemDisabled?: (item: T) => boolean;
   maxLength?: number;
   itemClassName?: string;
@@ -128,10 +129,13 @@ function SearchComboBoxBody<T>(props: SearchComboBoxProps<T>) {
         ) {
           event.preventDefault();
           event.stopPropagation();
-          const first = props.enterSelectsFirst
-            ? props.items.find((item) => !props.isItemDisabled?.(item))
-            : undefined;
-          if (first) state.selectionManager.select(props.getKey(first));
+          const defaultOption = props.items.find(
+            (item) =>
+              (props.isDefaultOption?.(item) ?? props.enterSelectsFirst) &&
+              !props.isItemDisabled?.(item),
+          );
+          if (defaultOption)
+            state.selectionManager.select(props.getKey(defaultOption));
           else props.onCommit?.();
         } else if (
           event.key === "Backspace" &&

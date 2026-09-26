@@ -71,6 +71,10 @@ export function TokenPicker({
       .filter((item) =>
         tokenKey(normalizeValue(item.value)).includes(normalizedQuery),
       )
+      .sort((left, right) =>
+        Number(tokenKey(normalizeValue(right.value)) === normalizedQuery) -
+        Number(tokenKey(normalizeValue(left.value)) === normalizedQuery),
+      )
       .slice(0, 8)
       .map((item) => ({ ...item, kind: "existing" as const }));
     const normalizedValue = normalizeValue(query);
@@ -146,7 +150,9 @@ export function TokenPicker({
           }}
           disabled={disabled}
           items={options}
-          enterSelectsFirst
+          isDefaultOption={(option) =>
+            tokenKey(normalizeValue(option.value)) === tokenKey(normalizeValue(query))
+          }
           label={label}
           placeholder={values.length ? "继续添加" : placeholder}
           descriptionId={error || atLimit ? `${id}-feedback` : undefined}

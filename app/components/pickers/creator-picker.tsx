@@ -98,7 +98,9 @@ export function CreatorPicker({
         }
         getText={(option) => option.matchedName}
         onChoose={choose}
-        enterSelectsFirst
+        isDefaultOption={(option) =>
+          creatorNameKey(option.matchedName) === creatorNameKey(inputValue)
+        }
         inputSuffix={
           compact && identityLocked ? (
             <Button

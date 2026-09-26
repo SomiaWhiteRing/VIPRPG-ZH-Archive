@@ -29,7 +29,7 @@ export function CreatorCard({ creator }: {
             </p>
           ) : null}
           {creator.bio ? (
-            <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-muted wrap-anywhere">
+            <p className="mt-2.5 line-clamp-2 whitespace-pre-wrap text-[13px] leading-relaxed text-muted wrap-anywhere">
               {creator.bio}
             </p>
           ) : null}
