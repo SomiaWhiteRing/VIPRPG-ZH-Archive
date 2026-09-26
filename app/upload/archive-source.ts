@@ -1,6 +1,7 @@
 import { inflate } from "fflate";
 import { enumerateSevenZipSourceFiles } from "./archive-7z";
 import { filesWithinArchiveGameRoot } from "./archive-game-root";
+import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import {
   contentTypeForArchivePath,
   normalizeArchivePath,
@@ -88,19 +89,51 @@ export async function inspectUploadSource(
         left.path.localeCompare(right.path),
     );
 
-  const titleImages = await Promise.all(
+  const titleImages = (await Promise.all(
     titleEntries.map(async (entry) => {
-      const contentType = entry.contentType.split(";", 1)[0] || "image/png";
-      return new File([toArrayBuffer(await entry.bytes())], basename(entry.path), {
-        lastModified: entry.mtimeMs ?? 0,
-        type: contentType,
-      });
+      try {
+        const contentType = entry.contentType.split(";", 1)[0] || "image/png";
+        return new File([toArrayBuffer(await entry.bytes())], basename(entry.path), {
+          lastModified: entry.mtimeMs ?? 0,
+          type: contentType,
+        });
+      } catch {
+        // A broken optional cover must not hide the work's face sheets.
+        return null;
+      }
     }),
-  );
+  )).filter((file): file is File => file !== null);
+
+  const faceSheetFiles: File[] = [];
+  const faceSheetWarnings: string[] = [];
+  const faceHashes = new Set<string>();
+  for (const entry of entries) {
+    if (!/^faceset\/.*\.(?:png|bmp|xyz)$/i.test(entry.path)) continue;
+    try {
+      if (!/\.png$/i.test(entry.path)) {
+        throw new Error("请先转换为 PNG 后手动添加。");
+      }
+      if (entry.size <= 0 || entry.size > 256 * 1024) {
+        throw new Error("脸图素材表必须非空且不能超过 256 KiB。");
+      }
+      const file = new File([toArrayBuffer(await entry.bytes())], entry.path, {
+        lastModified: entry.mtimeMs ?? 0,
+        type: "image/png",
+      });
+      const { sha256 } = await inspectCharacterFaceSheetFile(file);
+      if (faceHashes.has(sha256)) continue;
+      faceHashes.add(sha256);
+      faceSheetFiles.push(file);
+    } catch (error) {
+      faceSheetWarnings.push(`${entry.path}：${error instanceof Error ? error.message : "无法读取脸图。"}`);
+    }
+  }
 
   return {
-    gameTitle: ini ? parseGameTitle(await ini.bytes()) : null,
+    gameTitle: ini ? await ini.bytes().then(parseGameTitle).catch(() => null) : null,
     titleImages,
+    faceSheetFiles,
+    faceSheetWarnings,
   };
 }
 

@@ -89,6 +89,34 @@ export async function sendEmailChangeCodeEmail(
   });
 }
 
+export async function sendAccountDeletionCodeEmail(
+  runtime: AppRuntime,
+  input: { to: string; code: string },
+): Promise<void> {
+  const intro = "你正在申请注销 VIPRPG.org 账号。注销后无法登录或恢复，已上传作品、评论和其他公共贡献会保留。";
+  await sendAuthEmail(runtime, {
+    to: input.to,
+    subject: "VIPRPG.org 注销账号验证码",
+    html: [
+      '<div style="font-family:Arial,Microsoft YaHei,sans-serif;line-height:1.7;color:#1c1f22">',
+      '<h1 style="font-size:20px;color:#b91c1c">注销账号验证码</h1>',
+      `<p>${intro}</p>`,
+      `<p style="font-size:28px;font-weight:700;letter-spacing:4px">${escapeHtml(input.code)}</p>`,
+      '<p>验证码 10 分钟内有效，仅用于注销账号。请返回注销页面填写验证码，并确认注销。</p>',
+      '<p>若这不是你本人操作，请勿向任何人提供此验证码。</p>',
+      '</div>',
+    ].join(""),
+    text: [
+      intro,
+      "",
+      `注销验证码：${input.code}`,
+      "验证码 10 分钟内有效，仅用于注销账号。请返回注销页面填写验证码，并确认注销。",
+      "",
+      "若这不是你本人操作，请勿向任何人提供此验证码。",
+    ].join("\n"),
+  });
+}
+
 async function sendAuthEmail(
   runtime: AppRuntime,
   input: {
