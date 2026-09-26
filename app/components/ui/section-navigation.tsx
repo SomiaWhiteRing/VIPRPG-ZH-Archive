@@ -41,7 +41,7 @@ export function SectionNavigation({
             >
               {item.label}
               {item.count !== undefined ? (
-                <span className="font-mono text-xs text-muted">
+                <span className="relative top-px font-mono text-xs text-muted">
                   {item.count}
                 </span>
               ) : null}

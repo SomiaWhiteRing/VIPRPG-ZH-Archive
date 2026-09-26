@@ -257,6 +257,28 @@ export async function prepareWorkCharacterStatements(input: {
     );
   });
 
+  if (input.source === "user") {
+    const uploadedSheetHashes = [...sheets.values()]
+      .filter((sheet) =>
+        sheet.library_status === "pending" &&
+        sheet.created_by_user_id === input.actorUserId,
+      )
+      .map((sheet) => sheet.blob_sha256);
+    if (uploadedSheetHashes.length) {
+      // Publish only validated selections, atomically with the work and its
+      // character bindings. Uploading a blob alone must not publish a sheet.
+      setupStatements.push(
+        input.database
+          .prepare(
+            `UPDATE face_sheets SET library_status='approved',updated_at=CURRENT_TIMESTAMP
+             WHERE library_status='pending' AND created_by_user_id=?
+               AND blob_sha256 IN (SELECT value FROM json_each(?))`,
+          )
+          .bind(input.actorUserId, JSON.stringify(uploadedSheetHashes)),
+      );
+    }
+  }
+
   return [
     ...setupStatements,
     input.database
@@ -399,8 +421,7 @@ function validatePortraitChoice(
   if (character && sheet.characterIds.has(character.id)) return sheet;
   const mayBind =
     input.source === "admin" ||
-    (sheet.library_status === "pending" &&
-      sheet.created_by_user_id === input.actorUserId);
+    sheet.created_by_user_id === input.actorUserId;
   if (!mayBind) throw new HttpError(409, "这张脸图没有绑定到所选角色");
   return sheet;
 }
@@ -420,10 +441,7 @@ function validateFaceSheetBindings(
     if (character && sheet.characterIds.has(character.id)) continue;
     if (
       input.source !== "admin" &&
-      !(
-        sheet.library_status === "pending" &&
-        sheet.created_by_user_id === input.actorUserId
-      )
+      sheet.created_by_user_id !== input.actorUserId
     ) {
       throw new HttpError(409, "这张素材表不能绑定到所选角色");
     }
