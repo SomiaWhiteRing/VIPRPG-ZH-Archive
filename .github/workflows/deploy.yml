@@ -14,11 +14,6 @@ on:
         default: staging
         type: choice
         options: [staging, production]
-      apply_migrations:
-        description: Also approve the candidate's pending production D1 migrations
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -50,8 +45,6 @@ jobs:
       - name: Production candidate summary
         if: inputs.target == 'production'
         run: node scripts/release-summary.mjs
-        env:
-          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
 
   staging:
     needs: candidate
@@ -112,11 +105,5 @@ jobs:
         env:
           WRANGLER_CONFIG_JSONC: ${{ secrets.PRODUCTION_WRANGLER_CONFIG_JSONC }}
       - name: Deploy approved candidate
-        shell: bash
-        env:
-          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
-        run: |
-          args=(--confirm viprpg.org)
-          if [[ "$APPLY_MIGRATIONS" == 'true' ]]; then args+=(--apply-migrations); fi
-          npm run deploy:production -- "${args[@]}"
+        run: npm run deploy:production -- --apply-migrations --confirm viprpg.org
       - run: npm run smoke:production
