@@ -80,7 +80,7 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 - 注册与密码重置验证码只能原子消费一次；登录失败计数必须原子更新。
 - 注册时填写显示名、邮箱、密码与确认密码；显示名沿用个人资料的 1 至 80 字符规则，随验证码挑战保存，验证成功后写入账户。密码显隐由共用输入组件提供。注册、找回密码和修改邮箱的邮件链接在 URL fragment 中携带验证码，页面预填后移除 fragment；打开链接不自动提交或消费验证码。
 - 密码使用原生 `node:crypto` scrypt，格式和透明升级规则以 `app/.server/auth/password.ts` 为准，参数由 `password-policy.json` 发布。当前采用 [OWASP 建议](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)的 `N=32768, r=8, p=3`（32 MiB），原生分配上限 48 MiB，满足 [Workers 的 `N*r*p <= 2^20` 限制](https://github.com/cloudflare/workerd/blob/main/src/workerd/io/limit-enforcer.h)。参数调整需同步开发 seed，运行 `npm run auth:calibrate-password` 测量当前策略，并在部署后的 Workers 验证；本地耗时不能证明远端支持。Workers 原生 PBKDF2 上限为 100,000 次，不能按本机校准结果选择更高迭代数。
-- 正式站 `https://viprpg.org` 注册只授予基础角色，不按注册顺序自动产生超级管理员。负责人自行完成邮箱验证与注册后，通过 `scripts/rotate-bootstrap-admin.mjs --production --email <邮箱>` 预览，并在确认目标后以 `--apply --confirm <邮箱>` 初始化根权限；该操作保留角色事件和审计，并撤销受影响会话，需要重新登录。开发和预生产保留首个验证注册账号自动获得 `super_admin` 的行为；已有超级管理员时不重复授予。
+- 正式、预生产和开发环境使用相同的首账号初始化逻辑：第一个完成邮箱验证并创建的账号（用户表中 ID 最小的账号）自动获得 `super_admin`。系统已有超级管理员时不重复授予，后续注册账号仅获得基础角色，不依赖预设邮箱。`scripts/rotate-bootstrap-admin.mjs` 用于需要人工轮换根账户的维护操作，不是首次注册的必需步骤。
 
 ### 账户注销
 

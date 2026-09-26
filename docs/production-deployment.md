@@ -66,7 +66,7 @@ npm run db:production:migrate -- --apply
 
 1. 确定正式 Worker、独立空 D1/R2、DO、限流 namespace 与 AUTH_SECRET；保存旧资源身份、Worker 版本和恢复方案。核实 TLS、邮件域验证、EMAIL binding 和 `noreply@viprpg.org` 实际发信。
 2. 应用完整迁移链，记录首发 SHA、文件校验和与账本。用[干净种子](./staging-deployment.md#干净种子)准备经过审核的数据，只上传 manifest 指定对象；不导入本地／staging 的用户、会话或整库。软件包和更新频道另列发布清单。
-3. 核对表数量、外键、R2 大小和摘要。正式站不会向首个注册者自动授予根权限，可以直接开放正常注册。负责人上线后自行验证邮箱并注册，再确认目标邮箱，使用 `node scripts/rotate-bootstrap-admin.mjs --production --email <邮箱>` 查看计划，加 `--apply --confirm <邮箱>` 显式初始化根账户并重新登录；不预设负责人邮箱，不依赖抢先注册。开发和预生产保留原有首用户初始化行为。
+3. 核对表数量、外键、R2 大小和摘要。负责人上线后自行完成邮箱验证与首次注册；正式站与预生产、开发环境一致，首个验证注册账号自动获得 `super_admin`，已有超级管理员时不重复授予。首次注册不需要额外运行维护脚本；根账户轮换仅在需要时按已确认的目标邮箱执行。
 4. 核实部署计划后由负责人发布，确认正式 robots 允许索引、staging 仍 noindex、健康接口、邮件与匿名权限；UI／真实设备验收按任务授权另行执行。
 5. 正式入口就绪后，再批准状态页和正式 Android／Kai 包发布。更新网站频道属于独立数据写入，不由 GitHub Release 自动触发。
 

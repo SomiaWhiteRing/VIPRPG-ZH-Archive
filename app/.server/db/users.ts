@@ -751,9 +751,6 @@ async function ensureInitialBootstrapRole(
   userId: number,
   email: string,
 ): Promise<void> {
-  // Public production registration must never be a race for the root account.
-  // The owner initializes it explicitly with rotate-bootstrap-admin.mjs.
-  if (runtime.origin === "https://viprpg.org") return;
   const database = getD1(runtime);
   const firstUser = await database
     .prepare("SELECT id FROM users ORDER BY id LIMIT 1")
