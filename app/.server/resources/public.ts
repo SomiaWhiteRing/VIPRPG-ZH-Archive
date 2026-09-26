@@ -1,6 +1,7 @@
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
-import type { ToolArtifact, ToolRelease } from "@/lib/resources";
+import type { ResourceRecord, ToolArtifact, ToolRelease } from "@/lib/resources";
+import { resourceDownloadFilename } from "@/lib/resource-filename";
 import { assertArtifactObject, verifyArtifactObject } from "./objects";
 
 export async function downloadArtifact(
@@ -10,14 +11,15 @@ export async function downloadArtifact(
 ) {
   const row = await runtime.db
     .prepare(
-      `SELECT a.* FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id JOIN resources p ON p.id=r.resource_id
+      `SELECT a.*,r.version_label,p.download_filename_template FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id JOIN resources p ON p.id=r.resource_id
     WHERE a.id=? AND a.storage_status='ready' AND r.status='published' AND p.visibility='published'`,
     )
     .bind(id)
-    .first<ToolArtifact>();
+    .first<ToolArtifact & Pick<ToolRelease, "version_label"> & Pick<ResourceRecord, "download_filename_template">>();
   if (!row) throw new HttpError(404, "安装包不可用");
   const object = await verifyArtifactObject(runtime, row);
   const etag = `"sha256-${row.sha256}"`;
+  const filename = resourceDownloadFilename(row.download_filename_template, row, row.version_label);
   const headers = new Headers({
     "Content-Type":
       row.format === "zip"
@@ -25,7 +27,7 @@ export async function downloadArtifact(
         : row.format === "apk"
           ? "application/vnd.android.package-archive"
           : "application/octet-stream",
-    "Content-Disposition": `attachment; filename="download.${row.format}"; filename*=UTF-8''${encodeURIComponent(row.filename).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)}`,
+    "Content-Disposition": `attachment; filename="download.${row.format}"; filename*=UTF-8''${encodeURIComponent(filename).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)}`,
     "Content-Length": String(row.size_bytes),
     "Accept-Ranges": "bytes",
     ETag: etag,
@@ -118,13 +120,13 @@ export async function updateManifest(
   if (!selection.artifact_id) return { ...base, status: "paused" };
   const row = await runtime.db
     .prepare(
-      `SELECT a.*,r.version_label,r.release_sequence,r.published_at,r.notes
-    FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id
+      `SELECT a.*,r.version_label,r.release_sequence,r.published_at,r.notes,p.download_filename_template
+    FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id JOIN resources p ON p.id=r.resource_id
     WHERE a.id=? AND a.target=? AND r.resource_id=? AND r.channel=? AND r.status='published' AND a.storage_status='ready'`,
     )
     .bind(selection.artifact_id, target, selection.resource_id, channel)
     .first<
-      ToolArtifact &
+      ToolArtifact & Pick<ResourceRecord, "download_filename_template"> &
         Pick<
           ToolRelease,
           "version_label" | "release_sequence" | "published_at" | "notes"
@@ -173,7 +175,7 @@ export async function updateManifest(
       applicationBuildId: row.application_build_id,
       url: new URL(`/api/tool-artifacts/${row.id}/download`, runtime.origin)
         .href,
-      filename: row.filename,
+      filename: resourceDownloadFilename(row.download_filename_template, row, row.version_label),
       sizeBytes: row.size_bytes,
       sha256: row.sha256,
       format: row.format,

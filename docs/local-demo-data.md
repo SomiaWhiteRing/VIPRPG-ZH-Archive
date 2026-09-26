@@ -6,7 +6,7 @@
 
 ## 固定快照
 
-`data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。快照已对齐 `migrations/0001_init_archive_schema.sql` 和后续的 `0002_account_deletion_email_challenge.sql`，迁移账本同步记录这两条，支持注销账号专用邮箱验证码；原有业务记录、审核结果和素材引用保持原值。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。
+`data/local-seed/database.sqlite.gz` 保存完整 SQLite 数据库，包含 schema、迁移记录、全文搜索索引、主键序列及全部当前记录。快照已对齐 `migrations/0001_init_archive_schema.sql` 至 `0004_resource_download_filename_template.sql`，迁移账本同步记录这四条，包含注销账号专用邮箱验证码、共享播放器下载字段和链接下载文件名模板；现有链接的模板默认为空，原有业务记录、审核结果和素材引用保持原值。`manifest.json` 保存数据库校验和、逐表数量，以及全部 R2 对象的键、SHA-256、大小和 HTTP／自定义元数据。仓库已有的角色图片直接复用原文件；其他对象存于 `data/local-seed/objects/`。
 
 首次初始化空环境：
 

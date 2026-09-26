@@ -9,6 +9,7 @@ import type {
   ToolRelease,
 } from "@/lib/resources";
 import { HttpError } from "@/lib/http";
+import { resourceDownloadFilename } from "@/lib/resource-filename";
 
 export async function getResource(runtime: AppRuntime, id: string) {
   const row = await runtime.db
@@ -72,7 +73,10 @@ export async function listPublicResources(
   ).results;
   return resources.map((resource) => ({
     ...resource,
-    downloads: downloads.filter((d) => d.resource_id === resource.id),
+    downloads: downloads.filter((d) => d.resource_id === resource.id).map((download) => ({
+      ...download,
+      filename: resourceDownloadFilename(resource.download_filename_template, download, download.version_label),
+    })),
   }));
 }
 export async function getArtifact(runtime: AppRuntime, id: string) {
