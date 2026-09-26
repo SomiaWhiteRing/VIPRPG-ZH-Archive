@@ -6,11 +6,11 @@
 
 | 流程 | main 推送 | 手动发布 |
 | --- | --- | --- |
-| [Deploy](../.github/workflows/deploy.yml) | 主站相关变更自动部署 staging | 选择 staging；或选择 production，在检查完成后由本人批准 |
+| [Deploy](../.github/workflows/deploy.yml) | 主站相关变更自动部署 staging | 选择 staging；或选择 production，点击 Run workflow 后检查通过即部署，无需再 review |
 | [Deploy Status](../.github/workflows/status-deploy.yml) | 不自动发布 | 检查通过后由本人批准，部署 status.viprpg.org |
-| [Android Release](../.github/workflows/android.yml) | Android 及共用构建依赖变化生成 staging APK 预发布包 | target=production 先构建并验证正式 origin APK，再由本人批准发布正式 Release |
+| [Android Release](../.github/workflows/android.yml) | Android 及共用构建依赖变化生成 staging APK 预发布包 | 手动选择 target=production，构建并验证正式 origin APK 后直接发布正式 Release |
 
-主站 candidate 使用隔离配置运行 check 和既有 test:flow，固定本次 SHA。production job 在 candidate 成功后等待 production Environment 的唯一负责人审批，允许自审；无第二人要求。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。
+主站 candidate 使用隔离配置运行 check 和既有 test:flow，固定本次 SHA。手动选择 production 并运行 workflow 即确认发布；production job 在 candidate 成功后直接执行，不再等待 Review deployments。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。Codex 代为触发须有用户对本次正式发布的明确授权。
 
 staging 继续自动应用迁移。production 的 apply_migrations 默认 false：只读核对账本，有待应用迁移就停止；勾选时才在发布前应用本次候选的待执行文件。数据修复、导入、重建和恢复不属于普通发布步骤。状态服务的 apply_migrations 也需显式选择。
 
@@ -18,7 +18,7 @@ staging 继续自动应用迁移。production 的 apply_migrations 默认 false�
 
 ## GitHub Environment 与凭据
 
-production Environment 配置负责人本人为 required reviewer，允许本人批准自己的运行，关闭审批绕过，只允许 main。status 使用同样的单人确认方式。无需设置强制 PR、代码评审人数或 main 分支写入限制。
+production Environment 不设置 required reviewers，只保留正式 secrets 和 main 发布来源限制；手动运行 production workflow 是一次完整确认。共用 production 的主站和正式 Android 均无第二次 review。独立 status Environment 保留当前的本人审批。无需设置强制 PR、代码评审人数或 main 分支写入限制。
 
 - staging Environment：CLOUDFLARE_ACCOUNT_ID、CLOUDFLARE_API_TOKEN、WRANGLER_CONFIG_JSONC；SMOKE_BASE_URL 保持 https://staging.viprpg.org。
 - production Environment：PRODUCTION_CLOUDFLARE_ACCOUNT_ID、PRODUCTION_CLOUDFLARE_API_TOKEN、PRODUCTION_WRANGLER_CONFIG_JSONC。使用专用名称，缺失时失败，不回落到旧仓库级凭据。

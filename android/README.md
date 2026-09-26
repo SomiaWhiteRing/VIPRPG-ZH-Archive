@@ -18,7 +18,7 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 ### GitHub Actions
 
-[Android Release](../.github/workflows/android.yml) 仅在推送 `main` 且改动涉及 APK 构建输入时自动构建签名 APK，也支持在 `main` 手动选择 `target=staging|production`；正式目标先构建并校验 APK，再由负责人本人批准公开 Release，无须第二位审核人或另打 tag。每次符合条件的 push 事件生成一个 Release（一次 push 包含多个提交时，以该 push 的最终提交打包）。
+[Android Release](../.github/workflows/android.yml) 仅在推送 `main` 且改动涉及 APK 构建输入时自动构建签名 APK，也支持在 `main` 手动选择 `target=staging|production`；手动启动 production 即确认本次正式发布，构建并校验 APK 后直接公开 Release，无需再次 Review deployments、第二位审核人或另打 tag。每次符合条件的 push 事件生成一个 Release（一次 push 包含多个提交时，以该 push 的最终提交打包）。
 
 自动触发范围包括 Android 原生代码与离线页、离线页实际引用的共用游玩模块和 UI 组件、共用样式、EasyRPG 运行组件及其版本配置、应用图标，以及构建／验包脚本、依赖清单和锁文件、构建配置与 Android workflow。普通网站页面、服务端 API、数据库迁移、部署配置和文档更新不会单独触发打包；`android/` 内的 Markdown 文档也排除在外。`package.json` 或 `package-lock.json` 改动仍会触发，因为 Android 与网站共用 npm 安装环境。
 
@@ -26,7 +26,7 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 - CI 版本名为 `0.3.<run_number>`，`versionCode = 100000 + run_number`；递增由 workflow 负责，不用逐次修改 Gradle。不要重建 workflow 或降低此序号基数；手动重建旧提交使用新的运行序号。
 - tag 为 `android-<staging|production>-<versionCode>`，附件包含 `viprpg-release.apk` 与 `SHA256SUMS.txt`，说明自动结算该次提交的 GitHub release notes。所有附件就绪后才公开 Release；已经发布的运行重跑时跳过打包，避免同一构建身份对应不同文件。
-- main 自动构建和手动 staging 构建连接 staging，Release 标为预发布；手动 production 构建连接 `https://viprpg.org`，先保存已验证 APK 和 SHA-256 artifact，再由本人确认；发布 job 下载同一 artifact 并核对摘要后公开正式 Release。两者都不自动更改 Latest 或网站推荐频道；正式构建与其他正式维护串行。切换来源不会迁移原来源的离线游戏或存档。
+- main 自动构建和手动 staging 构建连接 staging，Release 标为预发布；手动 production 构建连接 `https://viprpg.org`，先保存已验证 APK 和 SHA-256 artifact，再由发布 job 下载同一 artifact 并核对摘要后公开正式 Release，不增加第二次 review。两者都不自动更改 Latest 或网站推荐频道；正式构建与其他正式维护串行。切换来源不会迁移原来源的离线游戏或存档。
 - 四项仓库 Secrets 为 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。只使用固定签名，缺少配置直接失败，不回退到临时 debug key。公开证书见 [release-certificate.pem](release-certificate.pem)，CI 发布前核对签名身份。
 - GitHub 构建成功不代表网站部署或站内发布完成。站点部署仍走独立 Deploy workflow；APK 上传与发布沿用后台入口。
 
