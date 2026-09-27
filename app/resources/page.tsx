@@ -10,6 +10,7 @@ import {
 } from "react-router";
 import { ResourceAction, ResourceEntry } from "./resource-entry";
 import { ResourceContent } from "./content";
+import { ResourceDownload } from "./resource-download";
 import { resourceLinks } from "@/lib/resources";
 
 export const meta: MetaFunction = ({ error }) =>
@@ -39,23 +40,7 @@ export default function ResourcesPage() {
             actions={
               <>
                 {resource.kind === "tool" ? (
-                  <>
-                  {resource.downloads.map((download, index) => (
-                    <ResourceAction
-                      key={download.id}
-                      download
-                      secondary={index > 0}
-                      href={`/api/tool-artifacts/${download.id}/download`}
-                    >
-                      {download.target === "windows-x64"
-                        ? resource.windows_button_label
-                        : resource.android_button_label}
-                    </ResourceAction>
-                  ))}
-                  {!resource.downloads.length ? (
-                    <span className="text-sm text-muted">暂未提供下载</span>
-                  ) : null}
-                  </>
+                  <ResourceDownload resource={resource} />
                 ) : null}
                 {resourceLinks(resource).map((link, index) => (
                   <ResourceAction key={index} href={link.url}>

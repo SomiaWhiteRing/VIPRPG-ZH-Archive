@@ -15,49 +15,16 @@ import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
-import type { CatalogDetail, CatalogSummary } from "@/lib/dto/db/catalogs";
-import type { FormEvent } from "react";
+import { CatalogCreateFields } from "./catalog-create-fields";
+import type { CatalogDetail } from "@/lib/dto/db/catalogs";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useRevalidator } from "react-router";
 
 export function CatalogCreateForm() {
-  const navigate = useNavigate();
-  const toast = useToast();
-
   const createButtonRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      const response = await fetch("/api/catalogs", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, description: description || null }),
-      });
-      const body = (await response.json()) as {
-        ok?: boolean;
-        catalog?: CatalogSummary;
-        detail?: string;
-      };
-      if (!response.ok || !body.ok || !body.catalog) {
-        toast.error(body.detail ?? "目录创建失败。");
-        return;
-      }
-      toast.success("目录已创建。");
-      navigate(`/catalogs/${body.catalog.id}`);
-    } catch {
-      toast.error("网络请求失败。");
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <Dialog.Root
       open={open}
@@ -66,7 +33,7 @@ export function CatalogCreateForm() {
       }}
     >
       <div>
-        <Rm2kButton
+        <Button
           aria-controls="catalog-create-dialog"
           aria-expanded={open}
           aria-haspopup="dialog"
@@ -77,7 +44,7 @@ export function CatalogCreateForm() {
           type="button"
         >
           创建目录
-        </Rm2kButton>
+        </Button>
       </div>
       <Dialog.Portal>
         <Dialog.Overlay className="bg-black/55" />
@@ -98,36 +65,11 @@ export function CatalogCreateForm() {
           >
             填写目录标题和说明。
           </Dialog.Description>
-          <form className="grid gap-4" onSubmit={submit}>
-            <FormField controlId="catalogs-field-1" label="标题">
-              <Input
-                id="catalogs-field-1"
-                required
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </FormField>
-            <FormField controlId="catalogs-field-2" label="说明">
-              <Textarea
-                id="catalogs-field-2"
-                rows={3}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </FormField>
-            <div className="flex justify-end gap-2">
-              <Rm2kButton
-                disabled={busy}
-                onClick={() => setOpen(false)}
-                type="button"
-              >
-                取消
-              </Rm2kButton>
-              <Rm2kButton disabled={busy || !title.trim()} type="submit">
-                {busy ? "正在创建…" : "创建目录"}
-              </Rm2kButton>
-            </div>
-          </form>
+          <CatalogCreateFields
+            busy={busy}
+            onBusyChange={setBusy}
+            onCancel={() => setOpen(false)}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

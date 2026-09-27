@@ -60,7 +60,7 @@ export async function searchCatalogsForOwner(
   };
 }
 
-export async function listCatalogsContainingWork(
+export async function sampleCatalogsContainingWork(
   runtime: AppRuntime,
   workId: number,
 ): Promise<CatalogSummary[]> {
@@ -71,11 +71,42 @@ export async function listCatalogsContainingWork(
          SELECT 1 FROM catalog_items ci
          WHERE ci.catalog_id = c.id AND ci.work_id = ?
        )
-       ORDER BY c.updated_at DESC,c.id DESC LIMIT 200`,
+       ORDER BY RANDOM() LIMIT 3`,
     )
     .bind(workId)
     .all<Row>();
   return (rows.results ?? []).map(mapSummary);
+}
+
+export async function paginateCatalogsContainingWork(
+  runtime: AppRuntime,
+  workId: number,
+  page = 1,
+) {
+  const pageSize = 20;
+  const requestedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const database = getD1(runtime);
+  const filter = `AND EXISTS (
+    SELECT 1 FROM catalog_items ci
+    WHERE ci.catalog_id = c.id AND ci.work_id = ?
+  )`;
+  const count = await database.prepare(
+    `SELECT COUNT(*) AS count FROM catalogs c
+     JOIN users u ON u.id = c.owner_user_id
+     WHERE c.status = 'published' ${filter}`,
+  ).bind(workId).first<{ count: number }>();
+  const total = Number(count?.count ?? 0);
+  const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize)));
+  const rows = await database.prepare(
+    `${CATALOG_SUMMARY_SELECT} ${filter}
+     ORDER BY c.id DESC LIMIT ? OFFSET ?`,
+  ).bind(workId, pageSize, (currentPage - 1) * pageSize).all<Row>();
+  return {
+    items: (rows.results ?? []).map(mapSummary),
+    total,
+    page: currentPage,
+    pageSize,
+  };
 }
 
 export async function searchCatalogs(

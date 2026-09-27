@@ -2,7 +2,7 @@ import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   searchCatalogsForOwner,
-  listCatalogsContainingWork,
+  sampleCatalogsContainingWork,
 } from "@/app/.server/db/catalogs";
 import { getGameWorkDetail, isWorkUploader } from "@/app/.server/db/game-library";
 import {
@@ -43,6 +43,7 @@ import {
   WorkEngagementActions,
 } from "./work-engagement-actions";
 import { WorkMediaGallery } from "./work-media-gallery";
+import { WorkDescription } from "./work-description";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -88,7 +89,7 @@ export async function loader(args: LoaderFunctionArgs) {
         null,
       ),
       currentUser ? searchCatalogsForOwner(runtime, {userId: currentUser.id}) : Promise.resolve({items: [], total: 0, page: 1, pageSize: 20}),
-      listCatalogsContainingWork(runtime, work.id),
+      sampleCatalogsContainingWork(runtime, work.id),
     ]);
   const userCatalogs = catalogs;
   const relationCards = getPublicRelationCards(work);
@@ -230,9 +231,7 @@ export default function GameDetailPage() {
                 </div>
               ) : null}
               {work.description ? (
-                <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
-                  {work.description}
-                </p>
+                <WorkDescription key={work.description} description={work.description} />
               ) : (
                 <p className="text-sm text-muted">暂无简介。</p>
               )}
@@ -436,9 +435,18 @@ export default function GameDetailPage() {
                     className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
                     id="catalog-card"
                   >
-                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">
-                      收录了本条目的目录
-                    </p>
+                    <div className="mb-[0.35rem] flex items-baseline justify-between gap-3">
+                      <h2 className="m-0 font-mono text-xs font-normal tracking-[0.08em] text-muted">
+                        收录了本条目的目录
+                      </h2>
+                      <Link
+                        aria-label="查看全部收录了本条目的目录"
+                        className="shrink-0 text-sm font-medium text-secondary hover:underline"
+                        to={`/games/${work.id}/catalogs`}
+                      >
+                        更多
+                      </Link>
+                    </div>
                     {containingCatalogs.map((catalog) => (
                       <div className="border-b border-dashed border-border last:border-b-0" key={catalog.id}>
                         <CatalogListRow catalog={catalog} compact />

@@ -4,6 +4,35 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website work detail introduction, on the page background. */
+.work-description-viewport {
+  position: relative;
+  overflow: hidden;
+  transition: height 300ms ease-in-out;
+}
+
+.work-description-viewport::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3.7em;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--color-background));
+  opacity: 0;
+  transition: opacity 300ms ease-in-out;
+}
+
+.work-description-viewport[data-collapsed="true"]::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-description-viewport,
+  .work-description-viewport::after {
+    transition: none;
+  }
+}
+
 /* Website-only theme and component animations. Cross-platform rules live in shared.css. */
 @theme {
   --color-card-foreground: #17212b;
