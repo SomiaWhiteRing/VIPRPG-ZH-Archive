@@ -2,6 +2,7 @@ import { CatalogCover } from "@/app/catalogs/catalog-cover";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { formatDate, formatNumber } from "@/lib/format";
 import { Link } from "react-router";
+import type { ReactNode } from "react";
 
 export function CatalogListRow({
   catalog,
@@ -9,12 +10,14 @@ export function CatalogListRow({
   showDescription = !compact,
   showOwner = true,
   showCreatedAt = !compact,
+  actions,
 }: {
   catalog: CatalogSummary;
   compact?: boolean;
   showDescription?: boolean;
   showOwner?: boolean;
   showCreatedAt?: boolean;
+  actions?: ReactNode;
 }) {
   const href = `/catalogs/${catalog.id}`;
 
@@ -60,6 +63,7 @@ export function CatalogListRow({
           </span> : null}
         </div>
       </div>
+      {actions ? <div className="shrink-0 self-center">{actions}</div> : null}
     </article>
   );
 }

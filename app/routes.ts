@@ -26,6 +26,7 @@ export default [
   route("games", "games/page.tsx"),
   route("games/:id", "games/[id]/page.tsx"),
   route("games/:id/characters", "games/[id]/characters/page.tsx"),
+  route("games/:id/catalogs", "games/[id]/catalogs/page.tsx"),
   route("games/:id/related", "games/[id]/related/page.tsx"),
   route("games/:id/relations", "games/[id]/relations/page.tsx"),
   route("inbox", "inbox/page.tsx"),
