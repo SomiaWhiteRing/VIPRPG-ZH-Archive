@@ -18,6 +18,7 @@ import {
   prepareWorkStaffStatements,
 } from "@/app/.server/db/creators";
 import { getD1 } from "@/app/.server/db/d1";
+import { getSharedArchivePlayer } from "@/app/.server/resources/archive-player";
 import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relations";
 import {
   assertSingleDownloadLink,
@@ -105,6 +106,7 @@ type SummaryRow = {
   status: string;
   cover_blob_sha256: string | null;
   current_archive_version_id: number | null;
+  uses_shared_player: number | null;
   external_download_url: string | null;
   archive_version_count: number;
   total_size_bytes: number | null;
@@ -369,6 +371,7 @@ export async function getGameWorkDetail(
     collections.tags,
     collections.characters,
     collections.creators,
+    await sharedPlayerSize(runtime, [row]),
   );
   const originalId =
     collections.translations.find((item) => item.role === "original")?.workId ??
@@ -1247,6 +1250,7 @@ function summarySql(): string {
       LIMIT 1
     ) AS cover_blob_sha256,
     av.id AS current_archive_version_id,
+    av.uses_shared_player,
     (
       SELECT wel.url
       FROM work_external_links wel
@@ -1429,6 +1433,7 @@ async function hydrate(
   rows: SummaryRow[],
 ): Promise<GameWorkSummary[]> {
   if (rows.length === 0) return [];
+  const playerSize = await sharedPlayerSize(runtime, rows);
   const ids = [...new Set(rows.map((row) => row.id))];
   const database = getD1(runtime);
   const queries: Array<{
@@ -1548,8 +1553,16 @@ async function hydrate(
       tagsByWork.get(row.id) ?? [],
       charactersByWork.get(row.id) ?? [],
       creatorsByWork.get(row.id) ?? [],
+      playerSize,
     ),
   );
+}
+
+async function sharedPlayerSize(runtime: AppRuntime, rows: SummaryRow[]): Promise<number | null> {
+  if (!rows.some((row) => row.uses_shared_player === 1)) return 0;
+  return getSharedArchivePlayer(getD1(runtime))
+    .then((player) => player.size_bytes)
+    .catch(() => null);
 }
 
 function mapSummaryRow(
@@ -1557,6 +1570,7 @@ function mapSummaryRow(
   tags: GameTag[],
   characters: GameCharacter[],
   creators: GameCreatorCredit[],
+  playerSize: number | null,
 ): GameWorkSummary {
   return {
     id: row.id,
@@ -1577,6 +1591,10 @@ function mapSummaryRow(
       : null,
     archiveVersionCount: row.archive_version_count,
     totalSizeBytes: row.total_size_bytes ?? 0,
+    downloadSizeBytes: row.current_archive_version_id === null
+      || (row.uses_shared_player === 1 && playerSize === null)
+      ? null
+      : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
     latestPublishedAt: row.latest_published_at,
     distribution: deriveWorkDistribution({
       hasCurrentArchive: row.current_archive_version_id !== null,

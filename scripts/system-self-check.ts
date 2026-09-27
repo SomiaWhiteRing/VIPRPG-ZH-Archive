@@ -794,7 +794,7 @@ async function verifyWorkDialogs(
   await editor.goto(origin + "/games", { waitUntil: "networkidle" });
   await editor.locator('a[href="/games/101"]').first().waitFor();
   for (const view of ["网格视图", "列表视图"]) {
-    await editor.getByRole("link", { name: view, exact: true }).click();
+    await editor.getByRole("button", { name: view, exact: true }).click();
     await editor.waitForLoadState("networkidle");
     assert.ok(await editor.locator('a[href="/games/101"]').count());
   }

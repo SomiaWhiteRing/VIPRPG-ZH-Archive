@@ -133,6 +133,7 @@ function publicCreatorFilter(query?: string): { where: string; binds: string[] }
 export async function getPublicCreatorDetail(
   runtime: AppRuntime,
   id: number,
+  includeWorkCredits = true,
 ): Promise<PublicCreatorDetail | null> {
   const database = getD1(runtime);
   const [creatorResult, aliasesResult] = await database.batch([
@@ -157,8 +158,28 @@ export async function getPublicCreatorDetail(
     aliases: (aliasesResult.results ?? []).map((alias) =>
       String((alias as { name: string }).name),
     ),
-    workCredits: await listCredits(runtime, row.id, false),
+    workCredits: includeWorkCredits ? await listCredits(runtime, row.id, false) : [],
   };
+}
+
+export async function browsePublicCreatorWorks(
+  runtime: AppRuntime,
+  id: number,
+  input: { page: number; pageSize: number },
+) {
+  const creator = await getPublicCreatorDetail(runtime, id, false);
+  if (!creator) return null;
+  const total = creator.workCreditCount;
+  const pageSize = limitValue(input.pageSize, 50);
+  const page = limitValue(input.page, Math.max(1, Math.ceil(total / pageSize)));
+  const credits = await listCredits(runtime, id, false, { page, pageSize });
+  const grouped = new Map<number, CreatorWorkCredit & { credits: CreatorWorkCredit[] }>();
+  for (const credit of credits) {
+    const current = grouped.get(credit.workId);
+    if (current) current.credits.push(credit);
+    else grouped.set(credit.workId, { ...credit, credits: [credit] });
+  }
+  return { creator, items: [...grouped.values()], total, page, pageSize };
 }
 export async function listCreatorSuggestions(
   runtime: AppRuntime,
@@ -391,6 +412,7 @@ async function listCredits(
   runtime: AppRuntime,
   id: number,
   includeNonPublic: boolean,
+  pagination?: { page: number; pageSize: number },
 ): Promise<CreatorWorkCredit[]> {
   const status = includeNonPublic ? "1=1" : "w.id IN (SELECT id FROM public_works)";
   const rows = await getD1(runtime)
@@ -424,10 +446,19 @@ async function listCredits(
        JOIN works w ON w.id = ws.work_id
        WHERE ws.creator_id = ?
          AND ${status}
+         ${pagination ? `AND w.id IN (
+           SELECT w.id FROM works w
+           WHERE ${status} AND EXISTS (
+             SELECT 1 FROM work_staff staff WHERE staff.work_id=w.id AND staff.creator_id=?
+           )
+           ORDER BY COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
+             w.original_title ASC, w.id DESC
+           LIMIT ? OFFSET ?
+         )` : ""}
        ORDER BY COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
-         w.original_title ASC`,
+         w.original_title ASC, w.id DESC, ws.sort_order ASC, ws.role_key ASC`,
     )
-    .bind(id)
+    .bind(id, ...(pagination ? [id, pagination.pageSize, (pagination.page - 1) * pagination.pageSize] : []))
     .all<CreditRow>();
   return (rows.results ?? []).map((row) => ({
     workId: row.work_id,

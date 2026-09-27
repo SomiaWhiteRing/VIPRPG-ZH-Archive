@@ -11,7 +11,7 @@ export function CatalogSummaryList({
   preview?: boolean;
 }) {
   return (
-    <ul className="divide-y divide-border border-y border-border">
+    <ul className={`divide-y divide-border border-border ${preview ? "border-t" : "border-b"}`}>
       {items.map((catalog, index) => (
         <li
           className={preview && index >= 2 ? "hidden sm:block" : undefined}

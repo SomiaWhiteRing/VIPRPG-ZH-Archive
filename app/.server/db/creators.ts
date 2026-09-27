@@ -270,7 +270,7 @@ export async function prepareWorkStaffStatements(input: {
     statements.push(
       input.database
         .prepare(
-          `INSERT INTO creators(name,name_key,avatar_blob_sha256,extra_json)
+          `INSERT INTO creators(name,name_key,avatar_blob_sha256,links_json)
            SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM creator_aliases WHERE name_key=?)
            ON CONFLICT(name_key) DO NOTHING`,
         )
@@ -280,8 +280,8 @@ export async function prepareWorkStaffStatements(input: {
           submitter?.user.avatarBlobSha256 ?? null,
           JSON.stringify(
             submitter
-              ? { bio: `个人主页：${submitter.origin}/users/${submitter.user.id}` }
-              : {},
+              ? [{ label: "主页", url: `${submitter.origin}/users/${submitter.user.id}` }]
+              : [],
           ),
           nameKey,
         ),

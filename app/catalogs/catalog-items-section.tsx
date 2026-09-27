@@ -360,7 +360,7 @@ export function CatalogItemsSection({
               {candidates.length ? (
                 <ol
                   aria-label="查找结果"
-                  className="divide-y divide-border border-y border-border"
+                  className="divide-y divide-border border-t border-border"
                 >
                   {candidates.map((candidate, index) => (
                     <WorkListItem

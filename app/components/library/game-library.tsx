@@ -1,6 +1,7 @@
 import type { loadGameLibrary } from "@/app/.server/game-library-page";
 import { GameCard } from "@/app/components/home/game-card";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { useLibraryViewPreference } from "@/app/components/library/view-preference";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
@@ -29,7 +30,7 @@ export function GameLibrary({
   basePath: string;
   title?: string;
   emptyTitle?: string;
-  renderWorkActions?: (work: GameWorkSummary) => ReactNode;
+  renderWorkActions?: (work: GameWorkSummary, isListView: boolean) => ReactNode;
 }) {
   const {
     engine,
@@ -39,7 +40,6 @@ export function GameLibrary({
     uploaderName,
     language,
     original,
-    view,
     sort,
     page,
     works,
@@ -48,9 +48,10 @@ export function GameLibrary({
     selectedCharacter,
     popularTags,
     activeParams,
-    isListView,
     hasFilters,
   } = data;
+  const [view, setView] = useLibraryViewPreference();
+  const isListView = view === "list";
   const gamesHref = (params: Record<string, string | undefined>) => libraryHref(basePath, params);
   const WorkCard = isListView ? GameLibraryListRow : GameCard;
   return (
@@ -105,40 +106,34 @@ export function GameLibrary({
               className="ml-auto inline-flex overflow-hidden rounded-md border border-border bg-card text-[13px] font-semibold"
               aria-label="显示方式"
             >
-              <Link
-                aria-current={view === "list" ? "page" : undefined}
+              <button
+                type="button"
+                aria-pressed={isListView}
                 aria-label="列表视图"
                 className={
                   view === "list"
                     ? "inline-flex min-h-8 items-center gap-1.5 bg-secondary px-3 text-secondary-foreground"
                     : "inline-flex min-h-8 items-center gap-1.5 px-3 text-muted hover:text-foreground"
                 }
-                to={gamesHref({
-                  ...activeParams,
-                  view: undefined,
-                  page: undefined,
-                })}
+                onClick={() => setView("list")}
               >
                 <List aria-hidden size={14} />
                 <span className="max-[560px]:hidden">列表</span>
-              </Link>
-              <Link
-                aria-current={view === "grid" ? "page" : undefined}
+              </button>
+              <button
+                type="button"
+                aria-pressed={!isListView}
                 aria-label="网格视图"
                 className={
                   view === "grid"
                     ? "inline-flex min-h-8 items-center gap-1.5 border-l border-border bg-secondary px-3 text-secondary-foreground"
                     : "inline-flex min-h-8 items-center gap-1.5 border-l border-border px-3 text-muted hover:text-foreground"
                 }
-                to={gamesHref({
-                  ...activeParams,
-                  view: "grid",
-                  page: undefined,
-                })}
+                onClick={() => setView("grid")}
               >
                 <LayoutGrid aria-hidden size={14} />
                 <span className="max-[560px]:hidden">网格</span>
-              </Link>
+              </button>
             </div>
           </div>
           {hasFilters ? (
@@ -201,7 +196,7 @@ export function GameLibrary({
               }
             >
               {works.map((work) => (
-                <WorkCard key={work.id} work={work} action={renderWorkActions?.(work)}>
+                <WorkCard key={work.id} work={work} action={renderWorkActions?.(work, isListView)}>
                   {data.occurredTimes?.[work.id] ? (
                     <p className="mt-1 break-words text-xs text-muted">
                       {data.userWorkKind === "played" ? "最近游玩：" : "收藏于 "}

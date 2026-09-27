@@ -46,7 +46,7 @@ export default function ProfilePage() {
       <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
 
       <RedirectForm action="/api/account/profile" method="post">
-        <div className="divide-y divide-border border-y border-border">
+        <div className="divide-y divide-border border-b border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
             <Label htmlFor="profile-display-name">显示名</Label>
             <Input

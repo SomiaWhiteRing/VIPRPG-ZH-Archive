@@ -112,6 +112,7 @@ export type GameWorkSummary = {
   externalDownloadUrl: string | null;
   archiveVersionCount: number;
   totalSizeBytes: number;
+  downloadSizeBytes: number | null;
   latestPublishedAt: string | null;
   tags: GameTag[];
   characters: GameCharacter[];

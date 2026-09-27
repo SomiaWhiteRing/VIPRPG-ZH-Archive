@@ -14,8 +14,8 @@ export function GameCard({ work, action, children }: { work: GameWorkSummary; ac
   const engine = engineShortLabel(work.engineFamily);
   const language = languageLabel(work.language);
   const size =
-    work.distribution === "archive" && work.totalSizeBytes > 0
-      ? formatBytes(work.totalSizeBytes)
+    work.distribution === "archive" && work.downloadSizeBytes !== null && work.downloadSizeBytes > 0
+      ? formatBytes(work.downloadSizeBytes)
       : null;
   const meta = [engine, language, year].filter((value): value is string =>
     Boolean(value),

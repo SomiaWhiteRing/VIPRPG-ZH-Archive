@@ -69,7 +69,7 @@ export default function PrivacyPage() {
       <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。" }} />
 
       <RedirectForm action="/api/account/privacy" method="post">
-        <div className="divide-y divide-border border-y border-border">
+        <div className="divide-y divide-border border-b border-border">
           {settings.map((setting) => (
             <div className="py-2" key={setting.name}>
               <CheckboxField

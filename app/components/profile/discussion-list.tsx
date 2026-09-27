@@ -14,7 +14,7 @@ export function DiscussionList({
 }) {
   if (!items.length) return <AccountEmpty>还没有可展示的讨论。</AccountEmpty>;
   return (
-    <ul className="divide-y divide-border border-y border-border">
+    <ul className={`divide-y divide-border border-border ${compact ? "border-t" : "border-b"}`}>
       {items.map((item, index) => (
         <li
           className={`min-w-0 py-3 ${compact && index >= 2 ? "hidden sm:block" : ""}`}
