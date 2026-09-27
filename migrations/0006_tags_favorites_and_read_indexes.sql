@@ -391,6 +391,7 @@ ALTER TABLE user_work_entries RENAME COLUMN favorite_note_next TO favorite_note;
 
 -- Preserve existing tags; enforce the smaller limits on new associations.
 -- Existing keys are exempt so upserts and INSERT OR IGNORE remain idempotent.
+-- Use WHERE guards: the remote D1 query parser rejects nested CASE/END here.
 CREATE TRIGGER user_work_tags_limits_insert
 BEFORE INSERT ON user_work_tags
 WHEN NOT EXISTS (
@@ -398,11 +399,11 @@ WHEN NOT EXISTS (
   WHERE work_id=NEW.work_id AND user_id=NEW.user_id AND name=NEW.name
 )
 BEGIN
-  SELECT CASE WHEN length(NEW.name)>20 OR instr(NEW.name,char(0))>0
-    THEN RAISE(ABORT, 'user tags must be at most 20 characters') END;
-  SELECT CASE WHEN (
+  SELECT RAISE(ABORT, 'user tags must be at most 20 characters')
+  WHERE length(NEW.name)>20 OR instr(NEW.name,char(0))>0;
+  SELECT RAISE(ABORT, 'favorites allow at most 10 tags') WHERE (
     SELECT COUNT(*) FROM user_work_tags WHERE work_id=NEW.work_id AND user_id=NEW.user_id
-  )>=10 THEN RAISE(ABORT, 'favorites allow at most 10 tags') END;
+  )>=10;
 END;
 
 CREATE TRIGGER user_work_tags_limits_update
@@ -410,13 +411,13 @@ BEFORE UPDATE OF work_id,user_id,name ON user_work_tags
 WHEN OLD.work_id IS NOT NEW.work_id OR OLD.user_id IS NOT NEW.user_id
   OR OLD.name IS NOT NEW.name COLLATE BINARY
 BEGIN
-  SELECT CASE WHEN length(NEW.name)>20 OR instr(NEW.name,char(0))>0
-    THEN RAISE(ABORT, 'user tags must be at most 20 characters') END;
-  SELECT CASE WHEN (
+  SELECT RAISE(ABORT, 'user tags must be at most 20 characters')
+  WHERE length(NEW.name)>20 OR instr(NEW.name,char(0))>0;
+  SELECT RAISE(ABORT, 'favorites allow at most 10 tags') WHERE (
     SELECT COUNT(*) FROM user_work_tags
     WHERE work_id=NEW.work_id AND user_id=NEW.user_id
       AND NOT (work_id=OLD.work_id AND user_id=OLD.user_id AND name=OLD.name)
-  )>=10 THEN RAISE(ABORT, 'favorites allow at most 10 tags') END;
+  )>=10;
 END;
 
 -- 0012_favorite_query_indexes.sql
