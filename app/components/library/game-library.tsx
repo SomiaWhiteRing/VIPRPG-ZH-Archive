@@ -2,6 +2,7 @@ import type { loadGameLibrary } from "@/app/.server/game-library-page";
 import { GameCard } from "@/app/components/home/game-card";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useLibraryViewPreference } from "@/app/components/library/view-preference";
+import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
@@ -106,34 +107,38 @@ export function GameLibrary({
               className="ml-auto inline-flex overflow-hidden rounded-md border border-border bg-card text-[13px] font-semibold"
               aria-label="显示方式"
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 aria-pressed={isListView}
                 aria-label="列表视图"
                 className={
                   view === "list"
-                    ? "inline-flex min-h-8 items-center gap-1.5 bg-secondary px-3 text-secondary-foreground"
-                    : "inline-flex min-h-8 items-center gap-1.5 px-3 text-muted hover:text-foreground"
+                    ? "min-h-8 gap-1.5 rounded-none bg-secondary px-3 text-[13px] text-secondary-foreground hover:bg-secondary [&_svg]:size-3.5"
+                    : "min-h-8 gap-1.5 rounded-none px-3 text-[13px] text-muted hover:bg-transparent hover:text-foreground [&_svg]:size-3.5"
                 }
                 onClick={() => setView("list")}
               >
                 <List aria-hidden size={14} />
                 <span className="max-[560px]:hidden">列表</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 aria-pressed={!isListView}
                 aria-label="网格视图"
                 className={
                   view === "grid"
-                    ? "inline-flex min-h-8 items-center gap-1.5 border-l border-border bg-secondary px-3 text-secondary-foreground"
-                    : "inline-flex min-h-8 items-center gap-1.5 border-l border-border px-3 text-muted hover:text-foreground"
+                    ? "min-h-8 gap-1.5 rounded-none border-l border-border bg-secondary px-3 text-[13px] text-secondary-foreground hover:bg-secondary [&_svg]:size-3.5"
+                    : "min-h-8 gap-1.5 rounded-none border-l border-border px-3 text-[13px] text-muted hover:bg-transparent hover:text-foreground [&_svg]:size-3.5"
                 }
                 onClick={() => setView("grid")}
               >
                 <LayoutGrid aria-hidden size={14} />
                 <span className="max-[560px]:hidden">网格</span>
-              </button>
+              </Button>
             </div>
           </div>
           {hasFilters ? (
