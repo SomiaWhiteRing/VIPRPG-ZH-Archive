@@ -1,4 +1,4 @@
-import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
+import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
 import {
   parseCharacterCreditSelection,
@@ -36,7 +36,6 @@ import type {
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { creatorSelectionKey } from "@/lib/creator-names";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
-import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
 import {
@@ -904,11 +903,7 @@ function normalizeMetadata(
   }
 
   const media = normalizeWorkMedia(game.coverBlobSha256, normalizeOptionalHashList(game.previewBlobSha256s));
-  const tags = unique(
-    metadata.tags
-      .map((tag) => normalizeEntityName(requireString(tag, "tag")))
-      .filter(Boolean),
-  );
+  const tags = normalizeWorkTags(metadata.tags.map((tag) => requireString(tag, "tag")));
 
   const workTitles = metadata.workTitles
     .map((title) => {

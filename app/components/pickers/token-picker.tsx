@@ -20,7 +20,9 @@ export function TokenPicker({
   placeholder,
   label,
   recommendationLabel,
+  recommendationGroups,
   showRecommendations = true,
+  includeSelectedRecommendations = false,
   showSelectionCount = true,
   suggestions,
   recommendations = suggestions,
@@ -41,7 +43,9 @@ export function TokenPicker({
   placeholder: string;
   label: string;
   recommendationLabel?: string;
+  recommendationGroups?: { label: string; items: TokenSuggestion[] }[];
   showRecommendations?: boolean;
+  includeSelectedRecommendations?: boolean;
   showSelectionCount?: boolean;
   suggestions: TokenSuggestion[];
   recommendations?: TokenSuggestion[];
@@ -91,9 +95,12 @@ export function TokenPicker({
     }
     return matches;
   }, [query, selectedKeys, suggestions, normalizeValue]);
-  const recommended = recommendations
-    .filter((item) => !selectedKeys.has(tokenKey(normalizeValue(item.value))))
-    .slice(0, 6);
+  const recommendedGroups = (recommendationGroups ?? [{ label: recommendationLabel, items: recommendations }])
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => includeSelectedRecommendations || !selectedKeys.has(tokenKey(normalizeValue(item.value)))).slice(0, 6),
+    }))
+    .filter((group) => group.items.length);
 
   function add(rawValue: string, validateQuery = true) {
     if (disabled || atLimit) return;
@@ -123,7 +130,7 @@ export function TokenPicker({
         if (!commitOnBlur || event.currentTarget.contains(event.relatedTarget))
           return;
         if (normalizeValue(query)) {
-          const existing = [...suggestions, ...recommendations].find(
+          const existing = [...suggestions, ...recommendations, ...(recommendationGroups?.flatMap((group) => group.items) ?? [])].find(
             (item) =>
               tokenKey(normalizeValue(item.value)) ===
               tokenKey(normalizeValue(query)),
@@ -220,29 +227,33 @@ export function TokenPicker({
           <span>输入后按 Enter 添加</span>
         </div>
       ) : null}
-      {showRecommendations && recommended.length ? (
-        <RecommendationRow singleLineOnMobile={singleLineRecommendations}>
-          {recommendationLabel ? (
+      {showRecommendations ? recommendedGroups.map((group, index) => (
+        <RecommendationRow key={group.label ?? index} singleLineOnMobile={singleLineRecommendations}>
+          {group.label ? (
             <span className="mr-1 shrink-0 whitespace-nowrap text-xs text-muted">
-              {recommendationLabel}
+              {group.label}
             </span>
           ) : null}
-          {recommended.map((item) => (
-            <Button
-              className="min-h-7 shrink-0 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
-              disabled={disabled || atLimit}
-              key={tokenKey(item.value)}
-              onClick={() => add(item.value, false)}
-              onMouseDown={(event) => event.preventDefault()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              + {item.value}
-            </Button>
-          ))}
+          {group.items.map((item) => {
+            const selected = selectedKeys.has(tokenKey(normalizeValue(item.value)));
+            return (
+              <Button
+                aria-pressed={includeSelectedRecommendations ? selected : undefined}
+                className="min-h-7 shrink-0 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
+                disabled={disabled || atLimit || selected}
+                key={tokenKey(item.value)}
+                onClick={() => add(item.value, false)}
+                onMouseDown={(event) => event.preventDefault()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {selected ? "✓" : "+"} {item.value}
+              </Button>
+            );
+          })}
         </RecommendationRow>
-      ) : null}
+      )) : null}
       {reorder.preview ? (
         <TokenDragPreview
           element={reorder.preview.element}

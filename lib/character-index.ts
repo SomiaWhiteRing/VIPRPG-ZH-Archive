@@ -28,11 +28,12 @@ export function sortCharacterNodes<T extends { id: string; sortOrder: number }>(
   return [...nodes].sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
 }
 export function characterNodeDescendants(categories: CharacterCategory[], id: string): Set<string> {
+  const children = groupBy(categories, (category) => category.parentId);
   const result = new Set<string>([id]);
   const pending = [id];
   while (pending.length) {
-    const parent = pending.pop();
-    for (const category of categories) if (category.parentId === parent && !result.has(category.id)) {
+    const parent = pending.pop()!;
+    for (const category of children.get(parent) ?? []) if (!result.has(category.id)) {
       result.add(category.id); pending.push(category.id);
     }
   }
@@ -52,20 +53,34 @@ export function characterNodePath(categories: CharacterCategory[], id: string): 
 export function characterMembershipKey(categoryId: string, characterId: number) {
   return `character:${categoryId}:${characterId}`;
 }
+function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
+  const groups = new Map<K, T[]>();
+  for (const item of items) {
+    const id = key(item);
+    const group = groups.get(id);
+    if (group) group.push(item);
+    else groups.set(id, [item]);
+  }
+  return groups;
+}
 export function buildCharacterBrowseTree(data: CharacterIndexData, query: string) {
   const characters = new Map(data.characters.map((character) => [character.id, character]));
+  const children = groupBy(data.categories, (category) => category.parentId);
+  const memberships = groupBy(data.memberships, (member) => member.categoryId);
   const terms = characterNameKey(query).split(/\s+/).filter(Boolean);
   const matches = (text: string) => terms.every((term) => characterNameKey(text).includes(term));
   const matched = new Set<number>();
   const collect = (parentId: string | null, context: string, visited: Set<string>): CharacterBrowseNode[] => {
     const result: CharacterBrowseNode[] = [];
-    for (const category of data.categories.filter((item) => item.parentId === parentId)) {
+    for (const category of children.get(parentId) ?? []) {
       if (visited.has(category.id)) continue;
       const next = `${context} ${category.label} ${category.originalName ?? ""}`;
-      const children = collect(category.id, next, new Set([...visited, category.id]));
-      if (children.length || matches(next)) result.push({ ...category, kind: "category", children });
+      visited.add(category.id);
+      const nodes = collect(category.id, next, visited);
+      visited.delete(category.id);
+      if (nodes.length || matches(next)) result.push({ ...category, kind: "category", children: nodes });
     }
-    for (const member of data.memberships.filter((item) => item.categoryId === parentId)) {
+    for (const member of (parentId === null ? [] : memberships.get(parentId) ?? [])) {
       const character = characters.get(member.characterId);
       if (!character) continue;
       const names = characterMembershipNames(character, member);

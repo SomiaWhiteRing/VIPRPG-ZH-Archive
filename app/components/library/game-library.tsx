@@ -1,5 +1,7 @@
 import type { loadGameLibrary } from "@/app/.server/game-library-page";
 import { GameCard } from "@/app/components/home/game-card";
+import { FavoriteTagSidebar } from "@/app/components/library/favorite-tag-sidebar";
+import { FavoriteEntryDetails } from "@/app/components/library/favorite-entry-details";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useLibraryViewPreference } from "@/app/components/library/view-preference";
 import { Button } from "@/app/components/ui/button";
@@ -26,12 +28,16 @@ export function GameLibrary({
   title,
   emptyTitle = "没有找到匹配的作品。",
   renderWorkActions,
+  sidebar,
+  showActiveFilters = true,
 }: {
   data: GameLibraryData;
   basePath: string;
   title?: string;
   emptyTitle?: string;
   renderWorkActions?: (work: GameWorkSummary, isListView: boolean) => ReactNode;
+  sidebar?: ReactNode;
+  showActiveFilters?: boolean;
 }) {
   const {
     engine,
@@ -47,12 +53,13 @@ export function GameLibrary({
     total,
     selectedTag,
     selectedCharacter,
-    popularTags,
+    favoriteTags,
     activeParams,
     hasFilters,
   } = data;
   const [view, setView] = useLibraryViewPreference();
   const isListView = view === "list";
+  const isFavoriteLibrary = data.userWorkKind === "favorite";
   const gamesHref = (params: Record<string, string | undefined>) => libraryHref(basePath, params);
   const WorkCard = isListView ? GameLibraryListRow : GameCard;
   return (
@@ -70,7 +77,9 @@ export function GameLibrary({
           </span>
         }
       /> : null}
-      <div className={data.userWorkKind ? "pb-11" : "grid gap-x-9 pb-11 @min-[981px]/library:grid-cols-[minmax(0,1fr)_252px]"}>
+      <div className={isFavoriteLibrary
+        ? "grid gap-x-9 gap-y-5 pb-11 @min-[681px]/library:grid-cols-[minmax(0,1fr)_190px]"
+        : data.userWorkKind ? "pb-11" : "grid gap-x-9 pb-11 @min-[981px]/library:grid-cols-[minmax(0,1fr)_252px]"}>
         <div className="@container min-w-0">
           <div
             className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5"
@@ -141,7 +150,7 @@ export function GameLibrary({
               </Button>
             </div>
           </div>
-          {hasFilters ? (
+          {showActiveFilters && !isFavoriteLibrary && hasFilters ? (
             <div
               className="mb-5 flex flex-wrap items-center gap-2 text-sm"
               aria-label="当前筛选"
@@ -200,16 +209,28 @@ export function GameLibrary({
                   : "grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4"
               }
             >
-              {works.map((work) => (
-                <WorkCard key={work.id} work={work} action={renderWorkActions?.(work, isListView)}>
-                  {data.occurredTimes?.[work.id] ? (
-                    <p className="mt-1 break-words text-xs text-muted">
-                      {data.userWorkKind === "played" ? "最近游玩：" : "收藏于 "}
-                      {formatDate(data.occurredTimes[work.id], { time: data.userWorkKind === "played" })}
-                    </p>
-                  ) : null}
-                </WorkCard>
-              ))}
+              {works.map((work) => {
+                const occurredAt = data.occurredTimes?.[work.id];
+                const favorite = isFavoriteLibrary ? data.favoriteDetails?.[work.id] : null;
+                const details = occurredAt ? isFavoriteLibrary ? (
+                  <FavoriteEntryDetails occurredAt={occurredAt} tags={favorite?.tags ?? []} basePath={basePath} />
+                ) : (
+                  <p className="mt-1 break-words text-xs text-muted">最近游玩：{formatDate(occurredAt, { time: true })}</p>
+                ) : null;
+                return (
+                  <div className="min-w-0" key={work.id}>
+                    <WorkCard work={work} action={renderWorkActions?.(work, isListView)}>
+                      {isListView || !isFavoriteLibrary ? details : null}
+                    </WorkCard>
+                    {isFavoriteLibrary && !isListView ? details : null}
+                    {favorite?.note ? (
+                      <p className={`w-full whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-card px-2.5 py-1.5 text-[13px] leading-[1.6] text-black shadow-sm ${isListView ? "mb-3.5" : "mt-2"}`}>
+                        {favorite.note}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
             </section>
           ) : (
             <EmptyState title={emptyTitle} />
@@ -222,104 +243,90 @@ export function GameLibrary({
             total={total}
           />
         </div>
-        {!data.userWorkKind ? <aside
+        {isFavoriteLibrary ? <FavoriteTagSidebar
+          tags={favoriteTags}
+          selectedTag={selectedTag?.name ?? tag}
+          basePath={basePath}
+        /> : !data.userWorkKind ? <aside
           className="mt-5 rounded-lg border border-border bg-muted/5 p-3 @min-[981px]/library:sticky @min-[981px]/library:top-18.5 @min-[981px]/library:mt-1 @min-[981px]/library:self-start @min-[981px]/library:border-0 @min-[981px]/library:bg-transparent @min-[981px]/library:p-0"
-          aria-label="游戏筛选"
+          aria-label={sidebar ? "标签浏览" : "游戏筛选"}
         >
-          <FilterSection label="来源">
-            <FilterLink
-              active={!original}
-              href={gamesHref({
-                ...activeParams,
-                original: undefined,
-                page: undefined,
-              })}
-              label="全部"
-            />
-            <FilterLink
-              active={original === "1"}
-              href={gamesHref({
-                ...activeParams,
-                original: "1",
-                page: undefined,
-              })}
-              label="本站原创"
-            />
-            <FilterLink
-              active={original === "0"}
-              href={gamesHref({
-                ...activeParams,
-                original: "0",
-                page: undefined,
-              })}
-              label="社区收录"
-            />
-          </FilterSection>
-          <FilterSection label="引擎">
-            <CollapsibleFilterLinks
-              options={ENGINES.map(({ value, label }) => ({
-                active: engine === value,
-                href: gamesHref({
+          {sidebar ?? <>
+            <FilterSection label="来源">
+              <FilterLink
+                active={!original}
+                href={gamesHref({
                   ...activeParams,
-                  engine: value === "all" ? undefined : value,
+                  original: undefined,
                   page: undefined,
-                }),
-                label,
-                value,
-              }))}
-              visibleCount={4}
-            />
-          </FilterSection>
-          <FilterSection label="语言">
-            <CollapsibleFilterLinks
-              options={[
-                {
-                  active: !language,
+                })}
+                label="全部"
+              />
+              <FilterLink
+                active={original === "1"}
+                href={gamesHref({
+                  ...activeParams,
+                  original: "1",
+                  page: undefined,
+                })}
+                label="本站原创"
+              />
+              {/* <FilterLink
+                active={original === "0"}
+                href={gamesHref({
+                  ...activeParams,
+                  original: "0",
+                  page: undefined,
+                })}
+                label="社区收录"
+              /> */}
+            </FilterSection>
+            <FilterSection label="引擎">
+              <CollapsibleFilterLinks
+                options={ENGINES.map(({ value, label }) => ({
+                  active: engine === value,
                   href: gamesHref({
                     ...activeParams,
-                    language: undefined,
-                    page: undefined,
-                  }),
-                  label: "全部",
-                  value: "all",
-                },
-                ...LANGUAGE_OPTIONS.map(({ value, label }) => ({
-                  active: language === value,
-                  href: gamesHref({
-                    ...activeParams,
-                    language: value,
+                    engine: value === "all" ? undefined : value,
                     page: undefined,
                   }),
                   label,
                   value,
-                })),
-              ]}
-              visibleCount={3}
-            />
-          </FilterSection>
-          <FilterSection label="标签" moreHref="/tags">
-            <FilterLink
-              active={!tag}
-              href={gamesHref({
-                ...activeParams,
-                tag: undefined,
-                page: undefined,
-              })}
-              label="全部"
-            />
-            {popularTags.map((item) => (
-              <FilterLink
-                active={tag === item.id}
-                href={gamesHref({
-                  ...activeParams,
-                  tag: String(item.id),
-                  page: undefined,
-                })}
-                key={item.id}
-                label={item.name}
+                }))}
+                visibleCount={4}
               />
-            ))}
-          </FilterSection>
+            </FilterSection>
+            <FilterSection label="语言">
+              <CollapsibleFilterLinks
+                options={[
+                  {
+                    active: !language,
+                    href: gamesHref({
+                      ...activeParams,
+                      language: undefined,
+                      page: undefined,
+                    }),
+                    label: "全部",
+                    value: "all",
+                  },
+                  ...LANGUAGE_OPTIONS.map(({ value, label }) => ({
+                    active: language === value,
+                    href: gamesHref({
+                      ...activeParams,
+                      language: value,
+                      page: undefined,
+                    }),
+                    label,
+                    value,
+                  })),
+                ]}
+                visibleCount={3}
+              />
+            </FilterSection>
+            <FilterSection label="标签">
+              <Link className="py-1.5 text-sm text-primary hover:underline" to="/tags">浏览全部标签</Link>
+            </FilterSection>
+          </>}
         </aside> : null}
       </div>
     </div>
@@ -376,7 +383,7 @@ function CollapsibleFilterLinks({
   );
 }
 
-function FilterSection({
+export function FilterSection({
   label,
   moreHref,
   children,
@@ -411,7 +418,7 @@ function FilterSection({
   );
 }
 
-function FilterLink({
+export function FilterLink({
   active,
   href,
   label,

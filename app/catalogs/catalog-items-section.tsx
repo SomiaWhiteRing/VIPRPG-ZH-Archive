@@ -333,7 +333,7 @@ export function CatalogItemsSection({
               className="sr-only"
               id="catalog-add-game-description"
             >
-              搜索并以默认排序值 0 将一个游戏加入目录。
+              搜索并以默认排序值 0 将一部作品加入目录。
             </Dialog.Description>
             <form
               className="flex gap-2 max-sm:flex-col"

@@ -1,6 +1,7 @@
 import schema from "./lcf-scan-schema.json";
 
 export type ResourceFile = { path: string; size: number; sha256: string };
+export type ReferenceObserver = (bytes: Uint8Array, source: string, kind: string, id: number, parameters?: number[]) => void;
 export type ResourceReferenceReport = {
   status: "no_candidates" | "analyzed" | "preserved";
   candidateCount: number;
@@ -15,6 +16,8 @@ const decoders = ["utf-8", "shift_jis", "gb18030", "big5", "euc-kr", "windows-12
   .map((encoding) => new TextDecoder(encoding, { fatal: true }));
 const normalize = (value: string) => value.replaceAll("\\", "/").normalize("NFC").toLowerCase();
 const stem = (path: string) => normalize(path).split("/").at(-1)!.replace(/\.[^.]*$/, "");
+const mapPath = (id: number) => `map${String(id).padStart(4, "0")}.lmu`;
+type MapInfo = { type: number; parent: number; hasAreaRect: boolean };
 
 /** Small, read-only LCF visitor. All strings count as references, including editor
  * defaults and unreachable events. Unknown structure/commands disable pruning.
@@ -27,18 +30,21 @@ export class LcfReferenceScan {
   private readonly protectedDirs = new Set<string>();
   private readonly reasons = new Set<string>();
   private readonly seenCore = new Set<string>();
-  private readonly mapIds = new Set<number>();
+  private readonly mapInfos = new Map<number, MapInfo>();
   private steps = 0;
   private totalBytes = 0;
   private currentPath = "";
 
-  constructor(private readonly files: readonly ResourceFile[], isCandidate: (file: ResourceFile) => boolean) {
+  constructor(private readonly files: readonly ResourceFile[], isCandidate: (file: ResourceFile) => boolean,
+    private readonly observe?: ReferenceObserver) {
     this.candidates = files.filter(isCandidate);
     for (const file of this.candidates) {
       const name = stem(file.path);
-      this.names.set(name, [...(this.names.get(name) ?? []), file]);
+      const bucket = this.names.get(name);
+      if (bucket) bucket.push(file);
+      else this.names.set(name, [file]);
     }
-    if (!this.candidates.length) return;
+    if (!this.candidates.length && !observe) return;
     for (const file of files) {
       const path = normalize(file.path);
       // Harmony is the stock RPG2000 audio library. Other plugins may load any path.
@@ -50,7 +56,7 @@ export class LcfReferenceScan {
     }
   }
 
-  get needsScan(): boolean { return this.candidates.length > 0 && !this.protectedDirs.has("*"); }
+  get needsScan(): boolean { return (this.candidates.length > 0 || Boolean(this.observe)) && !this.protectedDirs.has("*"); }
 
   consume(path: string, bytes: Uint8Array): void {
     if (!this.needsScan) return;
@@ -107,8 +113,15 @@ export class LcfReferenceScan {
           this.protect("*", `核心文件未完整分析：${file.path}`);
         }
       }
-      for (const id of this.mapIds) {
-        const path = `map${String(id).padStart(4, "0")}.lmu`;
+      for (const [id, info] of this.mapInfos) {
+        // Standard areas have type 2. Some games encode their area nodes as
+        // type 0: accept only a valid rectangle attached to a scanned real map.
+        // Names such as AREA0472 alone are not evidence that a map is optional.
+        const isArea = (info.type === 2 || info.type === 0) && info.hasAreaRect &&
+          info.parent > 0 && info.parent !== id && this.mapInfos.get(info.parent)?.type === 1 &&
+          this.seenCore.has(mapPath(info.parent));
+        if (isArea) continue;
+        const path = mapPath(id);
         if (id > 0 && !this.seenCore.has(path)) this.protect("*", `地图树中的地图未分析：${path}`);
       }
     }
@@ -130,9 +143,12 @@ export class LcfReferenceScan {
   private string(bytes: Uint8Array, allowsExFont = false): void {
     if (!bytes.length) return;
     if (bytes.length > 1024 * 1024) throw new Error("字符串超过分析大小限制");
+    const decoded = new Set<string>();
     for (const decoder of decoders) {
       let value: string;
       try { value = decoder.decode(bytes); } catch { continue; }
+      if (decoded.has(value)) continue;
+      decoded.add(value);
       // Standard message text and skill/item names can start with $A..$Z/$a..$z
       // (ExFont glyphs). Keep the patch heuristic for other strings, especially
       // sound names and comments, and for nonstandard prefixes such as $[x,y].
@@ -141,6 +157,9 @@ export class LcfReferenceScan {
       const base = normalize(value).split("/").at(-1)!;
       for (const name of [base, base.replace(/\.[^.]*$/, "")]) {
         for (const file of this.names.get(name) ?? []) this.referenced.add(file.path);
+        // All candidates in this bucket are now protected. Across the whole
+        // scan each candidate is visited once, even with repeated references.
+        this.names.delete(name);
       }
     }
   }
@@ -149,25 +168,51 @@ export class LcfReferenceScan {
     if (++this.steps > 2_000_000 || depth > 32) throw new Error("超过分析复杂度限制");
   }
 
-  private structure(reader: Reader, type: string, depth: number, eofAllowed = false): void {
+  private structure(reader: Reader, type: string, depth: number, eofAllowed = false, mapInfo?: MapInfo): void {
     const fields = structures[type];
     if (!fields) throw new Error(`未支持的结构：${type}`);
     const seen = new Set<number>();
+    let animationName: Uint8Array | undefined;
+    let largeAnimation = 0;
     while (reader.remaining) {
       this.tick(depth);
       const id = reader.integer();
-      if (!id) return;
+      if (!id) {
+        if (animationName) this.observe?.(animationName, this.currentPath, type, 2, [largeAnimation]);
+        return;
+      }
       if (seen.has(id)) throw new Error(`重复字段：${type}/${id}`);
       seen.add(id);
       const block = new Reader(reader.take(reader.integer()));
       const kind = fields[id];
       if (!kind) throw new Error(`未支持的字段：${type}/${id}`);
-      if (kind === "string") this.string(block.take(block.remaining), id === 1 && (type === "Skill" || type === "Item"));
+      if (kind === "string") {
+        const bytes = block.take(block.remaining);
+        this.string(bytes, id === 1 && (type === "Skill" || type === "Item"));
+        if (type === "Animation" && id === 2) animationName = bytes;
+        else this.observe?.(bytes, this.currentPath, type, id);
+      }
       else if (kind === "commands") this.commands(block);
       else if (kind === "moves") this.moves(block);
       else if (kind.startsWith("array:")) this.array(block, kind.slice(6), depth + 1);
       else if (kind.startsWith("struct:")) this.structure(block, kind.slice(7), depth + 1);
-      else block.take(block.remaining);
+      else if (mapInfo && (id === 2 || id === 4)) {
+        const value = block.integer();
+        if (id === 2) mapInfo.parent = value;
+        else mapInfo.type = value;
+      }
+      else if (mapInfo && id === 51) {
+        const bytes = block.take(block.remaining);
+        if (bytes.length !== 16) throw new Error("地图区域矩形长度无效");
+        const rect = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const left = rect.getInt32(0, true), top = rect.getInt32(4, true);
+        const right = rect.getInt32(8, true), bottom = rect.getInt32(12, true);
+        mapInfo.hasAreaRect = left >= 0 && top >= 0 && right > left && bottom > top;
+      }
+      else {
+        const bytes = block.take(block.remaining);
+        if (type === "Animation" && id === 3) largeAnimation = bytes.some((byte) => byte !== 0) ? 1 : 0;
+      }
       if (block.remaining) throw new Error(`字段长度不一致：${type}/${id}`);
     }
     if (!eofAllowed) throw new Error(`结构缺少结束标记：${type}`);
@@ -179,10 +224,11 @@ export class LcfReferenceScan {
     const ids = new Set<number>();
     for (let i = 0; i < count; i++) {
       const id = reader.integer();
-      if (type === "MapInfo") this.mapIds.add(id);
       if (ids.has(id)) throw new Error("数组 ID 重复");
       ids.add(id);
-      this.structure(reader, type, depth + 1);
+      const mapInfo = type === "MapInfo" ? { type: -1, parent: 0, hasAreaRect: false } : undefined;
+      this.structure(reader, type, depth + 1, false, mapInfo);
+      if (mapInfo) this.mapInfos.set(id, mapInfo);
     }
   }
 
@@ -196,10 +242,12 @@ export class LcfReferenceScan {
         return;
       }
       reader.integer(); // indentation
-      this.string(reader.take(reader.integer()), code === 10110 || code === 20110);
+      const bytes = reader.take(reader.integer());
+      this.string(bytes, code === 10110 || code === 20110);
       const count = reader.integer();
       if (count > reader.remaining || count > 100_000) throw new Error("事件参数数量无效");
       const parameters = Array.from({ length: count }, () => reader.integer());
+      this.observe?.(bytes, this.currentPath, "command", code, parameters);
       if (!commandNames[code]) throw new Error(`未支持的事件指令：${code}`);
       if (code === 11330) {
         if (parameters.length < 4 || parameters.slice(4).some((value) => value > 255)) throw new Error("移动路线参数无效");
@@ -229,7 +277,9 @@ export class LcfReferenceScan {
       if (code > 41) throw new Error(`未支持的移动指令：${code}`);
       if (code === 32 || code === 33) reader.integer();
       if (code === 34 || code === 35) {
-        this.string(reader.take(reader.integer()));
+        const bytes = reader.take(reader.integer());
+        this.string(bytes);
+        this.observe?.(bytes, this.currentPath, "move", code);
         reader.integer();
         if (code === 35) { reader.integer(); reader.integer(); }
       }

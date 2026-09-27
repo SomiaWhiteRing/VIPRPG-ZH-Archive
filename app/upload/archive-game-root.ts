@@ -10,7 +10,7 @@ export function filesWithinArchiveGameRoot<T extends { path: string }>(
   }
   if (roots.length > 1) {
     throw new Error(
-      `${format} 内找到多个 RPG_RT.lmt，无法确定游戏根目录；请每次只上传一个游戏。`,
+      `${format} 内找到多个 RPG_RT.lmt，无法确定游戏根目录；请每次只上传一部作品。`,
     );
   }
   const rootPath = roots[0].path;

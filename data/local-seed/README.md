@@ -1,5 +1,16 @@
 # Fixed Local Seed
 
+The consolidated `0006_tags_favorites_and_read_indexes.sql` preserves the original
+execution order of the eight unpublished tag, favorite and bounded-read migrations.
+The snapshot and local development ledger now contain 0001 through 0006.
+Public tags use names as primary keys; favorite-bound user tags and anonymous
+trigger-maintained usage statistics support tag discovery. Favorite notes allow
+500 characters, and new favorite tags allow 10 names of up to 20 characters.
+Read indexes cover favorite ordering, external-link availability, creator credits,
+public comments and object references. Active-object scan indexes and an empty
+GC cursor table bound cleanup candidate reads. Business records and R2 objects
+are preserved. The applied 0001 through 0005 files remain unchanged.
+
 The software package cleanup refresh applies `0005_tool_artifact_gc.sql`,
 retaining all release/build identities while allowing scheduled reclamation of
 superseded package objects. The seed schema and migration ledger include it;

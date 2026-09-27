@@ -138,8 +138,8 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
         size: player.size_bytes,
         crc32: await sharedPlayerCrc32(request, env.ARCHIVE_BUCKET, player, ctx),
         mtimeMs: Date.UTC(1980, 0, 1),
-        open: async () => {
-          const object = await env.ARCHIVE_BUCKET.get(player.object_key);
+        open: async (range) => {
+          const object = await env.ARCHIVE_BUCKET.get(player.object_key, range ? { range } : undefined);
           assertSharedPlayerObject(player, object);
           return object.body;
         },
@@ -358,8 +358,13 @@ function estimateR2GetCount(manifest, files) {
 }
 
 function buildZipEntries(manifest, bucket, files = manifest.files) {
-  const corePackCache = new Map();
-  const blobReadCache = new BlobReadCache(bucket);
+  const storage = {
+    bucket,
+    corePacks: new Map(manifest.corePacks.map((pack) => [pack.id, pack])),
+    corePackCache: new Map(),
+    corePackEntries: new Map(),
+    blobReadCache: new BlobReadCache(bucket),
+  };
 
   return files
     .slice()
@@ -369,7 +374,15 @@ function buildZipEntries(manifest, bucket, files = manifest.files) {
       size: file.size,
       crc32: file.crc32,
       mtimeMs: file.mtimeMs,
-      open: () => openManifestFile(file, manifest, bucket, corePackCache, blobReadCache),
+      selectForRead: () => {
+        if (file.storage.kind === "blob") return;
+        const pack = storage.corePacks.get(file.storage.packId);
+        if (!pack) throw new Error(`Missing core pack declaration: ${file.storage.packId}`);
+        let names = storage.corePackEntries.get(pack.sha256);
+        if (!names) storage.corePackEntries.set(pack.sha256, names = new Set());
+        names.add(file.storage.entry);
+      },
+      open: (range) => openManifestFile(file, storage, range),
     }));
 }
 
@@ -379,14 +392,15 @@ function compareManifestFiles(left, right) {
   );
 }
 
-async function openManifestFile(file, manifest, bucket, corePackCache, blobReadCache) {
+async function openManifestFile(file, context, range) {
+  const { bucket, corePacks, corePackCache, corePackEntries, blobReadCache } = context;
   const storage = file.storage;
 
   if (storage.kind === "blob") {
-    return blobReadCache.open(storage.blobSha256, file.size);
+    return blobReadCache.open(storage.blobSha256, file.size, range);
   }
 
-  const corePack = manifest.corePacks.find((item) => item.id === storage.packId);
+  const corePack = corePacks.get(storage.packId);
 
   if (!corePack) {
     throw new Error(`Missing core pack declaration: ${storage.packId}`);
@@ -395,7 +409,7 @@ async function openManifestFile(file, manifest, bucket, corePackCache, blobReadC
   let entriesPromise = corePackCache.get(corePack.sha256);
 
   if (!entriesPromise) {
-    entriesPromise = loadCorePackEntries(bucket, corePack.sha256);
+    entriesPromise = loadCorePackEntries(bucket, corePack.sha256, corePackEntries.get(corePack.sha256));
     corePackCache.set(corePack.sha256, entriesPromise);
   }
 
@@ -405,8 +419,8 @@ async function openManifestFile(file, manifest, bucket, corePackCache, blobReadC
   if (!bytes) {
     throw new Error(`Missing core pack entry: ${storage.entry}`);
   }
-
-  return streamBytes(bytes);
+  if (bytes.byteLength !== file.size) throw new Error(`Core pack entry size mismatch: ${file.path}`);
+  return streamBytes(range ? bytes.subarray(range.offset, range.offset + range.length) : bytes);
 }
 
 class BlobReadCache {
@@ -416,12 +430,16 @@ class BlobReadCache {
     this.reservedBytes = 0;
   }
 
-  async open(sha256, size) {
-    if (!this.shouldCache(size)) {
-      const object = await this.bucket.get(blobKey(sha256));
+  async open(sha256, size, range) {
+    if (range || !this.shouldCache(size)) {
+      const object = await this.bucket.get(blobKey(sha256), range ? { range } : undefined);
 
       if (!object?.body) {
         throw new Error(`Missing blob object: ${sha256}`);
+      }
+      if (object.size !== size) {
+        await object.body.cancel().catch(() => undefined);
+        throw new Error(`Blob size mismatch for ${sha256}: expected ${size}, got ${object.size}`);
       }
 
       return object.body;
@@ -471,14 +489,17 @@ class BlobReadCache {
   }
 }
 
-async function loadCorePackEntries(bucket, sha256) {
+async function loadCorePackEntries(bucket, sha256, names) {
   const object = await bucket.get(corePackKey(sha256));
 
   if (!object) {
     throw new Error(`Missing core pack object: ${sha256}`);
   }
 
-  const unzipped = unzipSync(new Uint8Array(await object.arrayBuffer()));
+  // A compressed entry still needs inflation, but unrelated entries do not.
+  const unzipped = unzipSync(new Uint8Array(await object.arrayBuffer()), {
+    filter: (entry) => names.has(entry.name),
+  });
   const entries = new Map();
 
   for (const [path, bytes] of Object.entries(unzipped)) {
@@ -499,6 +520,14 @@ function parseDownloadRange(value, size) {
 }
 
 function createFixedLengthZipStream(entries, expectedLength, range) {
+  let offset = 0;
+  for (const entry of entries) {
+    const dataStart = offset + 30 + textEncoder.encode(entry.path).byteLength;
+    if (!range || (entry.size > 0 && dataStart <= range.end && dataStart + entry.size > range.start)) {
+      entry.selectForRead?.();
+    }
+    offset = dataStart + entry.size;
+  }
   const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : expectedLength);
   const writer = writable.getWriter();
   const completion = writeZip(writer, entries, range)
@@ -530,10 +559,14 @@ async function writeZip(writer, entries, range) {
       const entry = entries[nextToPrefetch];
       const dataStart = prefetchOffset + 30 + textEncoder.encode(entry.path).byteLength;
       const dataEnd = dataStart + entry.size;
-      if (!range || (dataStart <= range.end && dataEnd > range.start)) {
-        const promise = entry.open();
+      if (!range || (entry.size > 0 && dataStart <= range.end && dataEnd > range.start)) {
+        const fileRange = range ? {
+          offset: Math.max(0, range.start - dataStart),
+          length: Math.min(dataEnd, range.end + 1) - Math.max(dataStart, range.start),
+        } : null;
+        const promise = entry.open(fileRange);
         promise.catch(() => undefined);
-        openPromises.set(nextToPrefetch, promise);
+        openPromises.set(nextToPrefetch, { promise, range: fileRange });
       }
       prefetchOffset = dataEnd;
       nextToPrefetch += 1;
@@ -558,10 +591,12 @@ async function writeZip(writer, entries, range) {
 
       await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
 
-      let actualSize = entry.size;
       if (openPromises.has(index)) {
-        actualSize = 0;
-        const stream = await openPromises.get(index);
+        const pending = openPromises.get(index);
+        const expectedSize = pending.range?.length ?? entry.size;
+        let actualSize = 0;
+        offset += pending.range?.offset ?? 0;
+        const stream = await pending.promise;
         const reader = stream.getReader();
         openPromises.delete(index);
 
@@ -575,6 +610,7 @@ async function writeZip(writer, entries, range) {
 
             const chunk = normalizeChunk(result.value);
             actualSize += chunk.byteLength;
+            if (actualSize > expectedSize) throw new Error(`ZIP entry exceeded requested length: ${entry.path}`);
             await write(chunk);
           }
         } catch (error) {
@@ -584,11 +620,12 @@ async function writeZip(writer, entries, range) {
           reader.releaseLock();
         }
 
-        if (actualSize !== entry.size) {
+        if (actualSize !== expectedSize) {
           throw new Error(
-            `ZIP entry size mismatch for ${entry.path}: expected ${entry.size}, got ${actualSize}`,
+            `ZIP entry size mismatch for ${entry.path}: expected ${expectedSize}, got ${actualSize}`,
           );
         }
+        offset += entry.size - (pending.range?.offset ?? 0) - actualSize;
       } else {
         // The deterministic STORE ZIP lets resumed requests skip complete earlier files.
         offset += entry.size;
@@ -597,7 +634,7 @@ async function writeZip(writer, entries, range) {
       centralEntries.push({
         pathBytes,
         crc32: entry.crc32,
-        size: actualSize,
+        size: entry.size,
         localHeaderOffset,
         dosTime,
         dosDate,
@@ -607,7 +644,7 @@ async function writeZip(writer, entries, range) {
     // A failed read, write or canceled consumer must not leave prefetched
     // responses occupying connections. Pending opens are canceled on arrival.
     await Promise.allSettled(
-      [...openPromises.values()].map(async (promise) => {
+      [...openPromises.values()].map(async ({ promise }) => {
         const stream = await promise;
         await stream.cancel();
       }),

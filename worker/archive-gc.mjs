@@ -1,3 +1,4 @@
+import { scanGcCandidates, advanceGcCursor } from "../app/.server/storage/gc-candidates.ts";
 import { sweepToolArtifacts } from "./tool-artifact-gc.mjs";
 
 const defaultGcGraceDays = 7;
@@ -36,14 +37,8 @@ export async function runScheduledArchiveGc(env, input = {}) {
     graceDays,
     limitPerType,
   );
-  const [blobRows, corePackRows] = await Promise.all([
-    listEligibleGcRows(env.DB, "blob", graceDays, limitPerType),
-    listEligibleGcRows(env.DB, "core_pack", graceDays, limitPerType),
-  ]);
-  const [blobs, corePacks] = await Promise.all([
-    sweepRows(env, "blob", blobRows, graceDays),
-    sweepRows(env, "core_pack", corePackRows, graceDays),
-  ]);
+  const blobs = await sweepCandidatePage(env, "blob", graceDays, limitPerType);
+  const corePacks = await sweepCandidatePage(env, "core_pack", graceDays, limitPerType);
   const toolArtifacts = await sweepToolArtifacts(env, limitPerType);
   const report = {
     checkedAt: new Date().toISOString(),
@@ -241,66 +236,11 @@ async function expireProcessingImportJob(db, importJobId, cutoff) {
   return (result.meta?.changes ?? 0) > 0;
 }
 
-async function listEligibleGcRows(db, type, graceDays, limit) {
-  const sql =
-    type === "blob"
-      ? `SELECT
-          b.sha256 AS id,
-          b.sha256,
-          b.size_bytes
-        FROM blobs b
-        WHERE b.status IN ('active', 'purging')
-          AND datetime(b.created_at) <= datetime('now', ?)
-          AND NOT EXISTS (
-            SELECT 1
-            FROM archive_version_blob_refs avbr
-            WHERE avbr.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM media_assets ma
-            WHERE ma.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
-          AND NOT EXISTS (
-            SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM character_materials cm WHERE cm.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM catalogs c
-            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
-          )
-        ORDER BY b.created_at ASC, b.sha256 ASC
-        LIMIT ?`
-      : `SELECT
-          cp.sha256 AS id,
-          cp.sha256,
-          cp.size_bytes
-        FROM core_packs cp
-        WHERE cp.status IN ('active', 'purging')
-          AND datetime(cp.created_at) <= datetime('now', ?)
-          AND NOT EXISTS (
-            SELECT 1
-            FROM archive_version_core_pack_refs avcpr
-            WHERE avcpr.core_pack_id = cp.id
-          )
-        ORDER BY cp.created_at ASC, cp.id ASC
-        LIMIT ?`;
-  const rows = await db.prepare(sql).bind(`-${graceDays} days`, limit).all();
-
-  return rows.results ?? [];
+async function sweepCandidatePage(env, type, graceDays, limit) {
+  const scan = await scanGcCandidates(env.DB, type, graceDays, limit);
+  const result = await sweepRows(env, type, scan.rows, graceDays);
+  await advanceGcCursor(env.DB, type, scan);
+  return { ...result, candidateScanCount: scan.scannedCount, scanCompleted: scan.completed };
 }
 
 async function listArchiveVersionPurgeCandidates(db, graceDays, limit) {
@@ -617,6 +557,10 @@ async function writeGcAuditLog(db, report) {
         purgedArchiveVersionFileCount: report.archiveVersions.purgedFileCount,
         purgedArchiveVersionSizeBytes: report.archiveVersions.purgedSizeBytes,
         failedArchiveVersionCount: report.archiveVersions.failedCount,
+        blobCandidateScanCount: report.blobs.candidateScanCount,
+        blobScanCompleted: report.blobs.scanCompleted,
+        corePackCandidateScanCount: report.corePacks.candidateScanCount,
+        corePackScanCompleted: report.corePacks.scanCompleted,
         purgedBlobCount: report.blobs.purgedCount,
         purgedCorePackCount: report.corePacks.purgedCount,
         purgedBlobSizeBytes: report.blobs.purgedSizeBytes,

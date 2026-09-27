@@ -63,7 +63,7 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["标签维护", "控制台"], page: loaderData?.page }, error);
+  pageMetaDescriptors({ title: ["公共标签维护", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminTagsPage() {
   const { adminUser, query, namespace, sort, page, result } =
@@ -72,7 +72,7 @@ export default function AdminTagsPage() {
     <main>
       <PageHeader
         compact
-        title="标签维护"
+        title="公共标签维护"
         subtitle="维护标签命名空间、说明和作品关联。"
         actions={
           <Link className={buttonVariants({ variant: "outline" })} to="/tags">
@@ -114,17 +114,17 @@ export default function AdminTagsPage() {
           </thead>
           <tbody>
             {result.items.map((tag) => (
-              <tr key={tag.id}>
+              <tr key={tag.name}>
                 <td>
                   <strong>{tag.name}</strong>
                 </td>
                 <td>{namespaceLabel(tag.namespace)}</td>
-                <td>{formatNumber(tag.workCount)} 个游戏</td>
+                <td>{formatNumber(tag.workCount)} 部作品</td>
                 <td>
                   {hasPermission(adminUser, "tag.metadata.update_any") ? (
                     <Link
                       className={buttonVariants()}
-                      to={`/admin/tags/${tag.id}`}
+                      to={`/admin/tags/edit?name=${encodeURIComponent(tag.name)}`}
                     >
                       编辑
                     </Link>

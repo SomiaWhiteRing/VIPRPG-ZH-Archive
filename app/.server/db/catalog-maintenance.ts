@@ -5,6 +5,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import { MAX_USER_TAG_LENGTH, MAX_USER_TAGS } from "@/lib/user-tags";
 
 export async function listWorkMaintainers(runtime: AppRuntime, workId: number) {
   const rows = await getD1(runtime)
@@ -165,6 +166,16 @@ export async function mergeWorks(
   ]);
   if (conflicts.some((r) => r.results?.length))
     throw new HttpError(409, "署名／目录备注不同，请先在后台处理冲突后再合并");
+  if (await db.prepare(`SELECT 1 FROM user_work_entries s JOIN user_work_entries t ON s.user_id=t.user_id
+    WHERE s.work_id=? AND t.work_id=? AND s.favorite_note<>'' AND t.favorite_note<>'' AND s.favorite_note<>t.favorite_note LIMIT 1`)
+    .bind(source, target).first()) {
+    throw new HttpError(409, "同一用户的两条收藏吐槽不同，请先处理吐槽冲突后再合并。");
+  }
+  if (await db.prepare(`SELECT user_id FROM user_work_tags WHERE work_id IN (?,?)
+    GROUP BY user_id HAVING COUNT(DISTINCT name)>? OR MAX(length(name))>? LIMIT 1`)
+    .bind(source, target, MAX_USER_TAGS, MAX_USER_TAG_LENGTH).first()) {
+    throw new HttpError(409, `合并后的收藏标签不能超过 ${MAX_USER_TAGS} 个，每个最多 ${MAX_USER_TAG_LENGTH} 字，请先处理标签后再合并。`);
+  }
   const statements: D1PreparedStatement[] = [];
   statements.push(
     db.prepare(`UPDATE works SET updated_at=CASE WHEN EXISTS (SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?`).bind(target, target),
@@ -248,7 +259,7 @@ export async function mergeWorks(
     ["work_uploaders", "user_id,created_at"],
     ["work_titles", "title,language,title_type,is_searchable,created_at"],
     ["work_staff", "creator_id,display_name,role_key,role_label,notes,sort_order"],
-    ["work_tags", "tag_id,source,created_at,sort_order"],
+    ["work_tags", "tag_name,source,created_at,sort_order"],
     ["catalog_items", "catalog_id,sort_order,note,created_at"],
   ]) {
     statements.push(
@@ -265,15 +276,20 @@ export async function mergeWorks(
   statements.push(
     db
       .prepare(
-        `INSERT INTO user_work_entries(work_id,user_id,last_played_at,favorited_at,updated_at)
-      SELECT ?,user_id,last_played_at,favorited_at,updated_at FROM user_work_entries WHERE work_id=?
+        `INSERT INTO user_work_entries(work_id,user_id,last_played_at,favorited_at,favorite_note,updated_at)
+      SELECT ?,user_id,last_played_at,favorited_at,favorite_note,updated_at FROM user_work_entries WHERE work_id=?
       ON CONFLICT(work_id,user_id) DO UPDATE SET last_played_at=CASE
         WHEN last_played_at IS NULL THEN excluded.last_played_at
         WHEN excluded.last_played_at IS NULL THEN last_played_at
         ELSE MAX(last_played_at,excluded.last_played_at) END,
-      favorited_at=COALESCE(favorited_at,excluded.favorited_at),updated_at=CURRENT_TIMESTAMP`,
+      favorited_at=COALESCE(favorited_at,excluded.favorited_at),
+      favorite_note=CASE WHEN favorite_note='' THEN excluded.favorite_note
+        WHEN excluded.favorite_note='' OR favorite_note=excluded.favorite_note THEN favorite_note ELSE NULL END,
+      updated_at=CURRENT_TIMESTAMP`,
       )
       .bind(target, source),
+    db.prepare(`INSERT OR IGNORE INTO user_work_tags(work_id,user_id,name,sort_order,created_at)
+      SELECT ?,user_id,name,sort_order,created_at FROM user_work_tags WHERE work_id=?`).bind(target, source),
     db.prepare(`DELETE FROM user_work_entries WHERE work_id=?`).bind(source),
     db.prepare(`UPDATE user_showcase_entries SET work_id=? WHERE work_id=?`).bind(target, source),
     db

@@ -9,8 +9,9 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { WorkDistribution } from "@/lib/dto/db/work-distribution";
 import type { StaffCredit } from "@/lib/staff-credits";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
+import type { FavoriteDetails } from "@/lib/user-tags";
 
-export type GameTag = { id: number; name: string; namespace: string };
+export type GameTag = { name: string; namespace: string };
 
 export type GameCharacter = {
   id: number;
@@ -210,6 +211,7 @@ export type ExternalWorkInput = {
 export type UserWorkListItem = {
   work: GameWorkSummary;
   occurredAt: string;
+  favorite: FavoriteDetails | null;
 };
 
 export type UploaderWorkEdit = AdminWorkEdit & {

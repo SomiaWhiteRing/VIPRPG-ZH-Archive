@@ -1,8 +1,24 @@
 import { requireUser } from "@/app/.server/auth/guards";
 import { setWorkFavorite } from "@/app/.server/db/work-community";
+import { getWorkFavorite } from "@/app/.server/db/user-work-tags";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
+
+export async function GET(
+  runtime: AppRuntime,
+  request: Request,
+  context: { params: { workId: string } },
+) {
+  const auth = await requireUser(runtime, request);
+  if ("response" in auth) return auth.response;
+  try {
+    const favorite = await getWorkFavorite(runtime, parsePositiveId(context.params.workId, "work id"), auth.user.id);
+    return json({ ok: true, ...favorite }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    return jsonError("Work preference load failed", error);
+  }
+}
 
 export async function PATCH(
   runtime: AppRuntime,
@@ -24,6 +40,8 @@ export async function PATCH(
       parsePositiveId((await context.params).workId, "work id"),
       auth.user.id,
       body.favorited,
+      body.tags,
+      body.note,
     );
     return json({ ok: true });
   } catch (error) {

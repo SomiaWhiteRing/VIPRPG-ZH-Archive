@@ -318,13 +318,13 @@ export async function createTranslationRelation(
   const relationRows = (validation[1].results ?? []) as TranslationRoleRow[];
   const currentRole = translationRoleFromRows(input.sourceWorkId, relationRows);
   if (currentRole && currentRole !== sourceGameRole)
-    throw new HttpError(400, "一个游戏不能同时作为原版和译版");
+    throw new HttpError(400, "一部作品不能同时作为原版和译版");
   const targetExistingRole = translationRoleFromRows(
     input.targetWorkId,
     relationRows,
   );
   if (targetExistingRole && targetExistingRole !== targetGameRole)
-    throw new HttpError(400, "一个游戏不能同时作为原版和译版");
+    throw new HttpError(400, "一部作品不能同时作为原版和译版");
   const targetRole =
     input.targetRole === "original" ? "translation" : "original";
   if (validation[2].results?.length)

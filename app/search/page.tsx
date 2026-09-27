@@ -2,10 +2,8 @@ import { searchCatalogs } from "@/app/.server/db/catalogs";
 import { readCharacterCounts } from "@/app/.server/db/character-index";
 import { listPublicCreators } from "@/app/.server/db/creator-library";
 import { searchGameWorks } from "@/app/.server/db/game-library";
-import {
-  listPublicTags,
-  searchPublicCharacters,
-} from "@/app/.server/db/taxonomy-library";
+import { searchPublicCharacters } from "@/app/.server/db/taxonomy-library";
+import { listCombinedTags } from "@/app/.server/db/user-work-tags";
 import { loadDiscussionSearch } from "@/app/.server/forum/search-page";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -17,7 +15,6 @@ import { TagCloud } from "@/app/components/library/tag-cloud";
 import { SearchResultRow } from "@/app/components/search/search-result-row";
 import { CreatorCard } from "@/app/creators/creator-card";
 import type { PublicCreatorSummary } from "@/lib/dto/db/creator-library";
-import type { PublicTagSummary } from "@/lib/dto/db/taxonomy-library";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -32,6 +29,7 @@ import { formatNumber } from "@/lib/format";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
 import { stringParam } from "@/lib/params";
 import { getSearchScope, SEARCH_SCOPES } from "@/lib/search";
+import { tagHref, type CombinedTagSummary } from "@/lib/user-tags";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useLoaderData } from "react-router";
 
@@ -161,12 +159,7 @@ export default function SearchPage() {
           </p>
           {directory && directory.items.length > 0 ? (
             scope === "tags" ? (
-              <TagCloud
-                tags={directory.items.flatMap((item) =>
-                  item.tag ? [item.tag] : [],
-                )}
-                label="标签搜索结果"
-              />
+              <TagCloud tags={directory.items.flatMap((item) => item.tag ? [item.tag] : [])} label="标签搜索结果" />
             ) : (
               <section
                 className={
@@ -251,7 +244,7 @@ async function listDirectory(
     >;
     catalog?: CatalogSummary;
     creator?: PublicCreatorSummary;
-    tag?: Pick<PublicTagSummary, "id" | "name" | "workCount">;
+    tag?: CombinedTagSummary;
   }>;
   if (scope === "creators")
     items = (await listPublicCreators(runtime, { query, limit: 300 })).map(
@@ -294,21 +287,19 @@ async function listDirectory(
     }));
     return { items, pageSize, total: characters.total };
   } else if (scope === "tags")
-    items = (await listPublicTags(runtime, { query, limit: 300 })).map(
-      (item) => ({
-        href: `/games?tag=${item.id}`,
-        title: item.name,
-        subtitle: null,
-        meta: `${item.workCount} 个作品`,
-        tag: { id: item.id, name: item.name, workCount: item.workCount },
-      }),
-    );
+    items = (await listCombinedTags(runtime, { query, limit: 300 })).map((tag) => ({
+      href: tagHref(tag.name),
+      title: tag.name,
+      subtitle: null,
+      meta: `${tag.usageCount} 次使用`,
+      tag,
+    }));
   else if (scope === "catalogs")
     items = (await searchCatalogs(runtime, query, 300)).map((item) => ({
       href: `/catalogs/${item.id}`,
       title: item.title,
       subtitle: null,
-      meta: `${item.itemCount} 个游戏 · ${item.ownerName}`,
+      meta: `${item.itemCount} 部作品 · ${item.ownerName}`,
       catalog: item,
     }));
   else items = [];
@@ -322,5 +313,5 @@ async function listDirectory(
 function searchHref(query: string, scope: string) {
   const params = new URLSearchParams({ scope });
   if (query) params.set("q", query);
-  return `/search?${params.toString()}`;
+  return `/search?${params}`;
 }
