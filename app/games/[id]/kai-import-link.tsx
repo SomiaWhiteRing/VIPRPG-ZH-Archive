@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Smartphone } from "lucide-react";
-import { buttonVariants } from "@/app/components/ui/button";
+import { Button, buttonVariants } from "@/app/components/ui/button";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -84,17 +84,18 @@ export function KaiImportLink({ archiveVersionId }: { archiveVersionId: number }
 
   return (
     <>
-      <button
+      <Button
         ref={buttonRef}
         type="button"
-        className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
+        variant="outline"
+        className="min-h-11 w-full"
         onClick={launchKai}
         disabled={launching}
         aria-busy={launching}
       >
         <Smartphone aria-hidden />
         导入 EasyRPG Player Kai
-      </button>
+      </Button>
       <AlertDialog open={failed} onOpenChange={setFailed}>
         <AlertDialogContent onCloseAutoFocus={(event) => {
           event.preventDefault();

@@ -13,6 +13,7 @@
 | 入口 | 用途 | 副作用与边界 |
 | --- | --- | --- |
 | `npm run check` | 类型、lint、静态架构、安全和 UI 静态规则 | 不证明浏览器交互；按改动需要单独运行 |
+| `npx tsx scripts/ui-self-check.ts` | `app` 下 TSX 控件和样式改动的最小 UI 静态检查 | 仅扫描源码，不启动浏览器；规则独立于 TypeScript 和 ESLint，已包含在 `npm run check` 中 |
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
 | `npm run regression` | 明确需要综合回归时使用 | 串行运行 `check` → `test`，保留报告和阶段日志 |
