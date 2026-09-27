@@ -15,7 +15,7 @@ export function WebPlaySaveExport({
   active: boolean;
 }) {
   const toast = useToast();
-  const [count, setCount] = useState(0);
+  const [hasSaves, setHasSaves] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
   const downloadRef = useRef<AbortController | null>(null);
@@ -30,21 +30,21 @@ export function WebPlaySaveExport({
       if (document.hidden || reading) return;
       reading = true;
       try {
-        const files = await readSaveFiles(workId);
+        const available = await hasSaveFiles(workId);
         if (current) {
-          setCount(files.length);
+          setHasSaves(available);
           setReadError(null);
         }
       } catch {
         if (current) {
-          setCount(0);
+          setHasSaves(false);
           setReadError("读取本地存档失败，请检查浏览器存储权限后重试。");
         }
       } finally {
         reading = false;
       }
     };
-    setCount(0);
+    setHasSaves(false);
     void refresh();
     // IDBFS commits saves independently of the page, including from other tabs.
     const timer = setInterval(() => void refresh(), 2000);
@@ -57,7 +57,7 @@ export function WebPlaySaveExport({
   }, [active, workId]);
 
   async function exportSaves() {
-    if (downloadRef.current || !count) return;
+    if (downloadRef.current || !hasSaves) return;
     const controller = new AbortController();
     downloadRef.current = controller;
     setExporting(true);
@@ -65,7 +65,7 @@ export function WebPlaySaveExport({
       // Read again at click time; never export an earlier polling snapshot.
       const files = await readSaveFiles(workId);
       controller.signal.throwIfAborted();
-      setCount(files.length);
+      setHasSaves(files.length > 0);
       if (!files.length) return;
       const bytes = zipSync(Object.fromEntries(files.map(file => [file.name, file.bytes])));
       const blob = new Blob([new Uint8Array(bytes)], { type: "application/zip" });
@@ -93,10 +93,10 @@ export function WebPlaySaveExport({
   return (
     <>
       <Button
-        disabled={!count || exporting}
+        disabled={!hasSaves || exporting}
         onClick={() => void exportSaves()}
         size="sm"
-        title={count ? `导出 ${count} 个存档` : "没有可导出的存档"}
+        title={hasSaves ? "导出当前游戏的存档" : "没有可导出的存档"}
         type="button"
         variant="outline"
       >
@@ -107,9 +107,8 @@ export function WebPlaySaveExport({
   );
 }
 
-async function readSaveFiles(workId: number): Promise<SaveFile[]> {
-  const directory = `/work-saves/${workId}`;
-  const db = await new Promise<IDBDatabase | null>((resolve, reject) => {
+async function openSaveDatabase(directory: string): Promise<IDBDatabase | null> {
+  return new Promise<IDBDatabase | null>((resolve, reject) => {
     // No version: the runtime owns the IDBFS schema and its upgrades.
     const request = indexedDB.open(directory);
     let missing = false;
@@ -124,6 +123,41 @@ async function readSaveFiles(workId: number): Promise<SaveFile[]> {
     };
     request.onerror = () => missing ? resolve(null) : reject(request.error);
   });
+}
+
+function saveFileName(directory: string, key: IDBValidKey): string | null {
+  const path = String(key);
+  const name = path.startsWith(`${directory}/`) ? path.slice(directory.length + 1) : "";
+  return /^[^/\\]+\.lsd$/i.test(name) ? name : null;
+}
+
+async function hasSaveFiles(workId: number): Promise<boolean> {
+  const directory = `/work-saves/${workId}`;
+  const db = await openSaveDatabase(directory);
+  if (!db) return false;
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      let found = false;
+      const tx = db.transaction("FILE_DATA", "readonly");
+      // Availability needs names only; never deserialize save contents on a timer.
+      const request = tx.objectStore("FILE_DATA").openKeyCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        if (saveFileName(directory, cursor.key)) found = true;
+        else cursor.continue();
+      };
+      tx.oncomplete = () => resolve(found);
+      tx.onabort = tx.onerror = () => reject(tx.error ?? request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function readSaveFiles(workId: number): Promise<SaveFile[]> {
+  const directory = `/work-saves/${workId}`;
+  const db = await openSaveDatabase(directory);
   if (!db) return [];
   try {
     return await new Promise<SaveFile[]>((resolve, reject) => {
@@ -133,11 +167,10 @@ async function readSaveFiles(workId: number): Promise<SaveFile[]> {
       request.onsuccess = () => {
         const cursor = request.result;
         if (!cursor) return;
-        const path = String(cursor.key);
-        const name = path.startsWith(`${directory}/`) ? path.slice(directory.length + 1) : "";
+        const name = saveFileName(directory, cursor.key);
         const entry = cursor.value as { mode: number; contents: Uint8Array };
         // Only regular .lsd files directly in this game's save directory.
-        if (/^[^/\\]+\.lsd$/i.test(name) && (entry.mode & 0o170000) === 0o100000) {
+        if (name && (entry.mode & 0o170000) === 0o100000) {
           files.push({ name, bytes: entry.contents });
         }
         cursor.continue();

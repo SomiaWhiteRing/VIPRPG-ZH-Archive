@@ -113,7 +113,7 @@ Map0070「保管庫でまだ埋まっている」有多个同名ストーンIII�
 
 | 文件 | 用途 |
 | --- | --- |
-| `xml/` | 80 个游戏数据副本及 EasyRPG 原始 XML |
+| `xml/` | 80 部作品数据副本及 EasyRPG 原始 XML |
 | `source-files.json`、`conversion.json` | 来源文件及转换器指纹 |
 | `maps.json`、`database.json`、`events.json` | 地图树、数据库、全事件及指令 |
 | `dialogue.txt` | 可全文检索的带位置日文文本，含公共事件 |

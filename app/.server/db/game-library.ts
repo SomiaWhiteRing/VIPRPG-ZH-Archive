@@ -1,4 +1,4 @@
-import { normalizeWorkMedia, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
+import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import type { CharacterPortraitRow } from "@/app/.server/db/character-portrait-library";
@@ -61,6 +61,7 @@ import type {
 } from "@/lib/dto/db/game-library";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeEntityName } from "@/lib/entity-name";
+import type { TagSource } from "@/lib/user-tags";
 import { HttpError } from "@/lib/http";
 import {
   isArchiveEngineFamily,
@@ -79,7 +80,8 @@ type Filters = {
   query?: string;
   status?: string;
   engine?: string;
-  tag?: number;
+  tag?: string;
+  tagSource?: TagSource;
   character?: number;
   uploader?: number;
   isOriginal?: boolean;
@@ -208,7 +210,7 @@ export async function getPublicGameWorkSummaries(
   for (const ids of chunkArray([...new Set(workIds)], 100)) {
     const result = await getD1(runtime)
       .prepare(
-        `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id IN (${ids.map(() => "?").join(",")}) AND w.id IN (SELECT id FROM public_works) GROUP BY w.id`,
+        `SELECT ${summarySql()} FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id IN (${ids.map(() => "?").join(",")}) AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) GROUP BY w.id`,
       )
       .bind(...ids)
       .all<SummaryRow>();
@@ -222,6 +224,7 @@ export async function searchUserWorks(
   input: {
     userId: number;
     kind: "favorite" | "played";
+    tag?: string;
     page?: number;
     pageSize?: number;
   },
@@ -234,27 +237,43 @@ export async function searchUserWorks(
   const pageSize = clamp(input.pageSize ?? 20, 1, 100);
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const column = input.kind === "favorite" ? "favorited_at" : "last_played_at";
+  const tag = input.kind === "favorite" ? normalizeEntityName(input.tag ?? "") : "";
+  const tagFilter = tag ? "AND EXISTS(SELECT 1 FROM user_work_tags t WHERE t.work_id=e.work_id AND t.user_id=e.user_id AND t.name=?)" : "";
+  const binds: Array<string | number> = [input.userId, ...(tag ? [tag] : [])];
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
     database
       .prepare(
-        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.id IN (SELECT id FROM public_works)`,
+        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) ${tagFilter}`,
       )
-      .bind(input.userId),
+      .bind(...binds),
     database
       .prepare(
-        `SELECT ${summarySql()},e.${column} AS occurred_at FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND w.id IN (SELECT id FROM public_works) GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
+        `SELECT ${summarySql()},e.${column} AS occurred_at,${input.kind === "favorite" ? "e.favorite_note" : "''"} AS favorite_note FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) ${tagFilter} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
       )
-      .bind(input.userId, pageSize, (page - 1) * pageSize),
+      .bind(...binds, pageSize, (page - 1) * pageSize),
   ]);
   const rows = (rowsResult.results ?? []) as Array<
-    SummaryRow & { occurred_at: string }
+    SummaryRow & { occurred_at: string; favorite_note: string }
   >;
-  const works = await hydrate(runtime, rows);
+  const [works, tagRows] = await Promise.all([
+    hydrate(runtime, rows),
+    input.kind === "favorite" && rows.length ? database.prepare(
+      `SELECT work_id,name FROM user_work_tags WHERE user_id=? AND work_id IN (SELECT value FROM json_each(?))
+       ORDER BY work_id,sort_order,name`,
+    ).bind(input.userId, JSON.stringify(rows.map((row) => row.id))).all<{ work_id: number; name: string }>() : Promise.resolve({ results: [] }),
+  ]);
+  const tagsByWork = new Map<number, string[]>();
+  for (const row of tagRows.results) {
+    const tags = tagsByWork.get(row.work_id) ?? [];
+    tags.push(row.name);
+    tagsByWork.set(row.work_id, tags);
+  }
   return {
     items: works.map((work, index) => ({
       work,
       occurredAt: rows[index].occurred_at,
+      favorite: input.kind === "favorite" ? { tags: tagsByWork.get(work.id) ?? [], note: rows[index].favorite_note } : null,
     })),
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
@@ -360,7 +379,7 @@ export async function getGameWorkDetail(
 ): Promise<GameWorkDetail | null> {
   const row = await getD1(runtime)
     .prepare(
-      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND w.id IN (SELECT id FROM public_works) GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) GROUP BY w.id LIMIT 1`,
     )
     .bind(id)
     .first<SummaryRow & { extra_json: string }>();
@@ -592,7 +611,7 @@ export async function updateOwnedWork(
   );
 
   const aliases = uniqueText(input.aliases);
-  const tags = uniqueText(input.tags.map(normalizeEntityName));
+  const tags = normalizeWorkTags(input.tags);
   const characters = input.characters.map(parseCharacterCreditSelection);
   const authors = uniqueCreatorSelections(input.authors);
   const existingTranslators = new Map(
@@ -859,7 +878,7 @@ export async function updateWorkForAdmin(
   const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s, input.status === "published");
   await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s].filter(Boolean));
   const aliases = uniqueText(input.aliases);
-  const tags = uniqueText(input.tags.map(normalizeEntityName));
+  const tags = normalizeWorkTags(input.tags);
   const characters = input.characters.map(parseCharacterCreditSelection);
   const current = await getWorkForAdminEdit(runtime, input.workId);
   if (!current) throw new HttpError(404, "作品不存在");
@@ -994,9 +1013,7 @@ export async function createExternalWork(
   const aliases = [
     ...new Set(input.aliases.map((value) => value.trim()).filter(Boolean)),
   ];
-  const tags = [
-    ...new Set(input.tags.map(normalizeEntityName).filter(Boolean)),
-  ];
+  const tags = normalizeWorkTags(input.tags);
   const characters = input.characters.map(parseCharacterCreditSelection);
   const authors = input.authors;
   const translatorCredits: StaffCredit[] = input.translators.map(
@@ -1399,10 +1416,16 @@ function buildWhere(input: Filters): {
     binds.push(input.language);
   }
   if (input.tag) {
-    clauses.push(
-      "EXISTS(SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=w.id AND t.id=?)",
-    );
-    binds.push(input.tag);
+    const publicTag = "EXISTS(SELECT 1 FROM work_tags wt WHERE wt.work_id=w.id AND wt.tag_name=?)";
+    const userTag = "EXISTS(SELECT 1 FROM counted_user_tags ut WHERE ut.work_id=w.id AND ut.name=?)";
+    const tag = normalizeEntityName(input.tag);
+    if (input.tagSource === "all") {
+      clauses.push(`(${publicTag} OR ${userTag})`);
+      binds.push(tag, tag);
+    } else {
+      clauses.push(input.tagSource === "user" ? userTag : publicTag);
+      binds.push(tag);
+    }
   }
   if (input.character) {
     clauses.push(
@@ -1447,8 +1470,8 @@ async function hydrate(
         kind: "tag",
         statement: database
           .prepare(
-            `SELECT wt.work_id,t.id,t.name,t.namespace
-             FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+            `SELECT wt.work_id,t.name,t.namespace
+             FROM work_tags wt JOIN tags t ON t.name=wt.tag_name
              WHERE wt.work_id IN (${placeholders})
              ORDER BY wt.work_id,wt.sort_order,t.name`,
           )
@@ -1521,7 +1544,6 @@ async function hydrate(
     }
   });
   const tagsByWork = groupRowsByWork(tagRows, (tag) => ({
-    id: tag.id,
     name: tag.name,
     namespace: tag.namespace,
   }));
@@ -1642,8 +1664,8 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT t.id,t.name,t.namespace
-         FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+        `SELECT t.name,t.namespace
+         FROM work_tags wt JOIN tags t ON t.name=wt.tag_name
          WHERE wt.work_id=? ORDER BY wt.sort_order,t.name`,
       )
       .bind(workId),
@@ -1698,7 +1720,7 @@ async function loadWorkCollections(
                  w.original_title,w.chinese_title,w.original_release_date,
                  w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
-          WHERE wr.from_work_id=? AND w.id IN (SELECT id FROM public_works)
+          WHERE wr.from_work_id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
           ORDER BY wr.relation_type,title,w.id,wr.id`,
       )
       .bind(workId),
@@ -1709,7 +1731,7 @@ async function loadWorkCollections(
                  w.original_title,w.chinese_title,w.original_release_date,
                  w.engine_family,w.language,${RELATED_COVER_SQL}
           FROM translation_relations tr JOIN works w ON w.id=tr.target_work_id
-          WHERE tr.source_work_id=? AND w.id IN (SELECT id FROM public_works)
+          WHERE tr.source_work_id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
           ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
       )
       .bind(workId),
@@ -1901,7 +1923,7 @@ async function listTranslations(
        FROM translation_relations tr
        JOIN works w ON w.id = tr.target_work_id
        WHERE tr.source_work_id = ?
-         AND w.id IN (SELECT id FROM public_works)
+         AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
        ORDER BY CASE tr.target_role WHEN 'original' THEN 0 ELSE 1 END,title,w.id,tr.id`,
     )
     .bind(id)

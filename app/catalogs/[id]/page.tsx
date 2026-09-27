@@ -9,7 +9,6 @@ import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { CatalogItemsSection } from "@/app/catalogs/catalog-items-section";
-import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
@@ -80,7 +79,6 @@ export default function CatalogPage() {
       key={`${catalog.id}:${currentUser?.id ?? "anonymous"}`}
       className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8"
     >
-      <BackLink href="/catalogs" label="返回目录" />
       <div className="mt-5 flex flex-col gap-8 min-[981px]:flex-row">
         <div className="min-w-0 flex-1">
           <h1 className="m-0 font-display text-[clamp(26px,4vw,36px)] font-bold leading-tight">
@@ -134,7 +132,7 @@ export default function CatalogPage() {
                 </time>
               </span>
               <span className="font-mono">
-                {formatNumber(catalog.itemCount)} 个游戏
+                {formatNumber(catalog.itemCount)} 部作品
               </span>
               {canEditSummary || canDelete ? (
                 <div className="ml-auto">
@@ -164,7 +162,7 @@ export default function CatalogPage() {
               <strong className="font-display text-3xl leading-none">
                 {formatNumber(catalog.itemCount)}
               </strong>
-              <span className="text-sm text-muted">个游戏</span>
+              <span className="text-sm text-muted">部作品</span>
             </div>
             <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
               <dt className="text-muted">创建者</dt>
@@ -203,7 +201,7 @@ export default function CatalogPage() {
                       {item.title}
                     </Link>
                     <span className="mt-0.5 block font-mono text-[11px] text-muted">
-                      {formatNumber(item.itemCount)} 个游戏
+                      {formatNumber(item.itemCount)} 部作品
                     </span>
                   </li>
                 ))}

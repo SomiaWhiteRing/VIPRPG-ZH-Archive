@@ -31,13 +31,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   }, error);
 
 export default function WorkCatalogsPage() {
-  const { workId, title, result } = useLoaderData<typeof loader>();
+  const { workId, result } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
         actions={<BackLink href={`/games/${workId}#catalog-card`} label="返回作品" />}
         title="收录了本条目的目录"
-        subtitle={`${title} · 共 ${result.total} 个目录，按 ID 从大到小排列`}
       />
       {result.items.length ? (
         <ul className="divide-y divide-border border-b border-border">

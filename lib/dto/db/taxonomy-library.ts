@@ -29,7 +29,6 @@ export type CharacterAliasMergeCandidate = {
 };
 
 export type PublicTagSummary = {
-  id: number;
   name: string;
   namespace: string;
   description: string | null;

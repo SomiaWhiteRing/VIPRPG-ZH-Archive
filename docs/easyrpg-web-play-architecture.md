@@ -18,7 +18,7 @@
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。
-- 引擎在 Worker 内同步读取本地文件，不发逐资源 HTTP 请求，不使用 Service Worker 资源桥，也不把整个游戏复制进 WASM 内存。
+- 引擎在 Worker 内同步读取本地文件，不发逐资源 HTTP 请求，不使用 Service Worker 资源桥，也不把整部作品复制进 WASM 内存。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
 - 仓库和每次部署只包含当前一个 EasyRPG runtime；升级成功后清理旧版本目录，不提供多版本选择或旧版回退。
 - 同源 `/play/player.html` iframe 持有播放器 Worker、画布与音频设备；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker；运行中的站内导航先等待存档写入，刷新或关页保留浏览器确认。
@@ -256,7 +256,7 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 - `movie-decoder.LICENSE.txt`、`web-movies.md`：解码器许可及构建、格式范围说明。
 - `COPYING`、`SOURCE.json`：许可证、来源、文件摘要。
 
-React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首个游戏画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
+React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首部作品画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
 
 音频 Worker 运行同一个 WASM 模块的独立实例，复用 C++ 解码器、混音器和音效缓存，不启动游戏、不挂载存档。音频指令与 MIDI 播放状态走 Worker 间 MessagePort；PCM 由音频 Worker 直接发给 AudioWorklet，不经过游戏或网页转发。音色库在启动阶段初始化。停止时两个 Worker 一同释放；运行组件升级不改变安装键、pack 或存档格式。
 
@@ -283,7 +283,7 @@ Kai 默认使用 FluidSynth 与 `.data` 中的 `/builtin/recommended.sf2`。音�
 - EasyRPG 存档沿用 Emscripten IDBFS，固定挂载于 `/work-saves/<workId>`。安装键不参与存档身份；归档、播放器、安装器升级沿用同一 Work 的存档。不同 Work（包括其他译版）互不共用，同一浏览器内也不按账号区分。
 - 游戏资源安装和存档生命周期分开。
 - 卸载游戏时不删除存档。
-- 诊断区的“导出存档”只读访问当前 Work 的 IDBFS `FILE_DATA`，将存档目录直属的 `.lsd` 文件（扩展名不区分大小写）以原文件名放入 ZIP，下载名为 `<游戏名称>.zip`。读取、打包和下载均在浏览器本地完成，不二次确认；没有存档时禁用按钮。展开诊断区时定期刷新数量，点击时重新读取已写入的存档，卸载后仍可导出。
+- 诊断区的“导出存档”只读访问当前 Work 的 IDBFS `FILE_DATA`，将存档目录直属的 `.lsd` 文件（扩展名不区分大小写）以原文件名放入 ZIP，下载名为 `<游戏名称>.zip`。读取、打包和下载均在浏览器本地完成，不二次确认；没有存档时禁用按钮。展开诊断区时只用键游标检查是否存在直属 `.lsd` 文件，不反序列化存档内容；点击时重新读取并验证普通存档文件，卸载后仍可导出。
 - 当前不提供单独清除存档、导入或云同步界面。
 
 ## 13. 浏览器存储策略

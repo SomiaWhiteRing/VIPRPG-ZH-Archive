@@ -1,6 +1,32 @@
 import type { CommentTarget } from "@/lib/comment-target";
 import type { CharacterPortrait } from "@/lib/character-names";
 import type { CommentImage } from "@/lib/comment-images";
+import type { CatalogSummary } from "@/lib/dto/db/catalogs";
+
+export type WorkCommunitySummary = {
+  viewCount: number;
+  playerCount: number;
+  commentCount: number;
+  favoriteCount: number;
+  favoritedByMe: boolean;
+};
+
+export type WorkOverviewSidebarData = {
+  currentUser: { id: number } | null;
+  community: WorkCommunitySummary;
+  userCatalogs: { items: CatalogSummary[]; total: number; page: number; pageSize: number };
+  containingCatalogs: CatalogSummary[];
+  showRelationEditor: boolean;
+  editInfoHref: string | null;
+};
+
+export type WorkCollection = {
+  userId: number;
+  displayName: string;
+  avatarBlobSha256: string | null;
+  favoritedAt: string;
+  note: string;
+};
 
 import type { FaceEmoji } from "@/lib/face-emojis";
 export type { FaceEmoji } from "@/lib/face-emojis";

@@ -35,7 +35,7 @@ import * as endpoint47 from "@/app/.server/endpoints/api/admin/roles/[roleId]/pe
 import * as endpoint48 from "@/app/.server/endpoints/api/admin/roles/[roleId]/route";
 import * as endpoint17 from "@/app/.server/endpoints/api/admin/roles/route";
 import * as endpoint18 from "@/app/.server/endpoints/api/admin/summary/route";
-import * as endpoint49 from "@/app/.server/endpoints/api/admin/tags/[tagId]/update/route";
+import * as endpoint49 from "@/app/.server/endpoints/api/admin/tags/update/route";
 import * as endpoint50 from "@/app/.server/endpoints/api/admin/users/[userId]/roles/[roleId]/route";
 import * as endpoint51 from "@/app/.server/endpoints/api/admin/users/[userId]/roles/route";
 import * as endpoint52 from "@/app/.server/endpoints/api/admin/users/[userId]/status/route";
@@ -729,15 +729,13 @@ api.all("/api/admin/roles/:roleId", (c) =>
     Allow: "PATCH, OPTIONS",
   }),
 );
-api.on("POST", "/api/admin/tags/:tagId/update", (c) =>
-  endpoint49.POST(c.get("runtime"), c.req.raw, {
-    params: { tagId: c.req.param("tagId") },
-  }),
+api.on("POST", "/api/admin/tags/update", (c) =>
+  endpoint49.POST(c.get("runtime"), c.req.raw),
 );
-api.options("/api/admin/tags/:tagId/update", (c) =>
+api.options("/api/admin/tags/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/tags/:tagId/update", (c) =>
+api.all("/api/admin/tags/update", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
     Allow: "POST, OPTIONS",
   }),
@@ -1232,17 +1230,22 @@ api.all("/api/works/:workId/delete", (c) =>
     Allow: "POST, OPTIONS",
   }),
 );
+api.on(["GET", "HEAD"], "/api/works/:workId/me", (c) =>
+  endpoint83.GET(c.get("runtime"), c.req.raw, {
+    params: { workId: c.req.param("workId") },
+  }),
+);
 api.on("PATCH", "/api/works/:workId/me", (c) =>
   endpoint83.PATCH(c.get("runtime"), c.req.raw, {
     params: { workId: c.req.param("workId") },
   }),
 );
 api.options("/api/works/:workId/me", (c) =>
-  c.body(null, 204, { Allow: "PATCH, OPTIONS" }),
+  c.body(null, 204, { Allow: "GET, HEAD, PATCH, OPTIONS" }),
 );
 api.all("/api/works/:workId/me", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
-    Allow: "PATCH, OPTIONS",
+    Allow: "GET, HEAD, PATCH, OPTIONS",
   }),
 );
 api.on("POST", "/api/works/:workId/owned", (c) =>

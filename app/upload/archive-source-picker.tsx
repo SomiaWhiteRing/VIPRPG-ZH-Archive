@@ -34,6 +34,8 @@ export type ArchiveSourceSummary = {
 
 export function ArchiveSourcePicker({
   canceling,
+  checkMissingResources,
+  onCheckMissingResourcesChange,
   cleanupResources,
   onCleanupResourcesChange,
   useSharedPlayer,
@@ -51,6 +53,8 @@ export function ArchiveSourcePicker({
   task,
 }: {
   canceling: boolean;
+  checkMissingResources: boolean;
+  onCheckMissingResourcesChange: (value: boolean) => void;
   cleanupResources: boolean;
   useSharedPlayer: boolean;
   onUseSharedPlayerChange: (value: boolean) => void;
@@ -86,6 +90,8 @@ export function ArchiveSourcePicker({
       <header className="mb-3 flex items-center justify-between gap-3">
         <h2 className="m-0 text-lg font-bold">游戏文件</h2>
         <ArchiveAdvancedOptions
+          checkMissingResources={checkMissingResources}
+          onCheckMissingResourcesChange={onCheckMissingResourcesChange}
           cleanupResources={cleanupResources}
           disabled={disabled}
           onCleanupResourcesChange={onCleanupResourcesChange}
@@ -211,6 +217,8 @@ export function ArchiveSourcePicker({
 }
 
 function ArchiveAdvancedOptions({
+  checkMissingResources,
+  onCheckMissingResourcesChange,
   cleanupResources,
   disabled,
   onCleanupResourcesChange,
@@ -218,6 +226,8 @@ function ArchiveAdvancedOptions({
   task,
   useSharedPlayer,
 }: {
+  checkMissingResources: boolean;
+  onCheckMissingResourcesChange: (value: boolean) => void;
   cleanupResources: boolean;
   disabled: boolean;
   onCleanupResourcesChange: (value: boolean) => void;
@@ -227,6 +237,7 @@ function ArchiveAdvancedOptions({
 }) {
   const cleanupResourcesId = useId();
   const sharedPlayerId = useId();
+  const missingResourcesId = useId();
 
   return (
     <Popover.Root>
@@ -266,6 +277,16 @@ function ArchiveAdvancedOptions({
             </Popover.Close>
           </div>
           <div className="grid gap-1">
+            <div className="flex min-h-7 items-center gap-2">
+              <Checkbox
+                checked={checkMissingResources}
+                disabled={disabled}
+                id={missingResourcesId}
+                onCheckedChange={(checked) => onCheckMissingResourcesChange(checked === true)}
+              />
+              <Label className="flex-1 py-1.5" htmlFor={missingResourcesId}>检测缺失素材</Label>
+              <InfoTooltip>扫描游戏引用但上传文件中未找到的素材。由于游戏可能在无法正常触发的分歧里引用未实装素材，检测结果仅供参考。</InfoTooltip>
+            </div>
             <div className="flex min-h-7 items-center gap-2" data-resource-cleanup-option>
               <Checkbox
                 checked={cleanupResources}
@@ -297,6 +318,7 @@ function ArchiveAdvancedOptions({
 function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) {
   const headingId = useId();
   const cleanup = task?.stats.resourceCleanup;
+  const missing = task?.stats.missingResources;
   const sharedPlayer = task?.stats.sharedPlayer;
   const files = [
     ...(sharedPlayer ? [{ ...sharedPlayer, reason: "共享播放器" }] : []),
@@ -325,7 +347,7 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
     >
       <h3 className="text-sm font-semibold" id={headingId}>清理日志</h3>
       <p aria-live="polite" className="mt-1 text-xs text-muted">{summary}</p>
-      {files.length || cleanup?.reasons.length ? (
+      {files.length || cleanup?.reasons.length || missing?.missing.length || missing?.limited ? (
         <div
           aria-label="清理日志明细"
           className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs"
@@ -333,6 +355,13 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
           tabIndex={0}
         >
           <ul className="grid gap-1 whitespace-nowrap">
+            {missing?.missing.map((file) => (
+              <li className="min-w-max text-red-600" key={`missing:${file.path}`}>疑似缺失：{file.path} — {file.source}</li>
+            ))}
+            {missing?.reasons.map((reason) => (
+              <li className="min-w-max text-red-600" key={`missing:${reason}`}>{reason}</li>
+            ))}
+            {missing?.limited ? <li className="min-w-max text-red-600">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
             {cleanup?.reasons.map((reason) => (
               <li className="min-w-max text-muted" key={reason}>{reason}</li>
             ))}
@@ -409,6 +438,7 @@ function UploadTaskCard({
   task: BrowserUploadTaskSnapshot | null;
 }) {
   const progress = Math.min(100, task?.progress.percent ?? 0);
+  const missing = task?.stats.missingResources;
   const progressLabel = task?.sourceReady
     ? "游戏文件已就绪"
     : task
@@ -460,6 +490,11 @@ function UploadTaskCard({
             </span>
           ) : null}
         </div>
+        {missing && (missing.missing.length > 0 || missing.limited) ? (
+          <p className="mt-2 text-xs text-red-600" role="status">
+            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的清理日志，可继续上传。
+          </p>
+        ) : null}
         {task?.error ? (
           <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">
             {task.error}

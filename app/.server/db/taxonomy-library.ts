@@ -48,7 +48,6 @@ type CharacterRow = CharacterPortraitRow & {
   updated_at: string;
 };
 type TagRow = {
-  id: number;
   name: string;
   namespace: string;
   description: string | null;
@@ -521,7 +520,7 @@ export async function listPublicTags(
 ): Promise<PublicTagSummary[]> {
   const binds: Array<string | number> = [];
   const where = [
-    `EXISTS(SELECT 1 FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.id IN (SELECT id FROM public_works))`,
+    `EXISTS(SELECT 1 FROM tag_usage_stats s WHERE s.name=t.name AND s.public_count > 0)`,
   ];
   if (input.query?.trim()) {
     const q = `%${input.query.trim()}%`;
@@ -538,22 +537,10 @@ export async function listPublicTags(
 }
 export async function getPublicTagSummary(
   runtime: AppRuntime,
-  id: number,
+  name: string,
 ): Promise<PublicTagSummary | null> {
-  const tag = await getTagById(runtime, id, false);
+  const tag = await getTagForAdminEdit(runtime, name);
   return tag && tag.workCount > 0 ? tag : null;
-}
-export async function listTagsForAdmin(
-  runtime: AppRuntime,
-  limit = 300,
-): Promise<PublicTagSummary[]> {
-  const rows = await getD1(runtime)
-    .prepare(
-      `${tagSql()} FROM tags t ORDER BY t.updated_at DESC,t.name ASC LIMIT ?`,
-    )
-    .bind(limitValue(limit, 500))
-    .all<TagRow>();
-  return (rows.results ?? []).map(mapTag);
 }
 export async function searchTagsForAdmin(
   runtime: AppRuntime,
@@ -585,10 +572,10 @@ export async function searchTagsForAdmin(
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const order =
     input.sort === "name"
-      ? "t.name ASC,t.id DESC"
+      ? "t.name ASC"
       : input.sort === "works"
-        ? "work_count DESC,t.id DESC"
-        : "t.updated_at DESC,t.id DESC";
+        ? "work_count DESC,t.name ASC"
+        : "t.updated_at DESC,t.name ASC";
   const database = getD1(runtime);
   const [rowsResult, countResult] = await database.batch([
     database
@@ -611,25 +598,23 @@ export async function searchTagsForAdmin(
 }
 export async function getTagForAdminEdit(
   runtime: AppRuntime,
-  id: number,
+  name: string,
 ): Promise<AdminTagEdit | null> {
   const row = await getD1(runtime)
-    .prepare(`${tagSql()} FROM tags t WHERE t.id=? LIMIT 1`)
-    .bind(id)
+    .prepare(`${tagSql()} FROM tags t WHERE t.name=? LIMIT 1`)
+    .bind(normalizeEntityName(name))
     .first<TagRow>();
   return row ? mapTag(row) : null;
 }
 export async function updateTagForAdmin(
   runtime: AppRuntime,
   input: {
-    tagId: number;
-    name: string;
+    originalName: string;
     namespace: string;
     description: string | null;
-    mergeTargetId: number | null;
   },
 ): Promise<AdminTagEdit> {
-  const name = normalizeEntityName(input.name);
+  const name = normalizeEntityName(input.originalName);
   if (!name)
     throw new HttpError(400, "标签名称不能为空。", "tag_name_required");
   if (
@@ -642,36 +627,38 @@ export async function updateTagForAdmin(
       "标签命名空间不合法，请重新选择。",
       "tag_namespace_invalid",
     );
-  if (input.mergeTargetId) {
-    await mergeTag(runtime, input.tagId, input.mergeTargetId);
-    const target = await getTagById(runtime, input.mergeTargetId, true);
-    if (!target)
-      throw new HttpError(
-        404,
-        "合并目标不存在，请刷新页面后重新选择。",
-        "tag_merge_target_missing",
-      );
-    return target;
+  const original = await getTagForAdminEdit(runtime, input.originalName);
+  if (!original) {
+    throw new HttpError(
+      404,
+      "公共标签不存在，请返回列表后重新进入。",
+      "tag_not_found",
+    );
   }
-  await getD1(runtime)
-    .prepare(
-      `UPDATE tags SET name=?,namespace=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    )
-    .bind(name, input.namespace, input.description, input.tagId)
-    .run();
-  const updated = await getTagForAdminEdit(runtime, input.tagId);
+  const database = getD1(runtime);
+  const result = await database.prepare(
+    `UPDATE tags SET namespace=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE name=?`,
+  ).bind(input.namespace, input.description, original.name).run();
+  if (!result.meta.changes) {
+    throw new HttpError(409, "公共标签已变更，请刷新页面后重试。", "tag_changed");
+  }
+  const updated = await getTagForAdminEdit(runtime, name);
   if (!updated) throw new Error("标签更新后不可读取");
   return updated;
 }
 export function parseTagEditForm(
   form: FormData,
 ): Parameters<typeof updateTagForAdmin>[1] {
+  const originalName = normalizeEntityName(String(form.get("original_name") ?? ""));
+  const submittedName = form.get("name");
+  if ((submittedName !== null && normalizeEntityName(String(submittedName)) !== originalName)
+    || String(form.get("merge_target_name") ?? "").trim()) {
+    throw new HttpError(400, "标签名称不能更改，也不支持合并或删除。", "tag_identity_immutable");
+  }
   return {
-    tagId: positive(form.get("tag_id")),
-    name: String(form.get("name") ?? ""),
+    originalName,
     namespace: String(form.get("namespace") ?? "other"),
     description: clean(form.get("description")),
-    mergeTargetId: nullablePositive(form.get("merge_target_id")),
   };
 }
 
@@ -697,18 +684,6 @@ async function getCharacterById(
   if (!character || (!includeNonPublic && character.workCount === 0))
     return null;
   return character;
-}
-async function getTagById(
-  runtime: AppRuntime,
-  id: number,
-  includeNonPublic: boolean,
-): Promise<PublicTagSummary | null> {
-  const row = await getD1(runtime)
-    .prepare(`${tagSql()} FROM tags t WHERE t.id=? LIMIT 1`)
-    .bind(id)
-    .first<TagRow>();
-  if (!row || (!includeNonPublic && row.work_count === 0)) return null;
-  return mapTag(row);
 }
 type CharacterMergeRow = {
   id: number;
@@ -903,33 +878,6 @@ async function prepareCharacterMerge(
     statements,
   };
 }
-async function mergeTag(
-  runtime: AppRuntime,
-  id: number,
-  targetId: number,
-): Promise<void> {
-  const target = await getD1(runtime)
-    .prepare(`SELECT id FROM tags WHERE id=? LIMIT 1`)
-    .bind(targetId)
-    .first<{ id: number }>();
-  if (!target || target.id === id) {
-    throw new HttpError(
-      400,
-      "标签合并目标不合法，请重新选择。",
-      "tag_merge_target_invalid",
-    );
-  }
-  const database = getD1(runtime);
-  await database.batch([
-    database
-      .prepare(
-        `INSERT OR IGNORE INTO work_tags(work_id,tag_id,source,sort_order) SELECT work_id,?,source,sort_order FROM work_tags WHERE tag_id=?`,
-      )
-      .bind(target.id, id),
-    database.prepare(`DELETE FROM work_tags WHERE tag_id=?`).bind(id),
-    database.prepare(`DELETE FROM tags WHERE id=?`).bind(id),
-  ]);
-}
 function characterSql(
   extraColumns = "",
   extraJoins = "",
@@ -938,7 +886,7 @@ function characterSql(
   return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works)) AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""} ${extraJoins}`;
 }
 function tagSql(): string {
-  return `SELECT t.id,t.name,t.namespace,t.description,(SELECT COUNT(DISTINCT wt.work_id) FROM work_tags wt JOIN works w ON w.id=wt.work_id WHERE wt.tag_id=t.id AND w.id IN (SELECT id FROM public_works)) AS work_count,t.updated_at`;
+  return `SELECT t.name,t.namespace,t.description,COALESCE((SELECT public_count FROM tag_usage_stats WHERE name=t.name),0) AS work_count,t.updated_at`;
 }
 function mapCharacter(row: CharacterRow): PublicCharacterSummary {
   return {
@@ -1207,7 +1155,6 @@ function isCharacterIdentityConstraintError(error: unknown): boolean {
 }
 function mapTag(row: TagRow): PublicTagSummary {
   return {
-    id: row.id,
     name: row.name,
     namespace: row.namespace,
     description: row.description,

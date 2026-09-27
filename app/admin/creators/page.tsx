@@ -104,7 +104,7 @@ export default function AdminCreatorsPage() {
                   <strong>{creator.name}</strong>
                 </td>
                 <td>
-                  {formatNumber(creator.workCreditCount)} 个游戏
+                  {formatNumber(creator.workCreditCount)} 部作品
                   {creator.latestWorkCreditAt ? (
                     <span className="text-sm text-muted">
                       最近关联：{creator.latestWorkCreditAt}

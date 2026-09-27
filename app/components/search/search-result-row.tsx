@@ -15,7 +15,7 @@ export function SearchResultRow({ work }: { work: GameWorkSummary }) {
           </Badge>
         ))}
         {work.tags.slice(0, 2).map((tag) => (
-          <Badge variant="subtle" key={tag.id}>
+          <Badge variant="subtle" key={tag.name}>
             {tag.name}
           </Badge>
         ))}

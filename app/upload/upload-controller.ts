@@ -266,6 +266,7 @@ export function useUploadController(accountId: number) {
     input: {
       sourceKind: UploadSourceKind;
       cleanupResources: boolean;
+      checkMissingResources: boolean;
       useSharedPlayer: boolean;
       sourceName: string;
       files: UploadSourceFile[];

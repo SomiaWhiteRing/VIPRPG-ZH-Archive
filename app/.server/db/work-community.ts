@@ -29,10 +29,13 @@ import type {
   CommentReplyPage,
   FaceEmoji,
   UserCommentSummary,
+  WorkCollection,
+  WorkCommunitySummary,
 } from "@/lib/dto/db/work-community";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
 import { viewCounts } from "@/app/.server/views/service";
+import { parseFavoriteNote, parseUserTags } from "@/lib/user-tags";
 
 export type { CommentTarget } from "@/lib/comment-target";
 
@@ -85,29 +88,48 @@ export async function setWorkFavorite(
   workId: number,
   userId: number,
   favorited: boolean,
+  tagInput?: unknown,
+  noteInput?: unknown,
 ): Promise<void> {
+  const tags = tagInput === undefined ? undefined : parseUserTags(tagInput);
+  const note = noteInput === undefined ? undefined : parseFavoriteNote(noteInput);
   const database = getD1(runtime);
   const results = await database.batch([
     database
       .prepare(
-        `INSERT INTO user_work_entries(work_id, user_id, favorited_at, updated_at)
-         SELECT id,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP
+        `INSERT INTO user_work_entries(work_id, user_id, favorited_at, favorite_note, updated_at)
+         SELECT id,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,?,CURRENT_TIMESTAMP
          FROM public_works WHERE id=?
          ON CONFLICT(work_id, user_id) DO UPDATE SET
-           favorited_at = excluded.favorited_at,
+           favorited_at = CASE WHEN excluded.favorited_at IS NULL THEN NULL ELSE COALESCE(user_work_entries.favorited_at,excluded.favorited_at) END,
+           favorite_note = CASE WHEN excluded.favorited_at IS NULL THEN '' WHEN ?=1 THEN excluded.favorite_note ELSE user_work_entries.favorite_note END,
            updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(userId, favorited ? 1 : 0, workId),
+      .bind(userId, favorited ? 1 : 0, favorited ? note ?? "" : "", workId, note !== undefined ? 1 : 0),
+    ...(favorited && tags !== undefined ? [
+      database.prepare(`DELETE FROM user_work_tags WHERE work_id=? AND user_id=?
+        AND EXISTS(SELECT 1 FROM public_works WHERE id=?) AND name NOT IN (SELECT value FROM json_each(?))`)
+        .bind(workId, userId, workId, JSON.stringify(tags)),
+      database.prepare(
+        `INSERT INTO user_work_tags(work_id,user_id,name,sort_order)
+         SELECT e.work_id,e.user_id,t.value,CAST(t.key AS INTEGER)
+         FROM user_work_entries e JOIN json_each(?) t
+         WHERE e.work_id=? AND e.user_id=? AND e.favorited_at IS NOT NULL
+           AND EXISTS(SELECT 1 FROM public_works WHERE id=?)
+         ON CONFLICT(work_id,user_id,name) DO UPDATE SET sort_order=excluded.sort_order
+         WHERE user_work_tags.sort_order IS NOT excluded.sort_order`,
+      ).bind(JSON.stringify(tags), workId, userId, workId),
+    ] : []),
     database
       .prepare(
         `DELETE FROM user_work_entries
          WHERE work_id = ? AND user_id = ?
            AND last_played_at IS NULL AND favorited_at IS NULL
-           AND changes()=1`,
+           AND EXISTS(SELECT 1 FROM public_works WHERE id=?)`,
       )
-      .bind(workId, userId),
+      .bind(workId, userId, workId),
   ]);
-  if ((results[0].meta.changes ?? 0) !== 1)
+  if ((results[0].meta.changes ?? 0) < 1)
     throw new HttpError(404, "作品不存在");
 }
 
@@ -115,25 +137,23 @@ export async function getWorkCommunitySummary(
   runtime: AppRuntime,
   workId: number,
   userId: number | null,
-): Promise<{
-  viewCount: number;
-  playerCount: number;
-  commentCount: number;
-  favoritedByMe: boolean;
-}> {
+): Promise<WorkCommunitySummary> {
   const row = await getD1(runtime)
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS player_count,
          (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
+         (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
+          WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
           WHERE ue.work_id = w.id AND ue.user_id = ? AND ue.favorited_at IS NOT NULL) AS favorited_by_me
-       FROM works w WHERE w.id = ? AND w.id IN (SELECT id FROM public_works) LIMIT 1`,
+       FROM works w WHERE w.id = ? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) LIMIT 1`,
     )
     .bind(userId ?? 0, workId)
     .first<{
       player_count: number;
       comment_count: number;
+      favorite_count: number;
       favorited_by_me: number;
     }>();
   if (!row) throw new HttpError(404, "作品不存在");
@@ -141,8 +161,30 @@ export async function getWorkCommunitySummary(
     viewCount: (await viewCounts(runtime, "work", [workId]))[workId],
     playerCount: row.player_count,
     commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
     favoritedByMe: row.favorited_by_me === 1,
   };
+}
+
+export async function listWorkCollections(runtime: AppRuntime, workId: number, requestedPage: number) {
+  const database = getD1(runtime);
+  // Counts can include private collections; named entries and notes cannot.
+  const where = `e.work_id=? AND e.favorited_at IS NOT NULL
+    AND u.status='active' AND u.profile_show_favorites=1
+    AND EXISTS(SELECT 1 FROM public_works WHERE id=?)`;
+  const count = await database.prepare(
+    `SELECT COUNT(*) AS total FROM user_work_entries e JOIN users u ON u.id=e.user_id WHERE ${where}`,
+  ).bind(workId, workId).first<{ total: number }>();
+  const total = count?.total ?? 0;
+  const pageSize = 20;
+  const page = Math.min(Math.max(1, requestedPage), Math.max(1, Math.ceil(total / pageSize)));
+  const rows = await database.prepare(
+    `SELECT u.id AS userId,u.display_name AS displayName,u.avatar_blob_sha256 AS avatarBlobSha256,
+            e.favorited_at AS favoritedAt,e.favorite_note AS note
+     FROM user_work_entries e JOIN users u ON u.id=e.user_id WHERE ${where}
+     ORDER BY e.favorited_at DESC,e.user_id DESC LIMIT ? OFFSET ?`,
+  ).bind(workId, workId, pageSize, (page - 1) * pageSize).all<WorkCollection>();
+  return { items: rows.results, total, page, pageSize };
 }
 
 export async function canPinWorkComments(
@@ -757,7 +799,7 @@ function publicTargetStatement(
           `SELECT c.id FROM creators c
            WHERE c.id=? AND EXISTS (
              SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
-             WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
+             WHERE ws.creator_id=c.id AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
            ) LIMIT 1`,
         )
         .bind(target.id);
@@ -765,11 +807,11 @@ function publicTargetStatement(
 
 function publicCommentTargetSql(alias: string): string {
   return `(
-    EXISTS (SELECT 1 FROM works public_work WHERE public_work.id=${alias}.work_id AND public_work.id IN (SELECT id FROM public_works))
+    EXISTS (SELECT 1 FROM public_works public_work WHERE public_work.id=${alias}.work_id)
     OR EXISTS (
       SELECT 1 FROM work_staff public_staff
-      JOIN works public_creator_work ON public_creator_work.id=public_staff.work_id
-      WHERE public_staff.creator_id=${alias}.creator_id AND public_creator_work.id IN (SELECT id FROM public_works)
+      JOIN public_works public_creator_work ON public_creator_work.id=public_staff.work_id
+      WHERE public_staff.creator_id=${alias}.creator_id
     )
     OR EXISTS (SELECT 1 FROM characters public_character WHERE public_character.id=${alias}.character_id)
   )`;

@@ -188,6 +188,7 @@ published Work + published current ArchiveVersion
 - ZIP 使用 STORE；local header 写入明确 CRC32、compressed size 和 uncompressed size，不依赖 data descriptor。
 - 预取窗口包含正在消费的条目，最多保留 6 个打开或待消费的对象；应用层窗口覆盖整个正文消费周期，避免未消费响应积压，异常或取消时须取消剩余预取响应。这不同于平台“等待响应头的并发连接”计数。2026-09-22 同一大游戏的 4/5/6 冷 ZIP 缓存串行实测中，6 的两轮完整下载最快且均校验通过；该结果不代表多用户高负载验收。
 - 可以缓存单次请求内重复的小 blob，但不能改变输出顺序或把完整 ZIP 写回 R2。
+- Range 映射到 ZIP 内各文件的偏移与长度，blob 和共享播放器直接使用 R2 范围读取；只涉及 ZIP 头部或中央目录时不读取文件正文。核心包仍读取压缩包，但只解压本次区间涉及的条目。同一 builder 的字节顺序、CRC、长度和 ETag 不变。
 - Workers Cache/CDN 是可丢弃派生缓存；`download_builds` 只记录 cache key 和观测数据，不拥有文件内容。
 - 构建失败必须记录错误并中止响应，不能跳过缺失 entry 生成“可下载”的残缺 ZIP。
 - MISS/BYPASS 的成功及耗时在 ZIP 输出流完整关闭后记录，流失败进入失败统计；HIT 仍记录缓存响应取得时的访问耗时。这些服务端记录不证明客户端已将文件落盘，R2 GET 计数仍按现有估计口径。
@@ -211,6 +212,10 @@ published Work + published current ArchiveVersion
 5. sweep 使用 `active -> purging -> purged` 状态转换；R2 删除失败恢复为 active 并报告。
 
 GC 实现位于 `app/.server/storage/admin-storage-checks.ts` 和 `worker/archive-gc.mjs`。最终 sweep 必须有权限、显式确认、固定批次上限和审计；dry-run 不得产生删除副作用。
+
+两种 sweep 共用 `gc-candidates.ts`：每类对象先按 SHA 索引取最多 `10 × limitPerType` 条活动记录，再检查宽限期和全部引用，最多清理 `limitPerType` 条。`archive_gc_cursors` 保存下一轮起点，清理完成后以条件更新推进；达到清理上限时只推进至最后选中的对象，避免遗漏后续候选。扫到末尾后下一次从头开始，较早位置新解除的引用及删除失败对象在后续巡检再次检查。对象较多时一次完整巡检可能跨多次调用，不再保证一轮找到所有可清理对象。
+
+`candidateScanCount` 和 `scanCompleted` 表达本轮候选窗口大小和是否到达末尾；原有 `scannedCount` 继续表示进入清理阶段的候选数。保留删除前的原子引用复核及失败恢复。预览统计仍为只读全量统计，并使用反向引用索引；它不推进游标。
 
 禁止根据“某个目录看起来不用了”直接删除 R2 prefix，也禁止只查单个 ArchiveVersion 就判断共享对象无引用。
 

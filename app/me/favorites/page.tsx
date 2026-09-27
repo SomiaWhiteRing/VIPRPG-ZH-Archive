@@ -13,7 +13,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const { searchParams } = routeInput(args);
   const url = new URL(args.request.url);
   const user = await requireAccountUser(runtime, `/me/favorites${url.search}`);
-  return loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite" });
+  return { ...await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite" }), currentUserId: user.id };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
@@ -24,7 +24,7 @@ export default function FavoritesPage() {
   return (
     <div>
       <PageHeader title="收藏" subtitle={`共 ${data.total} 部作品`} />
-      <FavoriteLibrary data={data} />
+      <FavoriteLibrary data={data} currentUserId={data.currentUserId} />
     </div>
   );
 }

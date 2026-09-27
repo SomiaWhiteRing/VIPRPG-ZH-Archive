@@ -1,126 +1,54 @@
-import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
-import {
-  searchCatalogsForOwner,
-  sampleCatalogsContainingWork,
-} from "@/app/.server/db/catalogs";
-import { getGameWorkDetail, isWorkUploader } from "@/app/.server/db/game-library";
-import {
-  getWorkCommunitySummary,
-  canPinWorkComments,
-  listRootComments,
-} from "@/app/.server/db/work-community";
+import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import { canPinWorkComments, listRootComments } from "@/app/.server/db/work-community";
+import { listWorkTagSummaries } from "@/app/.server/db/user-work-tags";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
-import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
+import { loadWorkOverviewSidebar } from "@/app/.server/work-overview-sidebar";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
-import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { WorkCard } from "@/app/components/work/work-card";
-import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
-import {
-  DetailPageLayout,
-  DetailPageShell,
-} from "@/app/components/ui/detail-page-layout";
+import { DetailPageLayout, DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
+import { WorkOverviewSidebar } from "@/app/components/work/work-overview-sidebar";
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
-import { WorkSidebar } from "@/app/components/work/work-page-layout";
-import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import { hasPermission } from "@/lib/authz/permissions";
+import { formatNumber } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { tagHref } from "@/lib/user-tags";
 import { CHARACTER_ROLE_LABELS, getPublicRelationCards } from "./public-relations";
-import { AlertTriangle, ExternalLink, Link2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { WorkActionBar } from "./work-action-bar";
-import {
-  CatalogAddDialog,
-  WorkEngagementActions,
-} from "./work-engagement-actions";
 import { WorkMediaGallery } from "./work-media-gallery";
 import { WorkDescription } from "./work-description";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { params } = routeInput(args);
-
   const id = parsePositiveId((await params).id, "work id");
   const work = await getGameWorkDetail(runtime, id);
   if (!work) throwNotFound();
-
   const currentUser = await getCurrentUser(runtime);
-  const canEditOwnWork =
-    currentUser &&
-    hasPermission(currentUser, "work.update_own") &&
-    (await isWorkUploader(runtime, id, currentUser.id));
-  const editInfoHref = canEditOwnWork
-    ? `/me/uploads/${id}?from=game`
-    : hasPermission(currentUser, "work.metadata.update_any")
-      ? `/admin/works/${id}`
-      : null;
-  const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, id, currentUser);
-  const title = work.chineseTitle || work.originalTitle;
-  const current = work.archiveVersions[0] ?? null;
-  const downloadSizeBytes = work.downloadSizeBytes;
-  const externalDownload =
-    work.externalLinks.find((link) => link.linkType === "download_page") ??
-    null;
-  const primaryMedia =
-    work.coverBlobSha256;
-  const media = [...work.media].sort(
-    (a, b) =>
-      Number(b.role === "cover") -
-        Number(a.role === "cover") ||
-      (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
-  );
-
-  const [community, comments, catalogs, containingCatalogs] =
-    await Promise.all([
-      getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
-      listRootComments(
-        runtime,
-        { kind: "work", id: work.id },
-        currentUser?.id ?? null,
-        null,
-      ),
-      currentUser ? searchCatalogsForOwner(runtime, {userId: currentUser.id}) : Promise.resolve({items: [], total: 0, page: 1, pageSize: 20}),
-      sampleCatalogsContainingWork(runtime, work.id),
-    ]);
-  const userCatalogs = catalogs;
-  const relationCards = getPublicRelationCards(work);
-  const showRelationEditor =
-    relationCapabilities.canCreateRelation ||
-    relationCapabilities.canCreateTranslation ||
-    relationCapabilities.canUpdate ||
-    relationCapabilities.canDeleteRelation ||
-    relationCapabilities.canDeleteTranslation;
-  const externalLinks = work.externalLinks.filter(
-    (link) => link.linkType !== "download_page",
-  );
-
+  const [sidebar, comments, tags, canPinComments] = await Promise.all([
+    loadWorkOverviewSidebar(runtime, id, currentUser),
+    listRootComments(runtime, { kind: "work", id }, currentUser?.id ?? null, null),
+    listWorkTagSummaries(runtime, id),
+    canPinWorkComments(runtime, id, currentUser),
+  ]);
   return {
     work,
-    canPinComments: await canPinWorkComments(runtime, work.id, currentUser),
-    currentUser: pickPageFields(currentUser, ["id"]),
-    title,
-    current,
-    downloadSizeBytes,
-    externalDownload,
-    primaryMedia,
-    media,
-    community,
+    sidebar,
+    canPinComments,
+    title: work.chineseTitle || work.originalTitle,
+    current: work.archiveVersions[0] ?? null,
+    primaryMedia: work.coverBlobSha256,
+    media: [...work.media].sort((a, b) => Number(b.role === "cover") - Number(a.role === "cover") || (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
     comments,
-    containingCatalogs,
-    userCatalogs,
-    relationCards,
-    showRelationEditor,
-    editInfoHref,
-    externalLinks,
+    tags,
+    relationCards: getPublicRelationCards(work),
   };
 }
 
@@ -128,25 +56,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: loaderData?.title || "游戏详情" }, error);
 
 export default function GameDetailPage() {
-  const {
-    work,
-    canPinComments,
-    currentUser,
-    title,
-    current,
-    downloadSizeBytes,
-    externalDownload,
-    primaryMedia,
-    media,
-    community,
-    comments,
-    containingCatalogs,
-    userCatalogs,
-    relationCards,
-    showRelationEditor,
-    editInfoHref,
-    externalLinks,
-  } = useLoaderData<typeof loader>();
+  const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags, comments, relationCards } = useLoaderData<typeof loader>();
+  const { currentUser, community } = sidebar;
   const relationGroups = new Map<string, typeof relationCards>();
   for (const relation of relationCards) {
     const group = relationGroups.get(relation.type);
@@ -200,6 +111,7 @@ export default function GameDetailPage() {
             label: "评论",
             count: community.commentCount,
           },
+          { href: `/games/${work.id}/collections`, label: "收藏与吐槽" },
         ]}
       />
 
@@ -235,15 +147,18 @@ export default function GameDetailPage() {
               ) : (
                 <p className="text-sm text-muted">暂无简介。</p>
               )}
-              {work.tags.length ? (
+              {tags.length ? (
                 <div aria-label="标签" className="mt-4 flex flex-wrap gap-2">
-                  {work.tags.map((tag) => (
+                  {tags.map((tag) => (
                     <Link
-                      className="inline-flex min-h-7.5 items-center rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-secondary hover:border-primary hover:bg-primary/10"
-                      to={`/games?tag=${tag.id}`}
-                      key={tag.id}
+                      className={tag.source === "public"
+                        ? "inline-flex min-h-7.5 items-center gap-1.5 rounded-full border border-secondary/30 px-2.75 py-1 text-sm font-medium text-secondary hover:border-secondary hover:bg-secondary/10"
+                        : "inline-flex min-h-7.5 items-center gap-1.5 rounded-full border border-primary/30 px-2.75 py-1 text-sm font-medium text-primary hover:border-primary hover:bg-primary/10"}
+                      to={tagHref(tag.name, tag.source === "public" ? "all" : "user")}
+                      key={tag.name}
                     >
                       {tag.name}
+                      <small className="font-mono text-[10px] font-normal tabular-nums" aria-label={`${tag.usageCount} 次使用`}>{formatNumber(tag.usageCount)}</small>
                     </Link>
                   ))}
                 </div>
@@ -391,134 +306,7 @@ export default function GameDetailPage() {
             </section>
           </>
         }
-        sidebar={
-          <WorkSidebar
-            engagement={
-              <WorkEngagementActions
-                currentUserId={currentUser?.id ?? null}
-                initialFavorited={community.favoritedByMe}
-                workId={work.id}
-              />
-            }
-            extras={
-              <>
-                {currentUser ? (
-                  <div
-                    aria-label="条目补充操作"
-                    className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full"
-                  >
-                    {showRelationEditor ? (
-                      <Link
-                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
-                        to={`/games/${work.id}/relations`}
-                      >
-                        编辑关联
-                      </Link>
-                    ) : null}
-                    {editInfoHref ? (
-                      <Link
-                        className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
-                        to={editInfoHref}
-                      >
-                        编辑信息
-                      </Link>
-                    ) : null}
-                    <CatalogAddDialog
-                      catalogs={userCatalogs}
-                      workId={work.id}
-                    />
-                  </div>
-                ) : null}
-
-                {containingCatalogs.length ? (
-                  <Card
-                    className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
-                    id="catalog-card"
-                  >
-                    <div className="mb-[0.35rem] flex items-baseline justify-between gap-3">
-                      <h2 className="m-0 font-mono text-xs font-normal tracking-[0.08em] text-muted">
-                        收录了本条目的目录
-                      </h2>
-                      <Link
-                        aria-label="查看全部收录了本条目的目录"
-                        className="shrink-0 text-sm font-medium text-secondary hover:underline"
-                        to={`/games/${work.id}/catalogs`}
-                      >
-                        更多
-                      </Link>
-                    </div>
-                    {containingCatalogs.map((catalog) => (
-                      <div className="border-b border-dashed border-border last:border-b-0" key={catalog.id}>
-                        <CatalogListRow catalog={catalog} compact />
-                      </div>
-                    ))}
-                  </Card>
-                ) : null}
-
-                {externalLinks.length ? (
-                  <Card
-                    className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
-                    id="links-card"
-                  >
-                    <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">
-                      外部链接
-                    </p>
-                    <div className="grid gap-0.5">
-                      {externalLinks.map((link) => (
-                        <a
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-secondary hover:bg-foreground/5"
-                          href={link.url}
-                          key={link.id}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          {link.linkType === "official" ? (
-                            <Link2 aria-hidden size={14} />
-                          ) : (
-                            <ExternalLink aria-hidden size={14} />
-                          )}
-                          {link.label}
-                        </a>
-                      ))}
-                    </div>
-                  </Card>
-                ) : null}
-              </>
-            }
-            mobilePrimaryFirst
-            primary={
-              <WorkActionBar
-                engineFamily={work.engineFamily}
-                archive={
-                  current
-                    ? {
-                        id: current.id,
-                        downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
-                        totalFiles: current.totalFiles,
-                        totalSizeBytes: current.totalSizeBytes,
-                        downloadSizeBytes,
-                        webPlayFileCount: current.webPlayFileCount,
-                        webPlaySizeBytes: current.webPlaySizeBytes,
-                      }
-                    : null
-                }
-                externalDownload={
-                  externalDownload ? { url: externalDownload.url } : null
-                }
-                isAuthenticated={Boolean(currentUser)}
-                workId={work.id}
-              />
-            }
-            secondary={<WorkSidebarInfo current={current} work={work} />}
-            stats={
-              <WorkCommunityStats
-                commentCount={community.commentCount}
-                playerCount={community.playerCount}
-                viewCount={community.viewCount}
-              />
-            }
-          />
-        }
+        sidebar={<WorkOverviewSidebar work={work} data={sidebar} />}
       />
     </DetailPageShell>
   );

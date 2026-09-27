@@ -54,3 +54,5 @@ tools/rpgm-archive-importer/samples/*.local.json
 tools/rpgm-archive-importer/samples/*.staging.json
 tools/rpgm-archive-importer/samples/*.production.json
 !tools/rpgm-archive-importer/samples/*.example.json
+
+ui-review/

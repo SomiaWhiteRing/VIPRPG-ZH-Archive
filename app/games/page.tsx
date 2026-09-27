@@ -5,9 +5,13 @@ import { GameLibrary } from "@/app/components/library/game-library";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { redirect, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
+  const url = new URL(args.request.url);
+  if (url.searchParams.get("tag")?.trim() || url.searchParams.has("tag_source")) {
+    throw redirect(`/tags${url.search}`);
+  }
   const runtime = args.context.get(runtimeContext);
   const { searchParams } = routeInput(args);
   return loadGameLibrary(runtime, searchParams);

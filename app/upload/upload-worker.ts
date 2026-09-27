@@ -13,6 +13,7 @@ import {
 } from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
+import { MissingResourceScan } from "@/lib/archive/missing-resources";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import type {
   ArchiveCommitMetadata,
@@ -209,7 +210,7 @@ async function startSource(
         throw new Error("共享 Kai 播放器不可用，请先在“链接”中推荐 Windows EXE，或关闭共享播放器选项。");
       }
     }
-    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer);
+    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer, message.checkMissingResources);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
 
@@ -633,6 +634,7 @@ async function scanAndHash(
   sourceFiles: SourceFile[],
   cleanupResources: boolean,
   useSharedPlayer: boolean,
+  checkMissingResources: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -696,21 +698,27 @@ async function scanAndHash(
 
   await recordResult;
 
-  if (cleanupResources) {
+  if (cleanupResources || checkMissingResources) {
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
-    const references = new ResourceReferenceScan(includedFiles);
-    for (let index = 0; index < includedFiles.length && references.needsScan; index++) {
+    const references = cleanupResources ? new ResourceReferenceScan(includedFiles) : null;
+    const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
+    const missing = checkMissingResources
+      ? new MissingResourceScan(includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()))
+      : null;
+    for (let index = 0; index < includedFiles.length && (references?.needsScan || missing?.scanner.needsScan); index++) {
       const file = includedFiles[index];
       if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || file.path.toLowerCase() === "rpg_rt.ini") {
         assertRuntimeActive(task.localTaskId);
-        references.consume(file.path, file.cachedBytes ?? await file.source.bytes());
+        const bytes = file.cachedBytes ?? await file.source.bytes();
+        references?.consume(file.path, bytes);
+        missing?.scanner.consume(file.path, bytes);
         task = emitTask(setPhase(task, "analyzing_resources", (index + 1) / includedFiles.length, file.path));
         // Let cancellation messages run even when all core bytes are already cached.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     }
-    const resourceCleanup = references.finish();
-    const removed = new Set(resourceCleanup.excluded.map((file) => file.path));
+    const resourceCleanup = references?.finish() ?? null;
+    const removed = new Set(resourceCleanup?.excluded.map((file) => file.path));
     for (const file of includedFiles) {
       if (!removed.has(file.path)) continue;
       includedSize -= file.size;
@@ -718,7 +726,7 @@ async function scanAndHash(
       addExcluded(excluded, "unused-resource", file.source);
     }
     includedFiles = includedFiles.filter((file) => !removed.has(file.path));
-    task = { ...task, stats: { ...task.stats, resourceCleanup } };
+    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: missing?.finish() ?? null } };
   }
 
   includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));

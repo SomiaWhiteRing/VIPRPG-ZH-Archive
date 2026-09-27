@@ -15,6 +15,7 @@ import { WorkbenchField } from "@/app/upload/workbench-field";
 import type { CharacterCreditSelection, CharacterSuggestion } from "@/lib/character-names";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { isArchiveEngineFamily } from "@/lib/labels";
+import { MAX_PUBLIC_TAGS } from "@/lib/user-tags";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
 
@@ -266,6 +267,7 @@ export function WorkMetadataFields({
             disabled={disabled}
             id="upload-tags"
             label="标签"
+            maxValues={MAX_PUBLIC_TAGS}
             onChange={(tags) => setForm((current) => ({ ...current, tags }))}
             placeholder="搜索或创建标签"
             recommendationLabel="推荐标签"

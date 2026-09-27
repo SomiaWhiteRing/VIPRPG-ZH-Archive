@@ -1,3 +1,4 @@
+import { scanGcCandidates, advanceGcCursor, type GcObjectType } from "./gc-candidates";
 import { chunkArray } from "@/app/.server/db/chunks";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -81,8 +82,13 @@ export type GcSweepReport = {
   graceDays: number;
   limitPerType: number;
   archiveVersions: GcArchiveVersionPurgeResult;
-  blobs: GcSweepObjectSummary;
-  corePacks: GcSweepObjectSummary;
+  blobs: GcSweepPageSummary;
+  corePacks: GcSweepPageSummary;
+};
+
+type GcSweepPageSummary = GcSweepObjectSummary & {
+  candidateScanCount: number;
+  scanCompleted: boolean;
 };
 
 export type GcArchiveVersionPurgeSummary = {
@@ -349,15 +355,8 @@ export async function runGcSweep(
     graceDays,
     Math.max(limitPerType, gcDefaultArchiveVersionPurgeLimit),
   );
-  const [blobRows, corePackRows] = await Promise.all([
-    listEligibleGcRows(runtime, "blob", graceDays, limitPerType),
-    listEligibleGcRows(runtime, "core_pack", graceDays, limitPerType),
-  ]);
-
-  const [blobs, corePacks] = await Promise.all([
-    sweepGcRows(runtime, "blob", blobRows, graceDays),
-    sweepGcRows(runtime, "core_pack", corePackRows, graceDays),
-  ]);
+  const blobs = await sweepCandidatePage(runtime, "blob", graceDays, limitPerType);
+  const corePacks = await sweepCandidatePage(runtime, "core_pack", graceDays, limitPerType);
 
   return {
     checkedAt: new Date().toISOString(),
@@ -861,83 +860,12 @@ function eligibleGcSummaryStatement(
   return database.prepare(sql).bind(`-${graceDays} days`);
 }
 
-async function listEligibleGcRows(
-  runtime: AppRuntime,
-  type: "blob" | "core_pack",
-  graceDays: number,
-  limit: number,
-): Promise<GcCandidateRow[]> {
-  const sql =
-    type === "blob"
-      ? `SELECT
-          b.sha256 AS id,
-          b.sha256,
-          b.size_bytes,
-          b.created_at,
-          0 AS total_reference_count,
-          0 AS live_reference_count,
-          0 AS deleted_reference_count
-        FROM blobs b
-        WHERE b.status IN ('active', 'purging')
-          AND datetime(b.created_at) <= datetime('now', ?)
-          AND NOT EXISTS (
-            SELECT 1
-            FROM archive_version_blob_refs avbr
-            WHERE avbr.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM media_assets ma
-            WHERE ma.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM users u WHERE u.avatar_blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM creators c WHERE c.avatar_blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.icon_blob_sha256 = b.sha256)
-          AND NOT EXISTS (
-            SELECT 1 FROM face_sheets fs WHERE fs.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM character_materials m WHERE m.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM face_emoji_refs ce WHERE ce.blob_sha256 = b.sha256
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM catalogs c
-            WHERE c.cover_blob_sha256 = b.sha256 AND c.status = 'published'
-          )
-        ORDER BY b.created_at ASC, b.sha256 ASC
-        LIMIT ?`
-      : `SELECT
-          cp.sha256 AS id,
-          cp.sha256,
-          cp.size_bytes,
-          cp.created_at,
-          0 AS total_reference_count,
-          0 AS live_reference_count,
-          0 AS deleted_reference_count
-        FROM core_packs cp
-        WHERE cp.status IN ('active', 'purging')
-          AND datetime(cp.created_at) <= datetime('now', ?)
-          AND NOT EXISTS (
-            SELECT 1
-            FROM archive_version_core_pack_refs avcpr
-            WHERE avcpr.core_pack_id = cp.id
-          )
-        ORDER BY cp.created_at ASC, cp.id ASC
-        LIMIT ?`;
-
-  const rows = await getD1(runtime)
-    .prepare(sql)
-    .bind(`-${graceDays} days`, limit)
-    .all<GcCandidateRow>();
-
-  return rows.results ?? [];
+async function sweepCandidatePage(runtime: AppRuntime, type: GcObjectType, graceDays: number, limit: number) {
+  const database = getD1(runtime);
+  const scan = await scanGcCandidates(database, type, graceDays, limit);
+  const result = await sweepGcRows(runtime, type, scan.rows, graceDays);
+  await advanceGcCursor(database, type, scan);
+  return { ...result, candidateScanCount: scan.scannedCount, scanCompleted: scan.completed };
 }
 
 async function sweepGcRows(

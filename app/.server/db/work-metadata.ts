@@ -3,6 +3,18 @@ import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { readValidatedImage } from "@/app/.server/storage/work-images";
 import { HttpError } from "@/lib/http";
+import { normalizeEntityName } from "@/lib/entity-name";
+import { MAX_PUBLIC_TAGS, tagNameKey } from "@/lib/user-tags";
+
+export function normalizeWorkTags(values: string[]): string[] {
+  const tags = new Map<string, string>();
+  for (const value of values) {
+    const name = normalizeEntityName(value);
+    if (name && !tags.has(tagNameKey(name))) tags.set(tagNameKey(name), name);
+  }
+  if (tags.size > MAX_PUBLIC_TAGS) throw new HttpError(400, `作品标签最多 ${MAX_PUBLIC_TAGS} 个。`);
+  return [...tags.values()];
+}
 
 export function normalizeWorkMedia(cover: string, previews: string[], requireCover = true) {
   if (requireCover && !cover) throw new HttpError(400, "作品必须指定一张封面");
@@ -37,15 +49,16 @@ export function workMediaStatements(database: D1Database, workId: number, cover:
 
 // A full editable set is independent of provenance. Keep provenance on unchanged rows.
 export function workTagStatements(database: D1Database, workId: number, tags: string[], source: "admin" | "uploader") {
+  tags = normalizeWorkTags(tags);
   return [
-    database.prepare(`DELETE FROM work_tags WHERE work_id=? AND tag_id NOT IN
-      (SELECT t.id FROM tags t JOIN json_each(?) submitted ON t.name=submitted.value COLLATE NOCASE)`)
+    database.prepare(`DELETE FROM work_tags WHERE work_id=? AND tag_name NOT IN
+      (SELECT value FROM json_each(?))`)
       .bind(workId, JSON.stringify(tags)),
     ...tags.flatMap((tag, sortOrder) => [
       database.prepare("INSERT OR IGNORE INTO tags(name,namespace) VALUES(?,'other')").bind(tag),
-      database.prepare(`INSERT INTO work_tags(work_id,tag_id,source,sort_order)
-        SELECT ?,id,?,? FROM tags WHERE name=? COLLATE NOCASE
-        ON CONFLICT(work_id,tag_id) DO UPDATE SET sort_order=excluded.sort_order`)
+      database.prepare(`INSERT INTO work_tags(work_id,tag_name,source,sort_order)
+        SELECT ?,name,?,? FROM tags WHERE name=? COLLATE NOCASE
+        ON CONFLICT(work_id,tag_name) DO UPDATE SET sort_order=excluded.sort_order`)
         .bind(workId, source, sortOrder, tag),
     ]),
   ];
