@@ -1,114 +1,11 @@
-import { Label } from "@/app/components/ui/label";
-import { CharacterPicker } from "@/app/components/characters/character-picker";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
-import type {
-  CharacterCreditSelection,
-  CharacterSuggestion,
-} from "@/lib/character-names";
 import type { GameExternalLink } from "@/lib/dto/db/game-library";
 import { useState } from "react";
 
-export function StructuredWorkFields(props: {
-  tags: string[];
-  characters: CharacterCreditSelection[];
-  characterSuggestions: CharacterSuggestion[];
-  coverBlobSha256: string;
-  previewBlobSha256s: string[];
-  externalLinks: GameExternalLink[];
-}) {
-  const [characters, setCharacters] = useState(props.characters);
-  return (
-    <div className="grid gap-5">
-      <div className="grid gap-5 md:grid-cols-2">
-        <TextList
-          label="标签"
-          name="tags"
-          initialValues={props.tags}
-          placeholder="标签名称"
-        />
-        <fieldset className="grid gap-2 rounded-md border border-border p-3">
-          <legend className="px-1 text-sm font-semibold">登场角色</legend>
-          <CharacterPicker
-            id="admin-work-characters"
-            name="characters"
-            onChange={setCharacters}
-            suggestions={props.characterSuggestions}
-            values={characters}
-          />
-        </fieldset>
-      </div>
-      <Label className="grid gap-2 text-sm">封面
-        <Input name="cover_blob_sha256" defaultValue={props.coverBlobSha256} pattern="[a-fA-F0-9]{64}" />
-      </Label>
-      <PreviewList initialValues={props.previewBlobSha256s} />
-      <ExternalLinkList initialValues={props.externalLinks} />
-    </div>
-  );
-}
-
-function TextList(props: {
-  label: string;
-  name: string;
-  initialValues: string[];
-  placeholder: string;
-}) {
-  const [values, setValues] = useState(
-    props.initialValues.length ? props.initialValues : [""],
-  );
-  return (
-    <fieldset className="grid gap-2 rounded-md border border-border p-3">
-      <legend className="px-1 text-sm font-semibold">{props.label}</legend>
-      <Textarea
-        className="hidden"
-        name={props.name}
-        readOnly
-        value={values.filter(Boolean).join("\n")}
-      />
-      {values.map((value, index) => (
-        <div className="flex items-center gap-2" key={index}>
-          <Input
-            placeholder={props.placeholder}
-            value={value}
-            onChange={(event) =>
-              setValues((current) =>
-                current.map((item, itemIndex) =>
-                  itemIndex === index ? event.target.value : item,
-                ),
-              )
-            }
-          />
-          <Button
-            aria-label={"删除" + props.label + " " + (index + 1)}
-            onClick={() =>
-              setValues((current) =>
-                current.filter((_, itemIndex) => itemIndex !== index),
-              )
-            }
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            删除
-          </Button>
-        </div>
-      ))}
-      <Button
-        className="w-fit"
-        onClick={() => setValues((current) => [...current, ""])}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        添加{props.label}
-      </Button>
-    </fieldset>
-  );
-}
-
-function PreviewList({ initialValues }: { initialValues: string[] }) {
+export function PreviewList({ initialValues }: { initialValues: string[] }) {
   const [values, setValues] = useState(
     initialValues.length ? initialValues : [""],
   );
@@ -195,7 +92,7 @@ function PreviewList({ initialValues }: { initialValues: string[] }) {
   );
 }
 
-function ExternalLinkList({
+export function ExternalLinkList({
   initialValues,
 }: {
   initialValues: GameExternalLink[];

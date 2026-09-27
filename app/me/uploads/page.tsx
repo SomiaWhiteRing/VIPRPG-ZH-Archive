@@ -63,7 +63,7 @@ export default function UploadsPage() {
         title="我的上传"
       />
       {result.items.length ? (
-        <ul className="divide-y divide-border border-y border-border">
+        <ul className="divide-y divide-border border-b border-border">
           {result.items.map((work) => (
             <li
               className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"

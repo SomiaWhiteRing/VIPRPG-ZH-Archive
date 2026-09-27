@@ -19,15 +19,13 @@ export async function loadGameLibrary(
         pageSize: PAGE_SIZE,
       })
     : null;
-  if (userWorks) params = { page: params.page, view: params.view };
+  if (userWorks) params = { page: params.page };
   const engine = stringParam(params.engine) || "all";
   const tag = parseOptionalId(stringParam(params.tag));
   const character = parseOptionalId(stringParam(params.character));
   const uploader = parseOptionalId(stringParam(params.uploader));
   const language = stringParam(params.language);
   const original = stringParam(params.original);
-  const requestedView = stringParam(params.view);
-  const view = requestedView === "grid" ? "grid" : "list";
   const requestedSort = stringParam(params.sort);
   const sort =
     requestedSort === "title" || requestedSort === "release"
@@ -69,9 +67,7 @@ export async function loadGameLibrary(
     language: language || undefined,
     original: original || undefined,
     sort: sort !== "id" ? sort : undefined,
-    view: view !== "list" ? view : undefined,
   };
-  const isListView = view === "list";
   const hasFilters =
     engine !== "all" || Boolean(tag || character || uploader || language || original);
 
@@ -87,7 +83,6 @@ export async function loadGameLibrary(
     uploaderName: selectedUploader?.displayName ?? null,
     language,
     original,
-    view,
     sort,
     page,
     pageSize: PAGE_SIZE,
@@ -97,7 +92,6 @@ export async function loadGameLibrary(
     selectedCharacter,
     popularTags,
     activeParams,
-    isListView,
     hasFilters,
   };
 }

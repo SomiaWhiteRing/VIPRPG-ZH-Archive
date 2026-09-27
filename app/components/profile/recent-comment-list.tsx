@@ -9,7 +9,7 @@ export function RecentCommentList({
   items: UserCommentSummary[];
 }) {
   return (
-    <ul className="divide-y divide-border border-y border-border">
+    <ul className="divide-y divide-border border-t border-border">
       {items.map((comment, index) => (
         <li
           className={`items-start gap-3 py-3 ${index >= 2 ? "hidden sm:flex" : "flex"}`}

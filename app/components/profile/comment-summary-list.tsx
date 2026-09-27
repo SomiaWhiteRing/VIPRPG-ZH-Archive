@@ -15,7 +15,7 @@ export function CommentSummaryList({
   showStatus?: boolean;
 }) {
   return (
-    <ul className="divide-y divide-border border-y border-border">
+    <ul className="divide-y divide-border border-b border-border">
       {items.map((comment) => (
         <li className="flex items-start gap-3 py-4" key={comment.id}>
           <CommentTargetImage comment={comment} />

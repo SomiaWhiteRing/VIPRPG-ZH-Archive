@@ -101,6 +101,7 @@ export default function MePage() {
       />
       <AccountSection
         href="/me/profile"
+        divided={false}
         status={
           !user.profileVisibility.bio ? (
             <Badge variant="outline">简介未在个人主页展示</Badge>
@@ -208,7 +209,7 @@ export default function MePage() {
       {uploads ? (
         <AccountSection href="/me/uploads" title="最近上传">
           {uploads.items.length ? (
-            <ul className="divide-y divide-border border-y border-border">
+            <ul className="divide-y divide-border border-t border-border">
               {uploads.items.map((work, index) => (
                 <li
                   className={`flex items-center justify-between gap-3 py-3 ${index >= 2 ? "hidden sm:flex" : ""}`}

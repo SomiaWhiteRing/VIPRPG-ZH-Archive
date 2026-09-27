@@ -1,7 +1,6 @@
 import { CreatorPicker } from "@/app/components/pickers/creator-picker";
 import { CustomSelect } from "@/app/components/ui/custom-select";
 import { InformationRow } from "@/app/components/ui/information-editor";
-import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { StaffCredit } from "@/lib/staff-credits";
@@ -25,7 +24,6 @@ export function StaffCreditRow({
   roles,
   suggestions,
   disabled = false,
-  showNotes = false,
   requireRoleLabel = false,
   error,
   onChange,
@@ -38,7 +36,6 @@ export function StaffCreditRow({
   roles: readonly { value: Role; label: string }[];
   suggestions: CreatorSuggestion[];
   disabled?: boolean;
-  showNotes?: boolean;
   requireRoleLabel?: boolean;
   error?: StaffRowError | null;
   onChange: (patch: Partial<EditableStaffCredit>) => void;
@@ -72,15 +69,6 @@ export function StaffCreditRow({
           }}
         />
       }
-      details={showNotes ? (
-        <Input
-          aria-label={`第 ${index + 1} 条署名的备注`}
-          placeholder="署名备注"
-          value={value.notes ?? ""}
-          disabled={disabled}
-          onChange={(event) => onChange({ notes: event.target.value || null })}
-        />
-      ) : undefined}
     >
       <div className="grid min-w-0 gap-1">
         <Label className="sr-only" htmlFor={`${id}-person`}>人物</Label>

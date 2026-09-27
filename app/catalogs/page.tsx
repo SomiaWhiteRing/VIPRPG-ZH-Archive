@@ -30,7 +30,7 @@ export default function CatalogsPage() {
       {catalogs.length ? (
         <section
           aria-label="目录列表"
-          className="mt-5 divide-y divide-border border-y border-border"
+          className="mt-5 divide-y divide-border border-b border-border"
         >
           {catalogs.map((catalog) => (
             <CatalogListRow catalog={catalog} key={catalog.id} />

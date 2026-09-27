@@ -25,10 +25,10 @@ export function FavoriteLibrary({ data }: { data: GameLibraryData }) {
       data={data}
       basePath="/me/favorites"
       emptyTitle={data.hasFilters ? "没有找到匹配的收藏作品。" : "还没有收藏作品。"}
-      renderWorkActions={(work) => (
+      renderWorkActions={(work, isListView) => (
         <Button
           variant="outline"
-          className={data.isListView ? "min-h-11 px-3.5 text-xs" : "min-h-7 px-1.5 py-0.5 text-[11px]"}
+          className={isListView ? "min-h-11 px-3.5 text-xs" : "min-h-7 px-1.5 py-0.5 text-[11px]"}
           disabled={busyId === work.id}
           onClick={() => remove(work.id)}
           type="button"

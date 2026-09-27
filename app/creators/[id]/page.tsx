@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
-import { getPublicCreatorDetail } from "@/app/.server/db/creator-library";
+import { browsePublicCreatorWorks } from "@/app/.server/db/creator-library";
 import { listRootComments } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
@@ -8,7 +8,6 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { BackLink } from "@/app/components/ui/back-link";
-import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import {
@@ -18,12 +17,10 @@ import {
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
-import { WorkListRow } from "@/app/components/work/work-list-row";
-import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
+import { CreatorWorkList } from "@/app/creators/creator-work-list";
 import { canEditPublicCreator } from "@/lib/authz/creator-permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
-import { creatorRoleLabel } from "@/lib/labels";
 import { ExternalLink } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
@@ -34,8 +31,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const id = parsePositiveId((await params).id, "creator id");
   const currentUser = await getCurrentUser(runtime);
-  const creator = await getPublicCreatorDetail(runtime, id);
-  if (!creator) throwNotFound();
+  const result = await browsePublicCreatorWorks(runtime, id, { page: 1, pageSize: 5 });
+  if (!result) throwNotFound();
+  const { creator, items: works } = result;
 
   const comments = await listRootComments(
     runtime,
@@ -43,8 +41,6 @@ export async function loader(args: LoaderFunctionArgs) {
     currentUser?.id ?? null,
     null,
   );
-
-  const works = groupWorkCredits(creator.workCredits);
 
   return {
     currentUser: pickPageFields(currentUser, ["id"]),
@@ -71,7 +67,7 @@ export default function CreatorDetailPage() {
         <SectionNavigation
           items={[
             { href: "#sec-intro", label: "概览", active: true },
-            { href: "#sec-works", label: "参与作品", count: works.length },
+            { href: "#sec-works", label: "参与作品", count: creator.workCreditCount },
             { href: "#sec-comments", label: "评论" },
           ]}
         />
@@ -123,49 +119,18 @@ export default function CreatorDetailPage() {
                 <h2 className="m-0 text-base font-bold" id="works-title">
                   参与作品
                 </h2>
-                <span className="font-mono text-xs text-muted">
-                  {formatNumber(works.length)} 部
-                </span>
+                {works.length ? (
+                  <Link
+                    aria-label="查看全部参与作品"
+                    className="text-sm font-medium text-secondary hover:underline"
+                    to={`/creators/${creator.id}/works`}
+                  >
+                    更多
+                  </Link>
+                ) : null}
               </div>
               {works.length ? (
-                <ul className="m-0 divide-y divide-border border-y border-border p-0">
-                  {works.map((work) => (
-                    <li key={work.workId}>
-                      <WorkListRow
-                        href={`/games/${work.workId}`}
-                        title={work.workTitle}
-                        originalTitle={work.workOriginalTitle}
-                        coverBlobSha256={work.coverBlobSha256}
-                        authorName={work.authorName}
-                        releaseDate={work.originalReleaseDate ?? "日期未知"}
-                        engineFamily={work.engineFamily}
-                        language={work.language}
-                      >
-                        {work.credits.map((credit) => (
-                          <div
-                            className="mt-1.5 text-sm"
-                            key={`${credit.roleKey}-${credit.displayName}`}
-                          >
-                            <Badge variant="credit">
-                              {credit.roleLabel ||
-                                creatorRoleLabel(credit.roleKey)}
-                            </Badge>
-                            <span className="ml-2 text-muted">{credit.displayName}</span>
-                          </div>
-                        ))}
-                        {work.credits.some((credit) => credit.notes) ? (
-                          <p className="m-0 mt-1 text-sm text-muted">
-                            {unique(
-                              work.credits.flatMap((credit) =>
-                                credit.notes ? [credit.notes] : [],
-                              ),
-                            ).join(" · ")}
-                          </p>
-                        ) : null}
-                      </WorkListRow>
-                    </li>
-                  ))}
-                </ul>
+                <CreatorWorkList works={works} creatorName={creator.name} />
               ) : (
                 <EmptyState title="暂无参与作品。" variant="plain" />
               )}
@@ -206,7 +171,7 @@ export default function CreatorDetailPage() {
               {creator.name}
             </h2>
             <dl className="mt-4">
-              <InfoRow label="作品">{formatNumber(works.length)} 部</InfoRow>
+              <InfoRow label="作品">{formatNumber(creator.workCreditCount)} 部</InfoRow>
               <InfoRow label="最近参与">
                 {creator.latestWorkCreditAt?.slice(0, 10) ?? "暂无"}
               </InfoRow>
@@ -240,21 +205,4 @@ export default function CreatorDetailPage() {
       />
     </DetailPageShell>
   );
-}
-
-function groupWorkCredits(credits: CreatorWorkCredit[]) {
-  const grouped = new Map<
-    number,
-    CreatorWorkCredit & { credits: CreatorWorkCredit[] }
-  >();
-  for (const credit of credits) {
-    const current = grouped.get(credit.workId);
-    if (current) current.credits.push(credit);
-    else grouped.set(credit.workId, { ...credit, credits: [credit] });
-  }
-  return [...grouped.values()];
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

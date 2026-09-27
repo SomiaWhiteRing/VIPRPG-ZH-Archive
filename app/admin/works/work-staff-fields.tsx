@@ -56,7 +56,6 @@ export function WorkStaffFields({
           value={row}
           roles={roles}
           suggestions={suggestions}
-          showNotes
           requireRoleLabel
           onChange={(patch) =>
             update(row.id, { ...patch, roleKey: patch.roleKey || row.roleKey })

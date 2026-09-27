@@ -17,7 +17,7 @@ export function GameLibraryListRow({
     ? {
         href: buildArchiveDownloadUrl(work.currentArchiveVersionId),
         label: "下载 ZIP",
-        detail: formatBytes(work.totalSizeBytes),
+        detail: work.downloadSizeBytes === null ? "共享播放器暂不可用" : formatBytes(work.downloadSizeBytes),
         external: false,
       }
     : work.externalDownloadUrl

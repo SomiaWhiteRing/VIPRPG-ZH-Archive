@@ -6,7 +6,9 @@ import {
 } from "@/app/.server/db/game-library";
 import { redirectResponse } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { json, jsonError } from "@/lib/http";
+import { readWorkImage, storeWorkImages } from "@/app/.server/storage/work-images";
+import { hasPermission } from "@/lib/authz/permissions";
+import { HttpError, json, jsonError } from "@/lib/http";
 
 type RouteContext = {
   params: {
@@ -37,6 +39,22 @@ export async function POST(
 
     if (input.workId !== workId) {
       throw new Error("Work id mismatch");
+    }
+
+    const current = await getWorkForAdminEdit(runtime, workId);
+    if (!current) throw new HttpError(404, "作品不存在");
+    if (!hasPermission(auth.user, "work.status.update_any") &&
+      (current.status === "deleted" || (input.status && input.status !== current.status))) {
+      throw new HttpError(403, "没有调整作品状态的权限");
+    }
+    const coverFile = formData.get("cover");
+    if (coverFile instanceof File && coverFile.size > 0) {
+      input.coverBlobSha256 = (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0];
+    }
+    if (formData.has("replace_previews")) {
+      input.previewBlobSha256s = await storeWorkImages(runtime,
+        formData.getAll("browsing_images[]").map((value) => readWorkImage(value, "browsing_images[]")),
+      );
     }
 
     await updateWorkForAdmin(runtime, input, auth.user);

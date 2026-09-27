@@ -1,5 +1,4 @@
 import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
-import { getSharedArchivePlayer } from "@/app/.server/resources/archive-player";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   searchCatalogsForOwner,
@@ -66,10 +65,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, id, currentUser);
   const title = work.chineseTitle || work.originalTitle;
   const current = work.archiveVersions[0] ?? null;
-  const playerSize = current?.usesSharedPlayer
-    ? await getSharedArchivePlayer(runtime.db).then((player) => player.size_bytes).catch(() => null)
-    : 0;
-  const downloadSizeBytes = current && playerSize !== null ? current.totalSizeBytes + playerSize : null;
+  const downloadSizeBytes = work.downloadSizeBytes;
   const externalDownload =
     work.externalLinks.find((link) => link.linkType === "download_page") ??
     null;
