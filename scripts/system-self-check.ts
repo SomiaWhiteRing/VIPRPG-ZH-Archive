@@ -819,20 +819,21 @@ async function verifyWorkDialogs(
   await editor.locator('a[href="/games/102"]').first().click();
   await editor.waitForURL(origin + "/games/102");
   await editor.getByRole("button", { name: "添加到目录", exact: true }).click();
-  await editor.getByRole("combobox", { name: "目录", exact: true }).click();
-  await editor
-    .getByRole("option", { name: "Dialog destination", exact: true })
-    .click();
-  // A successful addition closes the dialog; reopening it must still follow work identity.
+  const catalogItem = editor.getByRole("dialog").getByRole("listitem").filter({
+    has: editor.locator(`a[href="/catalogs/${catalog.catalog.id}"]`),
+  });
+  // Adding navigates to the catalog; returning and reopening must still follow work identity.
   const saved = editor.waitForResponse(
     (r) =>
       r.url().endsWith(`/api/catalogs/${catalog.catalog.id}/items`) &&
       r.request().method() === "POST",
   );
-  await editor.getByRole("button", { name: "添加", exact: true }).click();
+  await catalogItem.getByRole("button", { name: "添加到目录", exact: true }).click();
   assert.equal((await saved).status(), 200);
-  await editor.waitForLoadState("networkidle");
+  await editor.waitForURL(origin + `/catalogs/${catalog.catalog.id}`);
   await editor.getByRole("dialog").waitFor({ state: "detached" });
+  await editor.goBack();
+  await editor.waitForURL(origin + "/games/102");
   await editor.getByRole("button", { name: "添加到目录", exact: true }).click();
   await editor.getByRole("dialog").waitFor();
   await editor.goBack();
