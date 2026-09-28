@@ -8,6 +8,10 @@ export type Monitor = {
   dependency?: string;
 };
 
+export function monitorIntervalSeconds(monitor: Monitor): number {
+  return monitor.kind === "html" ? 15 * 60 : 60;
+}
+
 // New production IDs preserve the meaning of existing staging history.
 const staging = "https://staging.viprpg.org";
 

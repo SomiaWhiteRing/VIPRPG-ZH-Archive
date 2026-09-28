@@ -55,8 +55,8 @@ function formatDate(iso) {
   return iso ? `${stamp.format(new Date(iso))}（北京时间）` : "尚无记录";
 }
 
-function statusOf(state, now) {
-  if (!state || Date.parse(state.last_checked_at) < now - 180000) return "pending";
+function statusOf(state, now, intervalSeconds = 60) {
+  if (!state || Date.parse(state.last_checked_at) < now - (intervalSeconds + 120) * 1000) return "pending";
   return state.last_status;
 }
 
@@ -71,7 +71,7 @@ function statusLabel(status) {
 
 function renderOverall(data, stateMap) {
   const now = Date.now();
-  const statuses = data.monitors.map((monitor) => statusOf(stateMap.get(monitor.id), now));
+  const statuses = data.monitors.map((monitor) => statusOf(stateMap.get(monitor.id), now, monitor.intervalSeconds));
   const overall = statuses.includes("outage") ? "outage"
     : statuses.includes("degraded") ? "degraded"
       : statuses.includes("pending") ? "pending" : "operational";
@@ -88,7 +88,7 @@ function renderOverall(data, stateMap) {
     operational: "各项关键服务均可正常访问。",
     degraded: "有服务检查失败，正在继续确认。",
     outage: "有服务连续检查失败，请查看下方详情。",
-    pending: "最近三分钟没有完整检查记录，请稍后刷新。",
+    pending: "部分服务未在预定检查周期内返回记录，请稍后刷新。",
   }[overall];
   const latest = [...stateMap.values()].map((s) => s.last_checked_at).sort().at(-1);
   document.getElementById("last-check").textContent = formatDate(latest);
@@ -105,7 +105,7 @@ function renderServices(data, stateMap) {
     section.append(el("h3", "group-title", group));
     for (const monitor of data.monitors.filter((item) => item.group === group)) {
       const state = stateMap.get(monitor.id);
-      const current = statusOf(state, Date.now());
+      const current = statusOf(state, Date.now(), monitor.intervalSeconds);
       const card = el("article", "service-card");
       const main = el("div", "service-main");
       const title = el("div");
