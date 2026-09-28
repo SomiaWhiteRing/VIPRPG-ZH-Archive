@@ -22,7 +22,10 @@ export function createRuntime(
     execution,
     db: env.DB,
     bucket: env.ARCHIVE_BUCKET,
-    origin: normalizeAppOrigin(development ? request.url : env.APP_ORIGIN),
+    origin: normalizeAppOrigin(
+      development ? request.url : env.APP_ORIGIN,
+      development,
+    ),
     memo: new Map(),
   };
 }

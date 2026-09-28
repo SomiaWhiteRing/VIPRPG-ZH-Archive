@@ -32,7 +32,6 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
       <h2 className="mb-3 text-lg font-semibold">偏好</h2>
       <CheckboxField name="includePlayerInZip" label="下载ZIP时附带EasyRPG Player（若有）" defaultChecked={preferences.includePlayerInZip} />
       <h3 className="mb-2 mt-5 text-sm font-semibold" id="shortcut-heading">头像菜单显示的快捷入口</h3>
-      <p className="mb-3 text-sm text-muted" id="shortcut-help">勾选要显示的入口，拖动手柄排序；也可聚焦手柄后按 Enter，再用方向键移动并按 Enter 确认。个人中心始终显示，需上传权限的入口仅在有权限时显示。</p>
       <DndContext
         id={dndId}
         sensors={sensors}

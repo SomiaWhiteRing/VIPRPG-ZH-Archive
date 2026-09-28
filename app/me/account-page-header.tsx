@@ -15,6 +15,7 @@ export function AccountPageHeader({ title, parentTitle, ...props }: AccountPageH
         </div>
       ) : null}
       <PageHeader
+        compact
         {...props}
         title={parentTitle ? title : (
           <>
