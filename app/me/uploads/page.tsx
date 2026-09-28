@@ -10,8 +10,10 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { AccountPageHeader } from "@/app/me/account-page-header";
+import { Button } from "@/app/components/ui/button";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { StatusBadge } from "@/app/components/ui/status-badge";
+import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import {
   canAccessOwnWorks,
   canPublishWork,
@@ -66,9 +68,22 @@ export default function UploadsPage() {
         <ul className="divide-y divide-border border-b border-border">
           {result.items.map((work) => (
             <li
-              className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
               key={work.id}
             >
+              <Link
+                aria-label={`查看作品：${work.chineseTitle || work.originalTitle}`}
+                className="row-span-2 block aspect-4/3 w-26 self-start overflow-hidden rounded-md border border-border bg-muted/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:row-span-1 sm:w-32"
+                to={`/games/${work.id}`}
+              >
+                <WorkThumbnail
+                  blobSha256={work.coverBlobSha256}
+                  width={128}
+                  height={96}
+                  fallback="暂无封面"
+                  fallbackClassName="flex h-full items-center justify-center px-1 text-center font-mono text-xs text-muted"
+                />
+              </Link>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
@@ -93,14 +108,16 @@ export default function UploadsPage() {
                     : ""}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-3">
                 {hasPermission(user, "work.update_own") ? (
-                  <Rm2kButton
-                    className="min-h-9 px-3 text-xs"
-                    href={`/me/uploads/${work.id}`}
+                  <Button
+                    asChild
+                    variant="default"
+                    size="sm"
+                    className="px-3 text-xs"
                   >
-                    编辑信息
-                  </Rm2kButton>
+                    <Link to={`/me/uploads/${work.id}`}>编辑信息</Link>
+                  </Button>
                 ) : null}
               </div>
             </li>
