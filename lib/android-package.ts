@@ -92,7 +92,7 @@ function readManifest(bytes: Uint8Array): AndroidBuildInfo {
 
 export async function readAndroidPackage(size: number, source: PackageReader): Promise<AndroidBuildInfo> {
   try {
-    return readManifest(await readZipEntry(size, source, "AndroidManifest.xml", 65536));
+    return readManifest(await readZipEntry(size, source, "AndroidManifest.xml", 65536, true));
   } catch {
     throw invalid();
   }
