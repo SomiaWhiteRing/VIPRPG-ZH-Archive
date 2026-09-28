@@ -492,7 +492,7 @@ function UploadTaskCard({
         </div>
         {missing && (missing.missing.length > 0 || missing.limited) ? (
           <p className="mt-2 text-xs text-red-600" role="status">
-            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的清理日志，可继续上传。
+            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的清理日志，不影响上传。
           </p>
         ) : null}
         {task?.error ? (
