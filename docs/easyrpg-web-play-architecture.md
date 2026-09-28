@@ -93,15 +93,15 @@ playKey = av-{archiveVersionId}-{manifestSha256Short}-{webPlayInstallerVersion}
 在线游玩使用现有下载接口的过滤 profile，与普通下载共用 canonical 对象和 ZIP 构建器；响应字节不同，因此使用独立的 Workers Cache/CDN cache key 和 ETag。
 
 ```text
-GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBuilderVersion}&profile=web-play-v1
+GET /api/archive-versions/{archiveVersionId}/download?zip_builder={downloadZipBuilderVersion}&profile=web-play-v2
 ```
 
 注意：
 
 - `Content-Disposition: attachment` 不影响 `fetch()` 读取响应体。
-- `buildWebPlayDownloadUrl()` 在普通下载 URL 上加入 `webPlayDownloadProfile`；服务端只接受当前 profile，未知值返回 400。缓存路径和 ETag 包含 profile，不得把过滤响应归一化到完整 ZIP 的 cache key。过滤内容变化时提升 profile 版本。
-- 过滤发生在打开文件对象之前，`.txt`、`.exe` 和普通 `.dll` 不进入传输 ZIP，五个根目录引擎/补丁识别 DLL 仍保留。普通下载和 Kai 导入不带 profile，继续取得完整归档；旧页面仍可安装完整 ZIP，本地过滤继续生效。
-- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明完整归档内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装按钮与进度条的文件数和写入体积必须使用这个口径。仅将既有过滤提前到传输阶段，不改变本地安装规则，无需重算或重装。
+- `buildWebPlayDownloadUrl()` 在普通下载 URL 上加入 `webPlayDownloadProfile`；服务端接受当前 v2 及已发布客户端使用的 v1 profile，未知值返回 400。缓存路径和 ETag 包含 profile，不得把过滤响应归一化到完整 ZIP 的 cache key。过滤内容变化时提升 profile 版本。
+- v2 在打开文件对象之前仅排除根目录 `Player.exe`（不区分大小写），其余文件保留；关闭账户中的附带播放器偏好时使用完全相同的地址与缓存。已发布 v1 地址继续按原规则过滤普通 EXE/DLL/TXT，保证已有客户端与续传可用。Kai 导入也使用 v2；本地安装过滤独立维持原策略。
+- Web Play 元数据必须同时返回归档总量和本地安装目标总量。归档总量用于说明完整归档内容；本地安装目标总量由 `archive_versions.web_play_file_count` 和 `archive_versions.web_play_size_bytes` 保存，commit 时按 manifest 通过共享的 `shouldSkipWebPlayLocalWrite` 策略预先统计（包含五个引擎/补丁识别 DLL）；修改该策略时需按 manifest 重算已有归档的安装总量，安装按钮与进度条的文件数和写入体积必须使用这个口径。传输 ZIP 的 v2 策略不改变本地安装规则，无需重算或重装。
 - ZIP 下载进度来自 `Content-Length`，包含过滤后的文件与 ZIP 头部；下载端必须继续保证固定长度响应，HEAD 和 Range 使用同一过滤内容计算长度与偏移。
 - 下载 ZIP 必须使用 STORE，并在 local file header 中写入明确 `crc32`、compressed size 和 uncompressed size；不能使用 data descriptor。这样浏览器安装器可以顺序解析 entry，不需要等待中央目录。
 - ZIP 只在下载和解包过程中存在，解包完成后不进入 OPFS 和 IndexedDB。安装器继续跳过 `.txt`、`.exe` 和普通 `.dll` entry，以兼容完整 ZIP；五个根目录引擎/补丁识别 DLL 写入 pack，供引擎读取真实文件。保留识别文件不等于支持执行原生插件。

@@ -111,6 +111,7 @@ type SummaryRow = {
   cover_blob_sha256: string | null;
   current_archive_version_id: number | null;
   uses_shared_player: number | null;
+  embedded_player_size_bytes: number | null;
   external_download_url: string | null;
   archive_version_count: number;
   total_size_bytes: number | null;
@@ -1270,6 +1271,7 @@ function summarySql(): string {
     ) AS cover_blob_sha256,
     av.id AS current_archive_version_id,
     av.uses_shared_player,
+    av.embedded_player_size_bytes,
     (
       SELECT wel.url
       FROM work_external_links wel
@@ -1621,6 +1623,7 @@ function mapSummaryRow(
       : null,
     archiveVersionCount: row.archive_version_count,
     totalSizeBytes: row.total_size_bytes ?? 0,
+    embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
     downloadSizeBytes: row.current_archive_version_id === null
       || (row.uses_shared_player === 1 && playerSize === null)
       ? null
@@ -1711,7 +1714,7 @@ async function loadWorkCollections(
     database
       .prepare(
         `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
-                av.uses_shared_player,av.web_play_file_count,av.web_play_size_bytes,
+                av.uses_shared_player,av.embedded_player_size_bytes,av.web_play_file_count,av.web_play_size_bytes,
                 av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name
          FROM archive_versions av
          JOIN works w ON w.id=av.work_id
@@ -1820,6 +1823,7 @@ async function loadWorkCollections(
       })),
     archives: batchRows<{
       uses_shared_player: number;
+      embedded_player_size_bytes: number;
       web_play_file_count: number;
       web_play_size_bytes: number;
       id: number;
@@ -1833,6 +1837,7 @@ async function loadWorkCollections(
       uploader_name: string | null;
     }>(results[6]).map((row) => ({
       usesSharedPlayer: row.uses_shared_player === 1,
+      embeddedPlayerSizeBytes: row.embedded_player_size_bytes,
       webPlayFileCount: row.web_play_file_count,
       webPlaySizeBytes: row.web_play_size_bytes,
       id: row.id,

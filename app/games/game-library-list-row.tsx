@@ -1,5 +1,5 @@
 import { WorkListRow } from "@/app/components/work/work-list-row";
-import { buildArchiveDownloadUrl } from "@/lib/archive/web-play";
+import { useArchiveDownload } from "@/app/components/use-archive-download";
 import type { GameWorkSummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import type { ReactNode } from "react";
@@ -13,11 +13,13 @@ export function GameLibraryListRow({
   showDownload?: boolean;
 }) {
   const title = work.chineseTitle || work.originalTitle;
+  const { downloadUrl, downloadSize } = useArchiveDownload();
+  const sizeBytes = downloadSize(work);
   const download = work.currentArchiveVersionId
     ? {
-        href: buildArchiveDownloadUrl(work.currentArchiveVersionId),
+        href: downloadUrl(work.currentArchiveVersionId),
         label: "下载 ZIP",
-        detail: work.downloadSizeBytes === null ? "共享播放器暂不可用" : formatBytes(work.downloadSizeBytes),
+        detail: sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes),
         external: false,
       }
     : work.externalDownloadUrl

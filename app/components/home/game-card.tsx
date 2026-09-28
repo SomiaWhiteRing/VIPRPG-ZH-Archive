@@ -3,8 +3,11 @@ import type { GameWorkSummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import { engineLabel, engineShortLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
+import { useArchiveDownload } from "@/app/components/use-archive-download";
 
 export function GameCard({ work, action, children }: { work: GameWorkSummary; action?: ReactNode; children?: ReactNode }) {
+  const { downloadSize } = useArchiveDownload();
+  const sizeBytes = downloadSize(work);
   const title = work.chineseTitle || work.originalTitle;
   const originalTitle =
     work.chineseTitle && work.chineseTitle !== work.originalTitle
@@ -14,8 +17,8 @@ export function GameCard({ work, action, children }: { work: GameWorkSummary; ac
   const engine = engineShortLabel(work.engineFamily);
   const language = languageLabel(work.language);
   const size =
-    work.distribution === "archive" && work.downloadSizeBytes !== null && work.downloadSizeBytes > 0
-      ? formatBytes(work.downloadSizeBytes)
+    work.distribution === "archive" && sizeBytes !== null && sizeBytes > 0
+      ? formatBytes(sizeBytes)
       : null;
   const meta = [engine, language, year].filter((value): value is string =>
     Boolean(value),

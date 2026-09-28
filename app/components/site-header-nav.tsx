@@ -12,6 +12,8 @@ import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { formatUnreadCount } from "@/lib/format";
 import { getPageSearchScope } from "@/lib/search";
+import { ACCOUNT_SHORTCUTS, type AccountPreferences } from "@/lib/account-preferences";
+import { canAccessOwnWorks } from "@/lib/authz/permissions";
 
 import type { PermissionKey } from "@/lib/authz/permissions";
 import {
@@ -32,6 +34,7 @@ type Session = {
   unread: number;
   permissionKeys: PermissionKey[];
   isBootstrapAdmin: boolean;
+  preferences: AccountPreferences;
 };
 
 type Props = {
@@ -466,19 +469,15 @@ function UserMenu({
                 个人中心
               </Link>
             </DropdownMenu.Item>
-            <DropdownMenu.Item asChild>
-              <Link className={itemClass} to="/me/favorites">
-                收藏
-              </Link>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item asChild>
-              <Link className={itemClass} to="/me/emojis">表情库</Link>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item asChild>
-              <Link className={itemClass} to="/me/catalogs">
-                我的目录
-              </Link>
-            </DropdownMenu.Item>
+            {session.preferences.shortcuts.map((href) => {
+              const item = ACCOUNT_SHORTCUTS.find((entry) => entry.href === href);
+              if (!item || (item.requiresUpload && !canAccessOwnWorks({ status: "active", permissionKeys: session.permissionKeys }))) return null;
+              return (
+                <DropdownMenu.Item asChild key={href}>
+                  <Link className={itemClass} to={href}>{item.label}</Link>
+                </DropdownMenu.Item>
+              );
+            })}
             <DropdownMenu.Separator className="my-1 h-px bg-border" />
             <DropdownMenu.Item asChild>
               <Link

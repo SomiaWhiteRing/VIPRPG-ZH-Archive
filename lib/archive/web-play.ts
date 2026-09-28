@@ -1,5 +1,5 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import { webPlayDownloadProfile } from "@/lib/archive/web-play-local-policy";
+import { webPlayDownloadProfile } from "@/lib/archive/web-play-download-policy";
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
 
 export const webPlayInstallerVersion = "opfs-v12-workerfs";

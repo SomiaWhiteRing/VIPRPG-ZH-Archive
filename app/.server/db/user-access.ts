@@ -3,6 +3,7 @@ import { parsePermissionKeys } from "@/lib/authz/permissions";
 import type { RoleKind } from "@/lib/authz/roles";
 import type { ArchiveUser, UserStatus } from "@/lib/dto/db/user-access";
 import type { ProfileVisibility } from "@/lib/user-profile";
+import { readAccountPreferences } from "@/lib/account-preferences";
 
 export type UserRow = {
   id: number;
@@ -11,6 +12,8 @@ export type UserRow = {
   display_name: string;
   avatar_blob_sha256: string | null;
   bio: string;
+  include_player_in_zip: number;
+  account_shortcuts: string | null;
   profile_show_bio: number;
   profile_show_showcase: number;
   profile_show_favorites: number;
@@ -54,6 +57,8 @@ export const USER_ACCESS_COLUMNS = `
   u.display_name,
   u.avatar_blob_sha256,
   u.bio,
+  u.include_player_in_zip,
+  u.account_shortcuts,
   u.profile_show_bio,
   u.profile_show_showcase,
   u.profile_show_favorites,
@@ -151,6 +156,7 @@ export function mapArchiveUser(
     avatarBlobSha256: row.avatar_blob_sha256,
     bio: row.bio,
     profileVisibility: mapProfileVisibility(row),
+    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts),
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),

@@ -10,6 +10,7 @@ import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
+import { AccountPreferencesForm } from "./account-preferences-form";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -55,20 +56,21 @@ export async function loader(args: LoaderFunctionArgs) {
     },
   ];
 
-  return { params, settings };
+  return { params, settings, preferences: user.preferences };
 }
 
 export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["隐私设置", "个人中心"] }, error);
+  pageMetaDescriptors({ title: ["隐私与偏好", "个人中心"] }, error);
 
 export default function PrivacyPage() {
-  const { settings } = useLoaderData<typeof loader>();
+  const { settings, preferences } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader title="隐私" />
-      <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。" }} />
+      <PageHeader title="隐私与偏好" />
+      <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。", preferencesUpdated: "偏好设置已更新。" }} />
 
       <RedirectForm action="/api/account/privacy" method="post">
+        <h2 className="mb-3 text-lg font-semibold">隐私</h2>
         <div className="divide-y divide-border border-b border-border">
           {settings.map((setting) => (
             <div className="py-2" key={setting.name}>
@@ -84,6 +86,7 @@ export default function PrivacyPage() {
           <Rm2kButton type="submit">保存隐私设置</Rm2kButton>
         </div>
       </RedirectForm>
+      <AccountPreferencesForm preferences={preferences} />
     </div>
   );
 }

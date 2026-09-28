@@ -9,6 +9,7 @@ import { creatorRoleLabel, engineLabel, languageLabel } from "@/lib/labels";
 import { ChevronRight } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { useArchiveDownload } from "@/app/components/use-archive-download";
 
 export function WorkSidebarInfo({
   current,
@@ -24,9 +25,12 @@ export function WorkSidebarInfo({
     | "moreInfo"
     | "originalReleaseDate"
     | "originalReleasePrecision"
+    | "downloadSizeBytes"
   >;
 }) {
   const [filesExpanded, setFilesExpanded] = useState(false);
+  const { downloadSize, includePlayer } = useArchiveDownload();
+  const sizeBytes = current ? downloadSize({ ...current, downloadSizeBytes: work.downloadSizeBytes }) : null;
   const filesId = useId();
   const filesToggled = useRef(false);
 
@@ -122,10 +126,10 @@ export function WorkSidebarInfo({
             <div className="min-h-0 overflow-hidden">
               <dl className="m-0 pt-[0.35rem]">
                 <InfoRow label="文件" mono>
-                  {formatNumber(current.totalFiles)} 个
+                  {formatNumber(current.totalFiles + (includePlayer && current.usesSharedPlayer && sizeBytes !== null ? 1 : 0) - (!includePlayer && current.embeddedPlayerSizeBytes > 0 ? 1 : 0))} 个
                 </InfoRow>
                 <InfoRow label="体积" mono>
-                  {formatBytes(current.totalSizeBytes)}
+                  {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
                 </InfoRow>
                 {current.uploaderName ? (
                   <InfoRow label="上传者">

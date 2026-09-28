@@ -4,8 +4,8 @@ import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from 
 import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
   shouldSkipWebPlayLocalWrite,
-  webPlayDownloadProfile,
 } from "../lib/archive/web-play-local-policy.ts";
+import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
 
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
@@ -44,7 +44,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
   }
 
   const profile = match[2] === "download" ? url.searchParams.get("profile") : null;
-  if (profile !== null && profile !== webPlayDownloadProfile) {
+  if (profile !== null && profile !== webPlayDownloadProfile && profile !== legacyWebPlayDownloadProfile) {
     return new Response(request.method === "HEAD" ? null : "Unsupported download profile", {
       status: 400,
       headers: { "Cache-Control": "no-store" },
@@ -125,9 +125,11 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       throw new Error("Shared player policy does not match archive record");
     }
     const files = profile === webPlayDownloadProfile
-      ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
-      : manifest.files;
-    if (profile === webPlayDownloadProfile) {
+      ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
+      : profile === legacyWebPlayDownloadProfile
+        ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
+        : manifest.files;
+    if (profile) {
       record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) };
     }
     const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET, files);
@@ -291,7 +293,7 @@ async function kaiImportMetadata(request, bucket, record) {
     return Response.json({ error: "This engine is not supported by Kai" }, { status: 422, headers });
   }
   const manifest = await loadManifest(bucket, record.manifestSha256);
-  const files = manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path));
+  const files = manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path));
   const zipSizeBytes = estimateZipStreamSize(buildZipEntries(manifest, bucket, files));
   const paths = new Set(files.map((file) => file.path.toLowerCase()));
   if (zipSizeBytes > 1024 ** 3 || files.length > 50000 ||

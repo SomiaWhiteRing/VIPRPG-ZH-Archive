@@ -5,7 +5,6 @@ import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkActionBar } from "@/app/games/[id]/work-action-bar";
 import { CatalogAddDialog, WorkEngagementActions } from "@/app/games/[id]/work-engagement-actions";
-import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import type { GameWorkDetail } from "@/lib/dto/db/game-library";
 import type { WorkOverviewSidebarData } from "@/lib/dto/db/work-community";
 import { ExternalLink, Link2 } from "lucide-react";
@@ -86,9 +85,9 @@ export function WorkOverviewSidebar({ work, data }: { work: GameWorkDetail; data
           engineFamily={work.engineFamily}
           archive={current ? {
             id: current.id,
-            downloadHref: `/api/archive-versions/${current.id}/download?zip_builder=${downloadZipBuilderVersion}`,
             totalFiles: current.totalFiles,
             totalSizeBytes: current.totalSizeBytes,
+            embeddedPlayerSizeBytes: current.embeddedPlayerSizeBytes,
             downloadSizeBytes: work.downloadSizeBytes,
             webPlayFileCount: current.webPlayFileCount,
             webPlaySizeBytes: current.webPlaySizeBytes,
