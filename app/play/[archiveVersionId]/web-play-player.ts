@@ -1,3 +1,5 @@
+import { isAndroidClient } from "@/lib/browser/client-environment";
+import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { acquireGameResourceReadLock } from "./web-play-locks";
@@ -70,6 +72,8 @@ export function createPlayerSession(
   onFullscreen: () => void,
   onExit: () => void,
 ): PlayerSession {
+  const native = isAndroidClient();
+  let nativeResources: NativePlayerResources | undefined;
   const lifetime = new AbortController();
   const resourceLifetime = new AbortController();
   const heldButtons = new Set<PlayerButton>();
@@ -87,6 +91,7 @@ export function createPlayerSession(
   frame.allow = "autoplay; fullscreen";
 
   function touchResources(): Promise<void> {
+    if (native) return Promise.resolve();
     renewal = renewal.catch(() => {}).then(async () => {
       const current = await getWebPlayInstallation(metadata.playKey);
       const expires = current && gameResourceExpiresAt(current);
@@ -143,6 +148,7 @@ export function createPlayerSession(
       disconnectLogs?.();
       disconnectLogs = undefined;
       frame.remove();
+      if (nativeResources) await localRequest("stop");
       resourceLifetime.abort();
       releaseResources?.();
       releaseResources = undefined;
@@ -154,16 +160,23 @@ export function createPlayerSession(
   }
 
   const ready = (async () => {
-    releaseResources = await acquireGameResourceReadLock(metadata.playKey, resourceLifetime.signal);
-    lifetime.signal.throwIfAborted();
-    const installation = await getWebPlayInstallation(metadata.playKey);
-    const expires = installation && gameResourceExpiresAt(installation);
-    if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
-      throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
+    let packages: Awaited<ReturnType<typeof readGamePackages>>;
+    if (native) {
+      nativeResources = await localRequest<NativePlayerResources>("start", { key: metadata.playKey });
+      if (lifetime.signal.aborted) { await localRequest("stop"); lifetime.signal.throwIfAborted(); }
+      packages = [];
+    } else {
+      releaseResources = await acquireGameResourceReadLock(metadata.playKey, resourceLifetime.signal);
+      lifetime.signal.throwIfAborted();
+      const installation = await getWebPlayInstallation(metadata.playKey);
+      const expires = installation && gameResourceExpiresAt(installation);
+      if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
+        throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
+      }
+      packages = await readGamePackages(
+        installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
+      );
     }
-    const packages = await readGamePackages(
-      installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
-    );
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
       frame.src = `/play/player.html${window.location.search}`;
@@ -200,6 +213,8 @@ export function createPlayerSession(
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
     runtimeCreation = playerWindow.createEasyRpgPlayer({
       packages,
+      nativeResources,
+      saveNative: (files: Record<string, string>) => localRequest("save", { url: nativeResources?.url, files }),
       workId: metadata.workId,
       runtimeBase: `${metadata.runtimeBasePath}/`,
       arguments: args,

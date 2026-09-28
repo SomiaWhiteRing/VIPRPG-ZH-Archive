@@ -104,7 +104,7 @@ final class ScreenshotGallery extends LinearLayout {
         empty.addView(emptyIcon, new LinearLayout.LayoutParams(dp(80), dp(80)));
         emptyTitle = text("还没有截图", 21); emptyTitle.setTypeface(null, Typeface.BOLD); emptyTitle.setGravity(Gravity.CENTER); emptyTitle.setPadding(0, dp(20), 0, dp(8)); empty.addView(emptyTitle);
         emptyDescription = text("在游戏中启用截图按钮\n把喜欢的瞬间留在这里", 14); emptyDescription.setTextColor(MUTED); emptyDescription.setGravity(Gravity.CENTER); emptyDescription.setLineSpacing(dp(4), 1); empty.addView(emptyDescription);
-        choose = button(empty, "选择截图目录", () -> chooseDirectory(true)); choose.setIcon(new GalleryIcons(GalleryIcons.FOLDER, TEAL));
+        choose = button(empty, "刷新", () -> refresh(null)); choose.setIcon(new GalleryIcons(GalleryIcons.FOLDER, TEAL));
         LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-2, dp(48)); chooseParams.topMargin = dp(24); choose.setLayoutParams(chooseParams);
         directory = text("", 12); directory.setTextColor(MUTED); directory.setGravity(Gravity.CENTER); directory.setPadding(0, dp(12), 0, 0); empty.addView(directory);
         body.addView(empty, new FrameLayout.LayoutParams(-1, -1));
@@ -128,26 +128,16 @@ final class ScreenshotGallery extends LinearLayout {
         menu.getMenu().add("刷新").setOnMenuItemClickListener(item -> { refresh(null); return true; });
         menu.getMenu().add("截图保存目录").setOnMenuItemClickListener(item -> {
             NativeControls.dialog(getContext()).setTitle("截图保存目录").setMessage(directory.getText())
-                .setNegativeButton("关闭", null).setPositiveButton("更换目录", (dialog, which) -> chooseDirectory(true)).show(); return true;
+                .setPositiveButton("关闭", null).show(); return true;
         });
         menu.show();
     }
 
-    void open() { chooseDirectory(false); }
+    void open() { refresh(null); }
 
     void refreshOnResume() { if (!loading && !operating && !controller.isBusy()) refresh(null); }
 
     private void cancelOperation() { controller.cancelBatch(); cancel.setEnabled(false); }
-
-    private void chooseDirectory(boolean change) {
-        if (loading || operating) return;
-        loading = true; updateControls();
-        controller.ensureDirectory(change, (ready, error) -> {
-            loading = false;
-            selected.clear(); selecting = false; images.clear();
-            refresh(error != null ? error : !ready ? "已取消选择，截图目录未更改。" : null);
-        });
-    }
 
     private void refresh(String message) {
         if (closed || operating) return;
@@ -168,7 +158,7 @@ final class ScreenshotGallery extends LinearLayout {
                 directoryReady = snapshot.directory.ready;
                 directory.setText(snapshot.directory.ready ? "保存目录：" + snapshot.directory.name
                     : snapshot.directory.configured ? "目录无法访问，请重新选择：" + snapshot.directory.name : "请选择截图保存目录");
-                choose.setText(snapshot.directory.ready ? "更换目录" : "选择截图目录");
+                choose.setVisibility(GONE);
             }
             if (gameId != 0 && all.stream().noneMatch(item -> item.workId == gameId)) gameId = 0;
             rebuild();

@@ -55,6 +55,13 @@ public final class MainActivity extends Activity {
     private LinearLayout galleryTab;
     private LinearLayout versionTab;
     private ScreenshotController screenshots;
+    private LocalGames localGames;
+    private LinearLayout storageGate;
+    private boolean selectingStorage;
+    private final java.util.Set<String> loadedCovers = new java.util.HashSet<>();
+    private static final int STORAGE_REQUEST = 1003;
+    private final ExecutorService localIo = Executors.newSingleThreadExecutor();
+
     private ScreenshotGallery galleryPanel;
     private NativeLibrary nativeLibrary;
     private FrameLayout libraryPanel;
@@ -114,15 +121,23 @@ public final class MainActivity extends Activity {
         offlineBrowser = findViewById(R.id.offline_browser);
         libraryPanel = findViewById(R.id.library_panel);
         nativeLibrary = new NativeLibrary(this, new NativeLibrary.Actions() {
-            @Override public void refresh() { sendLibraryCommand("refresh", "null"); }
+            @Override public void refresh() { refreshLocalGames(); }
             @Override public void play(String key) { sendLibraryCommand("play", JSONObject.quote(key)); }
-            @Override public void delete(List<String> keys) { sendLibraryCommand("delete", new JSONArray(keys).toString()); }
+            @Override public void delete(List<String> keys) {
+                localIo.execute(() -> {
+                    try { for (String key : keys) localGames.store.delete(key); }
+                    catch (Exception e) { runOnUiThread(() -> nativeLibrary.setError(e.getMessage())); }
+                    runOnUiThread(MainActivity.this::refreshLocalGames);
+                });
+            }
             @Override public void retry(long id) { openInstall(id); }
             @Override public void details(long id) {
                 if (id > 0) showOnline(BuildConfig.SITE_ORIGIN + "/games/" + id);
             }
         });
         libraryPanel.addView(nativeLibrary);
+        localGames = new LocalGames(this, browser, offlineBrowser);
+        localGames.store.changed = () -> runOnUiThread(this::refreshLocalGames);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
         galleryPanel = new ScreenshotGallery(this, screenshots);
         ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
@@ -164,6 +179,7 @@ public final class MainActivity extends Activity {
                 Uri url = request.getUrl();
                 if (!sameOrigin(url)) return null;
                 String path = url.getPath();
+                if (view == offlineBrowser && path != null && path.startsWith("/_native/read/")) return localGames.read(request);
                 if (path == null || !(path.startsWith("/_android/") || path.equals("/play/player.html")
                     || path.startsWith("/play/runtime/easyrpg/" + BuildConfig.RUNTIME_VERSION + "/"))) return null;
                 WebResourceResponse response = assets.shouldInterceptRequest(url);
@@ -180,7 +196,13 @@ public final class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri url = request.getUrl();
-                if (sameOrigin(url)) return false;
+                if (sameOrigin(url)) {
+                    String path = url.getPath();
+                    if (view == browser && path != null && path.matches("/play/[0-9]+/?")) {
+                        openInstall(Long.parseLong(path.split("/")[2])); return true;
+                    }
+                    return false;
+                }
                 openExternal(url);
                 return true;
             }
@@ -288,6 +310,10 @@ public final class MainActivity extends Activity {
             else if (library) showLibrary();
             else showOnline();
         } else showOnline();
+        MaterialButton storageSettings = NativeControls.button(this, "本地数据目录", () -> showStorageGate(true));
+        ((LinearLayout) ((android.widget.ScrollView) findViewById(R.id.version_panel)).getChildAt(0)).addView(storageSettings);
+        showStorageGate(false);
+        if (getIntent().getBooleanExtra("library", false)) showLibrary();
         if (!startupChecked) {
             startupChecked = true;
             if (autoCheck.isChecked()) checkForUpdate(true);
@@ -398,7 +424,8 @@ public final class MainActivity extends Activity {
         if (!isBrowserOffline()) {
             nativeLibrary.loading();
             offlineBrowser.loadUrl(offlineUrl);
-        } else sendLibraryCommand("refresh", "null");
+        }
+        refreshLocalGames();
         updateNavigation();
     }
 
@@ -409,18 +436,68 @@ public final class MainActivity extends Activity {
     }
 
     private void openInstall(long archiveVersionId) {
-        if (archiveVersionId <= 0) return;
-        library = false;
-        libraryPanel.setVisibility(View.GONE);
-        offlineBrowser.setVisibility(View.GONE);
-        browser.setVisibility(View.VISIBLE);
-        if (resumed) resumeOnlineBrowser();
-        browser.loadUrl(BuildConfig.SITE_ORIGIN + "/play/" + archiveVersionId);
-        updateNavigation();
+        localIo.execute(() -> {
+            try { JSONObject task = localGames.store.enqueue(archiveVersionId); runOnUiThread(() -> installQueued(task)); }
+            catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show()); }
+        });
+    }
+
+    void installQueued(JSONObject task) {
+        if (!"ready".equals(task.optString("status"))) {
+            if (resumed && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1004);
+            InstallService.start(this);
+        }
+        Toast.makeText(this, "ready".equals(task.optString("status")) ? "此版本已安装，可在本地游戏中游玩。" : "已加入本地游戏下载任务。", Toast.LENGTH_SHORT).show();
+        refreshLocalGames();
+    }
+    void openLocalLibrary() { showLibrary(); }
+    private void refreshLocalGames() {
+        if (isDestroyed() || localGames == null || nativeLibrary == null) return;
+        try {
+            JSONObject snapshot = new JSONObject(localGames.store.snapshot());
+            nativeLibrary.setSnapshot(snapshot.toString());
+            JSONArray items = snapshot.getJSONArray("items");
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.getJSONObject(i); String key = item.getString("playKey");
+                if (!"ready".equals(item.optString("status")) || !loadedCovers.add(key)) continue;
+                localIo.execute(() -> {
+                    String cover = null; try { cover = localGames.store.cover(key); } catch (Exception ignored) { }
+                    String image = cover;
+                    runOnUiThread(() -> { if (image != null) nativeLibrary.setCover(key, image); else loadedCovers.remove(key); });
+                });
+            }
+        }
+        catch (Exception e) { nativeLibrary.setError(e.getMessage()); }
+        if (isBrowserOffline()) sendLibraryCommand("refresh", "null");
+        if (browser.getUrl() != null) browser.evaluateJavascript("window.dispatchEvent(new Event('viprpg:local-change'))", null);
+    }
+    private void showStorageGate(boolean change) {
+        if (playing || selectingStorage) return;
+        if (!change && localGames.store.storage.ready()) {
+            localIo.execute(() -> { try { localGames.store.reconcile(); runOnUiThread(() -> { refreshLocalGames(); if (localGames.store.next() != null) InstallService.start(this); }); }
+                catch (Exception e) { runOnUiThread(() -> nativeLibrary.setError(e.getMessage())); } });
+            return;
+        }
+        if (storageGate != null) root.removeView(storageGate);
+        storageGate = new LinearLayout(this); storageGate.setOrientation(LinearLayout.VERTICAL);
+        storageGate.setClickable(true); storageGate.setFocusable(true);
+        storageGate.setGravity(android.view.Gravity.CENTER); storageGate.setPadding(32, 32, 32, 32); storageGate.setBackgroundColor(0xfff5f4ef);
+        TextView text = new TextView(this); text.setText("设置本地数据目录\n\n请选择设备或 SD 卡中的文件夹。游戏、截图和存档将分别保存在 games、screenshots、saves 子目录。完成设置后即可使用应用。"); text.setTextSize(18);
+        storageGate.addView(text);
+        storageGate.addView(NativeControls.button(this, "选择文件夹", () -> {
+            if (localGames.store.writing()) { Toast.makeText(this, "请先完成或取消下载任务。", Toast.LENGTH_LONG).show(); return; }
+            selectingStorage = true;
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+            try { startActivityForResult(picker, STORAGE_REQUEST); } catch (Exception e) { selectingStorage = false; Toast.makeText(this, "无法打开目录选择器。", Toast.LENGTH_LONG).show(); }
+        }));
+        if (change && localGames.store.storage.ready()) storageGate.addView(NativeControls.button(this, "取消", () -> { root.removeView(storageGate); storageGate = null; }));
+        root.addView(storageGate, new FrameLayout.LayoutParams(-1, -1));
     }
 
     private void setPlaying(boolean value) {
         playing = value;
+        if (!value && localGames != null) localGames.store.playingKey = null;
         if (library && !version && !gallery) {
             offlineBrowser.setVisibility(value ? View.VISIBLE : View.GONE);
             libraryPanel.setVisibility(value ? View.GONE : View.VISIBLE);
@@ -623,7 +700,16 @@ public final class MainActivity extends Activity {
     @Deprecated
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (screenshots.onActivityResult(requestCode, resultCode, data)) return;
+        if (requestCode == STORAGE_REQUEST) {
+            selectingStorage = false;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) localIo.execute(() -> {
+                try {
+                    localGames.store.selectDirectory(data.getData(), data.getFlags());
+                    runOnUiThread(() -> { root.removeView(storageGate); storageGate = null; loadedCovers.clear(); refreshLocalGames(); });
+                } catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show()); }
+            });
+            return;
+        }
         if (requestCode == FILE_CHOOSER_REQUEST && fileChooser != null) {
             fileChooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             fileChooser = null;
@@ -633,6 +719,7 @@ public final class MainActivity extends Activity {
     @Override
     @Deprecated
     public void onBackPressed() {
+        if (storageGate != null) { if (localGames.store.storage.ready()) { root.removeView(storageGate); storageGate = null; } else finish(); return; }
         if (fullscreenView != null) {
             (library ? offlineBrowser : browser).evaluateJavascript("document.exitFullscreen()", null);
         } else if (playing || (!library && !gallery && !version && onlinePlaying)) {
@@ -693,9 +780,11 @@ public final class MainActivity extends Activity {
         if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
+        if (storageGate == null && localGames.store.next() != null) InstallService.start(this);
         restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();
         if (library && !playing && !gallery && !version) sendLibraryCommand("refresh", "null");
+        if (storageGate == null && !playing && !selectingStorage && !localGames.store.storage.ready()) showStorageGate(false);
         showPendingUpdate();
     }
 
@@ -704,6 +793,9 @@ public final class MainActivity extends Activity {
         if (fileChooser != null) fileChooser.onReceiveValue(null);
         galleryPanel.close();
         screenshots.close();
+        localGames.store.changed = null;
+        localGames.close();
+        localIo.shutdownNow();
         updateExecutor.shutdownNow();
         browser.destroy();
         offlineBrowser.destroy();
@@ -744,16 +836,6 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void requestPlayerFocus() {
             runOnUiThread(() -> restoreOfflinePlayerFocus());
-        }
-
-        @JavascriptInterface
-        public void setLibrarySnapshot(String snapshot) {
-            runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setSnapshot(snapshot); });
-        }
-
-        @JavascriptInterface
-        public void setLibraryCover(String key, String image) {
-            runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setCover(key, image); });
         }
 
         @JavascriptInterface

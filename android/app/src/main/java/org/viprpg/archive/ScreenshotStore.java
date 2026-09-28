@@ -37,78 +37,20 @@ final class ScreenshotStore {
     private static final Pattern NAME = Pattern.compile(
         "^(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}\\.\\d{3})__w([1-9][0-9]{0,14})__(.+)\\.png$");
     private final ContentResolver resolver;
-    private final SharedPreferences preferences;
+    private final LocalStorage storage;
 
     ScreenshotStore(Context context) {
         resolver = context.getContentResolver();
-        preferences = context.getSharedPreferences("screenshots-" + Uri.parse(BuildConfig.SITE_ORIGIN).getHost(), Context.MODE_PRIVATE);
+        storage = new LocalStorage(context);
     }
-
-    Directory status() {
-        String saved = preferences.getString("tree", null);
-        String name = preferences.getString("name", "截图目录");
-        if (saved != null) {
-            try {
-                Uri tree = requireTree();
-                name = writableDirectoryName(tree);
-                return new Directory(true, true, name);
-            } catch (Exception unavailable) { /* Reselect a moved or revoked directory. */ }
-        }
-        return new Directory(saved != null, false, name);
-    }
-
-    Uri initialDirectory() {
-        String saved = preferences.getString("tree", null);
-        return saved == null ? null : document(Uri.parse(saved));
-    }
-
-    private String writableDirectoryName(Uri tree) throws IOException {
-        try (Cursor cursor = resolver.query(document(tree), new String[]{Document.COLUMN_DISPLAY_NAME, Document.COLUMN_FLAGS}, null, null, null)) {
-            if (cursor == null || !cursor.moveToFirst() || (cursor.getLong(1) & Document.FLAG_DIR_SUPPORTS_CREATE) == 0) {
-                throw new IOException("此目录不可写，请选择其他截图目录。");
-            }
-            return cursor.getString(0);
-        }
-    }
-
-    void selectDirectory(Uri tree, int flags) throws Exception {
-        int access = flags & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        if (access != (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            || (flags & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) == 0) {
-            throw new IOException("请选择支持持久读写授权的目录。");
-        }
-        String name = writableDirectoryName(tree);
-        resolver.takePersistableUriPermission(tree, access);
-        String previous = preferences.getString("tree", null);
-        if (!preferences.edit().putString("tree", tree.toString()).putString("name", name).commit()) {
-            if (!tree.toString().equals(previous)) resolver.releasePersistableUriPermission(tree, access);
-            throw new IOException("目录设置保存失败，请重试。");
-        }
-        if (previous != null && !previous.equals(tree.toString())) {
-            try { resolver.releasePersistableUriPermission(Uri.parse(previous), access); }
-            catch (SecurityException ignored) { /* An already revoked grant needs no cleanup. */ }
-        }
-    }
-
-    private Uri requireTree() throws IOException {
-        String saved = preferences.getString("tree", null);
-        if (saved != null) {
-            Uri tree = Uri.parse(saved);
-            for (UriPermission grant : resolver.getPersistedUriPermissions()) {
-                if (grant.getUri().equals(tree) && grant.isReadPermission() && grant.isWritePermission()) return tree;
-            }
-        }
-        throw new IOException("截图目录未授权，请重新选择目录。");
-    }
-
-    private static Uri document(Uri tree) {
-        return DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
-    }
+    Directory status() { return new Directory(true, storage.ready(), storage.name() + "/screenshots"); }
+    private Uri requireTree() throws IOException { return storage.directory("screenshots"); }
+    private static Uri document(Uri directory) { return directory; }
 
     List<Entry> list() throws IOException {
         Uri tree = requireTree();
         List<Entry> found = new ArrayList<>();
-        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(tree));
         try (Cursor cursor = resolver.query(children, new String[]{Document.COLUMN_DOCUMENT_ID,
             Document.COLUMN_DISPLAY_NAME, Document.COLUMN_SIZE, Document.COLUMN_MIME_TYPE}, null, null, null)) {
             if (cursor == null) throw new IOException("无法读取截图目录，请重新选择目录。");

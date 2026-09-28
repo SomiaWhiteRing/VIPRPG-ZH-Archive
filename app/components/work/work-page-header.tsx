@@ -1,3 +1,5 @@
+import { isAndroidClient } from "@/lib/browser/client-environment";
+import { useEffect, useState } from "react";
 import { BackLink } from "@/app/components/ui/back-link";
 import {
   SectionNavigation,
@@ -21,6 +23,8 @@ export function WorkPageHeader({
   originalTitle: string;
   tabs: SectionLink[];
 }) {
+  const [native, setNative] = useState(false);
+  useEffect(() => { setNative(isAndroidClient()); }, []);
   const title = chineseTitle || originalTitle;
 
   return (
@@ -62,7 +66,7 @@ export function WorkPageHeader({
 
       <SectionNavigation
         className="sticky top-[var(--site-header-height,3.5rem)] z-30 bg-background"
-        items={tabs}
+        items={native ? tabs.filter(tab => !tab.href.startsWith("/play/")) : tabs}
       />
     </>
   );

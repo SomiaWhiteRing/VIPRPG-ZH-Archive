@@ -6,13 +6,13 @@
 
 | 环境 | `storageKind` | 游戏资源 | 保留期限 |
 | --- | --- | --- | --- |
-| 本站 Android 套壳 | `android-opfs` | 原 OPFS `viprpg-archive/games/<playKey>` | 不设置期限 |
+| 本站 Android App | 原生安装记录 | SAF 根目录下 `games/<archiveVersionId>` | 不设置期限 |
 | 支持 Storage Buckets 的浏览器 | `browser-bucket` | 每个安装版本独立的桶内 OPFS | 最后游玩后 7 × 24 小时 |
 | 不支持 Storage Buckets 的浏览器 | `browser-opfs` | 原 OPFS 目录 | 下次访问时执行相同的 7 天规则 |
 
 环境识别使用原生注入的 `window.VIPRPGAndroid`，不使用 Android UA。Android 手机上的普通浏览器按浏览器策略处理。主线程把选择的 `storageKind` 显式传给安装 Worker；读写和清理以安装记录中的存储位置为准。
 
-Android 套壳不显示新增入口，也不执行这套过期清理。线上主站页仍写原目录，旧 APK 内置的离线页仍能读取。原生应用数据目录不与手机浏览器共享。
+Android App 不显示浏览器安装管理入口，不执行过期清理。主站调用原生安装队列，游戏、截图和存档使用首次启动选择的目录，详见 [Android 说明](../android/README.md)。不迁移首发前旧 APK 的 OPFS 数据。
 
 桶名为 `viprpg-game-` 加安装键 SHA-256 的前 48 位，不超过 API 的 64 字符限制。桶只包含游戏 pack 和索引；安装记录留在原 IndexedDB，存档仍在 IDBFS `/work-saves/<workId>`，截图也不放进到期桶。
 
@@ -38,12 +38,12 @@ Storage Buckets 的 `expires` 不是准时释放磁盘的承诺。浏览器可�
 
 ## 首发前已有缓存与后续升级
 
-普通浏览器没有 `storageKind` 的旧安装在获得排他锁后一次性清理，随后按新机制重新安装，不保留旧浏览器存储模型。Android 环境完全跳过该处理，旧 APK 的原 OPFS 安装继续可用。清理不触及存档和截图。
+普通浏览器没有 `storageKind` 的旧安装在获得排他锁后一次性清理，随后按新机制重新安装，不保留旧浏览器存储模型。Android 环境完全跳过浏览器清理，原生目录由 App 独立管理。清理不触及存档和截图。
 
 此规则仅处理首发前缺少该字段的旧缓存，不是上线后任意清除用户数据的授权。后续格式和 origin 变更须明确保护真实安装、存档与截图；必要的升级支持按实际客户端契约维护，不因“唯一当前模型”而直接移除。
 
 ## 验证边界
 
-本次开发使用现有类型检查、变更文件 ESLint 和 Android 网页资源构建检查。未新增测试代码，未执行浏览器、模拟器或真机操作；不能据此声称实际到期回收或设备交互已经验收。
+浏览器到期回收机制使用现有类型检查、变更文件 ESLint 和资源构建检查，尚不能据此声称实际到期回收已经验收。Android 原生闭环已另外进行模拟器验证，范围见 [验收记录](android-native-acceptance.md)。未新增自动化测试代码。
 
 参考：[Storage Buckets 规范](https://wicg.github.io/storage-buckets/)、[Chrome Storage Buckets](https://developer.chrome.com/docs/web-platform/storage-buckets)。
