@@ -118,3 +118,20 @@ export async function listFavoriteWorkIds(runtime: AppRuntime, userId: number, w
   ).bind(userId, JSON.stringify(workIds)).all<{ work_id: number }>();
   return rows.results.map((row) => row.work_id);
 }
+
+export async function listUnavailableFavorites(runtime: AppRuntime, userId: number, requestedPage: number) {
+  const database = getD1(runtime);
+  const where = `user_id=? AND favorited_at IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM public_works WHERE id=user_work_entries.work_id)`;
+  const count = await database.prepare(`SELECT COUNT(*) AS total FROM user_work_entries WHERE ${where}`)
+    .bind(userId).first<{ total: number }>();
+  const total = count?.total ?? 0;
+  const pageSize = 20;
+  const page = Math.min(Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1,
+    Math.max(1, Math.ceil(total / pageSize)));
+  // IDs alone let the owner remove references without revealing hidden work metadata.
+  const rows = await database.prepare(`SELECT work_id AS workId FROM user_work_entries WHERE ${where}
+    ORDER BY favorited_at DESC,work_id DESC LIMIT ? OFFSET ?`)
+    .bind(userId, pageSize, (page - 1) * pageSize).all<{ workId: number }>();
+  return { items: rows.results, total, page, pageSize };
+}

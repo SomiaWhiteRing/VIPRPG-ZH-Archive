@@ -129,6 +129,7 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 - `npm run verify:preprod`：预生产完整验收；包含静态检查、关键流程和生产构建。
 - `npm run smoke:staging`：部署后只验证 staging 的健康入口。
 - 评论、点赞、游玩和收藏写请求沿用同源校验；公开评论还必须确认目标 Work、作者或角色、主楼和评论用户均处于可公开状态。
+- 添加或编辑收藏要求作品公开；取消本人收藏只按本人关系操作且可重复执行，不要求作品仍公开。个人收藏页分页展示不可访问作品的 ID 占位和取消入口，不读取标题、封面等隐藏资料；取消同时清理标签和吐槽，保留游玩记录。
 
 有状态 D1、API、Worker 和浏览器检查只通过上述测试入口串行运行。测试自行迁移和 seed 临时状态，不依赖也不重置开发环境的 `.wrangler/state`。
 
