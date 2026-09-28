@@ -1,5 +1,5 @@
 import { cn } from "@/lib/ui/cn";
-import type { DragEvent } from "react";
+import type { DragEvent, ReactElement } from "react";
 
 const GRID_COLUMNS = [
   "",
@@ -24,6 +24,7 @@ export function FaceSheetCanvas({
   scale = 2,
   selectedCell,
   cellState,
+  renderCell,
   disabled = false,
   fit = false,
   onDragCell,
@@ -47,6 +48,7 @@ export function FaceSheetCanvas({
     disabled?: boolean;
   };
   disabled?: boolean;
+  renderCell?: (row: number, column: number, button: ReactElement) => ReactElement;
   fit?: boolean;
   onDragCell?: (
     row: number,
@@ -94,7 +96,7 @@ export function FaceSheetCanvas({
           const selected =
             selectedCell?.row === row && selectedCell.column === column;
           const state = cellState?.(row, column);
-          return (
+          const button = (
             <button
               aria-label={`第 ${row + 1} 行，第 ${column + 1} 列${state?.collected ? "，已添加" : ""}`}
               aria-pressed={selected || !!state?.selected}
@@ -128,6 +130,7 @@ export function FaceSheetCanvas({
               ) : null}
             </button>
           );
+          return renderCell ? renderCell(row, column, button) : button;
         })}
       </div>
     </div>

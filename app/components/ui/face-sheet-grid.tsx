@@ -1,5 +1,5 @@
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
-import type { ComponentProps, DragEvent, ReactNode } from "react";
+import type { ComponentProps, DragEvent, ReactNode, ReactElement } from "react";
 
 type GridSheet = {
   blobSha256: string;
@@ -18,6 +18,7 @@ export function FaceSheetGrid<T extends GridSheet>({
   onDragEnd,
   cellState,
   renderFooter,
+  renderCell,
 }: {
   sheets: T[];
   highlightedBlob?: string | null;
@@ -35,6 +36,7 @@ export function FaceSheetGrid<T extends GridSheet>({
     row: number,
     column: number,
   ) => ReturnType<NonNullable<ComponentProps<typeof FaceSheetCanvas>["cellState"]>>;
+  renderCell?: (sheet: T, row: number, column: number, button: ReactElement) => ReactElement;
   renderFooter?: (sheet: T) => ReactNode;
 }) {
   return (
@@ -61,6 +63,7 @@ export function FaceSheetGrid<T extends GridSheet>({
                 ? (row, column, event) => onDragCell(sheet, row, column, event)
                 : undefined
             }
+            renderCell={renderCell ? (row, column, button) => renderCell(sheet, row, column, button) : undefined}
             onDragEnd={onDragEnd}
             cellState={cellState ? (row, column) => cellState(sheet, row, column) : undefined}
           />

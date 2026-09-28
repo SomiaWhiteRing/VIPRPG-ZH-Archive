@@ -1,9 +1,9 @@
+import { EmojiDragSource } from "@/app/components/ui/emoji-drag";
 import {
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type DragEvent,
 } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -43,8 +43,7 @@ export function SourceFaces({
   locateVersion,
   disabled,
   onSelect,
-  onDragEmoji,
-  onDragEnd,
+  dragDisabled,
 }: {
   source: EmojiSource;
   defaults: FaceEmoji[];
@@ -53,8 +52,7 @@ export function SourceFaces({
   locateVersion: number;
   disabled: boolean;
   onSelect: (emoji: FaceEmoji) => void;
-  onDragEmoji: (emoji: FaceEmoji, event: DragEvent<HTMLButtonElement>) => void;
-  onDragEnd: () => void;
+  dragDisabled: boolean;
 }) {
   const [items, setItems] = useState<(FaceEmoji | EmojiSheet)[]>(
     source.kind === "sheet" ? [source.sheet] : [],
@@ -190,6 +188,7 @@ export function SourceFaces({
         const key = emojiCellKey(emoji),
           collected = owned.has(key);
         return (
+          <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || collected || !emoji.available}>
           <Button
             variant="ghost"
             size="icon"
@@ -199,9 +198,6 @@ export function SourceFaces({
             aria-pressed={activeKey === key}
             disabled={disabled}
             onClick={() => onSelect(emoji)}
-            draggable={!disabled && emoji.available}
-            onDragStart={(event) => onDragEmoji(emoji, event)}
-            onDragEnd={onDragEnd}
             className={cn(
               "relative grid h-auto w-auto cursor-pointer justify-items-center gap-1 rounded border border-transparent p-1 font-normal hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default [&_svg]:size-3.5",
               activeKey === key &&
@@ -220,6 +216,7 @@ export function SourceFaces({
               <span className="text-[11px] text-muted">{emoji.users} 人</span>
             ) : null}
           </Button>
+          </EmojiDragSource>
         );
       })}
     </div>
@@ -275,10 +272,10 @@ export function SourceFaces({
           onSelectCell={(sheet, row, column) =>
             onSelect(sheetCell(sheet, row, column))
           }
-          onDragCell={(sheet, row, column, event) =>
-            onDragEmoji(sheetCell(sheet, row, column), event)
-          }
-          onDragEnd={onDragEnd}
+          renderCell={(sheet, row, column, button) => {
+            const emoji = sheetCell(sheet, row, column);
+            return <EmojiDragSource key={`${row}:${column}`} emoji={emoji} disabled={dragDisabled || owned.has(emojiCellKey(emoji))}>{button}</EmojiDragSource>;
+          }}
           cellState={(sheet, row, column) => {
             const key = emojiCellKey(sheetCell(sheet, row, column));
             return {
