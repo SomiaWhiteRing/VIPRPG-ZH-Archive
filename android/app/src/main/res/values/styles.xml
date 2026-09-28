@@ -7,4 +7,23 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
+    <!-- Native screenshot gallery: matches the website/offline warm paper and teal palette. -->
+    <style name="GalleryTheme" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#1F6F67</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E0F0EB</item>
+        <item name="colorOnPrimaryContainer">#185B54</item>
+        <item name="colorSecondary">#2F9F92</item>
+        <item name="colorSurface">#F5F4EF</item>
+        <item name="colorSurfaceContainerHigh">#FFFFFF</item>
+        <item name="colorSurfaceContainer">#F5F4EF</item>
+        <item name="colorSurfaceContainerLow">#F5F4EF</item>
+        <item name="colorSurfaceVariant">#E7ECE7</item>
+        <item name="colorControlActivated">#1F6F67</item>
+        <item name="colorOnSurface">#17212B</item>
+        <item name="colorOnSurfaceVariant">#68737D</item>
+        <item name="colorOutline">#D9DDD9</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#2F9F92</item>
+    </style>
 </resources>

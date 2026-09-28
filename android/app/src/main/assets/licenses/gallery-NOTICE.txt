@@ -1,0 +1,13 @@
+Native screenshot gallery dependencies
+
+ZoomImage 1.4.0 — Copyright (C) panpf
+https://github.com/panpf/zoomimage
+
+Material Components for Android 1.12.0 — Copyright The Android Open Source Project
+https://github.com/material-components/material-components-android
+
+AndroidX ViewPager2 1.1.0 and supporting AndroidX libraries — Copyright The Android Open Source Project
+https://android.googlesource.com/platform/frameworks/support/
+
+These components are licensed under Apache License 2.0; see Apache-2.0.txt.
+ReFra and Fossify Gallery were design references only; no source or graphics copied.

@@ -2,6 +2,8 @@ import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Notice } from "@/app/components/ui/notice";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { useToast } from "@/app/components/ui/toast";
+import { useClientEnvironment } from "@/app/components/use-client-environment";
+import { setAndroidOnlinePlaying } from "@/lib/browser/android-screenshots";
 
 import {
   AlertDialog,
@@ -94,6 +96,7 @@ export function WebPlayClient({
   stats,
 }: WebPlayClientProps) {
   const toast = useToast();
+  const clientEnvironment = useClientEnvironment();
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(
     null,
   );
@@ -138,7 +141,7 @@ export function WebPlayClient({
     capturing,
     loadError: screenshotLoadError,
     capture,
-  } = useWebPlayScreenshots(metadata.workId);
+  } = useWebPlayScreenshots(metadata.workId, metadata.title);
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
@@ -149,6 +152,11 @@ export function WebPlayClient({
   const immersive = nativeFullscreen || pageFullscreen;
   const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
   const controlsStorageMessage = mobileControls ? controlsStorageError : null;
+
+  useEffect(() => {
+    setAndroidOnlinePlaying(playerBusy);
+    return () => setAndroidOnlinePlaying(false);
+  }, [playerBusy]);
 
   useEffect(() => {
     immersiveRef.current = immersive;
@@ -613,6 +621,13 @@ export function WebPlayClient({
     }
   }, [addLog, exitImmersive]);
 
+  useEffect(() => {
+    if (clientEnvironment !== "android") return;
+    const onBack = () => { if (!playerStopping) void stopPlayer(); };
+    window.addEventListener("viprpg:back", onBack);
+    return () => window.removeEventListener("viprpg:back", onBack);
+  }, [clientEnvironment, playerStopping, stopPlayer]);
+
   const startDefaultPlayer = useCallback(async () => {
     if (running || startingRef.current) return;
     // Request fullscreen during the tap so mobile browsers retain user activation.
@@ -821,7 +836,7 @@ export function WebPlayClient({
         }
         sidebar={
           <WorkSidebar
-            extras={<WebPlayScreenshotGallery screenshots={screenshots} title={metadata.title} />}
+            extras={clientEnvironment === "browser" ? <WebPlayScreenshotGallery screenshots={screenshots} title={metadata.title} /> : null}
             mobilePrimaryFirst
             notice={notice}
             primary={

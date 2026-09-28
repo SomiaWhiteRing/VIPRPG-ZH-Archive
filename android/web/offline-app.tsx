@@ -22,6 +22,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type AndroidBridge = {
   setPlaying: (playing: boolean) => void;
   setOrientation: (orientation: string) => void;
+  setLibrarySnapshot?: (snapshot: string) => void;
+  setLibraryCover?: (playKey: string, image: string) => void;
+  setLibraryError?: (error: string) => void;
 };
 
 declare global {
@@ -61,11 +64,15 @@ export function OfflineApp() {
     try {
       const rows = await listWebPlayInstallations();
       setInstallations(rows);
-      setUsage((await navigator.storage.estimate())?.usage ?? null);
+      const used = (await navigator.storage.estimate())?.usage ?? null;
+      setUsage(used);
+      window.VIPRPGAndroid?.setLibrarySnapshot?.(JSON.stringify({ items: rows, usage: used }));
+      void publishNativeCovers(rows);
       setError(null);
       if (navigator.onLine) void hydrateMissingCovers(rows, setInstallations);
     } catch (reason) {
       setError(message(reason));
+      window.VIPRPGAndroid?.setLibraryError?.(message(reason));
     } finally {
       setLoading(false);
     }
@@ -100,6 +107,7 @@ export function OfflineApp() {
       setDeleting(null);
       await refresh();
       setError(message(reason));
+      window.VIPRPGAndroid?.setLibraryError?.(message(reason));
     } finally {
       if (removed.length) {
         const retained = installations.filter((item) => !removed.some((row) => row.playKey === item.playKey));
@@ -108,6 +116,24 @@ export function OfflineApp() {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    const onRefresh = () => { void refresh(); };
+    const onPlay = (event: Event) => {
+      const key = (event as CustomEvent<string>).detail;
+      const item = installations.find((row) => row.playKey === key);
+      if (item?.status === "ready" && item.workId) setSelected(item);
+    };
+    const onDelete = (event: Event) => { void remove((event as CustomEvent<string[]>).detail); };
+    window.addEventListener("viprpg:library-refresh", onRefresh);
+    window.addEventListener("viprpg:library-play", onPlay);
+    window.addEventListener("viprpg:library-delete", onDelete);
+    return () => {
+      window.removeEventListener("viprpg:library-refresh", onRefresh);
+      window.removeEventListener("viprpg:library-play", onPlay);
+      window.removeEventListener("viprpg:library-delete", onDelete);
+    };
+  });
 
   const ready = installations.filter((item) => item.status === "ready");
   const visible = installations.filter((item) =>
@@ -118,6 +144,9 @@ export function OfflineApp() {
     : (b.lastPlayedAt ?? b.readyAt ?? b.updatedAt).localeCompare(a.lastPlayedAt ?? a.readyAt ?? a.updatedAt));
   const visibleKeys = visible.map((item) => item.playKey);
   const allVisibleMarked = visible.length > 0 && visibleKeys.every((key) => marked.includes(key));
+  if (window.VIPRPGAndroid?.setLibrarySnapshot) {
+    return selected ? <OfflineGame installation={selected} onClose={closeGame} /> : null;
+  }
   return (
     <>
       <main className="mx-auto max-w-3xl px-4 pb-8 pt-5">
@@ -161,8 +190,8 @@ export function OfflineApp() {
         {!loading && installations.length === 0 ? (
           <div className="grid justify-items-center gap-3 py-16 text-center text-muted">
             <Gamepad2 aria-hidden className="size-12 text-primary" />
-            <p className="m-0 font-semibold text-foreground">还没有本地作品</p>
-            <p className="m-0 text-sm">联网后在在线游玩页安装，游戏会自动出现在这里。</p>
+            <p className="m-0 font-semibold text-foreground">还没有本地游戏</p>
+            <p className="m-0 text-sm">在主站安装后，游戏会自动出现在这里。</p>
           </div>
         ) : null}
         {!loading && installations.length > 0 && !visible.length ? <p className="py-12 text-center text-sm text-muted">没有符合条件的作品</p> : null}
@@ -218,6 +247,28 @@ function Cover({ installation }: { installation: WebPlayInstallation }) {
   return <div className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded bg-primary/10 text-xl font-semibold text-primary">{url ? <img alt="" className="h-full w-full object-cover" src={url} /> : installation.title.slice(0, 1)}</div>;
 }
 
+async function publishNativeCovers(installations: WebPlayInstallation[]) {
+  if (!window.VIPRPGAndroid?.setLibraryCover) return;
+  for (const installation of installations) {
+    if (!installation.coverBlobSha256) continue;
+    try {
+      const blob = await cacheWebPlayCover(installation.coverBlobSha256);
+      const image = await createImageBitmap(blob);
+      const canvas = document.createElement("canvas");
+      canvas.width = 64; canvas.height = 80;
+      const context = canvas.getContext("2d");
+      if (!context) { image.close(); continue; }
+      const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
+      context.drawImage(image, (canvas.width - image.width * scale) / 2,
+        (canvas.height - image.height * scale) / 2, image.width * scale, image.height * scale);
+      image.close();
+      window.VIPRPGAndroid?.setLibraryCover?.(installation.playKey, canvas.toDataURL("image/jpeg", 0.8));
+    } catch {
+      // A missing cover must not prevent the native library from opening offline.
+    }
+  }
+}
+
 async function hydrateMissingCovers(
   installations: WebPlayInstallation[],
   update: React.Dispatch<React.SetStateAction<WebPlayInstallation[]>>,
@@ -239,6 +290,12 @@ async function hydrateMissingCovers(
         const next = { ...current, coverBlobSha256: cover };
         await saveWebPlayInstallation(next);
         update((rows) => rows.map((row) => row.playKey === next.playKey ? next : row));
+        if (window.VIPRPGAndroid?.setLibrarySnapshot) {
+          const rows = await listWebPlayInstallations();
+          const usage = (await navigator.storage.estimate()).usage ?? null;
+          window.VIPRPGAndroid.setLibrarySnapshot(JSON.stringify({ items: rows, usage }));
+          void publishNativeCovers(rows);
+        }
       });
     } catch {
       // The local library remains usable even when the site is offline.
@@ -255,7 +312,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
   const [feedback, setFeedback] = useState<string | null>(null);
   const [portrait, setPortrait] = useState(window.matchMedia("(orientation: portrait)").matches);
   const { preferences, setOrientation, setTouchEnabled, saveLayout } = useWebPlayControlsPreferences();
-  const { capture, capturing } = useWebPlayScreenshots(installation.workId!);
+  const { capture, capturing } = useWebPlayScreenshots(installation.workId!, installation.title);
   const orientation = preferences.orientation;
 
   useEffect(() => {
