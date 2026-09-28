@@ -527,6 +527,7 @@ export async function getOwnedWorkForEdit(
          av.source_file_count AS current_archive_source_file_count,
          av.source_size_bytes AS current_archive_source_size_bytes,
          av.source_url AS current_archive_source_url,
+         av.uses_shared_player AS current_archive_uses_shared_player,
          av.published_at AS current_archive_published_at
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
@@ -543,6 +544,7 @@ export async function getOwnedWorkForEdit(
       current_archive_source_size_bytes: number | null;
       current_archive_published_at: string | null;
       current_archive_source_url: string | null;
+      current_archive_uses_shared_player: number | null;
     }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(runtime, workId);
@@ -571,6 +573,7 @@ export async function getOwnedWorkForEdit(
           sourceSizeBytes: owned.current_archive_source_size_bytes ?? 0,
           publishedAt: owned.current_archive_published_at,
           sourceUrl: owned.current_archive_source_url,
+          usesSharedPlayer: owned.current_archive_uses_shared_player === 1,
         }
       : null,
   };

@@ -227,6 +227,7 @@ export type UploaderWorkEdit = AdminWorkEdit & {
     sourceSizeBytes: number;
     publishedAt: string | null;
     sourceUrl: string | null;
+    usesSharedPlayer: boolean;
   } | null;
 };
 
