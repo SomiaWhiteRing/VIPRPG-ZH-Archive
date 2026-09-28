@@ -81,6 +81,7 @@ public final class MainActivity extends Activity {
     private View fullscreenView;
     private ValueCallback<Uri[]> fileChooser;
     private boolean playing;
+    private boolean onlineImmersive;
     private boolean library;
     private boolean version;
     private boolean gallery;
@@ -188,8 +189,9 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 if (view == offlineBrowser) setPlaying(false);
-                else if (playing && !library) {
+                else if (!library && (playing || onlineImmersive)) {
                     playing = false;
+                    onlineImmersive = false;
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
                     updateNavigation();
                 }
@@ -309,9 +311,10 @@ public final class MainActivity extends Activity {
             || (url.getPath() != null && url.getPath().matches("/play/[0-9]+/?")));
     }
 
-    void setOnlinePlaying(boolean value) {
+    void setOnlinePlaying(boolean value, boolean immersive) {
         if (!isScreenshotPage(browser) || isOffline(Uri.parse(browser.getUrl()))) return;
         playing = value;
+        onlineImmersive = immersive;
         if (!value && fullscreenView == null) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         updateNavigation();
         if (!value) showPendingUpdate();
@@ -548,7 +551,7 @@ public final class MainActivity extends Activity {
     }
 
     private void updateNavigation() {
-        boolean immersive = playing || fullscreenView != null;
+        boolean immersive = fullscreenView != null || (library ? playing : onlineImmersive);
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
         tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
         tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && !gallery && library);
@@ -684,7 +687,7 @@ public final class MainActivity extends Activity {
     private final class OnlineBridge {
         @JavascriptInterface
         public void setPlaying(boolean value) {
-            runOnUiThread(() -> setOnlinePlaying(value));
+            runOnUiThread(() -> setOnlinePlaying(value, value));
         }
 
         @JavascriptInterface

@@ -60,8 +60,8 @@ export async function saveAndroidScreenshot(blob: Blob, workId: number, title: s
   await request("save", { png, workId, title, capturedAt });
 }
 
-export function setAndroidOnlinePlaying(playing: boolean): void {
+export function setAndroidOnlinePlaying(playing: boolean, immersive: boolean): void {
   if (!isAndroidClient()) return;
   // Old APKs do not have the new channel; this does not enable old screenshot storage.
-  try { void request("playerState", { playing }).catch(() => {}); } catch { /* No native channel. */ }
+  try { void request("playerState", { playing, immersive }).catch(() => {}); } catch { /* No native channel. */ }
 }
