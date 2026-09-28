@@ -29,7 +29,10 @@ export function getAppOrigin(runtime: AppRuntime): string {
   return runtime.origin;
 }
 
-export function normalizeAppOrigin(input: string | undefined): string {
+export function normalizeAppOrigin(
+  input: string | undefined,
+  development = false,
+): string {
   const value = input?.trim();
 
   if (!value) {
@@ -42,7 +45,11 @@ export function normalizeAppOrigin(input: string | undefined): string {
     url.hostname === "127.0.0.1" ||
     url.hostname === "[::1]";
 
-  if (url.protocol !== "https:" && !(isLocalhost && url.protocol === "http:")) {
+  // Vite development requests may use a LAN address for phone access.
+  if (
+    url.protocol !== "https:" &&
+    !((development || isLocalhost) && url.protocol === "http:")
+  ) {
     throw new Error("APP_ORIGIN must be an https origin");
   }
 
