@@ -58,9 +58,6 @@ final class ScreenshotController {
                     String id = request.optString("id");
                     if (id.isEmpty() || id.length() > 100) return;
                     switch (request.optString("action")) {
-                        case "ensureDirectory":
-                            ensureDirectory(false, (ready, error) -> reply(reply, id, ready, error));
-                            break;
                         case "save":
                             if (busy) { reply(reply, id, null, "截图文件正在处理中，请稍后重试。"); return; }
                             busy = true;
@@ -98,11 +95,6 @@ final class ScreenshotController {
                 if (!closed && !activity.isDestroyed()) callback.done(result, failure);
             });
         });
-    }
-
-    void ensureDirectory(boolean change, Callback<Boolean> callback) {
-        execute(store::status, (directory, error) -> callback.done(directory != null && directory.ready,
-            error != null ? error : directory != null && directory.ready ? null : "请在应用的本地目录设置中恢复授权。"));
     }
 
     void batch(List<ScreenshotStore.Entry> items, boolean delete, Progress progress, Callback<BatchResult> callback) {
@@ -167,9 +159,9 @@ final class ScreenshotController {
     }
 
     static String errorMessage(Exception failure) {
-        if (failure instanceof SecurityException) return "截图目录授权已失效，请重新选择目录。";
+        if (failure instanceof SecurityException) return "无法访问该截图，请刷新图库。";
         if (failure instanceof IOException && failure.getMessage() != null) return failure.getMessage();
-        return "截图文件操作失败，请检查目录权限和剩余空间后重试。";
+        return "截图文件操作失败，请检查剩余空间后重试。";
     }
 
     static final class BatchResult {

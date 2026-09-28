@@ -1,4 +1,10 @@
 <resources>
+    <style name="ScreenshotViewerTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
     <style name="AppTheme" parent="GalleryTheme">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#2F9F92</item>

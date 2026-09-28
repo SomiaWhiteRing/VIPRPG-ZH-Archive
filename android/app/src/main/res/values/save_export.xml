@@ -1,0 +1,9 @@
+<resources>
+    <color name="save_export_checked">#1F6F67</color>
+    <style name="SaveExportDialogTheme" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="alertDialogStyle">@style/SaveExportDialogStyle</item>
+    </style>
+    <style name="SaveExportDialogStyle" parent="MaterialAlertDialog.Material3">
+        <item name="multiChoiceItemLayout">@layout/save_export_choice</item>
+    </style>
+</resources>

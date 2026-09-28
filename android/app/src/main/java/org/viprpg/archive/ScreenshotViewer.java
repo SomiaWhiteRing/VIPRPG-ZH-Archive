@@ -39,9 +39,12 @@ final class ScreenshotViewer extends Dialog {
     private final List<ScreenshotStore.Entry> items;
     private final ScreenshotImageLoader images;
     private final Consumer<ScreenshotStore.Entry> share, delete;
-    private final String directory;
     private final Map<String, String> dimensions = new HashMap<>();
     private final List<Page> pages = new ArrayList<>();
+    interface ThumbnailTarget { void find(ScreenshotStore.Entry item, Consumer<android.widget.ImageView> ready); }
+    private final ThumbnailTarget thumbnailTarget;
+    private ValueAnimator imageAnimation;
+    private boolean transitioning, closing;
     private final int start;
     private ViewPager2 pager;
     private LinearLayout top, bottom;
@@ -51,14 +54,14 @@ final class ScreenshotViewer extends Dialog {
     private LinearLayout detailContent;
     private android.widget.ImageView detailBack;
     private float detailReveal;
-    private ValueAnimator detailAnimation;
+    private ValueAnimator detailAnimation, fileAnimation;
     private boolean chromeVisible = true, closed;
 
     ScreenshotViewer(Context context, List<ScreenshotStore.Entry> items, int start,
-            ScreenshotImageLoader images, String directory, Consumer<ScreenshotStore.Entry> share, Consumer<ScreenshotStore.Entry> delete) {
-        super(context, android.R.style.Theme_Material_Light_NoActionBar);
-        this.items = items; this.start = Math.max(0, start); this.images = images; this.directory = directory;
-        this.share = share; this.delete = delete;
+            ScreenshotImageLoader images, ThumbnailTarget thumbnailTarget, Consumer<ScreenshotStore.Entry> share, Consumer<ScreenshotStore.Entry> delete) {
+        super(context, R.style.ScreenshotViewerTheme);
+        this.items = items; this.start = Math.max(0, start); this.images = images;
+        this.share = share; this.delete = delete; this.thumbnailTarget = thumbnailTarget;
     }
 
     @Override protected void onCreate(Bundle state) {
@@ -66,6 +69,7 @@ final class ScreenshotViewer extends Dialog {
         // Use the scoped Material theme supplied by the gallery for library widgets.
         Context context = new android.view.ContextThemeWrapper(getContext(), R.style.GalleryTheme);
         root = new ViewerRoot(context); root.setBackgroundColor(Color.WHITE);
+        root.setAlpha(0);
         pager = new ViewPager2(context); pager.setBackgroundColor(Color.TRANSPARENT);
         pager.setPageTransformer(new MarginPageTransformer(dp(12)));
         root.addView(pager, new FrameLayout.LayoutParams(-1, -1));
@@ -107,7 +111,7 @@ final class ScreenshotViewer extends Dialog {
         backParams.setMargins(dp(8), dp(8), 0, 0); root.addView(detailBack, backParams); detailBack.setVisibility(View.INVISIBLE);
         setContentView(root);
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-            @Override public void onPageSelected(int position) { updateTitle(position); }
+            @Override public void onPageSelected(int position) { if (closed || closing || position < 0 || position >= items.size()) return; updateTitle(position); thumbnailTarget.find(items.get(position), view -> {}); }
         });
         pager.setCurrentItem(start, false); updateTitle(start);
         Window window = getWindow();
@@ -115,7 +119,11 @@ final class ScreenshotViewer extends Dialog {
             window.setStatusBarColor(Color.WHITE); window.setNavigationBarColor(Color.WHITE);
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
             window.setLayout(-1, -1);
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.setWindowAnimations(0);
         }
+        root.post(() -> thumbnailTarget.find(items.get(start), source -> animateImage(source, true)));
     }
 
     private void updateTitle(int position) {
@@ -146,23 +154,56 @@ final class ScreenshotViewer extends Dialog {
         TextView heading = text(context, 17); heading.setText("详细信息"); heading.setTypeface(null, Typeface.BOLD);
         heading.setPadding(0, 0, 0, dp(14)); detailContent.addView(heading);
         String resolution = dimensions.get(item.id);
-        infoElement("文件", GalleryIcons.IMAGE, item.name,
-            (resolution == null ? "图片" : resolution) + "  ·  " + formatBytes(item.bytes));
-        if (!directory.isEmpty()) infoElement("保存目录", GalleryIcons.FOLDER, directory, "截图保存目录");
+        fileInformation(item, resolution);
     }
 
-    private void infoElement(String label, String path, String value, String secondary) {
+    private void fileInformation(ScreenshotStore.Entry item, String resolution) {
         Context context = root.getContext();
+        if (fileAnimation != null) fileAnimation.cancel();
+        LinearLayout card = new LinearLayout(context); card.setOrientation(LinearLayout.VERTICAL);
+        detailContent.addView(card, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout row = new LinearLayout(context); row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(16), dp(16), dp(16), dp(16));
-        GradientDrawable fill = new GradientDrawable(); fill.setColor(0xffedf3ef); fill.setCornerRadius(dp(20)); row.setBackground(fill);
-        android.widget.ImageView icon = new android.widget.ImageView(context);
-        icon.setImageDrawable(new GalleryIcons(path, 0xff1f6f67)); row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
-        LinearLayout labels = new LinearLayout(context); labels.setOrientation(LinearLayout.VERTICAL); labels.setPadding(dp(16), 0, 0, 0);
-        TextView name = text(context, 15); name.setText(value); name.setTextIsSelectable(true); labels.addView(name);
-        TextView info = text(context, 13); info.setTextColor(0xff68737d); info.setText(secondary); info.setPadding(0, dp(8), 0, 0); labels.addView(info);
-        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1)); row.setContentDescription(label);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(12); detailContent.addView(row, params);
+        row.setPadding(dp(16), dp(16), dp(8), dp(16));
+        GradientDrawable upper = new GradientDrawable(); upper.setColor(0xffedf3ef); upper.setCornerRadius(dp(24)); row.setBackground(upper);
+        android.widget.ImageView image = new android.widget.ImageView(context);
+        image.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, 0xff1f6f67)); row.addView(image, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        LinearLayout labels = new LinearLayout(context); labels.setOrientation(LinearLayout.VERTICAL); labels.setPadding(dp(16), 0, dp(8), 0);
+        TextView name = text(context, 15); name.setText(item.name); name.setTextIsSelectable(true); labels.addView(name);
+        TextView info = text(context, 13); info.setTextColor(0xff68737d); info.setText(resolution == null ? "图片" : resolution); info.setPadding(0, dp(8), 0, 0); labels.addView(info);
+        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+        MaterialButton arrow = NativeControls.icon(context, GalleryIcons.DOWN, 0xff1f6f67, () -> {});
+        arrow.setContentDescription("展开文件路径");
+        row.addView(arrow, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        card.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        FrameLayout reveal = new FrameLayout(context); reveal.setClipChildren(true);
+        LinearLayout.LayoutParams revealParams = new LinearLayout.LayoutParams(-1, 0); card.addView(reveal, revealParams);
+        TextView path = text(context, 14); path.setTextColor(0xff68737d); path.setTextIsSelectable(true);
+        path.setText("设备端 · " + formatBytes(item.bytes) + "\n" + (item.folderPath.isEmpty() ? "系统未提供文件路径" : item.folderPath));
+        path.setPadding(dp(20), dp(18), dp(20), dp(20));
+        GradientDrawable lower = new GradientDrawable(); lower.setColor(0xfff3f6f4); lower.setCornerRadius(dp(24)); path.setBackground(lower);
+        reveal.addView(path, new FrameLayout.LayoutParams(-1, -2));
+        final float[] fraction = {0}; final boolean[] expanded = {false};
+        arrow.setOnClickListener(view -> {
+            if (fileAnimation != null) fileAnimation.cancel();
+            expanded[0] = !expanded[0];
+            arrow.setContentDescription(expanded[0] ? "收起文件路径" : "展开文件路径");
+            androidx.core.view.ViewCompat.setStateDescription(arrow, expanded[0] ? "已展开" : "已收起");
+            path.measure(View.MeasureSpec.makeMeasureSpec(card.getWidth(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int height = path.getMeasuredHeight();
+            path.setLayoutParams(new FrameLayout.LayoutParams(-1, height));
+            fileAnimation = ValueAnimator.ofFloat(fraction[0], expanded[0] ? 1f : 0f);
+            fileAnimation.setDuration(280);
+            fileAnimation.setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator());
+            fileAnimation.addUpdateListener(animation -> {
+                float value = (float) animation.getAnimatedValue(); fraction[0] = value;
+                revealParams.height = Math.round(height * value); revealParams.topMargin = Math.round(dp(2) * value); reveal.setLayoutParams(revealParams);
+                path.setAlpha(value); arrow.setRotation(180 * value);
+                float outer = dp(24), inner = dp(24) - dp(20) * value;
+                upper.setCornerRadii(new float[]{outer, outer, outer, outer, inner, inner, inner, inner});
+                lower.setCornerRadii(new float[]{inner, inner, inner, inner, outer, outer, outer, outer});
+            });
+            fileAnimation.start();
+        });
     }
 
     private float detailTarget() { return root.getHeight() * .64f; }
@@ -234,6 +275,7 @@ final class ScreenshotViewer extends Dialog {
             return dragging;
         }
         @Override public boolean dispatchTouchEvent(MotionEvent event) {
+            if (transitioning || closing) return true;
             boolean wasDragging = dragging;
             if (detectDrag(event)) {
                 if (!wasDragging) {
@@ -278,15 +320,106 @@ final class ScreenshotViewer extends Dialog {
 
     @Override public void onBackPressed() {
         if (detailReveal > 0) animateDetails(0);
-        else super.onBackPressed();
+        else dismiss();
     }
 
     @Override public void dismiss() {
+        if (closed || closing) return;
+        if (root == null || !isShowing()) { finishDismiss(); return; }
+        closing = true;
+        if (imageAnimation != null) imageAnimation.cancel();
+        thumbnailTarget.find(items.get(pager.getCurrentItem()), target -> animateImage(target, false));
+    }
+
+    private void finishDismiss() {
         closed = true;
+        if (fileAnimation != null) fileAnimation.cancel();
         if (detailAnimation != null) detailAnimation.cancel();
         for (Page page : pages) page.clear();
         if (pager != null) pager.setAdapter(null);
         super.dismiss();
+    }
+
+    private void animateImage(android.widget.ImageView thumbnail, boolean opening) {
+        if (closed) return;
+        android.graphics.Bitmap bitmap = null;
+        for (Page page : pages) if (page.getBindingAdapterPosition() == pager.getCurrentItem()
+                && page.image.getDrawable() instanceof BitmapDrawable)
+            bitmap = ((BitmapDrawable) page.image.getDrawable()).getBitmap();
+        if (bitmap == null) bitmap = images.cachedThumbnail(items.get(pager.getCurrentItem()));
+        if (thumbnail == null || bitmap == null || root.getWidth() == 0) {
+            root.setAlpha(1);
+            if (!opening) finishDismiss();
+            return;
+        }
+        final android.graphics.Bitmap picture = bitmap;
+        int[] origin = new int[2], small = new int[2]; root.getLocationOnScreen(origin); thumbnail.getLocationOnScreen(small);
+        android.graphics.RectF smallRect = new android.graphics.RectF(small[0] - origin[0], small[1] - origin[1],
+            small[0] - origin[0] + thumbnail.getWidth(), small[1] - origin[1] + thumbnail.getHeight());
+        float fit = Math.min((float) root.getWidth() / picture.getWidth(), (float) root.getHeight() / picture.getHeight());
+        float w = picture.getWidth() * fit, h = picture.getHeight() * fit;
+        android.graphics.RectF largeRect = new android.graphics.RectF((root.getWidth() - w) / 2, (root.getHeight() - h) / 2 - detailReveal * .55f,
+            (root.getWidth() + w) / 2, (root.getHeight() + h) / 2 - detailReveal * .55f);
+        if (!opening) for (Page page : pages) if (page.getBindingAdapterPosition() == pager.getCurrentItem()) {
+            com.github.panpf.zoomimage.util.RectCompat rect = page.image.getZoomable().getContentDisplayRectFState().getValue();
+            if (!rect.isEmpty()) {
+                int[] location = new int[2]; page.image.getLocationOnScreen(location);
+                largeRect.set(rect.getLeft() + location[0] - origin[0], rect.getTop() + location[1] - origin[1],
+                    rect.getRight() + location[0] - origin[0], rect.getBottom() + location[1] - origin[1]);
+            }
+        }
+        float cover = Math.max(smallRect.width() / picture.getWidth(), smallRect.height() / picture.getHeight());
+        android.graphics.RectF smallImage = new android.graphics.RectF(smallRect.centerX() - picture.getWidth() * cover / 2,
+            smallRect.centerY() - picture.getHeight() * cover / 2, smallRect.centerX() + picture.getWidth() * cover / 2,
+            smallRect.centerY() + picture.getHeight() * cover / 2);
+        android.graphics.RectF largeClip = new android.graphics.RectF(largeRect);
+        largeClip.intersect(0, 0, root.getWidth(), root.getHeight());
+        final float[] fraction = {opening ? 0 : 1};
+        View overlay = new View(getContext()) {
+            private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(android.graphics.Canvas canvas) {
+                float t = fraction[0];
+                android.graphics.RectF box = new android.graphics.RectF(
+                    smallRect.left + (largeClip.left - smallRect.left) * t, smallRect.top + (largeClip.top - smallRect.top) * t,
+                    smallRect.right + (largeClip.right - smallRect.right) * t, smallRect.bottom + (largeClip.bottom - smallRect.bottom) * t);
+                android.graphics.RectF drawn = new android.graphics.RectF(
+                    smallImage.left + (largeRect.left - smallImage.left) * t, smallImage.top + (largeRect.top - smallImage.top) * t,
+                    smallImage.right + (largeRect.right - smallImage.right) * t, smallImage.bottom + (largeRect.bottom - smallImage.bottom) * t);
+                canvas.save(); canvas.clipRect(box);
+                canvas.drawBitmap(picture, null, drawn, paint); canvas.restore();
+            }
+        };
+        transitioning = true; root.setAlpha(1); pager.setAlpha(0);
+        // The thumbnail belongs to a different window. Keep it drawn until the
+        // opaque transition image covers it; cross-window alpha updates can leave a blank frame.
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+        root.setBackgroundColor(opening ? Color.TRANSPARENT : (chromeVisible || detailReveal > 0 ? Color.WHITE : Color.BLACK));
+        top.setAlpha(opening ? 0f : 1f); bottom.setAlpha(opening ? 0f : 1f);
+        details.setAlpha(opening ? 0f : 1f); detailBack.setAlpha(opening ? 0f : 1f);
+        imageAnimation = ValueAnimator.ofFloat(opening ? 0 : 1, opening ? 1 : 0);
+        imageAnimation.setDuration(280); imageAnimation.setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator());
+        imageAnimation.addUpdateListener(animation -> {
+            fraction[0] = (float) animation.getAnimatedValue(); float alpha = fraction[0];
+            root.setBackgroundColor(Color.argb(Math.round(255 * alpha), chromeVisible || detailReveal > 0 ? 255 : 0, chromeVisible || detailReveal > 0 ? 255 : 0, chromeVisible || detailReveal > 0 ? 255 : 0));
+            top.setAlpha(alpha); bottom.setAlpha(alpha); details.setAlpha(alpha); detailBack.setAlpha(alpha); overlay.invalidate();
+        });
+        imageAnimation.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator animation) {
+                if (opening) {
+                    pager.setAlpha(1f); applyDetails(detailReveal);
+                    // Keep the last overlay frame until the actual image has completed layout.
+                    androidx.core.view.OneShotPreDrawListener.add(pager, () -> {
+                        root.removeView(overlay); transitioning = false;
+                    });
+                    pager.invalidate();
+                } else {
+                    // Dismiss with the final thumbnail-sized image still in the window.
+                    // The already drawn gallery underneath takes over atomically.
+                    transitioning = false; finishDismiss();
+                }
+            }
+        });
+        imageAnimation.start();
     }
 
     private final class Page extends RecyclerView.ViewHolder {
@@ -310,10 +443,14 @@ final class ScreenshotViewer extends Dialog {
         }
         void bind(ScreenshotStore.Entry item) {
             clear(); int token = generation;
-            message.setText("正在读取…"); message.setVisibility(View.VISIBLE);
+            android.graphics.Bitmap cached = images.cachedThumbnail(item);
+            if (cached != null) {
+                BitmapDrawable preview = new BitmapDrawable(getContext().getResources(), cached);
+                preview.setFilterBitmap(false); image.setImageDrawable(preview); message.setVisibility(View.GONE);
+            } else { message.setText("正在读取…"); message.setVisibility(View.VISIBLE); }
             request = images.load(item, true, bitmap -> {
                 if (closed || token != generation) return;
-                if (bitmap == null) message.setText("图片无法读取\n请返回刷新或重新授权目录");
+                if (bitmap == null) message.setText("图片无法读取\n请返回刷新图库");
                 else {
                     dimensions.put(item.id, bitmap.getWidth() + " × " + bitmap.getHeight());
                     BitmapDrawable drawable = new BitmapDrawable(getContext().getResources(), bitmap); drawable.setFilterBitmap(false);

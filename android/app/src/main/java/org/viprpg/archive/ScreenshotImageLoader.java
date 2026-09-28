@@ -23,11 +23,11 @@ final class ScreenshotImageLoader {
     ScreenshotImageLoader(ScreenshotStore store) { this.store = store; }
 
     Bitmap cachedThumbnail(ScreenshotStore.Entry entry) {
-        return thumbnails.get(generation + ":" + entry.id);
+        return thumbnails.get(generation + ":" + entry.id + ":" + entry.modified + ":" + entry.bytes);
     }
 
     Future<?> load(ScreenshotStore.Entry entry, boolean fullSize, Result result) {
-        String cacheKey = generation + ":" + entry.id;
+        String cacheKey = generation + ":" + entry.id + ":" + entry.modified + ":" + entry.bytes;
         return workers.submit(() -> {
             Bitmap bitmap = fullSize ? null : thumbnails.get(cacheKey);
             try {

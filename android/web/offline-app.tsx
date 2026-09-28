@@ -78,7 +78,12 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
   const stoppingRef = useRef(false);
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), feedback.ok ? 1000 : 12000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
   const [portrait, setPortrait] = useState(window.matchMedia("(orientation: portrait)").matches);
   const { preferences, loaded, setOrientation, setTouchEnabled, saveLayout } = useWebPlayControlsPreferences();
   const { capture, capturing } = useWebPlayScreenshots(installation.workId!, installation.title);
@@ -168,11 +173,11 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
     <div className="offline-game" id="web-player-frame">
       <WebPlaySurface
         captureDisabled={starting || capturing}
-        feedback={error || feedback ? <p className="pointer-events-none absolute bottom-4 left-1/2 z-30 m-0 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 rounded bg-black/85 p-3 text-center text-sm text-white" role={error ? "alert" : "status"}>{error ?? feedback}</p> : null}
+        feedback={error || feedback ? <p className="pointer-events-none absolute bottom-4 left-1/2 z-30 m-0 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 rounded bg-black/85 p-3 text-center text-sm text-white" role={error ? "alert" : "status"}>{error ?? feedback?.message}</p> : null}
         immersive
         layout={preferences.layouts[orientation]}
         mobile
-        onCaptureScreenshot={() => { void capture(playerRef.current).then((result) => setFeedback(result?.message ?? null)); }}
+        onCaptureScreenshot={() => { void capture(playerRef.current).then((result) => setFeedback(result ?? null)); }}
         onSaveLayout={saveLayout}
         onTouchEnabledChange={setTouchEnabled}
         orientation={orientation}

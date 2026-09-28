@@ -33,8 +33,11 @@ final class NativeControls {
         return button;
     }
     static MaterialAlertDialogBuilder dialog(Context context) {
+        return dialog(context, 0);
+    }
+    static MaterialAlertDialogBuilder dialog(Context context, int theme) {
         GradientDrawable background = new GradientDrawable();
         background.setColor(Color.WHITE); background.setCornerRadius(dp(context, 20));
-        return new MaterialAlertDialogBuilder(context).setBackground(background);
+        return new MaterialAlertDialogBuilder(context, theme).setBackground(background);
     }
 }

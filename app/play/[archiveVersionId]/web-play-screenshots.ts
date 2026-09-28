@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerSession } from "./web-play-player";
 import { isAndroidClient } from "@/lib/browser/client-environment";
-import { ensureAndroidScreenshotDirectory, saveAndroidScreenshot } from "@/lib/browser/android-screenshots";
+import { saveAndroidScreenshot } from "@/lib/browser/android-screenshots";
 import {
   listWebPlayScreenshots,
   saveWebPlayScreenshot,
@@ -56,14 +56,13 @@ export function useWebPlayScreenshots(workId: number, title: string) {
     setCapturing(true);
     try {
       const android = isAndroidClient();
-      if (android && !await ensureAndroidScreenshotDirectory()) return { ok: false, message: "未选择截图目录，截图未保存。" };
       signal.throwIfAborted();
       const capturedAt = Date.now();
       const image = await player.captureScreenshot();
       signal.throwIfAborted();
       if (android) {
         await saveAndroidScreenshot(image.blob, workId, title, capturedAt);
-        return signal.aborted ? undefined : { ok: true, message: "截图已保存到所选目录。" };
+        return signal.aborted ? undefined : { ok: true, message: "截图已保存" };
       }
       const screenshot: WebPlayScreenshot = {
         ...image,
@@ -76,7 +75,7 @@ export function useWebPlayScreenshots(workId: number, title: string) {
       const url = URL.createObjectURL(screenshot.blob);
       urlsRef.current.add(url);
       setScreenshots((current) => [{ ...screenshot, url }, ...current]);
-      return { ok: true, message: "截图已保存。" };
+      return { ok: true, message: "截图已保存" };
     } catch (error) {
       if (signal.aborted) return;
       return {

@@ -1,8 +1,7 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Check } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ensureAndroidScreenshotDirectory } from "@/lib/browser/android-screenshots";
+import { useLayoutEffect, useRef, useState } from "react";
 import { controlDefinitions, controlIds } from "./web-play-controls-preferences";
 import type { ControlId, ControlLayout, ControlPlacement, DisplayOrientation } from "./web-play-controls-preferences";
 
@@ -26,32 +25,6 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const editorRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  const [preparingScreenshot, setPreparingScreenshot] = useState(false);
-  const [screenshotError, setScreenshotError] = useState<string | null>(null);
-  const lifetimeRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const lifetime = new AbortController();
-    lifetimeRef.current = lifetime;
-    return () => lifetime.abort();
-  }, []);
-
-  async function addScreenshotButton() {
-    if (preparingScreenshot) return;
-    const signal = lifetimeRef.current?.signal;
-    setPreparingScreenshot(true); setScreenshotError(null);
-    try {
-      const ready = await ensureAndroidScreenshotDirectory();
-      if (signal?.aborted) return;
-      if (ready) { onChange("screenshot", { visible: true }); onSelect("screenshot"); }
-      else setScreenshotError("未选择目录，截图按钮尚未启用。");
-    } catch (error) {
-      if (!signal?.aborted) setScreenshotError(error instanceof Error ? error.message : "无法选择截图目录。");
-    } finally {
-      if (!signal?.aborted) setPreparingScreenshot(false);
-    }
-  }
-
   useLayoutEffect(() => {
     const actions = actionsRef.current;
     if (!actions) return;
@@ -83,13 +56,11 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
         <Button aria-expanded={propertiesOpen} aria-controls="web-play-layout-properties" className={`${buttonClass} aria-expanded:border-yellow-300 aria-expanded:bg-zinc-700 aria-expanded:text-yellow-200 aria-expanded:ring-1 aria-expanded:ring-yellow-300`} onClick={() => setPropertiesOpen(!propertiesOpen)} size="sm" type="button" variant="outline">
           属性<span aria-hidden className="text-[10px]">{propertiesOpen ? "▲" : "▼"}</span>
         </Button>
-        <Button className={buttonClass} disabled={preparingScreenshot} onClick={onReset} size="sm" type="button" variant="outline">恢复默认</Button>
+        <Button className={buttonClass} onClick={onReset} size="sm" type="button" variant="outline">恢复默认</Button>
         <Button className={buttonClass} onClick={onCancel} size="sm" type="button" variant="outline">取消</Button>
-        <Button className={buttonClass} disabled={preparingScreenshot} onClick={onSave} size="sm" type="button" variant="outline">保存</Button>
+        <Button className={buttonClass} onClick={onSave} size="sm" type="button" variant="outline">保存</Button>
       </div>
       <div className={propertiesOpen ? `pointer-events-auto absolute ${panelPosition} overflow-y-auto overscroll-contain rounded-lg border border-white/25 bg-zinc-950 p-3 text-white` : "hidden"} id="web-play-layout-properties">
-        {preparingScreenshot ? <p className="mb-3 text-sm" role="status">正在选择截图目录…</p> : null}
-        {screenshotError ? <p className="mb-3 text-sm text-yellow-200" role="alert">{screenshotError}</p> : null}
         <div aria-label="选择或添加按钮" className="mb-3 flex flex-wrap gap-1.5" role="group">
           {controlIds.map((id) => {
             const visible = layout.buttons[id].visible;
@@ -99,10 +70,8 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
                 aria-label={visible ? `选择${label}` : `添加${label}`}
                 aria-pressed={selected === id && visible}
                 className={`${buttonClass} aria-pressed:border-white aria-pressed:bg-zinc-600`}
-                disabled={id === "screenshot" && preparingScreenshot}
                 key={id}
                 onClick={() => {
-                  if (!visible && id === "screenshot") { void addScreenshotButton(); return; }
                   if (!visible) onChange(id, { visible: true });
                   onSelect(id);
                 }}
