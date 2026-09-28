@@ -901,7 +901,8 @@ export function UploadClient({
                     changeTranslationDeclaration={changeTranslationDeclaration}
                     changeTranslator={changeTranslator}
                     disabled={preparing}
-                    existingPreviewCount={initialWork?.previewBlobSha256s.length ?? 0}
+                    existingPreviewHashes={initialWork?.previewBlobSha256s ?? []}
+                    existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
                     form={form}
                     imageSelections={imageSelections}
                     setForm={setForm}
@@ -1417,7 +1418,7 @@ async function prepareSelectedImages(
   const coverBlobSha256 = input.cover ? await prepareMetadataImage(input.cover, blobs) : retained?.coverBlobSha256 ?? "";
   if (!coverBlobSha256) throw new Error("请指定封面图。");
   const previewBlobSha256s = input.replacePreviews
-    ? await Promise.all(input.browsingImages.map((file) => prepareMetadataImage(file, blobs)))
+    ? await Promise.all((input.previewOrder ?? input.browsingImages.map((_, index) => index)).map((entry) => typeof entry === "string" ? entry : prepareMetadataImage(input.browsingImages[entry], blobs)))
     : retained?.previewBlobSha256s ?? [];
   return { hashes: { coverBlobSha256, previewBlobSha256s }, blobs: uniqueMetadataBlobs(blobs) };
 }
@@ -1556,6 +1557,7 @@ async function submitOwnedWork(
   if (images.cover) body.set("cover", images.cover);
   if (images.replacePreviews) {
     body.set("replace_previews", "1");
+    if (images.previewOrder) body.set("preview_order", JSON.stringify(images.previewOrder));
     for (const image of images.browsingImages) body.append("browsing_images[]", image);
   }
   for (const faceSheet of faceSheets.blobs) {

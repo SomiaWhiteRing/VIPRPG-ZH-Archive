@@ -1,8 +1,7 @@
 import { CharacterPicker } from "@/app/components/characters/character-picker";
-import { PreviewPicker } from "@/app/components/media/media-picker";
+import { PreviewPicker } from "@/app/components/media/preview-picker";
 import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
-import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -33,7 +32,8 @@ export function WorkMetadataFields({
   changeTranslationDeclaration,
   changeTranslator,
   disabled,
-  existingPreviewCount,
+  existingPreviewHashes,
+  existingImageBaseUrl = "/api/media/blobs/",
   form,
   imageSelections,
   removeCharacterFaceSheetFiles,
@@ -60,7 +60,8 @@ export function WorkMetadataFields({
   changeTranslationDeclaration: (checked: boolean) => void;
   changeTranslator: (value: (CreatorSelection | null)[]) => void;
   disabled: boolean;
-  existingPreviewCount: number;
+  existingPreviewHashes: string[];
+  existingImageBaseUrl?: string;
   form: FlatMetadata;
   imageSelections: ImageSelections;
   removeCharacterFaceSheetFiles?: (index: number) => void;
@@ -317,17 +318,19 @@ export function WorkMetadataFields({
             <WorkbenchField label="预览图">
               <PreviewPicker
                 disabled={disabled}
-                existingCount={imageSelections.replacePreviews ? 0 : existingPreviewCount}
+                existingHashes={imageSelections.replacePreviews ? [] : existingPreviewHashes}
+                imageBaseUrl={existingImageBaseUrl}
+                order={imageSelections.previewOrder}
                 files={imageSelections.browsingImages}
-                onChange={(browsingImages) =>
+                onChange={(browsingImages, previewOrder) =>
                   setImageSelections((current) => ({
                     ...current,
                     browsingImages,
+                    previewOrder,
                     replacePreviews: true,
                   }))
                 }
               />
-              {existingPreviewCount > 0 && !imageSelections.replacePreviews ? <Button type="button" variant="ghost" disabled={disabled} onClick={() => setImageSelections((current) => ({...current, browsingImages: [], replacePreviews: true}))}>清空已有预览图</Button> : null}
             </WorkbenchField>
             <WorkbenchField controlId="upload-aliases" label="别名">
               <TokenPicker

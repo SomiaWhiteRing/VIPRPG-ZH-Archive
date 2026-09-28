@@ -468,58 +468,6 @@ export function CoverPicker({
   );
 }
 
-export function PreviewPicker({
-  disabled = false,
-  existingCount = 0,
-  files,
-  name,
-  onChange,
-}: {
-  disabled?: boolean;
-  existingCount?: number;
-  files: File[];
-  name?: string;
-  onChange: (files: File[]) => void;
-}) {
-  const id = useId();
-  const status = files.length
-    ? "已选择 " + files.length + " 张预览图"
-    : existingCount
-      ? "当前 " + existingCount + " 张预览图"
-      : "可同时选择多张图片";
-  return (
-    <div className="grid gap-2">
-      <Label
-        className={cn(
-          "flex min-h-20 cursor-pointer items-center gap-3 rounded-md border border-dashed border-border bg-background px-4 py-3 hover:border-primary hover:bg-primary/5",
-          disabled && "pointer-events-none opacity-60",
-        )}
-        htmlFor={id}
-      >
-        <ImagePlus className="size-6 shrink-0 text-primary" />
-        <span>
-          <strong className="block text-sm">上传预览图</strong>
-          <span className="mt-0.5 block text-xs font-normal text-muted">
-            {status}
-          </span>
-        </span>
-      </Label>
-      <input
-        accept="image/*"
-        className="sr-only"
-        disabled={disabled}
-        id={id}
-        multiple
-        name={name}
-        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-          onChange(Array.from(event.target.files ?? []))
-        }
-        type="file"
-      />
-    </div>
-  );
-}
-
 function useFileUrl(file: File | null): string | null {
   const [preview, setPreview] = useState<{ file: File; url: string } | null>(
     null,
