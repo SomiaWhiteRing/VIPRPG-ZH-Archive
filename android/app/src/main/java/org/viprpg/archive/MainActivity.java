@@ -350,9 +350,8 @@ public final class MainActivity extends Activity {
         offlineBrowser.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        boolean wasLibrary = library;
         library = false;
-        if (wasLibrary || browser.getUrl() == null || onlineLoadFailed) {
+        if (browser.getUrl() == null || onlineLoadFailed) {
             onlineLoadFailed = false;
             browser.loadUrl(BuildConfig.SITE_ORIGIN + "/");
         }

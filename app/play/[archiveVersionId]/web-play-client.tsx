@@ -4,6 +4,7 @@ import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { useToast } from "@/app/components/ui/toast";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { setAndroidOnlinePlaying } from "@/lib/browser/android-screenshots";
+import { isAndroidClient } from "@/lib/browser/client-environment";
 
 import {
   AlertDialog,
@@ -531,6 +532,12 @@ export function WebPlayClient({
 
   const lockOrientation = useCallback(
     async (next: DisplayOrientation): Promise<boolean> => {
+      if (isAndroidClient()) {
+        androidOrientationBridge()?.setOrientation(next);
+        setOrientationLockActive(true);
+        setDisplayMessage(null);
+        return true;
+      }
       const orientation = screen.orientation as LockableScreenOrientation;
       if (typeof orientation?.lock !== "function") {
         setOrientationLockActive(false);
@@ -641,7 +648,7 @@ export function WebPlayClient({
   const changeDisplayOrientation = useCallback(
     async (next: DisplayOrientation) => {
       setDisplayOrientation(next);
-      if (nativeFullscreen) {
+      if (nativeFullscreen || isAndroidClient()) {
         await lockOrientation(next);
       } else {
         setOrientationLockActive(false);
@@ -1204,10 +1211,18 @@ function formatLog(log: WebPlayLog): string {
 }
 
 function unlockScreenOrientation(): void {
+  if (isAndroidClient()) {
+    androidOrientationBridge()?.setOrientation("portrait");
+    return;
+  }
   const orientation = screen.orientation as
     | LockableScreenOrientation
     | undefined;
   orientation?.unlock?.();
+}
+
+function androidOrientationBridge(): { setOrientation: (direction: string) => void } | undefined {
+  return (window as Window & { VIPRPGAndroid?: { setOrientation: (direction: string) => void } }).VIPRPGAndroid;
 }
 
 function focusPlayerCanvas(): void {
