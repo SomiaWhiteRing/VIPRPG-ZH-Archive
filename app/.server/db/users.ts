@@ -37,6 +37,7 @@ import { HttpError } from "@/lib/http";
 import { assertAccountDeletionRequest } from "@/app/.server/auth/account-deletion";
 import { hashVerificationCode } from "@/app/.server/auth/tokens";
 import { consumeLatestEmailChallenge } from "@/app/.server/db/auth-challenges";
+import { assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
 
 type UserAuthRow = UserRow & {
   password_hash: string | null;
@@ -259,20 +260,13 @@ export async function authenticateUser(
     password: string;
   },
 ): Promise<ArchiveUser> {
+  await assertAuthSourceRateLimit(runtime, "login");
   const email = normalizeEmail(input.email);
   const row = await findUserAuthRowByEmail(runtime, email);
 
-  if (!row || row.status === "deleted") {
-    await verifyPassword(input.password, null);
-    throw new Error("账号不存在");
-  }
-  if (row.status === "disabled") {
+  if (!row || row.status !== "active") {
     await verifyPassword(input.password, null);
     throw new Error("邮箱或密码不正确");
-  }
-
-  if (row.locked_until && new Date(row.locked_until).getTime() > Date.now()) {
-    throw new Error("登录失败次数过多，请稍后再试");
   }
 
   const passwordLengthValid =
@@ -292,7 +286,7 @@ export async function authenticateUser(
     ? await hashPassword(input.password)
     : row.password_hash;
 
-  await getD1(runtime)
+  const saved = await getD1(runtime)
     .prepare(
       `UPDATE users
       SET password_hash = ?,
@@ -300,10 +294,11 @@ export async function authenticateUser(
         last_login_at = CURRENT_TIMESTAMP,
         failed_login_count = 0,
         locked_until = NULL
-      WHERE id = ?`,
+      WHERE id = ? AND status='active' AND password_hash IS ?`,
     )
-    .bind(upgradedHash, upgradedHash, row.id)
+    .bind(upgradedHash, upgradedHash, row.id, row.password_hash)
     .run();
+  if (Number(saved.meta.changes) !== 1) throw new Error("邮箱或密码不正确");
 
   return requiredUserById(runtime, row.id);
 }
@@ -697,14 +692,17 @@ async function recordFailedLogin(
   runtime: AppRuntime,
   userId: number,
 ): Promise<void> {
+  // Keep a bounded failure window for diagnostics, never an account-wide login ban.
+  // The existing locked_until column stores this window's end; source limits enforce throttling.
   await getD1(runtime)
     .prepare(
       `UPDATE users
-      SET failed_login_count = failed_login_count + 1,
+      SET failed_login_count = CASE
+          WHEN locked_until IS NULL OR locked_until <= CURRENT_TIMESTAMP THEN 1
+          ELSE failed_login_count + 1 END,
         locked_until = CASE
-          WHEN failed_login_count + 1 >= 5 THEN datetime('now', '+15 minutes')
-          ELSE locked_until
-        END
+          WHEN locked_until IS NULL OR locked_until <= CURRENT_TIMESTAMP THEN datetime('now', '+15 minutes')
+          ELSE locked_until END
       WHERE id = ?`,
     )
     .bind(userId)

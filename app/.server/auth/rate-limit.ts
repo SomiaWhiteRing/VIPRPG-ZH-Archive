@@ -1,6 +1,13 @@
 import { getCloudflareEnv } from "@/app/.server/cloudflare/env";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
+import { hashRequestFingerprint } from "./tokens";
+
+export async function assertAuthSourceRateLimit(runtime: AppRuntime, purpose: string): Promise<void> {
+  // Only the edge-provided address is trusted; forwarded headers are caller-controlled.
+  const source = await hashRequestFingerprint(runtime, runtime.request.headers.get("cf-connecting-ip"));
+  await assertAuthEmailRateLimit(runtime, `${purpose}:source:${source ?? "unknown"}`);
+}
 
 export async function assertAuthEmailRateLimit(
   runtime: AppRuntime,

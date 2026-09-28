@@ -13,6 +13,14 @@ export function readRequiredFormString(
   return value.trim();
 }
 
+export function readRequiredPassword(formData: FormData, name: string): string {
+  const value = formData.get(name);
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("请输入密码");
+  }
+  return value;
+}
+
 export function redirectWithParams(
   request: Request,
   path: string,
