@@ -36,6 +36,8 @@ export type UploadFormMetadata = {
 export type UploadImageSelections = {
   cover: File | null;
   browsingImages: File[];
+  // Existing blob hashes and indices into browsingImages, in display order.
+  previewOrder?: (string | number)[];
   replacePreviews: boolean;
 };
 

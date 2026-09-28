@@ -6,7 +6,7 @@ import {
 } from "@/app/.server/db/game-library";
 import { redirectResponse } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { readWorkImage, storeWorkImages } from "@/app/.server/storage/work-images";
+import { readWorkImage, storeWorkImages, storeWorkPreviews } from "@/app/.server/storage/work-images";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError, json, jsonError } from "@/lib/http";
 
@@ -52,9 +52,7 @@ export async function POST(
       input.coverBlobSha256 = (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0];
     }
     if (formData.has("replace_previews")) {
-      input.previewBlobSha256s = await storeWorkImages(runtime,
-        formData.getAll("browsing_images[]").map((value) => readWorkImage(value, "browsing_images[]")),
-      );
+      input.previewBlobSha256s = await storeWorkPreviews(runtime, formData, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256));
     }
 
     await updateWorkForAdmin(runtime, input, auth.user);

@@ -19,6 +19,7 @@ import {
 import {
   readWorkImage,
   storeWorkImages,
+  storeWorkPreviews,
 } from "@/app/.server/storage/work-images";
 import { HttpError, json, jsonError } from "@/lib/http";
 
@@ -46,7 +47,7 @@ export async function POST(
       ? (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0]
       : current.media.find((media) => media.role === "cover")?.blobSha256 ?? "";
     const previewBlobSha256s = form.has("replace_previews")
-      ? await storeWorkImages(runtime, form.getAll("browsing_images[]").map((value) => readWorkImage(value, "browsing_images[]")))
+      ? await storeWorkPreviews(runtime, form, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256))
       : current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256);
     await storeCharacterFaceSheets(runtime, characterFaceSheets);
     await ensureCharacterFaceSheets(

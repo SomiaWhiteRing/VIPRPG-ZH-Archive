@@ -16,7 +16,7 @@ import type { StaffCredit } from "@/lib/staff-credits";
 import { isExtraStaffRole } from "@/lib/staff-credits";
 import { normalizeWorkMoreInfo } from "@/lib/work-more-info";
 import { useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
-import { ExternalLinkList, PreviewList } from "./structured-work-fields";
+import { ExternalLinkList } from "./structured-work-fields";
 
 export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
   work: AdminWorkEdit;
@@ -94,6 +94,7 @@ export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
       if (images.cover) body.set("cover", images.cover);
       if (images.replacePreviews) {
         body.set("replace_previews", "1");
+        if (images.previewOrder) body.set("preview_order", JSON.stringify(images.previewOrder));
         for (const image of images.browsingImages) body.append("browsing_images[]", image);
       }
       const response = await fetch(`/api/admin/works/${work.id}/update`, {
@@ -130,7 +131,8 @@ export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
                 changeTranslationDeclaration={(isTranslation) => setForm((current) => ({ ...current, isTranslation, isOriginal: isTranslation ? false : current.isOriginal }))}
                 changeTranslator={(translators) => setForm((current) => ({ ...current, translators }))}
                 disabled={busy}
-                existingPreviewCount={previewHashes.length}
+                existingPreviewHashes={previewHashes}
+                existingImageBaseUrl={`/api/works/${work.id}/media/`}
                 form={form}
                 setForm={setForm}
                 imageSelections={images}
@@ -157,13 +159,13 @@ export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
             </WorkbenchField> : null}
             <ExternalLinkList initialValues={work.externalLinks} />
             <details>
-              <summary className="cursor-pointer text-sm font-bold">已上传图片引用与排序</summary>
+              <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
               <div className="mt-3 grid gap-4">
-                <p className="text-sm text-muted">选择新封面或替换预览图后，将优先使用新图片。</p>
+                <p className="text-sm text-muted">选择新封面后，将优先使用新图片。</p>
                 <WorkbenchField controlId="admin-cover-hash" label="封面 SHA-256">
                   <Input id="admin-cover-hash" name="cover_blob_sha256" defaultValue={coverHash} pattern="[a-fA-F0-9]{64}" disabled={Boolean(images.cover)} />
                 </WorkbenchField>
-                <fieldset disabled={images.replacePreviews}><PreviewList initialValues={previewHashes} /></fieldset>
+                <input type="hidden" name="preview_blob_sha256s" value={previewHashes.join("\n")} />
               </div>
             </details>
           </div>

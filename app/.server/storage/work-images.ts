@@ -19,6 +19,27 @@ export function readWorkImage(
   return value;
 }
 
+// Retained references may only name previews already attached to this work.
+// Missing preview_order preserves the existing multipart upload contract.
+export async function storeWorkPreviews(runtime: AppRuntime, form: FormData, existingHashes: string[]): Promise<string[]> {
+  const files = form.getAll("browsing_images[]").map((value) => readWorkImage(value, "browsing_images[]"));
+  const raw = form.get("preview_order");
+  let order: unknown;
+  if (raw === null) order = files.map((_, index) => index);
+  else {
+    try { order = typeof raw === "string" ? JSON.parse(raw) : null; }
+    catch { throw new HttpError(400, "预览图顺序格式不合法"); }
+  }
+  if (!Array.isArray(order) || order.some((entry) =>
+    typeof entry === "string" ? !existingHashes.includes(entry) :
+      typeof entry !== "number" || !Number.isSafeInteger(entry) || entry < 0 || entry >= files.length,
+  ) || new Set(order).size !== order.length || files.some((_, index) => !order.includes(index))) {
+    throw new HttpError(400, "预览图顺序或已有图片引用不合法，请刷新后重试");
+  }
+  const hashes = await storeWorkImages(runtime, files);
+  return [...new Set(order.map((entry: string | number) => typeof entry === "string" ? entry : hashes[entry]))];
+}
+
 export async function storeWorkImages(
   runtime: AppRuntime,
   files: File[],
