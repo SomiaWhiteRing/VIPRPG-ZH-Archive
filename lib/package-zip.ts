@@ -4,7 +4,7 @@ export type PackageReader = (offset: number, length: number) => Promise<Uint8Arr
 const invalid = () => new Error("安装包 ZIP 结构或元数据无效");
 
 // Only read the bounded central directory and requested entry, on File or R2.
-export async function readZipEntry(size: number, source: PackageReader, metadataPath: string, maxBytes = 16384): Promise<Uint8Array> {
+export async function readZipEntry(size: number, source: PackageReader, metadataPath: string, maxBytes = 16384, caseSensitive = false): Promise<Uint8Array> {
   const read = async (offset: number, length: number) => {
     if (offset < 0 || length < 0 || offset + length > size) throw invalid();
     const bytes = await source(offset, length);
@@ -33,8 +33,10 @@ export async function readZipEntry(size: number, source: PackageReader, metadata
       if (next > length) throw invalid();
       const name = decoder.decode(directory.subarray(cursor + 46, cursor + 46 + nameLength)).replaceAll("\\", "/");
       const key = name.toLowerCase();
-      if (names.has(key) || name.split("/").some((part) => part === ".." || part === ".")) throw invalid();
-      names.add(key);
+      // Optimized APK resources can differ only by case; Windows ZIPs cannot.
+      const entryKey = caseSensitive ? name : key;
+      if (names.has(entryKey) || name.split("/").some((part) => part === ".." || part === ".")) throw invalid();
+      names.add(entryKey);
       if (key === metadataPath.toLowerCase()) {
         if (name !== metadataPath || entry || view.getUint16(cursor + 34, true)) throw invalid();
         entry = { offset: view.getUint32(cursor + 42, true), compressed: view.getUint32(cursor + 20, true), size: view.getUint32(cursor + 24, true), method: view.getUint16(cursor + 10, true), flags: view.getUint16(cursor + 8, true) };
