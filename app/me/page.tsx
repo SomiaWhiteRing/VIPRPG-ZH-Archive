@@ -17,7 +17,7 @@ import {
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import {
@@ -90,7 +90,7 @@ export default function MePage() {
   } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-7">
-      <PageHeader
+      <AccountPageHeader
         actions={
           <Button asChild size="sm" variant="outline">
             <Link to={`/users/${user.id}`}>查看访客页</Link>

@@ -1,7 +1,7 @@
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { runtimeContext } from "@/app/.server/router-context";
 import { EmojiLibrary } from "@/app/components/emojis/library";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
@@ -13,7 +13,7 @@ export const meta: MetaFunction = ({ error }) =>
 export default function EmojiLibraryPage() {
   return (
     <>
-      <PageHeader title="表情库" />
+      <AccountPageHeader title="表情库" />
       <EmojiLibrary />
     </>
   );

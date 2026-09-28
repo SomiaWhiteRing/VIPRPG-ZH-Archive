@@ -6,7 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useToast } from "@/app/components/ui/toast";
@@ -67,7 +67,7 @@ export default function AccountPermissionsPage() {
 
   return (
     <div>
-      <PageHeader title="权限申请" />
+      <AccountPageHeader title="权限申请" />
       {role && state ? (
         <div className="grid items-start gap-5 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-6">
           <nav className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-1" aria-label="选择要申请的权限">

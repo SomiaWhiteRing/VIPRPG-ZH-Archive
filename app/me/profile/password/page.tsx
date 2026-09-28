@@ -7,7 +7,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { AccountField } from "@/app/components/profile/account-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
@@ -27,7 +27,7 @@ export const meta: MetaFunction = ({ error }) =>
 export default function PasswordPage() {
   return (
     <div>
-      <PageHeader title="修改密码" />
+      <AccountPageHeader parentTitle="个人资料" title="修改密码" />
       <RedirectFeedback success={{ passwordUpdated: "密码已更新，其他设备已登出。" }} />
 
       <RedirectForm action="/api/account/password" className="grid gap-4" method="post">

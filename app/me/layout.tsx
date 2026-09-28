@@ -8,6 +8,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useMatch } from "react-router";
 import { AccountNavigation } from "./account-navigation";
+import type { AccountOutletContext } from "./mobile-account-navigation";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -31,7 +32,8 @@ export const meta: MetaFunction = ({ error }) =>
 export default function AccountLayout() {
   const { user } = useLoaderData<typeof loader>();
   const fullWidth = Boolean(useMatch("/me/uploads/:workId"));
-  const children = <Outlet />;
+  const canUpload = Boolean(user && canAccessOwnWorks(user));
+  const children = <Outlet context={{ canUpload } satisfies AccountOutletContext} />;
   return (
     <PageContainer>
       {/* Let content expand even when the sidebar is hidden by external styles. */}
@@ -50,17 +52,12 @@ export default function AccountLayout() {
                 </div>
               ) : null}
               <AccountNavigation
-                canUpload={Boolean(user && canAccessOwnWorks(user))}
-              />
-            </div>
-            <div className="md:hidden">
-              <AccountNavigation
-                canUpload={Boolean(user && canAccessOwnWorks(user))}
+                canUpload={canUpload}
               />
             </div>
           </>
         ) : null}
-        <div className="min-w-0 flex-1 pt-5 md:pt-0">{children}</div>
+        <div className={fullWidth ? "min-w-0 flex-1 pt-5 md:pt-0" : "min-w-0 flex-1"}>{children}</div>
       </div>
     </PageContainer>
   );

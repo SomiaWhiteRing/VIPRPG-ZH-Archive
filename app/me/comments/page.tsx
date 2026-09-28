@@ -9,7 +9,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
@@ -37,7 +37,7 @@ export default function CommentsPage() {
   const { page, result } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader
+      <AccountPageHeader
         title="我的评论"
         subtitle={`共 ${result.total} 条评论。`}
       />

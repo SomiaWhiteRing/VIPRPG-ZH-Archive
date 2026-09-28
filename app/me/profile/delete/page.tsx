@@ -8,7 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { useToast } from "@/app/components/ui/toast";
 import { ACCOUNT_DELETION_ACKNOWLEDGEMENT } from "@/lib/auth/account-deletion";
@@ -68,7 +68,7 @@ export default function DeleteAccountPage() {
 
   return (
     <div>
-      <PageHeader title="注销账号" />
+      <AccountPageHeader parentTitle="个人资料" title="注销账号" />
       <div className="max-w-2xl space-y-6">
         <section
           aria-labelledby="account-deletion-warning"
