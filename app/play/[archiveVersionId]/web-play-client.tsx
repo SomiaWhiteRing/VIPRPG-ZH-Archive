@@ -155,9 +155,12 @@ export function WebPlayClient({
   const controlsStorageMessage = mobileControls ? controlsStorageError : null;
 
   useEffect(() => {
-    setAndroidOnlinePlaying(playerBusy);
-    return () => setAndroidOnlinePlaying(false);
-  }, [playerBusy]);
+    setAndroidOnlinePlaying(playerBusy, immersive);
+  }, [playerBusy, immersive]);
+
+  useEffect(() => {
+    return () => setAndroidOnlinePlaying(false, false);
+  }, []);
 
   useEffect(() => {
     immersiveRef.current = immersive;
@@ -764,24 +767,24 @@ export function WebPlayClient({
                             aria-label={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
                             className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                             onClick={() => void changeDisplayOrientation(nextOrientation)}
-                            size="sm"
+                            size="icon"
+                            title={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
                             type="button"
                             variant="outline"
                           >
                             {nextOrientation === "landscape" ? <RectangleHorizontal aria-hidden /> : <RectangleVertical aria-hidden />}
-                            {nextOrientation === "landscape" ? "横屏" : "竖屏"}
                           </Button>
                         ) : null}
                         <Button
                           aria-label="恢复窗口"
                           className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                           onClick={() => void exitImmersive()}
-                          size="sm"
+                          size="icon"
+                          title="恢复窗口"
                           type="button"
                           variant="outline"
                         >
                           <Minimize2 aria-hidden />
-                          恢复
                         </Button>
                         {!mobileControls ? (
                           <Button

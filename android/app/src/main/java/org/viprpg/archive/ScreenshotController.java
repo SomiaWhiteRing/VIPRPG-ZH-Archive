@@ -77,7 +77,8 @@ final class ScreenshotController {
                             break;
                         case "playerState":
                             if (online)
-                                activity.setOnlinePlaying(request.optBoolean("playing"));
+                                activity.setOnlinePlaying(request.optBoolean("playing"),
+                                    request.has("immersive") ? request.optBoolean("immersive") : request.optBoolean("playing"));
                             reply(reply, id, true, null);
                             break;
                         default:
