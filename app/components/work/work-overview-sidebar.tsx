@@ -81,6 +81,8 @@ export function WorkOverviewSidebar({ work, data }: { work: GameWorkDetail; data
       mobilePrimaryFirst
       primary={
         <WorkActionBar
+          title={work.chineseTitle || work.originalTitle}
+          coverBlobSha256={work.coverBlobSha256}
           engineFamily={work.engineFamily}
           archive={current ? {
             id: current.id,

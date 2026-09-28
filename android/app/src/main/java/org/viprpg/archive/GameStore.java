@@ -29,7 +29,7 @@ final class GameStore {
         journal = new AtomicFile(new File(context.getFilesDir(), "install-tasks.json"));
         try (InputStream in = journal.openRead()) { tasks = new JSONArray(new String(readStream(in, 8 * 1024 * 1024), StandardCharsets.UTF_8)); }
         catch (Exception missing) { tasks = new JSONArray(); }
-        for (int i = 0; i < tasks.length(); i++) { JSONObject task = tasks.optJSONObject(i); if (task != null && "installing".equals(task.optString("status"))) put(task, "status", "created"); }
+        for (int i = 0; i < tasks.length(); i++) { JSONObject task = tasks.optJSONObject(i); if (task != null) { if ("installing".equals(task.optString("status")) || task.optBoolean("resumeRequested")) put(task, "status", "created"); task.remove("resumeRequested"); put(task, "bytesPerSecond", 0); } }
     }
     static void put(JSONObject object, String key, Object value) { try { object.put(key, value); } catch (JSONException impossible) { throw new IllegalArgumentException(impossible); } }
     synchronized void persist() throws IOException {
@@ -42,15 +42,33 @@ final class GameStore {
         }
     }
     synchronized JSONObject find(long id) { for (int i = 0; i < tasks.length(); i++) if (tasks.optJSONObject(i).optLong("archiveVersionId") == id) return tasks.optJSONObject(i); return null; }
-    synchronized JSONObject enqueue(long id) throws Exception {
+    synchronized JSONObject enqueue(long id) throws Exception { return enqueue(id, null); }
+    synchronized JSONObject enqueue(long id, JSONObject preview) throws Exception {
         if (id <= 0) throw new IOException("版本编号无效。");
         if (!storage.ready()) throw new IOException("本地目录不可用，请重新授权。");
         JSONObject task = find(id);
         if (task != null && active.contains(task) && "deleted".equals(task.optString("status"))) throw new IOException("正在取消上次安装，请稍后重试。");
         if (task != null && ("ready".equals(task.optString("status")) || "created".equals(task.optString("status")) || "installing".equals(task.optString("status")))) return task;
         if (task == null) { task = new JSONObject().put("archiveVersionId", id).put("playKey", "native-" + id).put("title", "版本 " + id); tasks.put(task); }
-        task.put("status", "created").put("error", JSONObject.NULL).put("installedBytes", 0).put("downloadedBytes", 0).put("downloadBytesTotal", 0)
+        if ("deleted".equals(task.optString("status"))) {
+            task.put("downloadedBytes", 0).put("downloadBytesTotal", 0).remove("readyAt");
+        }
+        if (preview != null) {
+            String hash = preview.optString("coverBlobSha256");
+            if (hash.matches("[a-f0-9]{64}")) task.put("coverBlobSha256", hash);
+            String title = preview.optString("title"); if (!title.isEmpty() && title.length() <= 500) task.put("title", title);
+            if (preview.optLong("workId") > 0) task.put("workId", preview.getLong("workId"));
+        }
+        if (active.contains(task)) { task.put("resumeRequested", true); persist(); return task; }
+        task.put("status", "created").put("error", JSONObject.NULL).put("installedBytes", 0).put("bytesPerSecond", 0)
             .put("updatedAt", Instant.now().toString()); persist(); return task;
+    }
+    synchronized void toggleDownload(String key) throws Exception {
+        JSONObject task = byKey(key); String status = task.optString("status");
+        if ("ready".equals(status) || "deleted".equals(status)) return;
+        if ("created".equals(status) || "installing".equals(status)) {
+            task.put("status", "paused").put("bytesPerSecond", 0).remove("resumeRequested"); persist();
+        } else enqueue(task.getLong("archiveVersionId"));
     }
     synchronized JSONObject next() { for (int i = 0; i < tasks.length(); i++) if ("created".equals(tasks.optJSONObject(i).optString("status"))) return tasks.optJSONObject(i); return null; }
     synchronized boolean busy() { return next() != null || !active.isEmpty(); }
@@ -65,13 +83,17 @@ final class GameStore {
     synchronized void begin(JSONObject task) { active.add(task); }
     synchronized void finish(JSONObject task) {
         active.remove(task);
+        if ("paused".equals(task.optString("status")) && task.optBoolean("resumeRequested")) {
+            task.remove("resumeRequested"); put(task, "status", "created");
+            try { persist(); } catch (IOException ignored) { }
+        }
         if ("deleted".equals(task.optString("status"))) try { delete(task.getString("playKey")); } catch (Exception ignored) { }
     }
     synchronized void update(JSONObject task, String status, String error) throws Exception {
-        if ("deleted".equals(task.optString("status"))) return;
-        task.put("status", status).put("error", error == null ? JSONObject.NULL : error).put("updatedAt", Instant.now().toString()); persist();
+        if ("deleted".equals(task.optString("status")) || "paused".equals(task.optString("status"))) return;
+        task.put("bytesPerSecond", 0).put("status", status).put("error", error == null ? JSONObject.NULL : error).put("updatedAt", Instant.now().toString()); persist();
     }
-    synchronized void check(JSONObject task) throws IOException { if (Thread.currentThread().isInterrupted() || "deleted".equals(task.optString("status"))) throw new IOException("安装已取消。"); }
+    synchronized void check(JSONObject task) throws IOException { if (Thread.currentThread().isInterrupted() || "deleted".equals(task.optString("status")) || "paused".equals(task.optString("status"))) throw new IOException("安装已取消。"); }
     synchronized String snapshot() throws Exception {
         JSONArray rows = new JSONArray(); long usage = 0;
         for (int i = 0; i < tasks.length(); i++) { JSONObject task = tasks.getJSONObject(i); if (!"deleted".equals(task.optString("status"))) { rows.put(task); usage += task.optLong("installedBytes"); } }
@@ -101,7 +123,7 @@ final class GameStore {
     }
     synchronized void delete(String key) throws Exception {
         if (key.equals(playingKey)) throw new IOException("请先退出游戏。");
-        JSONObject task = byKey(key); task.put("status", "deleted"); persist();
+        JSONObject task = byKey(key); task.put("status", "deleted").remove("resumeRequested"); persist();
         if (active.contains(task)) return; // The writer cleans up after it observes cancellation.
         try {
             Uri folder = folder(task, false);
@@ -171,19 +193,21 @@ final class GameStore {
             if (code != 200 && code != 206) throw new IOException("游戏下载失败（" + code + "）。");
             if (code == 206 && (download.getHeaderField("Content-Range") == null || !download.getHeaderField("Content-Range").startsWith("bytes " + offset + "-"))) throw new IOException("续传范围无效。");
             long length = download.getContentLengthLong(); long total = length < 0 ? metadata.getLong("installTotalSizeBytes") : offset + length;
+            synchronized (this) { check(task); task.put("downloadedBytes", offset).put("downloadBytesTotal", total).put("bytesPerSecond", 0); persist(); }
             try (InputStream in = download.getInputStream(); FileOutputStream out = new FileOutputStream(partial, offset > 0)) {
-                byte[] bytes = new byte[262144]; int n; long count = offset, emitted = 0;
+                byte[] bytes = new byte[262144]; int n; long count = offset, emitted = android.os.SystemClock.elapsedRealtime(), previousCount = offset;
                 while ((n = in.read(bytes)) != -1) { check(task); out.write(bytes, 0, n); count += n;
                     if (count > 1200L * 1024 * 1024) throw new IOException("下载文件超出大小限制。");
-                    if (System.currentTimeMillis() - emitted > 500) { synchronized(this) { task.put("downloadedBytes", count).put("downloadBytesTotal", total); persist(); } emitted = System.currentTimeMillis(); }
+                    long now = android.os.SystemClock.elapsedRealtime();
+                    if (now - emitted >= 500) { synchronized(this) { check(task); task.put("downloadedBytes", count).put("downloadBytesTotal", total).put("bytesPerSecond", (count - previousCount) * 1000 / (now - emitted)); persist(); } emitted = now; previousCount = count; }
                 }
                 out.getFD().sync(); if (length >= 0 && count != offset + length) throw new IOException("下载文件不完整。");
-                synchronized (this) { task.put("downloadedBytes", count).put("downloadBytesTotal", count); persist(); }
+                synchronized (this) { check(task); task.put("bytesPerSecond", 0).put("downloadedBytes", count).put("downloadBytesTotal", count); persist(); }
             }
         } finally { download.disconnect(); }
         check(task);
         JSONArray index;
-        try { index = indexZip(partial, task); } catch (Exception invalid) { partial.delete(); throw invalid; }
+        try { index = indexZip(partial, task); } catch (Exception invalid) { check(task); partial.delete(); throw invalid; }
         Uri folder = folder(task, true);
         requireManaged(folder, task);
         storage.write(storage.child(folder, ".viprpg-install.json", "application/json", true), new JSONObject()
@@ -202,12 +226,15 @@ final class GameStore {
         if (!Arrays.equals(expected, digest.digest())) throw new IOException("目录写入校验失败。");
         storage.write(storage.child(folder, "index.json", "application/json", true), new JSONObject().put("files", index).toString().getBytes(StandardCharsets.UTF_8));
         synchronized (this) {
-            check(task); task.put("installedBytes", metadata.getLong("installTotalSizeBytes")).put("readyAt", Instant.now().toString()).put("status", "ready");
+            check(task); task.put("bytesPerSecond", 0).put("installedBytes", metadata.getLong("installTotalSizeBytes")).put("readyAt", Instant.now().toString()).put("status", "ready");
             try { storage.write(storage.child(folder, "installation.json", "application/json", true), task.toString().getBytes(StandardCharsets.UTF_8)); persist(); }
             catch (Exception e) { task.put("status", "failed"); throw e; }
         }
         partial.delete();
-        cacheCover(task);
+        File cover = new File(context.getCacheDir(), "cover-" + task.optString("coverBlobSha256") + ".jpg");
+        if (cover.isFile()) try (InputStream in = new FileInputStream(cover)) {
+            storage.write(storage.child(folder, "cover.jpg", "image/jpeg", true), readStream(in, 150000));
+        } catch (Exception optionalCover) { }
     }
     private void cacheCover(JSONObject task) {
         String hash = task.optString("coverBlobSha256");
@@ -225,16 +252,28 @@ final class GameStore {
                 android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
                 if (bitmap == null) return;
                 ByteArrayOutputStream out = new ByteArrayOutputStream(); bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out); bitmap.recycle();
-                check(task); Uri folder = folder(task, false); if (folder == null) return;
-                storage.write(storage.child(folder, "cover.jpg", "image/jpeg", true), out.toByteArray());
+                File target = new File(context.getCacheDir(), "cover-" + hash + ".jpg");
+                try (FileOutputStream file = new FileOutputStream(target)) { file.write(out.toByteArray()); }
                 Runnable callback = changed; if (callback != null) callback.run();
             } finally { connection.disconnect(); }
         } catch (Exception optionalCover) { /* A missing cover must never break an installation. */ }
     }
     String cover(String key) throws Exception {
-        JSONObject task = byKey(key); Uri folder = folder(task, false); if (folder == null) return null;
-        Uri file = storage.child(folder, "cover.jpg", "image/jpeg", false); if (file == null) return null;
-        return "data:image/jpeg;base64," + android.util.Base64.encodeToString(storage.read(file, 150000), android.util.Base64.NO_WRAP);
+        JSONObject task; synchronized (this) { task = new JSONObject(byKey(key).toString()); }
+        String hash = task.optString("coverBlobSha256"); if (!hash.matches("[a-f0-9]{64}")) return null;
+        File file = new File(context.getCacheDir(), "cover-" + hash + ".jpg");
+        if (!file.isFile()) {
+            try {
+                Uri folder = folder(task, false);
+                Uri saved = folder == null ? null : storage.child(folder, "cover.jpg", "image/jpeg", false);
+                if (saved != null) return "data:image/jpeg;base64," + android.util.Base64.encodeToString(storage.read(saved, 150000), android.util.Base64.NO_WRAP);
+            } catch (Exception missingCover) { }
+            cacheCover(task);
+        }
+        if (!file.isFile()) return null;
+        try (InputStream in = new FileInputStream(file)) {
+            return "data:image/jpeg;base64," + android.util.Base64.encodeToString(readStream(in, 150000), android.util.Base64.NO_WRAP);
+        }
     }
     private JSONArray indexZip(File source, JSONObject metadata) throws Exception {
         JSONArray files = new JSONArray(); Set<String> paths = new HashSet<>(); long total = 0;

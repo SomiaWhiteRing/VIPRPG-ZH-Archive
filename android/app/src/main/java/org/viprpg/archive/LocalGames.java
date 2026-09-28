@@ -38,11 +38,20 @@ final class LocalGames {
                     switch (action) {
                         case "list": value = new JSONObject(store.snapshot()); break;
                         case "install": {
-                            JSONObject task = store.enqueue(request.getLong("archiveVersionId"));
+                            JSONObject task = store.enqueue(request.getLong("archiveVersionId"), request);
                             value = new JSONObject(task.toString());
                             activity.runOnUiThread(() -> activity.installQueued(task)); break;
                         }
-                        case "open": activity.runOnUiThread(activity::openLocalLibrary); value = true; break;
+                        case "open": {
+                            JSONObject task = request.has("archiveVersionId") ? store.find(request.getLong("archiveVersionId")) : null;
+                            if (request.has("archiveVersionId") && (task == null || !"ready".equals(task.optString("status")))) throw new IOException("游戏尚未安装完成。");
+                            String key = task == null ? null : task.getString("playKey");
+                            activity.runOnUiThread(() -> activity.openLocalLibrary(key)); value = true; break;
+                        }
+                        case "pendingPlay": {
+                            if (!offline) throw new IOException("无效操作。");
+                            value = activity.pendingLocalPlay; activity.pendingLocalPlay = null; break;
+                        }
                         case "start": {
                             if (!offline) throw new IOException("请从本地游戏启动。");
                             JSONObject task = store.start(request.getString("key"));
