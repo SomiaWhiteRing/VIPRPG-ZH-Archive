@@ -14,7 +14,6 @@ import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { VERIFICATION_EMAIL_HINT } from "@/lib/labels";
 import { Link } from "react-router";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
@@ -53,7 +52,7 @@ export default function ResetPasswordPage() {
     >
       {params.sent ? (
         <Notice tone="success" className="mb-4 rounded-md border p-3">
-          {VERIFICATION_EMAIL_HINT.replace("{email}", params.email ?? "")}
+          若 {params.email ?? ""} 对应可用账号且未超过发送限额，你将收到验证码。未收到时请检查垃圾邮件或稍后重试。
         </Notice>
       ) : null}
       <RedirectFeedback />

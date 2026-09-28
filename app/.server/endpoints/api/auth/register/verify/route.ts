@@ -1,4 +1,5 @@
 import { assertSameOrigin } from "@/app/.server/auth/origin";
+import { assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { createSessionCookie } from "@/app/.server/auth/session";
 import { hashVerificationCode } from "@/app/.server/auth/tokens";
@@ -22,6 +23,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
 
   try {
     assertSameOrigin(runtime, request);
+    await assertAuthSourceRateLimit(runtime, "register-verify");
     const challenge = await consumeLatestEmailChallenge(runtime, {
       email,
       purpose: "register",

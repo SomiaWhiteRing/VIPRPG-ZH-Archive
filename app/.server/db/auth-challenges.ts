@@ -149,20 +149,20 @@ export async function consumeLatestEmailChallenge(
     .first<ChallengeRow>();
 
   if (!row || row.expires_at <= new Date().toISOString().slice(0, 19).replace("T", " ")) {
-    throw new HttpError(400, "验证码不存在或已失效");
+    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
   }
 
   if (row.consumed_at) {
-    throw new HttpError(400, "验证码已被使用，请重新获取");
+    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
   }
 
   if (row.attempt_count >= 5) {
-    throw new HttpError(400, "验证码尝试次数过多，请重新获取");
+    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
   }
 
   if (!timingSafeEqualString(row.code_hash, input.codeHash)) {
     await incrementChallengeAttempts(runtime, row.id);
-    throw new HttpError(400, "验证码不正确");
+    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
   }
 
   const consumed = await getD1(runtime)
@@ -179,7 +179,7 @@ export async function consumeLatestEmailChallenge(
     .run();
 
   if (Number(consumed.meta.changes ?? 0) !== 1) {
-    throw new HttpError(400, "验证码已失效，请重新获取");
+    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
   }
 
   return mapChallengeRow({

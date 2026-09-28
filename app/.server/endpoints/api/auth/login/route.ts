@@ -6,6 +6,7 @@ import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { authenticateUser } from "@/app/.server/db/users";
 import {
   readRequiredFormString,
+  readRequiredPassword,
   redirectResponse,
   redirectWithParams,
 } from "@/app/.server/http/form";
@@ -20,7 +21,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     assertSameOrigin(runtime, request);
     const user = await authenticateUser(runtime, {
       email: readRequiredFormString(formData, "email"),
-      password: readRequiredFormString(formData, "password"),
+      password: readRequiredPassword(formData, "password"),
     });
     const response = redirectResponse(new URL(nextPath, request.url));
     await writeAuthAuditLog(runtime, {
