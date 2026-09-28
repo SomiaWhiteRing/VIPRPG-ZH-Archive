@@ -1,3 +1,4 @@
+import { normalizeWorkGenre } from "@/lib/work-genre";
 import { WorkMetadataFields } from "@/app/components/work/work-metadata-fields";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
@@ -96,6 +97,7 @@ export type UploadInitialWork = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  genre: string | null;
   originalReleaseDate: string | null;
   engineFamily: EngineFamily;
   isOriginal: boolean;
@@ -655,7 +657,7 @@ export function UploadClient({
     setSourceFaceSheetFiles(draft.formDraft?.sourceFaceSheetFiles ?? []);
     setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
-      setForm(draft.formDraft.form);
+      setForm({ ...draft.formDraft.form, genre: draft.formDraft.form.genre ?? "" });
       setAssociationDefaults(draft.formDraft.associationDefaults);
       setImageSelections(draft.formDraft.imageSelections);
       setCharacterFaceSheetFiles(draft.formDraft.characterFaceSheetFiles);
@@ -1241,6 +1243,7 @@ function initialForm(
       aliasTitles: initialWork.aliases,
       engineFamily: initialWork.engineFamily,
       description: initialWork.description ?? "",
+      genre: initialWork.genre ?? "",
       tags: initialWork.tags,
       characters: initialWork.characters,
       authors: initialWork.authors.length
@@ -1265,6 +1268,7 @@ function initialForm(
     aliasTitles: [],
     engineFamily: canArchiveUpload ? "rpg_maker_2000" : "other",
     description: "",
+    genre: "",
     tags: [],
     characters: [],
     authors: [null],
@@ -1304,6 +1308,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     aliasTitles: uniqueTokens(metadata.workTitles.map((item) => item.title)),
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
+    genre: metadata.game.genre ?? "",
     tags: metadata.tags,
     characters: (metadata.characters ?? []).map(
       ({ selection, roleKey, portrait, faceSheetBlobSha256s }) => ({
@@ -1386,6 +1391,7 @@ function buildMetadata(
       originalTitle: form.originalTitle.trim(),
       chineseTitle: cleanNullable(form.chineseTitle),
       description: cleanNullable(form.description),
+      genre: normalizeWorkGenre(form.genre) ?? null,
       originalReleaseDate: releaseDate.value,
       originalReleasePrecision: releaseDate.precision,
       engineFamily: form.engineFamily,
@@ -1477,6 +1483,7 @@ async function submitExternalWork(
   body.set("original_title", form.originalTitle.trim());
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
+  body.set("genre", normalizeWorkGenre(form.genre) ?? "");
   body.set("original_release_date", form.originalReleaseDate.trim());
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");
@@ -1535,6 +1542,7 @@ async function submitOwnedWork(
   body.set("original_title", form.originalTitle.trim());
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
+  body.set("genre", normalizeWorkGenre(form.genre) ?? "");
   body.set("original_release_date", form.originalReleaseDate.trim());
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");

@@ -143,3 +143,8 @@ captured fields remain unchanged. Staging initialization still excludes users.
 The registration refresh adds nullable `email_verification_challenges.pending_display_name`
 to match the current initialization schema, preserving all rows and the single
 migration ledger.
+
+The 2026-09-29 work genre refresh applies `0008_work_genre.sql` and records it
+in the migration ledger. Fictional works 10001–10003 demonstrate Japanese,
+Chinese and mixed free-form genre descriptions. Other records, including
+accounts, sessions and R2 references, are preserved from the fixed seed.

@@ -22,6 +22,7 @@ export function WorkSidebarInfo({
     | "creators"
     | "engineFamily"
     | "language"
+    | "genre"
     | "moreInfo"
     | "originalReleaseDate"
     | "originalReleasePrecision"
@@ -59,6 +60,7 @@ export function WorkSidebarInfo({
         {work.aliases.length ? (
           <InfoRow label="别名">{work.aliases.join(" · ")}</InfoRow>
         ) : null}
+        {work.genre ? <InfoRow label="类型">{work.genre}</InfoRow> : null}
         <InfoRow label="引擎">{engineLabel(work.engineFamily)}</InfoRow>
         <InfoRow label="语言">{languageLabel(work.language)}</InfoRow>
         <InfoRow label="发布日期" mono>
