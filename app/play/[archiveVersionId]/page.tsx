@@ -139,7 +139,7 @@ export default function WebPlayPage() {
       coverBlobSha256={work.coverBlobSha256} engineFamily={work.engineFamily} language={work.language}
       tabs={[{ href: `/games/${work.id}`, label: "概览" }]} />
     <div className="mx-auto max-w-md py-8">
-      <LocalInstallButton id={record.id} bytes={metadata.installTotalSizeBytes} />
+      <LocalInstallButton id={record.id} bytes={metadata.installTotalSizeBytes} title={metadata.title} workId={work.id} coverBlobSha256={work.coverBlobSha256} />
     </div>
   </DetailPageShell>;
   return (

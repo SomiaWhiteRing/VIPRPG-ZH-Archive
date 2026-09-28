@@ -37,12 +37,13 @@ export function OfflineApp() {
       delete document.documentElement.dataset.androidTouch;
     };
   }, []);
-  const [installations, setInstallations] = useState<WebPlayInstallation[]>([]);
   const [selected, setSelected] = useState<WebPlayInstallation | null>(null);
   const refresh = useCallback(async () => {
     try {
       const { items: rows } = await localRequest<{ items: WebPlayInstallation[] }>("list");
-      setInstallations(rows);
+      const key = await localRequest<string | null>("pendingPlay");
+      const item = rows.find(row => row.playKey === key);
+      if (item?.status === "ready" && item.workId) setSelected(item);
     } catch (reason) {
       window.VIPRPGAndroid?.setLibraryError?.(message(reason));
     }
@@ -58,11 +59,7 @@ export function OfflineApp() {
 
   useEffect(() => {
     const onRefresh = () => { void refresh(); };
-    const onPlay = (event: Event) => {
-      const key = (event as CustomEvent<string>).detail;
-      const item = installations.find((row) => row.playKey === key);
-      if (item?.status === "ready" && item.workId) setSelected(item);
-    };
+    const onPlay = () => { void refresh(); };
     window.addEventListener("viprpg:library-refresh", onRefresh);
     window.addEventListener("viprpg:library-play", onPlay);
     return () => {

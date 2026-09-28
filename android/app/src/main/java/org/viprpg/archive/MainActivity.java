@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private final java.util.Set<String> loadedCovers = new java.util.HashSet<>();
     private static final int STORAGE_REQUEST = 1003;
     private final ExecutorService localIo = Executors.newSingleThreadExecutor();
+    private final ExecutorService coverIo = Executors.newSingleThreadExecutor();
 
     private ScreenshotGallery galleryPanel;
     private NativeLibrary nativeLibrary;
@@ -122,7 +123,7 @@ public final class MainActivity extends Activity {
         libraryPanel = findViewById(R.id.library_panel);
         nativeLibrary = new NativeLibrary(this, new NativeLibrary.Actions() {
             @Override public void refresh() { refreshLocalGames(); }
-            @Override public void play(String key) { sendLibraryCommand("play", JSONObject.quote(key)); }
+            @Override public void play(String key) { openLocalLibrary(key); }
             @Override public void delete(List<String> keys) {
                 localIo.execute(() -> {
                     try { for (String key : keys) localGames.store.delete(key); }
@@ -131,6 +132,12 @@ public final class MainActivity extends Activity {
                 });
             }
             @Override public void retry(long id) { openInstall(id); }
+            @Override public void toggleDownload(String key) {
+                localIo.execute(() -> {
+                    try { localGames.store.toggleDownload(key); runOnUiThread(() -> InstallService.start(MainActivity.this)); }
+                    catch (Exception e) { runOnUiThread(() -> Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_LONG).show()); }
+                });
+            }
             @Override public void details(long id) {
                 if (id > 0) showOnline(BuildConfig.SITE_ORIGIN + "/games/" + id);
             }
@@ -451,7 +458,12 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, "ready".equals(task.optString("status")) ? "此版本已安装，可在本地游戏中游玩。" : "已加入本地游戏下载任务。", Toast.LENGTH_SHORT).show();
         refreshLocalGames();
     }
-    void openLocalLibrary() { showLibrary(); }
+    volatile String pendingLocalPlay;
+    void openLocalLibrary(String key) {
+        pendingLocalPlay = key;
+        showLibrary();
+        if (key != null) sendLibraryCommand("play", JSONObject.quote(key));
+    }
     private void refreshLocalGames() {
         if (isDestroyed() || localGames == null || nativeLibrary == null) return;
         try {
@@ -460,8 +472,8 @@ public final class MainActivity extends Activity {
             JSONArray items = snapshot.getJSONArray("items");
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i); String key = item.getString("playKey");
-                if (!"ready".equals(item.optString("status")) || !loadedCovers.add(key)) continue;
-                localIo.execute(() -> {
+                if (!item.optString("coverBlobSha256").matches("[a-f0-9]{64}") || !loadedCovers.add(key)) continue;
+                coverIo.execute(() -> {
                     String cover = null; try { cover = localGames.store.cover(key); } catch (Exception ignored) { }
                     String image = cover;
                     runOnUiThread(() -> { if (image != null) nativeLibrary.setCover(key, image); else loadedCovers.remove(key); });
@@ -796,6 +808,7 @@ public final class MainActivity extends Activity {
         localGames.store.changed = null;
         localGames.close();
         localIo.shutdownNow();
+        coverIo.shutdownNow();
         updateExecutor.shutdownNow();
         browser.destroy();
         offlineBrowser.destroy();

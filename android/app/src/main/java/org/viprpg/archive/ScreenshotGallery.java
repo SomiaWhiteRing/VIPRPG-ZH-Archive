@@ -19,7 +19,6 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.text.TextUtils;
 import com.google.android.material.button.MaterialButton;
@@ -40,8 +39,8 @@ final class ScreenshotGallery extends LinearLayout {
     private final MainActivity activity;
     private final ScreenshotController controller;
     private final ScreenshotImageLoader images;
-    private final TextView directory, status, selectionCount, emptyTitle, emptyDescription;
-    private final MaterialButton choose, manage, more, selectAll, share, delete, cancel, leaveSelection, gameBack, timelineTab, gamesTab;
+    private final TextView directory, status, selectionCount, emptyTitle;
+    private final MaterialButton manage, more, selectAll, share, delete, cancel, leaveSelection, gameBack, timelineTab, gamesTab;
     private final LinearLayout selectionBar, selectionHeader, tabs, empty;
     private final ArchivePageHeader normalHeader;
     private final ProgressBar progress;
@@ -69,7 +68,7 @@ final class ScreenshotGallery extends LinearLayout {
         normalHeader = new ArchivePageHeader(activity, "图库");
         gameBack = icon(normalHeader.leading(), "返回游戏合集", GalleryIcons.BACK, () -> { gameId = 0; selected.clear(); rebuild(); }, false);
         manage = icon(normalHeader.actions(), "选择截图", GalleryIcons.SELECT, () -> { selecting = true; selected.clear(); rebuild(); }, false);
-        more = icon(normalHeader.actions(), "更多选项", GalleryIcons.MORE, this::showOptions, false);
+        more = icon(normalHeader.actions(), "刷新", GalleryIcons.REFRESH, () -> refresh(null), false);
         addView(normalHeader);
         selectionHeader = row(); selectionHeader.setPadding(dp(8), dp(12), dp(12), dp(8));
         leaveSelection = icon(selectionHeader, "退出选择", GalleryIcons.CLOSE, () -> { selecting = false; selected.clear(); rebuild(); }, false);
@@ -102,11 +101,8 @@ final class ScreenshotGallery extends LinearLayout {
         ImageView emptyIcon = new ImageView(getContext()); emptyIcon.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, TEAL));
         emptyIcon.setPadding(dp(20), dp(20), dp(20), dp(20)); emptyIcon.setBackground(shape(TINT, 24));
         empty.addView(emptyIcon, new LinearLayout.LayoutParams(dp(80), dp(80)));
-        emptyTitle = text("还没有截图", 21); emptyTitle.setTypeface(null, Typeface.BOLD); emptyTitle.setGravity(Gravity.CENTER); emptyTitle.setPadding(0, dp(20), 0, dp(8)); empty.addView(emptyTitle);
-        emptyDescription = text("在游戏中启用截图按钮\n把喜欢的瞬间留在这里", 14); emptyDescription.setTextColor(MUTED); emptyDescription.setGravity(Gravity.CENTER); emptyDescription.setLineSpacing(dp(4), 1); empty.addView(emptyDescription);
-        choose = button(empty, "刷新", () -> refresh(null)); choose.setIcon(new GalleryIcons(GalleryIcons.FOLDER, TEAL));
-        LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-2, dp(48)); chooseParams.topMargin = dp(24); choose.setLayoutParams(chooseParams);
-        directory = text("", 12); directory.setTextColor(MUTED); directory.setGravity(Gravity.CENTER); directory.setPadding(0, dp(12), 0, 0); empty.addView(directory);
+        emptyTitle = text("暂无截图", 21); emptyTitle.setTypeface(null, Typeface.BOLD); emptyTitle.setGravity(Gravity.CENTER); emptyTitle.setPadding(0, dp(20), 0, dp(8)); empty.addView(emptyTitle);
+        directory = text("", 12);
         body.addView(empty, new FrameLayout.LayoutParams(-1, -1));
         tabs = row(); tabs.setGravity(Gravity.CENTER); tabs.setPadding(dp(6), dp(6), dp(6), dp(6));
         tabs.setBackground(shape(0xfff8f7fa, 36)); tabs.setElevation(dp(10));
@@ -121,16 +117,6 @@ final class ScreenshotGallery extends LinearLayout {
         share.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1)); delete.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1));
         addView(selectionBar);
         updateControls();
-    }
-
-    private void showOptions() {
-        PopupMenu menu = new PopupMenu(getContext(), more);
-        menu.getMenu().add("刷新").setOnMenuItemClickListener(item -> { refresh(null); return true; });
-        menu.getMenu().add("截图保存目录").setOnMenuItemClickListener(item -> {
-            NativeControls.dialog(getContext()).setTitle("截图保存目录").setMessage(directory.getText())
-                .setPositiveButton("关闭", null).show(); return true;
-        });
-        menu.show();
     }
 
     void open() { refresh(null); }
@@ -158,14 +144,12 @@ final class ScreenshotGallery extends LinearLayout {
                 directoryReady = snapshot.directory.ready;
                 directory.setText(snapshot.directory.ready ? "保存目录：" + snapshot.directory.name
                     : snapshot.directory.configured ? "目录无法访问，请重新选择：" + snapshot.directory.name : "请选择截图保存目录");
-                choose.setVisibility(GONE);
             }
             if (gameId != 0 && all.stream().noneMatch(item -> item.workId == gameId)) gameId = 0;
             rebuild();
             status.setText(error != null ? error : message != null ? message : "");
             status.setVisibility(status.getText().length() == 0 ? GONE : VISIBLE);
-            emptyTitle.setText(error != null ? "暂时无法读取截图" : !directoryReady ? "选择截图保存目录" : "还没有截图");
-            emptyDescription.setText(error != null ? error : !directoryReady ? "截图会直接保存到你选择的文件夹\n也可以随时在文件管理器中访问" : "在游戏中启用截图按钮\n把喜欢的瞬间留在这里");
+            emptyTitle.setText(error != null ? "暂时无法读取截图" : !directoryReady ? "选择截图保存目录" : "暂无截图");
         });
     }
 
@@ -191,7 +175,7 @@ final class ScreenshotGallery extends LinearLayout {
 
     private void updateControls() {
         boolean enabled = !loading && !operating;
-        choose.setEnabled(enabled); more.setEnabled(enabled);
+        more.setEnabled(enabled);
         manage.setEnabled(enabled && !all.isEmpty());
         manage.setVisibility(gamesPage && gameId == 0 ? GONE : VISIBLE);
         gameBack.setVisibility(gameId == 0 ? GONE : VISIBLE);
@@ -208,7 +192,6 @@ final class ScreenshotGallery extends LinearLayout {
         boolean showGames = gamesPage && gameId == 0;
         list.setVisibility(!showGames && !visible.isEmpty() ? VISIBLE : GONE);
         gameGrid.setVisibility(showGames && !games.isEmpty() ? VISIBLE : GONE);
-        choose.setVisibility(directoryReady && !all.isEmpty() ? GONE : VISIBLE);
         selectAll.setEnabled(enabled && !visible.isEmpty());
         boolean complete = !visible.isEmpty() && visible.stream().allMatch(item -> selected.contains(item.id));
         selectAll.setText(complete ? "取消全选" : "全选");

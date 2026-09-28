@@ -49,6 +49,7 @@ final class NativeLibrary extends LinearLayout {
         void play(String key);
         void delete(List<String> keys);
         void retry(long archiveVersionId);
+        void toggleDownload(String key);
         void details(long workId);
     }
 
@@ -67,6 +68,13 @@ final class NativeLibrary extends LinearLayout {
     private final Map<String, View> selectionRows = new HashMap<>();
     private final ChipGroup filters;
     private SwipeGameRow openRow;
+    private String renderedRows = "";
+    private final Map<String, DownloadViews> downloads = new HashMap<>();
+    private static final class DownloadViews {
+        TextView progress, speed;
+        com.google.android.material.progressindicator.LinearProgressIndicator bar;
+        MaterialButton toggle;
+    }
     private final TextView summary, message;
     private final MaterialButton searchButton, manageButton;
     private final SwipeRefreshLayout refreshLayout;
@@ -134,7 +142,7 @@ final class NativeLibrary extends LinearLayout {
         filters = new ChipGroup(context);
         filters.setSingleLine(true); filters.setSingleSelection(true); filters.setSelectionRequired(true);
         filters.setChipSpacingHorizontal(dp(4));
-        String[] names = {"全部", "已安装", "未完成"};
+        String[] names = {"全部", "已安装", "下载中"};
         String[] values = {"all", "ready", "incomplete"};
         for (int i = 0; i < 3; i++) {
             Chip chip = new Chip(context);
@@ -287,10 +295,20 @@ final class NativeLibrary extends LinearLayout {
         List<Entry> shown = visible();
         updateSelection();
         message.setText(error != null ? error : loading ? "读取本地游戏…"
-            : entries.isEmpty() ? "还没有本地游戏\n联网后在作品概览中安装，游戏会自动出现在这里。"
+            : entries.isEmpty() ? "还没有本地游戏。\n在主站安装的游戏会显示在这里。"
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
+        StringBuilder structure = new StringBuilder().append(managing).append(loading);
+        for (Entry entry : shown) structure.append('|').append(entry.key).append(':').append(entry.ready)
+            .append(':').append(entry.title).append(':').append(entry.workId).append(':').append(entry.lastPlayed);
+        String signature = structure.toString();
+        if (!loading && signature.equals(renderedRows)) {
+            for (Entry entry : shown) updateDownload(entry);
+            return;
+        }
+        renderedRows = signature;
         openRow = null;
+        downloads.clear();
         items.removeAllViews();
         visibleCovers.clear(); coverPlaceholders.clear();
         selectionChecks.clear(); selectionRows.clear();
@@ -335,26 +353,40 @@ final class NativeLibrary extends LinearLayout {
         line.addView(coverFrame, new LayoutParams(dp(96), dp(72)));
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
         TextView title = label(entry.title, 14, INK, true); title.setSingleLine(true);
-        title.setEllipsize(android.text.TextUtils.TruncateAt.END); details.addView(title);
-        String detailsText = entry.ready ? bytes(entry.bytes) : entry.progress;
-        if (!entry.lastPlayed.isEmpty()) detailsText += "  ·  " + date(entry.lastPlayed);
-        TextView subtitle = label(detailsText, 12, MUTED, false);
-        subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
-        line.addView(details, new LayoutParams(0, -2, 1));
-        if (!managing) {
-            View play;
-            if (entry.ready) play = icon(GalleryIcons.PLAY, TEAL, () -> { if (entry.workId != 0) actions.play(entry.key); });
-            else {
-                MaterialButton retry = NativeControls.button(getContext(), entry.installing ? "取消" : "重试", () -> {
-                    if (entry.installing) confirmDelete(java.util.Collections.singletonList(entry.key)); else actions.retry(entry.archiveVersionId);
-                });
-                retry.setMinWidth(0); retry.setMinimumWidth(0);
-                retry.setPadding(0, 0, 0, 0);
-                retry.setGravity(Gravity.CENTER);
-                play = retry;
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        if (entry.ready) {
+            details.addView(title);
+            String detailsText = bytes(entry.bytes);
+            if (!entry.lastPlayed.isEmpty()) detailsText += "  ·  " + date(entry.lastPlayed);
+            TextView subtitle = label(detailsText, 12, MUTED, false);
+            subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
+            line.addView(details, new LayoutParams(0, -2, 1));
+            if (!managing) {
+                MaterialButton play = icon(GalleryIcons.PLAY, TEAL, () -> actions.play(entry.key));
+                play.setContentDescription("游玩 " + entry.title);
+                line.addView(play, new LayoutParams(dp(48), dp(48)));
             }
-            play.setContentDescription((entry.ready ? "游玩 " : entry.installing ? "取消安装 " : "重新安装 ") + entry.title);
-            line.addView(play, new LayoutParams(dp(48), dp(48)));
+        } else {
+            DownloadViews views = new DownloadViews();
+            LinearLayout top = row(); top.setGravity(Gravity.CENTER_VERTICAL);
+            top.addView(title, new LayoutParams(0, -2, 1));
+            views.toggle = icon(GalleryIcons.PAUSE, TEAL, () -> actions.toggleDownload(entry.key));
+            views.toggle.setVisibility(managing ? GONE : VISIBLE);
+            top.addView(views.toggle, new LayoutParams(dp(48), dp(48)));
+            details.addView(top, new LayoutParams(-1, dp(48)));
+            LinearLayout numbers = row(); numbers.setGravity(Gravity.CENTER_VERTICAL);
+            views.progress = label("", 11, MUTED, false); views.progress.setSingleLine(true);
+            views.progress.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            views.speed = label("", 11, MUTED, false); views.speed.setGravity(Gravity.RIGHT); views.speed.setSingleLine(true);
+            numbers.addView(views.progress, new LayoutParams(0, dp(20), 1));
+            numbers.addView(views.speed, new LayoutParams(-2, dp(20)));
+            details.addView(numbers, new LayoutParams(-1, dp(20)));
+            views.bar = new com.google.android.material.progressindicator.LinearProgressIndicator(getContext());
+            views.bar.setTrackThickness(dp(3)); views.bar.setTrackCornerRadius(dp(2));
+            views.bar.setIndicatorColor(TEAL); views.bar.setTrackColor(BORDER); views.bar.setMax(1000);
+            details.addView(views.bar, new LayoutParams(-1, dp(4)));
+            line.addView(details, new LayoutParams(0, -2, 1));
+            downloads.put(entry.key, views); updateDownload(entry);
         }
         if (managing) {
             selectionRows.put(entry.key, line);
@@ -372,6 +404,16 @@ final class NativeLibrary extends LinearLayout {
         }
         View rule = new View(getContext()); rule.setBackgroundColor(BORDER);
         items.addView(rule, new LayoutParams(-1, dp(1)));
+    }
+
+    private void updateDownload(Entry entry) {
+        DownloadViews views = downloads.get(entry.key); if (views == null) return;
+        views.progress.setText(entry.progress);
+        views.speed.setText(entry.installing ? bytes(entry.speed) + "/s" : "");
+        views.bar.setProgress(entry.total > 0 ? (int)Math.min(1000, entry.downloaded * 1000 / entry.total) : 0);
+        views.toggle.setIcon(new GalleryIcons(entry.installing ? GalleryIcons.PAUSE : GalleryIcons.PLAY, TEAL));
+        views.toggle.setContentDescription((entry.installing ? "暂停下载 " : "继续下载 ") + entry.title);
+        views.toggle.setTooltipText(entry.installing ? "暂停" : "继续");
     }
 
     private void enterSelection(String key) {
@@ -422,7 +464,7 @@ final class NativeLibrary extends LinearLayout {
     private void confirmDelete(List<String> keys) {
         if (keys.isEmpty() || loading) return;
         NativeControls.dialog(getContext()).setTitle("删除 " + keys.size() + " 项本地作品？")
-            .setMessage("删除已安装的游戏文件；存档和截图不会删除。")
+            .setMessage("移除下载任务及游戏文件；存档和截图不会删除。")
             .setNegativeButton("取消", null)
             .setPositiveButton("删除", (dialog, which) -> { loading = true; selected.clear(); managing = false; render(); actions.delete(keys); })
             .show();
@@ -458,15 +500,16 @@ final class NativeLibrary extends LinearLayout {
 
     private static final class Entry {
         final String key, title, lastPlayed, recent, progress;
-        final long workId, archiveVersionId, bytes;
+        final long workId, archiveVersionId, bytes, downloaded, total, speed;
         final boolean ready, installing;
         Entry(JSONObject row) {
             key = row.optString("playKey"); title = row.optString("title");
             workId = row.optLong("workId"); archiveVersionId = row.optLong("archiveVersionId");
             String status = row.optString("status");
             installing = "created".equals(status) || "installing".equals(status);
-            progress = "created".equals(status) ? "等待下载" : "installing".equals(status)
-                ? "下载中 " + bytes(row.optLong("downloadedBytes")) + " / " + bytes(row.optLong("downloadBytesTotal"))
+            downloaded = row.optLong("downloadedBytes"); total = row.optLong("downloadBytesTotal"); speed = row.optLong("bytesPerSecond");
+            progress = "paused".equals(status) ? "已暂停 " + bytes(downloaded) + " / " + bytes(total) : "created".equals(status) ? "等待下载" : "installing".equals(status)
+                ? bytes(downloaded) + " / " + bytes(total)
                 : row.optString("error", "未完成安装");
             bytes = row.optLong("installedBytes"); ready = "ready".equals(row.optString("status"));
             String played = row.optString("lastPlayedAt", "");

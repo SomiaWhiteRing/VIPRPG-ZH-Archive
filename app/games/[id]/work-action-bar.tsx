@@ -1,3 +1,6 @@
+import { useSyncExternalStore } from "react";
+import { isAndroidClient } from "@/lib/browser/client-environment";
+const subscribeEnvironment = () => () => {};
 import { buttonVariants } from "@/app/components/ui/button";
 import { LocalInstallButton } from "./local-install-button";
 import { formatBytes } from "@/lib/format";
@@ -6,6 +9,8 @@ import { KaiImportLink } from "./kai-import-link";
 
 type Props = {
   workId: number;
+  title: string;
+  coverBlobSha256: string | null;
   isAuthenticated: boolean;
   engineFamily: string;
   archive: {
@@ -21,19 +26,20 @@ type Props = {
 };
 
 export function WorkActionBar({
-  archive,
+  archive, title, coverBlobSha256,
   externalDownload,
   workId,
   isAuthenticated,
   engineFamily,
 }: Props) {
+  const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   return (
     <div className="grid gap-3.5" aria-label="主操作">
       {archive ? (
         <>
           <div className="grid gap-2.5">
-            <LocalInstallButton id={archive.id} bytes={archive.webPlaySizeBytes} />
-            <a
+            <LocalInstallButton id={archive.id} bytes={archive.webPlaySizeBytes} title={title} workId={workId} coverBlobSha256={coverBlobSha256} />
+            {!native && <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
               href={archive.downloadHref}
               onClick={() => {
@@ -51,7 +57,7 @@ export function WorkActionBar({
               <span className="text-xs text-muted">
                 {archive.downloadSizeBytes === null ? "共享播放器暂不可用" : formatBytes(archive.downloadSizeBytes)}
               </span>
-            </a>
+            </a>}
             {["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
               archive.webPlaySizeBytes <= 1024 ** 3 && archive.webPlayFileCount <= 50000 ? (
                 <KaiImportLink archiveVersionId={archive.id} />
