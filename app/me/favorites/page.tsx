@@ -3,7 +3,7 @@ import { loadGameLibrary } from "@/app/.server/game-library-page";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { FavoriteLibrary } from "@/app/me/favorite-library";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
@@ -23,7 +23,7 @@ export default function FavoritesPage() {
   const data = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader title="收藏" subtitle={`共 ${data.total} 部作品`} />
+      <AccountPageHeader title="收藏" subtitle={`共 ${data.total} 部作品`} />
       <FavoriteLibrary data={data} currentUserId={data.currentUserId} />
     </div>
   );

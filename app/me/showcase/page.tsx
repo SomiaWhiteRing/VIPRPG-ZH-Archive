@@ -8,7 +8,7 @@ import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { ReorderItem } from "@/app/components/ui/reorder-item";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -213,7 +213,7 @@ function ShowcaseEditor({
 
   return (
     <div>
-      <PageHeader
+      <AccountPageHeader
         title="喜爱展柜"
       />
       <form onSubmit={save} aria-busy={busy}>

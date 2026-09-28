@@ -6,7 +6,7 @@ import { loadGameLibrary } from "@/app/.server/game-library-page";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { GameLibrary } from "@/app/components/library/game-library";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
@@ -28,7 +28,7 @@ export default function HistoryPage() {
   const data = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader
+      <AccountPageHeader
         title="游玩历史"
         subtitle={`共 ${data.total} 部作品`}
       />

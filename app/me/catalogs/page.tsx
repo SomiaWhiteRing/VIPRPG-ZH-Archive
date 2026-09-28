@@ -10,7 +10,7 @@ import { CatalogCreateForm } from "@/app/catalogs/catalog-manager";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -39,7 +39,7 @@ export default function MyCatalogsPage() {
   const { page, result } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-6">
-      <PageHeader
+      <AccountPageHeader
         actions={<CatalogCreateForm />}
         title="我的目录"
         subtitle={`共 ${result.total} 个公开目录`}

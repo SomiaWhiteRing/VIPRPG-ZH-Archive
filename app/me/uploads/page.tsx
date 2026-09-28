@@ -9,7 +9,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import {
@@ -53,7 +53,7 @@ export default function UploadsPage() {
   const { page, user, result } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader
+      <AccountPageHeader
         actions={
           canPublishWork(user) ? (
             <Rm2kButton href="/upload">发布新作品</Rm2kButton>

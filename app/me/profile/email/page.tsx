@@ -15,7 +15,7 @@ import { AccountField } from "@/app/components/profile/account-field";
 import { Input } from "@/app/components/ui/input";
 import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
@@ -36,7 +36,7 @@ export default function EmailPage() {
   const { user, params } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader title="修改登录邮箱" />
+      <AccountPageHeader parentTitle="个人资料" title="修改登录邮箱" />
       <RedirectFeedback success={{ emailUpdated: "邮箱已更新，其他设备已登出。" }} />
       {params.emailSent ? (
         <Notice

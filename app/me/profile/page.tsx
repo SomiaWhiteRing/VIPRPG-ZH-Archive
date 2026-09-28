@@ -10,7 +10,7 @@ import { AvatarCropper } from "@/app/components/ui/avatar-cropper";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Link } from "react-router";
@@ -42,7 +42,7 @@ export default function ProfilePage() {
   const { user } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader title="个人资料" />
+      <AccountPageHeader title="个人资料" />
       <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
 
       <RedirectForm action="/api/account/profile" method="post">

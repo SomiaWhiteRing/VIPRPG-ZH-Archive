@@ -9,7 +9,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
-import { PageHeader } from "@/app/components/ui/page-header";
+import { AccountPageHeader } from "@/app/me/account-page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -36,7 +36,7 @@ export default function DiscussionsPage() {
   const { result } = useLoaderData<typeof loader>();
   return (
     <div>
-      <PageHeader
+      <AccountPageHeader
         title="我的讨论"
       />
       <DiscussionList items={result.items} />
