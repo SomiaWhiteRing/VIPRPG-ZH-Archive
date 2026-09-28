@@ -10,7 +10,9 @@ import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
 import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { ReorderItem } from "@/app/components/ui/reorder-item";
+import { SortableListItem, SortableOverlay, SortableSnapshot } from "@/app/components/ui/sortable-list-item";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useToast } from "@/app/components/ui/toast";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
@@ -24,8 +26,8 @@ import {
 } from "@/lib/showcase";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { cn } from "@/lib/ui/cn";
-import { ArrowDown, ArrowUp, GripVertical, X } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { GripVertical, X } from "lucide-react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import {
   Link,
   useLoaderData,
@@ -33,7 +35,6 @@ import {
   type MetaFunction,
 } from "react-router";
 import { ShowcaseTargetPicker } from "./target-picker";
-import { useShowcaseReorder } from "./use-showcase-reorder";
 import { ShowcasePortraitPicker } from "./portrait-picker";
 import type { CharacterPortraitChoice } from "@/lib/character-names";
 
@@ -97,24 +98,15 @@ function ShowcaseEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
-  const [movement, setMovement] = useState("");
-  const reorderButtons = useRef<
-    Partial<Record<ShowcaseKind, Array<HTMLButtonElement | null>>>
-  >({});
-  const toast = useToast();
-  const reorder = useShowcaseReorder(
-    slots.map((slot) => slot.kind),
-    busy,
-    (order, kind) => {
-      setSlots((current) =>
-        order.map((key) => current.find((slot) => slot.kind === key)!),
-      );
-      setMovement(
-        `${SHOWCASE_LABELS[kind]}已移至第 ${order.indexOf(kind) + 1} 项`,
-      );
-    },
+  const dndId = useId();
+  const list = useRef<HTMLUListElement>(null);
+  const [drag, setDrag] = useState<{ kind: ShowcaseKind; element: HTMLElement } | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const locked = busy || reorder.drag !== null;
+  const toast = useToast();
+  const locked = busy || drag !== null;
   const dirty =
     JSON.stringify(entriesFor(slots)) !==
     JSON.stringify(entriesFor(slotsFor(saved)));
@@ -130,22 +122,6 @@ function ShowcaseEditor({
         slot.kind === kind ? { ...slot, ...change } : slot,
       ),
     );
-  }
-  function move(index: number, direction: number) {
-    const next = [...slots],
-      destination = index + direction;
-    if (destination < 0 || destination >= slots.length) return;
-    [next[index], next[destination]] = [next[destination], next[index]];
-    setSlots(next);
-    const kind = slots[index].kind;
-    setMovement(`${SHOWCASE_LABELS[kind]}已移至第 ${destination + 1} 项`);
-    window.requestAnimationFrame(() => {
-      const buttons = reorderButtons.current[kind] ?? [];
-      (buttons[direction < 0 ? 0 : 1]?.disabled
-        ? buttons.find((button) => button && !button.disabled)
-        : buttons[direction < 0 ? 0 : 1]
-      )?.focus();
-    });
   }
   async function reload() {
     if (
@@ -217,23 +193,40 @@ function ShowcaseEditor({
         title="喜爱展柜"
       />
       <form onSubmit={save} aria-busy={busy}>
-        <div
-          className="relative grid gap-4"
-          ref={reorder.list}
-          onDragOver={reorder.over}
-          onDrop={reorder.drop}
+        <DndContext
+          id={dndId}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          accessibility={{
+            screenReaderInstructions: { draggable: "按 Enter 开始排序，用方向键移动，按 Enter 确认，按 Escape 取消。" },
+            announcements: {
+              onDragStart: ({ active }) => `开始排序：最喜欢的${SHOWCASE_LABELS[active.id as ShowcaseKind]}。`,
+              onDragOver: ({ over }) => over ? `移动到第 ${slots.findIndex((slot) => slot.kind === over.id) + 1} 项。` : "已离开排序区域。",
+              onDragEnd: ({ over }) => over ? `排序完成，位于第 ${slots.findIndex((slot) => slot.kind === over.id) + 1} 项。` : "排序取消。",
+              onDragCancel: () => "排序取消。",
+            },
+          }}
+          onDragStart={({ active }) => {
+            if (busy) return;
+            const row = list.current?.children[slots.findIndex((slot) => slot.kind === active.id)]?.firstElementChild;
+            if (row instanceof HTMLElement) setDrag({ kind: active.id as ShowcaseKind, element: row.cloneNode(true) as HTMLElement });
+          }}
+          onDragCancel={() => setDrag(null)}
+          onDragEnd={({ active, over }) => {
+            setDrag(null);
+            if (busy || !over || active.id === over.id) return;
+            setSlots((current) => {
+              const from = current.findIndex((slot) => slot.kind === active.id);
+              const to = current.findIndex((slot) => slot.kind === over.id);
+              return from < 0 || to < 0 ? current : arrayMove(current, from, to);
+            });
+          }}
         >
-          {slots.map((slot, index) => (
-            <ReorderItem
-              key={slot.kind}
-              offset={reorder.offset(slot.kind)}
-              className={cn(
-                "min-w-0",
-                reorder.drag &&
-                  "transition-transform duration-150 ease-out motion-reduce:transition-none",
-                reorder.drag?.kind === slot.kind && "opacity-25",
-              )}
-            >
+          <SortableContext items={slots.map((slot) => slot.kind)} strategy={verticalListSortingStrategy}>
+            <ul className="relative grid gap-4" ref={list} aria-label="喜爱展柜排序">
+          {slots.map((slot) => (
+            <SortableListItem key={slot.kind} id={slot.kind} disabled={busy} className="min-w-0">
+              {({ attributes, listeners, setActivatorNodeRef }) => (
               <section
                 className="min-w-0 rounded-lg border border-border bg-card"
                 aria-labelledby={`showcase-heading-${slot.kind}`}
@@ -273,54 +266,17 @@ function ShowcaseEditor({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="hidden size-11 cursor-grab active:cursor-grabbing [@media(hover:hover)_and_(pointer:fine)]:inline-flex"
+                      {...attributes}
+                      {...listeners}
+                      ref={setActivatorNodeRef}
+                      className="size-11 touch-none select-none cursor-grab active:cursor-grabbing"
                       title={`拖动排序${SHOWCASE_LABELS[slot.kind]}`}
                       aria-label={`排序${SHOWCASE_LABELS[slot.kind]}`}
-                      aria-keyshortcuts="ArrowUp ArrowDown Home End"
                       disabled={busy}
-                      draggable={!busy}
-                      onDragStart={(event) => reorder.start(slot.kind, event)}
-                      onDragEnd={reorder.end}
-                      onKeyDown={(event) => reorder.keyDown(slot.kind, event)}
+                      onContextMenu={(event) => event.preventDefault()}
                     >
                       <GripVertical aria-hidden="true" />
                     </Button>
-                    <div className="flex gap-1.5 [@media(hover:hover)_and_(pointer:fine)]:hidden">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-11"
-                        aria-label={`上移${SHOWCASE_LABELS[slot.kind]}`}
-                        ref={(node) => {
-                          (reorderButtons.current[slot.kind] ??= [
-                            null,
-                            null,
-                          ])[0] = node;
-                        }}
-                        disabled={locked || index === 0}
-                        onClick={() => move(index, -1)}
-                      >
-                        <ArrowUp aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-11"
-                        aria-label={`下移${SHOWCASE_LABELS[slot.kind]}`}
-                        ref={(node) => {
-                          (reorderButtons.current[slot.kind] ??= [
-                            null,
-                            null,
-                          ])[1] = node;
-                        }}
-                        disabled={locked || index === slots.length - 1}
-                        onClick={() => move(index, 1)}
-                      >
-                        <ArrowDown aria-hidden="true" />
-                      </Button>
-                    </div>
                   </div>
                 </header>
                 {slot.enabled ? (
@@ -449,12 +405,13 @@ function ShowcaseEditor({
                   </div>
                 ) : null}
               </section>
-            </ReorderItem>
+              )}
+            </SortableListItem>
           ))}
-        </div>
-        <span className="sr-only" role="status">
-          {movement}
-        </span>
+            </ul>
+          </SortableContext>
+          <SortableOverlay>{drag && <SortableSnapshot element={drag.element} />}</SortableOverlay>
+        </DndContext>
         {error ? <Notice className="mt-4">{error}</Notice> : null}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
           {dirty ? (
@@ -464,7 +421,7 @@ function ShowcaseEditor({
             <Button
               type="button"
               variant="outline"
-              disabled={busy}
+              disabled={locked}
               onClick={() => void reload()}
             >
               重新读取

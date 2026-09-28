@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,15 +9,12 @@ import {
 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Button } from "@/app/components/ui/button";
-import { ReorderItem } from "@/app/components/ui/reorder-item";
+import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, closestCenter, type CollisionDetection, type KeyboardCoordinateGetter } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { EmojiDropZone, EmojiSortable, emojiDragId } from "@/app/components/ui/emoji-drag";
+import { SortableOverlay } from "@/app/components/ui/sortable-list-item";
 import { useToast } from "@/app/components/ui/toast";
 import { cn } from "@/lib/ui/cn";
-import {
-  moveDragItem,
-  nearestDragSlot,
-  readDragSlots,
-  type DragSlot,
-} from "@/lib/ui/drag-reorder";
 import {
   emojiCellKey,
   type FaceEmoji,
@@ -25,7 +22,6 @@ import {
   type EmojiSheet,
 } from "@/lib/face-emojis";
 import { emojiCells, emojiRequest } from "./client";
-import { emojiDragPreview } from "./drag-preview";
 import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
 import { EmojiSourcePicker } from "./source-picker";
 import { SourceFaces, sourceKey, type EmojiSource } from "./source-faces";
@@ -36,9 +32,38 @@ type EmojiDrag = {
   emoji: FaceEmoji;
   from: "source" | "library";
   order: FaceEmoji[];
-  slots: DragSlot[];
 };
-const EMOJI_DRAG_TYPE = "application/x-viprpg-face-emoji";
+const collisionDetection: CollisionDetection = (args) => {
+  if (args.pointerCoordinates) {
+    const hits = pointerWithin(args);
+    if (hits.some((hit) => hit.id === "source")) return hits.filter((hit) => hit.id === "source");
+    if (!hits.some((hit) => hit.id === "library")) return [];
+    const cells = args.droppableContainers.filter((item) => item.data.current?.from === "library");
+    return cells.length ? closestCenter({ ...args, droppableContainers: cells }) : hits.filter((hit) => hit.id === "library");
+  }
+  const cells = args.droppableContainers.filter((item) => item.data.current?.from === "library");
+  return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((item) => item.id !== "library" || !cells.length) });
+};
+
+const emojiKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
+  const { collisionRect, droppableContainers, droppableRects } = context;
+  if (!collisionRect || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.code)) return;
+  event.preventDefault();
+  const cells = droppableContainers.getEnabled().filter((item) => item.data.current?.from === "library");
+  const x = collisionRect.left + collisionRect.width / 2;
+  const y = collisionRect.top + collisionRect.height / 2;
+  const candidates = droppableContainers.getEnabled().flatMap((item) => {
+    if (item.id === "library" && cells.length) return [];
+    const rect = droppableRects.get(item.id);
+    if (!rect) return [];
+    const dx = rect.left + rect.width / 2 - x;
+    const dy = rect.top + rect.height / 2 - y;
+    const ahead = event.code === "ArrowLeft" ? dx < -1 : event.code === "ArrowRight" ? dx > 1 : event.code === "ArrowUp" ? dy < -1 : dy > 1;
+    return ahead ? [{ rect, distance: dx * dx + dy * dy }] : [];
+  }).sort((a, b) => a.distance - b.distance);
+  const rect = candidates[0]?.rect;
+  return rect ? { x: rect.left + (rect.width - collisionRect.width) / 2, y: rect.top + (rect.height - collisionRect.height) / 2 } : undefined;
+};
 
 export function EmojiLibrary({
   admin = false,
@@ -76,9 +101,12 @@ export function EmojiLibrary({
     null,
   );
   const dragRef = useRef<EmojiDrag | null>(null);
-  const dragImage = useRef<HTMLCanvasElement | null>(null);
-  const collectionGrid = useRef<HTMLDivElement>(null);
-  const collectionViewport = useRef<HTMLDivElement>(null);
+  const dndId = useId();
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 280, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: emojiKeyboardCoordinates }),
+  );
   const mutation = useRef(false);
   const workbench = useRef<HTMLDivElement>(null);
   const previewBar = useRef<HTMLDivElement>(null);
@@ -92,17 +120,6 @@ export function EmojiLibrary({
   const character = source.kind === "character" ? source.character : undefined;
   const sourceLabel =
     source.kind === "hot" ? "全站热门" : (character?.name ?? "所选脸图");
-  const dragPositions = new Map(
-    drag?.order.map((emoji, index) => [emojiCellKey(emoji), index]),
-  );
-
-  useEffect(
-    () => () => {
-      dragImage.current?.remove();
-    },
-    [],
-  );
-
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
@@ -220,101 +237,9 @@ export function EmojiLibrary({
     });
   }
   function endDrag() {
-    dragImage.current?.remove();
-    dragImage.current = null;
     dragRef.current = null;
     setDrag(null);
     setDropTarget(null);
-  }
-  function startDrag(
-    emoji: FaceEmoji,
-    from: EmojiDrag["from"],
-    event: DragEvent<HTMLButtonElement>,
-  ) {
-    if (mutation.current) {
-      event.preventDefault();
-      toast.info("正在保存，请稍后再操作。");
-      return;
-    }
-    if (
-      busy ||
-      !ready ||
-      !window.matchMedia("(hover: hover) and (pointer: fine)").matches ||
-      (from === "source" &&
-        (!emoji.available || owned.has(emojiCellKey(emoji))))
-    ) {
-      event.preventDefault();
-      return;
-    }
-    const image = emojiDragPreview(emoji, event.currentTarget);
-    if (!image) {
-      event.preventDefault();
-      return;
-    }
-    dragImage.current?.remove();
-    dragImage.current = image;
-    event.dataTransfer.setDragImage(image, 24, 24);
-    const slots = readDragSlots(collectionGrid.current?.children ?? []);
-    const value = { emoji, from, order: mine, slots };
-    dragRef.current = value;
-    setDrag(value);
-    event.dataTransfer.effectAllowed = from === "source" ? "copy" : "move";
-    event.dataTransfer.setData(EMOJI_DRAG_TYPE, emojiCellKey(emoji));
-  }
-  function dragOver(target: EmojiDrag["from"], event: DragEvent<HTMLElement>) {
-    const value = dragRef.current;
-    if (!value || busy) return;
-    event.preventDefault();
-    if (target === "source" && value.from === "source") {
-      event.dataTransfer.dropEffect = "none";
-      setDropTarget(null);
-      return;
-    }
-    event.dataTransfer.dropEffect = value.from === "source" ? "copy" : "move";
-    setDropTarget(target);
-    if (target === "library" && value.from === "library") {
-      const grid = collectionGrid.current;
-      const viewport = collectionViewport.current;
-      if (!grid || !viewport || !value.slots.length) return;
-      const bounds = viewport.getBoundingClientRect();
-      if (event.clientY < bounds.top || event.clientY > bounds.bottom) return;
-      if (event.clientY < bounds.top + 24) viewport.scrollTop -= 16;
-      else if (event.clientY > bounds.bottom - 24) viewport.scrollTop += 16;
-      const gridBounds = grid.getBoundingClientRect();
-      const x = event.clientX - gridBounds.left,
-        y = event.clientY - gridBounds.top;
-      const nearest = nearestDragSlot(value.slots, x, y);
-      const current = value.order.findIndex(
-        (emoji) => emojiCellKey(emoji) === emojiCellKey(value.emoji),
-      );
-      if (current === nearest || current < 0) return;
-      const order = moveDragItem(value.order, current, nearest);
-      const next = { ...value, order };
-      dragRef.current = next;
-      setDrag(next);
-    }
-  }
-  function dragLeave(target: EmojiDrag["from"], event: DragEvent<HTMLElement>) {
-    if (
-      !(event.relatedTarget instanceof Node) ||
-      !event.currentTarget.contains(event.relatedTarget)
-    ) {
-      setDropTarget((current) => (current === target ? null : current));
-    }
-  }
-  function drop(target: EmojiDrag["from"], event: DragEvent<HTMLElement>) {
-    const value = dragRef.current;
-    if (!value) return;
-    event.preventDefault();
-    endDrag();
-    if (busy) return;
-    if (target === "library" && value.from === "library") {
-      void reorder(value);
-      return;
-    }
-    if (target === value.from) return;
-    if (target === "library") void add(value.emoji);
-    else void remove(value.emoji);
   }
   async function reorder(value: EmojiDrag) {
     if (mutation.current) return;
@@ -421,6 +346,43 @@ export function EmojiLibrary({
   }
 
   return (
+    <DndContext
+      id={dndId}
+      sensors={sensors}
+      collisionDetection={collisionDetection}
+      accessibility={{
+        screenReaderInstructions: { draggable: "按空格或 Enter 开始拖动，方向键移动，空格或 Enter 确认，Escape 取消。" },
+        announcements: {
+          onDragStart: () => "开始拖动表情。",
+          onDragOver: ({ over }) => !over ? "已离开投放区域。" : over.id === "source" ? "松开将从表情库移除。" : "目标：表情库。",
+          onDragEnd: ({ over }) => over ? "拖动结束。" : "已取消拖动。",
+          onDragCancel: () => "已取消拖动。",
+        },
+      }}
+      onDragStart={({ active }) => {
+        const data = active.data.current;
+        if (mutation.current || busy || !ready || !data?.emoji) return;
+        const value: EmojiDrag = { emoji: data.emoji, from: data.from, order: mine };
+        dragRef.current = value;
+        setDrag(value);
+      }}
+      onDragOver={({ over }) => setDropTarget(over ? over.id === "source" ? "source" : "library" : null)}
+      onDragCancel={endDrag}
+      onDragEnd={({ over }) => {
+        const value = dragRef.current;
+        endDrag();
+        if (!value || !over || busy || mutation.current) return;
+        if (over.id === "source") {
+          if (value.from === "library") void remove(value.emoji);
+        } else if (value.from === "source") {
+          void add(value.emoji);
+        } else {
+          const from = mine.findIndex((item) => emojiCellKey(item) === emojiCellKey(value.emoji));
+          const to = mine.findIndex((item) => emojiDragId("library", item) === over.id);
+          if (from >= 0 && to >= 0) void reorder({ ...value, order: arrayMove(mine, from, to) });
+        }
+      }}
+    >
     <div
       ref={workbench}
       className={cn(
@@ -429,11 +391,8 @@ export function EmojiLibrary({
       )}
     >
       <div className="grid min-w-0 overflow-hidden rounded-md border border-border bg-card sm:h-[min(660px,75dvh)] sm:min-h-[440px] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <section
+        <EmojiDropZone zone="source"
           aria-label="查找脸图"
-          onDragOver={(event) => dragOver("source", event)}
-          onDragLeave={(event) => dragLeave("source", event)}
-          onDrop={(event) => drop("source", event)}
           className={cn(
             "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] border-b border-border sm:border-b-0 sm:border-r",
             dropTarget === "source" &&
@@ -464,8 +423,7 @@ export function EmojiLibrary({
             locateVersion={locateVersion}
             disabled={busy || !ready}
             onSelect={select}
-            onDragEmoji={(emoji, event) => startDrag(emoji, "source", event)}
-            onDragEnd={endDrag}
+            dragDisabled={busy || savingOrder || !ready}
           />
           {drag?.from === "library" ? (
             <div
@@ -477,12 +435,9 @@ export function EmojiLibrary({
               </span>
             </div>
           ) : null}
-        </section>
-        <section
+        </EmojiDropZone>
+        <EmojiDropZone zone="library"
           aria-label={admin ? "默认清单" : "我的表情"}
-          onDragOver={(event) => dragOver("library", event)}
-          onDragLeave={(event) => dragLeave("library", event)}
-          onDrop={(event) => drop("library", event)}
           className={cn(
             "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]",
             dropTarget === "library" &&
@@ -533,7 +488,6 @@ export function EmojiLibrary({
             ) : null}
           </header>
           <div
-            ref={collectionViewport}
             className="h-64 min-h-0 overflow-y-auto p-3 sm:h-auto"
           >
             {loadError ? (
@@ -558,49 +512,26 @@ export function EmojiLibrary({
                 <p className="m-0">还没有表情</p>
               </div>
             ) : null}
+            <SortableContext items={mine.map((emoji) => emojiDragId("library", emoji))} strategy={rectSortingStrategy}>
             <div
-              ref={collectionGrid}
               className="relative flex flex-wrap content-start gap-2"
             >
-              {mine.map((emoji, index) => {
+              {mine.map((emoji) => {
                 const key = emojiCellKey(emoji);
-                const dragging = drag?.from === "library";
-                const originalSlot = dragging ? drag.slots[index] : undefined;
-                const targetSlot = dragging
-                  ? drag.slots[dragPositions.get(key) ?? index]
-                  : undefined;
                 return (
-                  <ReorderItem
-                    key={key}
-                    className={cn(
-                      "group relative size-14",
-                      dragging &&
-                        "transition-transform duration-150 ease-out motion-reduce:transition-none",
-                      dragging &&
-                        emojiCellKey(drag.emoji) === key &&
-                        "opacity-25",
-                    )}
-                    offset={
-                      originalSlot && targetSlot
-                        ? {
-                            x: targetSlot.left - originalSlot.left,
-                            y: targetSlot.top - originalSlot.top,
-                          }
-                        : undefined
-                    }
-                  >
+                  <EmojiSortable key={key} emoji={emoji} disabled={busy || savingOrder || !ready}>
+                    {({ attributes, listeners, setActivatorNodeRef }) => <>
                     <Button
                       variant="ghost"
                       size="icon"
                       type="button"
                       aria-label={`定位${emoji.sources[0]?.name ?? "表情"}的来源脸图`}
-                      aria-pressed={activeKey === key}
                       disabled={busy}
-                      draggable={!busy && !savingOrder}
-                      onDragStart={(event) =>
-                        startDrag(emoji, "library", event)
-                      }
-                      onDragEnd={endDrag}
+                      {...attributes}
+                      aria-pressed={activeKey === key}
+                      {...listeners}
+                      ref={setActivatorNodeRef}
+                      onContextMenu={(event) => event.preventDefault()}
                       className={cn(
                         "relative inline-flex size-14 cursor-pointer items-center justify-center rounded border border-transparent hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default",
                         activeKey === key &&
@@ -627,10 +558,12 @@ export function EmojiLibrary({
                     >
                       <X aria-hidden size={10} />
                     </Button>
-                  </ReorderItem>
+                    </>}
+                  </EmojiSortable>
                 );
               })}
             </div>
+            </SortableContext>
           </div>
           <footer>
             {preview ? (
@@ -763,8 +696,10 @@ export function EmojiLibrary({
               </span>
             </div>
           ) : null}
-        </section>
+        </EmojiDropZone>
       </div>
     </div>
+    <SortableOverlay>{drag && <div aria-hidden inert className="grid size-14 place-items-center rounded border border-primary bg-card shadow-lg"><FaceEmojiImage emoji={drag.emoji} /></div>}</SortableOverlay>
+    </DndContext>
   );
 }
