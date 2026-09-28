@@ -1,5 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+.githooks/* text eol=lf
 
 # Runtime bundles and their recorded hashes must retain the imported bytes.
 public/play/runtime/easyrpg/** -text

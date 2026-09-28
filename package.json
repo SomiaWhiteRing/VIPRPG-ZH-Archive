@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "hooks:install": "git config --local core.hooksPath .githooks",
     "dev": "node scripts/app.mjs dev",
     "build": "node scripts/app.mjs build",
     "android:web:build": "vite build --config android/vite.config.ts && node scripts/build-android-assets.mjs",
