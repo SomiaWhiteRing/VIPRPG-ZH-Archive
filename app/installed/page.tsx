@@ -13,7 +13,6 @@ import { busyGameResourceKeys, cleanupExpiredGameResources, deleteLocalGame } fr
 import { readCachedWebPlayCover } from "@/app/play/[archiveVersionId]/web-play-cover";
 import { listWebPlayInstallations } from "@/app/play/[archiveVersionId]/web-play-db";
 import { subscribeGameResourcesChanged } from "@/app/play/[archiveVersionId]/web-play-events";
-import { gameResourceExpiresAt } from "@/app/play/[archiveVersionId]/web-play-storage";
 import type { WebPlayInstallation } from "@/app/play/[archiveVersionId]/web-play-types";
 import { DISPLAY_TIME_ZONE, formatBytes, formatDateKey, parseTimestamp } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
@@ -171,7 +170,7 @@ function InstalledGames() {
             {group.items.map(item => (
               <li className="flex items-start gap-3" key={item.playKey}>
                 {managing ? <Label className="flex min-h-11 shrink-0 items-center pt-3.5"><Checkbox aria-label={`选择 ${item.title}`} disabled={busy || activeKeys.has(item.playKey)} checked={selected.has(item.playKey)} onCheckedChange={checked => setSelected(current => { const next = new Set(current); if (checked === true) next.add(item.playKey); else next.delete(item.playKey); return next; })} /></Label> : null}
-                <div className="min-w-0 flex-1"><InstalledGameRow item={item} active={activeKeys.has(item.playKey)} actions={managing ? null : (
+                <div className="min-w-0 flex-1"><InstalledGameRow item={item} actions={managing ? null : (
                   <>
                     {!activeKeys.has(item.playKey) ? <Button asChild className="min-h-11 px-3.5 text-xs" variant="outline"><Link to={`/play/${item.archiveVersionId}`}><Play aria-hidden />{item.status === "ready" ? "游玩" : "重新安装"}</Link></Button> : null}
                     <Button className="min-h-11 px-3 text-xs text-muted" disabled={busy || activeKeys.has(item.playKey)} onClick={() => void remove([item])} type="button" variant="ghost">清理</Button>
@@ -186,7 +185,7 @@ function InstalledGames() {
   );
 }
 
-function InstalledGameRow({ item, active, actions }: { item: WebPlayInstallation; active: boolean; actions: ReactNode }) {
+function InstalledGameRow({ item, actions }: { item: WebPlayInstallation; actions: ReactNode }) {
   const [cover, setCover] = useState<{ hash: string; url: string } | null>(null);
   useEffect(() => {
     if (!item.coverBlobSha256) return;
@@ -200,14 +199,11 @@ function InstalledGameRow({ item, active, actions }: { item: WebPlayInstallation
     }).catch(() => {});
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
   }, [item.coverBlobSha256]);
-  const expires = gameResourceExpiresAt(item);
-  const status = active ? "正在使用" : item.status !== "ready" ? "未完成安装" : expires !== null ? `${dateLabel(new Date(expires))}到期` : "";
   return (
     <WorkListRow href={item.workId ? `/games/${item.workId}` : `/play/${item.archiveVersionId}`} title={item.title} originalTitle={item.originalTitle}
-      coverSrc={cover?.hash === item.coverBlobSha256 ? cover?.url : null} engineFamily={item.engineFamily}
+      coverSrc={cover?.hash === item.coverBlobSha256 ? cover?.url : null}
       action={actions ? <div className="hidden items-center gap-2 min-[561px]:flex">{actions}</div> : null}>
-      <p className="mt-1 font-mono text-xs text-muted">归档 #{item.archiveVersionId} / {formatBytes(item.installedBytes)}</p>
-      {status ? <p className={`mt-1 text-xs ${active ? "text-secondary" : "text-muted"}`}>{status}</p> : null}
+      <p className="mt-1 font-mono text-xs text-muted">{formatBytes(item.installedBytes)}</p>
       {actions ? <div className="mt-2 flex flex-wrap items-center gap-2 min-[561px]:hidden">{actions}</div> : null}
     </WorkListRow>
   );
