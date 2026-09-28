@@ -52,6 +52,7 @@ export type GameExternalLink = {
 };
 
 export type GameArchiveVersionDetail = {
+  embeddedPlayerSizeBytes: number;
   usesSharedPlayer: boolean;
   webPlayFileCount: number;
   webPlaySizeBytes: number;
@@ -97,6 +98,7 @@ export type GameTranslationRelation = {
 };
 
 export type GameWorkSummary = {
+  embeddedPlayerSizeBytes: number;
   id: number;
   originalTitle: string;
   chineseTitle: string | null;

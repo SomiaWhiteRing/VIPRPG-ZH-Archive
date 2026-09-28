@@ -3,6 +3,7 @@ import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { updateOwnProfileVisibility } from "@/app/.server/db/users";
 import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { updateAccountPreferences } from "@/app/.server/db/account-preferences";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
@@ -11,6 +12,10 @@ export async function POST(runtime: AppRuntime, request: Request) {
     if (!auth)
       return redirectWithParams(request, "/login", { next: "/me/privacy" });
     const form = await request.formData();
+    if (form.get("section") === "preferences") {
+      await updateAccountPreferences(runtime, auth.user.id, form);
+      return redirectWithParams(request, "/me/privacy", { preferencesUpdated: "1" });
+    }
     await updateOwnProfileVisibility(runtime, {
       user: auth.user,
       visibility: {

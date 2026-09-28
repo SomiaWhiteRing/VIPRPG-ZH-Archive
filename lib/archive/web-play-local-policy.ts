@@ -1,6 +1,4 @@
-// Bump when the filtered ZIP contents change so transport caches stay isolated.
-export const webPlayDownloadProfile = "web-play-v1";
-
+// Local installation filtering is independent of the downloadable ZIP contents.
 export const webPlayLocalSkippedExtensions = ["dll", "exe", "txt"] as const;
 
 const skippedExtensionSet = new Set<string>(webPlayLocalSkippedExtensions);

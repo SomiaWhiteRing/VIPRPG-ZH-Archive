@@ -57,6 +57,8 @@ const USER_SELECT = `SELECT
   display_name,
   avatar_blob_sha256,
   bio,
+  include_player_in_zip,
+  account_shortcuts,
   profile_show_bio,
   profile_show_showcase,
   profile_show_favorites,
@@ -852,7 +854,7 @@ export async function deleteOwnAccount(
     db
       .prepare(
         `UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
-      bio='',password_hash=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_favorites=0,profile_show_history=0,
+      bio='',password_hash=NULL,include_player_in_zip=1,account_shortcuts=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_favorites=0,profile_show_history=0,
       profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`,
       )
       .bind(user.id),

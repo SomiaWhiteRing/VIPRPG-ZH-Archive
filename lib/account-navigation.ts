@@ -17,6 +17,6 @@ export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me/discussions", label: "我的讨论" },
   { href: "/me/uploads", label: "我的上传", requiresUpload: true },
   { href: "/me/profile", label: "个人资料", separatorBefore: true },
-  { href: "/me/privacy", label: "隐私" },
+  { href: "/me/privacy", label: "隐私与偏好" },
   { href: "/me/permissions", label: "权限申请" },
 ] as const;

@@ -6,6 +6,7 @@ import { LocalInstallButton } from "./local-install-button";
 import { formatBytes } from "@/lib/format";
 import { Download, ExternalLink } from "lucide-react";
 import { KaiImportLink } from "./kai-import-link";
+import { useArchiveDownload } from "@/app/components/use-archive-download";
 
 type Props = {
   workId: number;
@@ -15,9 +16,9 @@ type Props = {
   engineFamily: string;
   archive: {
     id: number;
-    downloadHref: string;
     totalFiles: number;
     totalSizeBytes: number;
+    embeddedPlayerSizeBytes: number;
     downloadSizeBytes: number | null;
     webPlayFileCount: number;
     webPlaySizeBytes: number;
@@ -33,6 +34,8 @@ export function WorkActionBar({
   engineFamily,
 }: Props) {
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
+  const { downloadUrl, downloadSize } = useArchiveDownload();
+  const sizeBytes = archive ? downloadSize(archive) : null;
   return (
     <div className="grid gap-3.5" aria-label="主操作">
       {archive ? (
@@ -41,7 +44,7 @@ export function WorkActionBar({
             <LocalInstallButton id={archive.id} bytes={archive.webPlaySizeBytes} title={title} workId={workId} coverBlobSha256={coverBlobSha256} />
             {!native && <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
-              href={archive.downloadHref}
+              href={downloadUrl(archive.id)}
               onClick={() => {
                 if (isAuthenticated) {
                   void fetch(`/api/works/${workId}/played`, {
@@ -55,7 +58,7 @@ export function WorkActionBar({
               <Download aria-hidden />
               下载 ZIP
               <span className="text-xs text-muted">
-                {archive.downloadSizeBytes === null ? "共享播放器暂不可用" : formatBytes(archive.downloadSizeBytes)}
+                {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
               </span>
             </a>}
             {["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&

@@ -125,6 +125,7 @@ function fakeUser(
     externalAuthId: `email:${id}@example.test`,
     displayName: `user-${id}`,
     avatarBlobSha256: null,
+    preferences: { includePlayerInZip: true, shortcuts: ["/me/favorites", "/me/emojis", "/me/catalogs"] },
     bio: "",
     profileVisibility: {
       bio: true,

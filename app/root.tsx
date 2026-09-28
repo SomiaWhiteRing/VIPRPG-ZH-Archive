@@ -42,6 +42,7 @@ export async function loader(args: LoaderFunctionArgs) {
           unread,
           permissionKeys: user.permissionKeys,
           isBootstrapAdmin: user.isBootstrapAdmin,
+          preferences: user.preferences,
         }
       : null,
   };
