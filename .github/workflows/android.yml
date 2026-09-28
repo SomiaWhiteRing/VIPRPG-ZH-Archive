@@ -38,6 +38,7 @@ on:
       - 'lib/archive/easyrpg-runtime.json'
       - 'lib/archive/web-play.ts'
       - 'lib/browser/client-environment.ts'
+      - 'lib/browser/android-screenshots.ts'
       - 'lib/format.ts'
       - 'lib/ui/cn.ts'
       - 'lib/android-package.ts'

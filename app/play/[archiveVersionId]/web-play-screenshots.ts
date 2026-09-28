@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerSession } from "./web-play-player";
+import { isAndroidClient } from "@/lib/browser/client-environment";
+import { ensureAndroidScreenshotDirectory, saveAndroidScreenshot } from "@/lib/browser/android-screenshots";
 import {
   listWebPlayScreenshots,
   saveWebPlayScreenshot,
@@ -8,7 +10,7 @@ import {
 
 export type ScreenshotPreview = WebPlayScreenshot & { url: string };
 
-export function useWebPlayScreenshots(workId: number) {
+export function useWebPlayScreenshots(workId: number, title: string) {
   const [screenshots, setScreenshots] = useState<ScreenshotPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
@@ -24,7 +26,8 @@ export function useWebPlayScreenshots(workId: number) {
     setScreenshots([]);
     setLoading(true);
     setLoadError(null);
-    void listWebPlayScreenshots(workId)
+    if (isAndroidClient()) setLoading(false);
+    else void listWebPlayScreenshots(workId)
       .then((rows) => {
         if (lifetime.signal.aborted) return;
         setScreenshots(rows.map((row) => {
@@ -52,8 +55,16 @@ export function useWebPlayScreenshots(workId: number) {
     capturingRef.current = true;
     setCapturing(true);
     try {
+      const android = isAndroidClient();
+      if (android && !await ensureAndroidScreenshotDirectory()) return { ok: false, message: "未选择截图目录，截图未保存。" };
+      signal.throwIfAborted();
+      const capturedAt = Date.now();
       const image = await player.captureScreenshot();
       signal.throwIfAborted();
+      if (android) {
+        await saveAndroidScreenshot(image.blob, workId, title, capturedAt);
+        return signal.aborted ? undefined : { ok: true, message: "截图已保存到所选目录。" };
+      }
       const screenshot: WebPlayScreenshot = {
         ...image,
         id: crypto.randomUUID(),
@@ -80,7 +91,7 @@ export function useWebPlayScreenshots(workId: number) {
       capturingRef.current = false;
       if (!signal.aborted) setCapturing(false);
     }
-  }, [loading, workId]);
+  }, [loading, workId, title]);
 
   return { screenshots, loading, capturing, loadError, capture };
 }

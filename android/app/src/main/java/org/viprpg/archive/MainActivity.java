@@ -33,25 +33,33 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private final String offlineUrl = BuildConfig.SITE_ORIGIN + "/_android/index.html";
     private final Uri origin = Uri.parse(BuildConfig.SITE_ORIGIN);
     private WebView browser;
+    private WebView offlineBrowser;
     private LinearLayout bottomNavigation;
     private LinearLayout onlineTab;
     private LinearLayout libraryTab;
+    private LinearLayout galleryTab;
     private LinearLayout versionTab;
-    private ScrollView versionPanel;
+    private ScreenshotController screenshots;
+    private ScreenshotGallery galleryPanel;
+    private NativeLibrary nativeLibrary;
+    private FrameLayout libraryPanel;
+    private LinearLayout versionPage;
     private TextView installedVersion;
     private TextView updateStatus;
     private ImageView updateStatusIcon;
@@ -75,6 +83,8 @@ public final class MainActivity extends Activity {
     private boolean playing;
     private boolean library;
     private boolean version;
+    private boolean gallery;
+    private boolean onlineLoadFailed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,8 +95,10 @@ public final class MainActivity extends Activity {
         bottomNavigation = findViewById(R.id.bottom_navigation);
         onlineTab = findViewById(R.id.online_tab);
         libraryTab = findViewById(R.id.library_tab);
+        galleryTab = findViewById(R.id.gallery_tab);
         versionTab = findViewById(R.id.version_tab);
-        versionPanel = findViewById(R.id.version_panel);
+        versionPage = findViewById(R.id.version_page);
+        ((FrameLayout) findViewById(R.id.version_header)).addView(new ArchivePageHeader(this, getString(R.string.native_version)));
         installedVersion = findViewById(R.id.installed_version);
         updateStatus = findViewById(R.id.update_status);
         updateStatusIcon = findViewById(R.id.update_status_icon);
@@ -97,6 +109,18 @@ public final class MainActivity extends Activity {
         downloadUpdate = findViewById(R.id.download_update);
         progress = findViewById(R.id.progress);
         browser = findViewById(R.id.browser);
+        offlineBrowser = findViewById(R.id.offline_browser);
+        libraryPanel = findViewById(R.id.library_panel);
+        nativeLibrary = new NativeLibrary(this, new NativeLibrary.Actions() {
+            @Override public void refresh() { sendLibraryCommand("refresh", "null"); }
+            @Override public void play(String key) { sendLibraryCommand("play", JSONObject.quote(key)); }
+            @Override public void delete(List<String> keys) { sendLibraryCommand("delete", new JSONArray(keys).toString()); }
+            @Override public void retry(long id) { openInstall(id); }
+        });
+        libraryPanel.addView(nativeLibrary);
+        screenshots = new ScreenshotController(this, browser, offlineBrowser);
+        galleryPanel = new ScreenshotGallery(this, screenshots);
+        ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);
         checkUpdate.setOnClickListener(view -> checkForUpdate());
         Switch autoCheck = findViewById(R.id.auto_check_updates);
@@ -106,19 +130,22 @@ public final class MainActivity extends Activity {
         downloadUpdate.setOnClickListener(view -> {
             if (currentUpdate != null && currentUpdate.download != null) openExternal(currentUpdate.download);
         });
-        clearFocusAfterTouch(onlineTab, libraryTab, versionTab, checkUpdate, downloadUpdate);
+        clearFocusAfterTouch(onlineTab, libraryTab, galleryTab, versionTab, checkUpdate, downloadUpdate);
 
-        WebSettings settings = browser.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setSupportMultipleWindows(false);
-        settings.setSafeBrowsingEnabled(true);
+        for (WebView view : new WebView[]{browser, offlineBrowser}) {
+            WebSettings settings = view.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setAllowFileAccess(false);
+            settings.setAllowContentAccess(false);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+            settings.setMediaPlaybackRequiresUserGesture(false);
+            settings.setSupportMultipleWindows(false);
+            settings.setSafeBrowsingEnabled(true);
+        }
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-        browser.addJavascriptInterface(new LibraryBridge(), "VIPRPGAndroid");
+        browser.addJavascriptInterface(new OnlineBridge(), "VIPRPGAndroid");
+        offlineBrowser.addJavascriptInterface(new LibraryBridge(), "VIPRPGAndroid");
 
         WebViewAssetLoader.AssetsPathHandler packagedAssets = new WebViewAssetLoader.AssetsPathHandler(this);
         WebViewAssetLoader assets = new WebViewAssetLoader.Builder()
@@ -155,14 +182,23 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                library = isOffline(Uri.parse(url));
-                if (!library) setPlaying(false);
                 updateNavigation();
             }
 
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (view == offlineBrowser) setPlaying(false);
+                else if (playing && !library) {
+                    playing = false;
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                    updateNavigation();
+                }
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame() && !isOffline(request.getUrl()) && !library && !version) {
+                if (view == browser && request.isForMainFrame() && !isOffline(request.getUrl()) && !library && !version && !gallery) {
+                    onlineLoadFailed = true;
                     Toast.makeText(MainActivity.this, "网络不可用，已打开本地游戏", Toast.LENGTH_SHORT).show();
                     showLibrary();
                 }
@@ -170,7 +206,8 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
-                if (request.isForMainFrame() && !isOffline(request.getUrl()) && !version && response.getStatusCode() >= 500) {
+                if (view == browser && request.isForMainFrame() && !isOffline(request.getUrl()) && !library && !version && !gallery && response.getStatusCode() >= 500) {
+                    onlineLoadFailed = true;
                     showLibrary();
                 }
             }
@@ -183,11 +220,13 @@ public final class MainActivity extends Activity {
                 return true;
             }
         });
+        offlineBrowser.setWebViewClient(browser.getWebViewClient());
         browser.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int percent) {
+                if (view != browser) return;
                 progress.setProgress(percent);
-                progress.setVisibility(percent < 100 && !playing ? View.VISIBLE : View.GONE);
+                progress.setVisibility(percent < 100 && !playing && !library && !version && !gallery ? View.VISIBLE : View.GONE);
             }
 
             @Override
@@ -225,18 +264,24 @@ public final class MainActivity extends Activity {
                 }
             }
         });
+        offlineBrowser.setWebChromeClient(browser.getWebChromeClient());
         browser.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) -> openExternal(Uri.parse(url)));
 
         onlineTab.setOnClickListener(view -> showOnline());
         libraryTab.setOnClickListener(view -> showLibrary());
+        galleryTab.setOnClickListener(view -> showGallery());
         versionTab.setOnClickListener(view -> showVersion());
-        if (savedInstanceState == null || browser.restoreState(savedInstanceState) == null) {
-            showOnline();
-        } else {
-            library = isOffline(Uri.parse(browser.getUrl()));
-            if (savedInstanceState.getBoolean("version")) showVersion();
-            updateNavigation();
-        }
+        if (savedInstanceState != null) {
+            Bundle onlineState = savedInstanceState.getBundle("onlineState");
+            Bundle offlineState = savedInstanceState.getBundle("offlineState");
+            if (onlineState != null) browser.restoreState(onlineState);
+            if (offlineState != null) offlineBrowser.restoreState(offlineState);
+            library = savedInstanceState.getBoolean("library");
+            if (savedInstanceState.getBoolean("gallery")) showGallery();
+            else if (savedInstanceState.getBoolean("version")) showVersion();
+            else if (library) showLibrary();
+            else showOnline();
+        } else showOnline();
         if (!startupChecked) {
             startupChecked = true;
             if (autoCheck.isChecked()) checkForUpdate(true);
@@ -244,7 +289,7 @@ public final class MainActivity extends Activity {
     }
 
     private boolean sameOrigin(Uri url) {
-        return "https".equals(url.getScheme()) && origin.getHost().equalsIgnoreCase(url.getHost())
+        return url != null && "https".equals(url.getScheme()) && origin.getHost().equalsIgnoreCase(url.getHost())
             && (url.getPort() == -1 || url.getPort() == 443) && url.getUserInfo() == null;
     }
 
@@ -252,46 +297,123 @@ public final class MainActivity extends Activity {
         return sameOrigin(url) && url.getPath() != null && url.getPath().startsWith("/_android/");
     }
 
+    private boolean isBrowserOffline() {
+        String url = offlineBrowser.getUrl();
+        return url != null && isOffline(Uri.parse(url));
+    }
+
+    boolean isScreenshotPage(WebView view) {
+        if (view == null || view.getUrl() == null) return false;
+        Uri url = Uri.parse(view.getUrl());
+        return sameOrigin(url) && ("/_android/index.html".equals(url.getPath())
+            || (url.getPath() != null && url.getPath().matches("/play/[0-9]+/?")));
+    }
+
+    void setOnlinePlaying(boolean value) {
+        if (!isScreenshotPage(browser) || isOffline(Uri.parse(browser.getUrl()))) return;
+        playing = value;
+        if (!value && fullscreenView == null) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        updateNavigation();
+        if (!value) showPendingUpdate();
+    }
+
+    void onScreenshotDirectoryResult(String error) {
+        if (gallery) galleryPanel.directoryResult(error);
+        else if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+    }
+
+    private void hideGallery() {
+        gallery = false;
+        findViewById(R.id.gallery_panel).setVisibility(View.GONE);
+    }
+
+    private void showGallery() {
+        if (playing || screenshots.isBusy()) return;
+        version = false; gallery = true;
+        versionPage.setVisibility(View.GONE);
+        browser.setVisibility(View.GONE);
+        offlineBrowser.setVisibility(View.GONE);
+        libraryPanel.setVisibility(View.GONE);
+        progress.setVisibility(View.GONE);
+        findViewById(R.id.gallery_panel).setVisibility(View.VISIBLE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        updateNavigation();
+        galleryPanel.open();
+    }
+
     private void showOnline() {
-        if (playing) return;
-        boolean fromVersion = version;
+        if (playing || screenshots.isBusy()) return;
+        hideGallery();
         version = false;
-        versionPanel.setVisibility(View.GONE);
+        versionPage.setVisibility(View.GONE);
+        libraryPanel.setVisibility(View.GONE);
+        offlineBrowser.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        if (fromVersion && !library) { updateNavigation(); return; }
+        boolean wasLibrary = library;
         library = false;
-        browser.loadUrl(BuildConfig.SITE_ORIGIN + "/");
+        if (wasLibrary || browser.getUrl() == null || onlineLoadFailed) {
+            onlineLoadFailed = false;
+            browser.loadUrl(BuildConfig.SITE_ORIGIN + "/");
+        }
         updateNavigation();
     }
 
     private void showLibrary() {
-        if (playing) return;
-        boolean fromVersion = version;
+        if (playing || screenshots.isBusy()) return;
+        hideGallery();
         version = false;
-        versionPanel.setVisibility(View.GONE);
-        browser.setVisibility(View.VISIBLE);
+        versionPage.setVisibility(View.GONE);
+        browser.setVisibility(View.GONE);
+        offlineBrowser.setVisibility(playing ? View.VISIBLE : View.GONE);
+        libraryPanel.setVisibility(playing ? View.GONE : View.VISIBLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        if (fromVersion && library) { updateNavigation(); return; }
         library = true;
-        browser.loadUrl(offlineUrl);
+        if (!isBrowserOffline()) {
+            nativeLibrary.loading();
+            offlineBrowser.loadUrl(offlineUrl);
+        } else sendLibraryCommand("refresh", "null");
+        updateNavigation();
+    }
+
+    private void sendLibraryCommand(String command, String detail) {
+        if (!isBrowserOffline()) return;
+        offlineBrowser.evaluateJavascript("window.dispatchEvent(new CustomEvent('viprpg:library-" + command
+            + "',{detail:" + detail + "}))", null);
+    }
+
+    private void openInstall(long archiveVersionId) {
+        if (archiveVersionId <= 0) return;
+        library = false;
+        libraryPanel.setVisibility(View.GONE);
+        offlineBrowser.setVisibility(View.GONE);
+        browser.setVisibility(View.VISIBLE);
+        browser.loadUrl(BuildConfig.SITE_ORIGIN + "/play/" + archiveVersionId);
         updateNavigation();
     }
 
     private void setPlaying(boolean value) {
         playing = value;
+        if (library && !version && !gallery) {
+            offlineBrowser.setVisibility(value ? View.VISIBLE : View.GONE);
+            libraryPanel.setVisibility(value ? View.GONE : View.VISIBLE);
+            if (!value) sendLibraryCommand("refresh", "null");
+        }
         setRequestedOrientation(value ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         updateNavigation();
         if (!value) showPendingUpdate();
     }
 
     private void showVersion() {
-        if (playing) return;
+        if (playing || screenshots.isBusy()) return;
+        hideGallery();
         version = true;
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         browser.setVisibility(View.GONE);
+        offlineBrowser.setVisibility(View.GONE);
+        libraryPanel.setVisibility(View.GONE);
         progress.setVisibility(View.GONE);
-        versionPanel.setVisibility(View.VISIBLE);
+        versionPage.setVisibility(View.VISIBLE);
         updateNavigation();
         if (!checkedUpdates) checkForUpdate();
     }
@@ -396,7 +518,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showPendingUpdate() {
-        if (!pendingUpdatePrompt || !resumed || playing || fullscreenView != null || isFinishing() || isDestroyed()) return;
+        if (!pendingUpdatePrompt || !resumed || playing || gallery || screenshots.isBusy() || fullscreenView != null || isFinishing() || isDestroyed()) return;
         pendingUpdatePrompt = false;
         if (version || currentUpdate == null || !getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true)) return;
         UpdateChecker.Result update = currentUpdate;
@@ -429,8 +551,9 @@ public final class MainActivity extends Activity {
     private void updateNavigation() {
         boolean immersive = playing || fullscreenView != null;
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
-        tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !library);
-        tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && library);
+        tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
+        tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && !gallery && library);
+        tintTab(galleryTab, R.id.gallery_icon, R.id.gallery_label, gallery);
         tintTab(versionTab, R.id.version_icon, R.id.version_label, version);
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = getWindow().getInsetsController();
@@ -477,6 +600,7 @@ public final class MainActivity extends Activity {
     @Deprecated
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (screenshots.onActivityResult(requestCode, resultCode, data)) return;
         if (requestCode == FILE_CHOOSER_REQUEST && fileChooser != null) {
             fileChooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             fileChooser = null;
@@ -487,13 +611,17 @@ public final class MainActivity extends Activity {
     @Deprecated
     public void onBackPressed() {
         if (fullscreenView != null) {
-            browser.evaluateJavascript("document.exitFullscreen()", null);
+            (library ? offlineBrowser : browser).evaluateJavascript("document.exitFullscreen()", null);
         } else if (playing) {
-            browser.evaluateJavascript("window.dispatchEvent(new Event('viprpg:back'))", null);
+            (library ? offlineBrowser : browser).evaluateJavascript("window.dispatchEvent(new Event('viprpg:back'))", null);
+        } else if (gallery) {
+            if (!galleryPanel.onBack() && !screenshots.isBusy()) { if (library) showLibrary(); else showOnline(); }
         } else if (version) {
             if (library) showLibrary(); else showOnline();
         } else if (library) {
-            if (hasNetwork()) showOnline(); else super.onBackPressed();
+            if (!nativeLibrary.onBack()) {
+                if (hasNetwork()) showOnline(); else super.onBackPressed();
+            }
         } else if (browser.canGoBack()) {
             browser.goBack();
         } else {
@@ -505,12 +633,16 @@ public final class MainActivity extends Activity {
     public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
         browser.requestLayout();
+        offlineBrowser.requestLayout();
     }
 
     @Override
     protected void onPause() {
         resumed = false;
+        browser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
+        offlineBrowser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
         browser.onPause();
+        offlineBrowser.onPause();
         super.onPause();
     }
 
@@ -518,37 +650,81 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         browser.onResume();
+        offlineBrowser.onResume();
         resumed = true;
+        if (gallery) galleryPanel.refreshOnResume();
+        if (library && !playing && !gallery && !version) sendLibraryCommand("refresh", "null");
         showPendingUpdate();
     }
 
     @Override
     protected void onDestroy() {
         if (fileChooser != null) fileChooser.onReceiveValue(null);
+        galleryPanel.close();
+        screenshots.close();
         updateExecutor.shutdownNow();
         browser.destroy();
+        offlineBrowser.destroy();
         super.onDestroy();
     }
 
     @Override
     protected void onSaveInstanceState(Bundle state) {
         state.putBoolean("version", version);
-        browser.saveState(state);
+        state.putBoolean("gallery", gallery);
+        state.putBoolean("library", library);
+        Bundle onlineState = new Bundle();
+        Bundle offlineState = new Bundle();
+        browser.saveState(onlineState);
+        offlineBrowser.saveState(offlineState);
+        state.putBundle("onlineState", onlineState);
+        state.putBundle("offlineState", offlineState);
         super.onSaveInstanceState(state);
+    }
+
+    private final class OnlineBridge {
+        @JavascriptInterface
+        public void setPlaying(boolean value) {
+            runOnUiThread(() -> setOnlinePlaying(value));
+        }
+
+        @JavascriptInterface
+        public void setOrientation(String direction) {
+            runOnUiThread(() -> {
+                if (!isScreenshotPage(browser) || !"landscape".equals(direction) && !"portrait".equals(direction)) return;
+                setRequestedOrientation("landscape".equals(direction)
+                    ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            });
+        }
     }
 
     private final class LibraryBridge {
         @JavascriptInterface
+        public void setLibrarySnapshot(String snapshot) {
+            runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setSnapshot(snapshot); });
+        }
+
+        @JavascriptInterface
+        public void setLibraryCover(String key, String image) {
+            runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setCover(key, image); });
+        }
+
+        @JavascriptInterface
+        public void setLibraryError(String error) {
+            runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setError(error); });
+        }
+
+        @JavascriptInterface
         public void setPlaying(boolean value) {
             runOnUiThread(() -> {
-                if (isOffline(Uri.parse(browser.getUrl()))) MainActivity.this.setPlaying(value);
+                if (isBrowserOffline()) MainActivity.this.setPlaying(value);
             });
         }
 
         @JavascriptInterface
         public void setOrientation(String direction) {
             runOnUiThread(() -> {
-                if (!isOffline(Uri.parse(browser.getUrl())) || (!playing && !"unspecified".equals(direction))) return;
+                if (!isBrowserOffline() || (!playing && !"unspecified".equals(direction))) return;
                 int requested = "landscape".equals(direction) ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
                 setRequestedOrientation(requested);
