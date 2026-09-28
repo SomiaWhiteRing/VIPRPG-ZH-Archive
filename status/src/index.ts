@@ -1,4 +1,4 @@
-import { monitors, type Monitor } from "./monitors";
+import { monitors, monitorIntervalSeconds, type Monitor } from "./monitors";
 
 interface Env {
   STATUS_DB: D1Database;
@@ -145,7 +145,9 @@ async function saveResult(db: D1Database, result: CheckResult): Promise<void> {
 
 async function runChecks(db: D1Database, scheduledTime: number): Promise<void> {
   const checkedAt = new Date(scheduledTime).toISOString();
-  const results = await Promise.all(monitors.map((monitor) => check(monitor, checkedAt)));
+  const due = monitors.filter((monitor) =>
+    Math.floor(scheduledTime / 60_000) % (monitorIntervalSeconds(monitor) / 60) === 0);
+  const results = await Promise.all(due.map((monitor) => check(monitor, checkedAt)));
   for (const result of results) {
     await saveResult(db, result);
   }
@@ -186,7 +188,10 @@ async function statusData(db: D1Database): Promise<Response> {
     generatedAt: now.toISOString(),
     timezone: "Asia/Shanghai",
     intervalSeconds: 60,
-    monitors: monitors.map(({ id, name, description, group }) => ({ id, name, description, group })),
+    monitors: monitors.map((monitor) => ({
+      id: monitor.id, name: monitor.name, description: monitor.description, group: monitor.group,
+      intervalSeconds: monitorIntervalSeconds(monitor),
+    })),
     states: states.results,
     days: days.results,
     incidents: incidents.results,
