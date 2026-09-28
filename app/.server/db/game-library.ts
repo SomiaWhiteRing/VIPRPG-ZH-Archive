@@ -75,8 +75,10 @@ import {
 import type { StaffCredit } from "@/lib/staff-credits";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import { normalizeWorkMoreInfo } from "@/lib/work-more-info";
+import { normalizeReleasePeriod } from "@/lib/release-period";
 
 type Filters = {
+  release?: string;
   query?: string;
   status?: string;
   engine?: string;
@@ -1398,6 +1400,12 @@ function buildWhere(input: Filters): {
       `(w.original_title LIKE ? ESCAPE '\\' OR w.chinese_title LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM work_titles wtq WHERE wtq.work_id=w.id AND wtq.title LIKE ? ESCAPE '\\'))`,
     );
     binds.push(contains, contains, contains);
+  }
+  const release = normalizeReleasePeriod(input.release);
+  if (release) {
+    // Prefixes preserve year/month precision without inventing a January 1 date.
+    clauses.push("(w.original_release_date = ? OR w.original_release_date LIKE ?)");
+    binds.push(release, `${release}-%`);
   }
   if (input.status && input.status !== "all") {
     clauses.push("w.status=?");

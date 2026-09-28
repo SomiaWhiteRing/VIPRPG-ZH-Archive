@@ -7,6 +7,7 @@ import { stringParam } from "@/lib/params";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { getTagSource } from "@/lib/user-tags";
 import { listCombinedTags, listUserTags } from "@/app/.server/db/user-work-tags";
+import { normalizeReleasePeriod } from "@/lib/release-period";
 
 const PAGE_SIZE = 20;
 
@@ -31,6 +32,7 @@ export async function loadGameLibrary(
   const uploader = parseOptionalId(stringParam(params.uploader));
   const language = stringParam(params.language);
   const original = stringParam(params.original);
+  const release = normalizeReleasePeriod(stringParam(params.release));
   const requestedSort = stringParam(params.sort);
   const sort =
     requestedSort === "title" || requestedSort === "release"
@@ -41,6 +43,7 @@ export async function loadGameLibrary(
     Number.parseInt(stringParam(params.page) || "1", 10) || 1,
   );
   const filters = {
+    release: release || undefined,
     engine,
     tag: tag || undefined,
     tagSource,
@@ -73,6 +76,7 @@ export async function loadGameLibrary(
       uploader ? findPublicUserById(runtime, uploader) : Promise.resolve(null),
     ]);
   const activeParams = {
+    release: release || undefined,
     engine: engine !== "all" ? engine : undefined,
     tag: tag || undefined,
     tag_source: !userList && tagSource !== "all" ? tagSource : undefined,
@@ -83,9 +87,11 @@ export async function loadGameLibrary(
     sort: sort !== "id" ? sort : undefined,
   };
   const hasFilters =
-    engine !== "all" || Boolean(tag || character || uploader || language || original);
+    engine !== "all" || Boolean(tag || character || uploader || language || original || release);
 
   return {
+    release,
+    currentYear: new Date().getUTCFullYear(),
     userWorkKind: userList?.kind ?? null,
     occurredTimes: userWorks
       ? Object.fromEntries(userWorks.items.map(({ work, occurredAt }) => [work.id, occurredAt]))
