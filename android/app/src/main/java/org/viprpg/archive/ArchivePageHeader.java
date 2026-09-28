@@ -14,6 +14,8 @@ import java.io.InputStream;
 
 /** Native counterpart of the offline library header: app icon, brand, title and actions. */
 final class ArchivePageHeader extends LinearLayout {
+    static final int CONTENT_HEIGHT_DP = 80;
+    static final int DIVIDER_HEIGHT_DP = 1;
     private final TextView title;
     private final TextView brand;
     private final ImageView logo;
@@ -50,9 +52,9 @@ final class ArchivePageHeader extends LinearLayout {
         line.addView(labels, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
         actions = new LinearLayout(context); actions.setGravity(Gravity.CENTER_VERTICAL); line.addView(actions);
         // Keep the title baseline fixed regardless of the page's action controls.
-        addView(line, new LayoutParams(LayoutParams.MATCH_PARENT, dp(80)));
+        addView(line, new LayoutParams(LayoutParams.MATCH_PARENT, dp(CONTENT_HEIGHT_DP)));
         View divider = new View(context); divider.setBackgroundColor(0xffd9ddd9);
-        LayoutParams dividerLayout = new LayoutParams(LayoutParams.MATCH_PARENT, dp(1));
+        LayoutParams dividerLayout = new LayoutParams(LayoutParams.MATCH_PARENT, dp(DIVIDER_HEIGHT_DP));
         dividerLayout.setMargins(dp(16), 0, dp(16), 0);
         addView(divider, dividerLayout);
     }

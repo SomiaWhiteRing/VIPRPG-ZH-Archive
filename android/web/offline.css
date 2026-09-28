@@ -7,6 +7,3 @@ html[data-android-touch="true"] :is(button, a, select, input[type="checkbox"]):f
   outline: none !important;
   box-shadow: none !important;
 }
-html[data-android-touch="true"] .offline-search:focus-within {
-  box-shadow: none !important;
-}

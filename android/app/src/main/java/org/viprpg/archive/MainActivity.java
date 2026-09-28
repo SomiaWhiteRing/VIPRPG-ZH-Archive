@@ -1,12 +1,11 @@
 package org.viprpg.archive;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
@@ -27,8 +26,8 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.Switch;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -66,8 +65,8 @@ public final class MainActivity extends Activity {
     private TextView updateDetail;
     private TextView releaseNotesHeading;
     private TextView releaseNotes;
-    private Button checkUpdate;
-    private Button downloadUpdate;
+    private MaterialButton checkUpdate;
+    private MaterialButton downloadUpdate;
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
     private UpdateChecker.Result currentUpdate;
     private boolean checkedUpdates;
@@ -119,6 +118,9 @@ public final class MainActivity extends Activity {
             @Override public void play(String key) { sendLibraryCommand("play", JSONObject.quote(key)); }
             @Override public void delete(List<String> keys) { sendLibraryCommand("delete", new JSONArray(keys).toString()); }
             @Override public void retry(long id) { openInstall(id); }
+            @Override public void details(long id) {
+                if (id > 0) showOnline(BuildConfig.SITE_ORIGIN + "/games/" + id);
+            }
         });
         libraryPanel.addView(nativeLibrary);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
@@ -126,7 +128,7 @@ public final class MainActivity extends Activity {
         ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);
         checkUpdate.setOnClickListener(view -> checkForUpdate());
-        Switch autoCheck = findViewById(R.id.auto_check_updates);
+        MaterialSwitch autoCheck = findViewById(R.id.auto_check_updates);
         autoCheck.setChecked(getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true));
         autoCheck.setOnCheckedChangeListener((button, enabled) ->
             getPreferences(MODE_PRIVATE).edit().putBoolean("autoCheckUpdates", enabled).apply());
@@ -362,7 +364,9 @@ public final class MainActivity extends Activity {
         galleryPanel.open();
     }
 
-    private void showOnline() {
+    private void showOnline() { showOnline(null); }
+
+    private void showOnline(String destination) {
         if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
         hideGallery();
         version = false;
@@ -373,9 +377,9 @@ public final class MainActivity extends Activity {
         if (resumed) resumeOnlineBrowser();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         library = false;
-        if (browser.getUrl() == null || onlineLoadFailed) {
+        if (destination != null || browser.getUrl() == null || onlineLoadFailed) {
             onlineLoadFailed = false;
-            browser.loadUrl(BuildConfig.SITE_ORIGIN + "/");
+            browser.loadUrl(destination != null ? destination : BuildConfig.SITE_ORIGIN + "/");
         }
         updateNavigation();
     }
@@ -422,9 +426,11 @@ public final class MainActivity extends Activity {
             libraryPanel.setVisibility(value ? View.GONE : View.VISIBLE);
             if (!value) sendLibraryCommand("refresh", "null");
         }
-        setRequestedOrientation(value ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        // Game orientation comes from the loaded controls preference, never a startup default.
+        if (!value) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         updateNavigation();
-        if (!value) showPendingUpdate();
+        if (value) restoreOfflinePlayerFocus();
+        else showPendingUpdate();
     }
 
     private void showVersion() {
@@ -456,7 +462,6 @@ public final class MainActivity extends Activity {
         checkedUpdates = true;
         checkUpdate.setEnabled(false);
         checkUpdate.setText("检查中…");
-        setCheckButtonSecondary(false);
         updateStatus.setText("正在检查更新");
         updateStatusIcon.setImageResource(R.drawable.ic_version);
         updateDetail.setVisibility(View.VISIBLE);
@@ -538,7 +543,6 @@ public final class MainActivity extends Activity {
         updateDetail.setVisibility(View.GONE);
         checkUpdate.setVisibility(View.VISIBLE);
         checkUpdate.setText(R.string.check_update);
-        setCheckButtonSecondary(false);
     }
 
     private void showPendingUpdate() {
@@ -546,7 +550,7 @@ public final class MainActivity extends Activity {
         pendingUpdatePrompt = false;
         if (version || currentUpdate == null || !getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true)) return;
         UpdateChecker.Result update = currentUpdate;
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder dialog = NativeControls.dialog(this)
             .setTitle("发现新版本 " + update.version)
             .setPositiveButton("下载更新", (ignored, which) -> openExternal(update.download))
             .setNegativeButton("稍后", null);
@@ -554,11 +558,6 @@ public final class MainActivity extends Activity {
             dialog.setMessage(update.notes);
         }
         dialog.show();
-    }
-
-    private void setCheckButtonSecondary(boolean secondary) {
-        checkUpdate.setBackgroundTintList(ColorStateList.valueOf(secondary ? 0xffeaf4f2 : 0xff1f6f67));
-        checkUpdate.setTextColor(secondary ? 0xff1f6f67 : Color.WHITE);
     }
 
     private void clearFocusAfterTouch(View... controls) {
@@ -653,11 +652,30 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void restoreOfflinePlayerFocus() {
+        if (offlineBrowser == null) return;
+        offlineBrowser.postOnAnimation(() -> {
+            // Never steal focus from another tab, a system picker, or a paused activity.
+            if (!resumed || !playing || !library || gallery || version || fullscreenView != null
+                || !hasWindowFocus() || !offlineBrowser.isShown() || !isBrowserOffline()) return;
+            offlineBrowser.requestFocus();
+            offlineBrowser.evaluateJavascript(
+                "window.dispatchEvent(new Event('viprpg:player-focus'))", null);
+        });
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) restoreOfflinePlayerFocus();
+    }
+
     @Override
     public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
         browser.requestLayout();
         offlineBrowser.requestLayout();
+        restoreOfflinePlayerFocus();
     }
 
     @Override
@@ -675,6 +693,7 @@ public final class MainActivity extends Activity {
         if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
+        restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();
         if (library && !playing && !gallery && !version) sendLibraryCommand("refresh", "null");
         showPendingUpdate();
@@ -722,6 +741,11 @@ public final class MainActivity extends Activity {
     }
 
     private final class LibraryBridge {
+        @JavascriptInterface
+        public void requestPlayerFocus() {
+            runOnUiThread(() -> restoreOfflinePlayerFocus());
+        }
+
         @JavascriptInterface
         public void setLibrarySnapshot(String snapshot) {
             runOnUiThread(() -> { if (isBrowserOffline()) nativeLibrary.setSnapshot(snapshot); });

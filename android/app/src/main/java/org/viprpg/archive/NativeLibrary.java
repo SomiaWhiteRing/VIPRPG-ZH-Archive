@@ -1,6 +1,17 @@
 package org.viprpg.archive;
 
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
+import com.google.android.material.appbar.MaterialToolbar;
+import android.graphics.drawable.RippleDrawable;
+import androidx.appcompat.widget.PopupMenu;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
+import android.widget.HorizontalScrollView;
+import android.content.res.ColorStateList;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -11,14 +22,10 @@ import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
-import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.json.JSONArray;
@@ -42,22 +49,31 @@ final class NativeLibrary extends LinearLayout {
         void play(String key);
         void delete(List<String> keys);
         void retry(long archiveVersionId);
+        void details(long workId);
     }
 
     private static final int PAPER = 0xfff5f4ef, INK = 0xff17212b, MUTED = 0xff68737d;
-    private static final int TEAL = 0xff2f9f92, BORDER = 0xffd9ddd9;
+    private static final int TEAL = 0xff1f6f67, BORDER = 0xffd9ddd9;
     private final Actions actions;
     private final List<Entry> entries = new ArrayList<>();
     private final Map<String, Bitmap> covers = new HashMap<>();
     private final Map<String, ImageView> visibleCovers = new HashMap<>();
     private final Map<String, TextView> coverPlaceholders = new HashMap<>();
     private final Set<String> selected = new HashSet<>();
-    private final LinearLayout items, filters, management;
-    private final TextView summary, message, selectAll, deleteSelected;
-    private final ImageView searchButton, manageButton;
+    private final LinearLayout items;
+    private final ArchivePageHeader header;
+    private final MaterialToolbar selectionToolbar;
+    private final Map<String, MaterialCheckBox> selectionChecks = new HashMap<>();
+    private final Map<String, View> selectionRows = new HashMap<>();
+    private final ChipGroup filters;
+    private SwipeGameRow openRow;
+    private final TextView summary, message;
+    private final MaterialButton searchButton, manageButton;
     private final SwipeRefreshLayout refreshLayout;
-    private final Spinner sorting;
-    private final TextView[] filterButtons = new TextView[3];
+    private final MaterialButton sorting;
+    private int sortOrder;
+    private static final String[] SORT_NAMES = {"最近游玩", "名称", "大小"};
+    private final Chip[] filterButtons = new Chip[3];
     private String filter = "all", error, searchQuery = "";
     private boolean managing, loading = true;
     private long usage = -1;
@@ -67,16 +83,35 @@ final class NativeLibrary extends LinearLayout {
         this.actions = actions;
         setOrientation(VERTICAL);
         setBackgroundColor(PAPER);
-        ArchivePageHeader header = new ArchivePageHeader(context, "本地游戏");
+        header = new ArchivePageHeader(context, "本地游戏");
         searchButton = icon(GalleryIcons.SEARCH, INK, this::showSearch);
-        searchButton.setPadding(dp(16), dp(16), dp(16), dp(16));
+        searchButton.setTooltipText("搜索作品");
         searchButton.setContentDescription("搜索作品");
-        header.actions().addView(searchButton, new LayoutParams(dp(56), dp(56)));
-        manageButton = icon(GalleryIcons.SELECT, INK, () -> { managing = !managing; selected.clear(); render(); });
-        manageButton.setPadding(dp(16), dp(16), dp(16), dp(16));
+        header.actions().addView(searchButton, new LayoutParams(dp(48), dp(48)));
+        manageButton = icon(GalleryIcons.SELECT, INK, () -> enterSelection(null));
+        manageButton.setTooltipText("批量管理");
         manageButton.setContentDescription("批量管理");
-        header.actions().addView(manageButton, new LayoutParams(dp(56), dp(56)));
+        header.actions().addView(manageButton, new LayoutParams(dp(48), dp(48)));
         addView(header);
+        // Toolbar defaults buttonGravity to TOP, independently of title gravity.
+        selectionToolbar = (MaterialToolbar) android.view.LayoutInflater.from(context)
+            .inflate(R.layout.library_selection_toolbar, this, false);
+        selectionToolbar.setBackgroundColor(0xffe0f0eb);
+        selectionToolbar.setTitleTextColor(INK);
+        selectionToolbar.setNavigationIcon(new GalleryIcons(GalleryIcons.CLOSE, INK, dp(24)));
+        selectionToolbar.setNavigationContentDescription("退出选择");
+        selectionToolbar.setNavigationOnClickListener(view -> exitSelection());
+        selectionToolbar.getMenu().add(0, 1, 0, "删除")
+            .setIcon(new GalleryIcons(GalleryIcons.DELETE, INK, dp(24)))
+            .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
+        selectionToolbar.getMenu().add(0, 2, 1, "全选当前结果");
+        selectionToolbar.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 1) confirmDelete(new ArrayList<>(selected));
+            else toggleAll();
+            return true;
+        });
+        addView(selectionToolbar, new LayoutParams(-1,
+            dp(ArchivePageHeader.CONTENT_HEIGHT_DP) + dp(ArchivePageHeader.DIVIDER_HEIGHT_DP)));
 
         refreshLayout = new SwipeRefreshLayout(context);
         refreshLayout.setColorSchemeColors(TEAL);
@@ -96,45 +131,35 @@ final class NativeLibrary extends LinearLayout {
 
         LinearLayout filterRow = row();
         filterRow.setGravity(Gravity.CENTER_VERTICAL);
-        filters = row();
+        filters = new ChipGroup(context);
+        filters.setSingleLine(true); filters.setSingleSelection(true); filters.setSelectionRequired(true);
+        filters.setChipSpacingHorizontal(dp(4));
         String[] names = {"全部", "已安装", "未完成"};
         String[] values = {"all", "ready", "incomplete"};
         for (int i = 0; i < 3; i++) {
-            final String value = values[i];
-            filterButtons[i] = label(names[i], 13, MUTED, false);
-            filterButtons[i].setGravity(Gravity.CENTER);
-            filterButtons[i].setOnClickListener(view -> { filter = value; render(); });
-            filters.addView(filterButtons[i], new LayoutParams(-2, dp(36)));
+            Chip chip = new Chip(context);
+            chip.setId(View.generateViewId()); chip.setText(names[i]); chip.setTextSize(13);
+            chip.setCheckable(true); chip.setCheckedIconVisible(false);
+            chip.setChipCornerRadius(dp(24)); chip.setEnsureMinTouchTargetSize(true);
+            chip.setChipStartPadding(dp(8)); chip.setChipEndPadding(dp(8));
+            filterButtons[i] = chip;
+            filters.addView(chip);
         }
-        filterRow.addView(filters);
-        sorting = new Spinner(context);
-        sorting.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item,
-            new String[] {"最近游玩", "名称", "大小"}));
-        sorting.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) { render(); }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        filters.check(filterButtons[0].getId());
+        filters.setOnCheckedStateChangeListener((group, checked) -> {
+            for (int i = 0; i < filterButtons.length; i++) {
+                if (checked.contains(filterButtons[i].getId())) { filter = values[i]; render(); break; }
+            }
         });
-        LayoutParams sortParams = new LayoutParams(0, dp(42), 1);
-        sortParams.leftMargin = dp(8);
-        filterRow.addView(sorting, sortParams);
-        LayoutParams filtersParams = new LayoutParams(-1, -2);
-        filtersParams.topMargin = dp(12);
-        content.addView(filterRow, filtersParams);
-
-        management = row();
-        management.setGravity(Gravity.CENTER_VERTICAL);
-        selectAll = label("全选当前结果", 13, INK, false);
-        selectAll.setPadding(dp(5), 0, 0, 0);
-        selectAll.setGravity(Gravity.CENTER_VERTICAL);
-        selectAll.setOnClickListener(view -> toggleAll());
-        management.addView(selectAll, new LayoutParams(0, dp(44), 1));
-        deleteSelected = label("删除", 13, Color.WHITE, true);
-        deleteSelected.setGravity(Gravity.CENTER);
-        deleteSelected.setPadding(dp(12), 0, dp(12), 0);
-        deleteSelected.setBackground(box(0xffad4037, dp(7), 0xffad4037));
-        deleteSelected.setOnClickListener(view -> confirmDelete(new ArrayList<>(selected)));
-        management.addView(deleteSelected, new LayoutParams(-2, dp(36)));
-        content.addView(management);
+        // Keep both controls on one row, including with enlarged system fonts.
+        HorizontalScrollView filterScroll = new HorizontalScrollView(context);
+        filterScroll.setHorizontalScrollBarEnabled(false);
+        filterScroll.addView(filters);
+        filterRow.addView(filterScroll, new LayoutParams(0, -2, 1));
+        sorting = icon(GalleryIcons.SORT, INK, this::showSorting);
+        sorting.setTooltipText("排序");
+        filterRow.addView(sorting, new LayoutParams(dp(48), dp(48)));
+        content.addView(filterRow, new LayoutParams(-1, -2));
 
         View rule = new View(context); rule.setBackgroundColor(BORDER);
         content.addView(rule, new LayoutParams(-1, dp(1)));
@@ -171,14 +196,27 @@ final class NativeLibrary extends LinearLayout {
 
     void setError(String value) { loading = false; error = value; refreshLayout.setRefreshing(false); render(); }
 
+    private void showSorting() {
+        PopupMenu menu = new PopupMenu(getContext(), sorting);
+        for (int i = 0; i < SORT_NAMES.length; i++) menu.getMenu().add(0, i, i, SORT_NAMES[i]);
+        menu.getMenu().setGroupCheckable(0, true, true);
+        menu.getMenu().findItem(sortOrder).setChecked(true);
+        menu.setOnMenuItemClickListener(item -> { sortOrder = item.getItemId(); render(); return true; });
+        menu.show();
+    }
+
     private void showSearch() {
-        EditText input = new EditText(getContext());
-        input.setSingleLine(true); input.setTextSize(16); input.setHint("搜索作品");
+        TextInputLayout field = new TextInputLayout(getContext());
+        field.setHint("搜索作品");
+        field.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        TextInputEditText input = new TextInputEditText(field.getContext());
+        input.setSingleLine(true); input.setTextSize(16);
         input.setText(searchQuery); input.setSelectAllOnFocus(true);
         FrameLayout container = new FrameLayout(getContext());
         container.setPadding(dp(24), dp(8), dp(24), 0);
-        container.addView(input, new FrameLayout.LayoutParams(-1, dp(48)));
-        AlertDialog dialog = new AlertDialog.Builder(getContext()).setTitle("搜索作品").setView(container)
+        field.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        container.addView(field, new FrameLayout.LayoutParams(-1, -2));
+        AlertDialog dialog = NativeControls.dialog(getContext()).setTitle("搜索作品").setView(container)
             .setNegativeButton("取消", null)
             .setNeutralButton("清除搜索", (view, which) -> { searchQuery = ""; render(); })
             .setPositiveButton("搜索", (view, which) -> { searchQuery = input.getText().toString().trim(); render(); })
@@ -196,8 +234,9 @@ final class NativeLibrary extends LinearLayout {
     }
 
     boolean onBack() {
+        if (openRow != null && openRow.isOpen()) { openRow.close(); openRow = null; return true; }
         if (!managing) return false;
-        managing = false; selected.clear(); render(); return true;
+        exitSelection(); return true;
     }
 
     void setCover(String key, String image) {
@@ -224,7 +263,7 @@ final class NativeLibrary extends LinearLayout {
             if (!entry.title.toLowerCase(Locale.ROOT).contains(query)) continue;
             result.add(entry);
         }
-        switch (sorting.getSelectedItemPosition()) {
+        switch (sortOrder) {
             case 1: result.sort(Comparator.comparing(item -> item.title, java.text.Collator.getInstance(Locale.CHINA))); break;
             case 2: result.sort((a, b) -> Long.compare(b.bytes, a.bytes)); break;
             default: result.sort((a, b) -> b.recent.compareTo(a.recent));
@@ -234,48 +273,47 @@ final class NativeLibrary extends LinearLayout {
 
     private void render() {
         if (items == null || summary == null || sorting == null) return;
+        sorting.setTooltipText("排序：" + SORT_NAMES[sortOrder]);
+        sorting.setContentDescription("排序：" + SORT_NAMES[sortOrder]);
         int ready = 0; for (Entry item : entries) if (item.ready) ready++;
         summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  本站已用 " + bytes(usage))
             + (searchQuery.isEmpty() ? "" : "\n搜索：" + searchQuery));
-        searchButton.setColorFilter(searchQuery.isEmpty() ? INK : TEAL);
-        manageButton.setColorFilter(managing ? TEAL : INK);
+        searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? INK : TEAL));
+        manageButton.setIconTint(ColorStateList.valueOf(managing ? TEAL : INK));
+        manageButton.setIcon(new GalleryIcons(managing ? GalleryIcons.CLOSE : GalleryIcons.SELECT, INK));
+        manageButton.setContentDescription(managing ? "完成管理" : "批量管理");
+        manageButton.setTooltipText(managing ? "完成管理" : "批量管理");
         refreshLayout.setEnabled(!loading && !managing);
-        String[] values = {"all", "ready", "incomplete"};
-        for (int i = 0; i < 3; i++) {
-            boolean active = filter.equals(values[i]);
-            filterButtons[i].setPadding(dp(9), 0, dp(9), 0);
-            filterButtons[i].setTextColor(active ? Color.WHITE : MUTED);
-            filterButtons[i].setBackground(box(active ? TEAL : PAPER, dp(7), active ? TEAL : BORDER));
-        }
         List<Entry> shown = visible();
-        management.setVisibility(managing ? VISIBLE : GONE);
-        deleteSelected.setText("删除 " + selected.size() + " 项");
-        deleteSelected.setEnabled(!selected.isEmpty());
-        deleteSelected.setAlpha(selected.isEmpty() ? 0.5f : 1f);
-        selectAll.setText(shown.size() > 0 && shown.stream().allMatch(item -> selected.contains(item.key)) ? "取消全选" : "全选当前结果");
+        updateSelection();
         message.setText(error != null ? error : loading ? "读取本地游戏…"
             : entries.isEmpty() ? "还没有本地游戏\n联网后在在线游玩页安装，游戏会自动出现在这里。"
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
+        openRow = null;
         items.removeAllViews();
         visibleCovers.clear(); coverPlaceholders.clear();
+        selectionChecks.clear(); selectionRows.clear();
         if (loading) return;
         for (Entry entry : shown) addEntry(entry);
+        updateSelection();
     }
 
     private void addEntry(Entry entry) {
         LinearLayout line = row(); line.setGravity(Gravity.CENTER_VERTICAL);
         line.setPadding(0, dp(10), 0, dp(10));
         if (managing) {
-            CheckBox check = new CheckBox(getContext());
+            MaterialCheckBox check = new MaterialCheckBox(getContext());
+            check.setButtonTintList(ColorStateList.valueOf(TEAL));
             check.setChecked(selected.contains(entry.key));
             check.setContentDescription("选择 " + entry.title);
-            check.setOnCheckedChangeListener((button, value) -> { if (value) selected.add(entry.key); else selected.remove(entry.key); render(); });
-            line.addView(check, new LayoutParams(dp(40), dp(48)));
+            selectionChecks.put(entry.key, check);
+            check.setOnClickListener(view -> toggleSelection(entry.key));
+            line.addView(check, new LayoutParams(dp(48), dp(48)));
         }
         FrameLayout coverFrame = new FrameLayout(getContext());
         ImageView cover = new ImageView(getContext());
-        cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.setBackground(box(0xffe0f0eb, dp(5), 0xffe0f0eb));
         Bitmap bitmap = covers.get(entry.key);
         TextView placeholder = label(entry.title.isEmpty() ? "?" : entry.title.substring(0, 1), 20, TEAL, true);
@@ -287,7 +325,14 @@ final class NativeLibrary extends LinearLayout {
         cover.setVisibility(bitmap == null ? GONE : VISIBLE);
         coverFrame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
         visibleCovers.put(entry.key, cover); coverPlaceholders.put(entry.key, placeholder);
-        line.addView(coverFrame, new LayoutParams(dp(64), dp(80)));
+        if (!managing && entry.workId > 0) {
+            coverFrame.setContentDescription("查看 " + entry.title + " 的详情");
+            coverFrame.setForeground(new RippleDrawable(ColorStateList.valueOf(0x221f6f67), null,
+                box(Color.WHITE, dp(5), Color.WHITE)));
+            coverFrame.setOnClickListener(view -> actions.details(entry.workId));
+            coverFrame.setOnLongClickListener(view -> { enterSelection(entry.key); return true; });
+        }
+        line.addView(coverFrame, new LayoutParams(dp(96), dp(72)));
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
         TextView title = label(entry.title, 14, INK, true); title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END); details.addView(title);
@@ -300,45 +345,89 @@ final class NativeLibrary extends LinearLayout {
             View play;
             if (entry.ready) play = icon(GalleryIcons.PLAY, TEAL, () -> { if (entry.workId != 0) actions.play(entry.key); });
             else {
-                TextView retry = label("安装", 13, TEAL, true);
+                MaterialButton retry = NativeControls.button(getContext(), "安装", () -> actions.retry(entry.archiveVersionId));
+                retry.setMinWidth(0); retry.setMinimumWidth(0);
+                retry.setPadding(0, 0, 0, 0);
                 retry.setGravity(Gravity.CENTER);
-                retry.setOnClickListener(view -> actions.retry(entry.archiveVersionId));
                 play = retry;
             }
             play.setContentDescription((entry.ready ? "游玩 " : "重新安装 ") + entry.title);
             line.addView(play, new LayoutParams(dp(48), dp(48)));
-            ImageView delete = icon(GalleryIcons.DELETE, MUTED,
-                () -> confirmDelete(java.util.Collections.singletonList(entry.key)));
-            delete.setContentDescription("删除 " + entry.title);
-            line.addView(delete, new LayoutParams(dp(42), dp(48)));
         }
-        items.addView(line, new LayoutParams(-1, -2));
+        if (managing) {
+            selectionRows.put(entry.key, line);
+            line.setOnClickListener(view -> toggleSelection(entry.key));
+            items.addView(line, new LayoutParams(-1, -2));
+        }
+        else {
+            line.setOnLongClickListener(view -> { enterSelection(entry.key); return true; });
+            SwipeGameRow swipe = new SwipeGameRow(getContext(), line, entry.title,
+                () -> confirmDelete(java.util.Collections.singletonList(entry.key)), row -> {
+                    if (openRow != null && openRow != row) openRow.close();
+                    openRow = row;
+                });
+            items.addView(swipe, new LayoutParams(-1, -2));
+        }
         View rule = new View(getContext()); rule.setBackgroundColor(BORDER);
         items.addView(rule, new LayoutParams(-1, dp(1)));
+    }
+
+    private void enterSelection(String key) {
+        if (loading) return;
+        managing = true; selected.clear();
+        if (key != null) selected.add(key);
+        render();
+    }
+
+    private void exitSelection() {
+        if (loading) return;
+        managing = false; selected.clear(); render();
+    }
+
+    private void toggleSelection(String key) {
+        if (loading) return;
+        if (!selected.remove(key)) selected.add(key);
+        updateSelection();
+    }
+
+    private void updateSelection() {
+        header.setVisibility(managing ? GONE : VISIBLE);
+        selectionToolbar.setVisibility(managing ? VISIBLE : GONE);
+        selectionToolbar.setTitle("已选择 " + selected.size() + " 项");
+        selectionToolbar.getMenu().findItem(1).setEnabled(!loading && !selected.isEmpty());
+        List<Entry> shown = visible();
+        boolean all = !shown.isEmpty() && shown.stream().allMatch(item -> selected.contains(item.key));
+        selectionToolbar.getMenu().findItem(2).setTitle(all ? "取消全选" : "全选当前结果");
+        selectionToolbar.getMenu().findItem(2).setEnabled(!loading && !shown.isEmpty());
+        for (Map.Entry<String, MaterialCheckBox> item : selectionChecks.entrySet()) {
+            boolean checked = selected.contains(item.getKey());
+            item.getValue().setChecked(checked);
+            item.getValue().setEnabled(!loading);
+            View row = selectionRows.get(item.getKey());
+            row.setSelected(checked); row.setEnabled(!loading);
+            row.setBackground(new RippleDrawable(ColorStateList.valueOf(0x221f6f67),
+                box(checked ? 0xffe0f0eb : PAPER, dp(12), checked ? 0xffe0f0eb : PAPER), null));
+        }
     }
 
     private void toggleAll() {
         List<Entry> shown = visible();
         boolean all = !shown.isEmpty() && shown.stream().allMatch(item -> selected.contains(item.key));
         for (Entry item : shown) { if (all) selected.remove(item.key); else selected.add(item.key); }
-        render();
+        updateSelection();
     }
 
     private void confirmDelete(List<String> keys) {
-        if (keys.isEmpty()) return;
-        new AlertDialog.Builder(getContext()).setTitle("删除 " + keys.size() + " 项本地作品？")
+        if (keys.isEmpty() || loading) return;
+        NativeControls.dialog(getContext()).setTitle("删除 " + keys.size() + " 项本地作品？")
             .setMessage("删除已安装的游戏文件；存档和截图不会删除。")
             .setNegativeButton("取消", null)
-            .setPositiveButton("删除", (dialog, which) -> { loading = true; render(); actions.delete(keys); selected.clear(); managing = false; })
+            .setPositiveButton("删除", (dialog, which) -> { loading = true; selected.clear(); managing = false; render(); actions.delete(keys); })
             .show();
     }
 
-    private ImageView icon(String path, int color, Runnable click) {
-        ImageView view = new ImageView(getContext());
-        view.setImageDrawable(new GalleryIcons(path, color));
-        view.setPadding(dp(12), dp(12), dp(12), dp(12));
-        view.setOnClickListener(item -> click.run());
-        return view;
+    private MaterialButton icon(String path, int color, Runnable click) {
+        return NativeControls.icon(getContext(), path, color, click);
     }
     private LinearLayout row() { LinearLayout row = new LinearLayout(getContext()); row.setOrientation(HORIZONTAL); return row; }
     private LinearLayout column() { LinearLayout col = new LinearLayout(getContext()); col.setOrientation(VERTICAL); return col; }

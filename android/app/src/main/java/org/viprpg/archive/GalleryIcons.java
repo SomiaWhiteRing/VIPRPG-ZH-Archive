@@ -25,11 +25,15 @@ final class GalleryIcons extends Drawable {
     static final String GAMEPAD = "M6.5,8 H17.5 C19.5,8 20.5,9.2 21,11 L22,16 C22.7,19.3 20.2,21 18,19.4 L15.7,17.7 H8.3 L6,19.4 C3.8,21 1.3,19.3 2,16 L3,11 C3.5,9.2 4.5,8 6.5,8 Z M7,11 V15 M5,13 H9 M16,11.5 L16,11.51 M19,14 L19,14.01";
     static final String REFRESH = "M20,11 A8,8 0,1 0,20,14 M20,4 V11 H13 M4,13 A8,8 0,1 0,4,10 M4,20 V13 H11";
     static final String PLAY = "M7,4 L20,12 L7,20 Z";
+    static final String SORT = "M4,6 H20 M4,12 H15 M4,18 H10";
     static final String SEARCH = "M21,21 L16.5,16.5 M18,10.5 A7.5,7.5 0,1 1,3,10.5 A7.5,7.5 0,1 1,18,10.5";
     static final String INFO = "M12,17 V11 M12,7 L12,7.01 M22,12 A10,10 0,1 1,2,12 A10,10 0,1 1,22,12";
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path;
-    GalleryIcons(String data, int color) {
+    private final int intrinsicSize;
+    GalleryIcons(String data, int color) { this(data, color, 24); }
+    GalleryIcons(String data, int color, int intrinsicSize) {
+        this.intrinsicSize = intrinsicSize;
         path = PathParser.createPathFromPathData(data);
         paint.setColor(color); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f);
         paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
@@ -42,6 +46,6 @@ final class GalleryIcons extends Drawable {
     @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
     @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); invalidateSelf(); }
     @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
-    @Override public int getIntrinsicWidth() { return 24; }
-    @Override public int getIntrinsicHeight() { return 24; }
+    @Override public int getIntrinsicWidth() { return intrinsicSize; }
+    @Override public int getIntrinsicHeight() { return intrinsicSize; }
 }
