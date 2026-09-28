@@ -348,7 +348,7 @@ export function RelationCreateForm({
             options={relationOptions}
             value={relationChoice}
           />
-          <InfoTooltip>本作品之于关联对象的关系。</InfoTooltip>
+          <InfoTooltip>关联对象之于本作品的关系。</InfoTooltip>
         </div>
         <Button
           disabled={busy || !selected || excludedIds.has(selected.id)}
