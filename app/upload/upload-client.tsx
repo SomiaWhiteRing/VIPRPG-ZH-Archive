@@ -35,7 +35,7 @@ import {
   updateTranslationPreference,
 } from "@/app/upload/translation-preference";
 import { useUploadController } from "@/app/upload/upload-controller";
-import { useResourceCleanupPreference } from "@/app/upload/resource-cleanup-preference";
+import { useMissingResourcesPreference, useResourceCleanupPreference, useSharedPlayerPreference } from "@/app/upload/advanced-options-preference";
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
@@ -115,6 +115,7 @@ export type UploadInitialWork = {
   coverBlobSha256: string;
   previewBlobSha256s: string[];
   currentArchive: {
+    usesSharedPlayer: boolean;
     name: string;
     fileCount: number;
     sizeBytes: number;
@@ -142,8 +143,17 @@ export function UploadClient({
   );
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [cleanupResources, setCleanupResources] = useResourceCleanupPreference();
-  const [useSharedPlayer, setUseSharedPlayer] = useState(true);
-  const [checkMissingResources, setCheckMissingResources] = useState(false);
+  const [sharedPlayerPreference, setSharedPlayerPreference] = useSharedPlayerPreference();
+  const [sharedPlayerOverride, setSharedPlayerOverride] = useState<boolean | null>(
+    initialWork?.currentArchive?.usesSharedPlayer ?? null,
+  );
+  const useSharedPlayer = sharedPlayerOverride ?? sharedPlayerPreference;
+  const [checkMissingResources, setCheckMissingResources] = useMissingResourcesPreference();
+
+  function changeSharedPlayer(enabled: boolean) {
+    setSharedPlayerOverride(enabled);
+    setSharedPlayerPreference(enabled);
+  }
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser, initialWork),
   );
@@ -679,7 +689,7 @@ export function UploadClient({
       );
     }
     setMode(draft.preparedSource.sourceKind);
-    setUseSharedPlayer(draft.preparedSource.useSharedPlayer ?? false);
+    setSharedPlayerOverride(draft.preparedSource.useSharedPlayer ?? false);
     setSourceSummary({
       name: draft.preparedSource.sourceName,
       fileCount: draft.preparedSource.stats.sourceFileCount,
@@ -703,7 +713,7 @@ export function UploadClient({
     }
     upload.resetTask();
     if (upload.task?.result && sourceSummary) {
-      setExistingArchive(sourceSummary);
+      setExistingArchive({ ...sourceSummary, usesSharedPlayer: useSharedPlayer });
     }
     setSourceSummary(null);
     setSubmitError(null);
@@ -825,7 +835,7 @@ export function UploadClient({
                     onCheckMissingResourcesChange={setCheckMissingResources}
                     onCleanupResourcesChange={setCleanupResources}
                     useSharedPlayer={useSharedPlayer}
-                    onUseSharedPlayerChange={setUseSharedPlayer}
+                    onUseSharedPlayerChange={changeSharedPlayer}
                     disabled={
                       !canArchiveUpload ||
                       preparing ||

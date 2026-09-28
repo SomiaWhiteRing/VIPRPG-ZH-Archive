@@ -129,6 +129,7 @@ export default function UploadedWorkPage() {
           currentArchive: work.currentArchive
             ? {
                 name: work.currentArchive.sourceName,
+                usesSharedPlayer: work.currentArchive.usesSharedPlayer,
                 fileCount: work.currentArchive.sourceFileCount,
                 sizeBytes: work.currentArchive.sourceSizeBytes,
               }
