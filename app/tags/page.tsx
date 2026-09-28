@@ -11,6 +11,7 @@ import { normalizeEntityName } from "@/lib/entity-name";
 import { stringParam } from "@/lib/params";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { TagSource } from "@/lib/user-tags";
+import type { ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData } from "react-router";
 
@@ -51,7 +52,7 @@ export default function TagsPage() {
           data={data}
           basePath="/tags"
           title={`标签：${data.selectedTag?.name ?? data.tag}`}
-          sidebar={<TagSidebar source={data.tagSource} params={data.activeParams} />}
+          sidebar={(releaseFilter) => <TagSidebar source={data.tagSource} params={data.activeParams} releaseFilter={releaseFilter} />}
           showActiveFilters={false}
         />
       </PageContainer>
@@ -67,9 +68,10 @@ export default function TagsPage() {
   );
 }
 
-function TagSidebar({ source, params }: {
+function TagSidebar({ source, params, releaseFilter }: {
   source: TagSource;
   params: Record<string, string | undefined>;
+  releaseFilter: ReactNode;
 }) {
   return (
     <>
@@ -83,6 +85,7 @@ function TagSidebar({ source, params }: {
           return <FilterLink key={value} active={source === value} href={`/tags?${search}`} label={label} />;
         })}
       </FilterSection>
+      {releaseFilter}
       <FilterSection label="标签">
         <Link className="py-1.5 text-sm text-primary hover:underline" to="/tags">浏览全部标签</Link>
         <Link className="py-1.5 text-sm text-primary hover:underline" to="/games">返回作品库</Link>

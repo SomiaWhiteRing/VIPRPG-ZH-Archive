@@ -3,6 +3,8 @@ import { GameCard } from "@/app/components/home/game-card";
 import { FavoriteTagSidebar } from "@/app/components/library/favorite-tag-sidebar";
 import { FavoriteEntryDetails } from "@/app/components/library/favorite-entry-details";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
+import { ReleasePeriodFilter } from "@/app/components/library/release-period-filter";
+import { releasePeriodLabel } from "@/lib/release-period";
 import { useLibraryViewPreference } from "@/app/components/library/view-preference";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -36,7 +38,7 @@ export function GameLibrary({
   title?: string;
   emptyTitle?: string;
   renderWorkActions?: (work: GameWorkSummary, isListView: boolean) => ReactNode;
-  sidebar?: ReactNode;
+  sidebar?: (releaseFilter: ReactNode) => ReactNode;
   showActiveFilters?: boolean;
 }) {
   const {
@@ -62,6 +64,19 @@ export function GameLibrary({
   const isFavoriteLibrary = data.userWorkKind === "favorite";
   const gamesHref = (params: Record<string, string | undefined>) => libraryHref(basePath, params);
   const WorkCard = isListView ? GameLibraryListRow : GameCard;
+  const timeFilter = <ReleasePeriodFilter
+    key={`${basePath}:${data.release}`}
+    period={data.release}
+    currentYear={data.currentYear}
+    basePath={basePath}
+    params={activeParams}
+  />;
+  const clearTimeFilter = <Link
+    to={gamesHref({ ...activeParams, release: undefined, page: undefined })}
+    aria-current={!data.release ? "true" : undefined}
+    className="shrink-0 text-xs font-semibold text-primary hover:text-accent"
+  >全部</Link>;
+  const releaseFilter = <FilterSection label="发布日期" action={clearTimeFilter}>{timeFilter}</FilterSection>;
   return (
     <div className="@container/library">
       {title ? <PageHeader
@@ -168,6 +183,10 @@ export function GameLibrary({
                   label={`引擎：${ENGINES.find((option) => option.value === engine)?.label ?? engine}`}
                 />
               ) : null}
+              {data.release ? <FilterChip
+                href={gamesHref({ ...activeParams, release: undefined })}
+                label={`发布日期：${releasePeriodLabel(data.release)}`}
+              /> : null}
               {uploader ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, uploader: undefined })}
@@ -251,7 +270,7 @@ export function GameLibrary({
           className="mt-5 rounded-lg border border-border bg-muted/5 p-3 @min-[981px]/library:sticky @min-[981px]/library:top-18.5 @min-[981px]/library:mt-1 @min-[981px]/library:self-start @min-[981px]/library:border-0 @min-[981px]/library:bg-transparent @min-[981px]/library:p-0"
           aria-label={sidebar ? "标签浏览" : "游戏筛选"}
         >
-          {sidebar ?? <>
+          {sidebar ? sidebar(releaseFilter) : <>
             <FilterSection label="来源">
               <FilterLink
                 active={!original}
@@ -323,6 +342,7 @@ export function GameLibrary({
                 visibleCount={3}
               />
             </FilterSection>
+            {releaseFilter}
             <FilterSection label="标签">
               <Link className="py-1.5 text-sm text-primary hover:underline" to="/tags">浏览全部标签</Link>
             </FilterSection>
@@ -386,10 +406,12 @@ function CollapsibleFilterLinks({
 export function FilterSection({
   label,
   moreHref,
+  action,
   children,
 }: {
   label: string;
   moreHref?: string;
+  action?: ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -404,6 +426,7 @@ export function FilterSection({
         >
           {label}
         </h3>
+        {action}
         {moreHref ? (
           <Link
             className="shrink-0 text-xs font-semibold text-primary hover:text-accent"
