@@ -48,6 +48,10 @@
   --animate-select-roll-closed: select-roll-closed 160ms cubic-bezier(0.4, 0, 1, 1) both;
   --animate-popover-slide-open: popover-slide-open 180ms ease-out both;
   --animate-popover-slide-closed: popover-slide-closed 120ms ease-in both;
+  --animate-character-menu-open: character-menu-open 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-character-menu-closed: character-menu-closed 180ms ease-in both;
+  --animate-character-menu-backdrop-open: character-menu-backdrop-open 240ms ease-out both;
+  --animate-character-menu-backdrop-closed: character-menu-backdrop-closed 180ms ease-in both;
   --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
   --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
@@ -69,6 +73,23 @@
   @keyframes popover-slide-closed {
     from { opacity: 1; transform: translateY(0); }
     to { opacity: 0; transform: translateY(var(--popover-slide-offset, -0.5rem)); }
+  }
+  /* Mobile character index drawer: CSS exit animations defer Radix unmounting. */
+  @keyframes character-menu-open {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes character-menu-closed {
+    from { transform: translateX(0); }
+    to { transform: translateX(-100%); }
+  }
+  @keyframes character-menu-backdrop-open {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes character-menu-backdrop-closed {
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
   @keyframes site-toast-slide-in {
     from { opacity: 0; transform: translateX(calc(100% + 1rem)); }

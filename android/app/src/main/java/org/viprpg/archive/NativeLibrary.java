@@ -254,7 +254,7 @@ final class NativeLibrary extends LinearLayout {
         deleteSelected.setAlpha(selected.isEmpty() ? 0.5f : 1f);
         selectAll.setText(shown.size() > 0 && shown.stream().allMatch(item -> selected.contains(item.key)) ? "取消全选" : "全选当前结果");
         message.setText(error != null ? error : loading ? "读取本地游戏…"
-            : entries.isEmpty() ? "还没有本地作品\n联网后在在线游玩页安装，游戏会自动出现在这里。"
+            : entries.isEmpty() ? "还没有本地游戏\n联网后在在线游玩页安装，游戏会自动出现在这里。"
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
         items.removeAllViews();

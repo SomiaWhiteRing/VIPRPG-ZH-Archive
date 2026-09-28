@@ -347,10 +347,10 @@ export function CharacterIndexBrowser({
           </Button>
         </Dialog.Trigger>
         <Dialog.Portal>
-          <Dialog.Overlay className="bg-black/40 md:hidden" />
+          <Dialog.Overlay className="bg-black/40 data-[state=open]:animate-character-menu-backdrop-open data-[state=closed]:animate-character-menu-backdrop-closed motion-reduce:animate-none md:hidden" />
           <Dialog.Content
             aria-describedby={undefined}
-            className="inset-y-0 left-0 flex h-dvh w-[min(85vw,20rem)] flex-col border-r bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] md:hidden"
+            className="inset-y-0 left-0 flex h-dvh w-[min(85vw,20rem)] flex-col border-r bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] data-[state=open]:animate-character-menu-open data-[state=closed]:animate-character-menu-closed motion-reduce:animate-none md:hidden"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               menuTriggerRef.current?.focus({ preventScroll: true });
