@@ -20,6 +20,7 @@ const uint32Max = 0xffffffff;
 // Bound the window including the current entry, not just pending open calls.
 // Six passed the staging 4/5/6 cold-download comparison with cache writes enabled.
 const zipEntryOpenPrefetch = 6;
+const zipWriteBufferBytes = 64 * 1024;
 const blobReadCacheMaxEntryBytes = 2 * 1024 * 1024;
 const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 
@@ -95,10 +96,30 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     const currentEtag = downloadEtag(record, profile);
     const rangeHeader = request.method === "GET" && (!ifRange || ifRange === currentEtag)
       ? request.headers.get("Range") : null;
-    const bypassDownloadCache = Boolean(rangeHeader) || shouldBypassDownloadCache(request, env);
+    const bypassDownloadCache = shouldBypassDownloadCache(request, env);
 
     if (request.method === "GET" && !bypassDownloadCache) {
-      const cached = await caches.default.match(cacheRequest);
+      let cached = await caches.default.match(cacheRequest);
+      const cachedSize = cached ? numberHeader(cached.headers.get("Content-Length")) : null;
+      if (cached && rangeHeader) {
+        await cached.body?.cancel();
+        if (cachedSize !== null) {
+          const cachedRange = parseDownloadRange(rangeHeader, cachedSize);
+          if (!cachedRange) return new Response(null, {
+            status: 416,
+            headers: { "Content-Range": `bytes */${cachedSize}`, "Cache-Control": "no-store" },
+          });
+          cached = await caches.default.match(new Request(cacheRequest, {
+            headers: { Range: `bytes=${cachedRange.start}-${cachedRange.end}` },
+          }));
+          // Only serve a verified partial response; otherwise use the cold Range path.
+          if (cached && (cached.status !== 206 ||
+              cached.headers.get("Content-Range") !== `bytes ${cachedRange.start}-${cachedRange.end}/${cachedSize}`)) {
+            await cached.body?.cancel();
+            cached = null;
+          }
+        } else cached = null;
+      }
 
       if (cached) {
         record = {
@@ -110,13 +131,13 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
             record,
             cacheKey,
             cacheStatus: "HIT",
-            sizeBytes: numberHeader(cached.headers.get("Content-Length")) ?? record.totalSizeBytes,
+            sizeBytes: cachedSize ?? record.totalSizeBytes,
             actualR2GetCount: 0,
             durationMs: Date.now() - startedAt,
           }),
         );
 
-        return player ? withDownloadCacheHeader(cached, "HIT", "no-store, no-transform") : cached;
+        return player || rangeHeader ? withDownloadCacheHeader(cached, "HIT", "no-store, no-transform") : cached;
       }
     }
 
@@ -149,9 +170,9 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       zipEntries.sort(compareManifestFiles);
       record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) + 1 };
     }
-    const zipSizeBytes = estimateZipStreamSize(zipEntries);
+    const { entries: plannedEntries, size: zipSizeBytes } = prepareZipLayout(zipEntries);
     const cacheStatus =
-      request.method === "HEAD" || bypassDownloadCache ? "BYPASS" : "MISS";
+      request.method === "HEAD" || rangeHeader || bypassDownloadCache ? "BYPASS" : "MISS";
     const headers = downloadHeaders(record, cacheStatus, zipSizeBytes, profile);
     const range = rangeHeader ? parseDownloadRange(rangeHeader, zipSizeBytes) : null;
     if (rangeHeader && !range) {
@@ -170,7 +191,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       return new Response(null, { headers });
     }
 
-    const zipStream = createFixedLengthZipStream(zipEntries, zipSizeBytes, range);
+    const zipStream = createFixedLengthZipStream(plannedEntries, zipSizeBytes, range);
     const response = new Response(zipStream.readable, {
       status: range ? 206 : 200,
       headers,
@@ -197,7 +218,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       ),
     );
 
-    if (!bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
+    if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT", "public, max-age=31536000, immutable"))
@@ -294,7 +315,7 @@ async function kaiImportMetadata(request, bucket, record) {
   }
   const manifest = await loadManifest(bucket, record.manifestSha256);
   const files = manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path));
-  const zipSizeBytes = estimateZipStreamSize(buildZipEntries(manifest, bucket, files));
+  const zipSizeBytes = prepareZipLayout(buildZipEntries(manifest, bucket, files)).size;
   const paths = new Set(files.map((file) => file.path.toLowerCase()));
   if (zipSizeBytes > 1024 ** 3 || files.length > 50000 ||
       !paths.has("rpg_rt.ldb") || !paths.has("rpg_rt.lmt")) {
@@ -522,13 +543,11 @@ function parseDownloadRange(value, size) {
 }
 
 function createFixedLengthZipStream(entries, expectedLength, range) {
-  let offset = 0;
   for (const entry of entries) {
-    const dataStart = offset + 30 + textEncoder.encode(entry.path).byteLength;
+    const dataStart = entry.dataStart;
     if (!range || (entry.size > 0 && dataStart <= range.end && dataStart + entry.size > range.start)) {
       entry.selectForRead?.();
     }
-    offset = dataStart + entry.size;
   }
   const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : expectedLength);
   const writer = writable.getWriter();
@@ -547,19 +566,40 @@ async function writeZip(writer, entries, range) {
   const centralEntries = [];
   const openPromises = new Map();
   let nextToPrefetch = 0;
-  let prefetchOffset = 0;
+  let buffer = new Uint8Array(zipWriteBufferBytes);
+  let buffered = 0;
+
+  async function flush() {
+    if (!buffered) return;
+    const chunk = buffer.subarray(0, buffered);
+    buffer = new Uint8Array(zipWriteBufferBytes);
+    buffered = 0;
+    await writer.write(chunk);
+  }
+
+  async function emit(bytes) {
+    if (bytes.byteLength >= zipWriteBufferBytes) {
+      await flush();
+      await writer.write(bytes);
+      return;
+    }
+    if (buffered + bytes.byteLength > buffer.byteLength) await flush();
+    buffer.set(bytes, buffered);
+    buffered += bytes.byteLength;
+    if (buffered === buffer.byteLength) await flush();
+  }
 
   async function write(bytes) {
     const start = range ? Math.max(0, range.start - offset) : 0;
     const end = range ? Math.min(bytes.byteLength, range.end + 1 - offset) : bytes.byteLength;
-    if (start < end) await writer.write(bytes.subarray(start, end));
+    if (start < end) await emit(bytes.subarray(start, end));
     offset += bytes.byteLength;
   }
 
   function prefetchThrough(exclusiveIndex) {
     while (nextToPrefetch < entries.length && nextToPrefetch < exclusiveIndex) {
       const entry = entries[nextToPrefetch];
-      const dataStart = prefetchOffset + 30 + textEncoder.encode(entry.path).byteLength;
+      const dataStart = entry.dataStart;
       const dataEnd = dataStart + entry.size;
       if (!range || (entry.size > 0 && dataStart <= range.end && dataEnd > range.start)) {
         const fileRange = range ? {
@@ -570,7 +610,6 @@ async function writeZip(writer, entries, range) {
         promise.catch(() => undefined);
         openPromises.set(nextToPrefetch, { promise, range: fileRange });
       }
-      prefetchOffset = dataEnd;
       nextToPrefetch += 1;
     }
   }
@@ -581,17 +620,11 @@ async function writeZip(writer, entries, range) {
 
       const entry = entries[index];
 
-      validateZipPath(entry.path);
-
-      const pathBytes = textEncoder.encode(entry.path);
-      const { dosTime, dosDate } = toDosDateTime(entry.mtimeMs);
-      const localHeaderOffset = offset;
-
-      assertZip32Value(entry.size, "ZIP entry size");
-      assertZip32Value(entry.crc32, "ZIP entry CRC32");
-      assertZip32Value(localHeaderOffset, "ZIP local header offset");
+      const { pathBytes, dosTime, dosDate, localHeaderOffset } = entry;
 
       await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
+      // Deliver the first available ZIP bytes before awaiting the first object.
+      if (index === 0) await flush();
 
       if (openPromises.has(index)) {
         const pending = openPromises.get(index);
@@ -666,12 +699,14 @@ async function writeZip(writer, entries, range) {
   assertZip32Value(centralDirectorySize, "ZIP central directory size");
 
   await write(endOfCentralDirectory(centralEntries.length, centralDirectorySize, centralDirectoryOffset));
+  await flush();
   await writer.close();
 }
 
-function estimateZipStreamSize(entries) {
+function prepareZipLayout(entries) {
   let offset = 0;
   let centralDirectorySize = 0;
+  const planned = [];
 
   for (const entry of entries) {
     validateZipPath(entry.path);
@@ -683,6 +718,8 @@ function estimateZipStreamSize(entries) {
     assertZip32Value(entry.crc32, "ZIP entry CRC32");
     assertZip32Value(offset, "ZIP local header offset");
 
+    planned.push({ ...entry, pathBytes, ...toDosDateTime(entry.mtimeMs),
+      localHeaderOffset: offset, dataStart: offset + 30 + pathBytes.byteLength });
     offset += 30 + pathBytes.byteLength;
     offset += entry.size;
     centralDirectorySize += 46 + pathBytes.byteLength;
@@ -699,7 +736,7 @@ function estimateZipStreamSize(entries) {
 
   assertSafeZipSize(totalSize, "ZIP total size");
 
-  return totalSize;
+  return { entries: planned, size: totalSize };
 }
 
 function localFileHeader(pathBytes, crc32, size, dosTime, dosDate) {
