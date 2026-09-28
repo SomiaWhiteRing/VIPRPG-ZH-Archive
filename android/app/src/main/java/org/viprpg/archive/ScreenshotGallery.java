@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
 /** Android owns timeline, selection and viewer; the website never reads directory files. */
 final class ScreenshotGallery extends LinearLayout {
@@ -39,11 +40,12 @@ final class ScreenshotGallery extends LinearLayout {
     private final MainActivity activity;
     private final ScreenshotController controller;
     private final ScreenshotImageLoader images;
-    private final TextView directory, status, selectionCount, emptyTitle;
-    private final MaterialButton manage, more, selectAll, share, delete, cancel, leaveSelection, gameBack, timelineTab, gamesTab;
+    private final TextView status, selectionCount, emptyTitle;
+    private final MaterialButton manage, selectAll, share, delete, cancel, leaveSelection, gameBack, timelineTab, gamesTab;
     private final LinearLayout selectionBar, selectionHeader, tabs, empty;
     private final ArchivePageHeader normalHeader;
     private final ProgressBar progress;
+    private final androidx.swiperefreshlayout.widget.SwipeRefreshLayout refreshLayout;
     private boolean directoryReady;
     private final ListView list;
     private final GridView gameGrid;
@@ -55,7 +57,16 @@ final class ScreenshotGallery extends LinearLayout {
     private final List<GameGroup> games = new ArrayList<>();
     private long gameId;
     private boolean gamesPage;
-    private boolean selecting, loading, operating, closed;
+    private boolean selecting, loading, operating, closed, dirty = true, initialized;
+    private final android.os.Handler changes = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable refreshChanged = () -> { if (!closed && isShown() && dirty && !loading && !operating) refresh(null); };
+    private final android.database.ContentObserver mediaObserver = new android.database.ContentObserver(changes) {
+        @Override public void onChange(boolean selfChange) {
+            dirty = true;
+            changes.removeCallbacks(refreshChanged);
+            changes.postDelayed(refreshChanged, 180);
+        }
+    };
     private int generation;
     private Dialog viewer;
     private int columns = 3;
@@ -68,7 +79,6 @@ final class ScreenshotGallery extends LinearLayout {
         normalHeader = new ArchivePageHeader(activity, "图库");
         gameBack = icon(normalHeader.leading(), "返回游戏合集", GalleryIcons.BACK, () -> { gameId = 0; selected.clear(); rebuild(); }, false);
         manage = icon(normalHeader.actions(), "选择截图", GalleryIcons.SELECT, () -> { selecting = true; selected.clear(); rebuild(); }, false);
-        more = icon(normalHeader.actions(), "刷新", GalleryIcons.REFRESH, () -> refresh(null), false);
         addView(normalHeader);
         selectionHeader = row(); selectionHeader.setPadding(dp(8), dp(12), dp(12), dp(8));
         leaveSelection = icon(selectionHeader, "退出选择", GalleryIcons.CLOSE, () -> { selecting = false; selected.clear(); rebuild(); }, false);
@@ -89,7 +99,12 @@ final class ScreenshotGallery extends LinearLayout {
         progress = new ProgressBar(getContext(), null, android.R.attr.progressBarStyleHorizontal);
         progress.setIndeterminate(true); progress.setIndeterminateTintList(ColorStateList.valueOf(TEAL));
         addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
-        FrameLayout body = new FrameLayout(getContext()); addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
+        refreshLayout = new androidx.swiperefreshlayout.widget.SwipeRefreshLayout(getContext());
+        refreshLayout.setColorSchemeColors(TEAL);
+        refreshLayout.setProgressBackgroundColorSchemeColor(Color.WHITE);
+        refreshLayout.setOnRefreshListener(() -> refresh(null, true));
+        addView(refreshLayout, new LinearLayout.LayoutParams(-1, 0, 1));
+        FrameLayout body = new FrameLayout(getContext()); refreshLayout.addView(body, new androidx.swiperefreshlayout.widget.SwipeRefreshLayout.LayoutParams(-1, -1));
         list = new ListView(getContext()); list.setDivider(null); list.setAdapter(adapter);
         list.setPadding(0, 0, 0, dp(96)); list.setClipToPadding(false); list.setSelector(android.R.color.transparent);
         body.addView(list, new FrameLayout.LayoutParams(-1, -1));
@@ -97,12 +112,12 @@ final class ScreenshotGallery extends LinearLayout {
         gameGrid.setVerticalSpacing(dp(18)); gameGrid.setPadding(dp(16), dp(12), dp(16), dp(96));
         gameGrid.setClipToPadding(false); gameGrid.setSelector(android.R.color.transparent); gameGrid.setAdapter(gameAdapter);
         body.addView(gameGrid, new FrameLayout.LayoutParams(-1, -1));
+        refreshLayout.setOnChildScrollUpCallback((parent, child) -> (gamesPage && gameId == 0 ? gameGrid : list).canScrollVertically(-1));
         empty = new LinearLayout(getContext()); empty.setOrientation(VERTICAL); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(32), 0, dp(32), dp(48));
         ImageView emptyIcon = new ImageView(getContext()); emptyIcon.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, TEAL));
         emptyIcon.setPadding(dp(20), dp(20), dp(20), dp(20)); emptyIcon.setBackground(shape(TINT, 24));
         empty.addView(emptyIcon, new LinearLayout.LayoutParams(dp(80), dp(80)));
         emptyTitle = text("暂无截图", 21); emptyTitle.setTypeface(null, Typeface.BOLD); emptyTitle.setGravity(Gravity.CENTER); emptyTitle.setPadding(0, dp(20), 0, dp(8)); empty.addView(emptyTitle);
-        directory = text("", 12);
         body.addView(empty, new FrameLayout.LayoutParams(-1, -1));
         tabs = row(); tabs.setGravity(Gravity.CENTER); tabs.setPadding(dp(6), dp(6), dp(6), dp(6));
         tabs.setBackground(shape(0xfff8f7fa, 36)); tabs.setElevation(dp(10));
@@ -116,6 +131,7 @@ final class ScreenshotGallery extends LinearLayout {
         delete = button(selectionBar, "删除", () -> confirmDelete(selectedEntries())); delete.setIcon(new GalleryIcons(GalleryIcons.DELETE, 0xffad4037)); delete.setTextColor(0xffad4037); delete.setIconTint(ColorStateList.valueOf(0xffad4037));
         share.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1)); delete.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1));
         addView(selectionBar);
+        activity.getContentResolver().registerContentObserver(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, mediaObserver);
         updateControls();
     }
 
@@ -125,31 +141,46 @@ final class ScreenshotGallery extends LinearLayout {
 
     private void cancelOperation() { controller.cancelBatch(); cancel.setEnabled(false); }
 
-    private void refresh(String message) {
-        if (closed || operating) return;
+    private void refresh(String message) { refresh(message, false); }
+    private void refresh(String message, boolean manual) {
+        if (closed || operating || loading) {
+            dirty = true;
+            if (manual) refreshLayout.setRefreshing(loading);
+            return;
+        }
+        dirty = false;
         int request = ++generation;
-        loading = true; status.setText("读取截图目录…"); updateControls();
+        loading = true; if (manual) refreshLayout.setRefreshing(true); updateControls();
         controller.execute(() -> {
             ScreenshotStore.Directory state = controller.store.status();
             return new Snapshot(state, state.ready ? controller.store.list() : new ArrayList<>());
         }, (snapshot, error) -> {
             if (closed || request != generation) return;
-            loading = false;
-            images.clear();
-            all = snapshot == null ? new ArrayList<>() : snapshot.items;
+            loading = false; initialized = true;
+            refreshLayout.setRefreshing(false);
+            List<ScreenshotStore.Entry> next = snapshot == null ? all : snapshot.items;
+            boolean changed = all.size() != next.size();
+            if (!changed) for (int i = 0; i < all.size(); i++) {
+                ScreenshotStore.Entry before = all.get(i), after = next.get(i);
+                if (!before.id.equals(after.id) || before.bytes != after.bytes || !before.name.equals(after.name) || !before.folderPath.equals(after.folderPath) || before.modified != after.modified) { changed = true; break; }
+            }
+            all = next;
             if (snapshot == null) directoryReady = false;
             Set<String> available = new HashSet<>(); for (ScreenshotStore.Entry item : all) available.add(item.id);
             selected.retainAll(available);
             if (snapshot != null) {
                 directoryReady = snapshot.directory.ready;
-                directory.setText(snapshot.directory.ready ? "保存目录：" + snapshot.directory.name
-                    : snapshot.directory.configured ? "目录无法访问，请重新选择：" + snapshot.directory.name : "请选择截图保存目录");
+
             }
             if (gameId != 0 && all.stream().noneMatch(item -> item.workId == gameId)) gameId = 0;
-            rebuild();
+            if (changed) {
+                android.os.Parcelable listPosition = list.onSaveInstanceState(), gridPosition = gameGrid.onSaveInstanceState();
+                rebuild(); list.onRestoreInstanceState(listPosition); gameGrid.onRestoreInstanceState(gridPosition);
+            } else updateControls();
             status.setText(error != null ? error : message != null ? message : "");
             status.setVisibility(status.getText().length() == 0 ? GONE : VISIBLE);
-            emptyTitle.setText(error != null ? "暂时无法读取截图" : !directoryReady ? "选择截图保存目录" : "暂无截图");
+            emptyTitle.setText(error != null ? "暂时无法读取截图" : "暂无截图");
+            if (dirty) changes.post(refreshChanged);
         });
     }
 
@@ -174,8 +205,8 @@ final class ScreenshotGallery extends LinearLayout {
     }
 
     private void updateControls() {
-        boolean enabled = !loading && !operating;
-        more.setEnabled(enabled);
+        boolean enabled = !operating;
+        refreshLayout.setEnabled(!operating && !selecting);
         manage.setEnabled(enabled && !all.isEmpty());
         manage.setVisibility(gamesPage && gameId == 0 ? GONE : VISIBLE);
         gameBack.setVisibility(gameId == 0 ? GONE : VISIBLE);
@@ -186,9 +217,9 @@ final class ScreenshotGallery extends LinearLayout {
         selectionBar.setVisibility(selecting ? VISIBLE : GONE);
         selectionCount.setText("已选 " + selected.size() + " 张");
         leaveSelection.setEnabled(enabled);
-        progress.setVisibility(loading || operating ? VISIBLE : INVISIBLE);
+        progress.setVisibility(operating ? VISIBLE : GONE);
         status.setVisibility(status.getText().length() == 0 ? GONE : VISIBLE);
-        empty.setVisibility(all.isEmpty() && !loading ? VISIBLE : GONE);
+        empty.setVisibility(all.isEmpty() && (initialized || !loading) ? VISIBLE : GONE);
         boolean showGames = gamesPage && gameId == 0;
         list.setVisibility(!showGames && !visible.isEmpty() ? VISIBLE : GONE);
         gameGrid.setVisibility(showGames && !games.isEmpty() ? VISIBLE : GONE);
@@ -217,7 +248,7 @@ final class ScreenshotGallery extends LinearLayout {
     }
 
     private void toggle(ScreenshotStore.Entry entry) {
-        if (loading || operating) return;
+        if (operating) return;
         selecting = true;
         if (!selected.add(entry.id)) selected.remove(entry.id);
         rebuild();
@@ -234,7 +265,7 @@ final class ScreenshotGallery extends LinearLayout {
 
     private void runBatch(List<ScreenshotStore.Entry> items, boolean deleting) {
         if (operating || loading) return;
-        if (viewer != null) viewer.dismiss();
+        if (deleting && viewer != null) viewer.dismiss();
         operating = true; updateControls();
         status.setText((deleting ? "正在删除" : "准备分享") + " 0 / " + items.size());
         controller.batch(items, deleting, (done, total) -> status.setText((deleting ? "正在删除 " : "准备分享 ") + done + " / " + total),
@@ -261,12 +292,37 @@ final class ScreenshotGallery extends LinearLayout {
     }
 
     private void showViewer(ScreenshotStore.Entry entry) {
-        viewer = new ScreenshotViewer(getContext(), new ArrayList<>(visible), visible.indexOf(entry), images,
-            directoryReady ? directory.getText().toString().replaceFirst("^保存目录：", "") : "",
+        viewer = new ScreenshotViewer(getContext(), new ArrayList<>(visible), visible.indexOf(entry), images, this::thumbnailFor,
             item -> shareEntries(java.util.Collections.singletonList(item)),
             item -> confirmDelete(java.util.Collections.singletonList(item)));
         viewer.setOnDismissListener(ignored -> viewer = null);
         viewer.show();
+    }
+
+    private void thumbnailFor(ScreenshotStore.Entry entry, Consumer<android.widget.ImageView> ready) {
+        int position = -1;
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            if (row.date == null && row.items.stream().anyMatch(item -> item.id.equals(entry.id))) { position = i; break; }
+        }
+        if (closed || position < 0) { ready.accept(null); return; }
+        View current = list.getChildAt(position - list.getFirstVisiblePosition());
+        // Keep the current scroll position unless the destination is clipped or outside the viewport.
+        if (current == null || current.getTop() < list.getPaddingTop() || current.getBottom() > list.getHeight() - dp(110))
+            list.setSelectionFromTop(position, dp(56));
+        androidx.core.view.OneShotPreDrawListener.add(list, () -> {
+            android.widget.ImageView found = null;
+            for (int i = 0; i < list.getChildCount(); i++) {
+                View row = list.getChildAt(i);
+                if (!(row instanceof LinearLayout)) continue;
+                for (int j = 0; j < ((LinearLayout) row).getChildCount(); j++) {
+                    View child = ((LinearLayout) row).getChildAt(j);
+                    if (child instanceof Cell && entry.id.equals(((Cell) child).bound)) found = ((Cell) child).image;
+                }
+            }
+            ready.accept(found);
+        });
+        list.invalidate();
     }
 
     boolean onBack() {
@@ -278,7 +334,7 @@ final class ScreenshotGallery extends LinearLayout {
 
     void directoryResult(String error) { refresh(error); }
 
-    void close() { closed = true; ++generation; if (viewer != null) viewer.dismiss(); images.close(); }
+    void close() { activity.getContentResolver().unregisterContentObserver(mediaObserver); changes.removeCallbacksAndMessages(null); closed = true; ++generation; if (viewer != null) viewer.dismiss(); images.close(); }
 
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
@@ -363,7 +419,7 @@ final class ScreenshotGallery extends LinearLayout {
                 tile.height = dp(mosaic ? 82 : 166); covers[i].setLayoutParams(tile);
             }
             setContentDescription(group.title + "，" + group.items.size() + "张截图");
-            setOnClickListener(view -> { if (loading || operating) return;
+            setOnClickListener(view -> { if (operating) return;
                 gameId = group.id; rebuild(); list.setSelection(0);
             });
             for (int i = 0; i < covers.length; i++) {
@@ -415,7 +471,7 @@ final class ScreenshotGallery extends LinearLayout {
                     MaterialCheckBox check = new MaterialCheckBox(getContext()); check.setButtonTintList(ColorStateList.valueOf(TEAL));
                     check.setContentDescription("选择" + date + "的截图"); check.setMinHeight(dp(48)); check.setMinWidth(dp(48));
                     check.setChecked(row.items.stream().allMatch(item -> selected.contains(item.id)));
-                    check.setEnabled(!loading && !operating);
+                    check.setEnabled(!operating);
                     check.setOnCheckedChangeListener((button, checked) -> {
                     for (ScreenshotStore.Entry item : row.items) { if (checked) selected.add(item.id); else selected.remove(item.id); }
                     rebuild();
@@ -448,7 +504,7 @@ final class ScreenshotGallery extends LinearLayout {
         }
         void cancel() { ++bindGeneration; if (request != null) request.cancel(true); request = null; }
         void bind(ScreenshotStore.Entry entry) {
-            boolean sameImage = entry != null && entry.id.equals(bound) && image.getDrawable() != null;
+            boolean sameImage = entry != null && entry.id.equals(bound) && currentEntry != null && entry.modified == currentEntry.modified && entry.bytes == currentEntry.bytes && image.getDrawable() != null;
             cancel();
             if (!sameImage) image.setImageDrawable(null);
             currentEntry = entry;
@@ -460,7 +516,7 @@ final class ScreenshotGallery extends LinearLayout {
             int inset = dp(selecting && checked ? 7 : 1); setPadding(inset, inset, inset, inset);
             setBackground(checked && selecting ? shape(TINT, 8) : null);
             setContentDescription(entry.title + "，" + entry.createdAt + (selecting ? checked ? "，已选" : "，未选" : ""));
-            setOnClickListener(view -> { if (!loading && !operating) { if (selecting) toggle(entry); else showViewer(entry); } });
+            setOnClickListener(view -> { if (!operating) { if (selecting) toggle(entry); else showViewer(entry); } });
             setOnLongClickListener(view -> { toggle(entry); return true; });
             android.graphics.Bitmap cached = images.cachedThumbnail(entry);
             if (cached != null) {

@@ -112,7 +112,7 @@ final class LocalGames {
                     if (!values[1].isEmpty()) to = Math.min(to, Long.parseLong(values[1]));
                     if (from > to) throw new IOException("视频读取越界。");
                 }
-                ParcelFileDescriptor descriptor = store.storage.resolver.openFileDescriptor(current.zip, "r");
+                ParcelFileDescriptor descriptor = store.storage.open(current.zip, "r");
                 FileInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(descriptor);
                 try {
                     if (start > input.getChannel().size() - size) throw new IOException("视频读取越界。");
@@ -132,7 +132,7 @@ final class LocalGames {
             }
             if (start < 0 || size < 0 || size > 16 * 1024 * 1024) throw new IOException("读取范围无效。");
             byte[] bytes = new byte[size];
-            try (ParcelFileDescriptor descriptor = store.storage.resolver.openFileDescriptor(current.zip, "r");
+            try (ParcelFileDescriptor descriptor = store.storage.open(current.zip, "r");
                  FileInputStream in = new ParcelFileDescriptor.AutoCloseInputStream(descriptor)) {
                 if (start > in.getChannel().size() - size) throw new IOException("读取越界。");
                 in.getChannel().position(start); int offset = 0, n;

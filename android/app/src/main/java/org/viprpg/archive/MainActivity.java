@@ -56,10 +56,9 @@ public final class MainActivity extends Activity {
     private LinearLayout versionTab;
     private ScreenshotController screenshots;
     private LocalGames localGames;
-    private LinearLayout storageGate;
-    private boolean selectingStorage;
+    private SaveTransfers saveTransfers;
+
     private final java.util.Set<String> loadedCovers = new java.util.HashSet<>();
-    private static final int STORAGE_REQUEST = 1003;
     private final ExecutorService localIo = Executors.newSingleThreadExecutor();
     private final ExecutorService coverIo = Executors.newSingleThreadExecutor();
 
@@ -138,6 +137,7 @@ public final class MainActivity extends Activity {
                     catch (Exception e) { runOnUiThread(() -> Toast.makeText(MainActivity.this, e.getMessage(), Toast.LENGTH_LONG).show()); }
                 });
             }
+            @Override public void saves(String key) { saveTransfers.show(key); }
             @Override public void details(long id) {
                 if (id > 0) showOnline(BuildConfig.SITE_ORIGIN + "/games/" + id);
             }
@@ -317,9 +317,8 @@ public final class MainActivity extends Activity {
             else if (library) showLibrary();
             else showOnline();
         } else showOnline();
-        MaterialButton storageSettings = NativeControls.button(this, "本地数据目录", () -> showStorageGate(true));
-        ((LinearLayout) ((android.widget.ScrollView) findViewById(R.id.version_panel)).getChildAt(0)).addView(storageSettings);
-        showStorageGate(false);
+        saveTransfers = new SaveTransfers(this, localGames.store);
+        localIo.execute(() -> { try { localGames.store.reconcile(); runOnUiThread(this::refreshLocalGames); } catch (Exception ignored) { } });
         if (getIntent().getBooleanExtra("library", false)) showLibrary();
         if (!startupChecked) {
             startupChecked = true;
@@ -470,13 +469,16 @@ public final class MainActivity extends Activity {
             JSONObject snapshot = new JSONObject(localGames.store.snapshot());
             nativeLibrary.setSnapshot(snapshot.toString());
             JSONArray items = snapshot.getJSONArray("items");
+            java.util.Set<String> currentKeys = new java.util.HashSet<>();
+            for (int i = 0; i < items.length(); i++) currentKeys.add(items.getJSONObject(i).getString("playKey"));
+            loadedCovers.retainAll(currentKeys);
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i); String key = item.getString("playKey");
                 if (!item.optString("coverBlobSha256").matches("[a-f0-9]{64}") || !loadedCovers.add(key)) continue;
                 coverIo.execute(() -> {
                     String cover = null; try { cover = localGames.store.cover(key); } catch (Exception ignored) { }
                     String image = cover;
-                    runOnUiThread(() -> { if (image != null) nativeLibrary.setCover(key, image); else loadedCovers.remove(key); });
+                    runOnUiThread(() -> { if (image != null && loadedCovers.contains(key)) nativeLibrary.setCover(key, image); else loadedCovers.remove(key); });
                 });
             }
         }
@@ -484,28 +486,7 @@ public final class MainActivity extends Activity {
         if (isBrowserOffline()) sendLibraryCommand("refresh", "null");
         if (browser.getUrl() != null) browser.evaluateJavascript("window.dispatchEvent(new Event('viprpg:local-change'))", null);
     }
-    private void showStorageGate(boolean change) {
-        if (playing || selectingStorage) return;
-        if (!change && localGames.store.storage.ready()) {
-            localIo.execute(() -> { try { localGames.store.reconcile(); runOnUiThread(() -> { refreshLocalGames(); if (localGames.store.next() != null) InstallService.start(this); }); }
-                catch (Exception e) { runOnUiThread(() -> nativeLibrary.setError(e.getMessage())); } });
-            return;
-        }
-        if (storageGate != null) root.removeView(storageGate);
-        storageGate = new LinearLayout(this); storageGate.setOrientation(LinearLayout.VERTICAL);
-        storageGate.setClickable(true); storageGate.setFocusable(true);
-        storageGate.setGravity(android.view.Gravity.CENTER); storageGate.setPadding(32, 32, 32, 32); storageGate.setBackgroundColor(0xfff5f4ef);
-        TextView text = new TextView(this); text.setText("设置本地数据目录\n\n请选择设备或 SD 卡中的文件夹。游戏、截图和存档将分别保存在 games、screenshots、saves 子目录。完成设置后即可使用应用。"); text.setTextSize(18);
-        storageGate.addView(text);
-        storageGate.addView(NativeControls.button(this, "选择文件夹", () -> {
-            if (localGames.store.writing()) { Toast.makeText(this, "请先完成或取消下载任务。", Toast.LENGTH_LONG).show(); return; }
-            selectingStorage = true;
-            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
-            try { startActivityForResult(picker, STORAGE_REQUEST); } catch (Exception e) { selectingStorage = false; Toast.makeText(this, "无法打开目录选择器。", Toast.LENGTH_LONG).show(); }
-        }));
-        if (change && localGames.store.storage.ready()) storageGate.addView(NativeControls.button(this, "取消", () -> { root.removeView(storageGate); storageGate = null; }));
-        root.addView(storageGate, new FrameLayout.LayoutParams(-1, -1));
-    }
+
 
     private void setPlaying(boolean value) {
         playing = value;
@@ -712,16 +693,7 @@ public final class MainActivity extends Activity {
     @Deprecated
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == STORAGE_REQUEST) {
-            selectingStorage = false;
-            if (resultCode == RESULT_OK && data != null && data.getData() != null) localIo.execute(() -> {
-                try {
-                    localGames.store.selectDirectory(data.getData(), data.getFlags());
-                    runOnUiThread(() -> { root.removeView(storageGate); storageGate = null; loadedCovers.clear(); refreshLocalGames(); });
-                } catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show()); }
-            });
-            return;
-        }
+        if (saveTransfers != null && saveTransfers.result(requestCode, resultCode, data)) return;
         if (requestCode == FILE_CHOOSER_REQUEST && fileChooser != null) {
             fileChooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             fileChooser = null;
@@ -731,7 +703,6 @@ public final class MainActivity extends Activity {
     @Override
     @Deprecated
     public void onBackPressed() {
-        if (storageGate != null) { if (localGames.store.storage.ready()) { root.removeView(storageGate); storageGate = null; } else finish(); return; }
         if (fullscreenView != null) {
             (library ? offlineBrowser : browser).evaluateJavascript("document.exitFullscreen()", null);
         } else if (playing || (!library && !gallery && !version && onlinePlaying)) {
@@ -792,11 +763,10 @@ public final class MainActivity extends Activity {
         if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
-        if (storageGate == null && localGames.store.next() != null) InstallService.start(this);
+        if (localGames.store.next() != null) InstallService.start(this);
         restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();
         if (library && !playing && !gallery && !version) sendLibraryCommand("refresh", "null");
-        if (storageGate == null && !playing && !selectingStorage && !localGames.store.storage.ready()) showStorageGate(false);
         showPendingUpdate();
     }
 
@@ -808,6 +778,7 @@ public final class MainActivity extends Activity {
         localGames.store.changed = null;
         localGames.close();
         localIo.shutdownNow();
+        if (saveTransfers != null) saveTransfers.close();
         coverIo.shutdownNow();
         updateExecutor.shutdownNow();
         browser.destroy();

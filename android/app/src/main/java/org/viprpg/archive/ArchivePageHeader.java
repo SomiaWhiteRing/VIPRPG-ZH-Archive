@@ -14,7 +14,7 @@ import java.io.InputStream;
 
 /** Native counterpart of the offline library header: app icon, brand, title and actions. */
 final class ArchivePageHeader extends LinearLayout {
-    static final int CONTENT_HEIGHT_DP = 80;
+    static final int CONTENT_HEIGHT_DP = 64;
     static final int DIVIDER_HEIGHT_DP = 1;
     private final TextView title;
     private final TextView brand;
@@ -27,17 +27,15 @@ final class ArchivePageHeader extends LinearLayout {
         setOrientation(VERTICAL);
         LinearLayout line = new LinearLayout(context);
         line.setGravity(Gravity.CENTER_VERTICAL);
-        line.setPadding(dp(16), dp(20), dp(8), dp(12));
+        line.setPadding(dp(16), dp(8), dp(8), dp(8));
         leading = new LinearLayout(context); leading.setGravity(Gravity.CENTER_VERTICAL); line.addView(leading);
         logo = new ImageView(context);
-        try (InputStream image = context.getAssets().open("offline/icon.png")) {
-            logo.setImageBitmap(BitmapFactory.decodeStream(image));
-        } catch (IOException error) {
-            logo.setImageResource(R.drawable.ic_app);
-        }
+        logo.setImageResource(R.drawable.ic_app);
+        if (logo.getDrawable() instanceof android.graphics.drawable.BitmapDrawable)
+            ((android.graphics.drawable.BitmapDrawable) logo.getDrawable()).setFilterBitmap(false);
         logo.setContentDescription(null);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        line.addView(logo, new LayoutParams(dp(44), dp(44)));
+        line.addView(logo, new LayoutParams(dp(48), dp(48)));
         labels = new LinearLayout(context); labels.setOrientation(VERTICAL);
         labels.setPadding(dp(12), 0, 0, 0);
         labels.setTranslationY(-dp(1));

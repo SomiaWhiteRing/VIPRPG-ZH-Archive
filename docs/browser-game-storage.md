@@ -6,13 +6,13 @@
 
 | 环境 | `storageKind` | 游戏资源 | 保留期限 |
 | --- | --- | --- | --- |
-| 本站 Android App | 原生安装记录 | SAF 根目录下 `games/<archiveVersionId>` | 不设置期限 |
+| 本站 Android App | 原生安装记录 | 应用私有目录下 `games/<archiveVersionId>` | 不设置期限 |
 | 支持 Storage Buckets 的浏览器 | `browser-bucket` | 每个安装版本独立的桶内 OPFS | 最后游玩后 7 × 24 小时 |
 | 不支持 Storage Buckets 的浏览器 | `browser-opfs` | 原 OPFS 目录 | 下次访问时执行相同的 7 天规则 |
 
 环境识别使用原生注入的 `window.VIPRPGAndroid`，不使用 Android UA。Android 手机上的普通浏览器按浏览器策略处理。主线程把选择的 `storageKind` 显式传给安装 Worker；读写和清理以安装记录中的存储位置为准。
 
-Android App 不显示浏览器安装管理入口，不执行过期清理。主站调用原生安装队列，游戏、截图和存档使用首次启动选择的目录，详见 [Android 说明](../android/README.md)。不迁移首发前旧 APK 的 OPFS 数据。
+Android App 不显示浏览器安装管理入口，不执行过期清理。主站调用原生安装队列，游戏和存档使用应用私有目录，截图使用系统相册 VIPRPG.org，详见 [Android 说明](../android/README.md)。不迁移首发前旧 APK 的 OPFS 数据。
 
 桶名为 `viprpg-game-` 加安装键 SHA-256 的前 48 位，不超过 API 的 64 字符限制。桶只包含游戏 pack 和索引；安装记录留在原 IndexedDB，存档仍在 IDBFS `/work-saves/<workId>`，截图也不放进到期桶。
 

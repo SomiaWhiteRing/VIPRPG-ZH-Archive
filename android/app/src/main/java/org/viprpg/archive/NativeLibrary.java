@@ -51,6 +51,7 @@ final class NativeLibrary extends LinearLayout {
         void retry(long archiveVersionId);
         void toggleDownload(String key);
         void details(long workId);
+        void saves(String key);
     }
 
     private static final int PAPER = 0xfff5f4ef, INK = 0xff17212b, MUTED = 0xff68737d;
@@ -72,7 +73,7 @@ final class NativeLibrary extends LinearLayout {
     private final Map<String, DownloadViews> downloads = new HashMap<>();
     private static final class DownloadViews {
         TextView progress, speed;
-        com.google.android.material.progressindicator.LinearProgressIndicator bar;
+        android.widget.ProgressBar bar;
         MaterialButton toggle;
     }
     private final TextView summary, message;
@@ -348,7 +349,7 @@ final class NativeLibrary extends LinearLayout {
             coverFrame.setForeground(new RippleDrawable(ColorStateList.valueOf(0x221f6f67), null,
                 box(Color.WHITE, dp(5), Color.WHITE)));
             coverFrame.setOnClickListener(view -> actions.details(entry.workId));
-            coverFrame.setOnLongClickListener(view -> { enterSelection(entry.key); return true; });
+            coverFrame.setOnLongClickListener(view -> { if (entry.ready) actions.saves(entry.key); else enterSelection(entry.key); return true; });
         }
         line.addView(coverFrame, new LayoutParams(dp(96), dp(72)));
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
@@ -381,9 +382,13 @@ final class NativeLibrary extends LinearLayout {
             numbers.addView(views.progress, new LayoutParams(0, dp(20), 1));
             numbers.addView(views.speed, new LayoutParams(-2, dp(20)));
             details.addView(numbers, new LayoutParams(-1, dp(20)));
-            views.bar = new com.google.android.material.progressindicator.LinearProgressIndicator(getContext());
-            views.bar.setTrackThickness(dp(3)); views.bar.setTrackCornerRadius(dp(2));
-            views.bar.setIndicatorColor(TEAL); views.bar.setTrackColor(BORDER); views.bar.setMax(1000);
+            views.bar = new android.widget.ProgressBar(getContext(), null, android.R.attr.progressBarStyleHorizontal);
+            android.graphics.drawable.GradientDrawable track = box(BORDER, 0, BORDER);
+            android.graphics.drawable.ClipDrawable fill = new android.graphics.drawable.ClipDrawable(box(TEAL, 0, TEAL), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+            android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{track, fill});
+            layers.setId(0, android.R.id.background); layers.setId(1, android.R.id.progress);
+            views.bar.setProgressDrawable(layers); views.bar.setMax(1000);
+            views.bar.setPadding(0, 0, 0, 0);
             details.addView(views.bar, new LayoutParams(-1, dp(4)));
             line.addView(details, new LayoutParams(0, -2, 1));
             downloads.put(entry.key, views); updateDownload(entry);
@@ -394,7 +399,7 @@ final class NativeLibrary extends LinearLayout {
             items.addView(line, new LayoutParams(-1, -2));
         }
         else {
-            line.setOnLongClickListener(view -> { enterSelection(entry.key); return true; });
+            line.setOnLongClickListener(view -> { if (entry.ready) actions.saves(entry.key); else enterSelection(entry.key); return true; });
             SwipeGameRow swipe = new SwipeGameRow(getContext(), line, entry.title,
                 () -> confirmDelete(java.util.Collections.singletonList(entry.key)), row -> {
                     if (openRow != null && openRow != row) openRow.close();

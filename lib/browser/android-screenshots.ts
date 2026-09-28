@@ -7,12 +7,11 @@ type NativeChannel = {
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
 const pending = new Map<string, Pending>();
 let connected: NativeChannel | undefined;
-let choosingDirectory: Promise<boolean> | null = null;
 
 function channel(): NativeChannel {
   const bridge = (window as Window & { VIPRPGScreenshots?: NativeChannel }).VIPRPGScreenshots;
   if (!bridge || typeof bridge.postMessage !== "function") {
-    throw new Error("此客户端暂不支持目录截图，请更新 Android 客户端和系统 WebView。");
+    throw new Error("此客户端暂不支持截图保存，请更新 Android 客户端和系统 WebView。");
   }
   if (connected !== bridge) {
     connected = bridge;
@@ -36,17 +35,11 @@ function request<T>(action: string, payload: Record<string, unknown> = {}): Prom
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error(action === "save" ? "未能及时确认写入结果，请先查看截图图库。" : "操作等待超时，请重试。"));
-    }, action === "ensureDirectory" ? 600_000 : 120_000);
+    }, 120_000);
     pending.set(id, { resolve: (value) => resolve(value as T), reject, timer });
     try { bridge.postMessage(JSON.stringify({ ...payload, action, id })); }
     catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
   });
-}
-
-export async function ensureAndroidScreenshotDirectory(): Promise<boolean> {
-  if (!isAndroidClient()) return true;
-  choosingDirectory ??= request<boolean>("ensureDirectory").finally(() => { choosingDirectory = null; });
-  return choosingDirectory;
 }
 
 export async function saveAndroidScreenshot(blob: Blob, workId: number, title: string, capturedAt: number): Promise<void> {

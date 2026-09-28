@@ -6,6 +6,24 @@ import { Download, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/components/ui/toast";
 
+async function coverPreview(hash: string | null): Promise<string | undefined> {
+  if (!hash) return;
+  try {
+    const response = await fetch(`/api/media/blobs/${hash}`, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return;
+    const image = await createImageBitmap(await response.blob());
+    try {
+      const scale = Math.min(1, 256 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d"); if (!context) return;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.8);
+    } finally { image.close(); }
+  } catch { return; }
+}
+
 export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }: { id: number; bytes: number; title: string; workId: number; coverBlobSha256: string | null }) {
   const toast = useToast();
   const [native, setNative] = useState(false);
@@ -28,10 +46,10 @@ export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }
     disabled={busy} icon={native && status !== "ready" ? <Download aria-hidden /> : <Play aria-hidden />}
     onClick={native ? () => {
       setBusy(true);
-      void (status === "ready" || queued ? localRequest("open", status === "ready" ? { archiveVersionId: id } : {}) : localRequest<{ status: string }>("install", { archiveVersionId: id, title, workId, coverBlobSha256 }).then(task => setStatus(task.status)))
+      void (status === "ready" || queued ? localRequest("open", status === "ready" ? { archiveVersionId: id } : {}) : coverPreview(coverBlobSha256).then(coverDataUrl => localRequest<{ status: string }>("install", { archiveVersionId: id, title, workId, coverBlobSha256, coverDataUrl })).then(task => setStatus(task.status)))
         .catch(error => toast.error(error instanceof Error ? error.message : "无法创建安装任务。"))
         .finally(() => setBusy(false));
     } : undefined}>
-    {!native ? "在线游玩" : status === "ready" ? "启动游戏" : queued ? "查看下载进度" : <>安装到本地 <span className="text-xs text-muted">{formatBytes(bytes)}</span></>}
+    {!native ? "在线游玩" : status === "ready" ? "启动游戏" : queued ? "查看下载进度" : <>安装到本地 <span className="text-xs text-white">{formatBytes(bytes)}</span></>}
   </Rm2kButton>;
 }
