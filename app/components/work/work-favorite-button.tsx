@@ -18,7 +18,7 @@ type Props = {
   initialFavorited: boolean;
   workId: number;
   workTitle?: string;
-  appearance?: "button" | "compact" | "manage";
+  appearance?: "button" | "compact" | "manage" | "remove";
 };
 
 export function WorkFavoriteButton(props: Props) {
@@ -134,6 +134,12 @@ function WorkFavoriteButtonContent({
     );
     return <p className="m-0 text-xs text-muted">登录后可以收藏作品。</p>;
   }
+
+  if (appearance === "remove") return (
+    <Button type="button" variant="outline" size="sm" disabled={busy || !favorited} onClick={() => void removeFavorite()}>
+      {favorited ? "取消收藏" : "已取消收藏"}
+    </Button>
+  );
 
   const workSuggestions = (favorite?.workTags ?? []).filter((value) => !validateUserTag(value)).map((value) => ({ value, meta: "" }));
   const frequentSuggestions = (favorite?.frequentTags ?? []).filter((tag) => !validateUserTag(tag.name)).map((tag) => ({ value: tag.name, meta: `${tag.workCount} 部作品` }));

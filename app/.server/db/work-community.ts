@@ -91,6 +91,18 @@ export async function setWorkFavorite(
   tagInput?: unknown,
   noteInput?: unknown,
 ): Promise<void> {
+  if (!favorited) {
+    // Removing one's own relationship does not require access to the work.
+    const database = getD1(runtime);
+    await database.batch([
+      database.prepare(`UPDATE user_work_entries
+        SET favorited_at=NULL,favorite_note='',updated_at=CURRENT_TIMESTAMP
+        WHERE work_id=? AND user_id=?`).bind(workId, userId),
+      database.prepare(`DELETE FROM user_work_entries
+        WHERE work_id=? AND user_id=? AND last_played_at IS NULL AND favorited_at IS NULL`).bind(workId, userId),
+    ]);
+    return;
+  }
   const tags = tagInput === undefined ? undefined : parseUserTags(tagInput);
   const note = noteInput === undefined ? undefined : parseFavoriteNote(noteInput);
   const database = getD1(runtime);
