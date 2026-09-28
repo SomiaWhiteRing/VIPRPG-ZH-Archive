@@ -96,6 +96,7 @@ export default function MePage() {
             <Link to={`/users/${user.id}`}>查看访客页</Link>
           </Button>
         }
+        compact
         title="个人中心"
       />
       <AccountSection
