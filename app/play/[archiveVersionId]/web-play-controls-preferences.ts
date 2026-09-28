@@ -135,5 +135,5 @@ export function useWebPlayControlsPreferences() {
     }));
   }, []);
 
-  return { preferences, setOrientation, setTouchEnabled, saveLayout, storageError };
+  return { preferences, loaded, setOrientation, setTouchEnabled, saveLayout, storageError };
 }

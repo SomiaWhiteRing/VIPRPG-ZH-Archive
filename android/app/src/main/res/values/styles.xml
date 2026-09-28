@@ -1,5 +1,5 @@
 <resources>
-    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="AppTheme" parent="GalleryTheme">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#2F9F92</item>
         <item name="android:statusBarColor">#FFFFFF</item>
@@ -7,7 +7,7 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
-    <!-- Native screenshot gallery: matches the website/offline warm paper and teal palette. -->
+    <!-- Shared native-page theme; gallery controls define the application palette. -->
     <style name="GalleryTheme" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">#1F6F67</item>
         <item name="colorOnPrimary">#FFFFFF</item>
@@ -25,5 +25,23 @@
         <item name="colorOutline">#D9DDD9</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#2F9F92</item>
+    </style>
+    <style name="NativeTextButton" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">#1F6F67</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="cornerRadius">12dp</item>
+    </style>
+    <!-- The download is the page's primary action; retain Material's state colors. -->
+    <style name="NativePrimaryButton" parent="Widget.Material3.Button">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="cornerRadius">12dp</item>
     </style>
 </resources>

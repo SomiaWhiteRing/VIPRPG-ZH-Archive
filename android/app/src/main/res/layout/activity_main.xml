@@ -69,7 +69,7 @@
                         android:text="@string/app_name"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#182326" />
+                        android:textColor="#17212B" />
                     <TextView
                         android:id="@+id/installed_version"
                         android:layout_width="match_parent"
@@ -77,12 +77,12 @@
                         android:layout_marginTop="4dp"
                         android:gravity="center"
                         android:textSize="14sp"
-                        android:textColor="#58686A" />
+                        android:textColor="#68737D" />
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginTop="20dp"
-                        android:background="#DCE4E2" />
+                        android:background="#D9DDD9" />
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -90,7 +90,7 @@
                         android:text="@string/update_heading"
                         android:textSize="16sp"
                         android:textStyle="bold"
-                        android:textColor="#182326" />
+                        android:textColor="#17212B" />
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -112,7 +112,7 @@
                             android:text="@string/not_checked"
                             android:textSize="16sp"
                             android:textStyle="bold"
-                            android:textColor="#182326" />
+                            android:textColor="#17212B" />
                     </LinearLayout>
                     <TextView
                         android:id="@+id/update_detail"
@@ -123,7 +123,7 @@
                         android:lineSpacingExtra="3dp"
                         android:text="@string/not_checked_detail"
                         android:textSize="14sp"
-                        android:textColor="#58686A" />
+                        android:textColor="#68737D" />
                     <TextView
                         android:id="@+id/release_notes_heading"
                         android:layout_width="match_parent"
@@ -132,7 +132,7 @@
                         android:text="@string/release_notes_title"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="#182326"
+                        android:textColor="#17212B"
                         android:visibility="gone" />
                     <TextView
                         android:id="@+id/release_notes"
@@ -141,35 +141,33 @@
                         android:layout_marginTop="10dp"
                         android:lineSpacingExtra="3dp"
                         android:textSize="14sp"
-                        android:textColor="#58686A"
+                        android:textColor="#68737D"
                         android:visibility="gone" />
-                    <Button
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/NativePrimaryButton"
                         android:id="@+id/download_update"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginTop="16dp"
-                        android:backgroundTint="#1F6F67"
                         android:text="@string/download_update"
-                        android:textColor="#FFFFFF"
                         android:textAllCaps="false"
                         android:visibility="gone" />
-                    <Button
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/NativeTextButton"
                         android:id="@+id/check_update"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginTop="12dp"
-                        android:backgroundTint="#1F6F67"
                         android:text="@string/check_update"
-                        android:textColor="#FFFFFF"
                         android:textAllCaps="false" />
-                    <Switch
+                    <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/auto_check_updates"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:minHeight="48dp"
                         android:layout_marginTop="16dp"
                         android:text="@string/auto_check_updates"
-                        android:textColor="#58686A" />
+                        android:textColor="#68737D" />
                 </LinearLayout>
                 </ScrollView>
             </LinearLayout>

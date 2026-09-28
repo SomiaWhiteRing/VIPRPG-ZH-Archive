@@ -11,7 +11,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.widget.CheckBox;
+import com.google.android.material.checkbox.MaterialCheckBox;
 import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
@@ -23,7 +23,6 @@ import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.text.TextUtils;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -128,7 +127,7 @@ final class ScreenshotGallery extends LinearLayout {
         PopupMenu menu = new PopupMenu(getContext(), more);
         menu.getMenu().add("刷新").setOnMenuItemClickListener(item -> { refresh(null); return true; });
         menu.getMenu().add("截图保存目录").setOnMenuItemClickListener(item -> {
-            new MaterialAlertDialogBuilder(getContext()).setBackground(shape(Color.WHITE, 20)).setTitle("截图保存目录").setMessage(directory.getText())
+            NativeControls.dialog(getContext()).setTitle("截图保存目录").setMessage(directory.getText())
                 .setNegativeButton("关闭", null).setPositiveButton("更换目录", (dialog, which) -> chooseDirectory(true)).show(); return true;
         });
         menu.show();
@@ -253,7 +252,7 @@ final class ScreenshotGallery extends LinearLayout {
 
     private void confirmDelete(List<ScreenshotStore.Entry> items) {
         if (items.isEmpty()) return;
-        new MaterialAlertDialogBuilder(getContext()).setBackground(shape(Color.WHITE, 20)).setTitle("删除 " + items.size() + " 张截图？")
+        NativeControls.dialog(getContext()).setTitle("删除 " + items.size() + " 张截图？")
             .setMessage("将永久删除截图目录中的原文件，无法撤销。游戏和存档不受影响。")
             .setNegativeButton("取消", null).setPositiveButton("删除", (dialog, which) -> runBatch(items, true)).show();
     }
@@ -319,18 +318,13 @@ final class ScreenshotGallery extends LinearLayout {
     private GradientDrawable shape(int color, int radius) { GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable; }
     private LinearLayout row() { LinearLayout row = new LinearLayout(getContext()); row.setGravity(Gravity.CENTER_VERTICAL); return row; }
     private MaterialButton button(LinearLayout parent, String label, Runnable action) {
-        MaterialButton button = new MaterialButton(getContext(), null, com.google.android.material.R.attr.borderlessButtonStyle);
-        button.setText(label); button.setAllCaps(false); button.setTextSize(14); button.setTextColor(TEAL);
-        button.setIconTint(ColorStateList.valueOf(TEAL)); button.setIconSize(dp(20)); button.setCornerRadius(dp(12));
-        button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
-        button.setMinHeight(dp(48)); button.setMinimumHeight(dp(48)); button.setInsetTop(0); button.setInsetBottom(0);
-        button.setOnClickListener(view -> action.run()); parent.addView(button, new LinearLayout.LayoutParams(-2, dp(48))); return button;
+        MaterialButton button = NativeControls.button(getContext(), label, action);
+        parent.addView(button, new LinearLayout.LayoutParams(-2, dp(48))); return button;
     }
     private MaterialButton icon(LinearLayout parent, String label, String path, Runnable action, boolean dark) {
-        MaterialButton button = button(parent, "", action); button.setContentDescription(label); button.setTooltipText(label);
-        button.setIcon(new GalleryIcons(path, dark ? Color.WHITE : INK)); button.setIconTint(ColorStateList.valueOf(dark ? Color.WHITE : INK));
-        button.setIconPadding(0); button.setPadding(dp(12), 0, dp(12), 0); button.setMinWidth(0); button.setMinimumWidth(0);
-        button.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(48))); return button;
+        MaterialButton button = NativeControls.icon(getContext(), path, dark ? Color.WHITE : INK, action);
+        button.setContentDescription(label); button.setTooltipText(label);
+        parent.addView(button, new LinearLayout.LayoutParams(dp(48), dp(48))); return button;
     }
 
     private static final class Snapshot {
@@ -445,7 +439,7 @@ final class ScreenshotGallery extends LinearLayout {
                 TextView day = text(date, 17); day.setTypeface(null, Typeface.BOLD);
                 section.addView(day, new LinearLayout.LayoutParams(0, dp(40), 1)); day.setGravity(Gravity.CENTER_VERTICAL);
                 if (selecting) {
-                    CheckBox check = new CheckBox(getContext()); check.setButtonTintList(ColorStateList.valueOf(TEAL));
+                    MaterialCheckBox check = new MaterialCheckBox(getContext()); check.setButtonTintList(ColorStateList.valueOf(TEAL));
                     check.setContentDescription("选择" + date + "的截图"); check.setMinHeight(dp(48)); check.setMinWidth(dp(48));
                     check.setChecked(row.items.stream().allMatch(item -> selected.contains(item.id)));
                     check.setEnabled(!loading && !operating);
