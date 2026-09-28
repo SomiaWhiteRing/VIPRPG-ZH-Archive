@@ -1,3 +1,4 @@
+import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
@@ -101,6 +102,7 @@ type SummaryRow = {
   original_title: string;
   chinese_title: string | null;
   description: string | null;
+  genre: string | null;
   original_release_date: string | null;
   original_release_precision: string;
   engine_family: string;
@@ -124,6 +126,7 @@ type WorkRow = {
   original_title: string;
   chinese_title: string | null;
   description: string | null;
+  genre: string | null;
   original_release_date: string | null;
   original_release_precision: string;
   engine_family: string;
@@ -162,6 +165,7 @@ type WorkEditInput = {
   workId: number;
   chineseTitle: string | null;
   description: string | null;
+  genre?: string | null;
   originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
@@ -476,6 +480,7 @@ export async function getWorkForAdminEdit(
     originalTitle: row.original_title,
     chineseTitle: row.chinese_title,
     description: row.description,
+    genre: row.genre,
     originalReleaseDate: row.original_release_date,
     originalReleasePrecision: row.original_release_precision,
     engineFamily: row.engine_family,
@@ -691,7 +696,7 @@ export async function updateOwnedWork(
     database
       .prepare(
         `UPDATE works
-         SET original_title=?,chinese_title=?,description=?,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.usesUnsupportedManiac',json(?)),original_release_date=?,
+         SET original_title=?,chinese_title=?,description=?,genre=CASE WHEN ? THEN genre ELSE ? END,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.usesUnsupportedManiac',json(?)),original_release_date=?,
            original_release_precision=?,engine_family=?,
            is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
@@ -701,6 +706,8 @@ export async function updateOwnedWork(
         originalTitle,
         input.chineseTitle?.trim() || null,
         input.description?.trim() || null,
+        input.genre === undefined ? 1 : 0,
+        parseWorkGenre(input.genre) ?? null,
         moreInfo,
         JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
         releaseDate.value,
@@ -908,6 +915,7 @@ export async function updateWorkForAdmin(
         `UPDATE works
        SET chinese_title = ?,
          description = ?,
+         genre = CASE WHEN ? THEN genre ELSE ? END,
          extra_json = json_set(extra_json, '$.moreInfo', json(?), '$.usesUnsupportedManiac', json(?)),
          original_release_date = ?,
          original_release_precision = ?,
@@ -922,6 +930,8 @@ export async function updateWorkForAdmin(
       .bind(
         input.chineseTitle,
         input.description,
+        input.genre === undefined ? 1 : 0,
+        parseWorkGenre(input.genre) ?? null,
         moreInfo,
         JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
         releaseDate.value,
@@ -1046,15 +1056,16 @@ export async function createExternalWork(
   const result = await database
     .prepare(
       `INSERT INTO works (
-        original_title, chinese_title, description, is_original, is_translation, language,
+        original_title, chinese_title, description, genre, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status,
         extra_json, created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, CURRENT_TIMESTAMP)`,
     )
     .bind(
       originalTitle,
       input.chineseTitle?.trim() || null,
       input.description?.trim() || null,
+      parseWorkGenre(input.genre) ?? null,
       input.isOriginal ? 1 : 0,
       input.isTranslation ? 1 : 0,
       input.language,
@@ -1224,6 +1235,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
     description: clean(form.get("description")),
+    genre: parseWorkGenre(form.has("genre") ? form.get("genre") : undefined),
     moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: clean(form.get("original_release_date")),
     engineFamily: String(form.get("engine_family") ?? "other"),
@@ -1256,6 +1268,7 @@ function summarySql(): string {
     w.original_title,
     w.chinese_title,
     w.description,
+    w.genre,
     w.original_release_date,
     w.original_release_precision,
     w.engine_family,
@@ -1612,6 +1625,7 @@ function mapSummaryRow(
     originalTitle: row.original_title,
     chineseTitle: row.chinese_title,
     description: row.description,
+    genre: row.genre,
     originalReleaseDate: row.original_release_date,
     originalReleasePrecision: row.original_release_precision,
     engineFamily: row.engine_family,

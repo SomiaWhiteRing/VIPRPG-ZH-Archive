@@ -18,6 +18,7 @@ export type UploadFormMetadata = {
   aliasTitles: string[];
   engineFamily: ArchiveCommitMetadata["game"]["engineFamily"];
   description: string;
+  genre: string;
   tags: string[];
   characters: CharacterCreditSelection[];
   authors: (CreatorSelection | null)[];

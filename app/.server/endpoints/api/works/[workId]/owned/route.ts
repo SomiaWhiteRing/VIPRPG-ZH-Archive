@@ -1,3 +1,4 @@
+import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -98,6 +99,7 @@ function parseMetadata(form: FormData) {
     ),
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
+    genre: parseWorkGenre(form.has("genre") ? form.get("genre") : undefined),
     moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(

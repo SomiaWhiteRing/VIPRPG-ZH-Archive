@@ -94,6 +94,7 @@ export type ArchiveCommitMetadata = {
     originalTitle: string;
     chineseTitle: string | null;
     description: string | null;
+    genre?: string | null;
     originalReleaseDate: string | null;
     originalReleasePrecision: "year" | "month" | "day" | "unknown";
     engineFamily:

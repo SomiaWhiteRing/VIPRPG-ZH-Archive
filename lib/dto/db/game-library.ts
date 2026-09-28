@@ -103,6 +103,7 @@ export type GameWorkSummary = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  genre: string | null;
   originalReleaseDate: string | null;
   originalReleasePrecision: string;
   engineFamily: string;
@@ -144,6 +145,7 @@ export type AdminWorkEdit = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  genre: string | null;
   originalReleaseDate: string | null;
   originalReleasePrecision: string;
   engineFamily: string;
@@ -194,6 +196,7 @@ export type ExternalWorkInput = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  genre?: string | null;
   originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;
@@ -240,6 +243,7 @@ export type UploaderWorkUpdateInput = {
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
+  genre?: string | null;
   originalReleaseDate: string | null;
   engineFamily: string;
   isOriginal: boolean;

@@ -32,6 +32,7 @@ export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
     originalTitle: work.originalTitle,
     chineseTitle: work.chineseTitle ?? "",
     description: work.description ?? "",
+    genre: work.genre ?? "",
     originalReleaseDate: work.originalReleaseDate ?? "",
     engineFamily: work.engineFamily as UploadFormMetadata["engineFamily"],
     isOriginal: work.isOriginal,
@@ -70,6 +71,7 @@ export function WorkEditForm({ work, suggestions, canUpdateStatus, children }: {
       body.set("work_id", String(work.id));
       body.set("chinese_title", form.chineseTitle);
       body.set("description", form.description);
+      body.set("genre", form.genre);
       body.set("original_release_date", form.originalReleaseDate);
       body.set("engine_family", form.engineFamily);
       body.set("language", form.language);

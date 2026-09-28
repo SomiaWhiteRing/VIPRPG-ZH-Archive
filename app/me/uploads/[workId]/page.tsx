@@ -76,6 +76,7 @@ export default function UploadedWorkPage() {
           originalTitle: work.originalTitle,
           chineseTitle: work.chineseTitle,
           description: work.description,
+          genre: work.genre,
           moreInfo: work.moreInfo,
           usesUnsupportedManiac: work.usesUnsupportedManiac,
           originalReleaseDate: work.originalReleaseDate,

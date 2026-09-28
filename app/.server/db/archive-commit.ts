@@ -1,3 +1,4 @@
+import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
 import {
@@ -1005,6 +1006,7 @@ function normalizeMetadata(
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       description: normalizeNullableWorkText(game.description),
+      genre: parseWorkGenre(game.genre),
       extra: {
         ...game.extra,
         moreInfo: parseWorkMoreInfo(game.extra.moreInfo),
@@ -1103,15 +1105,16 @@ async function resolveTargetWork(
   const result = await database
     .prepare(
       `INSERT INTO works (
-        original_title, chinese_title, description, is_original, is_translation, language,
+        original_title, chinese_title, description, genre, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status, extra_json,
         created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
     )
     .bind(
       game.originalTitle,
       game.chineseTitle,
       game.description,
+      game.genre ?? null,
       game.isOriginal ? 1 : 0,
       game.isTranslation ? 1 : 0,
       game.language,
@@ -1236,6 +1239,7 @@ async function finalizeArchiveCommit(
        SET original_title = ?,
          chinese_title = ?,
          description = ?,
+         genre = CASE WHEN ? THEN genre ELSE ? END,
          is_original = ?,
          is_translation = ?,
          language = ?,
@@ -1255,6 +1259,8 @@ async function finalizeArchiveCommit(
         game.originalTitle,
         game.chineseTitle,
         game.description,
+        game.genre === undefined ? 1 : 0,
+        game.genre ?? null,
         game.isOriginal ? 1 : 0,
         game.isTranslation ? 1 : 0,
         game.language,
