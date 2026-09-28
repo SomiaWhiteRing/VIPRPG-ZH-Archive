@@ -81,11 +81,13 @@ public final class MainActivity extends Activity {
     private View fullscreenView;
     private ValueCallback<Uri[]> fileChooser;
     private boolean playing;
+    private boolean onlinePlaying;
     private boolean onlineImmersive;
     private boolean library;
     private boolean version;
     private boolean gallery;
     private boolean onlineLoadFailed;
+    private boolean onlineBrowserPaused;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -189,8 +191,8 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 if (view == offlineBrowser) setPlaying(false);
-                else if (!library && (playing || onlineImmersive)) {
-                    playing = false;
+                else if (onlinePlaying || onlineImmersive) {
+                    onlinePlaying = false;
                     onlineImmersive = false;
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
                     updateNavigation();
@@ -248,7 +250,7 @@ public final class MainActivity extends Activity {
                 fullscreenView = null;
                 fullscreenCallback.onCustomViewHidden();
                 fullscreenCallback = null;
-                if (!playing) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                if (!playing && !onlinePlaying) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
                 updateNavigation();
             }
 
@@ -313,9 +315,9 @@ public final class MainActivity extends Activity {
 
     void setOnlinePlaying(boolean value, boolean immersive) {
         if (!isScreenshotPage(browser) || isOffline(Uri.parse(browser.getUrl()))) return;
-        playing = value;
+        onlinePlaying = value;
         onlineImmersive = immersive;
-        if (!value && fullscreenView == null) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        if (!value && fullscreenView == null && !playing) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         updateNavigation();
         if (!value) showPendingUpdate();
     }
@@ -330,8 +332,24 @@ public final class MainActivity extends Activity {
         findViewById(R.id.gallery_panel).setVisibility(View.GONE);
     }
 
+    private void pauseOnlineBrowser() {
+        if (onlineBrowserPaused) return;
+        if (browser.getUrl() != null) browser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
+        browser.clearFocus();
+        browser.onPause();
+        onlineBrowserPaused = true;
+    }
+
+    private void resumeOnlineBrowser() {
+        if (!onlineBrowserPaused) return;
+        browser.onResume();
+        onlineBrowserPaused = false;
+        if (browser.getUrl() != null) browser.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null);
+    }
+
     private void showGallery() {
-        if (playing || screenshots.isBusy()) return;
+        if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
+        pauseOnlineBrowser();
         version = false; gallery = true;
         versionPage.setVisibility(View.GONE);
         browser.setVisibility(View.GONE);
@@ -345,13 +363,14 @@ public final class MainActivity extends Activity {
     }
 
     private void showOnline() {
-        if (playing || screenshots.isBusy()) return;
+        if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
         hideGallery();
         version = false;
         versionPage.setVisibility(View.GONE);
         libraryPanel.setVisibility(View.GONE);
         offlineBrowser.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
+        if (resumed) resumeOnlineBrowser();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         library = false;
         if (browser.getUrl() == null || onlineLoadFailed) {
@@ -362,7 +381,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showLibrary() {
-        if (playing || screenshots.isBusy()) return;
+        if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
+        pauseOnlineBrowser();
         hideGallery();
         version = false;
         versionPage.setVisibility(View.GONE);
@@ -390,6 +410,7 @@ public final class MainActivity extends Activity {
         libraryPanel.setVisibility(View.GONE);
         offlineBrowser.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
+        if (resumed) resumeOnlineBrowser();
         browser.loadUrl(BuildConfig.SITE_ORIGIN + "/play/" + archiveVersionId);
         updateNavigation();
     }
@@ -407,7 +428,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showVersion() {
-        if (playing || screenshots.isBusy()) return;
+        if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
+        pauseOnlineBrowser();
         hideGallery();
         version = true;
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
@@ -520,7 +542,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showPendingUpdate() {
-        if (!pendingUpdatePrompt || !resumed || playing || gallery || screenshots.isBusy() || fullscreenView != null || isFinishing() || isDestroyed()) return;
+        if (!pendingUpdatePrompt || !resumed || playing || onlinePlaying || gallery || screenshots.isBusy() || fullscreenView != null || isFinishing() || isDestroyed()) return;
         pendingUpdatePrompt = false;
         if (version || currentUpdate == null || !getPreferences(MODE_PRIVATE).getBoolean("autoCheckUpdates", true)) return;
         UpdateChecker.Result update = currentUpdate;
@@ -551,7 +573,7 @@ public final class MainActivity extends Activity {
     }
 
     private void updateNavigation() {
-        boolean immersive = fullscreenView != null || (library ? playing : onlineImmersive);
+        boolean immersive = fullscreenView != null || playing || (!library && !gallery && !version && onlineImmersive);
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
         tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
         tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && !gallery && library);
@@ -614,7 +636,7 @@ public final class MainActivity extends Activity {
     public void onBackPressed() {
         if (fullscreenView != null) {
             (library ? offlineBrowser : browser).evaluateJavascript("document.exitFullscreen()", null);
-        } else if (playing) {
+        } else if (playing || (!library && !gallery && !version && onlinePlaying)) {
             (library ? offlineBrowser : browser).evaluateJavascript("window.dispatchEvent(new Event('viprpg:back'))", null);
         } else if (gallery) {
             if (!galleryPanel.onBack() && !screenshots.isBusy()) { if (library) showLibrary(); else showOnline(); }
@@ -641,9 +663,8 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         resumed = false;
-        browser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
+        pauseOnlineBrowser();
         offlineBrowser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
-        browser.onPause();
         offlineBrowser.onPause();
         super.onPause();
     }
@@ -651,7 +672,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        browser.onResume();
+        if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
         if (gallery) galleryPanel.refreshOnResume();
