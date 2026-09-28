@@ -37,6 +37,11 @@ import {
 import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
+import { useSyncExternalStore } from "react";
+import { isAndroidClient } from "@/lib/browser/client-environment";
+import { LocalInstallButton } from "@/app/games/[id]/local-install-button";
+
+const subscribeEnvironment = () => () => {};
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -128,6 +133,15 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function WebPlayPage() {
   const { record, currentUser, work, community, comments, current, metadata } =
     useLoaderData<typeof loader>();
+  const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
+  if (native) return <DetailPageShell>
+    <WorkPageHeader chineseTitle={work.chineseTitle} originalTitle={work.originalTitle}
+      coverBlobSha256={work.coverBlobSha256} engineFamily={work.engineFamily} language={work.language}
+      tabs={[{ href: `/games/${work.id}`, label: "概览" }]} />
+    <div className="mx-auto max-w-md py-8">
+      <LocalInstallButton id={record.id} bytes={metadata.installTotalSizeBytes} />
+    </div>
+  </DetailPageShell>;
   return (
     <DetailPageShell
       key={`${metadata.playKey}:${currentUser?.id ?? "anonymous"}`}

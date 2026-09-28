@@ -42,7 +42,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Native library UI backed by the existing same-origin IndexedDB and OPFS WebView session. */
+/** Native library UI backed by the persistent native installation queue. */
 final class NativeLibrary extends LinearLayout {
     interface Actions {
         void refresh();
@@ -276,7 +276,7 @@ final class NativeLibrary extends LinearLayout {
         sorting.setTooltipText("排序：" + SORT_NAMES[sortOrder]);
         sorting.setContentDescription("排序：" + SORT_NAMES[sortOrder]);
         int ready = 0; for (Entry item : entries) if (item.ready) ready++;
-        summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  本站已用 " + bytes(usage))
+        summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  游戏文件 " + bytes(usage))
             + (searchQuery.isEmpty() ? "" : "\n搜索：" + searchQuery));
         searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? INK : TEAL));
         manageButton.setIconTint(ColorStateList.valueOf(managing ? TEAL : INK));
@@ -287,7 +287,7 @@ final class NativeLibrary extends LinearLayout {
         List<Entry> shown = visible();
         updateSelection();
         message.setText(error != null ? error : loading ? "读取本地游戏…"
-            : entries.isEmpty() ? "还没有本地游戏\n联网后在在线游玩页安装，游戏会自动出现在这里。"
+            : entries.isEmpty() ? "还没有本地游戏\n联网后在作品概览中安装，游戏会自动出现在这里。"
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
         openRow = null;
@@ -336,7 +336,7 @@ final class NativeLibrary extends LinearLayout {
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
         TextView title = label(entry.title, 14, INK, true); title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END); details.addView(title);
-        String detailsText = entry.ready ? bytes(entry.bytes) : "未完成安装";
+        String detailsText = entry.ready ? bytes(entry.bytes) : entry.progress;
         if (!entry.lastPlayed.isEmpty()) detailsText += "  ·  " + date(entry.lastPlayed);
         TextView subtitle = label(detailsText, 12, MUTED, false);
         subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
@@ -345,13 +345,15 @@ final class NativeLibrary extends LinearLayout {
             View play;
             if (entry.ready) play = icon(GalleryIcons.PLAY, TEAL, () -> { if (entry.workId != 0) actions.play(entry.key); });
             else {
-                MaterialButton retry = NativeControls.button(getContext(), "安装", () -> actions.retry(entry.archiveVersionId));
+                MaterialButton retry = NativeControls.button(getContext(), entry.installing ? "取消" : "重试", () -> {
+                    if (entry.installing) confirmDelete(java.util.Collections.singletonList(entry.key)); else actions.retry(entry.archiveVersionId);
+                });
                 retry.setMinWidth(0); retry.setMinimumWidth(0);
                 retry.setPadding(0, 0, 0, 0);
                 retry.setGravity(Gravity.CENTER);
                 play = retry;
             }
-            play.setContentDescription((entry.ready ? "游玩 " : "重新安装 ") + entry.title);
+            play.setContentDescription((entry.ready ? "游玩 " : entry.installing ? "取消安装 " : "重新安装 ") + entry.title);
             line.addView(play, new LayoutParams(dp(48), dp(48)));
         }
         if (managing) {
@@ -455,12 +457,17 @@ final class NativeLibrary extends LinearLayout {
     }
 
     private static final class Entry {
-        final String key, title, lastPlayed, recent;
+        final String key, title, lastPlayed, recent, progress;
         final long workId, archiveVersionId, bytes;
-        final boolean ready;
+        final boolean ready, installing;
         Entry(JSONObject row) {
             key = row.optString("playKey"); title = row.optString("title");
             workId = row.optLong("workId"); archiveVersionId = row.optLong("archiveVersionId");
+            String status = row.optString("status");
+            installing = "created".equals(status) || "installing".equals(status);
+            progress = "created".equals(status) ? "等待下载" : "installing".equals(status)
+                ? "下载中 " + bytes(row.optLong("downloadedBytes")) + " / " + bytes(row.optLong("downloadBytesTotal"))
+                : row.optString("error", "未完成安装");
             bytes = row.optLong("installedBytes"); ready = "ready".equals(row.optString("status"));
             String played = row.optString("lastPlayedAt", "");
             lastPlayed = "null".equals(played) ? "" : played;

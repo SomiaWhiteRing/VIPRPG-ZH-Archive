@@ -1,7 +1,7 @@
 import { buttonVariants } from "@/app/components/ui/button";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { LocalInstallButton } from "./local-install-button";
 import { formatBytes } from "@/lib/format";
-import { Download, ExternalLink, Play } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 import { KaiImportLink } from "./kai-import-link";
 
 type Props = {
@@ -32,14 +32,7 @@ export function WorkActionBar({
       {archive ? (
         <>
           <div className="grid gap-2.5">
-            <Rm2kButton
-              className="min-h-12.5 w-full text-base"
-              href={`/play/${archive.id}`}
-              reloadDocument
-              icon={<Play aria-hidden />}
-            >
-              在线游玩
-            </Rm2kButton>
+            <LocalInstallButton id={archive.id} bytes={archive.webPlaySizeBytes} />
             <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
               href={archive.downloadHref}

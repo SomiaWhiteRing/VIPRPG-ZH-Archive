@@ -45,7 +45,7 @@ export type WebPlayInstallation = {
   title: string;
   originalTitle?: string;
   engineFamily?: string;
-  /** Absent only on pre-existing OPFS installations, including older Android APKs. */
+  /** Absent only on pre-existing OPFS installations, in ordinary browsers. */
   storageKind?: WebPlayStorageKind;
   coverBlobSha256?: string | null;
   status: WebPlayInstallStatus;
@@ -67,7 +67,7 @@ export type WebPlayInstallation = {
   error: string | null;
 };
 
-export type WebPlayStorageKind = "browser-bucket" | "browser-opfs" | "android-opfs";
+export type WebPlayStorageKind = "browser-bucket" | "browser-opfs";
 
 export type WebPlayStorageSnapshot = {
   persistedStorage: boolean | null;

@@ -54,7 +54,7 @@ async function sweepExpiredGameResources(): Promise<void> {
         await navigator.locks.request(gameResourceLockName(row.playKey), { mode: "exclusive", ifAvailable: true }, async lock => {
           if (!lock) return;
           const current = await getWebPlayInstallation(row.playKey);
-          if (!current || current.storageKind === "android-opfs") return;
+          if (!current) return;
           const expires = gameResourceExpiresAt(current);
           // One-time reset of the old browser cache. Android never enters this sweep.
           const obsolete = !current.storageKind || (expires !== null && expires <= Date.now());

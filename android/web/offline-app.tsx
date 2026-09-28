@@ -1,14 +1,6 @@
+import { localRequest } from "@/lib/browser/android-local";
 import { Button } from "@/app/components/ui/button";
-import {
-  deleteWebPlayInstallation,
-  getWebPlayInstallation,
-  listWebPlayInstallations,
-  saveWebPlayInstallation,
-} from "@/app/play/[archiveVersionId]/web-play-db";
 import { useWebPlayControlsPreferences } from "@/app/play/[archiveVersionId]/web-play-controls-preferences";
-import { cacheWebPlayCover, deleteUnusedWebPlayCovers } from "@/app/play/[archiveVersionId]/web-play-cover";
-import { withGameResourceWriteLock } from "@/app/play/[archiveVersionId]/web-play-locks";
-import { resetGameOpfsDirectory } from "@/app/play/[archiveVersionId]/web-play-opfs";
 import { createPlayerSession } from "@/app/play/[archiveVersionId]/web-play-player";
 import type { PlayerSession } from "@/app/play/[archiveVersionId]/web-play-player";
 import { useWebPlayScreenshots } from "@/app/play/[archiveVersionId]/web-play-screenshots";
@@ -22,8 +14,6 @@ type AndroidBridge = {
   requestPlayerFocus?: () => void;
   setPlaying: (playing: boolean) => void;
   setOrientation: (orientation: string) => void;
-  setLibrarySnapshot?: (snapshot: string) => void;
-  setLibraryCover?: (playKey: string, image: string) => void;
   setLibraryError?: (error: string) => void;
 };
 
@@ -51,12 +41,8 @@ export function OfflineApp() {
   const [selected, setSelected] = useState<WebPlayInstallation | null>(null);
   const refresh = useCallback(async () => {
     try {
-      const rows = await listWebPlayInstallations();
+      const { items: rows } = await localRequest<{ items: WebPlayInstallation[] }>("list");
       setInstallations(rows);
-      const used = (await navigator.storage.estimate())?.usage ?? null;
-      window.VIPRPGAndroid?.setLibrarySnapshot?.(JSON.stringify({ items: rows, usage: used }));
-      void publishNativeCovers(rows);
-      if (navigator.onLine) void hydrateMissingCovers(rows, setInstallations);
     } catch (reason) {
       window.VIPRPGAndroid?.setLibraryError?.(message(reason));
     }
@@ -70,30 +56,6 @@ export function OfflineApp() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refresh]);
 
-  const remove = async (playKeys: string[]) => {
-    const removed: WebPlayInstallation[] = [];
-    try {
-      for (const playKey of playKeys) {
-        const installation = installations.find((item) => item.playKey === playKey);
-        if (!installation) continue;
-        await withGameResourceWriteLock(playKey, async () => {
-          await resetGameOpfsDirectory(installation);
-          await deleteWebPlayInstallation(playKey);
-        });
-        removed.push(installation);
-      }
-      await refresh();
-    } catch (reason) {
-      await refresh();
-      window.VIPRPGAndroid?.setLibraryError?.(message(reason));
-    } finally {
-      if (removed.length) {
-        const retained = installations.filter((item) => !removed.some((row) => row.playKey === item.playKey));
-        void deleteUnusedWebPlayCovers(removed.map((item) => item.coverBlobSha256), retained.map((item) => item.coverBlobSha256)).catch(() => {});
-      }
-    }
-  };
-
   useEffect(() => {
     const onRefresh = () => { void refresh(); };
     const onPlay = (event: Event) => {
@@ -101,76 +63,16 @@ export function OfflineApp() {
       const item = installations.find((row) => row.playKey === key);
       if (item?.status === "ready" && item.workId) setSelected(item);
     };
-    const onDelete = (event: Event) => { void remove((event as CustomEvent<string[]>).detail); };
     window.addEventListener("viprpg:library-refresh", onRefresh);
     window.addEventListener("viprpg:library-play", onPlay);
-    window.addEventListener("viprpg:library-delete", onDelete);
     return () => {
       window.removeEventListener("viprpg:library-refresh", onRefresh);
       window.removeEventListener("viprpg:library-play", onPlay);
-      window.removeEventListener("viprpg:library-delete", onDelete);
     };
   });
 
   // The APK's native library owns all browsing and selection UI.
   return selected ? <OfflineGame installation={selected} onClose={closeGame} /> : null;
-}
-
-async function publishNativeCovers(installations: WebPlayInstallation[]) {
-  if (!window.VIPRPGAndroid?.setLibraryCover) return;
-  for (const installation of installations) {
-    if (!installation.coverBlobSha256) continue;
-    try {
-      const blob = await cacheWebPlayCover(installation.coverBlobSha256);
-      const image = await createImageBitmap(blob);
-      const canvas = document.createElement("canvas");
-      // Keep the original aspect ratio before handing the thumbnail to Android.
-      const scale = Math.min(192 / image.width, 240 / image.height, 1);
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const context = canvas.getContext("2d");
-      if (!context) { image.close(); continue; }
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      image.close();
-      window.VIPRPGAndroid?.setLibraryCover?.(installation.playKey, canvas.toDataURL("image/jpeg", 0.8));
-    } catch {
-      // A missing cover must not prevent the native library from opening offline.
-    }
-  }
-}
-
-async function hydrateMissingCovers(
-  installations: WebPlayInstallation[],
-  update: React.Dispatch<React.SetStateAction<WebPlayInstallation[]>>,
-) {
-  for (const installation of installations) {
-    if (installation.coverBlobSha256 || installation.status !== "ready") continue;
-    try {
-      const response = await fetch(`/api/archive-versions/${installation.archiveVersionId}/web-play`, {
-        credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8000),
-      });
-      if (!response.ok) continue;
-      const metadata = await response.json() as { playKey?: string; coverBlobSha256?: string | null };
-      const cover = metadata.coverBlobSha256;
-      if (metadata.playKey !== installation.playKey || !cover || !/^[a-f0-9]{64}$/i.test(cover)) continue;
-      await cacheWebPlayCover(cover);
-      await withGameResourceWriteLock(installation.playKey, async () => {
-        const current = await getWebPlayInstallation(installation.playKey);
-        if (!current || current.status !== "ready" || current.coverBlobSha256) return;
-        const next = { ...current, coverBlobSha256: cover };
-        await saveWebPlayInstallation(next);
-        update((rows) => rows.map((row) => row.playKey === next.playKey ? next : row));
-        if (window.VIPRPGAndroid?.setLibrarySnapshot) {
-          const rows = await listWebPlayInstallations();
-          const usage = (await navigator.storage.estimate()).usage ?? null;
-          window.VIPRPGAndroid.setLibrarySnapshot(JSON.stringify({ items: rows, usage }));
-          void publishNativeCovers(rows);
-        }
-      });
-    } catch {
-      // The local library remains usable even when the site is offline.
-    }
-  }
 }
 
 function OfflineGame({ installation, onClose }: { installation: WebPlayInstallation; onClose: () => void }) {

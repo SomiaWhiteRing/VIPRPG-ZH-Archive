@@ -1,4 +1,3 @@
-import { isAndroidClient } from "@/lib/browser/client-environment";
 import type { WebPlayInstallation, WebPlayStorageKind } from "./web-play-types";
 
 export const GAME_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,12 +23,11 @@ export function supportsGameBuckets(): boolean {
 
 /** Called in the page; Workers must receive this choice in their install message. */
 export function chooseGameStorage(): WebPlayStorageKind {
-  if (isAndroidClient()) return "android-opfs";
   return supportsGameBuckets() ? "browser-bucket" : "browser-opfs";
 }
 
 export function gameResourceExpiresAt(installation: WebPlayInstallation): number | null {
-  if (installation.storageKind === "android-opfs" || !installation.storageKind) return null;
+  if (!installation.storageKind) return null;
   const base = installation.status === "ready"
     ? installation.lastPlayedAt ?? installation.readyAt ?? installation.createdAt
     : installation.updatedAt;

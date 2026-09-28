@@ -1,10 +1,8 @@
 package org.viprpg.archive;
 
-import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
-import android.provider.DocumentsContract;
 import android.webkit.WebView;
 
 import androidx.webkit.JavaScriptReplyProxy;
@@ -25,12 +23,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** The website may prepare a directory and save PNGs. Listing/deletion stay native. */
 final class ScreenshotController {
-    private static final int DIRECTORY_REQUEST = 1002;
     private final MainActivity activity;
     final ScreenshotStore store;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final AtomicBoolean cancelled = new AtomicBoolean();
-    private Callback<Boolean> directoryCallback;
     private boolean busy;
     private boolean closed;
 
@@ -105,42 +101,8 @@ final class ScreenshotController {
     }
 
     void ensureDirectory(boolean change, Callback<Boolean> callback) {
-        if (busy) { callback.done(false, "截图文件正在处理中，请稍后重试。"); return; }
-        busy = true;
-        execute(store::status, (directory, error) -> {
-            if (error != null) { busy = false; callback.done(false, error); return; }
-            if (!change && directory.ready) { busy = false; callback.done(true, null); return; }
-            directoryCallback = callback;
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
-            Uri initial = store.initialDirectory();
-            if (initial != null) intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initial);
-            try { activity.startActivityForResult(intent, DIRECTORY_REQUEST); }
-            catch (Exception unavailable) { finishDirectory(false, "无法打开系统目录选择器。"); }
-        });
-    }
-
-    boolean onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode != DIRECTORY_REQUEST) return false;
-        // The activity may have been recreated while the system picker was open.
-        if (directoryCallback == null) {
-            busy = true;
-            directoryCallback = (ready, error) -> activity.onScreenshotDirectoryResult(error);
-        }
-        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
-            finishDirectory(false, null);
-        } else {
-            execute(() -> { store.selectDirectory(data.getData(), data.getFlags()); return true; }, this::finishDirectory);
-        }
-        return true;
-    }
-
-    private void finishDirectory(Boolean success, String error) {
-        Callback<Boolean> callback = directoryCallback;
-        directoryCallback = null;
-        busy = false;
-        if (callback != null) callback.done(Boolean.TRUE.equals(success), error);
+        execute(store::status, (directory, error) -> callback.done(directory != null && directory.ready,
+            error != null ? error : directory != null && directory.ready ? null : "请在应用的本地目录设置中恢复授权。"));
     }
 
     void batch(List<ScreenshotStore.Entry> items, boolean delete, Progress progress, Callback<BatchResult> callback) {
@@ -191,7 +153,6 @@ final class ScreenshotController {
 
     void close() {
         closed = true;
-        directoryCallback = null;
         cancelled.set(true);
         io.shutdownNow();
     }
