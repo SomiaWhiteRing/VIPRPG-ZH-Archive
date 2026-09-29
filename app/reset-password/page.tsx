@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
     >
       {params.sent ? (
         <Notice tone="success" className="mb-4 rounded-md border p-3">
-          若 {params.email ?? ""} 对应可用账号且未超过发送限额，你将收到验证码。未收到时请检查垃圾邮件或稍后重试。
+          验证码已发送。未收到时请检查垃圾邮件或稍后重试。
         </Notice>
       ) : null}
       <RedirectFeedback />
