@@ -40,7 +40,7 @@
   --color-secondary: #1f6f67;
   --color-secondary-foreground: #ffffff;
   --color-accent-foreground: #ffffff;
-  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
   --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
   --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
 
