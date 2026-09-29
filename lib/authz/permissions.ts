@@ -16,6 +16,7 @@ export const PERMISSION_CATEGORIES = {
   creator: { group: "reference", label: "作者资料" },
   character: { group: "reference", label: "游戏角色" },
   tag: { group: "reference", label: "标签整理" },
+  genre: { group: "reference", label: "类型整理" },
   catalog: { group: "community", label: "作品目录" },
   comment: { group: "community", label: "评论审核" },
   forum: { group: "community", label: "讨论区" },
@@ -33,6 +34,12 @@ export const PERMISSION_CATEGORIES = {
 export type PermissionCategory = keyof typeof PERMISSION_CATEGORIES;
 
 export const PERMISSIONS = {
+  "genre.manage": {
+    category: "genre",
+    label: "合并作品类型",
+    scope: "全部作品类型的筛选归属",
+    description: "查看并合并类型组，保留作品原文和各类型名称。",
+  },
   "work.lookup_non_deleted": {
     category: "work",
     label: "查找公开作品",
@@ -669,6 +676,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
     ...CHARACTER_ADMIN_PERMISSIONS,
+    "genre.manage",
     "tag.read_private",
     "tag.metadata.update_any",
     "relation.create_any", "relation.update_any", "relation.delete_any",
@@ -711,6 +719,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
     ...CHARACTER_ADMIN_PERMISSIONS,
+    "genre.manage",
     "tag.read_private",
     "tag.metadata.update_any",
     "relation.create_any", "relation.update_any", "relation.delete_any",

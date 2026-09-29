@@ -60,44 +60,42 @@ export function WorkSidebarInfo({
         {work.aliases.length ? (
           <InfoRow label="别名">{work.aliases.join(" · ")}</InfoRow>
         ) : null}
-        {work.genre ? <InfoRow label="类型">{work.genre}</InfoRow> : null}
+        {work.genre ? <InfoRow label="类型"><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
         <InfoRow label="引擎">{engineLabel(work.engineFamily)}</InfoRow>
         <InfoRow label="语言">{languageLabel(work.language)}</InfoRow>
-        <InfoRow label="发布日期" mono>
-          {formatDateish(
-            work.originalReleaseDate,
-            work.originalReleasePrecision,
-          )}
-        </InfoRow>
+        {work.originalReleaseDate && work.originalReleasePrecision !== "unknown" ? (
+          <InfoRow label="发布日期" mono>
+            {work.originalReleaseDate}
+          </InfoRow>
+        ) : null}
       </dl>
 
-      {work.creators.length || work.moreInfo.length ? (
-        <>
-          <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
-            制作名单
-          </p>
-          <dl className="m-0">
-            {work.creators.map((creator) => (
-              <InfoRow
-                key={`${creator.id}-${creator.roleKey}`}
-                label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
-              >
-                <Link
-                  className="font-medium text-secondary hover:underline"
-                  to={`/creators/${creator.id}`}
-                >
-                  {creator.displayName}
-                </Link>
-              </InfoRow>
-            ))}
-            {work.moreInfo.map((item, index) => (
-              <InfoRow key={`more-info-${index}`} label={item.title}>
-                <span className="whitespace-pre-wrap">{item.body}</span>
-              </InfoRow>
-            ))}
-          </dl>
-        </>
-      ) : null}
+      <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
+        制作名单
+      </p>
+      <dl className="m-0">
+        {!work.creators.some((creator) => creator.roleKey === "author") ? (
+          <InfoRow label="作者">匿名</InfoRow>
+        ) : null}
+        {work.creators.map((creator) => (
+          <InfoRow
+            key={`${creator.id}-${creator.roleKey}`}
+            label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
+          >
+            <Link
+              className="font-medium text-secondary hover:underline"
+              to={`/creators/${creator.id}`}
+            >
+              {creator.displayName}
+            </Link>
+          </InfoRow>
+        ))}
+        {work.moreInfo.map((item, index) => (
+          <InfoRow key={`more-info-${index}`} label={item.title}>
+            <span className="whitespace-pre-wrap">{item.body}</span>
+          </InfoRow>
+        ))}
+      </dl>
 
       {current ? (
         <div className="mt-[0.65rem]">
@@ -157,8 +155,4 @@ export function WorkSidebarInfo({
       ) : null}
     </div>
   );
-}
-
-function formatDateish(value: string | null, precision: string): string {
-  return !value || precision === "unknown" ? "日期未知" : value;
 }

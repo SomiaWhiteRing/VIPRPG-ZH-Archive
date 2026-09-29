@@ -79,6 +79,7 @@ import { normalizeWorkMoreInfo } from "@/lib/work-more-info";
 import { normalizeReleasePeriod } from "@/lib/release-period";
 
 type Filters = {
+  genre?: string;
   release?: string;
   query?: string;
   status?: string;
@@ -298,7 +299,7 @@ export async function searchUploadedWorks(
     pageSize?: number;
   },
 ): Promise<{
-  items: GameWorkSummary[];
+  items: (GameWorkSummary & { publishedAt: string | null; updatedAt: string })[];
   total: number;
   page: number;
   pageSize: number;
@@ -317,7 +318,7 @@ export async function searchUploadedWorks(
       .bind(input.userId),
     database
       .prepare(
-        `SELECT ${summarySql()}
+        `SELECT ${summarySql()},w.published_at,w.updated_at
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
        LEFT JOIN archive_versions av
@@ -329,8 +330,17 @@ export async function searchUploadedWorks(
       )
       .bind(input.userId, pageSize, (page - 1) * pageSize),
   ]);
+  const rows = (rowsResult.results ?? []) as (SummaryRow & {
+    published_at: string | null;
+    updated_at: string;
+  })[];
+  const works = await hydrate(runtime, rows);
   return {
-    items: await hydrate(runtime, (rowsResult.results ?? []) as SummaryRow[]),
+    items: works.map((work, index) => ({
+      ...work,
+      publishedAt: rows[index].published_at,
+      updatedAt: rows[index].updated_at,
+    })),
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
     ),
@@ -1409,7 +1419,9 @@ function buildWhere(input: Filters): {
         ? input.includeDeleted
           ? "1=1"
           : "w.status <> 'deleted'"
-        : `w.id IN (SELECT id FROM public_works)`,
+        : input.genre
+          ? "EXISTS(SELECT 1 FROM public_works pw WHERE pw.id=w.id)"
+          : `w.id IN (SELECT id FROM public_works)`,
     ],
     binds: Array<string | number> = [];
   if (input.query) {
@@ -1440,6 +1452,10 @@ function buildWhere(input: Filters): {
   if (input.language) {
     clauses.push("w.language=?");
     binds.push(input.language);
+  }
+  if (input.genre) {
+    clauses.push("w.genre_group_id = (SELECT group_id FROM work_genres WHERE name=?)");
+    binds.push(input.genre);
   }
   if (input.tag) {
     const publicTag = "EXISTS(SELECT 1 FROM work_tags wt WHERE wt.work_id=w.id AND wt.tag_name=?)";

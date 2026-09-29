@@ -74,7 +74,7 @@ export async function getPublicCharacterDetail(
        WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS coverBlobSha256
       FROM work_characters wc JOIN works w ON w.id=wc.work_id
       WHERE wc.character_id=? AND w.id IN (SELECT id FROM public_works)
-      ORDER BY COALESCE(w.original_release_date,w.published_at,w.created_at) DESC,w.original_title,w.id,wc.sort_order,wc.id`,
+      ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title,w.id,wc.sort_order,wc.id`,
         )
         .bind(id),
       db
