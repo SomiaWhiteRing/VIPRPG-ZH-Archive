@@ -10,6 +10,6 @@ export function interactiveContent(content:PublicForumContent,topic:ForumTopic,v
   const root=content.kind==="post"&&content.postNumber===1;
   return {...content,liked:liked.includes(content.id),capabilities:{...emptyCapabilities,
     edit:root?topic.capabilities.edit:own&&!topic.locked,delete:root?topic.capabilities.delete:own,
-    reply:available&&!!viewer&&!topic.locked,like:available&&!!viewer&&content.kind==="post",
+    reply:content.postNumber>1&&available&&!!viewer&&!topic.locked,like:available&&!!viewer&&content.kind==="post",
     report:available&&!!viewer,moderate:!!viewer?.moderate&&content.state!=="deleted"}};
 }

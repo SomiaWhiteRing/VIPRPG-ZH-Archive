@@ -495,6 +495,15 @@ function addNewCharacterPortraitStatements(
          ) SELECT id,?,?,?,? FROM characters WHERE original_name_key=?`,
       )
       .bind(sheet.id, portrait.row, portrait.column, actorUserId, originalKey),
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO character_default_portraits(character_id,portrait_ref_id)
+         SELECT c.id,pr.id FROM characters c
+         JOIN character_portrait_refs pr ON pr.character_id=c.id
+         WHERE c.original_name_key=? AND pr.face_sheet_id=?
+           AND pr.cell_row=? AND pr.cell_column=?`,
+      )
+      .bind(originalKey, sheet.id, portrait.row, portrait.column),
   );
 }
 

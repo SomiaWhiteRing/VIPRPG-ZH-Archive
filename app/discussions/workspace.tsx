@@ -1338,7 +1338,7 @@ function ForumFloorView({
                 回复
               </Button>
             ) : null}
-            {!viewer && post.body !== null && !topic.locked ? (
+            {!viewer && post.postNumber > 1 && post.body !== null && !topic.locked ? (
               <Link
                 className="p-2 text-sm text-primary"
                 to={`/login?next=${encodeURIComponent(
@@ -1357,7 +1357,7 @@ function ForumFloorView({
             <ForumMenu items={menu(post)} />
           </div>
         </div>
-        {post.commentsAvailable && (post.comments.total > 0 || editor) ? (
+        {post.postNumber > 1 && post.commentsAvailable && (post.comments.total > 0 || editor) ? (
           <section
             id={`floor-comments-${post.id}`}
             aria-label={`#${post.postNumber}的回复`}
