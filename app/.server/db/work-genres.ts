@@ -6,9 +6,10 @@ export type WorkGenre = { id: number; name: string; group_id: number; public_cou
 
 export async function suggestWorkGenres(runtime: AppRuntime, query: string) {
   const prefix = query.replace(/[\\%_]/g, (value) => `\\${value}`) + "%";
+  const order = query ? "name COLLATE NOCASE" : "public_count DESC, name COLLATE NOCASE, name";
   const result = await getD1(runtime).prepare(
     `SELECT name FROM work_genres WHERE public_count > 0
-     AND name LIKE ? ESCAPE '\\' ORDER BY name COLLATE NOCASE LIMIT 12`,
+     AND name LIKE ? ESCAPE '\\' ORDER BY ${order} LIMIT 12`,
   ).bind(prefix).all<{ name: string }>();
   return result.results.map((row) => row.name);
 }
