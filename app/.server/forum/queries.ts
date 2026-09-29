@@ -320,6 +320,7 @@ export function mapContent(
     edit: own && !topic.locked,
     delete: own,
     reply:
+      row.post_number > 1 &&
       readable &&
       !topic.locked &&
       row.parent_status === "published" &&

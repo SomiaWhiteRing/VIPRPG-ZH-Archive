@@ -401,6 +401,8 @@ export async function publishForum(
       : { kind: "post", id: id(input.postId) },
   );
   currentPublic(parent);
+  if (kind === "comment" && parent.post_number === 1)
+    throw new HttpError(400, "主楼不支持楼中楼回复，请回复主题。");
   const topic = await rawTopic(ctx, parent.topic_id);
   if (topic.locked) throw new HttpError(409, "主题已锁定，不能继续回复。");
   const targetId = input.replyToId == null ? null : id(input.replyToId);
@@ -415,7 +417,7 @@ export async function publishForum(
   const tokenGate = topicGate(topic.id, token);
   const predicate: Predicate = {
     sql: `${publicTopicSql} AND t.locked=0 AND ${rateSql} AND ${attachments.sql} AND NOT EXISTS(SELECT 1 FROM ${table} WHERE user_id=? AND request_key=?)
-    ${kind === "comment" ? "AND EXISTS(SELECT 1 FROM forum_public_posts WHERE id=?)" : ""}
+    ${kind === "comment" ? "AND EXISTS(SELECT 1 FROM forum_public_posts WHERE id=? AND post_number>1)" : ""}
     ${kind === "comment" && targetId ? "AND EXISTS(SELECT 1 FROM forum_public_comments WHERE id=? AND post_id=?)" : ""}`,
     args: [
       actor.id,
