@@ -1,6 +1,6 @@
-import { Input } from "@/app/components/ui/input";
+import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { WORK_GENRE_MAX_LENGTH } from "@/lib/work-genre";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function WorkGenreInput({ id, value, disabled, onChange }: {
   id: string;
@@ -8,31 +8,41 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
-  const listId = useId();
-  const [focused, setFocused] = useState(false);
-  const [suggestions, setSuggestions] = useState<{ query: string; names: string[] }>({ query: "", names: [] });
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ query: string | null; names: string[] }>({ query: null, names: [] });
   useEffect(() => {
-    if (!focused || disabled) return;
+    if (!open || disabled) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch(`/api/genres?${new URLSearchParams({ q: value })}`, { signal: controller.signal });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("Genre suggestions unavailable");
         const result = await response.json() as { names: string[] };
         if (!controller.signal.aborted) setSuggestions({ query: value, names: result.names });
       } catch {
         // Suggestions are optional; a failed request never blocks free text.
+        if (!controller.signal.aborted) setSuggestions({ query: value, names: [] });
       }
-    }, 250);
+    }, value.trim() ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [value, focused, disabled]);
-  return <>
-    <Input id={id} value={value} disabled={disabled} list={listId}
+  }, [value, open, disabled]);
+  const loading = suggestions.query !== value;
+  return (
+    <SearchComboBox
+      id={id}
+      label="类型"
+      query={value}
+      disabled={disabled}
       maxLength={WORK_GENRE_MAX_LENGTH}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      onChange={(event) => onChange(event.target.value)} />
-    <datalist id={listId}>
-      {(suggestions.query === value ? suggestions.names : []).map((name) => <option key={name} value={name} />)}
-    </datalist>
-  </>;
+      onQueryChange={onChange}
+      onOpenChange={setOpen}
+      items={loading ? [] : suggestions.names}
+      getKey={(name) => name}
+      getText={(name) => name}
+      renderItem={(name) => <span>{name}</span>}
+      onChoose={onChange}
+      loading={loading}
+      emptyState={<span className="px-2.5 py-1.5 text-sm text-muted">{loading ? "加载中…" : "暂无候补"}</span>}
+    />
+  );
 }

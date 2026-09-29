@@ -75,7 +75,7 @@ export function WorkSidebarInfo({
       </p>
       <dl className="m-0">
         {!work.creators.some((creator) => creator.roleKey === "author") ? (
-          <InfoRow label="作者">匿名</InfoRow>
+          <InfoRow label="作者">VIPPER</InfoRow>
         ) : null}
         {work.creators.map((creator) => (
           <InfoRow
