@@ -3,6 +3,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
 
 export type WorkGenre = { id: number; name: string; group_id: number; public_count: number };
+export type WorkGenreGroup = { id: number; members: WorkGenre[]; publicCount: number };
 
 export async function suggestWorkGenres(runtime: AppRuntime, query: string) {
   const prefix = query.replace(/[\\%_]/g, (value) => `\\${value}`) + "%";
@@ -14,15 +15,34 @@ export async function suggestWorkGenres(runtime: AppRuntime, query: string) {
   return result.results.map((row) => row.name);
 }
 
-export async function listWorkGenres(runtime: AppRuntime, query: string, page: number) {
+export async function listWorkGenreGroups(runtime: AppRuntime, query: string, page: number) {
   const database = getD1(runtime);
   const pattern = query.replace(/[\\%_]/g, (value) => `\\${value}`) + "%";
   const [count, rows] = await database.batch([
-    database.prepare("SELECT COUNT(*) AS count FROM work_genres WHERE name LIKE ? ESCAPE '\\'").bind(pattern),
-    database.prepare(`SELECT id,name,group_id,public_count FROM work_genres
-      WHERE name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 50 OFFSET ?`).bind(pattern, (page - 1) * 50),
+    database.prepare("SELECT COUNT(DISTINCT group_id) AS count FROM work_genres WHERE name LIKE ? ESCAPE '\\'").bind(pattern),
+    database.prepare(`WITH selected_groups AS (
+      SELECT group_id, SUM(public_count) AS public_count, MIN(name) AS sort_name
+      FROM work_genres WHERE group_id IN (
+        SELECT group_id FROM work_genres WHERE name LIKE ? ESCAPE '\\'
+      )
+      GROUP BY group_id ORDER BY public_count DESC, sort_name, group_id LIMIT 50 OFFSET ?
+    )
+    SELECT g.id,g.name,g.group_id,g.public_count FROM selected_groups s
+    JOIN work_genres g ON g.group_id=s.group_id
+    ORDER BY s.public_count DESC,s.sort_name,s.group_id,g.public_count DESC,g.name,g.id`)
+      .bind(pattern, (page - 1) * 50),
   ]);
-  return { total: Number((count.results[0] as { count: number } | undefined)?.count ?? 0), items: rows.results as WorkGenre[] };
+  const groups = new Map<number, WorkGenreGroup>();
+  for (const member of rows.results as WorkGenre[]) {
+    let group = groups.get(member.group_id);
+    if (!group) {
+      group = { id: member.group_id, members: [], publicCount: 0 };
+      groups.set(member.group_id, group);
+    }
+    group.members.push(member);
+    group.publicCount += member.public_count;
+  }
+  return { total: Number((count.results[0] as { count: number } | undefined)?.count ?? 0), items: [...groups.values()] };
 }
 
 export async function getWorkGenreGroup(runtime: AppRuntime, name: string) {

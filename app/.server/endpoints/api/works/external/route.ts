@@ -86,6 +86,7 @@ function parseMetadata(form: FormData): {
   engineFamily: string;
   isOriginal: boolean;
   isTranslation: boolean;
+  usesUnsupportedManiac: boolean;
   language: string;
   aliases: string[];
   tags: string[];
@@ -110,6 +111,7 @@ function parseMetadata(form: FormData): {
     ),
     isOriginal: form.has("is_original"),
     isTranslation: form.has("is_translation"),
+    usesUnsupportedManiac: form.has("uses_unsupported_maniac"),
     language: readRequiredString(form.get("language"), "language"),
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),

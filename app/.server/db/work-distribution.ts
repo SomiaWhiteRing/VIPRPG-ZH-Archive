@@ -1,6 +1,6 @@
 import type { WorkDistribution } from "@/lib/dto/db/work-distribution";
 import { HttpError } from "@/lib/http";
-import { isArchiveEngineFamily, isExternalEngineFamily } from "@/lib/labels";
+import { isArchiveEngineFamily, isEngineFamily } from "@/lib/labels";
 
 export function deriveWorkDistribution(input: {
   hasCurrentArchive: boolean;
@@ -34,9 +34,9 @@ export function assertStableDistribution(input: {
 
   if (
     distribution === "external" &&
-    !isExternalEngineFamily(input.engineFamily)
+    !isEngineFamily(input.engineFamily)
   ) {
-    throw new HttpError(400, "RPG Maker 2000/2003 系游戏必须使用本站归档");
+    throw new HttpError(400, "引擎不合法");
   }
 
   if (

@@ -41,10 +41,12 @@ export function ArchiveSourcePicker({
   useSharedPlayer,
   onUseSharedPlayerChange,
   disabled,
+  externalDisabled = false,
   existingSource = null,
   mode,
   onCancel,
   onDrop,
+  onExternal,
   onFolder,
   onRemoveExisting,
   onRestart,
@@ -60,10 +62,12 @@ export function ArchiveSourcePicker({
   onUseSharedPlayerChange: (value: boolean) => void;
   onCleanupResourcesChange: (value: boolean) => void;
   disabled: boolean;
+  externalDisabled?: boolean;
   existingSource?: ArchiveSourceSummary | null;
   mode: UploadSourceKind;
   onCancel: () => void;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onExternal?: () => void;
   onFolder: (files: UploadSourceFile[], sourceName: string) => void;
   onRemoveExisting?: () => void;
   onRestart: () => void;
@@ -75,6 +79,7 @@ export function ArchiveSourcePicker({
   const instructionsId = useId();
   const [fileDragActive, setFileDragActive] = useState(false);
   const archiveInputRef = useRef<HTMLInputElement>(null);
+  const allActionsDisabled = disabled && (!onExternal || externalDisabled);
 
   function openArchivePicker() {
     if (!disabled) archiveInputRef.current?.click();
@@ -117,7 +122,7 @@ export function ArchiveSourcePicker({
       ) : (
         <div
           aria-describedby={instructionsId}
-          aria-disabled={disabled || undefined}
+          aria-disabled={allActionsDisabled || undefined}
           aria-label={
             fileDragActive
               ? "松开以上传游戏文件"
@@ -126,7 +131,7 @@ export function ArchiveSourcePicker({
           className={cn(
             "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             disabled
-              ? "cursor-not-allowed opacity-60"
+              ? allActionsDisabled ? "cursor-not-allowed opacity-60" : "cursor-default"
               : "cursor-pointer hover:border-primary hover:bg-primary/5",
             fileDragActive &&
               !disabled &&
@@ -208,6 +213,17 @@ export function ArchiveSourcePicker({
                   );
                 }}
               />
+              {onExternal ? (
+                <Button
+                  disabled={externalDisabled}
+                  onClick={onExternal}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  填写外链
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
