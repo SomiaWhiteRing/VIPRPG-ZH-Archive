@@ -346,7 +346,11 @@ export function UploadClient({
     generation: number,
   ) {
     if (generation !== sourceInspectionGenerationRef.current) return;
-    if (prefill.hasUltimateRuntime) {
+    if (prefill.hasManiacPatch) {
+      setForm((current) => current.engineFamily === "rpg_maker_2000" || current.engineFamily === "rpg_maker_2003"
+        ? { ...current, engineFamily: "rpg_maker_2003_maniac" }
+        : current);
+    } else if (prefill.hasUltimateRuntime) {
       setForm((current) => current.engineFamily === "rpg_maker_2000"
         ? { ...current, engineFamily: "rpg_maker_2003" }
         : current);
