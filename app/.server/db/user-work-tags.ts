@@ -32,9 +32,10 @@ export async function listCombinedTags(
 
 export async function listUserTags(
   runtime: AppRuntime,
-  input: { userId: number; query?: string; name?: string; limit?: number },
+  input: { userId: number; query?: string; name?: string; limit?: number; includeUnavailable?: boolean },
 ): Promise<UserTagSummary[]> {
-  const where = ["t.user_id=?", "EXISTS(SELECT 1 FROM public_works WHERE id=t.work_id)"];
+  const where = ["t.user_id=?"];
+  if (!input.includeUnavailable) where.push("EXISTS(SELECT 1 FROM public_works WHERE id=t.work_id)");
   const binds: Array<string | number> = [input.userId];
   if (input.query?.trim()) {
     where.push("t.name LIKE ?");
@@ -95,7 +96,7 @@ export async function getWorkFavorite(runtime: AppRuntime, workId: number, userI
     database.prepare("SELECT tag_name AS name FROM work_tags WHERE work_id=? ORDER BY sort_order,tag_name")
       .bind(workId).all<{ name: string }>(),
     listWorkUserTags(runtime, workId),
-    listUserTags(runtime, { userId, limit: 60 }),
+    listUserTags(runtime, { userId, limit: 60, includeUnavailable: true }),
   ]);
   const workTags = new Map<string, string>();
   for (const name of [...publicTags.results.map((tag) => tag.name), ...userTags]) {

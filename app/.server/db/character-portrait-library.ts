@@ -46,11 +46,10 @@ export const DEFAULT_CHARACTER_PORTRAIT_JOINS = `
   LEFT JOIN face_sheets portrait_sheet ON portrait_sheet.id=portrait_ref.face_sheet_id`;
 
 export const PUBLIC_CHARACTER_PORTRAIT_CONDITION = `
-  EXISTS (SELECT 1 FROM blobs b WHERE b.sha256=portrait_sheet.blob_sha256 AND b.status='active' AND b.content_type_hint LIKE 'image/%')
-  AND (portrait_sheet.library_status='approved' OR EXISTS (
-    SELECT 1 FROM character_portrait_refs ref JOIN work_characters wc ON wc.portrait_ref_id=ref.id
-    JOIN works w ON w.id=wc.work_id WHERE ref.face_sheet_id=portrait_sheet.id AND w.id IN (SELECT id FROM public_works)
-  ))`;
+  portrait_sheet.library_status<>'rejected' AND EXISTS (
+    SELECT 1 FROM blobs b WHERE b.sha256=portrait_sheet.blob_sha256
+      AND b.status='active' AND b.public_at IS NOT NULL AND b.content_type_hint LIKE 'image/%'
+  )`;
 
 export const WORK_CHARACTER_PORTRAIT_JOINS = `
   LEFT JOIN character_default_portraits cdp ON cdp.character_id=c.id

@@ -7,6 +7,8 @@ type DownloadRow = {
   manifest_sha256: string;
   packer_version: string;
   total_files: number;
+  web_play_file_count: number;
+  web_play_size_bytes: number;
   total_size_bytes: number;
   estimated_r2_get_count: number;
   work_original_title: string;
@@ -14,16 +16,14 @@ type DownloadRow = {
   work_cover_blob_sha256: string | null;
   engine_family: string;
 };
-type TotalsRow = {
-  total_files: number | null;
-  total_size_bytes: number | null;
-};
 
 export type ArchiveDownloadRecord = {
   id: number;
   manifestSha256: string;
   packerVersion: string;
   totalFiles: number;
+  installTotalFiles: number;
+  installTotalSizeBytes: number;
   totalSizeBytes: number;
   estimatedR2GetCount: number;
   workId: number;
@@ -32,31 +32,12 @@ export type ArchiveDownloadRecord = {
   workCoverBlobSha256: string | null;
   engineFamily: string;
 };
-export type WebPlayInstallTargetTotals = {
-  totalFiles: number;
-  totalSizeBytes: number;
-};
 export function parseArchiveVersionId(value: string): number {
   if (!/^\d+$/.test(value)) throw new Error("Invalid archive version id");
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id <= 0)
     throw new Error("Invalid archive version id");
   return id;
-}
-export async function getWebPlayInstallTargetTotals(
-  runtime: AppRuntime,
-  id: number,
-): Promise<WebPlayInstallTargetTotals> {
-  const row = await getD1(runtime)
-    .prepare(
-      `SELECT web_play_file_count AS total_files,web_play_size_bytes AS total_size_bytes FROM archive_versions WHERE id=?`,
-    )
-    .bind(id)
-    .first<TotalsRow>();
-  return {
-    totalFiles: row?.total_files ?? 0,
-    totalSizeBytes: row?.total_size_bytes ?? 0,
-  };
 }
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
@@ -69,6 +50,8 @@ export async function getPublishedArchiveDownloadRecord(
           av.manifest_sha256,
           av.packer_version,
           av.total_files,
+          av.web_play_file_count,
+          av.web_play_size_bytes,
           av.total_size_bytes,
           av.estimated_r2_get_count,
           w.original_title AS work_original_title,
@@ -92,6 +75,8 @@ export async function getPublishedArchiveDownloadRecord(
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,
+    installTotalFiles: row.web_play_file_count ?? 0,
+    installTotalSizeBytes: row.web_play_size_bytes ?? 0,
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,
     workId: row.work_id,

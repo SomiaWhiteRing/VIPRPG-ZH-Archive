@@ -82,7 +82,7 @@ export async function browsePublicCreators(
   const order = input.sort === "works" ? "work_credit_count DESC," : "";
   const rows = await database
     .prepare(
-      `${summarySql()} FROM creators c WHERE ${where}
+      `${summarySql(false)} FROM creators c WHERE ${where}
        ORDER BY ${order} c.name COLLATE NOCASE ASC,c.id ASC LIMIT ? OFFSET ?`,
     )
     .bind(...binds, pageSize, (page - 1) * pageSize)
@@ -117,7 +117,7 @@ export async function browsePublicCreators(
 
 function publicCreatorFilter(query?: string): { where: string; binds: string[] } {
   const where = [
-    `EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works))`,
+    "c.public_at IS NOT NULL",
   ];
   const binds: string[] = [];
   if (query?.trim()) {
@@ -139,10 +139,7 @@ export async function getPublicCreatorDetail(
   const [creatorResult, aliasesResult] = await database.batch([
     database
       .prepare(
-        `${summarySql()} FROM creators c WHERE c.id=? AND EXISTS (
-      SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
-      WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
-    ) LIMIT 1`,
+        `${summarySql()} FROM creators c WHERE c.id=? AND c.public_at IS NOT NULL LIMIT 1`,
       )
       .bind(id),
     database
@@ -153,6 +150,7 @@ export async function getPublicCreatorDetail(
   ]);
   const row = (creatorResult.results?.[0] ?? null) as CreatorRow | null;
   if (!row) return null;
+  runtime.memo.set(`public-target:creator:${row.id}`, true);
   return {
     ...mapSummary(row),
     aliases: (aliasesResult.results ?? []).map((alias) =>
@@ -476,7 +474,7 @@ async function listCredits(
     status: row.status,
   }));
 }
-function summarySql(): string {
+function summarySql(includeLatest = true): string {
   return `
     SELECT
       c.id,
@@ -491,13 +489,13 @@ function summarySql(): string {
         WHERE ws.creator_id = c.id
           AND w.id IN (SELECT id FROM public_works)
       ) AS work_credit_count,
-      (
+      ${includeLatest ? `(
         SELECT MAX(COALESCE(w.original_release_date, w.published_at, w.created_at))
         FROM work_staff ws
         JOIN works w ON w.id = ws.work_id
         WHERE ws.creator_id = c.id
           AND w.id IN (SELECT id FROM public_works)
-      ) AS latest_work_credit_at`;
+      )` : "NULL"} AS latest_work_credit_at`;
 }
 function mapSummary(row: CreatorRow): PublicCreatorSummary {
   return {

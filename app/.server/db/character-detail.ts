@@ -38,6 +38,7 @@ export async function getPublicCharacterDetail(
     .bind(id)
     .first<DetailRow>();
   if (!row) return null;
+  runtime.memo.set(`public-target:character:${row.id}`, true);
 
   const [aliases, sources, categories, memberships, works, faces, materials] =
     await db.batch([

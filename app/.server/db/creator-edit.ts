@@ -6,7 +6,7 @@ import { creatorNameKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
 
-const PUBLIC_CREATOR_SQL = `EXISTS (SELECT 1 FROM work_staff ws JOIN public_works w ON w.id=ws.work_id WHERE ws.creator_id=creators.id)`;
+const PUBLIC_CREATOR_SQL = "public_at IS NOT NULL";
 const EDITOR_PERMISSION_SQL = `EXISTS (SELECT 1 FROM users u
   JOIN effective_user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
   JOIN role_permissions rp ON rp.role_id=r.id

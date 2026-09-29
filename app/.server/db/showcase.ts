@@ -59,7 +59,7 @@ const sources = {
     columns: "c.avatar_blob_sha256 AS image_sha256",
     joins: "",
     visible:
-      "EXISTS (SELECT 1 FROM work_staff staff JOIN public_works w ON w.id=staff.work_id WHERE staff.creator_id=c.id)",
+      "c.public_at IS NOT NULL",
     names: ["c.name"],
     alias:
       "SELECT 1 FROM creator_aliases a WHERE a.creator_id=c.id AND instr(lower(a.name),lower(?))>0",

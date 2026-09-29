@@ -1,0 +1,205 @@
+{
+  "date": "2026-09-29T15:16:30.911785",
+  "git_baseline": "5f63573f",
+  "sqlite_version": "3.42.0",
+  "python_version": "3.11.6",
+  "source_database": ".wrangler\\state\\v3\\d1\\miniflare-D1DatabaseObject\\f1466b30f7ee2067ebc152493643436a95c7f9bf162202b0fcc949b7807f03dc.sqlite",
+  "source_mode": "read-only backup into in-memory snapshot; no source writes",
+  "timing": "10 warmups; 31 alternating paired blocks; 40 workload repetitions per block; median of block means; prepared statement cache enabled; VM counts measured separately with progress handler every instruction",
+  "counts": {
+    "works": 12,
+    "public_works": 9,
+    "archive_versions": 6,
+    "creators": 6,
+    "work_staff": 26,
+    "blobs": 19870,
+    "comments": 10,
+    "user_showcase_entries": 3,
+    "measured_public_media": 17179
+  },
+  "results": [
+    {
+      "name": "work_image_eligibility",
+      "samples": 4,
+      "same_selected_output": true,
+      "sql_statements_per_unit": [
+        1.0,
+        1.0
+      ],
+      "median_us_per_unit": [
+        50.764,
+        5.974
+      ],
+      "time_reduction_pct": 88.23,
+      "vm_instructions_per_unit": [
+        512.25,
+        26.0
+      ],
+      "vm_reduction_pct": 94.92,
+      "block_median_range_us": [
+        [
+          29.944,
+          84.175
+        ],
+        [
+          3.504,
+          22.207
+        ]
+      ],
+      "note": "Prototype stable eligibility materialized once in snapshot; transition, writes, invalidation and migration costs excluded.",
+      "queries_before": [
+        "SELECT b.sha256, b.content_type_hint, b.size_bytes\n        FROM blobs b\n        WHERE b.sha256 = ?\n          AND b.status = 'active'\n          AND (\n            EXISTS (\n              SELECT 1 FROM resources r\n              WHERE r.icon_blob_sha256 = b.sha256 AND r.visibility = 'published'\n            )\n            OR\n            EXISTS (\n              SELECT 1\n              FROM media_assets ma\n              JOIN work_media_assets wma ON wma.media_asset_id = ma.id\n              JOIN works w ON w.id = wma.work_id\n              WHERE ma.blob_sha256 = b.sha256\n                AND w.id IN (SELECT id FROM public_works)\n            )\n            OR EXISTS (\n              SELECT 1\n              FROM users u\n              WHERE u.avatar_blob_sha256 = b.sha256\n                AND u.status = 'active'\n            )\n            OR EXISTS (\n              SELECT 1\n              FROM creators c\n              WHERE c.avatar_blob_sha256 = b.sha256\n                AND EXISTS (\n                  SELECT 1 FROM work_staff ws\n                  JOIN works w ON w.id=ws.work_id\n                  WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)\n                )\n            )\n            OR EXISTS (\n              SELECT 1\n              FROM catalogs c\n              WHERE c.cover_blob_sha256 = b.sha256\n                AND c.status = 'published'\n            )\n            OR EXISTS (\n              SELECT 1 FROM character_materials m\n              JOIN character_material_bindings binding ON binding.material_id=m.id\n              WHERE m.blob_sha256=b.sha256\n            )\n            OR EXISTS (\n              SELECT 1\n              FROM face_sheets fs\n              WHERE fs.blob_sha256 = b.sha256\n                AND (\n                  fs.library_status = 'approved'\n                  OR EXISTS (\n                    SELECT 1\n                    FROM character_portrait_refs cpr\n                    JOIN work_characters wc ON wc.portrait_ref_id = cpr.id\n                    JOIN works w ON w.id = wc.work_id\n                    WHERE cpr.face_sheet_id = fs.id\n                      AND w.id IN (SELECT id FROM public_works)\n                  )\n                )\n            )\n          )\n        LIMIT 1"
+      ],
+      "queries_after": [
+        "SELECT b.sha256,b.content_type_hint,b.size_bytes FROM blobs b JOIN measured_public_media p ON p.sha256=b.sha256 WHERE b.sha256=? AND b.status='active' LIMIT 1"
+      ]
+    },
+    {
+      "name": "creator_index_remove_unused_latest_date",
+      "samples": 1,
+      "same_selected_output": true,
+      "sql_statements_per_unit": [
+        2.0,
+        2.0
+      ],
+      "median_us_per_unit": [
+        316.777,
+        205.965
+      ],
+      "time_reduction_pct": 34.98,
+      "vm_instructions_per_unit": [
+        3981.0,
+        2784.0
+      ],
+      "vm_reduction_pct": 30.07,
+      "block_median_range_us": [
+        [
+          208.857,
+          1000.553
+        ],
+        [
+          132.988,
+          365.375
+        ]
+      ],
+      "note": "Name-sort first page including total query; aliases unchanged and excluded.",
+      "queries_before": [
+        "SELECT COUNT(*) AS total FROM creators c WHERE EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works))",
+        "\n    SELECT\n      c.id,\n      c.name,\n      c.avatar_blob_sha256,\n      c.links_json,\n      c.extra_json,\n      (\n        SELECT COUNT(DISTINCT ws.work_id)\n        FROM work_staff ws\n        JOIN works w ON w.id = ws.work_id\n        WHERE ws.creator_id = c.id\n          AND w.id IN (SELECT id FROM public_works)\n      ) AS work_credit_count,\n      (\n        SELECT MAX(COALESCE(w.original_release_date, w.published_at, w.created_at))\n        FROM work_staff ws\n        JOIN works w ON w.id = ws.work_id\n        WHERE ws.creator_id = c.id\n          AND w.id IN (SELECT id FROM public_works)\n      ) AS latest_work_credit_at FROM creators c WHERE EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)) ORDER BY c.name COLLATE NOCASE ASC,c.id ASC LIMIT 30 OFFSET 0"
+      ],
+      "queries_after": [
+        "SELECT COUNT(*) AS total FROM creators c WHERE EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works))",
+        "\n    SELECT\n      c.id,\n      c.name,\n      c.avatar_blob_sha256,\n      c.links_json,\n      c.extra_json,\n      (\n        SELECT COUNT(DISTINCT ws.work_id)\n        FROM work_staff ws\n        JOIN works w ON w.id = ws.work_id\n        WHERE ws.creator_id = c.id\n          AND w.id IN (SELECT id FROM public_works)\n      ) AS work_credit_count FROM creators c WHERE EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)) ORDER BY c.name COLLATE NOCASE ASC,c.id ASC LIMIT 30 OFFSET 0"
+      ]
+    },
+    {
+      "name": "web_play_metadata_merge",
+      "samples": 6,
+      "same_selected_output": true,
+      "sql_statements_per_unit": [
+        2.0,
+        1.0
+      ],
+      "median_us_per_unit": [
+        16.594,
+        12.135
+      ],
+      "time_reduction_pct": 26.87,
+      "vm_instructions_per_unit": [
+        60.166666666666664,
+        52.166666666666664
+      ],
+      "vm_reduction_pct": 13.3,
+      "block_median_range_us": [
+        [
+          12.277,
+          50.577
+        ],
+        [
+          8.696,
+          43.699
+        ]
+      ],
+      "note": "Successful metadata reads only; query combine requires no publication policy change.",
+      "queries_before": [
+        "SELECT av.id,\n          av.work_id,\n          av.manifest_sha256,\n          av.packer_version,\n          av.total_files,\n          av.total_size_bytes,\n          av.estimated_r2_get_count,\n          w.original_title AS work_original_title,\n          w.chinese_title AS work_chinese_title,\n          (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id\n           WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS work_cover_blob_sha256,\n          w.engine_family\n       FROM archive_versions av\n       JOIN works w ON w.id = av.work_id\n       WHERE av.id = ?\n         AND av.status = 'published'\n         AND av.is_current = 1\n         AND w.status = 'published'\n       LIMIT 1",
+        "SELECT web_play_file_count AS total_files,web_play_size_bytes AS total_size_bytes FROM archive_versions WHERE id=?"
+      ],
+      "queries_after": [
+        "SELECT av.web_play_file_count, av.web_play_size_bytes, av.id,\n          av.work_id,\n          av.manifest_sha256,\n          av.packer_version,\n          av.total_files,\n          av.total_size_bytes,\n          av.estimated_r2_get_count,\n          w.original_title AS work_original_title,\n          w.chinese_title AS work_chinese_title,\n          (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id\n           WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS work_cover_blob_sha256,\n          w.engine_family\n       FROM archive_versions av\n       JOIN works w ON w.id = av.work_id\n       WHERE av.id = ?\n         AND av.status = 'published'\n         AND av.is_current = 1\n         AND w.status = 'published'\n       LIMIT 1"
+      ]
+    },
+    {
+      "name": "creator_identity_independent",
+      "samples": 6,
+      "same_selected_output": true,
+      "sql_statements_per_unit": [
+        1.0,
+        1.0
+      ],
+      "median_us_per_unit": [
+        53.092,
+        5.016
+      ],
+      "time_reduction_pct": 90.55,
+      "vm_instructions_per_unit": [
+        492.0,
+        16.0
+      ],
+      "vm_reduction_pct": 96.75,
+      "block_median_range_us": [
+        [
+          37.005,
+          97.488
+        ],
+        [
+          3.58,
+          29.962
+        ]
+      ],
+      "note": "Isolated identity lookup; stable public set from current snapshot. Not full creator page; work counts remain.",
+      "queries_before": [
+        "SELECT c.id,c.name,c.avatar_blob_sha256 FROM creators c WHERE c.id=? AND EXISTS (SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works))"
+      ],
+      "queries_after": [
+        "SELECT c.id,c.name,c.avatar_blob_sha256 FROM creators c JOIN measured_public_creators p ON p.id=c.id WHERE c.id=?"
+      ]
+    },
+    {
+      "name": "work_publicity_without_distribution",
+      "samples": 1,
+      "same_selected_output": true,
+      "sql_statements_per_unit": [
+        1.0,
+        1.0
+      ],
+      "median_us_per_unit": [
+        35.54,
+        8.117
+      ],
+      "time_reduction_pct": 77.16,
+      "vm_instructions_per_unit": [
+        426.0,
+        62.0
+      ],
+      "vm_reduction_pct": 85.45,
+      "block_median_range_us": [
+        [
+          23.157,
+          145.005
+        ],
+        [
+          6.385,
+          65.147
+        ]
+      ],
+      "note": "Isolated public-ID enumeration, not full catalog page. All published works currently have a source; semantics differ for future missing-source works.",
+      "queries_before": [
+        "SELECT id FROM public_works ORDER BY id"
+      ],
+      "queries_after": [
+        "SELECT id FROM works WHERE status='published' ORDER BY id"
+      ]
+    }
+  ]
+}

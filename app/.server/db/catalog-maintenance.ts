@@ -100,6 +100,8 @@ export async function mergeCreators(
       .prepare(`UPDATE comments SET creator_id=? WHERE creator_id=?`)
       .bind(target, source),
     db.prepare(`UPDATE user_showcase_entries SET creator_id=? WHERE creator_id=?`).bind(target, source),
+    db.prepare(`UPDATE creators SET public_at=COALESCE(public_at,(SELECT public_at FROM creators WHERE id=?)) WHERE id=?`)
+      .bind(source, target),
     db.prepare(`DELETE FROM creators WHERE id=?`).bind(source),
     audit(db, actor, "creators_merged", { source, target }),
   ]);
