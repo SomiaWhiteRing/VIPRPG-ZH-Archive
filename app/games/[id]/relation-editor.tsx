@@ -311,18 +311,16 @@ export function RelationCreateForm({
                 <span className="min-w-0 wrap-anywhere">{candidate.title}</span>
               </>
             )}
-            emptyState={
+            emptyState={query.trim() ? (
               <p
                 className="px-3 py-2 text-sm text-muted"
                 role={searchError ? "alert" : "status"}
               >
-                {!query.trim()
-                  ? "输入作品名称或别名开始搜索。"
-                  : searching
+                {searching
                     ? "正在搜索…"
                     : searchError || "没有找到可关联的作品。"}
               </p>
-            }
+            ) : null}
             footer={
               searchError && !searching ? (
                 <Button
@@ -341,6 +339,7 @@ export function RelationCreateForm({
         <div className="flex items-center gap-1">
           <SelectField
             aria-label="关联类型"
+            triggerClassName="w-[calc(5em+3rem+2px)] shrink-0"
             disabled={busy}
             onValueChange={(value) => {
               setRelationChoice(value as RelationChoice);
@@ -654,7 +653,7 @@ function WorkRelationActions({
         {canEdit ? (
           <SelectField
             aria-label={`${title}的关联类型`}
-            className="w-36"
+            triggerClassName="w-[calc(5em+3rem+2px)] shrink-0"
             disabled={busy}
             onValueChange={onChangeType}
             options={WORK_RELATION_TYPES.map((value) => ({
