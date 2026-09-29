@@ -225,11 +225,6 @@ export default function MePage() {
                     >
                       {work.chineseTitle || work.originalTitle}
                     </Link>
-                    <span className="text-sm text-muted">
-                      {work.distribution === "archive"
-                        ? "本站归档"
-                        : "外部下载"}
-                    </span>
                   </div>
                   <StatusBadge kind="publication" value={work.status} />
                 </li>

@@ -1,0 +1,1634 @@
+{
+  "packages": [
+    {
+      "name": "@fontsource-variable/inter",
+      "version": "5.3.0",
+      "tarball": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz",
+      "integrity": "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="
+    },
+    {
+      "name": "@fontsource-variable/noto-sans-sc",
+      "version": "5.3.0",
+      "tarball": "https://registry.npmjs.org/@fontsource-variable/noto-sans-sc/-/noto-sans-sc-5.3.0.tgz",
+      "integrity": "sha512-lNar1dF7Ik/lHNPo/7JWG0TolXY29LtsqYgMvEysooZ5bsO9uH4shJmRrwyJ3PjyTPljhpMJEK0jDuLSU4vJ1w=="
+    },
+    {
+      "name": "@fontsource-variable/noto-serif-sc",
+      "version": "5.3.0",
+      "tarball": "https://registry.npmjs.org/@fontsource-variable/noto-serif-sc/-/noto-serif-sc-5.3.0.tgz",
+      "integrity": "sha512-7LcN2NEf4HDjoSkGWc79WqDDyMK8JvSPdA/gsHjJpZ8l9A9mcK/GQTazp3klmkBwJooy0eqeNvlmaZFXPupHrA=="
+    },
+    {
+      "name": "@fontsource/ibm-plex-mono",
+      "version": "5.3.0",
+      "tarball": "https://registry.npmjs.org/@fontsource/ibm-plex-mono/-/ibm-plex-mono-5.3.0.tgz",
+      "integrity": "sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q=="
+    }
+  ],
+  "files": [
+    {
+      "file": "inter-cyrillic-ext-wght-normal-ca157063339ac4ad.woff2",
+      "sha256": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd",
+      "bytes": 25960,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-cyrillic-ext-wght-normal.woff2"
+    },
+    {
+      "file": "inter-cyrillic-wght-normal-71d5ee93cc1e9f1d.woff2",
+      "sha256": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075",
+      "bytes": 18748,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-cyrillic-wght-normal.woff2"
+    },
+    {
+      "file": "inter-greek-ext-wght-normal-6e9e020a25f9b56d.woff2",
+      "sha256": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190",
+      "bytes": 11232,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-greek-ext-wght-normal.woff2"
+    },
+    {
+      "file": "inter-greek-wght-normal-1be3448e292fbf05.woff2",
+      "sha256": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6",
+      "bytes": 18996,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-greek-wght-normal.woff2"
+    },
+    {
+      "file": "inter-vietnamese-wght-normal-5c66f9e07e90c6d4.woff2",
+      "sha256": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2",
+      "bytes": 10252,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-vietnamese-wght-normal.woff2"
+    },
+    {
+      "file": "inter-latin-ext-wght-normal-34b9c504cab7a73e.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+      "bytes": 85068,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-latin-ext-wght-normal.woff2"
+    },
+    {
+      "file": "inter-latin-wght-normal-3100e775e8616cd2.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "bytes": 48256,
+      "package": "@fontsource-variable/inter",
+      "source": "files/inter-latin-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-4-wght-normal-9fafd93ac77b81ff.woff2",
+      "sha256": "9fafd93ac77b81ffdeeb30c31e7d5911eb5b6a0a976b54c6e418eec8701a97e2",
+      "bytes": 3796,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-4-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-5-wght-normal-e64f57937e3ae4fe.woff2",
+      "sha256": "e64f57937e3ae4feb9dd073d6a5257a74fda82575060718a162c95c8c09ef2ae",
+      "bytes": 20176,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-5-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-6-wght-normal-17e15c4f0a5bfd92.woff2",
+      "sha256": "17e15c4f0a5bfd92e65a65d285833633f2cc8d4a51a8ba6a2080663989123d7e",
+      "bytes": 11464,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-6-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-21-wght-normal-c1409c43e55ecff2.woff2",
+      "sha256": "c1409c43e55ecff21bd7eee9327e71a6f4c66449842861b368dcdfe14445aab3",
+      "bytes": 11356,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-21-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-22-wght-normal-77037ed42ff4e7b0.woff2",
+      "sha256": "77037ed42ff4e7b0e5cc296cabe4f0580d1d518239a4a067c00ff8097f60819f",
+      "bytes": 65384,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-22-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-23-wght-normal-38d0df21ac374e93.woff2",
+      "sha256": "38d0df21ac374e938a5c885f50a80b7be2dbab9a34803462a4f2c6c6fa777128",
+      "bytes": 56792,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-23-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-24-wght-normal-8fa21e7e457acf3e.woff2",
+      "sha256": "8fa21e7e457acf3e8ca2e0561d5df4dd26cf0824a27a721c2b831b202e88e195",
+      "bytes": 62580,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-24-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-25-wght-normal-f760b7a3871d214d.woff2",
+      "sha256": "f760b7a3871d214d421b378faa2e27a763bc632000f983964a837f2323665f1d",
+      "bytes": 58320,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-25-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-26-wght-normal-be8386e7bd7facfe.woff2",
+      "sha256": "be8386e7bd7facfe78886db838ece2fac15056ef9ea6c48d631054460cd37c6f",
+      "bytes": 50888,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-26-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-27-wght-normal-4895abcaddbd162e.woff2",
+      "sha256": "4895abcaddbd162e48a212dd75c270d3ba1706519f527dff5fd7ec47dfa64dfd",
+      "bytes": 47488,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-27-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-28-wght-normal-82540b6201a9b9ad.woff2",
+      "sha256": "82540b6201a9b9ade19206b3e6e9ba65038e6ab5d8b61952352d87b92978f967",
+      "bytes": 50200,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-28-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-29-wght-normal-ff21d8fcc60ce391.woff2",
+      "sha256": "ff21d8fcc60ce39145c09da40c66f190dbb52b4b5ae6de1861dcaf15f87ef497",
+      "bytes": 54008,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-29-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-30-wght-normal-1f76f6ffded00b9e.woff2",
+      "sha256": "1f76f6ffded00b9ead063038ebfd5019ad334ffeb7035dda3aa33f4dd1bb7adc",
+      "bytes": 54656,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-30-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-31-wght-normal-e6c25be1bb08a63a.woff2",
+      "sha256": "e6c25be1bb08a63a0f4cd0cea425fc90b65df538be8505e3cf4010bec2853b64",
+      "bytes": 47220,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-31-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-32-wght-normal-0cda750d7d04a4e1.woff2",
+      "sha256": "0cda750d7d04a4e12e4b2ea1d78c0a3ec430b5c07e02b87064e809ff75d76998",
+      "bytes": 52548,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-32-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-33-wght-normal-b9732b5606bd87c5.woff2",
+      "sha256": "b9732b5606bd87c51942e5f56270d26495f2bc22a157493725417af2c70c265e",
+      "bytes": 47452,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-33-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-34-wght-normal-38aa326b4c84902a.woff2",
+      "sha256": "38aa326b4c84902a342b4225a452a7ca3ac32ebf40792663d7db2013c22bee9d",
+      "bytes": 46888,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-34-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-35-wght-normal-bd98226c8e0aa808.woff2",
+      "sha256": "bd98226c8e0aa80876366386a23e909087df5d6b570f48b2366a8849a3ca137b",
+      "bytes": 50688,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-35-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-36-wght-normal-0db1ca695a491d37.woff2",
+      "sha256": "0db1ca695a491d372060eba39ae66b1816457e8992698fbaacd35cc0f7786658",
+      "bytes": 41832,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-36-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-37-wght-normal-8df409a4e0a237c2.woff2",
+      "sha256": "8df409a4e0a237c21db73608de96e2ae49c53de50826098d050a0e2cca867836",
+      "bytes": 53528,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-37-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-38-wght-normal-672d2d994994a3c3.woff2",
+      "sha256": "672d2d994994a3c39072fbbc4a40f0e25424ab2ff36ec63f3b55849d1ab8a650",
+      "bytes": 54592,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-38-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-39-wght-normal-272d6d0e153f56e8.woff2",
+      "sha256": "272d6d0e153f56e8ab7d9412ca1e8581c06ce371641cf863859a0ab01751c1ea",
+      "bytes": 51784,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-39-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-40-wght-normal-5b9ef1ed48420aa7.woff2",
+      "sha256": "5b9ef1ed48420aa7b9da1fbc18c4a4dfd3d4edf1c6b8aab89cf12b40913335a3",
+      "bytes": 46628,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-40-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-41-wght-normal-30aee47f660fd88a.woff2",
+      "sha256": "30aee47f660fd88a68fee63052ce8f3746e78e606813de686b710692d7610529",
+      "bytes": 36416,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-41-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-42-wght-normal-ec0014830db682b6.woff2",
+      "sha256": "ec0014830db682b682120085e07476df857d016fa7bb1b4bb3dfe82113819a10",
+      "bytes": 45540,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-42-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-43-wght-normal-43df2b5dad9bb835.woff2",
+      "sha256": "43df2b5dad9bb8353549d68023297605443f251f1f846a9cb2e5363b84aacd0b",
+      "bytes": 46624,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-43-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-44-wght-normal-acaa6195041b1a92.woff2",
+      "sha256": "acaa6195041b1a928d35c7e80365a4e653ffc5cba556c0a1443ee3a561228eb8",
+      "bytes": 54244,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-44-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-45-wght-normal-8cdb9903f770db21.woff2",
+      "sha256": "8cdb9903f770db21bd3d17eab6a1dd7d302b47f7eab059b2ff814d9593ce2526",
+      "bytes": 67620,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-45-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-46-wght-normal-6590d0a6fe94571c.woff2",
+      "sha256": "6590d0a6fe94571cfb84a6d9536e0f58b6a6164643ffa339d3c1788835c96147",
+      "bytes": 57668,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-46-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-47-wght-normal-b05afdd32b3bf722.woff2",
+      "sha256": "b05afdd32b3bf722adac4b2c936a3c3390fb4b6b8adc20a132a0b42cb9c23e83",
+      "bytes": 56156,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-47-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-48-wght-normal-c9585f7d070700be.woff2",
+      "sha256": "c9585f7d070700be0435c1014761af37cd512faa68ffc33341d1e4634abed682",
+      "bytes": 50764,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-48-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-49-wght-normal-4943895a4dfa5dcf.woff2",
+      "sha256": "4943895a4dfa5dcf427429a13e1c56bb3fd344c1dd7b1ad927b9d6743e358ac0",
+      "bytes": 52844,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-49-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-50-wght-normal-13e51063d7743cfe.woff2",
+      "sha256": "13e51063d7743cfe2d533620860719890426ef12f6fe036d50b3c1a8f41508e7",
+      "bytes": 45876,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-50-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-51-wght-normal-fd4df1f02c2cb4d7.woff2",
+      "sha256": "fd4df1f02c2cb4d7db99d2d35225561f9695483f5f829e0f6667adac4bbe7ff6",
+      "bytes": 41616,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-51-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-52-wght-normal-06999a39c4c3a7ea.woff2",
+      "sha256": "06999a39c4c3a7ea279822ec42aeaf7e2f99d4047e4f8b7c48254158b7e293fa",
+      "bytes": 51840,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-52-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-53-wght-normal-767b7b9864658d91.woff2",
+      "sha256": "767b7b9864658d91d81787ebeac555cb9d67ec920002845061516dd87fa1b95f",
+      "bytes": 43528,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-53-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-54-wght-normal-4cd00537a46f6f1a.woff2",
+      "sha256": "4cd00537a46f6f1acaf2762a59176e059062d7259217a8a85a589df775531ea6",
+      "bytes": 52000,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-54-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-55-wght-normal-0118ec5d8c30b197.woff2",
+      "sha256": "0118ec5d8c30b1971a59ec5982f3eeee3e687a40ef5b79108e99e5d82fa67aa9",
+      "bytes": 48132,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-55-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-56-wght-normal-a3e4a78929826930.woff2",
+      "sha256": "a3e4a78929826930956ef1e3b3c1c329815d75c88f67296c4ffeac203e2cb544",
+      "bytes": 53500,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-56-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-57-wght-normal-7623501009e4a6db.woff2",
+      "sha256": "7623501009e4a6db7c2d5a635f57099da3e78de33fa85cccdf8d3c1596064ccb",
+      "bytes": 55496,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-57-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-58-wght-normal-56ae1a59a32e4a25.woff2",
+      "sha256": "56ae1a59a32e4a258336c6d100d5288f3d1ece6f9e4f2bb3ec0548c289ede761",
+      "bytes": 57648,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-58-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-59-wght-normal-7a377a40e99fd9bc.woff2",
+      "sha256": "7a377a40e99fd9bc3b1eb38517f08c4ac09520437bed24c3d3a39e2b64ff0ee9",
+      "bytes": 47676,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-59-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-60-wght-normal-3657f66babdf6aff.woff2",
+      "sha256": "3657f66babdf6aff2d2ca3cbadf7bcdce820bda6be7c765d909afee8e74dad5c",
+      "bytes": 41432,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-60-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-61-wght-normal-23919a2eb11d25dd.woff2",
+      "sha256": "23919a2eb11d25dd3a78c020ecc337c9c72b8ca760412f5b4cd567cc43b776ba",
+      "bytes": 45276,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-61-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-62-wght-normal-a901edf25bc1cfae.woff2",
+      "sha256": "a901edf25bc1cfae0fc4c474fce9f8783e93a46b9e88a1cb1cb1301feb1cbdb2",
+      "bytes": 59112,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-62-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-63-wght-normal-92f56f713cc0b62f.woff2",
+      "sha256": "92f56f713cc0b62f1cbbbc3533b957cff5d2db2abdb4b45a173564011d217ddc",
+      "bytes": 49180,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-63-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-64-wght-normal-4929c9f39a5a4bd9.woff2",
+      "sha256": "4929c9f39a5a4bd941050c7358e1556e57cef901b8c75503453e62c23ede281c",
+      "bytes": 41540,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-64-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-65-wght-normal-8daa61282fb62a11.woff2",
+      "sha256": "8daa61282fb62a111c17f896b12429a43a3d60bd5f2eceb8c5a4f7d57a26d83c",
+      "bytes": 41608,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-65-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-66-wght-normal-6479166925eb462b.woff2",
+      "sha256": "6479166925eb462be1a74ad446099719e8021949abf5c3eafefd9ad290836b9c",
+      "bytes": 52868,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-66-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-67-wght-normal-a6b0e11c4c761ffd.woff2",
+      "sha256": "a6b0e11c4c761ffda2e693d037f1384af67b6a338f81a8c0fcd7aa4eea9a177c",
+      "bytes": 52584,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-67-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-68-wght-normal-65b77f1fe9d68dae.woff2",
+      "sha256": "65b77f1fe9d68dae692578370f64b50ace8469fcf737b34d8b4cdfabed344f23",
+      "bytes": 41568,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-68-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-69-wght-normal-b34f765cbbf4d02e.woff2",
+      "sha256": "b34f765cbbf4d02e71cc0d3ea9d488ad4a9da2bcea08f4c84a74e6ec82877f06",
+      "bytes": 55604,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-69-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-70-wght-normal-a99d55c00e4f95b7.woff2",
+      "sha256": "a99d55c00e4f95b79ccc545fcd5464428edb7127670eaed421003473fd4ede7f",
+      "bytes": 42236,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-70-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-71-wght-normal-3298bed30dc8d233.woff2",
+      "sha256": "3298bed30dc8d23323c0ba9cab32aa4088d39f5316d126b5cbdabd56884a5f01",
+      "bytes": 47904,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-71-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-72-wght-normal-6597209ca9707726.woff2",
+      "sha256": "6597209ca97077267b65fc072819325eb5a6d3787791d193cc481b3a71fb1b76",
+      "bytes": 47032,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-72-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-73-wght-normal-e7ac1d4930eabd78.woff2",
+      "sha256": "e7ac1d4930eabd781b541d961576a89b49580cdf336ca2413e0eb7709b41e72a",
+      "bytes": 39312,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-73-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-74-wght-normal-1f0287be83a28e7a.woff2",
+      "sha256": "1f0287be83a28e7ac104beb7f1b12ea6c0f327dd2dcd50033fb11c4aba123734",
+      "bytes": 56424,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-74-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-75-wght-normal-d9a4bb7bcc2be578.woff2",
+      "sha256": "d9a4bb7bcc2be578e52835906301f04f6caf285ffcd299065521830529532fd6",
+      "bytes": 43940,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-75-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-76-wght-normal-5a019946bcadcec6.woff2",
+      "sha256": "5a019946bcadcec6e510d2786b1a490a8ca4442c849e3fbf6251bdc06a7e1f47",
+      "bytes": 48420,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-76-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-77-wght-normal-7c445e85d04f5319.woff2",
+      "sha256": "7c445e85d04f5319eda4b07329a71f5e468fb7906547d34150b819916d2f6d31",
+      "bytes": 36788,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-77-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-78-wght-normal-7d4afb70f641781c.woff2",
+      "sha256": "7d4afb70f641781cfe859e18b81b5b641fb76872fb44760e9314e76fa6b42e3f",
+      "bytes": 49156,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-78-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-79-wght-normal-5798753a721bb4ec.woff2",
+      "sha256": "5798753a721bb4eccbf7d9ca923d2496524009a6c27c4bfc36e2b27f0251ee59",
+      "bytes": 41232,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-79-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-80-wght-normal-db887159ca6e46f3.woff2",
+      "sha256": "db887159ca6e46f3f2787f7a1037940805bb7db727fd3a7ee2bdf9fb47f74469",
+      "bytes": 32632,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-80-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-81-wght-normal-71e5743bbd225b3d.woff2",
+      "sha256": "71e5743bbd225b3d80426f1b9e1d45c61fa7265aa453e2d22181944ec52569ff",
+      "bytes": 47548,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-81-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-82-wght-normal-8c5094c3785fd04f.woff2",
+      "sha256": "8c5094c3785fd04f84142ebc0362d835cce48e56b13e90d9900ddce5f9fe060f",
+      "bytes": 46176,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-82-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-83-wght-normal-4a60a1ccba905284.woff2",
+      "sha256": "4a60a1ccba9052841d6f22a1d8d84a553184689b1de4c3dc6bcaa654c2c91ef6",
+      "bytes": 43504,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-83-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-84-wght-normal-3ed54e59ef4758e3.woff2",
+      "sha256": "3ed54e59ef4758e3cf1f81d9dd5ac9197ba8a7071ec8c0d69e2d52b2a2826be6",
+      "bytes": 32612,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-84-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-85-wght-normal-e87e0a1342e1778c.woff2",
+      "sha256": "e87e0a1342e1778c69040e768b5ad1d615068cec94579ba0176a875cb4170bde",
+      "bytes": 26900,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-85-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-86-wght-normal-6d3ac3e20959dbcb.woff2",
+      "sha256": "6d3ac3e20959dbcb9c0f4fbe786a2fc4040f565577b35a13275959eec27a9ae0",
+      "bytes": 33576,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-86-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-87-wght-normal-0eeffd5daad5c17b.woff2",
+      "sha256": "0eeffd5daad5c17bba306e06e89e93ac563a497c806c0fa1d4c3a53a8ffa4225",
+      "bytes": 8012,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-87-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-88-wght-normal-b1d9582dfa268463.woff2",
+      "sha256": "b1d9582dfa2684636af41b19f0e2b397f8200337e0302dcaac3638ad431b7000",
+      "bytes": 7336,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-88-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-89-wght-normal-8b437aeb9e9fcb5a.woff2",
+      "sha256": "8b437aeb9e9fcb5aa31bd8565986f92cb7c43dbf1ac3763531b8b384fcda7290",
+      "bytes": 10984,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-89-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-90-wght-normal-83b0a59e0a5e045a.woff2",
+      "sha256": "83b0a59e0a5e045a44b1819d98795bee83684f746844f6fc4ebf448db3d53d39",
+      "bytes": 9344,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-90-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-91-wght-normal-382f72b98d4bb9d7.woff2",
+      "sha256": "382f72b98d4bb9d7006109efa128aedf846904490b52a5d4f1db151a73718faf",
+      "bytes": 8704,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-91-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-97-wght-normal-5e52856457c5cdab.woff2",
+      "sha256": "5e52856457c5cdaba991d72419e6f419f6627a5231b674275b8152f691328a33",
+      "bytes": 2080,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-97-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-98-wght-normal-ffded4e7fd560d93.woff2",
+      "sha256": "ffded4e7fd560d935f847ddd084187a049bbaca55d1deea9d2e6daf153cdea5b",
+      "bytes": 3416,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-98-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-99-wght-normal-54e302c23f11a8fd.woff2",
+      "sha256": "54e302c23f11a8fd518f0948183800ac954315067f0990eed41b9c91e55761ef",
+      "bytes": 9704,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-99-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-100-wght-normal-ad5f29028d5699a5.woff2",
+      "sha256": "ad5f29028d5699a59688d807fda531f23cb2c1ecd7815495853bbae8e75b8646",
+      "bytes": 64548,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-100-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-101-wght-normal-e189b81fc22ca6af.woff2",
+      "sha256": "e189b81fc22ca6afcf03a1fcbf8fad93e8272a502d4b23241900113d9ddbe51a",
+      "bytes": 58204,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-101-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-102-wght-normal-941c0c2971fc1d6d.woff2",
+      "sha256": "941c0c2971fc1d6d1e36c3d40d74e6a133ad02f58f0bc3a9cb265d8a60f3eb31",
+      "bytes": 60708,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-102-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-103-wght-normal-bafbd591af6493ff.woff2",
+      "sha256": "bafbd591af6493fface8ee91ca8701cd227f18b1636c5a380c1dbd84cd79b92d",
+      "bytes": 63864,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-103-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-104-wght-normal-b0bf80ced89dd61b.woff2",
+      "sha256": "b0bf80ced89dd61bc3c1427c23203b44413dfef6aafb50da905ab28a7937a923",
+      "bytes": 61588,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-104-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-105-wght-normal-8d8b4e6f4a00621d.woff2",
+      "sha256": "8d8b4e6f4a00621d2be4279e9ba4b07cded89ab6d4018d9b87d2116867ead335",
+      "bytes": 61828,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-105-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-106-wght-normal-bae74acc629d2e74.woff2",
+      "sha256": "bae74acc629d2e7484c66fd9bb0614df5bf3e98c39811d9e7e9222845a1c4b62",
+      "bytes": 62636,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-106-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-107-wght-normal-a42eff5010de7b0d.woff2",
+      "sha256": "a42eff5010de7b0d6922a14734dd06c9b495655ac6e4397506f44c8e3eaee10c",
+      "bytes": 61076,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-107-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-108-wght-normal-91882203459867be.woff2",
+      "sha256": "91882203459867be07157e9c8d433372b65cd4ce484fda26b97b05ed2cf6290d",
+      "bytes": 64552,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-108-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-109-wght-normal-a91f8b038e5ce108.woff2",
+      "sha256": "a91f8b038e5ce10805a173a293484c8c49552c275cf901cdf21324d6dca3ed17",
+      "bytes": 60372,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-109-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-110-wght-normal-bbca9081655c4523.woff2",
+      "sha256": "bbca9081655c45233a25c4cca030c47ebcf2e156eeedd48110836658adb31fa0",
+      "bytes": 61472,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-110-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-111-wght-normal-372be010ac0e87cb.woff2",
+      "sha256": "372be010ac0e87cb12065a861da39821104a43d68345a62ca95d3d3e2fb2c269",
+      "bytes": 62664,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-111-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-112-wght-normal-34a4580239eae8dc.woff2",
+      "sha256": "34a4580239eae8dc54b726a1e1e9fec266e74225b112063ed93b412d54b97ccd",
+      "bytes": 57648,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-112-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-113-wght-normal-614ab8f616352583.woff2",
+      "sha256": "614ab8f616352583f92cc2130fe8812c5aaaa8560b3828de45eefb318be7b503",
+      "bytes": 58648,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-113-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-114-wght-normal-cf7b8344807a316e.woff2",
+      "sha256": "cf7b8344807a316e8db054500a2b44ad9346ffa00763fec203ab5aa1c99ff602",
+      "bytes": 57964,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-114-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-115-wght-normal-fb29957c7adccb9a.woff2",
+      "sha256": "fb29957c7adccb9a89e34fb28d3d1c7d12bd7401f80c0dba6e1c9e5259cb3262",
+      "bytes": 56508,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-115-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-116-wght-normal-a98dc5a726f82141.woff2",
+      "sha256": "a98dc5a726f82141f74a827c443e120709a12fe737fabacf2530927a275fce0d",
+      "bytes": 52984,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-116-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-117-wght-normal-d94b5af0c14838af.woff2",
+      "sha256": "d94b5af0c14838af99bf9855f91e851878726558531ddef5bd2100b70dfbe90c",
+      "bytes": 52464,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-117-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-118-wght-normal-76c9ddb85ae4578c.woff2",
+      "sha256": "76c9ddb85ae4578cccd35ae4f6e6bbffaa2c8c2aec0fea17d3c17c84a3c6f7d1",
+      "bytes": 46192,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-118-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-119-wght-normal-b3b2374881f4cd93.woff2",
+      "sha256": "b3b2374881f4cd93f239820dfd91f0fde8d52f8f92ba2888f7ab9cba21e4d7eb",
+      "bytes": 76800,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-119-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-cyrillic-wght-normal-5932d441e7126669.woff2",
+      "sha256": "5932d441e7126669016ce303fb19247ff258622291f13069124eb9b91304bbf9",
+      "bytes": 10008,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-cyrillic-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-vietnamese-wght-normal-cba3d00c8db989f0.woff2",
+      "sha256": "cba3d00c8db989f0f0c3c7c48b1672468d9cb3c8c06514fc5cf1bb82ddccae7e",
+      "bytes": 9096,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-vietnamese-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-latin-ext-wght-normal-e316201f3fc493d1.woff2",
+      "sha256": "e316201f3fc493d191136a3ea728d184227b9651aea2bb38e279c45ef58646a7",
+      "bytes": 8244,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-latin-ext-wght-normal.woff2"
+    },
+    {
+      "file": "noto-sans-sc-latin-wght-normal-c1d919c8701a86ed.woff2",
+      "sha256": "c1d919c8701a86ed7f33a8044f7c4e5675db2fce8b754091e97b2c0792f9782c",
+      "bytes": 25240,
+      "package": "@fontsource-variable/noto-sans-sc",
+      "source": "files/noto-sans-sc-latin-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-4-wght-normal-92b93561d8af2775.woff2",
+      "sha256": "92b93561d8af27754352918934377dc09ecbf91d2d65a0951fb1d60895367330",
+      "bytes": 4644,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-4-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-5-wght-normal-405f96fc00f5de66.woff2",
+      "sha256": "405f96fc00f5de66a11045874d0964dcb4230122f820771ee13dd329895074d8",
+      "bytes": 26836,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-5-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-6-wght-normal-aba77127699e71bc.woff2",
+      "sha256": "aba77127699e71bc7d13fd80c4eaaebcb5065862590f6dfbb05ba14bb0c0d2d8",
+      "bytes": 15672,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-6-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-21-wght-normal-c56fed07baa5368c.woff2",
+      "sha256": "c56fed07baa5368c483c00d7963847caf0f9aff18bc78561fe8b14db7171b572",
+      "bytes": 26040,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-21-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-22-wght-normal-4e943fdd06982ac9.woff2",
+      "sha256": "4e943fdd06982ac9a81d192846dab76a2797321c990774600dc65ff8fe1d4e68",
+      "bytes": 85288,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-22-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-23-wght-normal-e50204d9c99dee1b.woff2",
+      "sha256": "e50204d9c99dee1b284a8f5c9508295fe6209c54e089ba7146813360d9c17713",
+      "bytes": 73872,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-23-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-24-wght-normal-03de62bc4c94fcf0.woff2",
+      "sha256": "03de62bc4c94fcf00ad2a87ed76731c95b0852b0b41c9028844e1a05c06082c0",
+      "bytes": 82664,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-24-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-25-wght-normal-9fa23b6cf30829d0.woff2",
+      "sha256": "9fa23b6cf30829d06600bda44f2b5d31880d088ef9bd5626aaf4557941457c10",
+      "bytes": 77944,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-25-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-26-wght-normal-158a0be2cbba07d1.woff2",
+      "sha256": "158a0be2cbba07d17824a5ba52319a3f914c59857f4bd70a332596bbe1b1128f",
+      "bytes": 71356,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-26-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-27-wght-normal-dc5909d502de13c0.woff2",
+      "sha256": "dc5909d502de13c096a9d4b6f674433f2da1ef62f71cce1e3f43be499f1a4a52",
+      "bytes": 64664,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-27-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-28-wght-normal-93daeb451edfe65d.woff2",
+      "sha256": "93daeb451edfe65dad18a468cc90933d6a5fc79e9411ce28027bacbfd7bfa0b8",
+      "bytes": 67936,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-28-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-29-wght-normal-d4ba29a42d58e9c7.woff2",
+      "sha256": "d4ba29a42d58e9c71f523225d6c2257e231e4d3fe92b720bbcbf99dd08add33c",
+      "bytes": 72784,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-29-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-30-wght-normal-106e18d90034e756.woff2",
+      "sha256": "106e18d90034e75630790ad203bc69850747bf96c0a398b96bd88bcaa81e9480",
+      "bytes": 76908,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-30-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-31-wght-normal-b9df2ce5d328a524.woff2",
+      "sha256": "b9df2ce5d328a524975728c051385e14c1c823798e084c1227101ed4acc6174a",
+      "bytes": 64260,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-31-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-32-wght-normal-87fdad598fb7ab59.woff2",
+      "sha256": "87fdad598fb7ab598784e43f87f1da2c5476f88e4a5a9aba56abc73973449a42",
+      "bytes": 68000,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-32-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-33-wght-normal-a1e18c863c00ab7e.woff2",
+      "sha256": "a1e18c863c00ab7e6f17fddcc42b193fb94ccb5e3e01ee394a189c149aef447e",
+      "bytes": 66088,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-33-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-34-wght-normal-ba9fbd7fdbf7cce9.woff2",
+      "sha256": "ba9fbd7fdbf7cce92c1a95946a7ad7b10ff9d3098403174b2b2b11ba6b282eb0",
+      "bytes": 64724,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-34-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-35-wght-normal-0eb731d70aa1f496.woff2",
+      "sha256": "0eb731d70aa1f4966dfffab308b3fb11975886fd5375f45ce6b16f1eaebafb83",
+      "bytes": 63760,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-35-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-36-wght-normal-b36a86aa9d07ae91.woff2",
+      "sha256": "b36a86aa9d07ae91a379ef0661f723c323677fb9106457318b1194d5c5f7cbc9",
+      "bytes": 57848,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-36-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-37-wght-normal-5b42c53aa93cc2a7.woff2",
+      "sha256": "5b42c53aa93cc2a7fd855c85a5ca733d4da8d06984df8b4c9b2b76ce1090bc80",
+      "bytes": 67828,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-37-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-38-wght-normal-60bae2b9a8bf65e1.woff2",
+      "sha256": "60bae2b9a8bf65e1b4c1a06d529079cea1824bbab0a37840469f24b698880aab",
+      "bytes": 75304,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-38-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-39-wght-normal-ef454fca50875c25.woff2",
+      "sha256": "ef454fca50875c2536bfbcf4e0b540f456c012a61d08ff778ea4e3e640bd938b",
+      "bytes": 72288,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-39-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-40-wght-normal-5392252c91bd0707.woff2",
+      "sha256": "5392252c91bd0707d647df33a9a279501a029388c7882a0ad420a40b760e5a62",
+      "bytes": 66144,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-40-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-41-wght-normal-0f39f0bbe9a7a450.woff2",
+      "sha256": "0f39f0bbe9a7a450b994c3c3bd9aa0627ae2dea8d36b67fc5a3554830f28005e",
+      "bytes": 51516,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-41-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-42-wght-normal-2db79fd3aa1d48c0.woff2",
+      "sha256": "2db79fd3aa1d48c07e30664553e9d1ddb9fc4c23fdf02d48c63e094ebf275a5d",
+      "bytes": 62740,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-42-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-43-wght-normal-7e94834579a87ac5.woff2",
+      "sha256": "7e94834579a87ac5bbeae3c8d0cfc33206d7e0fc85e7c59568f75358fb000c44",
+      "bytes": 58348,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-43-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-44-wght-normal-3f116c05fbb0abc3.woff2",
+      "sha256": "3f116c05fbb0abc3fba86bb85b4426eca3a41650d2763ed4c5b31fe8b28f752e",
+      "bytes": 72500,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-44-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-45-wght-normal-6b583a41d620c6b5.woff2",
+      "sha256": "6b583a41d620c6b504ce9d451fdbb8e08d073b2573e46d444820959647d7f3e0",
+      "bytes": 91672,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-45-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-46-wght-normal-1581af3bbb4e78f5.woff2",
+      "sha256": "1581af3bbb4e78f52db3b1078a85595e0ffa30ee334b7dbb49baf42ba9fbb28a",
+      "bytes": 77584,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-46-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-47-wght-normal-a491a10a853d1fb3.woff2",
+      "sha256": "a491a10a853d1fb3480d4471a275fd8824726b0e1a795fe8a98eb946001ac80e",
+      "bytes": 74000,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-47-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-48-wght-normal-cad6d79ef7a000ed.woff2",
+      "sha256": "cad6d79ef7a000ed533559c080e92351797bb90d800243fa3a25c7064a3ce93e",
+      "bytes": 64612,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-48-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-49-wght-normal-ca078411ddf19a16.woff2",
+      "sha256": "ca078411ddf19a164747d6e2220b0b2022f08e1682a1dc660a8902da13f2b0e0",
+      "bytes": 70316,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-49-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-50-wght-normal-80938d29c0efdbd6.woff2",
+      "sha256": "80938d29c0efdbd634308ac52ecbbda6707a0b3e3b7d1c84e197c28a6c8c837b",
+      "bytes": 64520,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-50-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-51-wght-normal-6e0e93e30ac6e513.woff2",
+      "sha256": "6e0e93e30ac6e513ffdb1e5ddc50337e81c5f33d54bc3bb0e044113f228f5727",
+      "bytes": 57320,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-51-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-52-wght-normal-6f05dd92f2f04002.woff2",
+      "sha256": "6f05dd92f2f040024ed6f401c03a78ec8f8058313ecab04b6ff195a0041a4a5a",
+      "bytes": 67828,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-52-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-53-wght-normal-039698b9bc16db34.woff2",
+      "sha256": "039698b9bc16db3439b86528c88c369086ed237f7baa13873ca33a0922edce18",
+      "bytes": 53856,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-53-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-54-wght-normal-2263f0841a3499dd.woff2",
+      "sha256": "2263f0841a3499dd34793a4b21c831760bcae5582b047cbcab0b55cf9b105ab5",
+      "bytes": 69316,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-54-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-55-wght-normal-c940bed82b2192c9.woff2",
+      "sha256": "c940bed82b2192c9a436af93a8ae990c9e66d1384376f56878c3906c6de35353",
+      "bytes": 61532,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-55-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-56-wght-normal-373d1b4d724f4ee5.woff2",
+      "sha256": "373d1b4d724f4ee5fa02eb5ee5474033a914a990d966f2abbb36c96682e5e993",
+      "bytes": 69656,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-56-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-57-wght-normal-a8e46481396f2a9e.woff2",
+      "sha256": "a8e46481396f2a9e4ac4875b64645f26e4e9ff185a8503c2402c2bc9bf46219c",
+      "bytes": 74032,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-57-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-58-wght-normal-4fb8ac1d7a95c72a.woff2",
+      "sha256": "4fb8ac1d7a95c72aa66de7673a352e3e8b9046ffa90c444d0f961221f7052e40",
+      "bytes": 82552,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-58-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-59-wght-normal-f69a03144d47d498.woff2",
+      "sha256": "f69a03144d47d4987530030eceff2c2c4e37388ce5e45976a7a15f4dcd849d30",
+      "bytes": 69524,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-59-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-60-wght-normal-952351694a0ada3a.woff2",
+      "sha256": "952351694a0ada3a721a73decd3afeac99fac4637e0dbd2af987c7e147205ff1",
+      "bytes": 61376,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-60-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-61-wght-normal-90a9d9858975f1c0.woff2",
+      "sha256": "90a9d9858975f1c073521af5df9a7286356ff78397d274cfe7b64cb97f719920",
+      "bytes": 61312,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-61-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-62-wght-normal-854a14f63241e795.woff2",
+      "sha256": "854a14f63241e795bc8a17e64d472f09c834a02f9b59258637063aabca530070",
+      "bytes": 79496,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-62-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-63-wght-normal-9d345b17ad128918.woff2",
+      "sha256": "9d345b17ad128918a7d4eea67714a376f8840ffdc82b77da8dbc416071491f65",
+      "bytes": 63936,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-63-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-64-wght-normal-ab7aef1b30a10f66.woff2",
+      "sha256": "ab7aef1b30a10f6643f3271cb55e64c49e6d8c4b91a2e68287196cde66ad7614",
+      "bytes": 51012,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-64-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-65-wght-normal-24f7302e65f8adae.woff2",
+      "sha256": "24f7302e65f8adaec36d642aa8caf68cdf4c50c91e54f75e9e535382366766b4",
+      "bytes": 58572,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-65-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-66-wght-normal-5c818243ce70b138.woff2",
+      "sha256": "5c818243ce70b138c5e7edd2798f92d311d8d9158eb60bad6c4f5cebe4d46fc6",
+      "bytes": 69204,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-66-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-67-wght-normal-a4557ab88bbc6bb5.woff2",
+      "sha256": "a4557ab88bbc6bb5272d315402d2448f92a7e53bdf3e89f1d839e95e5b67999a",
+      "bytes": 71680,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-67-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-68-wght-normal-bca8897bbf2ee33d.woff2",
+      "sha256": "bca8897bbf2ee33d854e2d2cb19a31c66d549c2eb585af439e905378486df29e",
+      "bytes": 54196,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-68-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-69-wght-normal-52740303931d8b85.woff2",
+      "sha256": "52740303931d8b85ab9529076bf835aeaf877c56e47aead612281bc128318282",
+      "bytes": 73588,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-69-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-70-wght-normal-b677122aea77998b.woff2",
+      "sha256": "b677122aea77998b4b6c991cc0268585a48690a9347bd17057ac589728176c5d",
+      "bytes": 53064,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-70-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-71-wght-normal-6b91a10abb4a03d3.woff2",
+      "sha256": "6b91a10abb4a03d31c63d528f6ef6b0fcdf4dbe7c030d67e1943f6139c115d73",
+      "bytes": 62884,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-71-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-72-wght-normal-713d2bb29db38602.woff2",
+      "sha256": "713d2bb29db38602e97e272bdafa666c5b426b7b779dbf3beb32313fd95b8551",
+      "bytes": 65720,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-72-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-73-wght-normal-c5cbbb60e77f863a.woff2",
+      "sha256": "c5cbbb60e77f863af35524ec5a6674f5ce15735f05746923caa8d07e99b55886",
+      "bytes": 56040,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-73-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-74-wght-normal-365512ffc9e2717c.woff2",
+      "sha256": "365512ffc9e2717c81cf5d9af42646426d657d5494b4fd04501a5beb0af6f2e7",
+      "bytes": 74576,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-74-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-75-wght-normal-f0e12f7e577876bf.woff2",
+      "sha256": "f0e12f7e577876bf2d554e924f0a2bbce375b647d885a568b37dd5b042133ad1",
+      "bytes": 57824,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-75-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-76-wght-normal-f0dbe158fa641cc4.woff2",
+      "sha256": "f0dbe158fa641cc4297af81a4d44d2a9a2b775a32a96d4f665d62820ee2e6562",
+      "bytes": 65740,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-76-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-77-wght-normal-cfabb52e72825965.woff2",
+      "sha256": "cfabb52e72825965ec66b18bc1bab646d150206f2a3aa6d4fa6f29040058515e",
+      "bytes": 51780,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-77-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-78-wght-normal-2101d62af080d680.woff2",
+      "sha256": "2101d62af080d6803513f4fe5d91aba6831b61bc95ed172dace75caa2a5b8c2d",
+      "bytes": 71048,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-78-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-79-wght-normal-a5fdbb67e3dadebd.woff2",
+      "sha256": "a5fdbb67e3dadebda5b447c1707fe47a2d9e40f095fb22dedc63aadf969d6609",
+      "bytes": 58804,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-79-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-80-wght-normal-0a97bd54c22add0c.woff2",
+      "sha256": "0a97bd54c22add0ce1fd54256f20bcafa92b8db870b3f80cefd3672da29eb3ae",
+      "bytes": 45184,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-80-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-81-wght-normal-5945538dcbfc11c1.woff2",
+      "sha256": "5945538dcbfc11c1db2d573e1a0889c33b90b45d8445cb9ce1f18b38db36336c",
+      "bytes": 60576,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-81-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-82-wght-normal-45f3ed82e9bd8231.woff2",
+      "sha256": "45f3ed82e9bd8231532b58a0de47d0b26fbe8e4ceba610615903e346e5213263",
+      "bytes": 62128,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-82-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-83-wght-normal-bf628db08549cbf5.woff2",
+      "sha256": "bf628db08549cbf5090c3486717d5121d48af1d82c79b6ab181ed9b49ba5e31b",
+      "bytes": 58812,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-83-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-84-wght-normal-60e71123f0b838bf.woff2",
+      "sha256": "60e71123f0b838bf4fd52cb5de5e3d6af8e48c8f7f32481a39da625d1e63fd2e",
+      "bytes": 42656,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-84-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-85-wght-normal-d8f48bbf844eadba.woff2",
+      "sha256": "d8f48bbf844eadbaa2e3db648ed6889ccb8083572437eb6f0f717f9097b9e45b",
+      "bytes": 40440,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-85-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-86-wght-normal-09248b343e7220ab.woff2",
+      "sha256": "09248b343e7220ab8786b907c2d75aaf6d1a54830822070a0ab012ec03a02bb1",
+      "bytes": 47336,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-86-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-87-wght-normal-50751cd23b3787ef.woff2",
+      "sha256": "50751cd23b3787eff2af23d3b9676b13cb5263e750a72fd258328f5812520b08",
+      "bytes": 7400,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-87-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-88-wght-normal-45cb9a16cbc13eff.woff2",
+      "sha256": "45cb9a16cbc13eff333b49bfa5c63f0478078ac6bdc327de9d69bdb6cdd8ce2b",
+      "bytes": 6892,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-88-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-89-wght-normal-ba142270184772c2.woff2",
+      "sha256": "ba142270184772c2bbc1985bf88e42d05e9462b14163001b8c253765c3f1d55e",
+      "bytes": 12280,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-89-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-90-wght-normal-5968dd127304a59f.woff2",
+      "sha256": "5968dd127304a59f1e2ea36b875f3702dadb0a229bc87a9053727c26807a15dc",
+      "bytes": 9736,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-90-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-91-wght-normal-30691665669ee807.woff2",
+      "sha256": "30691665669ee807f465d552b3247cd41f9097020662bc43f28dbaf243cbd883",
+      "bytes": 10568,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-91-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-97-wght-normal-91923c87f9f32c46.woff2",
+      "sha256": "91923c87f9f32c46056285e69b1009fbb71c0bd27a1a1f9d386bc9248217606f",
+      "bytes": 2416,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-97-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-98-wght-normal-26b9dec17f125371.woff2",
+      "sha256": "26b9dec17f125371d5f5089f89de39094a11f98ffebb061011158d7e4aa602d0",
+      "bytes": 4376,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-98-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-99-wght-normal-7bf7c8fd9809004c.woff2",
+      "sha256": "7bf7c8fd9809004cba36338a94c338cffbce66069c2b091a7472e0b4dfa6b041",
+      "bytes": 12324,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-99-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-100-wght-normal-10d846c3e11659c5.woff2",
+      "sha256": "10d846c3e11659c57d906ae2ab9a9d418e0aaa36b99a991a09aca8e5bd6e3c64",
+      "bytes": 84728,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-100-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-101-wght-normal-139765926260131b.woff2",
+      "sha256": "139765926260131beb5763bb8474d5441c7a504f62257cacd5b569ee39d119e4",
+      "bytes": 77708,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-101-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-102-wght-normal-98eb7841a02d362b.woff2",
+      "sha256": "98eb7841a02d362b6b92646644d54e9a3ed296e931799f342acc76f844024328",
+      "bytes": 79564,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-102-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-103-wght-normal-ae54f03733db84ab.woff2",
+      "sha256": "ae54f03733db84abcacd43c967c9d6afd647f0a1579ef3b595a807bd24f76a2f",
+      "bytes": 84032,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-103-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-104-wght-normal-ebda2b19fc7a325a.woff2",
+      "sha256": "ebda2b19fc7a325ab200e073d3152ef8761dd2e3fc6f4a36c757792ba393264e",
+      "bytes": 80996,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-104-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-105-wght-normal-f43c00b1e7e213ad.woff2",
+      "sha256": "f43c00b1e7e213add01d19eecf6ef2e8a96f7087b46b908df407490b72fe09d9",
+      "bytes": 81516,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-105-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-106-wght-normal-1a6cc82f2ce03f8b.woff2",
+      "sha256": "1a6cc82f2ce03f8bbc6c78ad27bb79d1319dbabb6a016499d9042073acabcc0e",
+      "bytes": 81600,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-106-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-107-wght-normal-2a55b026bb206504.woff2",
+      "sha256": "2a55b026bb206504dc94a3fa0d58a1f2af2b9b4c3daf6dd988519458e7404876",
+      "bytes": 79852,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-107-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-108-wght-normal-4665f9383f65a4fb.woff2",
+      "sha256": "4665f9383f65a4fb003c53808f5b91d1e93fcccd3d2d8c799cfda6e3d14656d7",
+      "bytes": 83484,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-108-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-109-wght-normal-16b43b96dc859eaf.woff2",
+      "sha256": "16b43b96dc859eaf9b6f2ee884c9976318d6b55720ae72b118f9ec77582361d6",
+      "bytes": 79000,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-109-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-110-wght-normal-3616d3502701dcdf.woff2",
+      "sha256": "3616d3502701dcdf867d0c850ef50cbf19e1613b283a238fe4f8ea0c91908c6d",
+      "bytes": 79492,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-110-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-111-wght-normal-8164af476b514e30.woff2",
+      "sha256": "8164af476b514e30654ecf3aa34edeecbad209782f4b026964032e4f594a2881",
+      "bytes": 81144,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-111-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-112-wght-normal-675553f67dda471c.woff2",
+      "sha256": "675553f67dda471ccc684b734a07db465fb6bb9ec1ce5a70b6d6b0f9a36a7a26",
+      "bytes": 75996,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-112-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-113-wght-normal-1594e53f4ab5fe06.woff2",
+      "sha256": "1594e53f4ab5fe067f7ba108b65a71ed07b2fb9da68af01349b4966c871e4d36",
+      "bytes": 75872,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-113-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-114-wght-normal-f402c381cb2eb5c6.woff2",
+      "sha256": "f402c381cb2eb5c6d1e65a8bae7629b5cb97faaa42759af6874f6d33fcc98273",
+      "bytes": 74744,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-114-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-115-wght-normal-1bd7a4092909a57c.woff2",
+      "sha256": "1bd7a4092909a57cf3f2df1f983980fa45d37f0f77b038a31785719fc9580668",
+      "bytes": 72536,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-115-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-116-wght-normal-2392f5989457174e.woff2",
+      "sha256": "2392f5989457174e847cc69a4eff0ff80f5ac744b8f1fe29b0b1925299cb0a0e",
+      "bytes": 67284,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-116-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-117-wght-normal-44c0c56034f29060.woff2",
+      "sha256": "44c0c56034f2906014cd0082c42cef587cd4e2eb24983aca2a10d9805a0f26f6",
+      "bytes": 66576,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-117-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-118-wght-normal-9a03bacc0425e420.woff2",
+      "sha256": "9a03bacc0425e420573fa8ba6b4a1468ebfe8860ef2243e41a646dee45b67b54",
+      "bytes": 58148,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-118-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-119-wght-normal-28858c6c597253c4.woff2",
+      "sha256": "28858c6c597253c4488e0ce1bddf52d6bb5464ebcf981927ea5c7269b5c1dc17",
+      "bytes": 103768,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-119-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-cyrillic-wght-normal-d6e6ed7b0a14b508.woff2",
+      "sha256": "d6e6ed7b0a14b508f94072aea3bb29abe236fd012ba6174b49292a6c900718e6",
+      "bytes": 14476,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-cyrillic-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-vietnamese-wght-normal-9826143bb6278155.woff2",
+      "sha256": "9826143bb6278155de4f76910fd6ec34fe450385dd0d85df10e4497bb174eac7",
+      "bytes": 10920,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-vietnamese-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-latin-ext-wght-normal-b07e7e5e090ed922.woff2",
+      "sha256": "b07e7e5e090ed9220e5fd4afc6a22339a77f63f79f1f7ac010e3b05a8849c5ce",
+      "bytes": 10332,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-latin-ext-wght-normal.woff2"
+    },
+    {
+      "file": "noto-serif-sc-latin-wght-normal-2ac76686e472db28.woff2",
+      "sha256": "2ac76686e472db28292edcc26bcc201a3b40b08b2615db7e75e03d07ab853017",
+      "bytes": 32972,
+      "package": "@fontsource-variable/noto-serif-sc",
+      "source": "files/noto-serif-sc-latin-wght-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-ext-400-normal-f8c22ec1804bd696.woff2",
+      "sha256": "f8c22ec1804bd6966b70f43ac7c327025645b4c09597117fca2a5a6c750106fe",
+      "bytes": 6912,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-ext-400-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-400-normal-7635422bd10ddbbc.woff2",
+      "sha256": "7635422bd10ddbbcb0e0caa1154b928298f5c8319b8c00b30978d4395f4783ce",
+      "bytes": 8356,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-400-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-vietnamese-400-normal-62632b6375305e70.woff2",
+      "sha256": "62632b6375305e70ddcafdd895218e6ae41a184fcd280a69c739460604ca00a9",
+      "bytes": 5868,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-vietnamese-400-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-ext-400-normal-6bc0f226a5b7884a.woff2",
+      "sha256": "6bc0f226a5b7884a8170e3f62c63d7675609d4631bdc5931b5cdab81821f00eb",
+      "bytes": 13348,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-ext-400-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-400-normal-08949f728dc52d52.woff2",
+      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7",
+      "bytes": 14708,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-400-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-ext-500-normal-3febe5c7f22e4b07.woff2",
+      "sha256": "3febe5c7f22e4b07b4552738673c3dbe8bced2dc5f48b866edf7ccd9552d109a",
+      "bytes": 6972,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-ext-500-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-500-normal-1d89462e86cb8e87.woff2",
+      "sha256": "1d89462e86cb8e87e7e9d6f6635605bd7c3081baca6caaecee84916bf7b60edc",
+      "bytes": 8460,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-500-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-vietnamese-500-normal-781633d95de88040.woff2",
+      "sha256": "781633d95de88040fb77141d1e65d928c87c0144691fbc74da5a64d137a7e910",
+      "bytes": 6040,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-vietnamese-500-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-ext-500-normal-6bb06407c97584b0.woff2",
+      "sha256": "6bb06407c97584b0867a959e05e8874693bfeb8c317de190811c51598f2d99ea",
+      "bytes": 13432,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-ext-500-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-500-normal-01d285447409c8a5.woff2",
+      "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22",
+      "bytes": 14888,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-500-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-ext-600-normal-83109cdd4f8665b4.woff2",
+      "sha256": "83109cdd4f8665b475dfc11d61bd44da328bf7e6eab3d3953d39c49b1b9f6015",
+      "bytes": 7692,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-ext-600-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-600-normal-2b05a8695c7f9f4a.woff2",
+      "sha256": "2b05a8695c7f9f4abd7178b279646a3b005a8ce57546bef6fd145f25d131e0aa",
+      "bytes": 9352,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-600-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-vietnamese-600-normal-51b74d53e106ba8a.woff2",
+      "sha256": "51b74d53e106ba8a26dd33464b231a562069be2a234b923c115beb622e6f6bc6",
+      "bytes": 6932,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-vietnamese-600-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-ext-600-normal-32057cf50dd14bdb.woff2",
+      "sha256": "32057cf50dd14bdb21a2c93766c4a2c43e4abe688ea3922df3203cac7751a98b",
+      "bytes": 14328,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-ext-600-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-600-normal-0d1f0b8d0722224e.woff2",
+      "sha256": "0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83",
+      "bytes": 15620,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-600-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-ext-700-normal-31fbbf2279dd1bdf.woff2",
+      "sha256": "31fbbf2279dd1bdfb9176a5d61dd85d77206ccba92a43ea5665210ee4ef9b6fa",
+      "bytes": 7184,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-ext-700-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-cyrillic-700-normal-104701bedfa06b56.woff2",
+      "sha256": "104701bedfa06b56abba3e273f3ed74d7235d02c00ddc6ca942d65e2940fe6fe",
+      "bytes": 8676,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-cyrillic-700-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-vietnamese-700-normal-6de519604eba816d.woff2",
+      "sha256": "6de519604eba816d624fbe830bff8123d8e8fd4921d60182b442adc8e9d66c19",
+      "bytes": 6068,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-vietnamese-700-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-ext-700-normal-5b9b81f54dd69635.woff2",
+      "sha256": "5b9b81f54dd69635c7adcaacd4c4545a73fe4809c528e22734b238a83a74135f",
+      "bytes": 13380,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-ext-700-normal.woff2"
+    },
+    {
+      "file": "ibm-plex-mono-latin-700-normal-4f84d86cfd060f4d.woff2",
+      "sha256": "4f84d86cfd060f4ded334358ff8a4c81d4db2ed5addd568359d693f44a87765a",
+      "bytes": 14908,
+      "package": "@fontsource/ibm-plex-mono",
+      "source": "files/ibm-plex-mono-latin-700-normal.woff2"
+    }
+  ],
+  "stylesheet": "site-fonts-5af26311f0c39afc.css"
+}

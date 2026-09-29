@@ -19,7 +19,7 @@ import type {
   CommentPage,
   CommentReplyPage,
 } from "@/lib/dto/db/work-community";
-import { MessageCircle, ThumbsUp, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -224,6 +224,14 @@ function CommentPanelContent({
               onLike={toggleLike}
               endpoint={endpoint}
               onReplyCreated={replyCreated}
+              onUpdated={(updated) => setCommentUpdates((current) => ({
+                ...current,
+                [updated.id]: {
+                  ...current[updated.id],
+                  body: updated.body, bodySource: updated.bodySource, images: updated.images,
+                  editedAt: updated.editedAt, updatedAt: updated.updatedAt,
+                },
+              }))}
             />
           ))
         ) : (
@@ -261,6 +269,7 @@ function CommentCard({
   onReplyCreated,
   onLike,
   onDelete,
+  onUpdated,
 }: {
   comment: CommentDto;
   pinControl: React.ReactNode;
@@ -271,11 +280,34 @@ function CommentCard({
   onReplyCreated: (rootId: number, reply: CommentDto) => void;
   onLike: (comment: CommentDto) => void;
   onDelete: (comment: CommentDto) => Promise<boolean>;
+  onUpdated: (comment: CommentDto) => void;
 }) {
   const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
+  const [editTarget, setEditTarget] = useState<CommentDto | null>(null);
+  const editTrigger = useRef<HTMLButtonElement | null>(null);
+  function closeEdit() {
+    setEditTarget(null);
+    requestAnimationFrame(() => editTrigger.current?.focus());
+  }
+  function editControl(entry: CommentDto) {
+    if (entry.status !== "published" || entry.author?.id !== currentUserId || entry.bodySource == null) return null;
+    return <Button type="button" size="sm" variant="ghost" className="text-xs text-muted"
+      disabled={!!editTarget || !!replyTarget || loading} onClick={(event) => {
+        editTrigger.current = event.currentTarget;
+        setEditTarget(entry);
+      }}><Pencil aria-hidden />编辑</Button>;
+  }
+  function editEditor(entry: CommentDto) {
+    if (editTarget?.id !== entry.id) return null;
+    return <div className="mt-3 grid min-w-0 gap-2" role="group" aria-label={entry.rootCommentId ? "编辑回复" : "编辑评论"}>
+      <CommentComposer key={editTarget.id} endpoint={`/api/comments/${editTarget.id}`} target={editTarget.target}
+        editing={editTarget} inputId={`comment-edit-input-${editTarget.id}`} onCancel={closeEdit}
+        onCreated={(updated) => { onUpdated(updated); closeEdit(); }} />
+    </div>;
+  }
   function startReply(target: CommentDto) {
-    if (!replyBusy) setReplyTarget(target);
+    if (!replyBusy && !editTarget) setReplyTarget(target);
   }
   const [replies, setReplies] = useState<CommentReplyPage | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -363,12 +395,15 @@ function CommentCard({
           <CommentControls
             comment={currentComment}
             currentUserId={currentUserId}
+            editing={!!editTarget}
             onDelete={onDelete}
             onLike={onLike}
             onReply={startReply}
           />
           {pinControl}
+          {editControl(currentComment)}
         </div>
+        {editEditor(currentComment)}
         {replyCount > 0 || loading || error || replyTarget ? (
           <section
             aria-label={`${comment.floorNumber} 楼的回复`}
@@ -384,6 +419,7 @@ function CommentCard({
                   key={reply.id}
                   comment={reply}
                   currentUserId={currentUserId}
+                  editing={!!editTarget}
                   onDelete={async (reply) => {
                     if (await onDelete(reply)) {
                       if (replyTarget?.id === reply.id) setReplyTarget(null);
@@ -392,6 +428,8 @@ function CommentCard({
                   }}
                   onLike={onLike}
                   onReply={startReply}
+                  editControl={editControl(reply)}
+                  editor={editEditor(reply)}
                 />
               );
             })}
@@ -399,7 +437,7 @@ function CommentCard({
               <Button
                 aria-controls={`comment-replies-${comment.id}`}
                 aria-expanded={expanded}
-                disabled={loading}
+                disabled={loading || !!editTarget}
                 onClick={() => {
                   if (expanded) {
                     setExpanded(false);
@@ -425,7 +463,7 @@ function CommentCard({
                 page={replies.page}
                 pageSize={replies.pageSize}
                 total={replies.total}
-                disabled={loading}
+                disabled={loading || !!editTarget}
                 onPageChange={(page) => void loadReplies(page)}
               />
             ) : null}
@@ -436,7 +474,7 @@ function CommentCard({
               >
                 {error}
                 <Button
-                  disabled={loading}
+                  disabled={loading || !!editTarget}
                   onClick={() =>
                     void loadReplies(
                       lastRequest.current.page,
@@ -480,12 +518,18 @@ function CommentNestedReply({
   onReply,
   onLike,
   onDelete,
+  editControl,
+  editor,
+  editing,
 }: {
   comment: CommentDto;
   currentUserId: number | null;
   onReply: (comment: CommentDto) => void;
   onLike: (comment: CommentDto) => void;
   onDelete: (comment: CommentDto) => void;
+  editControl: React.ReactNode;
+  editor: React.ReactNode;
+  editing: boolean;
 }) {
   if (comment.status === "deleted") return null;
   return (
@@ -496,8 +540,9 @@ function CommentNestedReply({
         {comment.editedAt ? " · 已编辑" : ""}
       </>}
       actions={<>
+        {editControl}
         {currentUserId ? (
-          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" onClick={() => onReply(comment)}>
+          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" disabled={editing} onClick={() => onReply(comment)}>
             回复
           </Button>
         ) : null}
@@ -513,7 +558,7 @@ function CommentNestedReply({
           <span className={comment.likedByMe ? "text-primary" : undefined}>{comment.likeCount}</span>
         </Button>
         {currentUserId === comment.author?.id ? (
-          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" onClick={() => onDelete(comment)}>
+          <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" disabled={editing} onClick={() => onDelete(comment)}>
             删除
           </Button>
         ) : null}
@@ -527,6 +572,7 @@ function CommentNestedReply({
         {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "已删除用户"}</span> : null}
         ：<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
         <CommentImages images={comment.images} />
+        {editor}
     </NestedReply>
   );
 }
@@ -587,12 +633,14 @@ function CommentControls({
   onReply,
   onLike,
   onDelete,
+  editing,
 }: {
   comment: CommentDto;
   currentUserId: number | null;
   onReply: (comment: CommentDto) => void;
   onLike: (comment: CommentDto) => void;
   onDelete: (comment: CommentDto) => void;
+  editing: boolean;
 }) {
   if (comment.status === "deleted") return null;
   return (
@@ -601,6 +649,7 @@ function CommentControls({
         <Button
           className="text-xs text-muted"
           onClick={() => onReply(comment)}
+          disabled={editing}
           size="sm"
           type="button"
           variant="ghost"
@@ -630,6 +679,7 @@ function CommentControls({
         <Button
           className="text-xs text-muted"
           onClick={() => onDelete(comment)}
+          disabled={editing}
           size="sm"
           type="button"
           variant="ghost"
