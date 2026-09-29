@@ -1,4 +1,4 @@
-import { cleanupExpiredGameResources } from "@/app/play/[archiveVersionId]/web-play-cleanup";
+import { cleanupExpiredGameResources } from "@/app/play/[workId]/web-play-cleanup";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { isAndroidClient } from "@/lib/browser/client-environment";

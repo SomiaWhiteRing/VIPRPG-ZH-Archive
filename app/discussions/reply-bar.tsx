@@ -1,6 +1,6 @@
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { ForumViewer } from "@/lib/forum";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { createContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const ForumReplyLayoutContext = createContext<{
@@ -13,16 +13,21 @@ export const ForumReplyLayoutContext = createContext<{
 export function ForumReplyBar({
   children,
   viewer,
+  pagination,
+  bottomPaginationRef,
   onBottomOverscroll,
 }: {
   children: ReactNode;
   viewer: ForumViewer;
+  pagination?: ReactNode;
+  bottomPaginationRef?: RefObject<HTMLDivElement | null>;
   onBottomOverscroll?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const slot = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  const inlinePagination = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [mobileEmojiOpen, setMobileEmojiOpen] = useState(false);
   const fullscreenMode = useRef({ active: false, restoring: false });
@@ -137,7 +142,14 @@ export function ForumReplyBar({
     let frame = 0;
     function measure() {
       if (!bar || !placeholder || !page) return;
-      if (fullscreenMode.current.active) return;
+      if (fullscreenMode.current.active) {
+        if (inlinePagination.current) {
+          inlinePagination.current.dataset.visible = "false";
+          inlinePagination.current.inert = true;
+          inlinePagination.current.setAttribute("aria-hidden", "true");
+        }
+        return;
+      }
       const currentAnchor = page?.querySelector<HTMLElement>("#post-1") ?? null;
       if (currentAnchor !== anchor) {
         if (anchor) observer.unobserve(anchor);
@@ -153,6 +165,17 @@ export function ForumReplyBar({
       const bounds = anchor?.getBoundingClientRect();
       const docked =
         !bounds || bounds.bottom <= top || bounds.top >= viewBottom;
+      const paginationBounds =
+        bottomPaginationRef?.current?.firstElementChild?.getBoundingClientRect();
+      const showPagination =
+        !docked && !!paginationBounds &&
+        paginationBounds.top >= viewBottom;
+      const inline = inlinePagination.current;
+      if (inline && inline.dataset.visible !== String(showPagination)) {
+        inline.dataset.visible = String(showPagination);
+        inline.inert = !showPagination;
+        inline.setAttribute("aria-hidden", String(!showPagination));
+      }
       if (bar.dataset.docked !== String(docked))
         bar.dataset.docked = String(docked);
       const bottom = viewport
@@ -232,37 +255,54 @@ export function ForumReplyBar({
       root.style.scrollPaddingBottom = originalScrollPadding;
       page.style.removeProperty("--forum-reply-clearance");
     };
-  }, []);
+  }, [bottomPaginationRef]);
+  useLayoutEffect(() => {
+    scheduleMeasurement.current();
+  });
   return (
-    <div ref={slot}>
-      <div
-        ref={ref}
-        data-forum-reply-bar
-        data-fullscreen={fullscreen}
-        data-mobile-emoji-open={mobileEmojiOpen}
-        className="border-b border-border bg-card data-[fullscreen=true]:relative data-[fullscreen=true]:z-[60] data-[docked=true]:fixed data-[docked=true]:inset-x-0 data-[docked=true]:bottom-0 data-[docked=true]:z-40 data-[docked=true]:data-[fullscreen=true]:z-[60] data-[docked=true]:border-t data-[docked=true]:pb-[env(safe-area-inset-bottom)] data-[docked=true]:data-[mobile-emoji-open=true]:pb-0 data-[docked=true]:shadow-surface"
-      >
-        <div ref={surface}>
-          <div
-            ref={content}
-            data-mobile-emoji-open={mobileEmojiOpen}
-            className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3 data-[mobile-emoji-open=true]:pb-0"
-          >
-            {viewer ? (
-              <UserAvatar
-                displayName={viewer.name}
-                avatarBlobSha256={viewer.avatar}
-                className="size-8 sm:size-10"
-              />
-            ) : null}
-            <div className="min-w-0 flex-1">
-              <ForumReplyLayoutContext.Provider value={{ fullscreen, setFullscreen, setMobileEmojiOpen }}>
-                {children}
-              </ForumReplyLayoutContext.Provider>
+    <>
+      <div ref={slot}>
+        <div
+          ref={ref}
+          data-forum-reply-bar
+          data-fullscreen={fullscreen}
+          data-mobile-emoji-open={mobileEmojiOpen}
+          className="border-b border-border bg-card data-[fullscreen=true]:relative data-[fullscreen=true]:z-[60] data-[docked=true]:fixed data-[docked=true]:inset-x-0 data-[docked=true]:bottom-0 data-[docked=true]:z-40 data-[docked=true]:data-[fullscreen=true]:z-[60] data-[docked=true]:border-t data-[docked=true]:pb-[env(safe-area-inset-bottom)] data-[docked=true]:data-[mobile-emoji-open=true]:pb-0 data-[docked=true]:shadow-surface"
+        >
+          <div ref={surface}>
+            <div
+              ref={content}
+              data-mobile-emoji-open={mobileEmojiOpen}
+              className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3 data-[mobile-emoji-open=true]:pb-0"
+            >
+              {viewer ? (
+                <UserAvatar
+                  displayName={viewer.name}
+                  avatarBlobSha256={viewer.avatar}
+                  className="size-8 sm:size-10"
+                />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <ForumReplyLayoutContext.Provider value={{ fullscreen, setFullscreen, setMobileEmojiOpen }}>
+                  {children}
+                </ForumReplyLayoutContext.Provider>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+      {pagination ? (
+        // Keep the slot stable: collapsing it can move the bottom pager across
+        // the viewport edge and repeatedly reverse the visibility decision.
+        <div
+          ref={inlinePagination}
+          className="invisible flow-root data-[visible=true]:visible"
+          inert
+          aria-hidden="true"
+        >
+          {pagination}
+        </div>
+      ) : null}
+    </>
   );
 }

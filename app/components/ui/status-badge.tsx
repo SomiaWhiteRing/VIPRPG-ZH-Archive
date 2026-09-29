@@ -1,5 +1,5 @@
 import { archiveStatusLabel, importTaskStatusLabel, inboxStatusLabel, installStatusLabel, userStatusLabel, workStatusLabel } from "@/lib/labels";
-import type { WebPlayInstallStatus } from "@/app/play/[archiveVersionId]/web-play-types";
+import type { WebPlayInstallStatus } from "@/app/play/[workId]/web-play-types";
 import { Badge } from "@/app/components/ui/badge";
 
 type StatusBadgeProps =

@@ -9,11 +9,11 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { useToast } from "@/app/components/ui/toast";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { WorkListRow } from "@/app/components/work/work-list-row";
-import { busyGameResourceKeys, cleanupExpiredGameResources, deleteLocalGame } from "@/app/play/[archiveVersionId]/web-play-cleanup";
-import { readCachedWebPlayCover } from "@/app/play/[archiveVersionId]/web-play-cover";
-import { listWebPlayInstallations } from "@/app/play/[archiveVersionId]/web-play-db";
-import { subscribeGameResourcesChanged } from "@/app/play/[archiveVersionId]/web-play-events";
-import type { WebPlayInstallation } from "@/app/play/[archiveVersionId]/web-play-types";
+import { busyGameResourceKeys, cleanupExpiredGameResources, deleteLocalGame } from "@/app/play/[workId]/web-play-cleanup";
+import { readCachedWebPlayCover } from "@/app/play/[workId]/web-play-cover";
+import { listWebPlayInstallations } from "@/app/play/[workId]/web-play-db";
+import { subscribeGameResourcesChanged } from "@/app/play/[workId]/web-play-events";
+import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
 import { DISPLAY_TIME_ZONE, formatBytes, formatDateKey, parseTimestamp } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { Check, Clock3, HardDrive, ListChecks, Play } from "lucide-react";
@@ -172,7 +172,7 @@ function InstalledGames() {
                 {managing ? <Label className="flex min-h-11 shrink-0 items-center pt-3.5"><Checkbox aria-label={`选择 ${item.title}`} disabled={busy || activeKeys.has(item.playKey)} checked={selected.has(item.playKey)} onCheckedChange={checked => setSelected(current => { const next = new Set(current); if (checked === true) next.add(item.playKey); else next.delete(item.playKey); return next; })} /></Label> : null}
                 <div className="min-w-0 flex-1"><InstalledGameRow item={item} actions={managing ? null : (
                   <>
-                    {!activeKeys.has(item.playKey) ? <Button asChild className="min-h-11 px-3.5 text-xs" variant="outline"><Link to={`/play/${item.archiveVersionId}`}><Play aria-hidden />{item.status === "ready" ? "游玩" : "重新安装"}</Link></Button> : null}
+                    {item.workId && !activeKeys.has(item.playKey) ? <Button asChild className="min-h-11 px-3.5 text-xs" variant="outline"><Link to={`/play/${item.workId}`}><Play aria-hidden />{item.status === "ready" ? "游玩" : "重新安装"}</Link></Button> : null}
                     <Button className="min-h-11 px-3 text-xs text-muted" disabled={busy || activeKeys.has(item.playKey)} onClick={() => void remove([item])} type="button" variant="ghost">清理</Button>
                   </>
                 )} /></div>
@@ -200,7 +200,7 @@ function InstalledGameRow({ item, actions }: { item: WebPlayInstallation; action
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
   }, [item.coverBlobSha256]);
   return (
-    <WorkListRow href={item.workId ? `/games/${item.workId}` : `/play/${item.archiveVersionId}`} title={item.title} originalTitle={item.originalTitle}
+    <WorkListRow href={item.workId ? `/games/${item.workId}` : "/games"} title={item.title} originalTitle={item.originalTitle}
       coverSrc={cover?.hash === item.coverBlobSha256 ? cover?.url : null}
       action={actions ? <div className="hidden items-center gap-2 min-[561px]:flex">{actions}</div> : null}>
       <p className="mt-1 font-mono text-xs text-muted">{formatBytes(item.installedBytes)}</p>

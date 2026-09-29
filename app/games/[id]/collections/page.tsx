@@ -52,7 +52,7 @@ export default function WorkCollectionsPage() {
         originalTitle={work.originalTitle}
         tabs={[
           { href: `/games/${work.id}`, label: "概览" },
-          ...(current ? [{ href: `/play/${current.id}`, label: "在线游玩", reloadDocument: true }] : []),
+          ...(current ? [{ href: `/play/${work.id}`, label: "在线游玩", reloadDocument: true }] : []),
           { href: `/games/${work.id}/collections`, label: "收藏与吐槽", active: true },
         ]}
       />

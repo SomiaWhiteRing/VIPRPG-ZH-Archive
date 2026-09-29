@@ -29,8 +29,9 @@
 ## 2. 总体流程
 
 ```text
-用户进入 /play/{archiveVersionId}
-  -> 查询 ArchiveVersion 和 Work 元数据
+用户进入 /play/{workId}
+  -> 按作品 ID 查询公开作品及已发布的活跃版本（is_current=1），不存在则返回 404
+  -> 使用活跃版本的 ArchiveVersion 元数据安装游戏，下载 URL 与安装键继续使用版本 ID
   -> RPG Maker 2003 Maniac 作品显示兼容性提示
   -> 检查 IndexedDB 是否已有 ready 安装
   -> 没有 ready 安装时启动 Web Worker
@@ -52,7 +53,7 @@
 ### 3.1 页面和资源路径
 
 ```text
-GET /play/{archiveVersionId}
+GET /play/{workId}
 GET /play/player.html
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/index.js
 GET /play/runtime/easyrpg/{easyrpgRuntimeVersion}/player-worker.js
@@ -212,11 +213,11 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 
 ## 10. 在线游玩页面
 
-`/play/{archiveVersionId}` 与 `/games/{workId}` 复用作品页头、导航标签和侧栏结构。桌面端把游玩画面作为主栏正文，评论紧接在画面下方；侧栏保留游玩操作和作品资料。移动端依次展开游玩操作、画面、评论和作品资料，不把评论藏进弹窗或独立页面。
+`/play/{workId}` 与 `/games/{workId}` 复用作品页头、导航标签和侧栏结构。桌面端把游玩画面作为主栏正文，评论紧接在画面下方；侧栏保留游玩操作和作品资料。移动端依次展开游玩操作、画面、评论和作品资料，不把评论藏进弹窗或独立页面。
 
 播放器主体固定使用 4:3 画面比例。容量、持久化授权、安装记录和运行日志属于诊断信息，默认收进折叠区；安装、启动、全屏和下载保留为直接操作。
 
-`/play/{archiveVersionId}` 至少需要这些状态：
+`/play/{workId}` 至少需要这些状态：
 
 - Maniac 作品：允许尝试在线游玩，并显示兼容性提示。
 - 未安装：显示游戏大小和安装按钮；浏览器存储用量放在诊断区。
@@ -242,7 +243,7 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 - 运行日志：加载 runtime 前接入播放器 iframe 的 console.debug/log/info/warn/error，同时收集未捕获错误与 Promise 拒绝，保留浏览器控制台原输出。页面与剪贴板统一逐行使用 `[HH:mm:ss]内容` 格式，警告与错误通过颜色区分，不重复输出来源和级别文字；“清空”旁提供“复制”按钮，按显示顺序复制当前日志。保留最近 300 条（每条最多 16,000 字符），停止后可继续查看。Worker 将引擎日志发给 iframe，iframe 转发至 console 与页面；页面每 200 毫秒批量更新日志，避免高频警告阻塞导航。
 - 中断安装：刷新或浏览器崩溃后，如果 IndexedDB 仍记录 `installing`，页面提示上次安装未完成，并提供“清理并重装”。当前不从半截 ZIP 继续恢复。
 
-本地缓存管理并入 `/play/{archiveVersionId}`。
+本地缓存管理并入 `/play/{workId}`。
 
 ## 11. EasyRPG runtime
 
@@ -256,7 +257,7 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 - `movie-decoder.LICENSE.txt`、`web-movies.md`：解码器许可及构建、格式范围说明。
 - `COPYING`、`SOURCE.json`：许可证、来源、文件摘要。
 
-React 页面通过 [createPlayerSession](../app/play/%5BarchiveVersionId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首部作品画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
+React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-player.ts) 创建同源 `/play/player.html` iframe，加载入口并传入 `workId`、`runtimeBase`、本地 packages 与启动参数。首部作品画面完成后才报告启动成功。截图调用引擎已有 PNG 输出，返回原始分辨率的 Blob。
 
 音频 Worker 运行同一个 WASM 模块的独立实例，复用 C++ 解码器、混音器和音效缓存，不启动游戏、不挂载存档。音频指令与 MIDI 播放状态走 Worker 间 MessagePort；PCM 由音频 Worker 直接发给 AudioWorklet，不经过游戏或网页转发。音色库在启动阶段初始化。停止时两个 Worker 一同释放；运行组件升级不改变安装键、pack 或存档格式。
 

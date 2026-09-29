@@ -79,7 +79,7 @@ export default function GameDetailPage() {
           ...(current
             ? [
                 {
-                  href: `/play/${current.id}`,
+                  href: `/play/${work.id}`,
                   label: "在线游玩",
                   reloadDocument: true,
                 },

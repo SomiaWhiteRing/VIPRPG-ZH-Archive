@@ -42,7 +42,7 @@ export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }
   }, [id]);
   const queued = status === "created" || status === "installing" || status === "paused";
   return <Rm2kButton className="min-h-12.5 w-full text-base"
-    href={native ? undefined : `/play/${id}`} reloadDocument
+    href={native ? undefined : `/play/${workId}`} reloadDocument
     disabled={busy} icon={native && status !== "ready" ? <Download aria-hidden /> : <Play aria-hidden />}
     onClick={native ? () => {
       setBusy(true);
