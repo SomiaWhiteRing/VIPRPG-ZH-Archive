@@ -360,7 +360,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
   if (!ids.length) return;
   const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,
       c.work_id,c.creator_id,c.character_id,
-      COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.name) AS target_title,
+      COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
       sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
     FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.reply_comment_id,i.work_comment_id)

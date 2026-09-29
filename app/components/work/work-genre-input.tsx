@@ -8,10 +8,10 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<{ query: string | null; names: string[] }>({ query: null, names: [] });
   useEffect(() => {
-    if (!open || disabled || !value.trim()) return;
+    if (!focused || disabled || !value.trim()) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -25,9 +25,10 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
       }
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [value, open, disabled]);
+  }, [value, focused, disabled]);
   const hasQuery = Boolean(value.trim());
   const loading = hasQuery && suggestions.query !== value;
+  const items = !hasQuery || loading ? [] : suggestions.names;
   return (
     <SearchComboBox
       id={id}
@@ -36,14 +37,13 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
       disabled={disabled}
       maxLength={WORK_GENRE_MAX_LENGTH}
       onQueryChange={onChange}
-      onOpenChange={setOpen}
-      items={!hasQuery || loading ? [] : suggestions.names}
+      onFocusChange={setFocused}
+      inputSuffix={items.length > 0 ? undefined : false}
+      items={items}
       getKey={(name) => name}
       getText={(name) => name}
       renderItem={(name) => <span>{name}</span>}
       onChoose={onChange}
-      loading={loading}
-      emptyState={hasQuery ? <span className="px-2.5 py-1.5 text-sm text-muted">{loading ? "加载中…" : "暂无候补"}</span> : null}
     />
   );
 }

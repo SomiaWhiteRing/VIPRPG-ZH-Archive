@@ -279,7 +279,7 @@ final class GameStore {
         }
     }
     private JSONArray indexZip(File source, JSONObject metadata) throws Exception {
-        JSONArray files = new JSONArray(); Set<String> paths = new HashSet<>(); long total = 0;
+        JSONArray files = new JSONArray(); Set<String> paths = new HashSet<>(); long total = 0, archiveTotal = 0;
         try (RandomAccessFile zip = new RandomAccessFile(source, "r")) {
             while (true) {
                 check(metadata); long signature = Integer.toUnsignedLong(Integer.reverseBytes(zip.readInt()));
@@ -298,11 +298,25 @@ final class GameStore {
                 if (sum.getValue() != crc) throw new IOException("游戏文件校验失败：" + path);
                 if (path.endsWith("/")) continue;
                 if (!paths.add(path.toLowerCase(Locale.ROOT))) throw new IOException("游戏文件路径重复。");
+                archiveTotal += size;
+                if (paths.size() > 50000 || archiveTotal > 1024L * 1024 * 1024) throw new IOException("游戏过大。");
+                if (shouldSkipLocalInstallFile(path)) continue;
                 files.put(new JSONObject().put("filename", path).put("start", start).put("end", start + size)); total += size;
-                if (files.length() > 50000 || total > 1024L * 1024 * 1024) throw new IOException("游戏过大。");
             }
         }
         if (files.length() != metadata.getInt("installTotalFiles") || total != metadata.getLong("installTotalSizeBytes")) throw new IOException("游戏文件数量或大小与版本信息不一致。");
         return files;
+    }
+    // Keep aligned with lib/archive/web-play-local-policy.ts: metadata counts only runtime files.
+    // Root DLLs used for engine/patch detection must remain in the runtime index.
+    private static boolean shouldSkipLocalInstallFile(String path) {
+        String lower = path.toLowerCase(Locale.ROOT);
+        switch (lower) {
+            case "accord.dll": case "ultimate_rt_eb.dll": case "harmony.dll":
+            case "dynloader.dll": case "destiny.dll": return false;
+            default:
+                String name = lower.substring(lower.lastIndexOf('/') + 1);
+                return name.endsWith(".dll") || name.endsWith(".exe") || name.endsWith(".txt");
+        }
     }
 }

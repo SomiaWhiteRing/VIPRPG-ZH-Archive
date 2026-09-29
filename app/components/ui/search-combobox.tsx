@@ -37,6 +37,7 @@ type SearchComboBoxProps<T> = {
   emptyState?: ReactNode;
   footer?: ReactNode;
   onOpenChange?: (open: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
   onRemoveLast?: () => void;
   onCommit?: () => void;
   enterSelectsFirst?: boolean;
@@ -58,6 +59,7 @@ export function SearchComboBox<T>(props: SearchComboBoxProps<T>) {
       items={props.items}
       isDisabled={props.disabled}
       isInvalid={props.invalid}
+      onFocusChange={props.onFocusChange}
       disabledKeys={props.items
         .filter((item) => props.isItemDisabled?.(item))
         .map(props.getKey)}
