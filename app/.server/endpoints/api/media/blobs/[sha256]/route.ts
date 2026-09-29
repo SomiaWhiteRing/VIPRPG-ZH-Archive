@@ -26,69 +26,8 @@ export async function GET(
     const sha256 = normalizeSha256(rawSha256);
     const row = await getD1(runtime)
       .prepare(
-        `SELECT b.sha256, b.content_type_hint, b.size_bytes
-        FROM blobs b
-        WHERE b.sha256 = ?
-          AND b.status = 'active'
-          AND (
-            EXISTS (
-              SELECT 1 FROM resources r
-              WHERE r.icon_blob_sha256 = b.sha256 AND r.visibility = 'published'
-            )
-            OR
-            EXISTS (
-              SELECT 1
-              FROM media_assets ma
-              JOIN work_media_assets wma ON wma.media_asset_id = ma.id
-              JOIN works w ON w.id = wma.work_id
-              WHERE ma.blob_sha256 = b.sha256
-                AND w.id IN (SELECT id FROM public_works)
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM users u
-              WHERE u.avatar_blob_sha256 = b.sha256
-                AND u.status = 'active'
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM creators c
-              WHERE c.avatar_blob_sha256 = b.sha256
-                AND EXISTS (
-                  SELECT 1 FROM work_staff ws
-                  JOIN works w ON w.id=ws.work_id
-                  WHERE ws.creator_id=c.id AND w.id IN (SELECT id FROM public_works)
-                )
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM catalogs c
-              WHERE c.cover_blob_sha256 = b.sha256
-                AND c.status = 'published'
-            )
-            OR EXISTS (
-              SELECT 1 FROM character_materials m
-              JOIN character_material_bindings binding ON binding.material_id=m.id
-              WHERE m.blob_sha256=b.sha256
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM face_sheets fs
-              WHERE fs.blob_sha256 = b.sha256
-                AND (
-                  fs.library_status = 'approved'
-                  OR EXISTS (
-                    SELECT 1
-                    FROM character_portrait_refs cpr
-                    JOIN work_characters wc ON wc.portrait_ref_id = cpr.id
-                    JOIN works w ON w.id = wc.work_id
-                    WHERE cpr.face_sheet_id = fs.id
-                      AND w.id IN (SELECT id FROM public_works)
-                  )
-                )
-            )
-          )
-        LIMIT 1`,
+        `SELECT sha256, content_type_hint, size_bytes FROM blobs
+         WHERE sha256=? AND status='active' AND public_at IS NOT NULL LIMIT 1`,
       )
       .bind(sha256)
       .first<BlobMediaRow>();

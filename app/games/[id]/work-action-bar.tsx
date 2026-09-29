@@ -80,7 +80,7 @@ export function WorkActionBar({
         </a>
       ) : (
         <span className="font-mono text-xs leading-[1.6] text-muted">
-          该作品目前暂无可下载的当前快照。
+          该作品目前暂无可用的下载来源。
         </span>
       )}
     </div>

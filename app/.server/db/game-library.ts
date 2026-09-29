@@ -401,6 +401,7 @@ export async function getGameWorkDetail(
     .bind(id)
     .first<SummaryRow & { extra_json: string }>();
   if (!row) return null;
+  runtime.memo.set(`public-target:work:${row.id}`, true);
   const collections = await loadWorkCollections(runtime, row.id);
   const summary = mapSummaryRow(
     row,

@@ -1,7 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   getPublishedArchiveDownloadRecord,
-  getWebPlayInstallTargetTotals,
   parseArchiveVersionId,
 } from "@/app/.server/db/archive-downloads";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
@@ -65,8 +64,7 @@ export async function loader(args: LoaderFunctionArgs) {
     throwNotFound();
   }
 
-  const [installTarget, currentUser, work] = await Promise.all([
-    getWebPlayInstallTargetTotals(runtime, record.id),
+  const [currentUser, work] = await Promise.all([
     getCurrentUser(runtime),
     getGameWorkDetail(runtime, record.workId),
   ]);
@@ -107,8 +105,8 @@ export async function loader(args: LoaderFunctionArgs) {
     downloadUrl: buildWebPlayDownloadUrl(record.id),
     totalFiles: record.totalFiles,
     totalSizeBytes: record.totalSizeBytes,
-    installTotalFiles: installTarget.totalFiles,
-    installTotalSizeBytes: installTarget.totalSizeBytes,
+    installTotalFiles: record.installTotalFiles,
+    installTotalSizeBytes: record.installTotalSizeBytes,
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
   };

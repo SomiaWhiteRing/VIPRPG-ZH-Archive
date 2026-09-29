@@ -88,7 +88,7 @@ export default function AdminWorkEditPage() {
         actions={<BackLink href="/admin/works" label="返回游戏维护" />}
       />
       <WorkEditForm work={work} suggestions={suggestions} canUpdateStatus={canUpdateStatus}>
-        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源，作品当前不会公开展示。恢复来源后按原发布状态展示。</p> : null}
+        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍公开展示，恢复来源后可重新下载。</p> : null}
         <StickySaveBar>
           <Button type="submit">保存游戏资料</Button>
           {work.status === "published" && work.hasUsableDistribution ? (

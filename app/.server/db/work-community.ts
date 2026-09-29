@@ -277,11 +277,13 @@ export async function listRootComments(
           ? [currentUserId, ...binds, pinned ? -1 : size + 1]
           : [...binds, pinned ? -1 : size + 1]),
       );
-  const [targetResult, rowsResult] = await database.batch([
-    publicTargetStatement(database, target),
+  const knownPublic = runtime.memo.get(`public-target:${target.kind}:${target.id}`) === true;
+  const results = await database.batch([
+    ...(!knownPublic ? [publicTargetStatement(database, target)] : []),
     rootStatement(false),
   ]);
-  if (!targetResult.results?.length)
+  const rowsResult = results[results.length - 1];
+  if (!knownPublic && !results[0].results?.length)
     throw new HttpError(
       404,
       target.kind === "work"
@@ -343,7 +345,6 @@ export async function listReplies(
          FROM comments c
          WHERE c.id=? AND c.root_comment_id IS NULL
            AND c.id IN (SELECT id FROM public_comments)
-           AND EXISTS (SELECT 1 FROM users root_user WHERE root_user.id=c.user_id AND root_user.status IN ('active','deleted'))
          LIMIT 1`,
       )
       .bind(rootCommentId),
@@ -461,15 +462,17 @@ export async function searchUserComments(
 }> {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
-  const publicClause = input.publicOnly
-    ? "AND c.id IN (SELECT id FROM public_comments)"
-    : "";
-  const from = `FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id) LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
-    ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
-    WHERE c.user_id=? AND c.status<>'deleted' AND root.status<>'deleted' AND ${publicCommentTargetSql("c")} ${publicClause}`;
+  const visibility = input.publicOnly
+    ? "c.id IN (SELECT id FROM public_comments)"
+    : publicCommentTargetSql("c");
+  const base = `FROM comments c JOIN users u ON u.id=c.user_id
+    LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)`;
+  const where = `WHERE c.user_id=? AND c.status<>'deleted' AND root.status<>'deleted' AND ${visibility}`;
+  const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
+    ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
-    database.prepare(`SELECT COUNT(*) AS count ${from}`).bind(input.userId),
+    database.prepare(`SELECT COUNT(*) AS count ${base} ${where}`).bind(input.userId),
     database
       .prepare(
         `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,
@@ -736,12 +739,7 @@ async function publicCommentIdentity(
 ): Promise<{ id: number }> {
   const row = await getD1(runtime)
     .prepare(
-      `SELECT c.id FROM comments c JOIN users u ON u.id=c.user_id
-       LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
-       JOIN users root_user ON root_user.id=root.user_id
-       WHERE c.id=? AND c.id IN (SELECT id FROM public_comments)
-         AND u.status IN ('active','deleted') AND root_user.status IN ('active','deleted')
-         AND root.status='published' LIMIT 1`,
+      `SELECT id FROM public_comments WHERE id=? LIMIT 1`,
     )
     .bind(id)
     .first<{ id: number }>();
@@ -809,10 +807,7 @@ function publicTargetStatement(
     : database
         .prepare(
           `SELECT c.id FROM creators c
-           WHERE c.id=? AND EXISTS (
-             SELECT 1 FROM work_staff ws JOIN works w ON w.id=ws.work_id
-             WHERE ws.creator_id=c.id AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
-           ) LIMIT 1`,
+           WHERE c.id=? AND c.public_at IS NOT NULL LIMIT 1`,
         )
         .bind(target.id);
 }
@@ -821,9 +816,8 @@ function publicCommentTargetSql(alias: string): string {
   return `(
     EXISTS (SELECT 1 FROM public_works public_work WHERE public_work.id=${alias}.work_id)
     OR EXISTS (
-      SELECT 1 FROM work_staff public_staff
-      JOIN public_works public_creator_work ON public_creator_work.id=public_staff.work_id
-      WHERE public_staff.creator_id=${alias}.creator_id
+      SELECT 1 FROM creators public_creator
+      WHERE public_creator.id=${alias}.creator_id AND public_creator.public_at IS NOT NULL
     )
     OR EXISTS (SELECT 1 FROM characters public_character WHERE public_character.id=${alias}.character_id)
   )`;
