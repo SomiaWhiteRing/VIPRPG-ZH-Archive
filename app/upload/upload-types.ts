@@ -81,6 +81,7 @@ export type UploadTaskPhase =
 export type UploadSourceKind = "folder" | "zip" | "7z";
 
 export type UploadSourcePrefill = {
+  hasUltimateRuntime: boolean;
   gameTitle: string | null;
   titleImages: File[];
   faceSheetFiles: File[];
