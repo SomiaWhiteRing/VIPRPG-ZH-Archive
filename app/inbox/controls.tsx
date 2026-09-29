@@ -21,7 +21,9 @@ export function InboxControls({
   const [pending, startTransition] = useTransition();
   const categories: Array<[InboxCategory, string]> = [
     ["all", "全部"],
+    ["comments", "评论"],
     ["replies", "回复"],
+    ["forum", "讨论版"],
     ["likes", "赞"],
     ["system", "系统"],
     ...(canResolve

@@ -290,9 +290,9 @@ function CommentCard({
     setEditTarget(null);
     requestAnimationFrame(() => editTrigger.current?.focus());
   }
-  function editControl(entry: CommentDto) {
+  function editControl(entry: CommentDto, className = "text-xs text-muted") {
     if (entry.status !== "published" || entry.author?.id !== currentUserId || entry.bodySource == null) return null;
-    return <Button type="button" size="sm" variant="ghost" className="text-xs text-muted"
+    return <Button type="button" size="sm" variant="ghost" className={className}
       disabled={!!editTarget || !!replyTarget || loading} onClick={(event) => {
         editTrigger.current = event.currentTarget;
         setEditTarget(entry);
@@ -400,8 +400,8 @@ function CommentCard({
             onLike={onLike}
             onReply={startReply}
           />
-          {pinControl}
           {editControl(currentComment)}
+          {pinControl}
         </div>
         {editEditor(currentComment)}
         {replyCount > 0 || loading || error || replyTarget ? (
@@ -428,7 +428,7 @@ function CommentCard({
                   }}
                   onLike={onLike}
                   onReply={startReply}
-                  editControl={editControl(reply)}
+                  editControl={editControl(reply, "min-h-10 px-2")}
                   editor={editEditor(reply)}
                 />
               );
