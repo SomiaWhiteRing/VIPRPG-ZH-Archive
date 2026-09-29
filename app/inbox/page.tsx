@@ -175,7 +175,7 @@ function InboxRow({
   const Icon =
     item.type === "forum_like"
       ? ThumbsUp
-      : item.type === "forum_reply" || item.workComment
+      : item.type === "forum_reply" || item.commentNotification
         ? MessageCircle
         : item.type === "role_change_request"
           ? ShieldCheck
@@ -251,10 +251,10 @@ function InboxRow({
             <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
               {item.title}
             </p>
-            {item.workComment ? (
+            {item.commentNotification ? (
               <Link to={`/inbox/${item.id}`} prefetch="none" className="mt-1 block rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-primary">
-                <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.workComment.workTitle}</span>
-                <span className="mt-2 line-clamp-2 text-foreground">{item.workComment.excerpt}</span>
+                <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.commentNotification.targetTitle}</span>
+                <span className="mt-2 line-clamp-2 text-foreground">{item.commentNotification.excerpt}</span>
               </Link>
             ) : null}
             {item.type === "role_change_request" ? (
@@ -299,7 +299,9 @@ function emptyLabel(category: InboxCategory, unread: boolean) {
   if (unread) return "没有未读提醒";
   return {
     all: "暂无提醒",
+    comments: "还没有收到评论",
     replies: "还没有收到回复",
+    forum: "还没有收到讨论版回复",
     likes: "还没有收到赞",
     system: "暂无系统通知",
     pending: "暂无待处理申请",

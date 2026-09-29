@@ -47,12 +47,14 @@ type InboxItemRow = {
   already_assigned: number;
   can_reject: number;
   work_comment_id: number | null;
+  reply_comment_id: number | null;
 };
 
 const INBOX_SELECT = `SELECT
   i.id,
   i.type,
   i.work_comment_id,
+  i.reply_comment_id,
   i.status,
   i.sender_user_id,
   sender.display_name AS sender_display_name,
@@ -145,10 +147,12 @@ export async function listInboxItemsForUser(
   const query = inboxQuery(user);
   const categorySql = {
     all: "1",
-    replies: "(type='forum_reply' OR work_comment_id IS NOT NULL)",
+    comments: "work_comment_id IS NOT NULL",
+    replies: "reply_comment_id IS NOT NULL",
+    forum: "type='forum_reply'",
     likes: "type='forum_like'",
     system:
-      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL",
+      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL",
     pending: "can_reject=1",
   }[input.category];
   const filter = `${categorySql} AND ${input.unread ? "read_at IS NULL" : "1"}`;
@@ -203,7 +207,7 @@ export async function listInboxItemsForUser(
   const items = (rows.results ?? []).map(mapInboxItemRow);
   if (newer) items.reverse();
   await attachInteractions(runtime, items);
-  await attachWorkComments(runtime, items, rows.results ?? []);
+  await attachCommentNotifications(runtime, items, rows.results ?? []);
   const firstId = items[0]?.id ?? anchor?.id;
   const lastId = items.at(-1)?.id ?? anchor?.id;
   const hasNewer = newer ? matching > INBOX_PAGE_SIZE : total > matching;
@@ -310,7 +314,7 @@ export async function getInboxItemForUser(
   const item = mapInboxItemRow(row);
 
   await attachInteractions(runtime, [item]);
-  await attachWorkComments(runtime, [item], [row]);
+  await attachCommentNotifications(runtime, [item], [row]);
   return item;
 }
 
@@ -320,7 +324,7 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
       !!row.can_reject && row.role_status === "active" && !row.already_assigned,
     canReject: !!row.can_reject,
     interaction: null,
-    workComment: null,
+    commentNotification: null,
     id: row.id,
     type: row.type,
     status: row.status,
@@ -351,18 +355,26 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
   };
 }
 
-async function attachWorkComments(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
-  const ids = source.filter((row) => row.work_comment_id !== null).map((row) => row.id);
+async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
+  const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
-  const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,
-      w.id AS work_id,COALESCE(NULLIF(w.chinese_title,''),w.original_title) AS work_title,
+  const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,
+      c.work_id,c.creator_id,c.character_id,
+      COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.name) AS target_title,
       sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
-    FROM inbox_items i JOIN public_comments c ON c.id=i.work_comment_id
-    JOIN public_works w ON w.id=c.work_id JOIN users sender ON sender.id=c.user_id
-    WHERE i.id IN (SELECT value FROM json_each(?))`)
+    FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.reply_comment_id,i.work_comment_id)
+    LEFT JOIN public_works w ON w.id=c.work_id
+    LEFT JOIN creators cr ON cr.id=c.creator_id
+    LEFT JOIN characters ch ON ch.id=c.character_id
+    JOIN users sender ON sender.id=c.user_id
+    WHERE i.id IN (SELECT value FROM json_each(?))
+      AND (i.reply_comment_id IS NULL OR EXISTS (
+        SELECT 1 FROM public_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
+      ))`)
     .bind(JSON.stringify(ids)).all<{
-      id: number; body: string; work_id: number; work_title: string;
+      id: number; body: string; reply_comment_id: number | null;
+      work_id: number | null; creator_id: number | null; character_id: number | null; target_title: string;
       display_name: string; sender_status: string; image_count: number;
     }>();
   const byId = new Map(rows.results.map((row) => [row.id, row]));
@@ -376,10 +388,10 @@ async function attachWorkComments(runtime: AppRuntime, items: InboxItem[], sourc
     const row = byId.get(item.id);
     if (!row) continue;
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
-    item.title = `${name}评论了你上传的作品`;
-    item.workComment = {
-      workTitle: row.work_title,
-      href: `/games/${row.work_id}#sec-comments`,
+    item.title = row.reply_comment_id ? `${name}回复了你的评论` : `${name}评论了你上传的作品`;
+    item.commentNotification = {
+      targetTitle: row.target_title,
+      href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,
       excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
     };
   }

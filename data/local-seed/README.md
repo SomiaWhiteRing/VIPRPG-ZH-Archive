@@ -1,5 +1,9 @@
 # Fixed Local Seed
 
+The comment reply refresh applies `0012_comment_reply_notifications.sql`,
+adding a nullable inbox reference for replies on works, creators and characters.
+The migration ledger is synchronized; existing records and R2 objects are preserved.
+
 The uploaded-work comment preference refresh applies
 `0011_uploaded_work_comment_notifications.sql` after 0010 and records it in the
 migration ledger. All existing accounts default to receiving these notices.

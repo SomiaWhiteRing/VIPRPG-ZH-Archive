@@ -598,8 +598,18 @@ export async function createComment(
           UNION SELECT uploader_id FROM archive_versions WHERE work_id=c.work_id AND status='published'
         )
         WHERE c.user_id=? AND c.request_key=? AND c.work_id IS NOT NULL
+          AND c.root_comment_id IS NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
           AND recipient.notify_uploaded_work_comments=1
+        ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,reply_comment_id)
+        SELECT 'system_notice',c.user_id,recipient.id,'','',
+          'comment-reply:'||c.id||':'||recipient.id,c.id
+        FROM public_comments c
+        JOIN public_comments target ON target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
+        JOIN users recipient ON recipient.id=target.user_id
+        WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NOT NULL
+          AND recipient.id<>c.user_id AND recipient.status='active'
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
     ]);
     const id = Number((results[0].results[0] as { id: number }).id);
