@@ -391,7 +391,7 @@ function CommentCard({
       <div className="min-w-0">
         {currentComment.pinned ? <span className="text-xs font-bold text-primary">置顶</span> : null}
         <CommentLine comment={currentComment} />
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="mt-1 flex flex-wrap items-center gap-1">
           <CommentControls
             comment={currentComment}
             currentUserId={currentUserId}
@@ -644,7 +644,7 @@ function CommentControls({
 }) {
   if (comment.status === "deleted") return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
+    <>
       {currentUserId ? (
         <Button
           className="text-xs text-muted"
@@ -688,6 +688,6 @@ function CommentControls({
           删除
         </Button>
       ) : null}
-    </div>
+    </>
   );
 }
