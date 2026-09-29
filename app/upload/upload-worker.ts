@@ -702,7 +702,8 @@ async function scanAndHash(
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
     const references = cleanupResources ? new ResourceReferenceScan(includedFiles) : null;
     const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
-    const missing = checkMissingResources
+    const skipMissingForManiac = checkMissingResources && includedFiles.some((file) => file.path.toLowerCase() === "accord.dll");
+    const missing = checkMissingResources && !skipMissingForManiac
       ? new MissingResourceScan(includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()))
       : null;
     for (let index = 0; index < includedFiles.length && (references?.needsScan || missing?.scanner.needsScan); index++) {
@@ -726,7 +727,9 @@ async function scanAndHash(
       addExcluded(excluded, "unused-resource", file.source);
     }
     includedFiles = includedFiles.filter((file) => !removed.has(file.path));
-    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: missing?.finish() ?? null } };
+    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: skipMissingForManiac
+      ? { missing: [], limited: false, reasons: ["检测到Maniac补丁，自动跳过缺失检测"] }
+      : missing?.finish() ?? null } };
   }
 
   includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
