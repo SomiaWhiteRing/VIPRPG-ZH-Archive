@@ -588,6 +588,19 @@ export async function createComment(
           ...guard.args, body, requestKey, requestHash),
       ...contentEmojiStatements(db, "comment", source, [userId, requestKey], body, userId, true),
       ...commentImageStatements(db, ids, userId, source, [userId, requestKey]),
+      // Same transaction as publication; retries return the existing comment above.
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id)
+        SELECT 'system_notice',c.user_id,recipient.id,'','',
+          'work-comment:'||c.id||':'||recipient.id,c.id
+        FROM public_comments c
+        JOIN users recipient ON recipient.id IN (
+          SELECT user_id FROM work_uploaders WHERE work_id=c.work_id
+          UNION SELECT uploader_id FROM archive_versions WHERE work_id=c.work_id AND status='published'
+        )
+        WHERE c.user_id=? AND c.request_key=? AND c.work_id IS NOT NULL
+          AND recipient.id<>c.user_id AND recipient.status='active'
+          AND recipient.notify_uploaded_work_comments=1
+        ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
     ]);
     const id = Number((results[0].results[0] as { id: number }).id);
     return requiredComment(runtime, id, userId);

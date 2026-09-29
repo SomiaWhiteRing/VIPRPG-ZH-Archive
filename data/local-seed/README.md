@@ -1,5 +1,11 @@
 # Fixed Local Seed
 
+The uploaded-work comment preference refresh applies
+`0011_uploaded_work_comment_notifications.sql` after 0010 and records it in the
+migration ledger. All existing accounts default to receiving these notices.
+Business rows and R2 objects are preserved; existing inbox items have no work
+comment reference. No historical comment notifications are generated.
+
 The consolidated `0006_tags_favorites_and_read_indexes.sql` preserves the original
 execution order of the eight unpublished tag, favorite and bounded-read migrations.
 The snapshot and local development ledger now contain 0001 through 0006.

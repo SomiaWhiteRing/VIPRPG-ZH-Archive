@@ -38,6 +38,7 @@ export type InboxItem = {
   canApprove: boolean;
   canReject: boolean;
   interaction: InboxInteraction | null;
+  workComment: { workTitle: string; href: string; excerpt: string } | null;
 };
 
 export type InboxInteraction = {
