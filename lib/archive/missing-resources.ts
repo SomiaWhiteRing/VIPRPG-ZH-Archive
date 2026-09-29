@@ -1,4 +1,4 @@
-import { LcfReferenceScan, type ResourceFile, type ReferenceObserver } from "./lcf-reference-scan";
+import { LcfReferenceScan, mayUseDynamicPictureName, type ResourceFile, type ReferenceObserver } from "./lcf-reference-scan";
 
 export type MissingResourceReport = {
   missing: { path: string; source: string }[];
@@ -62,7 +62,7 @@ export class MissingResourceScan {
       const command = commands[id];
       if (!command) return;
       if (id === 10710 && parameters[2] !== 1) return;
-      if (parameters.length > command[1] || (id === 11110 && parameters[0] >= 50000)) {
+      if (id === 11110 ? mayUseDynamicPictureName(parameters) : parameters.length > command[1]) {
         this.limited = true;
         return;
       }

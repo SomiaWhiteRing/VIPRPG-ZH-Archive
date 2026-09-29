@@ -362,7 +362,7 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
               <li className="min-w-max text-red-600" key={`missing:${reason}`}>{reason}</li>
             ))}
             {missing?.limited ? <li className="min-w-max text-red-600">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
-            {cleanup?.reasons.map((reason) => (
+            {cleanup?.reasons.filter((reason) => !missing?.reasons.includes(reason)).map((reason) => (
               <li className="min-w-max text-muted" key={reason}>{reason}</li>
             ))}
             {files.map((file) => (

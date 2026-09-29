@@ -22,6 +22,15 @@ const stem = (path: string) => normalize(path).split("/").at(-1)!.replace(/\.[^.
 const mapPath = (id: number) => `map${String(id).padStart(4, "0")}.lmu`;
 type MapInfo = { type: number; parent: number; hasAreaRect: boolean };
 
+export function mayUseDynamicPictureName(parameters: readonly number[]): boolean {
+  if (parameters[0] >= 50000) return true;
+  if (parameters.length <= 16) return false;
+  // RPG Maker 2003 1.12 adds display options through parameter 29.
+  // Parameter 19 enables filename substitution; 17 beyond 0/1 may contain
+  // Maniac string-variable flags. Unknown layouts remain conservative.
+  return parameters.length !== 30 || ![0, 1].includes(parameters[17]) || parameters[19] !== 0;
+}
+
 /** Small, read-only LCF visitor. All strings count as references, including editor
  * defaults and unreachable events. Unknown structure/commands disable pruning.
  * The caller defines the candidate scope. Production uses standard engine media.
@@ -261,7 +270,7 @@ export class LcfReferenceScan {
         if (parameters.length < 4 || parameters.slice(4).some((value) => value > 255)) throw new Error("移动路线参数无效");
         this.moves(new Reader(Uint8Array.from(parameters.slice(4))));
       }
-      if (code === 11110 && (count > 16 || parameters[0] >= 50000)) {
+      if (code === 11110 && mayUseDynamicPictureName(parameters)) {
         this.protect("picture", `${this.currentPath}：图片指令可能动态指定文件名`);
       }
       // The standard form has only literal filenames. Extra parameters can select

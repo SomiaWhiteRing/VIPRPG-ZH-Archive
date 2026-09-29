@@ -6,7 +6,7 @@ import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/ui/cn";
 import { ImagePlus, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
 import { Slider } from "radix-ui";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, DragEvent } from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Area } from "react-easy-crop";
 import Cropper from "react-easy-crop";
@@ -165,7 +165,25 @@ export function CoverPicker({
   function chooseUpload(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0];
     event.target.value = "";
-    if (!selected) return;
+    if (selected) uploadSource(selected);
+  }
+
+  function dragOverCrop(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = disabled || busy ? "none" : "copy";
+  }
+
+  function dropOnCrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const selected = event.dataTransfer.files[0];
+    if (selected) uploadSource(selected);
+  }
+
+  function uploadSource(selected: File) {
+    if (disabled || busy) return;
     if (!selected.type.toLowerCase().startsWith("image/")) {
       toast.error("请选择图片文件。");
       return;
@@ -343,6 +361,8 @@ export function CoverPicker({
                       ? "bg-black"
                       : "border border-dashed border-border bg-background",
                   )}
+                  onDragOver={dragOverCrop}
+                  onDrop={dropOnCrop}
                 >
                   {activeCandidate ? (
                     <Cropper
