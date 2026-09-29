@@ -50,8 +50,9 @@ export class LcfReferenceScan {
     if (!this.candidates.length && !observe) return;
     for (const file of files) {
       const path = normalize(file.path);
-      // Harmony is the stock RPG2000 audio library. Other plugins may load any path.
-      if ((path.endsWith(".dll") && path !== "harmony.dll") ||
+      // Stock RPG2000/2003 runtime libraries are not arbitrary resource loaders.
+      // Only accept their root paths; other plugins may load any path.
+      if ((path.endsWith(".dll") && path !== "harmony.dll" && path !== "ultimate_rt_eb.dll") ||
           /(?:^|\/)(?:dynrpg|easyrpg)\.ini$/.test(path) ||
           /\.(?:script|lua|js)$/.test(path)) {
         this.protect("*", `存在未分析的扩展：${file.path}`);
