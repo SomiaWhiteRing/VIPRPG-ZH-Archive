@@ -1,4 +1,4 @@
-import { WORK_GENRE_MAX_LENGTH } from "@/lib/work-genre";
+import { WorkGenreInput } from "@/app/components/work/work-genre-input";
 import { CharacterPicker } from "@/app/components/characters/character-picker";
 import { PreviewPicker } from "@/app/components/media/preview-picker";
 import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
@@ -126,11 +126,10 @@ export function WorkMetadataFields({
           />
         </WorkbenchField>
         <WorkbenchField className="md:col-span-2" controlId="upload-genre" label="类型">
-          <Input
+          <WorkGenreInput
             disabled={disabled}
             id="upload-genre"
-            maxLength={WORK_GENRE_MAX_LENGTH}
-            onChange={(event) => setForm((current) => ({ ...current, genre: event.target.value }))}
+            onChange={(genre) => setForm((current) => ({ ...current, genre }))}
             value={form.genre}
           />
         </WorkbenchField>

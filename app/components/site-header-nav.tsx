@@ -87,6 +87,7 @@ const ADMIN_NAVIGATION: Array<
         anyPermission: [...CHARACTER_ADMIN_PERMISSIONS],
       },
       { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
+      { href: "/admin/genres", label: "类型", permission: "genre.manage" },
       {
         href: "/admin/archive-versions/trash",
         label: "回收站",

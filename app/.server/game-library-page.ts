@@ -18,6 +18,7 @@ export async function loadGameLibrary(
 ) {
   if (userList) params = { page: params.page, tag: userList.kind === "favorite" ? params.tag : undefined };
   const tag = normalizeEntityName(stringParam(params.tag));
+  const genre = stringParam(params.genre).trim();
   const tagSource = userList ? "user" : getTagSource(stringParam(params.tag_source));
   const userWorks = userList
     ? await searchUserWorks(runtime, {
@@ -43,6 +44,7 @@ export async function loadGameLibrary(
     Number.parseInt(stringParam(params.page) || "1", 10) || 1,
   );
   const filters = {
+    genre: genre || undefined,
     release: release || undefined,
     engine,
     tag: tag || undefined,
@@ -76,6 +78,7 @@ export async function loadGameLibrary(
       uploader ? findPublicUserById(runtime, uploader) : Promise.resolve(null),
     ]);
   const activeParams = {
+    genre: genre || undefined,
     release: release || undefined,
     engine: engine !== "all" ? engine : undefined,
     tag: tag || undefined,
@@ -87,9 +90,10 @@ export async function loadGameLibrary(
     sort: sort !== "id" ? sort : undefined,
   };
   const hasFilters =
-    engine !== "all" || Boolean(tag || character || uploader || language || original || release);
+    engine !== "all" || Boolean(genre || tag || character || uploader || language || original || release);
 
   return {
+    genre,
     release,
     currentYear: new Date().getUTCFullYear(),
     userWorkKind: userList?.kind ?? null,

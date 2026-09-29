@@ -20,7 +20,7 @@ import {
   hasPermission,
 } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseTimestamp } from "@/lib/format";
 import { engineLabel, languageLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
@@ -100,11 +100,17 @@ export default function UploadsPage() {
                   </p>
                 ) : null}
                 <p className="mt-1 text-sm text-muted">
-                  {work.distribution === "archive" ? "本站归档" : "外部下载"} ·{" "}
                   {engineLabel(work.engineFamily)} ·{" "}
                   {languageLabel(work.language)}
-                  {work.latestPublishedAt
-                    ? ` · 最近发布于 ${formatDate(work.latestPublishedAt)}`
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  {work.publishedAt
+                    ? `发布于 ${formatDate(work.publishedAt)}`
+                    : ""}
+                  {!work.publishedAt ||
+                  parseTimestamp(work.updatedAt).getTime() !==
+                    parseTimestamp(work.publishedAt).getTime()
+                    ? `${work.publishedAt ? " · " : ""}最近更新：${formatDate(work.updatedAt)}`
                     : ""}
                 </p>
               </div>

@@ -1,4 +1,6 @@
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
+import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
+import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
 import * as creatorUpdateEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/update/route";
@@ -729,6 +731,12 @@ api.all("/api/admin/roles/:roleId", (c) =>
     Allow: "PATCH, OPTIONS",
   }),
 );
+api.on("GET", "/api/genres", (c) => genresEndpoint.GET(c.get("runtime"), c.req.raw));
+api.options("/api/genres", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));
+api.all("/api/genres", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" }));
+api.on("POST", "/api/admin/genres/merge", (c) => genreMergeEndpoint.POST(c.get("runtime"), c.req.raw));
+api.options("/api/admin/genres/merge", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/admin/genres/merge", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
 api.on("POST", "/api/admin/tags/update", (c) =>
   endpoint49.POST(c.get("runtime"), c.req.raw),
 );

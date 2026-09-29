@@ -18,7 +18,7 @@ export function CreatorWorkList({ works, creatorName, standalone = false }: {
             originalTitle={work.workOriginalTitle}
             coverBlobSha256={work.coverBlobSha256}
             authorName={work.authorName}
-            releaseDate={work.originalReleaseDate ?? "日期未知"}
+            releaseDate={work.originalReleaseDate}
             engineFamily={work.engineFamily}
             language={work.language}
           >

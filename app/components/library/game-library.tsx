@@ -199,6 +199,12 @@ export function GameLibrary({
                   label={`标签：${selectedTag?.name ?? tag}`}
                 />
               ) : null}
+              {data.genre ? (
+                <FilterChip
+                  href={gamesHref({ ...activeParams, genre: undefined })}
+                  label={`类型：${data.genre}`}
+                />
+              ) : null}
               {character ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, character: undefined })}

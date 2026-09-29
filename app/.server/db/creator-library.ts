@@ -451,11 +451,11 @@ async function listCredits(
            WHERE ${status} AND EXISTS (
              SELECT 1 FROM work_staff staff WHERE staff.work_id=w.id AND staff.creator_id=?
            )
-           ORDER BY COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
+           ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,
              w.original_title ASC, w.id DESC
            LIMIT ? OFFSET ?
          )` : ""}
-       ORDER BY COALESCE(w.original_release_date, w.published_at, w.created_at) DESC,
+       ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,
          w.original_title ASC, w.id DESC, ws.sort_order ASC, ws.role_key ASC`,
     )
     .bind(id, ...(pagination ? [id, pagination.pageSize, (pagination.page - 1) * pagination.pageSize] : []))

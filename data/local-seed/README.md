@@ -148,3 +148,8 @@ The 2026-09-29 work genre refresh applies `0008_work_genre.sql` and records it
 in the migration ledger. Fictional works 10001–10003 demonstrate Japanese,
 Chinese and mixed free-form genre descriptions. Other records, including
 accounts, sessions and R2 references, are preserved from the fixed seed.
+
+The genre grouping refresh applies `0009_work_genre_groups.sql` and records it
+in the migration ledger. The three existing spellings remain unchanged and
+initially belong to separate groups. Public suggestion counts are backfilled;
+the two built-in administrator roles receive `genre.manage`.
