@@ -3,6 +3,7 @@
 import { zip } from "fflate";
 import {
   classifyArchivePath,
+  contentTypeForArchivePath,
   FILE_POLICY_VERSION,
   PACKER_VERSION,
 } from "@/lib/archive/file-policy";
@@ -14,6 +15,8 @@ import {
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
+import { createRtpResolver } from "@/lib/archive/rtp-restore";
+import { detectSourceEngine } from "@/lib/archive/source-engine";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import type {
   ArchiveCommitMetadata,
@@ -270,6 +273,44 @@ async function startSource(
     );
     runtime.task = task = preflight.task;
     await waitForCancellation(runtime);
+
+    for (const resource of scan.missingScan?.rtpResources.values() ?? []) {
+      // RTP is provisioned in the archive before deployment. Link its fixed SHA
+      // without preflighting or uploading it; source-ready still checks the ledger.
+      const source: SourceFile = { path: resource.path, size: resource.size, mtimeMs: null,
+        contentType: contentTypeForArchivePath(resource.path), bytes: async () => {
+          throw new Error(`项目库中的 RTP 已不可用：${resource.path}`);
+        } };
+      scan.includedFiles.push({ ...resource, pathSortKey: resource.path.toLowerCase(), role: "asset",
+        storageKind: "blob", mtimeMs: null, contentType: source.contentType, packEntryPath: null, source });
+      const isNewBlob = !scan.blobObjects.has(resource.sha256);
+      if (isNewBlob) scan.blobObjects.set(resource.sha256, {
+        sha256: resource.sha256, size: resource.size, contentType: source.contentType, source,
+      });
+      // Preserve source = included + excluded in the prepared manifest.
+      task = { ...task, stats: { ...task.stats,
+        sourceFileCount: task.stats.sourceFileCount + 1,
+        sourceSizeBytes: task.stats.sourceSizeBytes + resource.size,
+        includedFileCount: task.stats.includedFileCount + 1,
+        includedSizeBytes: task.stats.includedSizeBytes + resource.size,
+        uniqueBlobCount: task.stats.uniqueBlobCount + Number(isNewBlob),
+        uniqueBlobSizeBytes: task.stats.uniqueBlobSizeBytes + (isNewBlob ? resource.size : 0),
+        estimatedR2GetCount: task.stats.estimatedR2GetCount + Number(isNewBlob),
+      } };
+    }
+    scan.includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
+    task = { ...task, stats: { ...task.stats,
+      restoredRtpFiles: [...scan.missingScan?.rtpResources.values() ?? []]
+        .map(({ path, size, sha256 }) => ({ path, size, sha256 }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    } };
+    if (message.checkMissingResources && scan.missingScan) {
+      task = { ...task, stats: { ...task.stats,
+        missingResources: scan.missingScan.finish(new Set(
+          [...scan.missingScan.rtpResources.values()].map((file) => file.sha256),
+        )) } };
+    }
+    runtime.task = task = emitTask(task, true);
 
     task = await uploadMissingObjects({
       task,
@@ -640,8 +681,10 @@ async function scanAndHash(
   includedFiles: IncludedFile[];
   coreFiles: IncludedFile[];
   blobObjects: Map<string, BlobObject>;
+  missingScan: MissingResourceScan | null;
 }> {
   let task = initialTask;
+  let missingScan: MissingResourceScan | null = null;
   const players = useSharedPlayer ? sourceFiles.filter((file) => isSharedPlayerPath(file.path)) : [];
   if (players.length > 1) throw new Error("根目录存在多个大小写不同的 Player.exe，请先保留一个再上传。");
   const player = players[0];
@@ -698,14 +741,15 @@ async function scanAndHash(
 
   await recordResult;
 
-  if (cleanupResources || checkMissingResources) {
+  {
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
     const references = cleanupResources ? new ResourceReferenceScan(includedFiles) : null;
     const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
-    const skipMissingForManiac = checkMissingResources && includedFiles.some((file) => file.path.toLowerCase() === "accord.dll");
-    const missing = checkMissingResources && !skipMissingForManiac
-      ? new MissingResourceScan(includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()))
+    const skipMissingForManiac = detectSourceEngine(includedFiles) === "rpg_maker_2003_maniac";
+    const missing = !skipMissingForManiac
+      ? new MissingResourceScan(includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()), createRtpResolver(includedFiles))
       : null;
+    missingScan = missing;
     for (let index = 0; index < includedFiles.length && (references?.needsScan || missing?.scanner.needsScan); index++) {
       const file = includedFiles[index];
       if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || file.path.toLowerCase() === "rpg_rt.ini") {
@@ -727,7 +771,9 @@ async function scanAndHash(
       addExcluded(excluded, "unused-resource", file.source);
     }
     includedFiles = includedFiles.filter((file) => !removed.has(file.path));
-    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: skipMissingForManiac
+    // The checkbox controls diagnostics only; automatic RTP restoration is
+    // always enabled. Do not expose missing-file warnings in silent mode.
+    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: !checkMissingResources ? null : skipMissingForManiac
       ? { missing: [], limited: false, reasons: ["检测到Maniac补丁，自动跳过缺失检测"] }
       : missing?.finish() ?? null } };
   }
@@ -759,7 +805,7 @@ async function scanAndHash(
       ...task.stats,
       includedFileCount: includedFiles.length,
       includedSizeBytes: includedSize,
-      excludedFileCount: sourceFiles.length - includedFiles.length,
+      excludedFileCount: [...excluded.values()].reduce((sum, item) => sum + item.fileCount, 0),
       excludedSizeBytes: excludedSize,
       uniqueBlobCount: blobObjects.size,
       uniqueBlobSizeBytes: uniqueBlobSize,
@@ -776,6 +822,7 @@ async function scanAndHash(
     includedFiles,
     coreFiles,
     blobObjects,
+    missingScan,
   };
 }
 
@@ -1407,6 +1454,7 @@ function emptyStats(): UploadTaskStats {
     estimatedR2GetCount: 0,
     excludedFileTypes: [],
     resourceCleanup: null,
+    restoredRtpFiles: [],
   };
 }
 

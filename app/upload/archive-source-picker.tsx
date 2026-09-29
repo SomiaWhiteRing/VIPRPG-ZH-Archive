@@ -320,6 +320,7 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
   const cleanup = task?.stats.resourceCleanup;
   const missing = task?.stats.missingResources;
   const sharedPlayer = task?.stats.sharedPlayer;
+  const restoredRtpFiles = task?.stats.restoredRtpFiles ?? [];
   const files = [
     ...(sharedPlayer ? [{ ...sharedPlayer, reason: "共享播放器" }] : []),
     ...(cleanup?.excluded.map((file) => ({ ...file, reason: "未引用素材" })) ?? []),
@@ -347,7 +348,7 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
     >
       <h3 className="text-sm font-semibold" id={headingId}>清理日志</h3>
       <p aria-live="polite" className="mt-1 text-xs text-muted">{summary}</p>
-      {files.length || cleanup?.reasons.length || missing?.missing.length || missing?.limited ? (
+      {files.length || restoredRtpFiles.length || cleanup?.reasons.length || missing?.missing.length || missing?.limited ? (
         <div
           aria-label="清理日志明细"
           className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs"
@@ -371,6 +372,9 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
                 <span className="text-muted">{file.reason}</span>
                 <span className="text-muted tabular-nums">{formatBytes(file.size)}</span>
               </li>
+            ))}
+            {restoredRtpFiles.map((file) => (
+              <li className="min-w-max text-blue-600" key={`rtp:${file.path}`}>自动补充 RTP：{file.path}</li>
             ))}
           </ul>
         </div>
