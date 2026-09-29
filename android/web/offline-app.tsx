@@ -1,11 +1,11 @@
 import { localRequest } from "@/lib/browser/android-local";
 import { Button } from "@/app/components/ui/button";
-import { useWebPlayControlsPreferences } from "@/app/play/[archiveVersionId]/web-play-controls-preferences";
-import { createPlayerSession } from "@/app/play/[archiveVersionId]/web-play-player";
-import type { PlayerSession } from "@/app/play/[archiveVersionId]/web-play-player";
-import { useWebPlayScreenshots } from "@/app/play/[archiveVersionId]/web-play-screenshots";
-import { WebPlaySurface } from "@/app/play/[archiveVersionId]/web-play-surface";
-import type { WebPlayInstallation } from "@/app/play/[archiveVersionId]/web-play-types";
+import { useWebPlayControlsPreferences } from "@/app/play/[workId]/web-play-controls-preferences";
+import { createPlayerSession } from "@/app/play/[workId]/web-play-player";
+import type { PlayerSession } from "@/app/play/[workId]/web-play-player";
+import { useWebPlayScreenshots } from "@/app/play/[workId]/web-play-screenshots";
+import { WebPlaySurface } from "@/app/play/[workId]/web-play-surface";
+import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
 import { easyRpgRuntimeBasePath } from "@/lib/archive/web-play";
 import { ArrowLeft, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

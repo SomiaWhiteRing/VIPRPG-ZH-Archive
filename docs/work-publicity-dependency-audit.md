@@ -89,7 +89,7 @@ flowchart TD
 | 27 | 作品类型候补/管理计数：`db/work-genres.ts`、`counted_work_genres` | 候补只读 `public_count>0`，作品类型/状态/引擎/归档/下载链接变化同步受影响作品 | 当前读路径已经便宜，不优先删除统计体系；资料/下载分离后可以缩小触发器依赖 |
 | 28 | 热门脸图表情：`emojis/service.ts:hotEmojis` | 最近 30 天评论使用聚合，手写作品 `published` 与作者署名条件，未使用完整 `public_works` | 必须单列，见第 7 节；先确定统计语义，再决定仅独立作者/内容状态或一致公开目标。不得把这条旁路漏出审计 |
 | 29 | 原生 ZIP 下载、Kai 导入信息：`worker/archive-download.mjs:getDownloadRecord` | 版本 published/current，作品 published；读取发生在 ZIP Cache API 查询之前 | 保留下载有效性边界；单独去掉状态谓词不消除读取，因为同查询还提供 manifest、文件名等信息 |
-| 30 | 在线游玩页面、安装元数据：`db/archive-downloads.ts`、`api/archive-versions/[archiveVersionId]/web-play`、`play/[archiveVersionId]/page.tsx` | 安装元数据读取版本；页面另外读完整作品、社区统计、评论；安装总量另查一次版本 | 元数据与总量可合并；页面可缩小投影/复用作品结果；不能把页面曾通过当作后续下载请求的授权 |
+| 30 | 在线游玩页面、安装元数据：`db/archive-downloads.ts`、`api/archive-versions/[archiveVersionId]/web-play`、`play/[workId]/page.tsx` | 安装元数据读取版本；页面另外读完整作品、社区统计、评论；安装总量另查一次版本 | 元数据与总量可合并；页面可缩小投影/复用作品结果；不能把页面曾通过当作后续下载请求的授权 |
 | 31 | 上传提交、作品修改、归档维护：`archive-commit.ts`、`game-library.ts`、`work-distribution.ts`、`archive-maintenance.ts` | 发布时校验来源；现有缺源作品可维护；切换/删除 current 改变公开视图结果并触发统计 | 发布/归属/数据完整性保留。是否允许已发布资料在缺源时留存另议，不能只改读取视图而忽略编辑/恢复语义 |
 
 以上目录成员、个人展示、作品关系里的备注也属于数据输出；即使放开图片原始 URL，仍不代表可以把隐藏目标的标题和备注重新输出。
@@ -260,10 +260,10 @@ A 批次的目标是低风险候选，仍须核对并发语义；不是将所有
 | [热门表情](../app/.server/emojis/service.ts) | 340 hotEmojis，手写作品/作者公开条件 |
 | [下载 Worker](../worker/archive-download.mjs) | 60 D1；77 共享播放器；102 缓存；259 元数据；937 统计 |
 | [游玩元数据](../app/.server/db/archive-downloads.ts) | 46 安装总量；63 公开版本记录 |
-| [游玩页面](../app/play/[archiveVersionId]/page.tsx) | 59–85 多次读取目标 |
+| [游玩页面](../app/play/[workId]/page.tsx) | 59–85 多次读取目标 |
 | [作品页面](../app/games/[id]/page.tsx) | 32–40 详情、侧栏和评论调用链 |
 | [侧栏](../app/.server/work-overview-sidebar.ts) | 16–21 社区/目录/关系/上传者读取 |
-| [安装封面](../app/play/[archiveVersionId]/web-play-cover.ts) | 本地 cover cache 与网络 no-store |
+| [安装封面](../app/play/[workId]/web-play-cover.ts) | 本地 cover cache 与网络 no-store |
 | [分发校验](../app/.server/db/work-distribution.ts) | assertStableDistribution |
 | [归档维护](../app/.server/db/archive-maintenance.ts) | current 切换、删除与恢复 |
 | [对象 GC](../app/.server/storage/gc-candidates.ts) | 27 附近引用检查，非作品公开资格 |

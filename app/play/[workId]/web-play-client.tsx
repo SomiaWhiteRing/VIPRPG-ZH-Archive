@@ -32,7 +32,7 @@ import { WebPlaySaveExport } from "./web-play-save-export";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   getWebPlayInstallation,
-} from "@/app/play/[archiveVersionId]/web-play-db";
+} from "@/app/play/[workId]/web-play-db";
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
 import { subscribeGameResourcesChanged } from "./web-play-events";
@@ -43,7 +43,7 @@ import type {
   WebPlayInstallWorkerOutput,
   WebPlayMetadata,
   WebPlayStorageSnapshot,
-} from "@/app/play/[archiveVersionId]/web-play-types";
+} from "@/app/play/[workId]/web-play-types";
 import { DISPLAY_TIME_ZONE, formatBytes, parseTimestamp } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
 import {

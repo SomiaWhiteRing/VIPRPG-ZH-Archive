@@ -63,7 +63,7 @@ export async function verifyEasyRpgGame(
     }});
   `,
   });
-  const playUrl = `${origin}/play/${archiveId}`;
+  const playUrl = `${origin}/play/${workId}`;
   const savePath = `/work-saves/${workId}/Save01.lsd`;
   const key = async (frame: Frame, value: string) => {
     await frame.locator("#canvas").focus();

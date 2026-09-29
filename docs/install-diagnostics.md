@@ -1,10 +1,10 @@
 # 临时安装性能诊断
 
-诊断模块位于 `app/play/[archiveVersionId]/diagnostics/`，与正式安装器分离。普通入口不启动诊断定时器，不采集详细日志，不显示诊断面板，也不导入诊断 Worker。主安装器、OPFS 和数据库只保留可选观察点；未注册观察器时直接执行原操作。
+诊断模块位于 `app/play/[workId]/diagnostics/`，与正式安装器分离。普通入口不启动诊断定时器，不采集详细日志，不显示诊断面板，也不导入诊断 Worker。主安装器、OPFS 和数据库只保留可选观察点；未注册观察器时直接执行原操作。
 
 ## 启用和移除
 
-在 `app/play/[archiveVersionId]/web-play-client.tsx` 替换唯一一行导入：
+在 `app/play/[workId]/web-play-client.tsx` 替换唯一一行导入：
 
 ```ts
 // 正常生产入口（默认）

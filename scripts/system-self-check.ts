@@ -603,8 +603,8 @@ async function run(): Promise<void> {
   app = startApp(appPort, origin, "app-2.log");
   await waitForHttp(`${origin}/api/health`, app);
   await page.goto(`${origin}/games/${workId}`);
-  await page.locator(`a[href="/play/${archiveVersionId}"]`).first().click();
-  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
+  await page.locator(`a[href="/play/${workId}"]`).first().click();
+  await page.waitForURL(`${origin}/play/${workId}`);
   const installStarted = performance.now();
   await page.locator('[data-web-play-action="install"]').click();
   await page
@@ -637,8 +637,8 @@ async function run(): Promise<void> {
   await page.locator('[data-web-play-status="ready"]').waitFor();
   // Exercise the action button as well as the tab, from a document outside /play/.
   await page.goto(`${origin}/games/${workId}`);
-  await page.locator(`a[href="/play/${archiveVersionId}"]`).last().click();
-  await page.waitForURL(`${origin}/play/${archiveVersionId}`);
+  await page.locator(`a[href="/play/${workId}"]`).last().click();
+  await page.waitForURL(`${origin}/play/${workId}`);
   await page.locator('[data-web-play-status="ready"]').waitFor();
   assert.deepEqual(
     browserErrors,
@@ -1474,7 +1474,7 @@ async function inspectOpfs(currentPage: Page, playKey: string) {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const installation = await new Promise<import("../app/play/[archiveVersionId]/web-play-types").WebPlayInstallation>((resolve, reject) => {
+    const installation = await new Promise<import("../app/play/[workId]/web-play-types").WebPlayInstallation>((resolve, reject) => {
       const request = database.transaction("web_play_installations").objectStore("web_play_installations").get(key);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);

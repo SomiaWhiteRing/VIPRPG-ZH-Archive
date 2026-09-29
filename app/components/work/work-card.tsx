@@ -44,14 +44,16 @@ export function WorkCard({
           ) : null}
         </div>
         <div className="grid gap-1 p-2 min-[641px]:px-3 min-[641px]:pt-2.5 min-[641px]:pb-3">
-          <h3 className="m-0 line-clamp-2 h-[calc(1.45em*2)] text-[12.5px] font-normal leading-[1.45] min-[641px]:text-[14.5px] min-[641px]:font-semibold">
-            {title}
-            {originalTitle && originalTitle !== title ? (
-              <span className="hidden text-xs font-normal text-muted min-[641px]:block">
-                {originalTitle}
-              </span>
-            ) : null}
-          </h3>
+          <div className="h-[calc(1.45em*2)] text-[12.5px] font-normal leading-[1.45] min-[641px]:text-[14.5px] min-[641px]:font-semibold">
+            <h3 className="m-0 line-clamp-2">
+              {title}
+              {originalTitle && originalTitle !== title ? (
+                <span className="hidden text-xs font-normal text-muted min-[641px]:block">
+                  {originalTitle}
+                </span>
+              ) : null}
+            </h3>
+          </div>
           {metadata}
           {children}
         </div>

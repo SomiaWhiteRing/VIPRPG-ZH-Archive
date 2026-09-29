@@ -1,7 +1,7 @@
 import type {
   WebPlayFileRecord,
   WebPlayInstallation,
-} from "@/app/play/[archiveVersionId]/web-play-types";
+} from "@/app/play/[workId]/web-play-types";
 import { installObserver, observeInstallTask } from "./web-play-install-observer";
 
 const DB_NAME = "viprpg_web_play_v1";

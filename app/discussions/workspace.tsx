@@ -158,6 +158,7 @@ export function DiscussionWorkspace({
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
   const pageRef = useRef<HTMLElement>(null);
+  const bottomPaginationRef = useRef<HTMLDivElement>(null);
   const handledNavigation = useRef<string | null>(null);
   const localNavigation = useRef<{
     href: string;
@@ -753,10 +754,21 @@ export function DiscussionWorkspace({
       />
     </ClientOnly>
   ) : null;
+  const topicPagination = detail && detail.posts.total > detail.posts.pageSize ? (
+    <PaginationLinks
+      basePath={`/discussions/${detail.topic.id}`}
+      page={detail.posts.page}
+      pageSize={detail.posts.pageSize}
+      total={detail.posts.total}
+      params={{ from: returnTo }}
+    />
+  ) : null;
   const replyBar =
     detail && !unavailable && draft?.mode !== "topic" ? (
       <ForumReplyBar
         viewer={viewer}
+        pagination={detail.posts.page === 1 ? topicPagination : null}
+        bottomPaginationRef={bottomPaginationRef}
         onBottomOverscroll={
           viewer &&
           !draft &&
@@ -865,6 +877,7 @@ export function DiscussionWorkspace({
               </div>
             </div>
           </header>
+          {detail.posts.page > 1 ? topicPagination : null}
           <section aria-label="帖子流">
             {detail.posts.items.map((post, index) => (
               <Fragment key={post.id}>
@@ -899,13 +912,9 @@ export function DiscussionWorkspace({
             ))}
             {!detail.posts.items.length ? replyBar : null}
           </section>
-          <PaginationLinks
-            basePath={`/discussions/${detail.topic.id}`}
-            page={detail.posts.page}
-            pageSize={detail.posts.pageSize}
-            total={detail.posts.total}
-            params={{ from: returnTo }}
-          />
+          <div ref={bottomPaginationRef} className="flow-root">
+            {topicPagination}
+          </div>
         </>
       ) : (
         <div className="grid min-w-0 gap-6 lg:grid-cols-[192px_minmax(0,1fr)]">

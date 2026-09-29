@@ -5,13 +5,13 @@ import {
   getWebPlayInstallation,
   saveWebPlayFileRecords,
   saveWebPlayInstallation,
-} from "@/app/play/[archiveVersionId]/web-play-db";
+} from "@/app/play/[workId]/web-play-db";
 import {
   createGamePackWritable,
   ensureOpfsSupported,
   resetGameOpfsDirectory,
   writeGamePackIndexJson,
-} from "@/app/play/[archiveVersionId]/web-play-opfs";
+} from "@/app/play/[workId]/web-play-opfs";
 import type {
   WebPlayFileRecord,
   WebPlayInstallation,
@@ -20,7 +20,7 @@ import type {
   WebPlayMetadata,
   WebPlayStorageSnapshot,
   WebPlayStorageKind,
-} from "@/app/play/[archiveVersionId]/web-play-types";
+} from "@/app/play/[workId]/web-play-types";
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { withGameResourceWriteLock } from "./web-play-locks";

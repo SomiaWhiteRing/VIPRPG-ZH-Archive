@@ -1,7 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   getPublishedArchiveDownloadRecord,
-  parseArchiveVersionId,
 } from "@/app/.server/db/archive-downloads";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import {
@@ -9,6 +8,7 @@ import {
   listRootComments,
 } from "@/app/.server/db/work-community";
 import { throwNotFound } from "@/app/.server/http/page-response";
+import { parsePositiveId } from "@/app/.server/http/request";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -22,8 +22,8 @@ import {
 } from "@/app/components/work/work-page-header";
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { WebPlayClient } from "@/app/play/[archiveVersionId]/web-play-client";
-import type { WebPlayMetadata } from "@/app/play/[archiveVersionId]/web-play-types";
+import { WebPlayClient } from "@/app/play/[workId]/web-play-client";
+import type { WebPlayMetadata } from "@/app/play/[workId]/web-play-types";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
@@ -46,32 +46,25 @@ export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { params } = routeInput(args);
 
-  const { archiveVersionId: rawArchiveVersionId } = await params;
-  let archiveVersionId: number;
+  const { workId: rawWorkId } = await params;
+  let workId: number;
 
   try {
-    archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
+    workId = parsePositiveId(rawWorkId, "work id");
   } catch {
     throwNotFound();
   }
 
-  const record = await getPublishedArchiveDownloadRecord(
-    runtime,
-    archiveVersionId,
-  );
+  const work = await getGameWorkDetail(runtime, workId);
+  if (!work) throwNotFound();
 
-  if (!record) {
-    throwNotFound();
-  }
+  const current = work.archiveVersions.find((archive) => archive.isCurrent);
+  if (!current) throwNotFound();
 
-  const [currentUser, work] = await Promise.all([
-    getCurrentUser(runtime),
-    getGameWorkDetail(runtime, record.workId),
-  ]);
+  const record = await getPublishedArchiveDownloadRecord(runtime, current.id);
+  if (!record || record.workId !== work.id) throwNotFound();
 
-  if (!work) {
-    throwNotFound();
-  }
+  const currentUser = await getCurrentUser(runtime);
 
   const [community, comments] = await Promise.all([
     getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
@@ -82,8 +75,6 @@ export async function loader(args: LoaderFunctionArgs) {
       null,
     ),
   ]);
-  const current =
-    work.archiveVersions.find((archive) => archive.id === record.id) ?? null;
 
   const metadata: WebPlayMetadata = {
     ok: true,
@@ -153,7 +144,7 @@ export default function WebPlayPage() {
         originalTitle={work.originalTitle}
         tabs={[
           { href: `/games/${work.id}`, label: "概览" },
-          { href: `/play/${record.id}`, label: "在线游玩", active: true },
+          { href: `/play/${work.id}`, label: "在线游玩", active: true },
           {
             href: "#sec-comments",
             label: "评论",

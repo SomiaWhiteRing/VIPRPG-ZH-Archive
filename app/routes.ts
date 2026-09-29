@@ -35,7 +35,7 @@ export default [
   route("installed", "installed/page.tsx"),
   route("login", "login/page.tsx"),
   index("page.tsx"),
-  route("play/:archiveVersionId", "play/[archiveVersionId]/page.tsx"),
+  route("play/:workId", "play/[workId]/page.tsx"),
   route("register", "register/page.tsx"),
   route("reset-password", "reset-password/page.tsx"),
   route("resources", "resources/page.tsx"),

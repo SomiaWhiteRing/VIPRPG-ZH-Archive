@@ -3,7 +3,7 @@
    Website-only rules belong in globals.css or a website component stylesheet;
    Android-only rules belong in android/web/. */
 
-/* Consumers: app/play/[archiveVersionId]/web-play-client.tsx and android/web/offline-app.tsx.
+/* Consumers: app/play/[workId]/web-play-client.tsx and android/web/offline-app.tsx.
    Apply native fullscreen geometry in the browser's fullscreen style update,
    without waiting for React's fullscreenchange state update. */
 #web-player-frame:fullscreen {
