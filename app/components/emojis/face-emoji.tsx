@@ -28,6 +28,14 @@ export function FaceEmojiView({
   }>({});
   const collecting = useRef(false);
   useEffect(() => {
+    if (addedId === null) return;
+    const timer = setTimeout(() => {
+      collecting.current = false;
+      setOpen(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [addedId]);
+  useEffect(() => {
     const pending = timers.current;
     return () => {
       clearTimeout(pending.open);
@@ -39,14 +47,15 @@ export function FaceEmojiView({
     clearTimeout(timers.current.close);
   }
   function changeOpen(value: boolean) {
+    if (!value && collecting.current) return;
     clearTimers();
     setOpen(value);
   }
   function closeAfterHover() {
     clearTimers();
-    if (activation.current !== "hover") return;
+    if (activation.current !== "hover" || collecting.current) return;
     timers.current.close = setTimeout(() => {
-      if (!content.current?.contains(document.activeElement)) setOpen(false);
+      if (!content.current?.contains(document.activeElement)) changeOpen(false);
     }, 200);
   }
   if (!emoji?.available)
@@ -147,6 +156,7 @@ export function FaceEmojiView({
               disabled={busy || added}
               onClick={async () => {
                 if (collecting.current) return;
+                clearTimers();
                 collecting.current = true;
                 setBusy(true);
                 try {
@@ -156,11 +166,11 @@ export function FaceEmojiView({
                   });
                   setAddedId(emoji.id);
                 } catch (error) {
+                  collecting.current = false;
                   toast.error(
                     error instanceof Error ? error.message : "收藏失败。",
                   );
                 } finally {
-                  collecting.current = false;
                   setBusy(false);
                 }
               }}

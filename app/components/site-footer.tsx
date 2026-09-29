@@ -46,7 +46,7 @@ export function SiteFooter() {
           <Link to="/about">关于</Link>
           <a href="https://status.viprpg.org/">运行状态</a>
           <a
-            href="https://github.com/SomiaWhiteRing/VIPRPG-ZH-Archive/issues"
+            href="https://viprpg.org/discussions/1"
             rel="noreferrer"
             target="_blank"
           >
