@@ -66,6 +66,7 @@ export default function UploadedWorkPage() {
         title={`编辑作品：${work.chineseTitle || work.originalTitle}`}
       />
       <UploadClient
+        saveRedirectTo={fromGameDetail ? `/games/${work.id}` : "/me/uploads"}
         currentUser={{
           id: user.id,
           displayName: user.displayName,

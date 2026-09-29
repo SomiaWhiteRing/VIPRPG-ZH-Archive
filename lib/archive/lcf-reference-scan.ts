@@ -125,7 +125,11 @@ export class LcfReferenceScan {
           this.seenCore.has(mapPath(info.parent));
         if (isArea) continue;
         const path = mapPath(id);
-        if (id > 0 && !this.seenCore.has(path)) this.protect("*", `地图树中的地图未分析：${path}`);
+        // Missing map files are advisory: prune against the files actually
+        // supplied. Existing but unscanned files are still protected above.
+        if (id > 0 && !this.seenCore.has(path) && this.reasons.size < 20) {
+          this.reasons.add(`地图树中的地图未分析：${path}`);
+        }
       }
     }
     return {

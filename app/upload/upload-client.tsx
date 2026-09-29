@@ -69,7 +69,7 @@ import { moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
 import { Check, Link as LinkIcon } from "lucide-react";
 import type { DragEvent, FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useRevalidator } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
@@ -127,10 +127,12 @@ export type UploadInitialWork = {
 export function UploadClient({
   currentUser,
   initialWork = null,
+  saveRedirectTo = "/me/uploads",
   suggestions,
 }: {
   currentUser: CurrentUser;
   initialWork?: UploadInitialWork | null;
+  saveRedirectTo?: string;
   suggestions: {
     tags: UploadTaxonomySuggestion[];
     characters: CharacterSuggestion[];
@@ -138,7 +140,6 @@ export function UploadClient({
   };
 }) {
   const navigate = useNavigate();
-  const revalidator = useRevalidator();
   const upload = useUploadController(currentUser.id);
   const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
     currentUser.permissionKeys.includes(key),
@@ -576,8 +577,8 @@ export function UploadClient({
               faceSheets,
             ),
           );
-          revalidator.revalidate();
           toast.success("作品资料已保存。");
+          navigate(saveRedirectTo);
         } else {
           const result = await submitExternalWork(
             form,
@@ -622,8 +623,8 @@ export function UploadClient({
             faceSheets,
           ),
         );
-        revalidator.revalidate();
         toast.success("作品资料已保存。");
+        navigate(saveRedirectTo);
         return;
       }
       const images = await prepareSelectedImages(
