@@ -191,6 +191,7 @@ export type AdminArchiveVersionEdit = {
 };
 
 export type ExternalWorkInput = {
+  usesUnsupportedManiac?: boolean;
   moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
   originalTitle: string;

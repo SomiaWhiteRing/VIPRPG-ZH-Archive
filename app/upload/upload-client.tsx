@@ -144,6 +144,8 @@ export function UploadClient({
   const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
     currentUser.permissionKeys.includes(key),
   );
+  const canExternalPublish = Boolean(initialWork) ||
+    currentUser.permissionKeys.includes("work.external_create");
   const [mode, setMode] = useState<UploadSourceKind>("folder");
   const [cleanupResources, setCleanupResources] = useResourceCleanupPreference();
   const [sharedPlayerPreference, setSharedPlayerPreference] = useSharedPlayerPreference();
@@ -159,6 +161,11 @@ export function UploadClient({
   }
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser, initialWork),
+  );
+  const [sourceMode, setSourceMode] = useState<"archive" | "external">(() =>
+    isArchiveEngineFamily(form.engineFamily) && !initialWork?.externalDownloadUrl
+      ? "archive"
+      : "external",
   );
   const [associationDefaults, setAssociationDefaults] =
     useState<AssociationDefaults>(() =>
@@ -202,21 +209,20 @@ export function UploadClient({
     () => [...sourceCoverCandidates, ...imageSelections.browsingImages],
     [imageSelections.browsingImages, sourceCoverCandidates],
   );
-  const archiveMode = isArchiveEngineFamily(form.engineFamily);
+  const archiveMode = sourceMode === "archive";
   const uploadResult = upload.task?.result;
   const metadataLocked =
     upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
   const formDisabled = preparing || metadataLocked;
-  const gameFileLocksType = Boolean(
+  const hasGameFiles = Boolean(
     existingArchive ||
       sourceSummary ||
       upload.active ||
       upload.task?.sourceReady,
   );
-  const externalLinkLocksType = Boolean(form.externalDownloadUrl.trim());
   const editSourceReady = archiveMode
     ? Boolean(existingArchive || upload.active)
-    : externalLinkLocksType;
+    : Boolean(form.externalDownloadUrl.trim());
   const relevantDrafts = upload.drafts.filter(
     (draft) =>
       draft.targetWorkId === (initialWork?.id ?? null) &&
@@ -340,6 +346,15 @@ export function UploadClient({
     );
   }
 
+  function changeSourceMode(nextMode: "archive" | "external") {
+    if (formDisabled) return;
+    if (nextMode === "external" && (!canExternalPublish || hasGameFiles)) return;
+    if (nextMode === "archive" && (!canArchiveUpload || !isArchiveEngineFamily(form.engineFamily))) return;
+    setSourceMode(nextMode);
+    setForm((current) => ({ ...current, externalDownloadUrl: "" }));
+    setSubmitError(null);
+  }
+
   function prefillSourceMetadata(
     prefill: UploadSourcePrefill,
     canPrefill: { originalTitle: boolean; chineseTitle: boolean },
@@ -409,6 +424,7 @@ export function UploadClient({
     sourceName: string,
     files: UploadSourceFile[],
   ) {
+    if (!archiveMode || !canArchiveUpload || metadataLocked || upload.active) return;
     const sizeBytes = files.reduce((sum, item) => sum + item.file.size, 0);
     const canPrefill = {
       originalTitle: !form.originalTitle.trim(),
@@ -700,6 +716,12 @@ export function UploadClient({
         ),
       );
     }
+    setSourceMode("archive");
+    setForm((current) => ({
+      ...current,
+      engineFamily: isArchiveEngineFamily(current.engineFamily) ? current.engineFamily : "rpg_maker_2000",
+      externalDownloadUrl: "",
+    }));
     setMode(draft.preparedSource.sourceKind);
     setSharedPlayerOverride(draft.preparedSource.useSharedPlayer ?? false);
     setSourceSummary({
@@ -803,28 +825,23 @@ export function UploadClient({
           <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-[84px_minmax(0,1fr)] sm:items-start sm:gap-x-3">
             <span className="text-sm font-bold sm:pt-2">游戏引擎</span>
             <EnginePicker
-              disabled={metadataLocked}
+              disabled={formDisabled}
               disabledReason={(option) => {
-                if (option.distribution === "archive" && !canArchiveUpload) {
+                const targetArchive = archiveMode && isArchiveEngineFamily(option.value);
+                if (targetArchive && !canArchiveUpload) {
                   return "当前账户没有本站归档上传权限";
                 }
-                if (
-                  option.distribution === "external" &&
-                  !initialWork &&
-                  !currentUser.permissionKeys.includes("work.external_create")
-                ) {
+                if (!targetArchive && !canExternalPublish) {
                   return "当前账户没有外链作品发布权限";
                 }
-                const targetArchive = option.distribution === "archive";
                 if (targetArchive === archiveMode) return null;
-                if (gameFileLocksType)
+                if (hasGameFiles)
                   return "已有游戏文件，不能切换到外链类型";
-                if (externalLinkLocksType)
-                  return "请先清空外部下载链接再切换到保存库类型";
                 return null;
               }}
               onValueChange={(engineFamily) => {
                 setSubmitError(null);
+                if (!isArchiveEngineFamily(engineFamily)) setSourceMode("external");
                 setForm((current) => ({
                   ...current,
                   engineFamily,
@@ -850,14 +867,16 @@ export function UploadClient({
                     onUseSharedPlayerChange={changeSharedPlayer}
                     disabled={
                       !canArchiveUpload ||
-                      preparing ||
+                      formDisabled ||
                       Boolean(sourceSummary) ||
                       upload.active
                     }
                     existingSource={sourceSummary ? null : existingArchive}
+                    externalDisabled={formDisabled || hasGameFiles || !canExternalPublish}
                     mode={mode}
                     onCancel={() => void cancelUpload()}
                     onDrop={onSourceDrop}
+                    onExternal={() => changeSourceMode("external")}
                     onFolder={(files, sourceName) =>
                       void startFolder(files, sourceName)
                     }
@@ -872,7 +891,9 @@ export function UploadClient({
                   />
                 ) : (
                   <ExternalSourceSection
+                    archiveDisabled={formDisabled || !canArchiveUpload}
                     disabled={formDisabled}
+                    onArchive={isArchiveEngineFamily(form.engineFamily) ? () => changeSourceMode("archive") : undefined}
                     onChange={(externalDownloadUrl) =>
                       setForm((current) => ({
                         ...current,
@@ -926,6 +947,7 @@ export function UploadClient({
                     existingPreviewHashes={initialWork?.previewBlobSha256s ?? []}
                     existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
                     form={form}
+                    showArchiveSource={archiveMode}
                     imageSelections={imageSelections}
                     setForm={setForm}
                     setImageSelections={setImageSelections}
@@ -1075,20 +1097,31 @@ export function UploadClient({
 }
 
 function ExternalSourceSection({
+  archiveDisabled,
   disabled,
+  onArchive,
   onChange,
   value,
 }: {
+  archiveDisabled: boolean;
   disabled: boolean;
+  onArchive?: () => void;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
     <div>
       <header className="mb-4">
-        <h2 className="m-0 text-lg font-bold">外部下载</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-lg font-bold">外部下载</h2>
+          {onArchive ? (
+            <Button disabled={archiveDisabled} onClick={onArchive} size="sm" type="button" variant="outline">
+              返回游戏文件上传
+            </Button>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-muted">
-          保存库不支持提交RM2k系以外作品，您可以提交外部网盘链接。
+          {onArchive ? "您可以提交外部网盘链接。" : "保存库不支持提交RM2k系以外作品，您可以提交外部网盘链接。"}
         </p>
       </header>
       <div className="grid grid-cols-[20px_minmax(0,1fr)] items-center gap-2.5">
@@ -1498,6 +1531,9 @@ async function submitExternalWork(
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");
   if (form.isTranslation) body.set("is_translation", "1");
+  if (form.engineFamily === "rpg_maker_2003_maniac" && form.usesUnsupportedManiac) {
+    body.set("uses_unsupported_maniac", "1");
+  }
   body.set("language", form.language);
   body.set("aliases", form.aliasTitles.join("\n"));
   body.set("tags", form.tags.join("\n"));

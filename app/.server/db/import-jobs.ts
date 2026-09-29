@@ -2,7 +2,6 @@ import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
-import { isArchiveEngineFamily } from "@/lib/labels";
 
 export type ImportJobStatus =
   | "created"
@@ -69,7 +68,7 @@ export async function createImportJob(
   },
 ): Promise<ImportJobRow> {
   if (input.targetWorkId !== null) {
-    await assertArchiveWorkCanReceiveVersion(
+    await assertWorkCanReceiveArchive(
       runtime,
       input.targetWorkId,
       input.uploader,
@@ -113,7 +112,7 @@ export async function createImportJob(
   return requiredImportJob(runtime, id);
 }
 
-async function assertArchiveWorkCanReceiveVersion(
+async function assertWorkCanReceiveArchive(
   runtime: AppRuntime,
   workId: number,
   user: ArchiveUser,
@@ -121,11 +120,7 @@ async function assertArchiveWorkCanReceiveVersion(
   const row = await getD1(runtime)
     .prepare(
       `SELECT
-         w.engine_family,
          w.status,
-         (SELECT COUNT(*) FROM archive_versions av WHERE av.work_id = w.id) AS archive_count,
-         (SELECT COUNT(*) FROM work_external_links wel
-          WHERE wel.work_id = w.id AND wel.link_type = 'download_page') AS download_count,
          EXISTS(
            SELECT 1 FROM work_uploaders wu
            WHERE wu.work_id = w.id AND wu.user_id = ?
@@ -136,10 +131,7 @@ async function assertArchiveWorkCanReceiveVersion(
     )
     .bind(user.id, workId)
     .first<{
-      engine_family: string;
       status: string;
-      archive_count: number;
-      download_count: number;
       is_uploader: number;
     }>();
 
@@ -151,13 +143,7 @@ async function assertArchiveWorkCanReceiveVersion(
   ) {
     throw new HttpError(403, "无权更新这款作品");
   }
-  if (
-    !isArchiveEngineFamily(row.engine_family) ||
-    row.archive_count < 1 ||
-    row.download_count !== 0
-  ) {
-    throw new HttpError(409, "只有本站归档作品可以上传新版本");
-  }
+  // The commit validates the selected 2k engine and atomically replaces the download source.
 }
 
 export async function requiredImportJob(

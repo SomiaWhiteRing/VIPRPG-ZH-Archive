@@ -58,9 +58,9 @@ export function isArchiveEngineFamily(value: string): value is ArchiveEngineFami
   );
 }
 
-export function isExternalEngineFamily(value: string): boolean {
+export function isEngineFamily(value: string): boolean {
   return ENGINE_OPTIONS.some(
-    (option) => option.value === value && option.distribution === "external",
+    (option) => option.value === value,
   );
 }
 

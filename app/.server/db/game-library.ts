@@ -66,7 +66,7 @@ import type { TagSource } from "@/lib/user-tags";
 import { HttpError } from "@/lib/http";
 import {
   isArchiveEngineFamily,
-  isExternalEngineFamily,
+  isEngineFamily,
   isLanguageCode,
 } from "@/lib/labels";
 import {
@@ -621,9 +621,9 @@ export async function updateOwnedWork(
   }
   if (
     input.distribution === "external" &&
-    !isExternalEngineFamily(input.engineFamily)
+    !isEngineFamily(input.engineFamily)
   ) {
-    throw new HttpError(400, "外链作品必须使用非 RPG Maker 2000/2003 系引擎");
+    throw new HttpError(400, "引擎不合法");
   }
 
   await assertTranslationLanguageChangeAllowed(
@@ -1018,11 +1018,8 @@ export async function createExternalWork(
   input: ExternalWorkInput,
 ): Promise<{ workId: number }> {
   const moreInfo = parseWorkMoreInfo(input.moreInfo);
-  if (!isExternalEngineFamily(input.engineFamily)) {
-    throw new HttpError(
-      400,
-      "外链下载作品必须使用非 RPG Maker 2000/2003 系引擎",
-    );
+  if (!isEngineFamily(input.engineFamily)) {
+    throw new HttpError(400, "引擎不合法");
   }
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
@@ -1083,7 +1080,12 @@ export async function createExternalWork(
       releaseDate.value,
       releaseDate.precision,
       input.engineFamily,
-      JSON.stringify({ moreInfo }),
+      JSON.stringify({
+        moreInfo,
+        ...(input.engineFamily === "rpg_maker_2003_maniac"
+          ? { usesUnsupportedManiac: input.usesUnsupportedManiac === true }
+          : {}),
+      }),
       input.user.id,
     )
     .run();
@@ -2217,5 +2219,5 @@ async function hasUsableDistribution(runtime: AppRuntime, workId: number) {
   const work = await getD1(runtime).prepare("SELECT engine_family FROM works WHERE id=?").bind(workId).first<{engine_family: string}>();
   const links = await getD1(runtime).prepare("SELECT COUNT(*) AS count FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(workId).first<{count: number}>();
   const distribution = deriveWorkDistribution({...state, downloadLinkCount: links?.count ?? 0});
-  return !!work && (distribution === "archive" ? isArchiveEngineFamily(work.engine_family) : distribution === "external" && isExternalEngineFamily(work.engine_family));
+  return !!work && (distribution === "archive" ? isArchiveEngineFamily(work.engine_family) : distribution === "external" && isEngineFamily(work.engine_family));
 }
