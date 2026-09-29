@@ -30,6 +30,9 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
       <input name="section" type="hidden" value="preferences" />
       <input name="shortcuts" type="hidden" value={JSON.stringify(order.filter((href) => selected.has(href)))} />
       <h2 className="mb-3 text-lg font-semibold">偏好</h2>
+      <div className="mb-3">
+        <CheckboxField name="notifyUploadedWorkComments" label="接收上传的作品的评论提醒" defaultChecked={preferences.notifyUploadedWorkComments} />
+      </div>
       <CheckboxField name="includePlayerInZip" label="下载ZIP时附带EasyRPG Player（若有）" defaultChecked={preferences.includePlayerInZip} />
       <h3 className="mb-2 mt-5 text-sm font-semibold" id="shortcut-heading">头像菜单显示的快捷入口</h3>
       <DndContext

@@ -6,6 +6,7 @@ export const ACCOUNT_SHORTCUTS = ACCOUNT_NAVIGATION.filter(
 export const DEFAULT_ACCOUNT_SHORTCUTS = ["/me/favorites", "/me/emojis", "/me/catalogs"];
 
 export type AccountPreferences = {
+  notifyUploadedWorkComments: boolean;
   includePlayerInZip: boolean;
   shortcuts: string[];
 };
@@ -19,8 +20,9 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number): AccountPreferences {
   return {
+    notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
     includePlayerInZip: includePlayer !== 0,
     shortcuts: shortcuts === null ? [...DEFAULT_ACCOUNT_SHORTCUTS] : parseAccountShortcuts(JSON.parse(shortcuts)),
   };

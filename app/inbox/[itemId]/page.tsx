@@ -59,6 +59,10 @@ export default function InboxTargetPage() {
       <PageHeader compact title="提醒" />
       <div ref={contentRef} className="py-6">
         <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
+        {item.workComment ? <>
+          <Link to={item.workComment.href} className="mt-2 block text-primary hover:underline">{item.workComment.workTitle}</Link>
+          <p className="mt-2 whitespace-pre-wrap">{item.workComment.excerpt}</p>
+        </> : null}
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}
         {item.closedReason ? <p className="mt-2 text-muted">{item.closedReason}</p> : null}
       </div>

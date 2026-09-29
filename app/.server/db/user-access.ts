@@ -13,6 +13,7 @@ export type UserRow = {
   avatar_blob_sha256: string | null;
   bio: string;
   include_player_in_zip: number;
+  notify_uploaded_work_comments: number;
   account_shortcuts: string | null;
   profile_show_bio: number;
   profile_show_showcase: number;
@@ -58,6 +59,7 @@ export const USER_ACCESS_COLUMNS = `
   u.avatar_blob_sha256,
   u.bio,
   u.include_player_in_zip,
+  u.notify_uploaded_work_comments,
   u.account_shortcuts,
   u.profile_show_bio,
   u.profile_show_showcase,
@@ -156,7 +158,7 @@ export function mapArchiveUser(
     avatarBlobSha256: row.avatar_blob_sha256,
     bio: row.bio,
     profileVisibility: mapProfileVisibility(row),
-    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts),
+    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts, row.notify_uploaded_work_comments),
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),

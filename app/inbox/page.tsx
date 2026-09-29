@@ -175,7 +175,7 @@ function InboxRow({
   const Icon =
     item.type === "forum_like"
       ? ThumbsUp
-      : item.type === "forum_reply"
+      : item.type === "forum_reply" || item.workComment
         ? MessageCircle
         : item.type === "role_change_request"
           ? ShieldCheck
@@ -251,6 +251,12 @@ function InboxRow({
             <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
               {item.title}
             </p>
+            {item.workComment ? (
+              <Link to={`/inbox/${item.id}`} prefetch="none" className="mt-1 block rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-primary">
+                <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.workComment.workTitle}</span>
+                <span className="mt-2 line-clamp-2 text-foreground">{item.workComment.excerpt}</span>
+              </Link>
+            ) : null}
             {item.type === "role_change_request" ? (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
                 <span>
