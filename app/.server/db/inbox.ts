@@ -470,6 +470,7 @@ export async function inboxTargetLocation(
   runtime: AppRuntime,
   item: InboxItem,
 ) {
+  if (item.commentNotification) return { href: item.commentNotification.href };
   if (!item.interaction) return null;
   const target = item.interaction;
   try {
