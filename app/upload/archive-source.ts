@@ -132,6 +132,7 @@ export async function inspectUploadSource(
 
   return {
     gameTitle: ini ? await ini.bytes().then(parseGameTitle).catch(() => null) : null,
+    hasUltimateRuntime: entries.some((entry) => entry.path.toLowerCase() === "ultimate_rt_eb.dll"),
     titleImages,
     faceSheetFiles,
     faceSheetWarnings,

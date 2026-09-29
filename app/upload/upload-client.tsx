@@ -346,6 +346,11 @@ export function UploadClient({
     generation: number,
   ) {
     if (generation !== sourceInspectionGenerationRef.current) return;
+    if (prefill.hasUltimateRuntime) {
+      setForm((current) => current.engineFamily === "rpg_maker_2000"
+        ? { ...current, engineFamily: "rpg_maker_2003" }
+        : current);
+    }
     setSourceCoverCandidates(prefill.titleImages);
     setSourceFaceSheetFiles(prefill.faceSheetFiles);
     setSourceFaceSheetWarnings(prefill.faceSheetWarnings);
