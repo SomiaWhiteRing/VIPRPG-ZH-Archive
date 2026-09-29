@@ -2,6 +2,7 @@ import { inflate } from "fflate";
 import { enumerateSevenZipSourceFiles } from "./archive-7z";
 import { filesWithinArchiveGameRoot } from "./archive-game-root";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
+import { detectSourceEngine } from "@/lib/archive/source-engine";
 import {
   contentTypeForArchivePath,
   normalizeArchivePath,
@@ -132,8 +133,8 @@ export async function inspectUploadSource(
 
   return {
     gameTitle: ini ? await ini.bytes().then(parseGameTitle).catch(() => null) : null,
-    hasUltimateRuntime: entries.some((entry) => entry.path.toLowerCase() === "ultimate_rt_eb.dll"),
-    hasManiacPatch: entries.some((entry) => entry.path.toLowerCase() === "accord.dll"),
+    hasUltimateRuntime: detectSourceEngine(entries) === "rpg_maker_2003",
+    hasManiacPatch: detectSourceEngine(entries) === "rpg_maker_2003_maniac",
     titleImages,
     faceSheetFiles,
     faceSheetWarnings,

@@ -1,4 +1,5 @@
 import { LcfReferenceScan, mayUseDynamicPictureName, type ResourceFile, type ReferenceObserver } from "./lcf-reference-scan";
+import type { RtpResource } from "./rtp-restore";
 
 export type MissingResourceReport = {
   missing: { path: string; source: string }[];
@@ -29,21 +30,24 @@ const commands: Record<number, [string, number]> = {
 };
 const normalize = (path: string) => path.replaceAll("\\", "/").normalize("NFC").toLowerCase();
 const extensions = (directory: string) => directory === "Music"
-  ? [".wav", ".mid", ".midi", ".mp3", ".ogg", ".oga", ".opus", ".wma"]
-  : directory === "Sound" ? [".wav", ".mp3", ".ogg", ".oga", ".opus", ".wma"]
-  : directory === "Movie" ? [".avi", ".mpg", ".mpeg"] : [".png", ".bmp", ".xyz"];
+  ? [".wav", ".mid", ".midi", ".mp3", ".ogg", ".oga", ".flac", ".opus", ".wma"]
+  : directory === "Sound" ? [".wav", ".mp3", ".ogg", ".oga", ".flac", ".opus", ".wma"]
+  : directory === "Movie" ? [".avi", ".mpg", ".mpeg"] : [".png", ".bmp", ".xyz", ".jpg"];
 
-/** Advisory only: checks the selected archive, not external RTP installations.
+/** Checks the selected archive, with an optional resolver for known RTP hashes.
  * Uses a separate visitor so diagnostic limits cannot change pruning decisions. */
 export class MissingResourceScan {
   readonly scanner: LcfReferenceScan;
+  readonly rtpResources = new Map<string, RtpResource>();
+  private readonly rtpReferences = new Map<string, string>();
   private readonly paths: Set<string>;
   private readonly missing = new Map<string, { path: string; source: string }>();
   private limited = false;
   private decoders = ["utf-8", "shift_jis", "gb18030", "big5", "euc-kr", "windows-1252"]
     .map((encoding) => new TextDecoder(encoding, { fatal: true }));
 
-  constructor(files: readonly ResourceFile[], ini?: Uint8Array) {
+  constructor(files: readonly ResourceFile[], ini?: Uint8Array,
+    private readonly resolveRtp?: (directory: string, names: readonly string[]) => RtpResource | null) {
     this.paths = new Set(files.map((file) => normalize(file.path)));
     const encoding = ini && new TextDecoder().decode(ini).match(/^\s*Encoding\s*=\s*(\S+)/im)?.[1];
     if (encoding) {
@@ -88,14 +92,24 @@ export class MissingResourceScan {
     }))) return;
     const path = `${directories.join("|")}/${names[0]}`;
     const key = normalize(path);
+    for (const directory of directories) {
+      const rtp = this.resolveRtp?.(directory, names);
+      if (!rtp) continue;
+      this.rtpResources.set(normalize(rtp.path), rtp);
+      this.rtpReferences.set(key, rtp.sha256);
+      // Keep the diagnostic until the caller adds the fixed SHA reference.
+      break;
+    }
     if (this.missing.has(key)) return;
     if (this.missing.size >= 200) { this.limited = true; return; }
     this.missing.set(key, { path, source: `${source} · ${kind}/${id}` });
   };
 
-  finish(): MissingResourceReport {
+  finish(linkedRtp: ReadonlySet<string> = new Set()): MissingResourceReport {
     const report = this.scanner.finish();
-    return { missing: [...this.missing.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    return { missing: [...this.missing.entries()]
+      .filter(([key]) => !linkedRtp.has(this.rtpReferences.get(key) ?? ""))
+      .map(([, entry]) => entry).sort((a, b) => a.path.localeCompare(b.path)),
       limited: this.limited || report.reasons.length > 0,
       reasons: report.reasons };
   }

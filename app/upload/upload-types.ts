@@ -174,6 +174,7 @@ export type UploadTaskStats = {
   excludedFileTypes: ExcludedFileTypeSummary[];
   resourceCleanup: ResourceCleanupReport | null;
   missingResources?: MissingResourceReport | null;
+  restoredRtpFiles?: { path: string; size: number; sha256: string }[];
   sharedPlayer?: SharedPlayerReplacement | null;
 };
 
