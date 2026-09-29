@@ -14,6 +14,9 @@ const structures: Record<string, Record<string, string>> = schema.structs;
 const commandNames: Record<string, string> = schema.commands;
 const decoders = ["utf-8", "shift_jis", "gb18030", "big5", "euc-kr", "windows-1252"]
   .map((encoding) => new TextDecoder(encoding, { fatal: true }));
+// Keep the shared scan budget high enough for large archives while retaining a
+// finite guard against malformed data causing unbounded work.
+const ANALYSIS_STEP_LIMIT = 20_000_000;
 const normalize = (value: string) => value.replaceAll("\\", "/").normalize("NFC").toLowerCase();
 const stem = (path: string) => normalize(path).split("/").at(-1)!.replace(/\.[^.]*$/, "");
 const mapPath = (id: number) => `map${String(id).padStart(4, "0")}.lmu`;
@@ -165,7 +168,7 @@ export class LcfReferenceScan {
   }
 
   private tick(depth: number): void {
-    if (++this.steps > 2_000_000 || depth > 32) throw new Error("超过分析复杂度限制");
+    if (++this.steps > ANALYSIS_STEP_LIMIT || depth > 32) throw new Error("超过分析复杂度限制");
   }
 
   private structure(reader: Reader, type: string, depth: number, eofAllowed = false, mapInfo?: MapInfo): void {
