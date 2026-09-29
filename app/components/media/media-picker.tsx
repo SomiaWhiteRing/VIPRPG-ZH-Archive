@@ -4,7 +4,7 @@ import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/ui/cn";
-import { ImagePlus, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
+import { ImagePlus, LoaderCircle, Plus, RotateCcw, Upload, X } from "lucide-react";
 import { Slider } from "radix-ui";
 import type { ChangeEvent, DragEvent } from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -70,6 +70,7 @@ export function CoverPicker({
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const toast = useToast();
 
   const candidates = useMemo(() => {
@@ -173,11 +174,19 @@ export function CoverPicker({
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = disabled || busy ? "none" : "copy";
+    setDropActive(!disabled && !busy);
+  }
+
+  function leaveCrop(event: DragEvent<HTMLDivElement>) {
+    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+      setDropActive(false);
+    }
   }
 
   function dropOnCrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
+    setDropActive(false);
     const selected = event.dataTransfer.files[0];
     if (selected) uploadSource(selected);
   }
@@ -245,6 +254,7 @@ export function CoverPicker({
       <Dialog.Root
         onOpenChange={(nextOpen) => {
           if (busy) return;
+          setDropActive(false);
           setOpen(nextOpen);
         }}
         open={open}
@@ -362,6 +372,7 @@ export function CoverPicker({
                       : "border border-dashed border-border bg-background",
                   )}
                   onDragOver={dragOverCrop}
+                  onDragLeave={leaveCrop}
                   onDrop={dropOnCrop}
                 >
                   {activeCandidate ? (
@@ -399,6 +410,16 @@ export function CoverPicker({
                       </div>
                     </div>
                   )}
+                  {dropActive && !disabled && !busy ? (
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-primary/5 ring-2 ring-inset ring-primary"
+                    >
+                      <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-surface">
+                        <Plus className="size-6" />
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mx-auto grid w-full max-w-[640px] grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[auto_minmax(120px,1fr)_auto] sm:gap-3">

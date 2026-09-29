@@ -68,15 +68,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
-        <link rel="preconnect" href="https://fonts.loli.net" />
-        <link
-          rel="preconnect"
-          href="https://gstatic.loli.net"
-          crossOrigin="anonymous"
-        />
         <link
           rel="stylesheet"
-          href="https://fonts.loli.net/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+          href="/assets/fonts/site-fonts-5af26311f0c39afc.css"
         />
         <link rel="icon" href="/icon/windI.png" />
       </head>

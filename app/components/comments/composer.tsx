@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, LoaderCircle, Send, X } from "lucide-react";
+import { ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { Button } from "@/app/components/ui/button";
@@ -14,7 +14,7 @@ import type { CommentDto } from "@/lib/dto/db/work-community";
 type Attachment = {
   key: string;
   preview: string;
-  file: File;
+  file?: File;
   processed: boolean;
   stage?: "processing" | "uploading";
   uploaded?: CommentImage;
@@ -23,7 +23,7 @@ type Attachment = {
 const NO_IMAGES: DraftImage[] = [];
 
 export function CommentComposer({ endpoint, target, replyToCommentId, inputId = "comment-input", placeholder,
-  unavailable = false, onBusyChange, onCreated,
+  unavailable = false, onBusyChange, onCreated, editing, onCancel,
 }: {
   endpoint: string;
   target: CommentTarget;
@@ -33,9 +33,13 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   unavailable?: boolean;
   onBusyChange?: (busy: boolean) => void;
   onCreated: (comment: CommentDto) => void;
+  editing?: CommentDto;
+  onCancel?: () => void;
 }) {
-  const [body, setBody] = useState("");
-  const [images, setImages] = useState<Attachment[]>([]);
+  const [body, setBody] = useState(editing?.bodySource ?? "");
+  const [images, setImages] = useState<Attachment[]>(() => editing?.images.map((image) => ({
+    key: image.id, preview: image.url, processed: true, uploaded: image,
+  })) ?? []);
   const [progress, setProgress] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +80,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     if (mounted.current) { setProgress(""); setSubmitting(false); onBusyChange?.(false); }
   }
   function release(url: string) {
-    URL.revokeObjectURL(url);
-    resources.current.delete(url);
+    if (resources.current.delete(url)) URL.revokeObjectURL(url);
   }
   function updateImage(image: Attachment) {
     if (mounted.current) setImages((current) => current.map((entry) => entry.key === image.key ? { ...image } : entry));
@@ -87,6 +90,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     image.error = undefined;
     updateImage(image);
     try {
+      if (!image.file) throw new Error("请选择图片文件。");
       processor.current ??= createImageProcessor();
       image.file = await processor.current.process(image.file);
       image.processed = true;
@@ -141,6 +145,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
           image.error = undefined;
           updateImage(image);
           const form = new FormData();
+          if (!image.file) throw new Error("请选择图片文件。");
           form.set("image", image.file);
           form.set("clientId", image.key);
           form.set("targetKind", target.kind);
@@ -155,18 +160,18 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         } finally { image.stage = undefined; updateImage(image); }
       }
       if (!mounted.current) return;
-      setProgress(replyToCommentId ? "正在发布回复…" : "正在发布评论…");
+      setProgress(editing ? "正在保存修改…" : replyToCommentId ? "正在发布回复…" : "正在发布评论…");
       setSubmitting(true);
       const payload = { body, replyToCommentId, imageIds: next.map((image) => image.uploaded!.id) };
       const serialized = JSON.stringify(payload);
       if (requestIdentity.current?.payload !== serialized)
         requestIdentity.current = { payload: serialized, key: crypto.randomUUID() };
       const response = await fetch(endpoint, {
-        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...payload, requestKey: requestIdentity.current.key }),
+        method: editing ? "PATCH" : "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify(editing ? { body, imageIds: payload.imageIds } : { ...payload, requestKey: requestIdentity.current.key }),
       });
       const result = await response.json() as { ok?: boolean; comment?: CommentDto; detail?: string };
-      if (!response.ok || !result.ok || !result.comment) throw new Error(result.detail ?? "评论发送失败。");
+      if (!response.ok || !result.ok || !result.comment) throw new Error(result.detail ?? (editing ? "评论修改失败。" : "评论发送失败。"));
       if (!mounted.current) return;
       setBody("");
       setImages([]);
@@ -175,7 +180,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       // Release the reply target before the parent closes this composer.
       finish();
       onCreated(result.comment);
-      toast.success(replyToCommentId ? "回复已发布。" : "评论已发布。");
+      toast.success(editing ? "修改已保存。" : replyToCommentId ? "回复已发布。" : "评论已发布。");
     } catch (cause) {
       if (mounted.current) toast.error(`${cause instanceof Error ? cause.message : "网络请求失败。"} 正文和图片已保留，请重试。`);
     } finally { finish(); }
@@ -194,7 +199,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       }}
     >
       <BodyEditor ref={editor} textOnly maxLength={2000} inputId={inputId} body={body} images={NO_IMAGES}
-        busy={busy || unavailable} topic={false} placeholder={placeholder} autoFocus={!!replyToCommentId}
+        busy={busy || unavailable} topic={false} placeholder={placeholder} autoFocus={!!replyToCommentId || !!editing}
         onChange={setBody} onBusyChange={() => {}} onError={setError} onCompositionChange={() => {}} />
       {images.length ? <ul className="flex flex-wrap gap-2" aria-label="待发布图片">
         {images.map((image, index) => <li key={image.key} className="w-24" aria-busy={!!image.stage}>
@@ -219,7 +224,10 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         {(trigger) => <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1">{trigger}<Button type="button" variant="ghost" size="sm" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
             onClick={() => picker.current?.click()}><ImagePlus aria-hidden />上传图片</Button></div>
-          <Button type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}><Send aria-hidden />{submitting ? progress : replyToCommentId ? "发布回复" : "发布评论"}</Button>
+          <div className="flex items-center gap-2">
+            {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>取消</Button> : null}
+            <Button type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}>{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? "保存修改" : replyToCommentId ? "发布回复" : "发布评论"}</Button>
+          </div>
         </div>}
       </EmojiPicker>
       {progress ? <p role="status" className="sr-only">{progress}</p> : null}
