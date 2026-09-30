@@ -5,7 +5,7 @@ import type { ForumDetail } from "@/lib/forum";
 import { FORUM_POST_PAGE_SIZE } from "@/lib/forum";
 import { interactiveContent, interactiveTopic } from "@/lib/forum-state";
 import { forumEngagement } from "./engagement";
-import { forumLocation } from "./location";
+import { forumAuthorPostPage, forumLocation } from "./location";
 import {
   assertPublicTopic,
   forumPostPage,
@@ -23,6 +23,7 @@ export async function forumDetail(
     floor?: number;
     commentPage: number;
     comment?: number;
+    onlyAuthor?: boolean;
   },
   user: ArchiveUser | null,
 ): Promise<ForumDetail> {
@@ -34,10 +35,14 @@ export async function forumDetail(
     page = location.page;
     floor = location.postNumber;
     commentPage = location.commentPage;
-  } else if (floor) {
-    page = Math.ceil(floor / FORUM_POST_PAGE_SIZE);
   }
-  const data = await forumPostPage(ctx, topicId, page);
+  const onlyAuthor = input.onlyAuthor === true;
+  if (floor) {
+    page = onlyAuthor
+      ? (await forumAuthorPostPage(ctx, topicId, floor)) ?? unavailable()
+      : Math.ceil(floor / FORUM_POST_PAGE_SIZE);
+  }
+  const data = await forumPostPage(ctx, topicId, page, onlyAuthor);
   const ids = data.posts.items.map((post) => post.id);
   const engagement = await forumEngagement(ctx, user, topicId, ids);
   const topic = interactiveTopic(
@@ -71,6 +76,7 @@ export async function forumDetail(
   return {
     topic,
     posts: { ...data.posts, items: posts },
+    onlyAuthor,
     floor: floor ?? null,
     comment: input.comment ?? null,
   };

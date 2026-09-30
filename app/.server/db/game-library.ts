@@ -181,6 +181,8 @@ type WorkEditInput = {
   previewBlobSha256s: string[];
   outgoingRelations: GameWorkRelation[];
   externalLinks: GameExternalLink[];
+  distribution?: "archive" | "external";
+  archiveSourceUrl?: string | null;
 };
 
 type ArchiveEditInput = {
@@ -476,9 +478,26 @@ export async function getWorkForAdminEdit(
   workId: number,
 ): Promise<AdminWorkEdit | null> {
   const row = await getD1(runtime)
-    .prepare(`SELECT w.* FROM works w WHERE w.id=? LIMIT 1`)
+    .prepare(`SELECT w.*,
+       av.id AS current_archive_id, av.source_name AS current_archive_source_name,
+       av.source_file_count AS current_archive_source_file_count,
+       av.source_size_bytes AS current_archive_source_size_bytes,
+       av.source_url AS current_archive_source_url,
+       av.uses_shared_player AS current_archive_uses_shared_player,
+       av.published_at AS current_archive_published_at
+       FROM works w LEFT JOIN archive_versions av
+         ON av.work_id=w.id AND av.status='published' AND av.is_current=1 AND av.purged_at IS NULL
+       WHERE w.id=? LIMIT 1`)
     .bind(workId)
-    .first<WorkRow>();
+    .first<WorkRow & {
+      current_archive_id: number | null;
+      current_archive_source_name: string | null;
+      current_archive_source_file_count: number | null;
+      current_archive_source_size_bytes: number | null;
+      current_archive_source_url: string | null;
+      current_archive_uses_shared_player: number | null;
+      current_archive_published_at: string | null;
+    }>();
   if (!row) return null;
   const collections = await loadWorkCollections(runtime, workId);
   const originalId =
@@ -516,6 +535,15 @@ export async function getWorkForAdminEdit(
       ? await listTranslations(runtime, originalId)
       : [],
     externalLinks: collections.links,
+    currentArchive: row.current_archive_id === null ? null : {
+      id: row.current_archive_id,
+      sourceName: row.current_archive_source_name || "本站归档",
+      sourceFileCount: row.current_archive_source_file_count ?? 0,
+      sourceSizeBytes: row.current_archive_source_size_bytes ?? 0,
+      sourceUrl: row.current_archive_source_url,
+      usesSharedPlayer: row.current_archive_uses_shared_player === 1,
+      publishedAt: row.current_archive_published_at,
+    },
   };
 }
 
@@ -537,31 +565,14 @@ export async function getOwnedWorkForEdit(
 ): Promise<UploaderWorkEdit | null> {
   const owned = await getD1(runtime)
     .prepare(
-      `SELECT
-         av.id AS current_archive_id,
-         av.source_name AS current_archive_source_name,
-         av.source_file_count AS current_archive_source_file_count,
-         av.source_size_bytes AS current_archive_source_size_bytes,
-         av.source_url AS current_archive_source_url,
-         av.uses_shared_player AS current_archive_uses_shared_player,
-         av.published_at AS current_archive_published_at
+      `SELECT w.id
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
-       LEFT JOIN archive_versions av
-         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
        WHERE wu.work_id=? AND wu.user_id=? AND w.status<>'deleted'
        LIMIT 1`,
     )
     .bind(workId, user.id)
-    .first<{
-      current_archive_id: number | null;
-      current_archive_source_name: string | null;
-      current_archive_source_file_count: number | null;
-      current_archive_source_size_bytes: number | null;
-      current_archive_published_at: string | null;
-      current_archive_source_url: string | null;
-      current_archive_uses_shared_player: number | null;
-    }>();
+    .first<{ id: number }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(runtime, workId);
   if (!work || work.status === "processing" || work.status === "deleted")
@@ -570,7 +581,7 @@ export async function getOwnedWorkForEdit(
     (link) => link.linkType === "download_page",
   );
 
-  const hasCurrentArchive = owned.current_archive_id !== null;
+  const hasCurrentArchive = work.currentArchive !== null;
   const distribution = deriveWorkDistribution({
     hasCurrentArchive,
     downloadLinkCount: work.externalLinks.filter((link) => link.linkType === "download_page").length,
@@ -581,17 +592,6 @@ export async function getOwnedWorkForEdit(
     distribution: distribution === "invalid" ? (isArchiveEngineFamily(work.engineFamily) ? "archive" : "external") : distribution,
     externalDownloadUrl: downloadLink?.url ?? null,
     hasCurrentArchive,
-    currentArchive: hasCurrentArchive
-      ? {
-          id: owned.current_archive_id!,
-          sourceName: owned.current_archive_source_name || "本站归档",
-          sourceFileCount: owned.current_archive_source_file_count ?? 0,
-          sourceSizeBytes: owned.current_archive_source_size_bytes ?? 0,
-          publishedAt: owned.current_archive_published_at,
-          sourceUrl: owned.current_archive_source_url,
-          usesSharedPlayer: owned.current_archive_uses_shared_player === 1,
-        }
-      : null,
   };
 }
 
@@ -888,12 +888,16 @@ export async function updateWorkForAdmin(
   assertStableDistribution({
     status: input.status,
     engineFamily: input.engineFamily,
-    hasCurrentArchive: distributionState.hasCurrentArchive,
+    hasCurrentArchive: input.distribution !== "external" && distributionState.hasCurrentArchive,
     allowMissing: input.status === "hidden" || input.status === currentStatus.status,
     downloadLinkCount: externalLinks.filter(
       (link) => link.linkType === "download_page",
     ).length,
   });
+  if (input.distribution === "archive" && externalLinks.some((link) => link.linkType === "download_page")) {
+    throw new HttpError(400, "本站归档不能同时填写外部下载地址");
+  }
+  const archiveSourceUrl = input.archiveSourceUrl === undefined ? undefined : normalizeHttpUrl(input.archiveSourceUrl, "归档来源");
   await assertTranslationLanguageChangeAllowed(
     runtime,
     input.workId,
@@ -969,6 +973,11 @@ export async function updateWorkForAdmin(
       .prepare(`DELETE FROM work_external_links WHERE work_id=?`)
       .bind(input.workId),
   ];
+  if (input.distribution === "external") {
+    statements.push(database.prepare(`UPDATE archive_versions SET is_current=0 WHERE work_id=?`).bind(input.workId));
+  } else if (archiveSourceUrl !== undefined) {
+    statements.push(database.prepare(`UPDATE archive_versions SET source_url=? WHERE work_id=? AND is_current=1`).bind(archiveSourceUrl, input.workId));
+  }
   for (const alias of aliases) {
     statements.push(
       database
@@ -1244,6 +1253,10 @@ export async function updateArchiveVersionForAdmin(
   return updated;
 }
 export function parseWorkEditForm(form: FormData): WorkEditInput {
+  const distribution = form.get("distribution");
+  if (distribution !== null && distribution !== "archive" && distribution !== "external") {
+    throw new HttpError(400, "distribution 不合法");
+  }
   return {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
@@ -1265,6 +1278,8 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     previewBlobSha256s: lines(form.get("preview_blob_sha256s")),
     outgoingRelations: [],
     externalLinks: parseLinks(form.get("external_links")),
+    distribution: distribution ?? undefined,
+    archiveSourceUrl: form.has("archive_source_url") ? clean(form.get("archive_source_url")) : undefined,
   };
 }
 export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
@@ -2003,8 +2018,8 @@ async function listTranslations(
     coverBlobSha256: x.cover_blob_sha256,
   }));
 }
-function normalizeExternalLinks(
-  values: GameExternalLink[],
+export function normalizeExternalLinks(
+  values: Array<Pick<GameExternalLink, "label" | "url" | "linkType">>,
 ): GameExternalLink[] {
   const links = values
     .filter(

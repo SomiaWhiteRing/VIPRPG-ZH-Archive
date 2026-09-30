@@ -49,7 +49,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     workId,
-    adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
+    adminUser: pickPageFields(adminUser, ["id", "displayName", "status", "permissionKeys"]),
     work,
     suggestions,
     canUpdateStatus,
@@ -87,10 +87,9 @@ export default function AdminWorkEditPage() {
         title={work.chineseTitle || work.originalTitle}
         actions={<BackLink href="/admin/works" label="返回游戏维护" />}
       />
-      <WorkEditForm work={work} suggestions={suggestions} canUpdateStatus={canUpdateStatus}>
+      <WorkEditForm work={work} currentUser={adminUser} suggestions={suggestions} canUpdateStatus={canUpdateStatus}>
         {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍公开展示，恢复来源后可重新下载。</p> : null}
         <StickySaveBar>
-          <Button type="submit">保存游戏资料</Button>
           {work.status === "published" && work.hasUsableDistribution ? (
             <Link
               className={buttonVariants({ variant: "outline" })}

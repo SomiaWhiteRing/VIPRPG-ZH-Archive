@@ -94,6 +94,7 @@ export function CharacterPicker({
     index: number;
     value: string;
     roleKey: CharacterRoleKey;
+    portraitDraft: PortraitDraft | null;
   } | null>(null);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -140,8 +141,15 @@ export function CharacterPicker({
   const recommended = suggestions
     .filter((item) => !selectedCharacterIds.has(item.id))
     .slice(0, 6);
-  const activeCredit =
+  const selectedCredit =
     portraitIndex === null ? null : (values[portraitIndex] ?? null);
+  const portraitDraft = aliasEdit?.index === portraitIndex ? aliasEdit.portraitDraft : null;
+  const activeCredit = selectedCredit && portraitDraft ? {
+    ...selectedCredit,
+    portrait: portraitDraft.portrait,
+    faceSheetBlobSha256s: portraitDraft.faceSheetBlobSha256s,
+  } : selectedCredit;
+  const activeFiles = portraitDraft?.files ?? faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES;
   const activeSuggestion =
     activeCredit?.selection.kind === "existing"
       ? (suggestionsById.get(activeCredit.selection.characterId) ?? null)
@@ -178,6 +186,9 @@ export function CharacterPicker({
     if (disabled || !aliasEdit) return;
     const displayName = normalizeEntityName(aliasEdit.value);
     if (!displayName || !values[aliasEdit.index]) return;
+    if (aliasEdit.portraitDraft) {
+      onFaceSheetFilesChange?.(aliasEdit.index, aliasEdit.portraitDraft.files);
+    }
     onChange(
       values.map((credit, index) =>
         index === aliasEdit.index
@@ -185,6 +196,10 @@ export function CharacterPicker({
               ...credit,
               selection: { ...credit.selection, displayName },
               roleKey: aliasEdit.roleKey,
+              ...(aliasEdit.portraitDraft ? {
+                portrait: aliasEdit.portraitDraft.portrait,
+                faceSheetBlobSha256s: aliasEdit.portraitDraft.faceSheetBlobSha256s,
+              } : {}),
             }
           : credit,
       ),
@@ -219,6 +234,14 @@ export function CharacterPicker({
 
   function confirmPortrait({ files, portrait, faceSheetBlobSha256s }: PortraitDraft) {
     if (disabled || portraitIndex === null) return;
+    if (aliasEdit?.index === portraitIndex) {
+      setAliasEdit((current) => current ? {
+        ...current,
+        portraitDraft: { files, portrait, faceSheetBlobSha256s },
+      } : null);
+      setPortraitIndex(null);
+      return;
+    }
     onFaceSheetFilesChange?.(portraitIndex, files);
     onChange(
       values.map((item, index) =>
@@ -239,6 +262,69 @@ export function CharacterPicker({
       onChange(next, indices);
     },
     disabled,
+  );
+
+  const portraitDialog = (
+    <Dialog.Root
+      open={Boolean(activeCredit)}
+      onOpenChange={(nextOpen) => !nextOpen && setPortraitIndex(null)}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content
+          className="inset-0 flex h-dvh w-full flex-col overflow-hidden sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(720px,90dvh)] sm:w-[min(64rem,calc(100vw-1rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg"
+          id={`${id}-portrait-dialog`}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const returnFocus = portraitReturnFocusRef.current?.isConnected
+              ? portraitReturnFocusRef.current
+              : document.getElementById(id);
+            returnFocus?.focus();
+          }}
+        >
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3 pt-[max(.75rem,env(safe-area-inset-top))]">
+            <div>
+              <Dialog.Title>选择本作头像</Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-sm text-muted">
+                {activeCredit?.selection.displayName ?? ""}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button
+                aria-label="关闭头像选择"
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <X className="size-4" />
+              </Button>
+            </Dialog.Close>
+          </div>
+          {activeCredit?.selection.kind === "new" && onFaceSheetFilesChange ? (
+            <UploadCharacterFaceSheets
+              credit={activeCredit}
+              disabled={disabled}
+              files={activeFiles}
+              key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
+              onConfirm={confirmPortrait}
+              sourceFiles={sourceFaceSheetFiles}
+              sourceLoading={sourceFaceSheetsLoading}
+              sourceWarnings={sourceFaceSheetWarnings}
+            />
+          ) : activeCredit ? (
+            <PortraitSelectionWorkbench
+              canUpload={Boolean(onFaceSheetFilesChange)}
+              credit={activeCredit}
+              disabled={disabled}
+              files={activeFiles}
+              key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
+              onConfirm={confirmPortrait}
+              suggestion={activeSuggestion}
+            />
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 
   return (
@@ -372,6 +458,7 @@ export function CharacterPicker({
                             index,
                             value: selection.displayName,
                             roleKey: credit.roleKey,
+                            portraitDraft: null,
                           });
                         }}
                         size="icon"
@@ -528,6 +615,25 @@ export function CharacterPicker({
                   value={aliasEdit?.roleKey ?? "main"}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`${id}-alias-portrait`}>头像与脸图</Label>
+                <Button
+                  aria-controls={`${id}-portrait-dialog`}
+                  aria-expanded={aliasEdit?.index === portraitIndex}
+                  aria-haspopup="dialog"
+                  disabled={disabled}
+                  id={`${id}-alias-portrait`}
+                  onClick={(event) => {
+                    if (!aliasEdit) return;
+                    portraitReturnFocusRef.current = event.currentTarget;
+                    setPortraitIndex(aliasEdit.index);
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  选择头像与脸图
+                </Button>
+              </div>
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
                   <Button type="button" variant="outline">
@@ -544,70 +650,12 @@ export function CharacterPicker({
                 </Button>
               </div>
             </form>
+            {portraitDialog}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root
-        open={Boolean(activeCredit)}
-        onOpenChange={(nextOpen) => !nextOpen && setPortraitIndex(null)}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay />
-          <Dialog.Content
-            className="inset-0 flex h-dvh w-full flex-col overflow-hidden sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(720px,90dvh)] sm:w-[min(64rem,calc(100vw-1rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg"
-            id={`${id}-portrait-dialog`}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              const returnFocus = portraitReturnFocusRef.current?.isConnected
-                ? portraitReturnFocusRef.current
-                : document.getElementById(id);
-              returnFocus?.focus();
-            }}
-          >
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3 pt-[max(.75rem,env(safe-area-inset-top))]">
-              <div>
-                <Dialog.Title>选择本作头像</Dialog.Title>
-                <Dialog.Description className="mt-0.5 text-sm text-muted">
-                  {activeCredit?.selection.displayName ?? ""}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <Button
-                  aria-label="关闭头像选择"
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <X className="size-4" />
-                </Button>
-              </Dialog.Close>
-            </div>
-            {activeCredit?.selection.kind === "new" && onFaceSheetFilesChange ? (
-              <UploadCharacterFaceSheets
-                credit={activeCredit}
-                disabled={disabled}
-                files={faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES}
-                key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
-                onConfirm={confirmPortrait}
-                sourceFiles={sourceFaceSheetFiles}
-                sourceLoading={sourceFaceSheetsLoading}
-                sourceWarnings={sourceFaceSheetWarnings}
-              />
-            ) : activeCredit ? (
-              <PortraitSelectionWorkbench
-                canUpload={Boolean(onFaceSheetFilesChange)}
-                credit={activeCredit}
-                disabled={disabled}
-                files={faceSheetFiles[portraitIndex ?? -1] ?? []}
-                key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
-                onConfirm={confirmPortrait}
-                suggestion={activeSuggestion}
-              />
-            ) : null}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {aliasEdit ? null : portraitDialog}
 
       {reorder.preview ? (
         <TokenDragPreview element={reorder.preview.element} {...reorder.preview.chip} />

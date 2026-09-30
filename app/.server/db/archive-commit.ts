@@ -13,6 +13,8 @@ import {
 } from "@/app/.server/db/creators";
 import { getD1 } from "@/app/.server/db/d1";
 import type { ImportJobRow } from "@/app/.server/db/import-jobs";
+import { assertWorkCanReceiveArchive } from "@/app/.server/db/import-jobs";
+import { normalizeExternalLinks } from "@/app/.server/db/game-library";
 import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relations";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
 import { parseWorkMoreInfo } from "@/app/.server/http/work-more-info";
@@ -36,6 +38,7 @@ import type {
 } from "@/lib/archive/manifest";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { creatorSelectionKey } from "@/lib/creator-names";
+import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
@@ -134,6 +137,9 @@ export async function commitArchiveImport(
     );
   }
 
+  if (metadata.admin && !hasPermission(input.user, "work.metadata.update_any")) {
+    throw new HttpError(403, "没有编辑作品资料的权限");
+  }
   const sourceManifest = sourceManifestFromArchive(manifest);
   await verifySharedPlayerAvailability(runtime, sourceManifest);
   const sourceManifestSha256 =
@@ -998,11 +1004,27 @@ function normalizeMetadata(
   if (!game.originalTitle.trim()) {
     throw new HttpError(400, "游戏原名不能为空");
   }
+  let admin: ArchiveCommitMetadata["admin"];
+  if (metadata.admin !== undefined) {
+    if (!isRecord(metadata.admin) || target.mode !== "update" ||
+      !isEnum(metadata.admin.status, ["published", "hidden", "deleted"] as const) ||
+      !Array.isArray(metadata.admin.externalLinks) || metadata.admin.externalLinks.some((link) =>
+        !isRecord(link) || typeof link.label !== "string" || typeof link.url !== "string" || typeof link.linkType !== "string")) {
+      throw new HttpError(400, "后台作品设置不合法");
+    }
+    const externalLinks = normalizeExternalLinks(metadata.admin.externalLinks);
+    if (externalLinks.some((link) => link.linkType === "download_page")) {
+      throw new HttpError(400, "本站归档不能同时填写外部下载地址");
+    }
+    admin = { status: metadata.admin.status, externalLinks };
+  }
 
   return {
     ...metadata,
+    admin,
     game: {
       ...metadata.game,
+      status: admin ? (admin.status === "deleted" ? "hidden" : admin.status) : game.status,
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       description: normalizeNullableWorkText(game.description),
@@ -1059,12 +1081,18 @@ async function resolveTargetWork(
     if (existingJobWorkId !== metadata.target.workId) {
       throw new HttpError(409, "导入任务与更新目标不匹配");
     }
-    if (
-      !metadata.target.workId ||
-      !(await canEditWork(runtime, metadata.target.workId, user))
-    ) {
+    if (!metadata.target.workId) {
       throw new HttpError(403, "无权更新此游戏");
     }
+    const current = await assertWorkCanReceiveArchive(runtime, metadata.target.workId, user);
+    if (current.status === "deleted" && !metadata.admin) {
+      throw new HttpError(403, "已删除作品须从后台维护");
+    }
+    const adminEdit = Boolean(metadata.admin) || current.is_uploader !== 1 || !hasPermission(user, "work.update_own");
+    if (adminEdit && (metadata.admin?.status ?? game.status) !== current.status && !hasPermission(user, "work.status.update_any")) {
+      throw new HttpError(403, "没有调整作品状态的权限");
+    }
+    if (adminEdit) game.originalTitle = current.original_title;
     await assertTranslationLanguageChangeAllowed(
       runtime,
       metadata.target.workId,
@@ -1225,6 +1253,7 @@ async function finalizeArchiveCommit(
 ): Promise<void> {
   const database = getD1(runtime);
   const game = input.metadata.game;
+  const status = input.metadata.admin?.status ?? game.status;
   const characters = input.metadata.characters ?? [];
   const statements: D1PreparedStatement[] = [];
   const before = await database
@@ -1253,7 +1282,7 @@ async function finalizeArchiveCommit(
            WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
            ELSE published_at
          END
-       WHERE id = ? AND status <> 'deleted'`,
+       WHERE id = ? AND (status <> 'deleted' OR ?)`,
       )
       .bind(
         game.originalTitle,
@@ -1267,10 +1296,11 @@ async function finalizeArchiveCommit(
         game.originalReleaseDate,
         game.originalReleasePrecision,
         game.engineFamily,
-        game.status,
+        status,
         jsonText(game.extra),
-        game.status,
+        status,
         input.workId,
+        input.metadata.admin && hasPermission(input.user, "work.status.update_any") ? 1 : 0,
       ),
   );
 
@@ -1310,17 +1340,20 @@ async function finalizeArchiveCommit(
       database,
       workId: input.workId,
       credits: characters,
-      source: "user",
+      source: input.metadata.admin ? "admin" : "user",
       actorUserId: input.user.id,
-      requirePortrait: true,
+      requirePortrait: !input.metadata.admin,
     })),
   );
 
   statements.push(
-    ...workTagStatements(database, input.workId, input.metadata.tags, "uploader"),
-    database.prepare("DELETE FROM work_external_links WHERE work_id=? AND link_type='download_page'").bind(input.workId),
+    ...workTagStatements(database, input.workId, input.metadata.tags, input.metadata.admin ? "admin" : "uploader"),
+    database.prepare(`DELETE FROM work_external_links WHERE work_id=?${input.metadata.admin ? "" : " AND link_type='download_page'"}`).bind(input.workId),
     ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
   );
+  for (const link of input.metadata.admin?.externalLinks ?? []) {
+    statements.push(database.prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,?,?,?)`).bind(input.workId, link.label, link.url, link.linkType));
+  }
 
   statements.push(
     database
@@ -1388,7 +1421,7 @@ async function finalizeArchiveCommit(
           oldOriginalTitle: before?.original_title ?? null,
           newOriginalTitle: game.originalTitle,
           oldStatus: before?.status ?? null,
-          newStatus: game.status,
+          newStatus: status,
         }),
         input.importJobId,
       ),

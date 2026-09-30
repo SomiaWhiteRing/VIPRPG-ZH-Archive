@@ -54,6 +54,7 @@ async function read(runtime: AppRuntime, request: Request) {
           floor: p.has("floor") ? id("floor") : undefined,
           commentPage: forumPage(p.get("commentPage")),
           comment: p.has("comment") ? id("comment") : undefined,
+          onlyAuthor: p.get("onlyAuthor") === "1",
         },
         (await loadRequestSession(ctx.db, request.headers.get("cookie")))
           ?.user ?? null,
@@ -170,6 +171,7 @@ async function write(runtime: AppRuntime, request: Request) {
         saved.target.kind === "comment"
           ? { commentId: saved.target.id }
           : { postNumber: row.post_number },
+        new URL(request.url).searchParams.get("onlyAuthor") === "1",
       ),
     );
   }

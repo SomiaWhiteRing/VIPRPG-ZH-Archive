@@ -6,10 +6,28 @@ import {
 import { unavailable } from "./queries";
 import type { ForumRuntime } from "./runtime";
 
+export async function forumAuthorPostPage(
+  ctx: ForumRuntime,
+  topicId: number,
+  postNumber: number,
+) {
+  const row = await ctx.db
+    .prepare(
+      `SELECT COUNT(*) AS position,MAX(post_number=?) AS matched FROM forum_posts
+      WHERE topic_id=? AND user_id=(SELECT user_id FROM forum_topics WHERE id=?) AND post_number<=?`,
+    )
+    .bind(postNumber, topicId, topicId, postNumber)
+    .first<{ position: number; matched: number | null }>();
+  return row?.matched
+    ? Math.ceil(row.position / FORUM_POST_PAGE_SIZE)
+    : null;
+}
+
 export async function forumLocation(
   ctx: ForumRuntime,
   topicId: number,
   target: { commentId?: number; postNumber?: number },
+  onlyAuthor = false,
 ) {
   const row = target.commentId
     ? await ctx.db
@@ -35,7 +53,10 @@ export async function forumLocation(
           comment_number: number;
         }>();
   if (!row) unavailable();
-  const page = Math.ceil(row.post_number / FORUM_POST_PAGE_SIZE);
+  const authorPage = onlyAuthor
+    ? await forumAuthorPostPage(ctx, topicId, row.post_number)
+    : null;
+  const page = authorPage ?? Math.ceil(row.post_number / FORUM_POST_PAGE_SIZE);
   const commentPage = target.commentId
     ? Math.ceil(row.comment_number / FORUM_COMMENT_PAGE_SIZE)
     : 1;
@@ -48,6 +69,7 @@ export async function forumLocation(
     href:
       forumHref(`/discussions/${topicId}`, {
         page,
+        onlyAuthor: authorPage ? "1" : null,
         floor: target.commentId ? row.post_number : null,
         commentPage: target.commentId ? commentPage : null,
         comment: target.commentId,

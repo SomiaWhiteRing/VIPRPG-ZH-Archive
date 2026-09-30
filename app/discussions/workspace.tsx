@@ -24,7 +24,7 @@ import { FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
 import type { PublicForumContent } from "@/lib/forum-public";
 import { interactiveContent } from "@/lib/forum-state";
 import { cn } from "@/lib/ui/cn";
-import { MessageSquare, ThumbsUp } from "lucide-react";
+import { MessageSquare, ThumbsUp, UserRound } from "lucide-react";
 import {
   Fragment,
   lazy,
@@ -393,6 +393,7 @@ export function DiscussionWorkspace({
           op: "detail",
           topicId: detail.topic.id,
           page: params.get("page"),
+          onlyAuthor: params.get("onlyAuthor"),
           floor: params.get("floor"),
           commentPage: params.get("commentPage"),
           comment: params.get("comment"),
@@ -505,7 +506,9 @@ export function DiscussionWorkspace({
       );
       setUploadProgress("");
       const result = await forumRequest<{ href: string; topicId: number }>(
-        "/api/discussions",
+        forumHref("/api/discussions", {
+          onlyAuthor: detail?.onlyAuthor ? "1" : null,
+        }),
         {
           op: draft.target ? "edit" : "publish",
           kind: draft.mode,
@@ -767,8 +770,29 @@ export function DiscussionWorkspace({
       page={detail.posts.page}
       pageSize={detail.posts.pageSize}
       total={detail.posts.total}
-      params={{ from: returnTo }}
+      params={{ from: returnTo, onlyAuthor: detail.onlyAuthor ? "1" : undefined }}
     />
+  ) : null;
+  const authorFilter = detail ? (
+    <Button
+      className={cn("min-h-10 px-2", detail.onlyAuthor && "text-primary")}
+      size="sm"
+      variant="ghost"
+      type="button"
+      aria-pressed={detail.onlyAuthor}
+      disabled={busy || pending}
+      onClick={() => {
+        startTransition(() => navigate(
+          forumHref(`/discussions/${detail.topic.id}`, {
+            onlyAuthor: detail.onlyAuthor ? null : "1",
+            from: returnTo,
+          }),
+        ));
+      }}
+    >
+      <UserRound aria-hidden className="size-4" />
+      {detail.onlyAuthor ? "取消只看楼主" : "只看楼主"}
+    </Button>
   ) : null;
   const replyBar =
     detail && !unavailable && draft?.mode !== "topic" ? (
@@ -810,6 +834,7 @@ export function DiscussionWorkspace({
             to={`/login?next=${encodeURIComponent(
               forumHref(`/discussions/${detail.topic.id}`, {
                 page: detail.posts.page,
+                onlyAuthor: detail.onlyAuthor ? "1" : null,
                 floor: detail.floor,
                 commentPage: detail.posts.items.find(
                   (post) => post.postNumber === detail.floor,
@@ -895,6 +920,8 @@ export function DiscussionWorkspace({
                   emojis={currentEmojis}
                   viewer={viewer}
                   page={detail.posts.page}
+                  onlyAuthor={detail.onlyAuthor}
+                  authorFilter={post.postNumber === 1 ? authorFilter : null}
                   returnTo={returnTo}
                   onLocationChange={(href, replace, targetId) => {
                     localNavigation.current = {
@@ -1136,6 +1163,8 @@ function ForumFloorView({
   topic,
   viewer,
   page,
+  onlyAuthor,
+  authorFilter,
   returnTo,
   emojis,
   initialExpanded,
@@ -1148,6 +1177,8 @@ function ForumFloorView({
   topic: ForumTopic;
   viewer: ForumViewer;
   page: number;
+  onlyAuthor: boolean;
+  authorFilter: React.ReactNode;
   returnTo?: string;
   emojis: FaceEmoji[];
   initialExpanded: boolean;
@@ -1333,6 +1364,7 @@ function ForumFloorView({
                 </span>
               </Button>
             ) : null}
+            {authorFilter}
             {post.capabilities.reply ? (
               <Button
                 className="min-h-10 px-2"
@@ -1351,6 +1383,7 @@ function ForumFloorView({
                 to={`/login?next=${encodeURIComponent(
                   forumHref(`/discussions/${topic.id}`, {
                     page,
+                    onlyAuthor: onlyAuthor ? "1" : null,
                     floor: post.postNumber,
                     commentPage: comments.page,
                     from: returnTo,

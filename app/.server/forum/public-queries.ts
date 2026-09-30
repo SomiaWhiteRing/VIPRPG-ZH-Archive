@@ -38,10 +38,16 @@ export async function forumPostPage(
   ctx: ForumRuntime,
   topicId: number,
   requested: number,
+  onlyAuthor = false,
 ) {
   const row = await rawTopic(ctx, topicId);
   if (!row.public) unavailable();
-  const total = row.next_post_number - 1;
+  const total = onlyAuthor
+    ? (await ctx.db
+        .prepare("SELECT COUNT(*) AS n FROM forum_posts WHERE topic_id=? AND user_id=?")
+        .bind(topicId, row.user_id)
+        .first<{ n: number }>())!.n
+    : row.next_post_number - 1;
   const page = Math.min(
     forumPage(requested),
     Math.max(1, Math.ceil(total / FORUM_POST_PAGE_SIZE)),
@@ -49,9 +55,13 @@ export async function forumPostPage(
   const low = (page - 1) * FORUM_POST_PAGE_SIZE + 1;
   const data = await ctx.db
     .prepare(
-      `${contentSql("post", 0, true)} WHERE p.topic_id=? AND p.post_number BETWEEN ? AND ? ORDER BY p.post_number`,
+      onlyAuthor
+        ? `${contentSql("post", 0, true)} WHERE p.topic_id=? AND p.user_id=? ORDER BY p.post_number LIMIT ? OFFSET ?`
+        : `${contentSql("post", 0, true)} WHERE p.topic_id=? AND p.post_number BETWEEN ? AND ? ORDER BY p.post_number`,
     )
-    .bind(topicId, low, low + FORUM_POST_PAGE_SIZE - 1)
+    .bind(...(onlyAuthor
+      ? [topicId, row.user_id, FORUM_POST_PAGE_SIZE, low - 1]
+      : [topicId, low, low + FORUM_POST_PAGE_SIZE - 1]))
     .all<ContentRow>();
   const tags = await topicTags(ctx, [topicId]);
   const topic = mapTopic(row, null, tags.get(topicId) ?? []);
