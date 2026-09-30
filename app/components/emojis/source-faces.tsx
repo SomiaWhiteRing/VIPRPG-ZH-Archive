@@ -40,6 +40,7 @@ export function SourceFaces({
   defaults,
   owned,
   active,
+  selected,
   locateVersion,
   disabled,
   onSelect,
@@ -49,6 +50,7 @@ export function SourceFaces({
   defaults: FaceEmoji[];
   owned: Set<string>;
   active: FaceEmoji | null;
+  selected: Set<string> | null;
   locateVersion: number;
   disabled: boolean;
   onSelect: (emoji: FaceEmoji) => void;
@@ -186,7 +188,8 @@ export function SourceFaces({
     <div className="flex flex-wrap gap-2">
       {emojis.map((emoji) => {
         const key = emojiCellKey(emoji),
-          collected = owned.has(key);
+          collected = owned.has(key),
+          isSelected = selected?.has(key) ?? activeKey === key;
         return (
           <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || collected || !emoji.available}>
           <Button
@@ -195,12 +198,12 @@ export function SourceFaces({
             key={key}
             type="button"
             aria-label={`${collected ? "已添加" : "选择表情"}${emoji.users ? `，${emoji.users} 人使用` : ""}`}
-            aria-pressed={activeKey === key}
+            aria-pressed={isSelected}
             disabled={disabled}
             onClick={() => onSelect(emoji)}
             className={cn(
               "relative grid h-auto w-auto cursor-pointer justify-items-center gap-1 rounded border border-transparent p-1 font-normal hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default [&_svg]:size-3.5",
-              activeKey === key &&
+              isSelected &&
                 "border-primary bg-primary/5 ring-1 ring-primary",
             )}
           >
@@ -279,7 +282,7 @@ export function SourceFaces({
           cellState={(sheet, row, column) => {
             const key = emojiCellKey(sheetCell(sheet, row, column));
             return {
-              selected: activeKey === key,
+              selected: selected?.has(key) ?? activeKey === key,
               collected: owned.has(key),
               highlighted: activeKey === key,
             };
