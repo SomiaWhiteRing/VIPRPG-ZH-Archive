@@ -63,6 +63,11 @@ export async function topicViews<T extends { id: number }>(runtime: AppRuntime, 
   return items.map((item) => ({ ...item, views: counts[item.id] }));
 }
 
+export async function rankWorkViews(runtime: AppRuntime, ids: number[], limit: number, offset: number) {
+  if (!ids.length) return [];
+  return stats(runtime.env).rankWorks(ids, limit, offset);
+}
+
 // Only administrative merges use D1 here. Normal reads and view reports never do.
 // The outbox is committed with the catalog transaction; retries are idempotent in the DO.
 export async function drainViewMerges(env: CloudflareEnv) {

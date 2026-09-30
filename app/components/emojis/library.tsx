@@ -91,7 +91,7 @@ export function EmojiLibrary({
   const [mine, setMine] = useState<FaceEmoji[]>([]);
   const [defaults, setDefaults] = useState<FaceEmoji[]>([]);
   const [active, setActive] = useState<FaceEmoji | null>(null);
-  const [multiSelect, setMultiSelect] = useState(false);
+  const [multiSelect, setMultiSelect] = useState<EmojiDrag["from"] | null>(null);
   const [selected, setSelected] = useState<FaceEmoji[]>([]);
   const [locateVersion, setLocateVersion] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -125,6 +125,7 @@ export function EmojiLibrary({
   const activeIndex = mine.findIndex(
     (emoji) => emojiCellKey(emoji) === activeKey,
   );
+  const isRemoval = hasSelection ? multiSelect === "library" : activeIndex >= 0;
   const preview = selected.at(-1) ?? mine[activeIndex] ?? active;
   const hasPreview = !!preview;
   const character = source.kind === "character" ? source.character : undefined;
@@ -193,10 +194,15 @@ export function EmojiLibrary({
       else setSavingOrder(false);
     }
   }
-  function select(emoji: FaceEmoji) {
-    if (multiSelect) {
+  function toggleMultiSelect(from: EmojiDrag["from"]) {
+    setMultiSelect((current) => (current === from ? null : from));
+    setSelected([]);
+    if (from === "source") setActive(null);
+  }
+  function select(emoji: FaceEmoji, from: EmojiDrag["from"]) {
+    if (multiSelect === from) {
       const key = emojiCellKey(emoji);
-      setActive(null);
+      if (from === "source") setActive(null);
       if (selectedKeys.has(key)) {
         setSelected((current) =>
           current.filter((item) => emojiCellKey(item) !== key),
@@ -208,15 +214,20 @@ export function EmojiLibrary({
       }
       return;
     }
+    if (from === "library") {
+      locate(emoji);
+      return;
+    }
+    setSelected([]);
     setActive(
       mine.find((item) => emojiCellKey(item) === emojiCellKey(emoji)) ?? emoji,
     );
   }
   async function changeCollection() {
     if (!preview || busy || !ready) return;
-    if (hasSelection) await add(selected);
-    else if (activeIndex >= 0) await remove(preview);
-    else await add([preview]);
+    const emojis = hasSelection ? selected : [preview];
+    if (isRemoval) await remove(emojis);
+    else await add(emojis);
   }
   async function add(emojis: FaceEmoji[]) {
     if (busy || !ready) return;
@@ -250,11 +261,15 @@ export function EmojiLibrary({
       );
     });
   }
-  async function remove(emoji: FaceEmoji) {
-    if (busy || !ready) return;
+  async function remove(emojis: FaceEmoji[]) {
+    if (busy || !ready || !emojis.length) return;
+    const keys = new Set(emojis.map(emojiCellKey));
     if (admin) {
       setMine((current) =>
-        current.filter((item) => emojiCellKey(item) !== emojiCellKey(emoji)),
+        current.filter((item) => !keys.has(emojiCellKey(item))),
+      );
+      setSelected((current) =>
+        current.filter((item) => !keys.has(emojiCellKey(item))),
       );
       setDirty(true);
       return;
@@ -262,9 +277,12 @@ export function EmojiLibrary({
     await update(async () => {
       const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
         "/api/emojis",
-        { op: "remove", ids: [emoji.id] },
+        { op: "remove", ids: emojis.map((emoji) => emoji.id) },
       );
       setMine(result.emojis);
+      setSelected((current) =>
+        current.filter((item) => !keys.has(emojiCellKey(item))),
+      );
     });
   }
   function endDrag() {
@@ -395,10 +413,12 @@ export function EmojiLibrary({
         const data = active.data.current;
         if (mutation.current || busy || !ready || !data?.emoji) return;
         const emojis =
-          data.from === "source" && selectedKeys.has(emojiCellKey(data.emoji))
-            ? selected.filter(
-                (emoji) => emoji.available && !owned.has(emojiCellKey(emoji)),
-              )
+          multiSelect === data.from && selectedKeys.has(emojiCellKey(data.emoji))
+            ? data.from === "source"
+              ? selected.filter(
+                  (emoji) => emoji.available && !owned.has(emojiCellKey(emoji)),
+                )
+              : selected
             : [data.emoji];
         const value: EmojiDrag = {
           emoji: data.emoji,
@@ -416,10 +436,11 @@ export function EmojiLibrary({
         endDrag();
         if (!value || !over || busy || mutation.current) return;
         if (over.id === "source") {
-          if (value.from === "library") void remove(value.emoji);
+          if (value.from === "library") void remove(value.emojis);
         } else if (value.from === "source") {
           void add(value.emojis);
         } else {
+          if (value.emojis.length > 1) return;
           const from = mine.findIndex((item) => emojiCellKey(item) === emojiCellKey(value.emoji));
           const to = mine.findIndex((item) => emojiDragId("library", item) === over.id);
           if (from >= 0 && to >= 0) void reorder({ ...value, order: arrayMove(mine, from, to) });
@@ -436,6 +457,9 @@ export function EmojiLibrary({
       <div className="grid min-w-0 overflow-hidden rounded-md border border-border bg-card sm:h-[min(660px,75dvh)] sm:min-h-[440px] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <EmojiDropZone zone="source"
           aria-label="查找脸图"
+          onClick={() => {
+            if (multiSelect === "library") setSelected([]);
+          }}
           className={cn(
             "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] border-b border-border sm:border-b-0 sm:border-r",
             dropTarget === "source" &&
@@ -463,18 +487,14 @@ export function EmojiLibrary({
             <Button
               type="button"
               size="icon"
-              variant={multiSelect ? "default" : "ghost"}
+              variant={multiSelect === "source" ? "default" : "outline"}
               disabled={busy || savingOrder || !ready}
-              aria-label={multiSelect ? "关闭多选" : "开启多选"}
-              title={multiSelect ? "关闭多选" : "开启多选"}
-              aria-pressed={multiSelect}
-              onClick={() => {
-                setMultiSelect((current) => !current);
-                setSelected([]);
-                setActive(null);
-              }}
+              aria-label={multiSelect === "source" ? "关闭左栏多选" : "开启左栏多选"}
+              title={multiSelect === "source" ? "关闭多选" : "开启多选"}
+              aria-pressed={multiSelect === "source"}
+              onClick={() => toggleMultiSelect("source")}
             >
-              {multiSelect ? <ListX aria-hidden /> : <ListChecks aria-hidden />}
+              {multiSelect === "source" ? <ListX aria-hidden /> : <ListChecks aria-hidden />}
             </Button>
           </header>
           <SourceFaces
@@ -483,10 +503,10 @@ export function EmojiLibrary({
             defaults={defaults}
             owned={owned}
             active={active}
-            selected={multiSelect ? selectedKeys : null}
+            selected={multiSelect === "source" ? selectedKeys : null}
             locateVersion={locateVersion}
             disabled={busy || !ready}
-            onSelect={select}
+            onSelect={(emoji) => select(emoji, "source")}
             dragDisabled={busy || savingOrder || !ready}
           />
           {drag?.from === "library" ? (
@@ -502,7 +522,9 @@ export function EmojiLibrary({
         </EmojiDropZone>
         <EmojiDropZone zone="library"
           aria-label={admin ? "默认清单" : "我的表情"}
-          onClick={() => setSelected([])}
+          onClick={() => {
+            if (multiSelect === "source") setSelected([]);
+          }}
           className={cn(
             "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]",
             dropTarget === "library" &&
@@ -522,6 +544,18 @@ export function EmojiLibrary({
                 {savingOrder ? "正在保存顺序…" : ""}
               </span>
             </div>
+            <Button
+              type="button"
+              size="icon"
+              variant={multiSelect === "library" ? "default" : "outline"}
+              disabled={busy || savingOrder || !ready}
+              aria-label={multiSelect === "library" ? "关闭右栏多选" : "开启右栏多选"}
+              title={multiSelect === "library" ? "关闭多选" : "开启多选"}
+              aria-pressed={multiSelect === "library"}
+              onClick={() => toggleMultiSelect("library")}
+            >
+              {multiSelect === "library" ? <ListX aria-hidden /> : <ListChecks aria-hidden />}
+            </Button>
             {!admin ? (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
@@ -583,26 +617,39 @@ export function EmojiLibrary({
             >
               {mine.map((emoji) => {
                 const key = emojiCellKey(emoji);
+                const isSelected =
+                  multiSelect === "library"
+                    ? selectedKeys.has(key)
+                    : activeKey === key;
                 return (
-                  <EmojiSortable key={key} emoji={emoji} disabled={busy || savingOrder || !ready}>
+                  <EmojiSortable
+                    key={key}
+                    emoji={emoji}
+                    disabled={busy || savingOrder || !ready}
+                    sortingDisabled={drag?.from === "library" && drag.emojis.length > 1}
+                  >
                     {({ attributes, listeners, setActivatorNodeRef }) => <>
                     <Button
                       variant="ghost"
                       size="icon"
                       type="button"
-                      aria-label={`定位${emoji.sources[0]?.name ?? "表情"}的来源脸图`}
+                      aria-label={
+                        multiSelect === "library"
+                          ? `选择${emoji.sources[0]?.name ?? "表情"}`
+                          : `定位${emoji.sources[0]?.name ?? "表情"}的来源脸图`
+                      }
                       disabled={busy}
                       {...attributes}
-                      aria-pressed={activeKey === key}
+                      aria-pressed={isSelected}
                       {...listeners}
                       ref={setActivatorNodeRef}
                       onContextMenu={(event) => event.preventDefault()}
                       className={cn(
                         "relative inline-flex size-14 cursor-pointer items-center justify-center rounded border border-transparent hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default",
-                        activeKey === key &&
+                        isSelected &&
                           "border-primary bg-primary/5 ring-1 ring-primary",
                       )}
-                      onClick={() => locate(emoji)}
+                      onClick={() => select(emoji, "library")}
                     >
                       <FaceEmojiImage emoji={emoji} />
                     </Button>
@@ -615,7 +662,7 @@ export function EmojiLibrary({
                       }
                       title="移除表情"
                       disabled={busy || savingOrder}
-                      onClick={() => void remove(emoji)}
+                      onClick={() => void remove([emoji])}
                       className={cn(
                         "absolute -right-0.5 -top-0.5 z-10 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:inline-flex [&_svg]:size-2.5",
                         drag && "invisible",
@@ -644,23 +691,23 @@ export function EmojiLibrary({
                       <Button
                         type="button"
                         size="sm"
-                        variant={!hasSelection && activeIndex >= 0 ? "outline" : "default"}
+                        variant={isRemoval ? "outline" : "default"}
                         disabled={
                           busy ||
                           savingOrder ||
                           !ready ||
                           (hasSelection
-                            ? !canAddSelection
+                            ? !isRemoval && !canAddSelection
                             : activeIndex < 0 && !preview.available)
                         }
                         onClick={() => void changeCollection()}
                       >
-                        {!hasSelection && activeIndex >= 0 ? (
+                        {isRemoval ? (
                           <Trash2 aria-hidden />
                         ) : (
                           <Plus aria-hidden />
                         )}
-                        {!hasSelection && activeIndex >= 0
+                        {isRemoval
                           ? admin
                             ? "从默认清单移除"
                             : "从表情库移除"

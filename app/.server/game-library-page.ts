@@ -36,7 +36,8 @@ export async function loadGameLibrary(
   const release = normalizeReleasePeriod(stringParam(params.release));
   const requestedSort = stringParam(params.sort);
   const sort =
-    requestedSort === "title" || requestedSort === "release"
+    requestedSort === "title" || requestedSort === "release" ||
+    requestedSort === "views" || requestedSort === "players" || requestedSort === "comments"
       ? requestedSort
       : "id";
   const page = Math.max(

@@ -9,6 +9,7 @@ export function WorkCard({
   coverBlobSha256,
   ariaLabel = title,
   metadata,
+  imageMetadata,
   imageBadge,
   action,
   children,
@@ -19,6 +20,7 @@ export function WorkCard({
   coverBlobSha256?: string | null;
   ariaLabel?: string;
   metadata?: ReactNode;
+  imageMetadata?: ReactNode;
   imageBadge?: ReactNode;
   action?: ReactNode;
   children?: ReactNode;
@@ -37,8 +39,13 @@ export function WorkCard({
             height={315}
             fallback="暂无封面"
           />
+          {imageMetadata ? (
+            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/45 to-transparent px-2 pb-1.5 pt-6 font-normal text-white min-[641px]:px-3 min-[641px]:pb-2">
+              {imageMetadata}
+            </div>
+          ) : null}
           {imageBadge && !action ? (
-            <span className="absolute right-1.5 bottom-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white max-[640px]:hidden">
+            <span className="absolute top-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white">
               {imageBadge}
             </span>
           ) : null}
@@ -60,7 +67,7 @@ export function WorkCard({
       </Link>
       {action ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-4/3">
-          <div className="pointer-events-auto absolute right-1.5 bottom-1.5">{action}</div>
+          <div className="pointer-events-auto absolute top-1.5 right-1.5">{action}</div>
         </div>
       ) : null}
     </div>
