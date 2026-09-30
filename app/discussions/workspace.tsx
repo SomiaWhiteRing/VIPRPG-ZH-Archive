@@ -37,6 +37,7 @@ import {
 } from "react";
 import {
   Link,
+  useBeforeUnload,
   useLocation,
   useNavigate,
   useNavigationType,
@@ -154,6 +155,12 @@ export function DiscussionWorkspace({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [requestError, setRequestError] = useState<ForumRequestError | null>(null);
+  const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
+  useBeforeUnload(useCallback((event) => {
+    if (!dirty && !busy) return;
+    event.preventDefault();
+    event.returnValue = "";
+  }, [dirty, busy]));
   const [action, setAction] = useState<ForumDialogAction | null>(null),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);

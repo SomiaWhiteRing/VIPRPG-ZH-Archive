@@ -47,6 +47,7 @@ const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/games", label: "作品库" },
   { href: "/characters", label: "角色" },
   { href: "/discussions", label: "讨论版" },
+  { href: "/rakuen", label: "超展开" },
   { href: "/catalogs", label: "目录" },
   { href: "/resources", label: "链接" },
   { href: "/upload", label: "上传" },

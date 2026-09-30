@@ -36,6 +36,7 @@ export default [
   route("login", "login/page.tsx"),
   index("page.tsx"),
   route("play/:workId", "play/[workId]/page.tsx"),
+  route("rakuen", "rakuen/page.tsx"),
   route("register", "register/page.tsx"),
   route("reset-password", "reset-password/page.tsx"),
   route("resources", "resources/page.tsx"),
