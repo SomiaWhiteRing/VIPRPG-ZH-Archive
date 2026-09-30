@@ -109,10 +109,10 @@ export function GameLibrary({
                 { value: "id", label: "默认" },
                 { value: "title", label: "标题" },
                 { value: "release", label: "发布日期" },
-                { value: "views", label: "最多浏览" },
-                { value: "players", label: "最多游玩" },
-                { value: "comments", label: "最多评论" },
-                { value: "favorites", label: "最多收藏" },
+                { value: "views", label: "浏览数" },
+                { value: "players", label: "游玩数" },
+                { value: "comments", label: "评论数" },
+                { value: "favorites", label: "收藏数" },
               ] as const).map(({ value, label }) => (
                 <Link
                   className={
