@@ -3,6 +3,7 @@ package org.viprpg.archive;
 import android.app.Activity;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
@@ -42,6 +43,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -724,8 +726,21 @@ public final class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (saveTransfers != null && saveTransfers.result(requestCode, resultCode, data)) return;
         if (requestCode == FILE_CHOOSER_REQUEST && fileChooser != null) {
-            fileChooser.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            ValueCallback<Uri[]> callback = fileChooser;
             fileChooser = null;
+            List<Uri> files = new ArrayList<>();
+            if (resultCode == RESULT_OK && data != null) {
+                // WebView's parseResult only reads getData(); multi-select pickers can return ClipData alone.
+                ClipData clip = data.getClipData();
+                if (clip != null) {
+                    for (int i = 0; i < clip.getItemCount(); i++) {
+                        Uri uri = clip.getItemAt(i).getUri();
+                        if (uri != null) files.add(uri);
+                    }
+                }
+                if (files.isEmpty() && data.getData() != null) files.add(data.getData());
+            }
+            callback.onReceiveValue(files.isEmpty() ? null : files.toArray(new Uri[0]));
         }
     }
 
