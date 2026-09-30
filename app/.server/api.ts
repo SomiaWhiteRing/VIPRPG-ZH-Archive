@@ -103,12 +103,20 @@ import type { AppRuntime } from "./runtime";
 import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
 import { listPublicCharacterFaceSheets } from "./db/taxonomy-library";
+import { listRandomGameWorks } from "./db/game-library";
 
 export const api = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
+  c.json({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, 200,
+    { "Cache-Control": "no-store" }),
+);
+api.options("/api/works/random", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/works/random", (c) => c.json({ ok: false, error: "Method not allowed" }, 405,
+  { Allow: "GET, HEAD, OPTIONS" }));
 api.get("/api/characters/:characterId/face-sheets", async (c) => {
   const rawId = c.req.param("characterId");
   const id = Number(rawId);

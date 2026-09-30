@@ -10,8 +10,10 @@ import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { useToast } from "@/app/components/ui/toast";
+import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -30,7 +32,25 @@ export const meta: MetaFunction = ({ error }) =>
 export default function HomePage() {
   const { recentWorks, recentOriginalWorks, randomWorks, topics } =
     useLoaderData<typeof loader>();
-  const revalidator = useRevalidator();
+  const [randomSelection, setRandomSelection] = useState(randomWorks);
+  const [randomBusy, setRandomBusy] = useState(false);
+  const toast = useToast();
+  useEffect(() => setRandomSelection(randomWorks), [randomWorks]);
+
+  async function refreshRandomWorks() {
+    if (randomBusy) return;
+    setRandomBusy(true);
+    try {
+      const response = await fetch("/api/works/random");
+      const result = await response.json() as { ok: boolean; works: GameCardSummary[]; detail?: string };
+      if (!response.ok || !result.ok) throw new Error(result.detail ?? "随机作品加载失败，请稍后重试。");
+      setRandomSelection(result.works);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "随机作品加载失败，请稍后重试。");
+    } finally {
+      setRandomBusy(false);
+    }
+  }
   return (
     <PageContainer>
       <div className="flex flex-col gap-7 min-[561px]:gap-8 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-9">
@@ -104,9 +124,9 @@ export default function HomePage() {
             variant="ghost"
             className="ml-auto min-h-0 rounded-none p-0 font-bold text-primary hover:bg-transparent hover:text-accent min-[851px]:mt-5"
             type="button"
-            disabled={revalidator.state !== "idle"}
+            disabled={randomBusy}
             aria-controls="random-work-grid"
-            onClick={() => void revalidator.revalidate()}
+            onClick={() => void refreshRandomWorks()}
           >
             试试手气
           </Button>
@@ -114,9 +134,9 @@ export default function HomePage() {
         <div
           className="min-w-0 flex-1"
           id="random-work-grid"
-          aria-busy={revalidator.state !== "idle"}
+          aria-busy={randomBusy}
         >
-          <HomeWorkGrid singleRow works={randomWorks} />
+          <HomeWorkGrid singleRow works={randomSelection} />
         </div>
       </section>
     </PageContainer>
