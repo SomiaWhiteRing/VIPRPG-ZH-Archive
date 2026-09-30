@@ -1,10 +1,13 @@
-import type { AppRuntime } from "@/app/.server/runtime";
+import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
 import type { StatKind } from "@/lib/view-stats";
 
 const FRESH_MS = 15 * 60 * 1000;
 const MAX_IDS = 128;
+const MAX_LOCAL_COUNTS = 4096;
 type CachedCount = { count: number; at: number };
+// Only settled public numbers may cross requests, never DO/cache I/O promises.
+const localCounts = new WeakMap<CloudflareEnv["VIEW_STATS"], Map<string, CachedCount>>();
 
 function stats(env: CloudflareEnv) {
   return env.VIEW_STATS.getByName("site");
@@ -27,28 +30,67 @@ export async function recordView(runtime: AppRuntime, kind: StatKind, id: number
 
 export async function viewCounts(runtime: AppRuntime, kind: StatKind, ids: number[], initialCounts: Record<number, number> = {}): Promise<Record<number, number>> {
   const unique = [...new Set(ids)];
+  const pending = memoizeRequest(runtime, `view-counts:${kind}`, () => new Map<number, Promise<number>>());
+  const unread = unique.filter((id) => !pending.has(id));
+  if (unread.length) {
+    const counts = loadViewCounts(runtime, kind, unread, initialCounts);
+    for (const id of unread) pending.set(id, counts.then((values) => values[id]));
+  }
+  return Object.fromEntries(await Promise.all(unique.map(async (id) => [id, await pending.get(id)!])));
+}
+
+async function loadViewCounts(runtime: AppRuntime, kind: StatKind, ids: number[], initialCounts: Record<number, number>): Promise<Record<number, number>> {
   const values: Record<number, number> = {};
-  if (!unique.length) return values;
-  const cache = typeof caches === "undefined" ? undefined : await caches.open("view-stats").catch(() => undefined);
+  const binding = runtime.env.VIEW_STATS;
+  let local = binding ? localCounts.get(binding) : undefined;
+  if (!local) {
+    local = new Map();
+    if (binding) localCounts.set(binding, local);
+  }
+  const key = (id: number) => `${runtime.origin}/${kind}/${id}`;
+  const remember = (id: number, value: CachedCount) => {
+    local.delete(key(id));
+    local.set(key(id), value);
+    if (local.size > MAX_LOCAL_COUNTS) local.delete(local.keys().next().value!);
+  };
+  const uncached = ids.filter((id) => {
+    const cached = local.get(key(id));
+    if (cached && Date.now() - cached.at < FRESH_MS) {
+      values[id] = cached.count;
+      remember(id, cached);
+      return false;
+    }
+    local.delete(key(id));
+    return true;
+  });
+  if (!uncached.length) return values;
+  const cache = await memoizeRequest(runtime, "view-counts:cache", () =>
+    typeof caches === "undefined" ? undefined : caches.open("view-stats").catch(() => undefined));
   const missing: number[] = [];
   // Cache only anonymous numbers, never the surrounding authenticated page/DTO.
-  await Promise.all(unique.map(async (id) => {
+  await Promise.all(uncached.map(async (id) => {
     let cached: CachedCount | undefined;
     try {
       const response = await cache?.match(cacheKey(runtime.origin, kind, id));
-      if (response) cached = await response.json() as CachedCount;
+      if (response) {
+        const value = await response.json() as CachedCount;
+        if (Number.isSafeInteger(value?.count) && value.count >= 0 && Number.isFinite(value.at)) cached = value;
+      }
     } catch { /* A cache failure must not prevent reading the counter. */ }
     values[id] = cached?.count ?? initialCounts[id] ?? 0;
     if (!cached || Date.now() - cached.at >= FRESH_MS) missing.push(id);
+    else remember(id, cached);
   }));
   for (let offset = 0; offset < missing.length; offset += MAX_IDS) {
     const batch = missing.slice(offset, offset + MAX_IDS);
     try {
       const counts = await stats(runtime.env).counts(kind, batch, initialCounts);
       Object.assign(values, counts);
+      const at = Date.now();
+      for (const id of batch) remember(id, { count: counts[id], at });
       if (cache) runtime.execution.waitUntil(Promise.all(batch.map((id) => cache.put(
         cacheKey(runtime.origin, kind, id),
-        Response.json({ count: counts[id], at: Date.now() }, { headers: { "Cache-Control": "public, max-age=86400" } }),
+        Response.json({ count: counts[id], at }, { headers: { "Cache-Control": "public, max-age=86400" } }),
       ))).catch(() => undefined));
     } catch {
       // Keep a stale value when available; never write outage fallbacks into storage/cache.

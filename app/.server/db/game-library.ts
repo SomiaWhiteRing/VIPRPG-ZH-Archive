@@ -49,6 +49,7 @@ import type {
   GameArchiveVersionDetail,
   GameCharacter,
   GameCardSummary,
+  GameLibrarySummary,
   GameCreatorCredit,
   GameExternalLink,
   GameMediaAsset,
@@ -127,6 +128,11 @@ type SummaryRow = {
   comment_count: number;
   favorite_count: number;
 };
+type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" | "original_release_date" |
+  "engine_family" | "language" | "current_archive_version_id" | "uses_shared_player" |
+  "embedded_player_size_bytes" | "total_size_bytes" | "cover_blob_sha256" |
+  "download_link_count" | "legacy_player_count" | "comment_count" | "favorite_count">;
+type LibraryRow = CardRow & Pick<SummaryRow, "external_download_url">;
 type WorkRow = {
   extra_json: string;
   id: number;
@@ -210,7 +216,10 @@ const LINK_TYPES = [
 export async function listGameWorks(
   runtime: AppRuntime,
   input: ListInput = {},
-): Promise<GameWorkSummary[]> {
+): Promise<GameLibrarySummary[]> {
+  const columns = `${cardColumnsSql()},
+    (SELECT url FROM work_external_links WHERE work_id=w.id AND link_type='download_page'
+     ORDER BY id LIMIT 1) AS external_download_url`;
   if (input.sort === "views" || input.sort === "players") {
     const database = getD1(runtime);
     const { where, binds } = buildWhere(input);
@@ -227,34 +236,23 @@ export async function listGameWorks(
     if (!pageIds.length) return [];
     const result = await gameWorksListStatement(database, {
       ...input, sort: "id", workIds: pageIds, limit: pageIds.length, offset: 0,
-    }).all<SummaryRow>();
+    }, columns).all<LibraryRow>();
     const byId = new Map(result.results.map((row) => [row.id, row]));
     const counts = Object.fromEntries(ranked.map((row) => [row.id, row.count]));
-    return hydrate(runtime, pageIds.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
+    return hydrateLibrary(runtime, pageIds.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
       kind === "work" ? counts : undefined, kind === "play" ? counts : undefined);
   }
   const rows = await gameWorksListStatement(
     getD1(runtime),
     input,
-  ).all<SummaryRow>();
-  return hydrate(runtime, rows.results ?? []);
+    columns,
+  ).all<LibraryRow>();
+  return hydrateLibrary(runtime, rows.results ?? []);
 }
 
 export async function listHomeGameWorks(runtime: AppRuntime) {
   const db = getD1(runtime);
-  const columns = `w.id,w.original_title,w.chinese_title,w.original_release_date,
-    w.engine_family,w.language,av.id AS current_archive_version_id,
-    av.uses_shared_player,av.embedded_player_size_bytes,av.total_size_bytes,
-    ${workCountsSql()},
-    (SELECT ma.blob_sha256 FROM work_media_assets wma
-     JOIN media_assets ma ON ma.id=wma.media_asset_id
-     WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
-    EXISTS(SELECT 1 FROM work_external_links wel
-      WHERE wel.work_id=w.id AND wel.link_type='download_page') AS download_link_count`;
-  type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" |
-    "original_release_date" | "engine_family" | "language" | "current_archive_version_id" |
-    "uses_shared_player" | "embedded_player_size_bytes" | "total_size_bytes" |
-    "cover_blob_sha256" | "download_link_count" | "legacy_player_count" | "comment_count" | "favorite_count">;
+  const columns = cardColumnsSql();
   const [recent, original, random] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12 }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
@@ -275,28 +273,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
     viewCounts(runtime, "play", allRows.map((row) => row.id),
       Object.fromEntries(allRows.map((row) => [row.id, row.legacy_player_count]))),
   ]);
-  const card = (row: CardRow): GameCardSummary => ({
-    id: row.id,
-    originalTitle: row.original_title,
-    chineseTitle: row.chinese_title,
-    originalReleaseDate: row.original_release_date,
-    engineFamily: row.engine_family,
-    language: row.language,
-    coverBlobSha256: row.cover_blob_sha256,
-    viewCount: counts[row.id],
-    playerCount: plays[row.id],
-    commentCount: row.comment_count,
-    favoriteCount: row.favorite_count,
-    totalSizeBytes: row.total_size_bytes ?? 0,
-    embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
-    downloadSizeBytes: row.current_archive_version_id === null
-      || (row.uses_shared_player === 1 && playerSize === null)
-      ? null : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
-    distribution: deriveWorkDistribution({
-      hasCurrentArchive: row.current_archive_version_id !== null,
-      downloadLinkCount: row.download_link_count,
-    }),
-  });
+  const card = (row: CardRow) => mapCardRow(row, playerSize, counts[row.id], plays[row.id]);
   return {
     recentWorks: recent.results.map(card),
     recentOriginalWorks: original.results.map(card),
@@ -511,6 +488,12 @@ export async function getGameWorkDetail(
     counts[row.id],
     plays[row.id],
   );
+  runtime.memo.set(`work-public-stats:${row.id}`, {
+    viewCount: summary.viewCount,
+    playerCount: summary.playerCount,
+    commentCount: summary.commentCount,
+    favoriteCount: summary.favoriteCount,
+  });
   const originalId =
     collections.translations.find((item) => item.role === "original")?.workId ??
     (collections.translations.some((item) => item.role === "translation")
@@ -1400,6 +1383,18 @@ function workCountsSql(): string {
      WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count`;
 }
 
+function cardColumnsSql(): string {
+  return `w.id,w.original_title,w.chinese_title,w.original_release_date,
+    w.engine_family,w.language,av.id AS current_archive_version_id,
+    av.uses_shared_player,av.embedded_player_size_bytes,av.total_size_bytes,
+    ${workCountsSql()},
+    (SELECT ma.blob_sha256 FROM work_media_assets wma
+     JOIN media_assets ma ON ma.id=wma.media_asset_id
+     WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
+    (SELECT COUNT(*) FROM work_external_links wel
+      WHERE wel.work_id=w.id AND wel.link_type='download_page') AS download_link_count`;
+}
+
 function summarySql(): string {
   return `
     w.id,
@@ -1631,6 +1626,59 @@ function searchPatterns(query: string): {
 } {
   const escaped = query.replace(/[\\%_]/g, (match) => `\\${match}`);
   return { exact: escaped, prefix: `${escaped}%`, contains: `%${escaped}%` };
+}
+
+async function hydrateLibrary(
+  runtime: AppRuntime,
+  rows: LibraryRow[],
+  knownViewCounts?: Record<number, number>,
+  knownPlayCounts?: Record<number, number>,
+): Promise<GameLibrarySummary[]> {
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  const [playerSize, counts, plays, authors] = await Promise.all([
+    sharedPlayerSize(runtime, rows),
+    knownViewCounts ? Promise.resolve(knownViewCounts) : viewCounts(runtime, "work", ids),
+    knownPlayCounts ? Promise.resolve(knownPlayCounts) : viewCounts(runtime, "play", ids,
+      Object.fromEntries(rows.map((row) => [row.id, row.legacy_player_count]))),
+    getD1(runtime).prepare(`SELECT ws.work_id,ws.display_name
+      FROM work_staff ws JOIN creators c ON c.id=ws.creator_id
+      WHERE ws.work_id IN (SELECT value FROM json_each(?)) AND ws.role_key='author'
+      ORDER BY ws.work_id,ws.sort_order,c.name`)
+      .bind(JSON.stringify(ids)).all<{ work_id: number; display_name: string }>(),
+  ]);
+  const byWork = groupRowsByWork(authors.results, (row) => ({ displayName: row.display_name, roleKey: "author" }));
+  return rows.map((row) => ({
+    ...mapCardRow(row, playerSize, counts[row.id], plays[row.id]),
+    currentArchiveVersionId: row.current_archive_version_id,
+    externalDownloadUrl: isHttpUrl(row.external_download_url) ? row.external_download_url : null,
+    creators: byWork.get(row.id) ?? [],
+  }));
+}
+
+function mapCardRow(row: CardRow, playerSize: number | null, viewCount: number, playerCount: number): GameCardSummary {
+  return {
+    id: row.id,
+    originalTitle: row.original_title,
+    chineseTitle: row.chinese_title,
+    originalReleaseDate: row.original_release_date,
+    engineFamily: row.engine_family,
+    language: row.language,
+    coverBlobSha256: row.cover_blob_sha256,
+    viewCount,
+    playerCount,
+    commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
+    totalSizeBytes: row.total_size_bytes ?? 0,
+    embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
+    downloadSizeBytes: row.current_archive_version_id === null
+      || (row.uses_shared_player === 1 && playerSize === null)
+      ? null : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
+    distribution: deriveWorkDistribution({
+      hasCurrentArchive: row.current_archive_version_id !== null,
+      downloadLinkCount: row.download_link_count,
+    }),
+  };
 }
 
 async function hydrate(

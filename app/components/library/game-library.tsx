@@ -10,7 +10,7 @@ import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
-import type { GameWorkSummary } from "@/lib/dto/db/game-library";
+import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
 import { formatNumber, formatDate } from "@/lib/format";
 import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 import { LayoutGrid, List } from "lucide-react";
@@ -37,7 +37,7 @@ export function GameLibrary({
   basePath: string;
   title?: string;
   emptyTitle?: string;
-  renderWorkActions?: (work: GameWorkSummary, isListView: boolean) => ReactNode;
+  renderWorkActions?: (work: GameLibrarySummary, isListView: boolean) => ReactNode;
   sidebar?: (releaseFilter: ReactNode) => ReactNode;
   showActiveFilters?: boolean;
 }) {

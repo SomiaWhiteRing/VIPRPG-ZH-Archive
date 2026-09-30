@@ -1,14 +1,14 @@
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import { WorkPopularityStats, useShowGameCardInteractionData } from "@/app/components/work/work-popularity-stats";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
-import type { GameWorkSummary } from "@/lib/dto/db/game-library";
+import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import type { ReactNode } from "react";
 
 export function GameLibraryListRow({
   work, action, children, showDownload = true,
 }: {
-  work: GameWorkSummary;
+  work: GameLibrarySummary;
   action?: ReactNode;
   children?: ReactNode;
   showDownload?: boolean;
