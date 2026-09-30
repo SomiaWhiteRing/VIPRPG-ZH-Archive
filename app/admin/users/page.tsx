@@ -2,6 +2,7 @@ import { requirePagePermission } from "@/app/.server/auth/authorize";
 import {
   listRoles,
   listUserRoleMemberships,
+  listUserPermissionBlocks,
 } from "@/app/.server/db/permissions";
 import { searchUsersForAdmin } from "@/app/.server/db/users";
 import { routeInput } from "@/app/.server/route-input";
@@ -17,12 +18,13 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
-import { hasPermission, PERMISSION_LIST } from "@/lib/authz/permissions";
+import { hasPermission, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RoleAssignmentControl } from "./role-assignment-control";
+import { PermissionBlockControl } from "./permission-block-control";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 const PAGE_SIZE = 50;
@@ -38,6 +40,7 @@ export async function loader(args: LoaderFunctionArgs) {
   );
   const canAssignRoles = hasPermission(adminUser, "user.role.assign");
   const canUpdateStatus = hasPermission(adminUser, "user.status.update");
+  const canBlockPermissions = adminUser.isBootstrapAdmin;
   const params = await searchParams;
   const query = searchParam(params.q);
   const status = allowed(
@@ -66,6 +69,7 @@ export async function loader(args: LoaderFunctionArgs) {
     runtime,
     result.items.map((user) => user.id),
   );
+  const permissionBlocks = await listUserPermissionBlocks(runtime, result.items.map((user) => user.id));
   const assignableRoles = roles.filter(
     (role) =>
       role.key !== "user" &&
@@ -77,6 +81,8 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     canAssignRoles,
     canUpdateStatus,
+    canBlockPermissions,
+    permissionBlocks,
     query,
     status,
     sort,
@@ -95,6 +101,8 @@ export default function AdminUsersPage() {
   const {
     canAssignRoles,
     canUpdateStatus,
+    canBlockPermissions,
+    permissionBlocks,
     query,
     status,
     sort,
@@ -199,6 +207,11 @@ export default function AdminUsersPage() {
                       </ul>
                     )}
                   </details>
+                  {permissionBlocks.get(user.id)?.length ? (
+                    <p className="mt-2 text-xs text-muted">
+                      单独禁用：{permissionBlocks.get(user.id)!.map((key) => PERMISSIONS[key].label).join("、")}
+                    </p>
+                  ) : null}
                 </td>
                 <td>
                   <StatusBadge kind="account" value={user.status} />
@@ -206,6 +219,14 @@ export default function AdminUsersPage() {
                 <td>{formatDate(user.createdAt)}</td>
                 <td>
                   <div className="flex flex-wrap items-center gap-3">
+                    {canBlockPermissions && user.status !== "deleted" ? (
+                      <PermissionBlockControl
+                        userId={user.id}
+                        displayName={user.displayName}
+                        blockedKeys={permissionBlocks.get(user.id) ?? []}
+                        grantedKeys={user.permissionKeys}
+                      />
+                    ) : null}
                     {canAssignRoles && user.status === "active" ? (
                       <RoleAssignmentControl
                         initialRoleIds={memberships.get(user.id) ?? []}

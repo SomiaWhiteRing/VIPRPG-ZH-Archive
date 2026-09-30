@@ -200,6 +200,7 @@ export function DiscussionWorkspace({
     toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
   }, [toast]);
   const userId = viewer?.id;
+  const canUseForum = !!viewer?.use;
   const topicId = initialDetail?.topic.id;
   const preparedDrafts = useRef(new Map<string, PreparedDraft>());
   const prepareDraft = useCallback((key: string) => {
@@ -289,7 +290,7 @@ export function DiscussionWorkspace({
     setDraft(null);
     const { initialDetail: initial, initialReply: reply } =
       initialDraftContext.current;
-    if (userId !== undefined && initial) {
+    if (canUseForum && userId !== undefined && initial) {
       if (typeof reply === "number") {
         const post = initial.posts.items.find((item) => item.postNumber === reply);
         if (post?.capabilities.reply)
@@ -301,7 +302,7 @@ export function DiscussionWorkspace({
     return () => {
       sequence.current++;
     };
-  }, [restoreDraft, userId]);
+  }, [canUseForum, restoreDraft, userId]);
   useEffect(() => {
     const page = pageRef.current;
     if (!detail || !page || handledNavigation.current === location.key) return;
@@ -444,6 +445,7 @@ export function DiscussionWorkspace({
     post?: ForumContent,
     reply?: ForumContent,
   ) {
+    if (!canUseForum) return;
     void switchDraft(
       createDraft(
         mode,
@@ -654,7 +656,7 @@ export function DiscussionWorkspace({
               },
             ]
           : []),
-        ...(viewer
+        ...(topic.capabilities.report
           ? [
               {
                 label: "请求处理",
@@ -732,7 +734,7 @@ export function DiscussionWorkspace({
     : [];
   // Let the router finish removing the reply parameter before the editor mounts
   // and takes focus through its own textarea/Tiptap lifecycle.
-  const editor = draft && !initialReply ? (
+  const editor = draft && canUseForum && !initialReply ? (
     <ClientOnly
       fallback={
         draft.mode === "post" ? (
@@ -821,7 +823,7 @@ export function DiscussionWorkspace({
           <p className="py-2 text-sm text-muted">
             主题已锁定，不能继续回复。
           </p>
-        ) : viewer ? (
+        ) : viewer?.use ? (
           <Button
             variant="ghost"
             className={forumReplyLauncherClass}
@@ -833,6 +835,8 @@ export function DiscussionWorkspace({
               ? "回复主题……"
               : "当前主题不可回复"}
           </Button>
+        ) : viewer ? (
+          <p className="py-2 text-sm text-muted">没有使用讨论版的权限。</p>
         ) : (
           <Link
             className={forumReplyLauncherClass}
@@ -997,11 +1001,11 @@ export function DiscussionWorkspace({
               compact
               title="讨论版"
               actions={
-                viewer ? (
+                viewer?.use ? (
                   <Button type="button" onClick={() => newDraft("topic")}>
                     发布主题
                   </Button>
-                ) : (
+                ) : viewer ? null : (
                   <Link to="/login?next=%2Fdiscussions">登录后发布</Link>
                 )
               }

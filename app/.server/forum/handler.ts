@@ -143,7 +143,13 @@ async function write(runtime: AppRuntime, request: Request) {
     await recordView(runtime, "topic", topicId);
     return result({});
   }
-  const { user } = await requireForumUser(ctx, request);
+  const { user } = await requireForumUser(
+    ctx,
+    request,
+    input.op === "moderate"
+      ? ["forum.content.moderate_any", "forum.topic.feature_any"]
+      : undefined,
+  );
   if (input.op === "publish" || input.op === "edit") {
     const saved =
       input.op === "publish"

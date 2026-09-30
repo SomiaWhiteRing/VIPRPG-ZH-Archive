@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The account permission refresh applies `0018_account_and_forum_permissions.sql`
+and records it in the migration ledger. The base user role grants self-renaming
+and forum use; the new per-user permission block table is empty. Existing
+account names and business rows are preserved.
+
 The game-card interaction preference refresh applies
 `0016_game_card_interaction_preference.sql`. Existing and new accounts default to
 showing interaction counts; the schema and migration ledger are synchronized.

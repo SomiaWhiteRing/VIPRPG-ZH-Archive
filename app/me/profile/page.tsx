@@ -15,6 +15,7 @@ import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Link } from "react-router";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
+import { hasPermission } from "@/lib/authz/permissions";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -31,6 +32,7 @@ export async function loader(args: LoaderFunctionArgs) {
       "email",
       "isBootstrapAdmin",
     ]),
+    canRename: hasPermission(user, "user.rename_own"),
     params,
   };
 }
@@ -39,7 +41,7 @@ export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["个人资料", "个人中心"] }, error);
 
 export default function ProfilePage() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, canRename } = useLoaderData<typeof loader>();
   return (
     <div>
       <AccountPageHeader title="个人资料" />
@@ -54,6 +56,7 @@ export default function ProfilePage() {
               id="profile-display-name"
               maxLength={80}
               name="displayName"
+              readOnly={!canRename}
               required
             />
           </div>

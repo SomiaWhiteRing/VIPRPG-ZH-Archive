@@ -23,12 +23,12 @@ export function assertForumOrigin(ctx: ForumRequestRuntime, request: Request) {
 export async function requireForumUser(
   ctx: ForumRequestRuntime,
   request: Request,
-  permissions?: readonly PermissionKey[],
+  permissions: readonly PermissionKey[] = ["forum.use"],
 ) {
   assertForumOrigin(ctx, request);
   const auth = await loadRequestSession(ctx.db, request.headers.get("cookie"));
   if (!auth) throw new HttpError(401, "请登录后继续。");
-  if (permissions && !permissions.some((key) => hasPermission(auth.user, key)))
+  if (!permissions.some((key) => hasPermission(auth.user, key)))
     throw new HttpError(403, "没有此操作权限。");
   return auth;
 }

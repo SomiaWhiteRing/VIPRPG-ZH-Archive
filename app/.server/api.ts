@@ -41,6 +41,7 @@ import * as endpoint49 from "@/app/.server/endpoints/api/admin/tags/update/route
 import * as endpoint50 from "@/app/.server/endpoints/api/admin/users/[userId]/roles/[roleId]/route";
 import * as endpoint51 from "@/app/.server/endpoints/api/admin/users/[userId]/roles/route";
 import * as endpoint52 from "@/app/.server/endpoints/api/admin/users/[userId]/status/route";
+import * as userPermissionsEndpoint from "@/app/.server/endpoints/api/admin/users/[userId]/permissions/route";
 import * as endpoint53 from "@/app/.server/endpoints/api/admin/works/[workId]/maintainers/route";
 import * as endpoint54 from "@/app/.server/endpoints/api/admin/works/[workId]/merge/route";
 import * as endpoint55 from "@/app/.server/endpoints/api/admin/works/[workId]/update/route";
@@ -783,6 +784,17 @@ api.all("/api/admin/users/:userId/roles", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
     Allow: "POST, OPTIONS",
   }),
+);
+api.post("/api/admin/users/:userId/permissions", (c) =>
+  userPermissionsEndpoint.POST(c.get("runtime"), c.req.raw, {
+    params: { userId: c.req.param("userId") },
+  }),
+);
+api.options("/api/admin/users/:userId/permissions", (c) =>
+  c.body(null, 204, { Allow: "POST, OPTIONS" }),
+);
+api.all("/api/admin/users/:userId/permissions", (c) =>
+  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }),
 );
 api.on("POST", "/api/admin/users/:userId/status", (c) =>
   endpoint52.POST(c.get("runtime"), c.req.raw, {
