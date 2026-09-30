@@ -350,6 +350,12 @@ function estimateR2GetCount(manifest, files) {
 }
 
 function buildZipEntries(files) {
+  const blobUses = new Map();
+  for (const { storage } of files) {
+    if (storage.kind === "blob") {
+      blobUses.set(storage.blobSha256, (blobUses.get(storage.blobSha256) ?? 0) + 1);
+    }
+  }
   return files
     .slice()
     .sort(compareManifestFiles)
@@ -359,6 +365,7 @@ function buildZipEntries(files) {
       crc32: file.crc32,
       mtimeMs: file.mtimeMs,
       storage: file.storage,
+      cacheBlob: file.storage.kind === "blob" && blobUses.get(file.storage.blobSha256) > 1,
     }));
 }
 
@@ -422,7 +429,7 @@ async function openManifestFile(file, context, range) {
   const storage = file.storage;
 
   if (storage.kind === "blob") {
-    return blobReadCache.open(storage.blobSha256, file.size, range);
+    return blobReadCache.open(storage.blobSha256, file.size, range, file.cacheBlob);
   }
 
   const corePack = corePacks.get(storage.packId);
@@ -455,8 +462,11 @@ class BlobReadCache {
     this.reservedBytes = 0;
   }
 
-  async open(sha256, size, range) {
-    if (range || !this.shouldCache(size)) {
+  async open(sha256, size, range, reused) {
+    // Reuse admitted bytes even when no budget remains for another entry.
+    const cached = !range && this.promises.get(sha256);
+    if (cached) return streamBytes(await cached);
+    if (range || !reused || !this.shouldCache(size)) {
       const object = await this.bucket.get(blobKey(sha256), range ? { range } : undefined);
 
       if (!object?.body) {
@@ -470,18 +480,14 @@ class BlobReadCache {
       return object.body;
     }
 
-    let promise = this.promises.get(sha256);
-
-    if (!promise) {
-      this.reservedBytes += size;
-      promise = this.loadBytes(sha256, size).catch((error) => {
-        this.reservedBytes -= size;
-        this.promises.delete(sha256);
-        throw error;
-      });
-      promise.catch(() => undefined);
-      this.promises.set(sha256, promise);
-    }
+    this.reservedBytes += size;
+    const promise = this.loadBytes(sha256, size).catch((error) => {
+      this.reservedBytes -= size;
+      this.promises.delete(sha256);
+      throw error;
+    });
+    promise.catch(() => undefined);
+    this.promises.set(sha256, promise);
 
     return streamBytes(await promise);
   }
@@ -591,30 +597,30 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
   let buffer = new Uint8Array(zipWriteBufferBytes);
   let buffered = 0;
 
-  async function flush() {
+  function flush() {
     if (!buffered) return;
     const chunk = buffer.subarray(0, buffered);
     buffer = new Uint8Array(zipWriteBufferBytes);
     buffered = 0;
-    await writer.write(chunk);
+    return writer.write(chunk);
   }
 
-  async function emit(bytes) {
+  // Appending small headers/chunks is synchronous. Only actual output yields.
+  function emit(bytes) {
     if (bytes.byteLength >= zipWriteBufferBytes) {
-      await flush();
-      await writer.write(bytes);
-      return;
+      const pending = flush();
+      return pending ? pending.then(() => writer.write(bytes)) : writer.write(bytes);
     }
-    if (buffered + bytes.byteLength > buffer.byteLength) await flush();
+    if (buffered + bytes.byteLength > buffer.byteLength) return flush().then(() => emit(bytes));
     buffer.set(bytes, buffered);
     buffered += bytes.byteLength;
-    if (buffered === buffer.byteLength) await flush();
+    if (buffered === buffer.byteLength) return flush();
   }
 
-  async function write(bytes, offset) {
+  function write(bytes, offset) {
     const start = range ? Math.max(0, range.start - offset) : 0;
     const end = range ? Math.min(bytes.byteLength, range.end + 1 - offset) : bytes.byteLength;
-    if (start < end) await emit(bytes.subarray(start, end));
+    if (start < end) return emit(start === 0 && end === bytes.byteLength ? bytes : bytes.subarray(start, end));
   }
 
   function prefetchThrough(exclusiveIndex) {
@@ -644,10 +650,14 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
       const { pathBytes, dosTime, dosDate, localHeaderOffset } = entry;
 
       if (!range || entry.dataStart > range.start) {
-        await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate), localHeaderOffset);
+        const pending = write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate), localHeaderOffset);
+        if (pending) await pending;
       }
       // Deliver the first available ZIP bytes before awaiting the first object.
-      if (index === firstLocal) await flush();
+      if (index === firstLocal) {
+        const pending = flush();
+        if (pending) await pending;
+      }
 
       if (openPromises.has(index)) {
         const pending = openPromises.get(index);
@@ -669,7 +679,8 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
             const chunk = normalizeChunk(result.value);
             actualSize += chunk.byteLength;
             if (actualSize > expectedSize) throw new Error(`ZIP entry exceeded requested length: ${entry.path}`);
-            await write(chunk, offset);
+            const writing = write(chunk, offset);
+            if (writing) await writing;
             offset += chunk.byteLength;
           }
         } catch (error) {
@@ -702,10 +713,13 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
   for (let index = firstCentral; index < entries.length; index++) {
     const entry = entries[index];
     if (range && entry.centralHeaderOffset > range.end) break;
-    await write(centralDirectoryHeader(entry), entry.centralHeaderOffset);
+    const pending = write(centralDirectoryHeader(entry), entry.centralHeaderOffset);
+    if (pending) await pending;
   }
-  await write(layout.endRecord, layout.size - layout.endRecord.length);
-  await flush();
+  const ending = write(layout.endRecord, layout.size - layout.endRecord.length);
+  if (ending) await ending;
+  const flushing = flush();
+  if (flushing) await flushing;
   await writer.close();
 }
 
