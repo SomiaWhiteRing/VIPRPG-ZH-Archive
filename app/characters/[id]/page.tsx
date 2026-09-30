@@ -111,7 +111,7 @@ export default function CharacterDetailPage() {
               ) : null}
             </div>
             {character.works.length ? (
-              <CharacterWorkList works={character.works} />
+              <CharacterWorkList works={character.works} characterName={character.primaryName} />
             ) : <EmptyState title="暂无登场作品。" variant="plain" />}
           </section>
         }

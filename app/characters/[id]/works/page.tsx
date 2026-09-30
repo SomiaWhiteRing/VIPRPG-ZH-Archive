@@ -39,7 +39,7 @@ export default function CharacterWorksPage() {
         title="登场作品"
       />
       {items.length ? (
-        <CharacterWorkList works={items} standalone />
+        <CharacterWorkList works={items} characterName={character.primaryName} standalone />
       ) : <EmptyState title="暂无登场作品。" />}
       <PaginationLinks
         basePath={`/characters/${character.id}/works`}
