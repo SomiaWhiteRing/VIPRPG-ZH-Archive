@@ -11,6 +11,7 @@ export type CharacterIndexEntry = {
   portrait: CharacterPortrait | null; workCount: number; commentCount: number; materialCount: number; sourceUrls: string[];
 };
 export type CharacterIndexData = { categories: CharacterCategory[]; memberships: CharacterMembership[]; characters: CharacterIndexEntry[] };
+export const UNCLASSIFIED_GROUP_ID = "group:unclassified";
 // These are render rows, derived from categories and actual characters; never stored as another identity.
 export type CharacterBrowseNode = {
   id: string; kind: "category"; label: string; sourceUrl: string | null; sortOrder: number; children: CharacterBrowseNode[];
@@ -63,7 +64,7 @@ function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
   }
   return groups;
 }
-export function buildCharacterBrowseTree(data: CharacterIndexData, query: string) {
+export function buildCharacterBrowseTree(data: CharacterIndexData, query: string, { includeUnclassified = false }: { includeUnclassified?: boolean } = {}) {
   const characters = new Map(data.characters.map((character) => [character.id, character]));
   const children = groupBy(data.categories, (category) => category.parentId);
   const memberships = groupBy(data.memberships, (member) => member.categoryId);
@@ -91,5 +92,15 @@ export function buildCharacterBrowseTree(data: CharacterIndexData, query: string
     return sortCharacterNodes(result);
   };
   const roots = collect(null, "", new Set());
+  if (includeUnclassified) {
+    const classified = new Set(data.memberships.map((member) => member.characterId));
+    const unclassified: CharacterBrowseNode[] = [];
+    data.characters.forEach((character, index) => {
+      if (classified.has(character.id) || !matches(`未分类 ${character.primaryName} ${character.originalName} ${character.aliases.map((alias) => alias.name).join(" ")}`)) return;
+      matched.add(character.id);
+      unclassified.push({ id: character.key, kind: "character", categoryId: null, label: character.primaryName, originalName: character.originalName, sortOrder: index, character, children: [] });
+    });
+    if (unclassified.length) roots.push({ id: UNCLASSIFIED_GROUP_ID, kind: "category", label: "未分类", sourceUrl: null, sortOrder: Number.MAX_SAFE_INTEGER, children: unclassified });
+  }
   return { roots: sortCharacterNodes(roots), matchCount: matched.size };
 }
