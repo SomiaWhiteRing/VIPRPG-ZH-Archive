@@ -248,7 +248,9 @@ export async function listRootComments(
   const clauses = [
     `c.${targetColumn} = ?`,
     "c.root_comment_id IS NULL",
-    "c.id IN (SELECT id FROM public_comments)",
+    "c.status IN ('published','deleted')",
+    "u.status IN ('active','deleted')",
+    publicCommentTargetSql("c"),
   ];
   const binds: Array<string | number> = [target.id];
   if (parsed) {
@@ -269,7 +271,7 @@ export async function listRootComments(
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c JOIN users u ON u.id=c.user_id
-       WHERE ${[...clauses, pinned ? "c.pinned_at IS NOT NULL" : "c.pinned_at IS NULL"].join(" AND ")}
+       WHERE ${[...clauses, pinned ? "(c.pinned_at IS NOT NULL AND c.status='published')" : "(c.pinned_at IS NULL OR c.status='deleted')"].join(" AND ")}
        ORDER BY ${pinned ? "c.pinned_at DESC," : ""} c.created_at ${direction},c.id ${direction} LIMIT ?`,
       )
       .bind(
@@ -342,9 +344,10 @@ export async function listReplies(
     database
       .prepare(
         `SELECT c.id
-         FROM comments c
+         FROM comments c JOIN users u ON u.id=c.user_id
          WHERE c.id=? AND c.root_comment_id IS NULL
-           AND c.id IN (SELECT id FROM public_comments)
+           AND c.status IN ('published','deleted') AND u.status IN ('active','deleted')
+           AND ${publicCommentTargetSql("c")}
          LIMIT 1`,
       )
       .bind(rootCommentId),
@@ -414,7 +417,7 @@ export async function listReplies(
 }
 
 function visibleReplySql(comment: string, user: string): string {
-  return `${comment}.status='published' AND ${user}.status IN ('active','deleted')`;
+  return `${comment}.status IN ('published','deleted') AND ${user}.status IN ('active','deleted')`;
 }
 
 function replyRowsStatement(
@@ -427,16 +430,20 @@ function replyRowsStatement(
   return database
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
-          target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
+          target.display_name AS reply_to_display_name,root.status AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           0 AS reply_count,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c
        LEFT JOIN users u ON u.id=c.user_id AND u.status IN ('active','deleted')
-       LEFT JOIN comments target_comment ON target_comment.id=c.reply_to_comment_id
+       JOIN comments root ON root.id=c.root_comment_id
+       JOIN users root_user ON root_user.id=root.user_id
+       LEFT JOIN public_comments target_comment ON target_comment.id=c.reply_to_comment_id
        LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}
+         AND root.status IN ('published','deleted') AND root_user.status IN ('active','deleted')
+         AND ${publicCommentTargetSql("c")}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ? OFFSET ?`,
     )
     .bind(
@@ -465,9 +472,8 @@ export async function searchUserComments(
   const visibility = input.publicOnly
     ? "c.id IN (SELECT id FROM public_comments)"
     : publicCommentTargetSql("c");
-  const base = `FROM comments c JOIN users u ON u.id=c.user_id
-    LEFT JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)`;
-  const where = `WHERE c.user_id=? AND c.status<>'deleted' AND root.status<>'deleted' AND ${visibility}`;
+  const base = `FROM comments c JOIN users u ON u.id=c.user_id`;
+  const where = `WHERE c.user_id=? AND c.status<>'deleted' AND ${visibility}`;
   const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
     ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);
@@ -619,6 +625,10 @@ export async function createComment(
     if (committed) return requiredComment(runtime, committed.id, userId);
     const valid = await db.prepare(`SELECT 1 AS ok WHERE ${guard.sql}`).bind(...guard.args).first();
     if (!valid) throw new HttpError(409, "图片不可用或已被其他评论使用，请移除后重新选择。");
+    if (rootCommentId !== null && !(await db.prepare(`SELECT id FROM public_comments
+      WHERE id=? AND (? IS NULL OR EXISTS(SELECT 1 FROM public_comments target WHERE target.id=?))`)
+      .bind(rootCommentId, replyToId, replyToId).first()))
+      throw new HttpError(409, "回复目标不可用");
     throw error;
   }
 }
@@ -678,7 +688,7 @@ export async function deleteComment(
   const results = await db.batch([
     db
       .prepare(
-        `UPDATE comments SET body=NULL,status='deleted',deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+        `UPDATE comments SET body=NULL,status='deleted',pinned_at=NULL,deleted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND user_id=? AND status<>'deleted'`,
       )
       .bind(id, userId),
@@ -736,13 +746,19 @@ export async function likeComment(
   id: number,
   userId: number,
 ): Promise<void> {
-  const comment = await publicCommentIdentity(runtime, id);
-  await getD1(runtime)
-    .prepare(
-      `INSERT OR IGNORE INTO comment_likes(comment_id,user_id) VALUES(?,?)`,
-    )
-    .bind(comment.id, userId)
-    .run();
+  await publicCommentIdentity(runtime, id);
+  const db = getD1(runtime);
+  await db.batch([
+    db.prepare(`INSERT OR IGNORE INTO comment_likes(comment_id,user_id)
+      SELECT id,? FROM public_comments WHERE id=?
+        AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')`)
+      .bind(userId, id, userId),
+    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,like_comment_id)
+      SELECT 'system_notice',?,c.user_id,'','','comment-like:'||?||':'||c.id||':'||c.user_id,c.id
+      FROM public_comments c JOIN users recipient ON recipient.id=c.user_id AND recipient.status='active'
+      WHERE c.id=? AND c.user_id<>? AND changes()=1
+      ON CONFLICT(event_key) DO NOTHING`).bind(userId, userId, id, userId),
+  ]);
 }
 
 export async function unlikeComment(
@@ -779,13 +795,14 @@ async function requiredComment(
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           ${commentFloorSql()} AS floor_number,
-          target.display_name AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
+          target.display_name AS reply_to_display_name,COALESCE(root.status,c.status) AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${viewerId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c
        LEFT JOIN users u ON u.id=c.user_id
-       LEFT JOIN comments target_comment ON target_comment.id=c.reply_to_comment_id
+       LEFT JOIN comments root ON root.id=c.root_comment_id
+       LEFT JOIN public_comments target_comment ON target_comment.id=c.reply_to_comment_id
        LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE c.id=? LIMIT 1`,
     )
@@ -912,16 +929,16 @@ function mapComment(
   return {
     id: row.id,
     floorNumber: row.floor_number ?? null,
-    pinned: !!row.pinned_at,
+    pinned: !deleted && !!row.pinned_at,
     target: commentTarget(row),
     rootCommentId: row.root_comment_id,
-    replyTo: row.reply_to_comment_id
+    replyTo: !deleted && row.reply_to_comment_id
       ? {
           commentId: row.reply_to_comment_id,
           displayName: row.reply_to_display_name,
         }
       : null,
-    author: row.author_name
+    author: !deleted && row.author_name
       ? {
           id: row.user_id,
           displayName: row.author_name,
@@ -930,17 +947,17 @@ function mapComment(
       : null,
     images: deleted ? [] : images.get(row.id) ?? [],
     body: deleted
-      ? [{ type: "text", text: "该评论已删除" }]
+      ? [{ type: "text", text: row.root_comment_id ? "该回复已删除。" : "该评论已删除。" }]
       : tokenizeBody(row.body ?? "", emojis),
-    ...(viewerId !== null && row.user_id === viewerId
+    ...(!deleted && viewerId !== null && row.user_id === viewerId
       ? { bodySource: row.body }
       : {}),
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    editedAt: row.edited_at,
-    likeCount: row.like_count ?? 0,
-    likedByMe: row.liked_by_me === 1,
+    editedAt: deleted ? null : row.edited_at,
+    likeCount: deleted ? 0 : row.like_count ?? 0,
+    likedByMe: !deleted && row.liked_by_me === 1,
     ...(row.reply_count === undefined ? {} : { replyCount: row.reply_count }),
     ...(row.root_status && row.root_status !== "published"
       ? { rootDeleted: row.root_status === "deleted" }

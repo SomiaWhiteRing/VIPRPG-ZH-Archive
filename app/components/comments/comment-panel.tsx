@@ -118,22 +118,22 @@ function CommentPanelContent({
           const result = await response.json().catch(() => ({})) as { detail?: string };
           throw new Error(result.detail ?? "评论删除失败，请重试。");
         }
-        if (comment.rootCommentId) {
-          setCommentUpdates((current) => ({
-            ...current,
-            [comment.id]: {
-              ...current[comment.id],
-              status: "deleted",
-              body: [{ type: "text", text: "该评论已删除" }],
-              bodySource: null,
-              images: [],
-            },
-          }));
-        } else {
-          setComments((current) =>
-            current.filter((entry) => entry.id !== comment.id),
-          );
-        }
+        setCommentUpdates((current) => ({
+          ...current,
+          [comment.id]: {
+            ...current[comment.id],
+            status: "deleted",
+            author: null,
+            replyTo: null,
+            body: [{ type: "text", text: comment.rootCommentId ? "该回复已删除。" : "该评论已删除。" }],
+            bodySource: null,
+            images: [],
+            pinned: false,
+            editedAt: null,
+            likeCount: 0,
+            likedByMe: false,
+          },
+        }));
       },
     });
   }
@@ -307,7 +307,7 @@ function CommentCard({
     </div>;
   }
   function startReply(target: CommentDto) {
-    if (!replyBusy && !editTarget) setReplyTarget(target);
+    if (!replyBusy && !editTarget && target.status === "published" && !target.rootDeleted) setReplyTarget(target);
   }
   const [replies, setReplies] = useState<CommentReplyPage | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -369,15 +369,15 @@ function CommentCard({
       className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0 @max-[320px]/comments:grid-cols-[32px_minmax(0,1fr)] @max-[320px]/comments:gap-2"
       id={`comment-${comment.id}`}
     >
-      {comment.author ? (
+      {currentComment.status === "deleted" ? <div aria-hidden /> : currentComment.author ? (
         <Link
-          aria-label={`查看${comment.author.displayName}的主页`}
-          to={`/users/${comment.author.id}`}
+          aria-label={`查看${currentComment.author.displayName}的主页`}
+          to={`/users/${currentComment.author.id}`}
         >
           <UserAvatar
-            avatarBlobSha256={comment.author.avatarBlobSha256}
+            avatarBlobSha256={currentComment.author.avatarBlobSha256}
             className="size-9.5"
-            displayName={comment.author.displayName}
+            displayName={currentComment.author.displayName}
             size={38}
           />
         </Link>
@@ -396,12 +396,14 @@ function CommentCard({
             comment={currentComment}
             currentUserId={currentUserId}
             editing={!!editTarget}
-            onDelete={onDelete}
+            onDelete={async (entry) => {
+              if (await onDelete(entry)) setReplyTarget(null);
+            }}
             onLike={onLike}
             onReply={startReply}
           />
           {editControl(currentComment)}
-          {pinControl}
+          {currentComment.status === "published" ? pinControl : null}
         </div>
         {editEditor(currentComment)}
         {replyCount > 0 || loading || error || replyTarget ? (
@@ -412,8 +414,11 @@ function CommentCard({
             id={`comment-replies-${comment.id}`}
           >
             {visibleReplies.map((entry) => {
-              const reply = { ...entry, ...commentUpdates[entry.id] };
-              if (reply.status === "deleted") return null;
+              const reply = {
+                ...entry,
+                ...commentUpdates[entry.id],
+                rootDeleted: currentComment.status === "deleted" || entry.rootDeleted,
+              };
               return (
                 <CommentNestedReply
                   key={reply.id}
@@ -489,7 +494,7 @@ function CommentCard({
                 </Button>
               </div>
             ) : null}
-            {replyTarget && currentUserId ? (
+            {replyTarget && currentUserId && currentComment.status === "published" ? (
               <CommentReplyEditor
                 endpoint={endpoint}
                 rootId={comment.id}
@@ -531,7 +536,11 @@ function CommentNestedReply({
   editor: React.ReactNode;
   editing: boolean;
 }) {
-  if (comment.status === "deleted") return null;
+  if (comment.status === "deleted") return (
+    <NestedReply id={`comment-${comment.id}`} metadata={<Timestamp value={comment.createdAt} />} actions={null}>
+      <span className="text-muted">该回复已删除。</span>
+    </NestedReply>
+  );
   return (
     <NestedReply
       id={`comment-${comment.id}`}
@@ -541,7 +550,7 @@ function CommentNestedReply({
       </>}
       actions={<>
         {editControl}
-        {currentUserId ? (
+        {currentUserId && !comment.rootDeleted ? (
           <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" disabled={editing} onClick={() => onReply(comment)}>
             回复
           </Button>
@@ -569,7 +578,7 @@ function CommentNestedReply({
             {comment.author.displayName}
           </Link>
         ) : "已删除用户"}
-        {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "已删除用户"}</span> : null}
+        {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "一条已不可用的回复"}</span> : null}
         ：<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
         <CommentImages images={comment.images} />
         {editor}
@@ -578,6 +587,15 @@ function CommentNestedReply({
 }
 
 function CommentLine({ comment }: { comment: CommentDto }) {
+  if (comment.status === "deleted") return (
+    <div>
+      <div className="flex items-baseline gap-2.5 font-mono text-xs text-muted">
+        <Timestamp value={comment.createdAt} />
+        <span className="ml-auto">{comment.floorNumber} 楼</span>
+      </div>
+      <p className="m-0 mt-1 text-sm text-muted">该评论已删除。</p>
+    </div>
+  );
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
@@ -597,9 +615,6 @@ function CommentLine({ comment }: { comment: CommentDto }) {
         {comment.editedAt ? (
           <span className="font-mono text-xs text-muted">已编辑</span>
         ) : null}
-        {comment.status === "deleted" ? (
-          <span className="font-mono text-xs text-muted">已删除</span>
-        ) : null}
         <span className="ml-auto font-mono text-xs text-muted">
           {comment.floorNumber} 楼
         </span>
@@ -607,7 +622,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
       <p className="m-0 mt-1 text-[15px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
         {comment.replyTo ? (
           <span className="text-muted">
-            回复 @{comment.replyTo.displayName ?? "已删除用户"}：
+            回复 {comment.replyTo.displayName ? `@${comment.replyTo.displayName}` : "一条已不可用的回复"}：
           </span>
         ) : null}
         <CommentBody body={comment.body} />
