@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The display-name refresh applies `0019_unique_user_display_names.sql` and records
+it in the migration ledger. Active and disabled accounts have unique names under
+SQLite NOCASE comparison; actual renames record their old and new names through
+an atomic audit trigger. Existing account names and business rows are preserved.
+
 The account permission refresh applies `0018_account_and_forum_permissions.sql`
 and records it in the migration ledger. The base user role grants self-renaming
 and forum use; the new per-user permission block table is empty. Existing

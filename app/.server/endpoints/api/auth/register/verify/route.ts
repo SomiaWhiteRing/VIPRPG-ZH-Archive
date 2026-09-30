@@ -15,11 +15,13 @@ import {
   redirectWithParams,
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { HttpError } from "@/lib/http";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   const formData = await request.formData();
   const nextPath = sanitizeRedirectPath(formData.get("next"));
   const email = normalizeEmail(readRequiredFormString(formData, "email"));
+  let displayName: string | null = null;
 
   try {
     assertSameOrigin(runtime, request);
@@ -37,11 +39,12 @@ export async function POST(runtime: AppRuntime, request: Request) {
     if (!challenge.pendingPasswordHash || !challenge.pendingDisplayName) {
       throw new Error("注册状态不完整，请重新获取验证码");
     }
+    displayName = challenge.pendingDisplayName;
 
     const user = await createOrActivateVerifiedUser(runtime, {
       email,
       passwordHash: challenge.pendingPasswordHash,
-      displayName: challenge.pendingDisplayName,
+      displayName,
     });
     await writeAuthAuditLog(runtime, {
       userId: user.id,
@@ -60,7 +63,8 @@ export async function POST(runtime: AppRuntime, request: Request) {
     return redirectWithParams(request, "/register", {
       next: nextPath,
       email,
-      sent: "1",
+      sent: error instanceof HttpError && error.code === "display_name_taken" ? null : "1",
+      displayName,
       error: error instanceof Error ? error.message : "注册验证失败",
     });
   }

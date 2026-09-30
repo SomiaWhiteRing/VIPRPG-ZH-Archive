@@ -3,7 +3,7 @@ import { hashPassword } from "@/app/.server/auth/password";
 import { queuePublicEmailChallenge } from "@/app/.server/auth/public-email-challenge";
 import { assertAuthEmailRateLimit, assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
-import { normalizeDisplayName, normalizeEmail } from "@/app/.server/db/users";
+import { assertDisplayNameAvailable, normalizeDisplayName, normalizeEmail } from "@/app/.server/db/users";
 import { readRequiredFormString, readRequiredPassword, redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 
@@ -19,6 +19,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     }
     await assertAuthSourceRateLimit(runtime, "register");
     await assertAuthEmailRateLimit(runtime, `register:${email}`);
+    await assertDisplayNameAvailable(runtime, displayName);
     const passwordHash = await hashPassword(readRequiredPassword(formData, "password"));
     queuePublicEmailChallenge(runtime, { purpose: "register", email, nextPath, passwordHash, displayName });
     return redirectWithParams(request, "/register", { next: nextPath, email, sent: "1" });
