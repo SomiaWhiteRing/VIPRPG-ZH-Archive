@@ -1,4 +1,4 @@
-import { drainViewMerges } from "@/app/.server/views/service";
+import { drainViewMerges, initializeWorkPlays } from "@/app/.server/views/service";
 import { getD1 } from "@/app/.server/db/d1";
 import { findUserByEmail } from "@/app/.server/db/users";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -178,6 +178,7 @@ export async function mergeWorks(
     .bind(source, target, MAX_USER_TAGS, MAX_USER_TAG_LENGTH).first()) {
     throw new HttpError(409, `合并后的收藏标签不能超过 ${MAX_USER_TAGS} 个，每个最多 ${MAX_USER_TAG_LENGTH} 字，请先处理标签后再合并。`);
   }
+  await initializeWorkPlays(runtime, [source, target]);
   const statements: D1PreparedStatement[] = [];
   statements.push(
     db.prepare(`UPDATE works SET updated_at=CASE WHEN EXISTS (SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?`).bind(target, target),

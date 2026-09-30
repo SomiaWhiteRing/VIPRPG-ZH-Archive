@@ -1,4 +1,5 @@
 export type ViewKind = "work" | "topic";
+export type StatKind = ViewKind | "play";
 
 export const VIEW_DAY_MS = 86_400_000;
 export const VIEW_DAY_OFFSET_MS = 8 * 60 * 60 * 1000;

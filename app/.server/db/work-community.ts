@@ -34,7 +34,7 @@ import type {
 } from "@/lib/dto/db/work-community";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
-import { viewCounts } from "@/app/.server/views/service";
+import { recordView, viewCounts } from "@/app/.server/views/service";
 import { parseFavoriteNote, parseUserTags } from "@/lib/user-tags";
 
 export type { CommentTarget } from "@/lib/comment-target";
@@ -67,20 +67,30 @@ type CommentRow = {
 export async function recordWorkPlayed(
   runtime: AppRuntime,
   workId: number,
-  userId: number,
+  userId: number | null,
 ): Promise<void> {
-  const result = await getD1(runtime)
-    .prepare(
-      `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
-       SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-       FROM public_works WHERE id=?
-       ON CONFLICT(work_id, user_id) DO UPDATE SET
-         last_played_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP`,
-    )
-    .bind(userId, workId)
-    .run();
-  if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
+  const database = getD1(runtime);
+  const work = await database.prepare(`SELECT
+    (SELECT COUNT(*) FROM user_work_entries WHERE work_id=w.id AND last_played_at IS NOT NULL) AS count
+    FROM public_works w WHERE w.id=?`).bind(workId).first<{ count: number }>();
+  if (!work) throw new HttpError(404, "作品不存在");
+  const [counter] = await Promise.allSettled([recordView(runtime, "play", workId, work.count)]);
+  // Personal history must still update when the anonymous counter is unavailable.
+  if (userId !== null) {
+    const result = await database
+      .prepare(
+        `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
+         SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+         FROM public_works WHERE id=?
+         ON CONFLICT(work_id, user_id) DO UPDATE SET
+           last_played_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(userId, workId)
+      .run();
+    if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
+  }
+  if (counter.status === "rejected") throw counter.reason;
 }
 
 export async function setWorkFavorite(
@@ -153,7 +163,7 @@ export async function getWorkCommunitySummary(
   const row = await getD1(runtime)
     .prepare(
       `SELECT
-         (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS player_count,
+         (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS legacy_player_count,
          (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
          (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
           WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count,
@@ -163,15 +173,19 @@ export async function getWorkCommunitySummary(
     )
     .bind(userId ?? 0, workId)
     .first<{
-      player_count: number;
+      legacy_player_count: number;
       comment_count: number;
       favorite_count: number;
       favorited_by_me: number;
     }>();
   if (!row) throw new HttpError(404, "作品不存在");
+  const [views, plays] = await Promise.all([
+    viewCounts(runtime, "work", [workId]),
+    viewCounts(runtime, "play", [workId], { [workId]: row.legacy_player_count }),
+  ]);
   return {
-    viewCount: (await viewCounts(runtime, "work", [workId]))[workId],
-    playerCount: row.player_count,
+    viewCount: views[workId],
+    playerCount: plays[workId],
     commentCount: row.comment_count,
     favoriteCount: row.favorite_count,
     favoritedByMe: row.favorited_by_me === 1,

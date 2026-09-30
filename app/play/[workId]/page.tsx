@@ -169,7 +169,6 @@ export default function WebPlayPage() {
             workId={work.id}
           />
         }
-        isAuthenticated={Boolean(currentUser)}
         metadata={metadata}
         notice={
           work.usesUnsupportedManiac ? (

@@ -1,6 +1,6 @@
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
-import type { ViewKind } from "@/lib/view-stats";
+import type { StatKind } from "@/lib/view-stats";
 
 const FRESH_MS = 15 * 60 * 1000;
 const MAX_IDS = 128;
@@ -10,11 +10,11 @@ function stats(env: CloudflareEnv) {
   return env.VIEW_STATS.getByName("site");
 }
 
-function cacheKey(origin: string, kind: ViewKind, id: number) {
+function cacheKey(origin: string, kind: StatKind, id: number) {
   return new Request(`${origin}/__view_stats/v1/${kind}/${id}`);
 }
 
-export async function recordView(runtime: AppRuntime, kind: ViewKind, id: number) {
+export async function recordView(runtime: AppRuntime, kind: StatKind, id: number, initialCount = 0) {
   const request = runtime.request;
   const userAgent = request.headers.get("user-agent")?.slice(0, 1024);
   // CF sets this header at the edge. Never accept an IP supplied in the body or X-Forwarded-For.
@@ -22,10 +22,10 @@ export async function recordView(runtime: AppRuntime, kind: ViewKind, id: number
   if (!ip || !userAgent || /bot\b|crawler|spider|headless|preview|facebookexternalhit/i.test(userAgent)) return;
   const limited = await runtime.env.VIEW_RATE_LIMITER.limit({ key: `${runtime.origin}:${ip}` });
   if (!limited.success) throw new HttpError(429, "请求过于频繁");
-  await stats(runtime.env).record(kind, id, runtime.origin, ip, userAgent);
+  await stats(runtime.env).record(kind, id, runtime.origin, ip, userAgent, initialCount);
 }
 
-export async function viewCounts(runtime: AppRuntime, kind: ViewKind, ids: number[]): Promise<Record<number, number>> {
+export async function viewCounts(runtime: AppRuntime, kind: StatKind, ids: number[], initialCounts: Record<number, number> = {}): Promise<Record<number, number>> {
   const unique = [...new Set(ids)];
   const values: Record<number, number> = {};
   if (!unique.length) return values;
@@ -38,13 +38,13 @@ export async function viewCounts(runtime: AppRuntime, kind: ViewKind, ids: numbe
       const response = await cache?.match(cacheKey(runtime.origin, kind, id));
       if (response) cached = await response.json() as CachedCount;
     } catch { /* A cache failure must not prevent reading the counter. */ }
-    values[id] = cached?.count ?? 0;
+    values[id] = cached?.count ?? initialCounts[id] ?? 0;
     if (!cached || Date.now() - cached.at >= FRESH_MS) missing.push(id);
   }));
   for (let offset = 0; offset < missing.length; offset += MAX_IDS) {
     const batch = missing.slice(offset, offset + MAX_IDS);
     try {
-      const counts = await stats(runtime.env).counts(kind, batch);
+      const counts = await stats(runtime.env).counts(kind, batch, initialCounts);
       Object.assign(values, counts);
       if (cache) runtime.execution.waitUntil(Promise.all(batch.map((id) => cache.put(
         cacheKey(runtime.origin, kind, id),
@@ -63,12 +63,22 @@ export async function topicViews<T extends { id: number }>(runtime: AppRuntime, 
   return items.map((item) => ({ ...item, views: counts[item.id] }));
 }
 
-export async function rankWorkViews(runtime: AppRuntime, ids: number[], limit: number, offset: number) {
+export async function rankWorkStats(runtime: AppRuntime, kind: "work" | "play", ids: number[], limit: number, offset: number, initialCounts: Record<number, number> = {}) {
   if (!ids.length) return [];
-  return stats(runtime.env).rankWorks(ids, limit, offset);
+  return stats(runtime.env).rankWorks(ids, limit, offset, kind, initialCounts);
 }
 
-// Only administrative merges use D1 here. Normal reads and view reports never do.
+// Preserve both pre-merge account totals before D1 moves/deduplicates personal histories.
+export async function initializeWorkPlays(runtime: AppRuntime, ids: number[]) {
+  const rows = await runtime.db.prepare(`SELECT w.id,
+    (SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS count
+    FROM works w WHERE w.id IN (SELECT value FROM json_each(?))`)
+    .bind(JSON.stringify(ids)).all<{ id: number; count: number }>();
+  await stats(runtime.env).counts("play", rows.results.map((row) => row.id),
+    Object.fromEntries(rows.results.map((row) => [row.id, row.count])));
+}
+
+// View reports and counter reads use only the DO/cache; callers supply legacy play baselines.
 // The outbox is committed with the catalog transaction; retries are idempotent in the DO.
 export async function drainViewMerges(env: CloudflareEnv) {
   const pending = await env.DB.prepare("SELECT id,source_id,target_id FROM view_stat_merges ORDER BY id LIMIT 50")
