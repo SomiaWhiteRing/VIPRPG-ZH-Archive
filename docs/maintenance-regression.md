@@ -17,6 +17,7 @@
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
 | `npx tsx scripts/archive-performance-check.ts` | ZIP Range 字节与对象读取范围、GC 候选分页及游标推进 | 使用内存 SQLite 和模拟对象存储，不启动浏览器或访问运行中的数据 |
+| `npx tsx scripts/archive-gc-check.ts` | 失败归档过期、溯源外键、共享引用保护和 D1/R2 失败重试 | 使用完整迁移链的内存 SQLite 和模拟 R2，不启动浏览器或访问运行中的数据 |
 | `npm run regression` | 明确需要综合回归时使用 | 串行运行 `check` → `test`，保留报告和阶段日志 |
 | `npm run regression -- --flow --build` | 预生产或发布前完整候选 | 额外运行浏览器/Worker 流程和生产构建，耗时较长 |
 | `npm run smoke:staging` / `smoke:production` | 对应环境的只读 HTTP 健康入口 | 固定 origin，不写业务数据；不替代 schema、邮件或 UI 验收 |

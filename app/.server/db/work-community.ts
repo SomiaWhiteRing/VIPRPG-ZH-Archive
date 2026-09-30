@@ -615,7 +615,6 @@ export async function createComment(
         FROM public_comments c
         JOIN users recipient ON recipient.id IN (
           SELECT user_id FROM work_uploaders WHERE work_id=c.work_id
-          UNION SELECT uploader_id FROM archive_versions WHERE work_id=c.work_id AND status='published'
         )
         WHERE c.user_id=? AND c.request_key=? AND c.work_id IS NOT NULL
           AND c.root_comment_id IS NULL
