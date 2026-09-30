@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The nested forum reply like migration `0022_forum_comment_likes.sql` adds an
+empty per-user like relation and enables live nested reply targets for forum like
+notifications. Existing inbox IDs, read/archive timestamps, role-event sources,
+and all business rows are preserved. The schema and migration ledger are synchronized.
+
 The download observability refresh applies `0020_download_observability.sql`.
 Full and range responses, transport interruptions and server failures are counted
 separately. Historical counters remain unclassified; completed response bytes and

@@ -644,13 +644,20 @@ export async function likeForum(
   input: Record<string, unknown>,
 ) {
   checkPermission(actor, "forum.use");
-  const postId = id(input.postId);
+  // Preserve the published postId input; new callers can identify a nested reply.
+  const target = input.target === undefined
+    ? { kind: "post" as const, id: id(input.postId) }
+    : forumTarget(input.target);
+  if (target.kind === "topic") throw new HttpError(400, "点赞目标无效。");
+  const table = target.kind === "comment" ? "forum_comment_likes" : "forum_post_likes";
+  const column = target.kind === "comment" ? "comment_id" : "post_id";
+  const visible = target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   if (typeof input.liked !== "boolean")
     throw new HttpError(400, "点赞状态无效。");
   if (
     !(await ctx.db
-      .prepare("SELECT id FROM forum_public_posts WHERE id=?")
-      .bind(postId)
+      .prepare(`SELECT id FROM ${visible} WHERE id=?`)
+      .bind(target.id)
       .first())
   )
     unavailable();
@@ -658,26 +665,26 @@ export async function likeForum(
     await ctx.db.batch([
       ctx.db
         .prepare(
-          `INSERT OR IGNORE INTO forum_post_likes(post_id,user_id) SELECT id,? FROM forum_public_posts WHERE id=? AND ${forumActorSql()}`,
+          `INSERT OR IGNORE INTO ${table}(${column},user_id) SELECT id,? FROM ${visible} WHERE id=? AND ${forumActorSql()}`,
         )
-        .bind(actor.id, postId, actor.id),
-      likeNotificationStatement(ctx, actor.id, postId),
+        .bind(actor.id, target.id, actor.id),
+      likeNotificationStatement(ctx, actor.id, { kind: target.kind, id: target.id }),
     ]);
   else
     await ctx.db
       .prepare(
-        `DELETE FROM forum_post_likes WHERE post_id=? AND user_id=? AND ${forumActorSql()} AND EXISTS(SELECT 1 FROM forum_public_posts WHERE id=?)`,
+        `DELETE FROM ${table} WHERE ${column}=? AND user_id=? AND ${forumActorSql()} AND EXISTS(SELECT 1 FROM ${visible} WHERE id=?)`,
       )
-      .bind(postId, actor.id, actor.id, postId)
+      .bind(target.id, actor.id, actor.id, target.id)
       .run();
   const fresh = await ctx.db
     .prepare(
       `SELECT
-    (SELECT COUNT(*) FROM forum_post_likes WHERE post_id=p.id) AS likes,
-    EXISTS(SELECT 1 FROM forum_post_likes WHERE post_id=p.id AND user_id=?) AS liked
-    FROM forum_public_posts p WHERE p.id=?`,
+    (SELECT COUNT(*) FROM ${table} WHERE ${column}=p.id) AS likes,
+    EXISTS(SELECT 1 FROM ${table} WHERE ${column}=p.id AND user_id=?) AS liked
+    FROM ${visible} p WHERE p.id=?`,
     )
-    .bind(actor.id, postId)
+    .bind(actor.id, target.id)
     .first<{ likes: number; liked: number }>();
   if (!fresh) unavailable();
   return { liked: !!fresh.liked, likes: fresh.likes };

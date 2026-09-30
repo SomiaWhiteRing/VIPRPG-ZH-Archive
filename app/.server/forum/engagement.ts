@@ -1,7 +1,25 @@
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
+import type { ForumViewer } from "@/lib/forum";
 import { HttpError } from "@/lib/http";
 import { forumViewer, mapTopic, rawTopic, unavailable } from "./queries";
 import type { ForumRuntime } from "./runtime";
+
+export async function forumCommentLikes(
+  ctx: ForumRuntime,
+  viewer: ForumViewer,
+  commentIds: number[],
+): Promise<number[]> {
+  if (!viewer || !commentIds.length) return [];
+  const likes = await ctx.db
+    .prepare(
+      `SELECT l.comment_id FROM forum_comment_likes l
+    JOIN forum_public_comments c ON c.id=l.comment_id
+    WHERE l.user_id=? AND l.comment_id IN(SELECT value FROM json_each(?))`,
+    )
+    .bind(viewer.id, JSON.stringify(commentIds))
+    .all<{ comment_id: number }>();
+  return likes.results.map((row) => row.comment_id);
+}
 
 export async function forumEngagement(
   ctx: ForumRuntime,

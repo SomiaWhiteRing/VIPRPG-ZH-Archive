@@ -257,7 +257,9 @@ export function contentSql(
     FROM forum_posts p JOIN users u ON u.id=p.user_id`;
   return `SELECT ${projection},${publicOnly ? "c.post_id,c.comment_number,c.reply_to_id," : ""}p.topic_id,p.post_number,'comment' AS kind,
     p.status AS parent_status,pu.status AS parent_user_status,${readable} AS public,
-    target.id IS NOT NULL AND tu.status IN('active','deleted') AND p.status IN('published','deleted') AND pu.status IN('active','deleted') AS target_public,target.user_id AS target_user_id,tu.display_name AS target_name,tu.avatar_blob_sha256 AS target_avatar,tu.status AS target_status,0 AS likes,0 AS liked
+    target.id IS NOT NULL AND tu.status IN('active','deleted') AND p.status IN('published','deleted') AND pu.status IN('active','deleted') AS target_public,target.user_id AS target_user_id,tu.display_name AS target_name,tu.avatar_blob_sha256 AS target_avatar,tu.status AS target_status,
+    (SELECT COUNT(*) FROM forum_comment_likes l WHERE l.comment_id=c.id) AS likes,
+    ${viewerId ? `EXISTS(SELECT 1 FROM forum_comment_likes l WHERE l.comment_id=c.id AND l.user_id=${viewerId})` : "0"} AS liked
     FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id JOIN users u ON u.id=c.user_id JOIN users pu ON pu.id=p.user_id
     LEFT JOIN forum_post_comments target ON target.id=c.reply_to_id AND target.status='published' LEFT JOIN users tu ON tu.id=target.user_id`;
 }
@@ -326,7 +328,7 @@ export function mapContent(
       !topic.locked &&
       row.parent_status === "published" &&
       !!viewer?.use,
-    like: readable && row.kind === "post" && !!viewer?.use,
+    like: readable && !!viewer?.use,
     report: readable && !!viewer?.use,
     moderate: !!viewer?.moderate && row.status !== "deleted",
     feature: false,

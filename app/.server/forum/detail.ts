@@ -4,7 +4,7 @@ import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type { ForumDetail } from "@/lib/forum";
 import { FORUM_POST_PAGE_SIZE } from "@/lib/forum";
 import { interactiveContent, interactiveTopic } from "@/lib/forum-state";
-import { forumEngagement } from "./engagement";
+import { forumCommentLikes, forumEngagement } from "./engagement";
 import { forumAuthorPostPage, forumLocation } from "./location";
 import {
   assertPublicTopic,
@@ -56,10 +56,16 @@ export async function forumDetail(
   const expanded = selected
     ? await publicCommentPage(ctx, selected.id, commentPage)
     : null;
+  const likedComments = await forumCommentLikes(ctx, engagement.viewer, [
+    ...new Set([
+      ...previews.flatMap((preview) => preview.comments.items.map((item) => item.id)),
+      ...(expanded?.items.map((item) => item.id) ?? []),
+    ]),
+  ]);
   const posts = data.posts.items.map((post) => {
     const preview = previews.find((item) => item.postId === post.id)!;
     const comment = (item: Parameters<typeof interactiveContent>[0]) => {
-      const content = interactiveContent(item, topic, engagement.viewer);
+      const content = interactiveContent(item, topic, engagement.viewer, likedComments);
       content.capabilities.reply &&= post.state === "published";
       return content;
     };

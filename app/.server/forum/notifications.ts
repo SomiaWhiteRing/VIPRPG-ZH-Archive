@@ -32,15 +32,18 @@ export function replyNotificationStatement(
 export function likeNotificationStatement(
   ctx: ForumRuntime,
   actorId: number,
-  postId: number,
+  target: { kind: "post" | "comment"; id: number },
 ) {
+  const comment = target.kind === "comment";
   return ctx.db
     .prepare(
       `INSERT INTO inbox_items
-    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id)
-    SELECT 'forum_like',?,p.user_id,'','','like:'||?||':'||p.id||':'||p.user_id,p.topic_id,p.id
-    FROM forum_public_posts p JOIN users recipient ON recipient.id=p.user_id AND recipient.status='active'
+    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id,forum_comment_id)
+    SELECT 'forum_like',?,p.user_id,'','','${comment ? "like:comment:" : "like:"}'||?||':'||p.id||':'||p.user_id,
+      p.topic_id,${comment ? "p.post_id,p.id" : "p.id,NULL"}
+    FROM ${comment ? "forum_public_comments" : "forum_public_posts"} p
+    JOIN users recipient ON recipient.id=p.user_id AND recipient.status='active'
     WHERE p.id=? AND p.user_id<>? AND changes()=1 ON CONFLICT(event_key) DO NOTHING`,
     )
-    .bind(actorId, actorId, postId, actorId);
+    .bind(actorId, actorId, target.id, actorId);
 }
