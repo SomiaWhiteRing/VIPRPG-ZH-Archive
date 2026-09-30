@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
@@ -15,8 +16,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.MotionEvent;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -35,6 +35,11 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -101,6 +106,7 @@ public final class MainActivity extends Activity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         setContentView(R.layout.activity_main);
         root = findViewById(R.id.root);
+        configureWindowInsets();
         bottomNavigation = findViewById(R.id.bottom_navigation);
         onlineTab = findViewById(R.id.online_tab);
         libraryTab = findViewById(R.id.library_tab);
@@ -324,6 +330,29 @@ public final class MainActivity extends Activity {
             startupChecked = true;
             if (autoCheck.isChecked()) checkForUpdate(true);
         }
+    }
+
+    private void configureWindowInsets() {
+        // Own the safe area on every supported Android version, including SDK 35's enforced edge-to-edge.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        attributes.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+            ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(attributes);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
+            boolean immersive = isContentImmersive();
+            int types = WindowInsetsCompat.Type.displayCutout();
+            if (!immersive) types |= WindowInsetsCompat.Type.systemBars();
+            Insets safe = windowInsets.getInsetsIgnoringVisibility(types);
+            int bottom = immersive ? safe.bottom
+                : Math.max(safe.bottom, windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+            view.setPadding(safe.left, safe.top, safe.right, bottom);
+            // The native viewport already avoids these areas; don't apply them again inside the WebViews.
+            return WindowInsetsCompat.CONSUMED;
+        });
     }
 
     private boolean sameOrigin(Uri url) {
@@ -641,28 +670,28 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private boolean isContentImmersive() {
+        return fullscreenView != null || playing || (!library && !gallery && !version && onlineImmersive);
+    }
+
     private void updateNavigation() {
-        boolean immersive = fullscreenView != null || playing || (!library && !gallery && !version && onlineImmersive);
+        boolean immersive = isContentImmersive();
+        getWindow().setBackgroundDrawable(new ColorDrawable(immersive ? Color.BLACK : Color.rgb(245, 244, 239)));
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
         tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
         tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && !gallery && library);
         tintTab(galleryTab, R.id.gallery_icon, R.id.gallery_label, gallery);
         tintTab(versionTab, R.id.version_icon, R.id.version_label, version);
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController controller = getWindow().getInsetsController();
-            if (controller != null) {
-                if (immersive) {
-                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                    controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                } else {
-                    controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                }
-            }
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), root);
+        controller.setAppearanceLightStatusBars(!immersive);
+        controller.setAppearanceLightNavigationBars(!immersive);
+        controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        if (immersive) {
+            controller.hide(WindowInsetsCompat.Type.systemBars());
         } else {
-            getWindow().getDecorView().setSystemUiVisibility(immersive
-                ? View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            controller.show(WindowInsetsCompat.Type.systemBars());
         }
+        ViewCompat.requestApplyInsets(root);
     }
 
     private void tintTab(LinearLayout tab, int iconId, int labelId, boolean active) {
@@ -743,6 +772,7 @@ public final class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
+        ViewCompat.requestApplyInsets(root);
         browser.requestLayout();
         offlineBrowser.requestLayout();
         restoreOfflinePlayerFocus();
