@@ -70,6 +70,20 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     return result;
   }
 
+  rankWorks(ids: number[], limit: number, offset: number): Array<{ id: number; count: number }> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0)
+      throw new Error("Invalid view ranking page");
+    for (const id of ids) target("work", id);
+    // D1 supplies the complete filtered ID set; return only this page of counts.
+    // LEFT JOIN keeps works with no recorded views in the same stable ordering.
+    return this.ctx.storage.sql.exec<{ id: number; count: number }>(
+      `SELECT candidate.value AS id,COALESCE(t.count,0) AS count
+       FROM json_each(?) candidate LEFT JOIN totals t ON t.kind='work' AND t.id=candidate.value
+       ORDER BY COALESCE(t.count,0) DESC,candidate.value DESC LIMIT ? OFFSET ?`,
+      JSON.stringify(ids), limit, offset,
+    ).toArray();
+  }
+
   mergeWorks(operation: number, source: number, destination: number) {
     target("work", source);
     target("work", destination);

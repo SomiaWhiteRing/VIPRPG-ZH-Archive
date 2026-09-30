@@ -32,6 +32,7 @@ import {
   parseWorkMoreInfoJson,
 } from "@/app/.server/http/work-more-info";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { rankWorkViews, viewCounts } from "@/app/.server/views/service";
 import { hasPermission } from "@/lib/authz/permissions";
 import type {
   CharacterCreditSelection,
@@ -95,7 +96,8 @@ type Filters = {
   includeDeleted?: boolean;
 };
 type ListInput = Filters & {
-  sort?: "id" | "title" | "release" | "relevance";
+  sort?: "id" | "title" | "release" | "relevance" | "views" | "players" | "comments";
+  workIds?: number[];
   limit?: number;
   offset?: number;
 };
@@ -121,6 +123,8 @@ type SummaryRow = {
   total_size_bytes: number | null;
   latest_published_at: string | null;
   download_link_count: number;
+  player_count: number;
+  comment_count: number;
 };
 type WorkRow = {
   extra_json: string;
@@ -206,6 +210,23 @@ export async function listGameWorks(
   runtime: AppRuntime,
   input: ListInput = {},
 ): Promise<GameWorkSummary[]> {
+  if (input.sort === "views") {
+    const database = getD1(runtime);
+    const { where, binds } = buildWhere(input);
+    // Rank only IDs and counts across the filtered library, then hydrate this page.
+    const candidates = await database.prepare(`SELECT w.id FROM works w WHERE ${where}`)
+      .bind(...binds).all<{ id: number }>();
+    const ranked = await rankWorkViews(runtime, candidates.results.map((row) => row.id),
+      clamp(input.limit ?? 80, 1, 200), clamp(input.offset ?? 0, 0, Number.MAX_SAFE_INTEGER));
+    const pageIds = ranked.map((row) => row.id);
+    if (!pageIds.length) return [];
+    const result = await gameWorksListStatement(database, {
+      ...input, sort: "id", workIds: pageIds, limit: pageIds.length, offset: 0,
+    }).all<SummaryRow>();
+    const byId = new Map(result.results.map((row) => [row.id, row]));
+    return hydrate(runtime, pageIds.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
+      Object.fromEntries(ranked.map((row) => [row.id, row.count])));
+  }
   const rows = await gameWorksListStatement(
     getD1(runtime),
     input,
@@ -218,6 +239,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   const columns = `w.id,w.original_title,w.chinese_title,w.original_release_date,
     w.engine_family,w.language,av.id AS current_archive_version_id,
     av.uses_shared_player,av.embedded_player_size_bytes,av.total_size_bytes,
+    ${workCountsSql()},
     (SELECT ma.blob_sha256 FROM work_media_assets wma
      JOIN media_assets ma ON ma.id=wma.media_asset_id
      WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
@@ -226,7 +248,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" |
     "original_release_date" | "engine_family" | "language" | "current_archive_version_id" |
     "uses_shared_player" | "embedded_player_size_bytes" | "total_size_bytes" |
-    "cover_blob_sha256" | "download_link_count">;
+    "cover_blob_sha256" | "download_link_count" | "player_count" | "comment_count">;
   const [recent, original, random] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12 }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
@@ -240,7 +262,11 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
        ORDER BY RANDOM()`,
     ),
   ]);
-  const playerSize = await sharedPlayerSize(runtime, [...recent.results, ...original.results, ...random.results]);
+  const allRows = [...recent.results, ...original.results, ...random.results];
+  const [playerSize, counts] = await Promise.all([
+    sharedPlayerSize(runtime, allRows),
+    viewCounts(runtime, "work", allRows.map((row) => row.id)),
+  ]);
   const card = (row: CardRow): GameCardSummary => ({
     id: row.id,
     originalTitle: row.original_title,
@@ -249,6 +275,9 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
     engineFamily: row.engine_family,
     language: row.language,
     coverBlobSha256: row.cover_blob_sha256,
+    viewCount: counts[row.id],
+    playerCount: row.player_count,
+    commentCount: row.comment_count,
     totalSizeBytes: row.total_size_bytes ?? 0,
     embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
     downloadSizeBytes: row.current_archive_version_id === null
@@ -458,13 +487,18 @@ export async function getGameWorkDetail(
     .first<SummaryRow & { extra_json: string }>();
   if (!row) return null;
   runtime.memo.set(`public-target:work:${row.id}`, true);
-  const collections = await loadWorkCollections(runtime, row.id);
+  const [collections, playerSize, counts] = await Promise.all([
+    loadWorkCollections(runtime, row.id),
+    sharedPlayerSize(runtime, [row]),
+    viewCounts(runtime, "work", [row.id]),
+  ]);
   const summary = mapSummaryRow(
     row,
     collections.tags,
     collections.characters,
     collections.creators,
-    await sharedPlayerSize(runtime, [row]),
+    playerSize,
+    counts[row.id],
   );
   const originalId =
     collections.translations.find((item) => item.role === "original")?.workId ??
@@ -1344,6 +1378,11 @@ export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
     sourceUrl: clean(form.get("source_url")),
   };
 }
+function workCountsSql(): string {
+  return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS player_count,
+    (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count`;
+}
+
 function summarySql(): string {
   return `
     w.id,
@@ -1358,6 +1397,7 @@ function summarySql(): string {
     w.is_translation,
     w.language,
     w.status,
+    ${workCountsSql()},
     (
       SELECT ma.blob_sha256
       FROM work_media_assets wma
@@ -1409,6 +1449,7 @@ function gameWorksListStatement(
   columns = summarySql(),
 ): D1PreparedStatement {
   const { where, binds } = buildWhere(input);
+  const selectedIds = input.workIds ? " AND w.id IN (SELECT value FROM json_each(?))" : "";
   const limit = clamp(input.limit ?? 80, 1, 200);
   const offset = Math.max(0, Math.floor(input.offset ?? 0));
   const { order, orderBinds } = gameWorksOrder(input);
@@ -1418,12 +1459,12 @@ function gameWorksListStatement(
        FROM works w
        LEFT JOIN archive_versions av
          ON av.work_id=w.id AND av.status='published' AND av.is_current=1
-       WHERE ${where}
+       WHERE ${where}${selectedIds}
        GROUP BY w.id
        ORDER BY ${order},w.id DESC
        LIMIT ? OFFSET ?`,
     )
-    .bind(...binds, ...orderBinds, limit, offset);
+    .bind(...binds, ...(input.workIds ? [JSON.stringify(input.workIds)] : []), ...orderBinds, limit, offset);
 }
 
 function gameWorksOrder(input: ListInput): {
@@ -1467,6 +1508,12 @@ function gameWorksOrder(input: ListInput): {
   if (input.sort === "release") {
     return {
       order: "w.original_release_date IS NULL ASC,w.original_release_date DESC",
+      orderBinds: [],
+    };
+  }
+  if (input.sort === "players" || input.sort === "comments") {
+    return {
+      order: `${input.sort === "players" ? "player_count" : "comment_count"} DESC`,
       orderBinds: [],
     };
   }
@@ -1569,10 +1616,14 @@ function searchPatterns(query: string): {
 async function hydrate(
   runtime: AppRuntime,
   rows: SummaryRow[],
+  knownViewCounts?: Record<number, number>,
 ): Promise<GameWorkSummary[]> {
   if (rows.length === 0) return [];
-  const playerSize = await sharedPlayerSize(runtime, rows);
   const ids = [...new Set(rows.map((row) => row.id))];
+  const [playerSize, counts] = await Promise.all([
+    sharedPlayerSize(runtime, rows),
+    knownViewCounts ? Promise.resolve(knownViewCounts) : viewCounts(runtime, "work", ids),
+  ]);
   const database = getD1(runtime);
   const queries: Array<{
     kind: "tag" | "character" | "creator";
@@ -1691,6 +1742,7 @@ async function hydrate(
       charactersByWork.get(row.id) ?? [],
       creatorsByWork.get(row.id) ?? [],
       playerSize,
+      counts[row.id],
     ),
   );
 }
@@ -1708,6 +1760,7 @@ function mapSummaryRow(
   characters: GameCharacter[],
   creators: GameCreatorCredit[],
   playerSize: number | null,
+  viewCount: number,
 ): GameWorkSummary {
   return {
     id: row.id,
@@ -1735,6 +1788,9 @@ function mapSummaryRow(
       ? null
       : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
     latestPublishedAt: row.latest_published_at,
+    viewCount,
+    playerCount: row.player_count,
+    commentCount: row.comment_count,
     distribution: deriveWorkDistribution({
       hasCurrentArchive: row.current_archive_version_id !== null,
       downloadLinkCount: row.download_link_count,

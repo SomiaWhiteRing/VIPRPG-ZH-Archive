@@ -105,13 +105,21 @@ export function GameLibrary({
               aria-label="游戏排序"
             >
               <span className="text-[13px]">排序</span>
-              {(["id", "title", "release"] as const).map((value) => (
+              {([
+                { value: "id", label: "默认" },
+                { value: "title", label: "标题" },
+                { value: "release", label: "发布日期" },
+                { value: "views", label: "最多浏览" },
+                { value: "players", label: "最多游玩" },
+                { value: "comments", label: "最多评论" },
+              ] as const).map(({ value, label }) => (
                 <Link
                   className={
                     sort === value
                       ? "min-h-8 py-1.5 text-primary"
                       : "min-h-8 py-1.5 hover:text-foreground"
                   }
+                  aria-current={sort === value ? "true" : undefined}
                   to={gamesHref({
                     ...activeParams,
                     sort: value === "id" ? undefined : value,
@@ -119,11 +127,7 @@ export function GameLibrary({
                   })}
                   key={value}
                 >
-                  {value === "id"
-                    ? "默认"
-                    : value === "title"
-                      ? "标题"
-                      : "发布日期"}
+                  {label}
                 </Link>
               ))}
             </div> : null}

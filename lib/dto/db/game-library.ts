@@ -118,6 +118,9 @@ export type GameWorkSummary = {
   totalSizeBytes: number;
   downloadSizeBytes: number | null;
   latestPublishedAt: string | null;
+  viewCount: number;
+  playerCount: number;
+  commentCount: number;
   tags: GameTag[];
   characters: GameCharacter[];
   creators: GameCreatorCredit[];
@@ -177,7 +180,8 @@ export type AdminWorkEdit = {
 export type GameCardSummary = Pick<GameWorkSummary,
   "id" | "originalTitle" | "chineseTitle" | "originalReleaseDate" |
   "engineFamily" | "language" | "coverBlobSha256" | "distribution" |
-  "totalSizeBytes" | "embeddedPlayerSizeBytes" | "downloadSizeBytes"
+  "totalSizeBytes" | "embeddedPlayerSizeBytes" | "downloadSizeBytes" |
+  "viewCount" | "playerCount" | "commentCount"
 >;
 
 export type AdminArchiveVersionEdit = {

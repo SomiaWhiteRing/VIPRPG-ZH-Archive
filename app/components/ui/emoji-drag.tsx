@@ -12,13 +12,14 @@ export function EmojiDragSource({ emoji, disabled, children }: { emoji: FaceEmoj
   return <Slot.Root ref={setNodeRef} {...attributes} {...listeners} onContextMenu={(event) => event.preventDefault()}>{children}</Slot.Root>;
 }
 
-export function EmojiSortable({ emoji, disabled, children }: {
+export function EmojiSortable({ emoji, disabled, sortingDisabled = false, children }: {
   emoji: FaceEmoji;
   disabled: boolean;
+  sortingDisabled?: boolean;
   children: (handle: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners" | "setActivatorNodeRef">) => ReactNode;
 }) {
-  const { setNodeRef, transform, transition, isDragging, ...handle } = useSortable({ id: emojiDragId("library", emoji), disabled, data: { emoji, from: "library" } });
-  return <div ref={setNodeRef} className="group relative size-14" style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.25 : undefined }}>{children(handle)}</div>;
+  const { setNodeRef, transform, transition, isDragging, ...handle } = useSortable({ id: emojiDragId("library", emoji), disabled: { draggable: disabled, droppable: disabled || sortingDisabled }, data: { emoji, from: "library" } });
+  return <div ref={setNodeRef} className="group relative size-14" style={{ transform: sortingDisabled ? undefined : CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.25 : undefined }}>{children(handle)}</div>;
 }
 
 export function EmojiDropZone({ zone, ...props }: ComponentProps<"section"> & { zone: "source" | "library" }) {
