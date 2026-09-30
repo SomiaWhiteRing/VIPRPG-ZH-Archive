@@ -45,6 +45,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editor = useRef<BodyEditorHandle>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  const composing = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
   const processor = useRef<ReturnType<typeof createImageProcessor> | null>(null);
   const resources = useRef(new Set<string>());
@@ -198,6 +200,18 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
 
   return (
     <div className="grid min-w-0 gap-2" role="group" aria-label="评论编辑器"
+      onKeyDownCapture={(event) => {
+        if (
+          event.key !== "Enter" || !event.ctrlKey ||
+          event.altKey || event.metaKey || event.shiftKey ||
+          event.nativeEvent.isComposing || event.keyCode === 229 || composing.current ||
+          !(event.target instanceof Node) || !event.currentTarget.contains(event.target)
+        ) return;
+        // Capture before the body editor handles Ctrl+Enter as a line break.
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) submitButton.current?.click();
+      }}
       onPasteCapture={(event) => {
         const files = Array.from(event.clipboardData.files);
         if (files.length) { event.preventDefault(); event.stopPropagation(); void addImages(files); }
@@ -210,7 +224,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     >
       <BodyEditor ref={editor} textOnly maxLength={2000} inputId={inputId} body={body} images={NO_IMAGES}
         busy={busy || unavailable} topic={false} placeholder={placeholder} autoFocus={!!replyToCommentId || !!editing}
-        onChange={setBody} onBusyChange={() => {}} onError={setError} onCompositionChange={() => {}} />
+        onChange={setBody} onBusyChange={() => {}} onError={setError}
+        onCompositionChange={(value) => { composing.current = value; }} />
       {images.length ? <ul className="flex flex-wrap gap-2" aria-label="待发布图片">
         {images.map((image, index) => <li key={image.key} className="w-24" aria-busy={!!image.stage}>
           <div className="relative aspect-square overflow-hidden rounded-md bg-muted/15">
@@ -236,7 +251,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
             onClick={() => picker.current?.click()}><ImagePlus aria-hidden />上传图片</Button></div>
           <div className="flex items-center gap-2">
             {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>取消</Button> : null}
-            <Button type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}>{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? "保存修改" : replyToCommentId ? "发布回复" : "发布评论"}</Button>
+            <Button ref={submitButton} type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}
+              title="Ctrl+Enter 提交" aria-keyshortcuts="Control+Enter">{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? "保存修改" : replyToCommentId ? "发布回复" : "发布评论"}</Button>
           </div>
         </div>}
       </EmojiPicker>

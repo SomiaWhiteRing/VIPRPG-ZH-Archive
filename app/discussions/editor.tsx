@@ -63,6 +63,7 @@ export function ForumEditor({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const mixed = useRef<BodyEditorHandle>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
   const section = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
   const originalHeight = useRef(0);
@@ -236,6 +237,18 @@ export function ForumEditor({
       <form
         inert={isCollapsed}
         aria-hidden={isCollapsed}
+        onKeyDownCapture={(event) => {
+          if (
+            event.key !== "Enter" || !event.ctrlKey ||
+            event.altKey || event.metaKey || event.shiftKey ||
+            event.nativeEvent.isComposing || event.keyCode === 229 || composing.current ||
+            !(event.target instanceof Node) || !event.currentTarget.contains(event.target)
+          ) return;
+          // Capture before the body editor handles Ctrl+Enter as a line break.
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) submitButton.current?.click();
+        }}
         className={
           "flex min-h-0 flex-1 flex-col gap-2" +
           (!topic && !inline
@@ -485,8 +498,11 @@ export function ForumEditor({
                   </Button>
                 ) : null}
                 <Button
+                  ref={submitButton}
                   disabled={busy || conflict || !!draft.currentVersion || !canSubmit}
                   type="submit"
+                  title={`${label}（Ctrl+Enter）`}
+                  aria-keyshortcuts="Control+Enter"
                   variant={remaining < 0 ? "neutral" : undefined}
                   className={remaining < 0 ? "disabled:opacity-100" : undefined}
                   aria-label={
