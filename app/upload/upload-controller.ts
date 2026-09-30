@@ -268,6 +268,7 @@ export function useUploadController(accountId: number) {
       cleanupResources: boolean;
       checkMissingResources: boolean;
       useSharedPlayer: boolean;
+      includeSaves: boolean;
       sourceName: string;
       files: UploadSourceFile[];
       targetWorkId: number | null;
