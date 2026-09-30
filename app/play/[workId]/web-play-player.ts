@@ -2,6 +2,7 @@ import { isAndroidClient } from "@/lib/browser/client-environment";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
+import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
 import { acquireGameResourceReadLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
 import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
@@ -176,6 +177,7 @@ export function createPlayerSession(
       packages = await readGamePackages(
         installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
       );
+      await seedBundledWebPlaySaves(metadata.workId, packages, lifetime.signal);
     }
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).

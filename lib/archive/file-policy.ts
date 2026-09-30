@@ -1,4 +1,4 @@
-export const FILE_POLICY_VERSION = "rpgm2000-2003-resources-v10";
+export const FILE_POLICY_VERSION = "rpgm2000-2003-resources-v11";
 export const PACKER_VERSION = "browser-upload-phase-d-2026-05";
 
 export type ArchiveFileRole =
@@ -38,6 +38,7 @@ const allowedFileTypeKeys = new Set([
   ".ldb",
   ".lmt",
   ".lmu",
+  ".lsd",
   ".png",
   ".jpg",
   ".bmp",
@@ -130,12 +131,13 @@ export function contentTypeForArchivePath(path: string): string {
 export function classifyArchivePath(
   rawPath: string,
   metadataPaths: Set<string> = new Set(),
+  includeSaves = false,
 ): ArchiveFileClassification {
   const path = normalizeArchivePath(rawPath);
   const forcedExclusion = forcedExclusionReason(path);
   const typeKey = fileTypeKey(path);
 
-  if (forcedExclusion || !allowedFileTypeKeys.has(typeKey)) {
+  if (forcedExclusion || !allowedFileTypeKeys.has(typeKey) || (typeKey === ".lsd" && !includeSaves)) {
     return {
       included: false,
       fileType: forcedExclusion ?? typeKey,
@@ -196,7 +198,7 @@ function roleFor(path: string, metadataPaths: Set<string>): ArchiveFileRole {
     return ext === ".lmu" ? "map" : "database";
   }
 
-  if (isStringScriptTxt(path)) {
+  if (ext === ".lsd" || isStringScriptTxt(path)) {
     return "other";
   }
 
