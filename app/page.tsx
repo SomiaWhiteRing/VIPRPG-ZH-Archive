@@ -147,7 +147,7 @@ function HomeWorkGrid({
       <div
         className={`grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4 ${
           original || singleRow
-            ? "@max-[609px]:[&>*:nth-child(n+3)]:hidden @max-[889px]:[&>*:nth-child(n+4)]:hidden"
+            ? "@min-[609px]:@max-[889px]:[&>*:nth-child(n+4)]:hidden"
             : "@max-[609px]:[&>*:nth-child(n+7)]:hidden @max-[889px]:[&>*:nth-child(n+10)]:hidden"
         }`}
       >
