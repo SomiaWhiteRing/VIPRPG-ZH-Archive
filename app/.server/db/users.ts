@@ -28,7 +28,7 @@ import {
 } from "@/lib/auth/password-rules";
 import { hasPermission } from "@/lib/authz/permissions";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
-import { normalizeEntityName } from "@/lib/entity-name";
+import { inspectDisplayName } from "@/lib/display-name";
 
 import { getD1 } from "@/app/.server/db/d1";
 import {
@@ -114,11 +114,8 @@ export function normalizeEmail(value: string): string {
 }
 
 export function normalizeDisplayName(value: string): string {
-  if (/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]/u.test(value))
-    throw new HttpError(400, "显示名不能包含控制字符或不可见字符");
-  const displayName = normalizeEntityName(value);
-  if (!displayName || [...displayName].length > 80)
-    throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
+  const { displayName, error } = inspectDisplayName(value);
+  if (error) throw new HttpError(400, error);
   return displayName;
 }
 
