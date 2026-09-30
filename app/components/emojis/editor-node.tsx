@@ -6,7 +6,7 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { emojiToken, type FaceEmoji } from "@/lib/face-emojis";
-import { FaceEmojiView } from "./face-emoji";
+import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
 export const EditorEmojis = createContext<ReadonlyMap<number, FaceEmoji>>(
   new Map(),
 );
@@ -16,12 +16,9 @@ function EmojiNodeView({ node, selected }: NodeViewProps) {
     <NodeViewWrapper
       as="span"
       contentEditable={false}
-      className={`inline-flex align-bottom ${selected ? "outline-2 outline-primary" : ""}`}
+      className={`mx-0.5 inline-flex align-bottom ${selected ? "outline-2 outline-primary" : ""}`}
     >
-      <FaceEmojiView
-        key={node.attrs.id}
-        emoji={emojis.get(node.attrs.id) ?? null}
-      />
+      <FaceEmojiImage emoji={emojis.get(node.attrs.id) ?? null} />
     </NodeViewWrapper>
   );
 }
