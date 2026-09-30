@@ -9,12 +9,10 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { Button } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { PageHeader } from "@/app/components/ui/page-header";
-import type { UploadInitialWork } from "@/app/upload/upload-client";
+import { uploadInitialWork } from "@/app/upload/initial-work";
 import { UploadClient } from "@/app/upload/upload-client";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import type { UploaderWorkEdit } from "@/lib/dto/db/game-library";
-import { isExtraStaffRole } from "@/lib/staff-credits";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -72,71 +70,7 @@ export default function UploadedWorkPage() {
           displayName: user.displayName,
           permissionKeys: user.permissionKeys,
         }}
-        initialWork={{
-          id: work.id,
-          originalTitle: work.originalTitle,
-          chineseTitle: work.chineseTitle,
-          description: work.description,
-          genre: work.genre,
-          moreInfo: work.moreInfo,
-          usesUnsupportedManiac: work.usesUnsupportedManiac,
-          originalReleaseDate: work.originalReleaseDate,
-          engineFamily: work.engineFamily as UploadInitialWork["engineFamily"],
-          isOriginal: work.isOriginal,
-          isTranslation: work.isTranslation,
-          language: work.language,
-          status: work.status as "published" | "hidden",
-          aliases: work.aliases,
-          tags: work.tags,
-          characters: work.characters,
-          characterCredits: work.characterCredits.map((character) => ({
-            selection: {
-              kind: "existing" as const,
-              characterId: character.id,
-              originalName: character.originalName,
-              displayName: character.displayName,
-            },
-            portrait: character.portraitChoice,
-            faceSheetBlobSha256s: [],
-            roleKey: characterRole(character.roleKey),
-            spoilerLevel: character.spoilerLevel,
-            sortOrder: character.sortOrder ?? 0,
-            notes: character.notes,
-          })),
-          authors: staffCredits(work, "author"),
-          extraStaff: work.creators
-            .filter((creator) => isExtraStaffRole(creator.roleKey))
-            .map((creator) => ({
-              selection: {
-                kind: "existing" as const,
-                creatorId: creator.id,
-                name: creator.name,
-                displayName: creator.displayName,
-              },
-              roleKey:
-                creator.roleKey as UploadInitialWork["authors"][number]["roleKey"],
-              roleLabel: creator.roleLabel,
-              notes: creator.notes,
-            })),
-          translators: staffCredits(work, "translator"),
-          externalDownloadUrl: work.externalDownloadUrl,
-          archiveSourceUrl: work.currentArchive?.sourceUrl ?? null,
-          coverBlobSha256: work.media.find((media) => media.role === "cover")?.blobSha256 ?? "",
-          previewBlobSha256s: work.media
-            .filter((media) => media.role === "preview")
-            .sort(
-              (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0),
-            )
-            .map((media) => media.blobSha256),
-          currentArchive: work.currentArchive
-            ? {
-                name: work.currentArchive.sourceName,
-                usesSharedPlayer: work.currentArchive.usesSharedPlayer,
-                fileCount: work.currentArchive.sourceFileCount,
-                sizeBytes: work.currentArchive.sourceSizeBytes,
-              }
-            : null,
-        }}
+        initialWork={uploadInitialWork(work)}
         suggestions={suggestions}
       />
       <ConfirmingForm
@@ -155,38 +89,8 @@ export default function UploadedWorkPage() {
   );
 }
 
-function staffCredits(
-  work: UploaderWorkEdit,
-  roleKey: "author" | "translator",
-): UploadInitialWork["authors"] {
-  return work.creators
-    .filter((creator) => creator.roleKey === roleKey)
-    .map((creator) => ({
-      selection: {
-        kind: "existing" as const,
-        creatorId: creator.id,
-        name: creator.name,
-        displayName: creator.displayName,
-      },
-      roleKey,
-      roleLabel: creator.roleLabel,
-      notes: creator.notes,
-    }));
-}
-
 function parseId(value: string): number {
   const id = Number.parseInt(value, 10);
   if (!Number.isSafeInteger(id) || id <= 0) throwNotFound();
   return id;
-}
-
-function characterRole(
-  value: string,
-): "main" | "supporting" | "cameo" | "mentioned" | "other" {
-  return value === "main" ||
-    value === "cameo" ||
-    value === "mentioned" ||
-    value === "other"
-    ? value
-    : "supporting";
 }

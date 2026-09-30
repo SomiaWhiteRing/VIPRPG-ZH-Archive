@@ -32,12 +32,13 @@ const loadDetail = async (
   floor: number | undefined,
   commentPage: number,
   comment: number | undefined,
+  onlyAuthor: boolean,
 ) => {
   try {
     return await forumDetail(
       getForumRuntime(runtime),
       id,
-      { page, floor, commentPage, comment },
+      { page, floor, commentPage, comment, onlyAuthor },
       await getCurrentUser(runtime),
     );
   } catch (error) {
@@ -64,6 +65,7 @@ export async function loader(args: LoaderFunctionArgs) {
     optionalId(query.floor),
     forumPage(query.commentPage),
     optionalId(query.comment),
+    query.onlyAuthor === "1",
   );
   const commentPage = detail.floor
     ? detail.posts.items.find((p) => p.postNumber === detail.floor)?.comments
@@ -75,6 +77,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const inboxId = optionalId(query.inbox);
   const canonical = forumHref(`/discussions/${topicId}`, {
     page: detail.posts.page,
+    onlyAuthor: detail.onlyAuthor ? "1" : null,
     floor: detail.floor,
     commentPage,
     comment: detail.comment,

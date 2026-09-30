@@ -1,5 +1,6 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 
@@ -112,14 +113,15 @@ export async function createImportJob(
   return requiredImportJob(runtime, id);
 }
 
-async function assertWorkCanReceiveArchive(
+export async function assertWorkCanReceiveArchive(
   runtime: AppRuntime,
   workId: number,
   user: ArchiveUser,
-): Promise<void> {
+): Promise<{ original_title: string; status: string; is_uploader: number }> {
   const row = await getD1(runtime)
     .prepare(
       `SELECT
+         w.original_title,
          w.status,
          EXISTS(
            SELECT 1 FROM work_uploaders wu
@@ -131,19 +133,20 @@ async function assertWorkCanReceiveArchive(
     )
     .bind(user.id, workId)
     .first<{
+      original_title: string;
       status: string;
       is_uploader: number;
     }>();
 
-  if (!row || row.status === "deleted") throw new HttpError(404, "作品不存在");
-  if (
-    user.status !== "active" ||
-    !user.permissionKeys.includes("work.update_own") ||
-    row.is_uploader !== 1
-  ) {
+  const canAdminEdit = hasPermission(user, "work.metadata.update_any");
+  if (!row || (row.status === "deleted" && !(canAdminEdit && hasPermission(user, "work.status.update_any")))) {
+    throw new HttpError(404, "作品不存在");
+  }
+  if (!canAdminEdit && !(hasPermission(user, "work.update_own") && row.is_uploader === 1)) {
     throw new HttpError(403, "无权更新这款作品");
   }
   // The commit validates the selected 2k engine and atomically replaces the download source.
+  return row;
 }
 
 export async function requiredImportJob(
@@ -187,7 +190,7 @@ export async function requiredOwnedImportJob(
   if (
     !job ||
     job.uploader_id !== user.id ||
-    (job.work_id &&
+    (job.work_id && !(hasPermission(user, "work.metadata.update_any") && hasPermission(user, "work.status.update_any")) &&
       (await getD1(runtime)
         .prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`)
         .bind(job.work_id)

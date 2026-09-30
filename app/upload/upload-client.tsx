@@ -2,6 +2,10 @@ import { normalizeWorkGenre } from "@/lib/work-genre";
 import { WorkMetadataFields } from "@/app/components/work/work-metadata-fields";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
+import { Pane } from "@/app/components/ui/pane";
+import { ExternalLinkList, serializeExternalLinks } from "@/app/admin/works/structured-work-fields";
+import { WorkbenchField } from "@/app/upload/workbench-field";
+import type { GameExternalLink } from "@/lib/dto/db/game-library";
 
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
 
@@ -67,7 +71,7 @@ import { cn } from "@/lib/ui/cn";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import { moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
 import { Check, Link as LinkIcon } from "lucide-react";
-import type { DragEvent, FormEvent } from "react";
+import type { DragEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -89,6 +93,14 @@ type CharacterFaceSheetFiles = Record<number, File[]>;
 type PreparedCharacterFaceSheets = {
   hashesByIndex: Record<number, string[]>;
   blobs: MetadataBlobUpload[];
+};
+
+type AdminSettings = NonNullable<ArchiveCommitMetadata["admin"]>;
+type AdminEditSubmission = {
+  settings: AdminSettings;
+  initialWork: UploadInitialWork;
+  associationDefaults: AssociationDefaults;
+  downloadLink?: GameExternalLink;
 };
 
 export type UploadInitialWork = {
@@ -129,10 +141,17 @@ export function UploadClient({
   initialWork = null,
   saveRedirectTo = "/me/uploads",
   suggestions,
+  adminOptions,
 }: {
   currentUser: CurrentUser;
   initialWork?: UploadInitialWork | null;
   saveRedirectTo?: string;
+  adminOptions?: {
+    canUpdateStatus: boolean;
+    status: AdminSettings["status"];
+    externalLinks: GameExternalLink[];
+    footer: ReactNode;
+  };
   suggestions: {
     tags: UploadTaxonomySuggestion[];
     characters: CharacterSuggestion[];
@@ -162,6 +181,11 @@ export function UploadClient({
   const [form, setForm] = useState<FlatMetadata>(() =>
     initialForm(canArchiveUpload, currentUser, initialWork),
   );
+  const [adminSettings, setAdminSettings] = useState<AdminSettings | undefined>(() => adminOptions ? {
+    status: adminOptions.status,
+    externalLinks: adminOptions.externalLinks.filter((link) => link.linkType !== "download_page"),
+  } : undefined);
+  const [coverBlobSha256, setCoverBlobSha256] = useState(initialWork?.coverBlobSha256 ?? "");
   const [sourceMode, setSourceMode] = useState<"archive" | "external">(() =>
     isArchiveEngineFamily(form.engineFamily) && !initialWork?.externalDownloadUrl
       ? "archive"
@@ -223,9 +247,11 @@ export function UploadClient({
   const editSourceReady = archiveMode
     ? Boolean(existingArchive || upload.active)
     : Boolean(form.externalDownloadUrl.trim());
+  const canSaveWithoutSource = Boolean(adminOptions && !initialWork?.currentArchive && !initialWork?.externalDownloadUrl);
   const relevantDrafts = upload.drafts.filter(
     (draft) =>
       draft.targetWorkId === (initialWork?.id ?? null) &&
+      (adminOptions || !(draft.metadata?.admin || draft.formDraft?.adminSettings)) &&
       draft.serverImportJobId !== upload.task?.serverImportJobId,
   );
   const { saveFormDraft } = upload;
@@ -239,6 +265,8 @@ export function UploadClient({
       characterFaceSheetFiles,
       sourceFaceSheetFiles,
       sourceFaceSheetWarnings,
+      adminSettings,
+      coverBlobSha256,
     });
   }, [
     form,
@@ -247,9 +275,17 @@ export function UploadClient({
     characterFaceSheetFiles,
     sourceFaceSheetFiles,
     sourceFaceSheetWarnings,
+    adminSettings,
+    coverBlobSha256,
     localTaskId,
     saveFormDraft,
   ]);
+  const adminSubmission: AdminEditSubmission | undefined = adminSettings && initialWork ? {
+    settings: adminSettings,
+    initialWork: { ...initialWork, coverBlobSha256 },
+    associationDefaults,
+    downloadLink: adminOptions?.externalLinks.find((link) => link.linkType === "download_page"),
+  } : undefined;
 
   useEffect(() => {
     if (initialWork) return;
@@ -561,6 +597,7 @@ export function UploadClient({
     }
     const characterWithoutPortrait = form.characters.find((credit) => {
       const selection = credit.selection;
+      if (adminOptions && selection.kind === "existing") return false;
       if (credit.portrait) return false;
       return (
         selection.kind === "new" ||
@@ -582,7 +619,7 @@ export function UploadClient({
         setSubmitError("新建外链作品必须选择封面图。");
         return;
       }
-      if (!form.externalDownloadUrl.trim()) {
+      if (!canSaveWithoutSource && !form.externalDownloadUrl.trim()) {
         setSubmitError("请填写外部下载地址。");
         return;
       }
@@ -594,12 +631,13 @@ export function UploadClient({
         if (initialWork) {
           rememberPublishedTranslators(
             currentUser.id,
-            await submitOwnedWork(
+            await submitEditedWork(
               initialWork.id,
               "external",
               form,
               imageSelections,
               faceSheets,
+              adminSubmission,
             ),
           );
           toast.success("作品资料已保存。");
@@ -624,7 +662,7 @@ export function UploadClient({
       return;
     }
     const hasArchiveSource = Boolean(existingArchive || upload.active);
-    if (!hasArchiveSource) {
+    if (!hasArchiveSource && !canSaveWithoutSource) {
       setSubmitError("请先选择游戏文件。");
       return;
     }
@@ -637,15 +675,16 @@ export function UploadClient({
       const faceSheets = await prepareCharacterFaceSheets(
         characterFaceSheetFiles,
       );
-      if (initialWork && existingArchive && !upload.active) {
+      if (initialWork && (existingArchive || canSaveWithoutSource) && !upload.active) {
         rememberPublishedTranslators(
           currentUser.id,
-          await submitOwnedWork(
+          await submitEditedWork(
             initialWork.id,
             "archive",
             form,
             imageSelections,
             faceSheets,
+            adminSubmission,
           ),
         );
         toast.success("作品资料已保存。");
@@ -654,7 +693,7 @@ export function UploadClient({
       }
       const images = await prepareSelectedImages(
         imageSelections,
-        initialWork,
+        adminSubmission?.initialWork ?? initialWork,
       );
       upload.confirmMetadata(
         buildMetadata(
@@ -663,6 +702,7 @@ export function UploadClient({
           faceSheets.hashesByIndex,
           initialWork?.id ?? null,
           associationDefaults,
+          adminSettings,
         ),
         uniqueMetadataBlobs([...images.blobs, ...faceSheets.blobs]),
       );
@@ -683,13 +723,19 @@ export function UploadClient({
     setSourceFaceSheetFiles(draft.formDraft?.sourceFaceSheetFiles ?? []);
     setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
-      setForm({ ...draft.formDraft.form, genre: draft.formDraft.form.genre ?? "" });
+      setForm({ ...draft.formDraft.form, genre: draft.formDraft.form.genre ?? "",
+        ...(adminOptions && initialWork ? { originalTitle: initialWork.originalTitle } : {}),
+      });
       setAssociationDefaults(draft.formDraft.associationDefaults);
       setImageSelections(draft.formDraft.imageSelections);
       setCharacterFaceSheetFiles(draft.formDraft.characterFaceSheetFiles);
       setTranslatorError(null);
       setStaffErrorsVisible(false);
       setMoreInfoErrorsVisible(false);
+      if (adminOptions) {
+        if (draft.formDraft.adminSettings) setAdminSettings(draft.formDraft.adminSettings);
+        setCoverBlobSha256(draft.formDraft.coverBlobSha256 ?? initialWork?.coverBlobSha256 ?? "");
+      }
     } else if (draft.metadata && !initialWork) {
       setForm(formFromMetadata(draft.metadata));
       setTranslatorError(null);
@@ -716,6 +762,7 @@ export function UploadClient({
         ),
       );
     }
+    if (adminOptions && !draft.formDraft && draft.metadata?.admin) setAdminSettings(draft.metadata.admin);
     setSourceMode("archive");
     setForm((current) => ({
       ...current,
@@ -893,6 +940,7 @@ export function UploadClient({
                   <ExternalSourceSection
                     archiveDisabled={formDisabled || !canArchiveUpload}
                     disabled={formDisabled}
+                    required={!canSaveWithoutSource}
                     onArchive={isArchiveEngineFamily(form.engineFamily) ? () => changeSourceMode("archive") : undefined}
                     onChange={(externalDownloadUrl) =>
                       setForm((current) => ({
@@ -929,6 +977,8 @@ export function UploadClient({
                   </div>
                 ) : (
                   <WorkMetadataFields
+                    originalTitleReadOnly={Boolean(adminOptions)}
+                    originalDeclarationLabel={adminOptions ? "本站原创" : undefined}
                     characterFaceSheetFiles={characterFaceSheetFiles}
                     sourceFaceSheetFiles={sourceFaceSheetFiles}
                     sourceFaceSheetWarnings={sourceFaceSheetWarnings}
@@ -967,7 +1017,7 @@ export function UploadClient({
                     candidateFiles={coverCandidates}
                     disabled={formDisabled}
                     existingBlobSha256s={initialWork?.previewBlobSha256s}
-                    existingCoverBlobSha256={initialWork?.coverBlobSha256}
+                    existingCoverBlobSha256={coverBlobSha256}
                     existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
                     file={imageSelections.cover}
                     includeSelectedFileCandidate={
@@ -977,7 +1027,7 @@ export function UploadClient({
                       automaticCoverRef.current = null;
                       setImageSelections((current) => ({ ...current, cover }));
                     }}
-                    required={!initialWork?.coverBlobSha256}
+                    required={!coverBlobSha256 && !adminOptions}
                   />
                 </div>
 
@@ -1010,13 +1060,14 @@ export function UploadClient({
                       value={form.language}
                     />
                   </div>
-                  {initialWork ? (
+                  {initialWork && (!adminOptions || adminOptions.canUpdateStatus) ? (
                     <div className="grid gap-2">
-                      <Label className="font-bold">公开状态</Label>
+                      <Label className="font-bold">{adminOptions ? "状态" : "公开状态"}</Label>
                       <SelectField
-                        aria-label="公开状态"
+                        aria-label={adminOptions ? "状态" : "公开状态"}
                         disabled={formDisabled}
-                        onValueChange={(status) =>
+                        onValueChange={(status) => adminOptions ?
+                          setAdminSettings((current) => current ? { ...current, status: status as AdminSettings["status"] } : current) :
                           setForm((current) => ({
                             ...current,
                             status: status as "published" | "hidden",
@@ -1025,8 +1076,9 @@ export function UploadClient({
                         options={[
                           { value: "published", label: "已发布" },
                           { value: "hidden", label: "隐藏" },
+                          ...(adminOptions ? [{ value: "deleted", label: "已删除（仅后台可见）" }] : []),
                         ]}
-                        value={form.status}
+                        value={adminSettings?.status ?? form.status}
                       />
                     </div>
                   ) : null}
@@ -1070,7 +1122,7 @@ export function UploadClient({
                     <Button
                       className="min-h-12 w-full"
                       disabled={
-                        preparing || Boolean(initialWork && !editSourceReady)
+                        preparing || Boolean(initialWork && !editSourceReady && !canSaveWithoutSource)
                       }
                       type="submit"
                       variant="rm2k"
@@ -1080,7 +1132,7 @@ export function UploadClient({
                           ? "正在确认…"
                           : "正在发布…"
                         : initialWork
-                          ? "保存作品资料"
+                          ? adminOptions ? "保存游戏资料" : "保存作品资料"
                           : archiveMode
                             ? "确认作品资料"
                             : "发布外链作品"}
@@ -1091,6 +1143,27 @@ export function UploadClient({
             </aside>
           </div>
         </section>
+        {adminOptions && adminSettings ? (
+          <fieldset className="mt-4 grid gap-4" disabled={formDisabled}>
+            <Pane heading="管理设置">
+              <div className="grid gap-4">
+                <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
+                  setAdminSettings((current) => current ? { ...current, externalLinks } : current)} />
+                <details>
+                  <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
+                  <div className="mt-3 grid gap-4">
+                    <p className="text-sm text-muted">选择新封面后，将优先使用新图片。</p>
+                    <WorkbenchField controlId="admin-cover-hash" label="封面 SHA-256">
+                      <Input id="admin-cover-hash" value={coverBlobSha256} onChange={(event) => setCoverBlobSha256(event.target.value)}
+                        pattern="[a-fA-F0-9]{64}" disabled={Boolean(imageSelections.cover)} />
+                    </WorkbenchField>
+                  </div>
+                </details>
+              </div>
+            </Pane>
+            {adminOptions.footer}
+          </fieldset>
+        ) : null}
       </form>
     </div>
   );
@@ -1102,12 +1175,14 @@ function ExternalSourceSection({
   onArchive,
   onChange,
   value,
+  required = true,
 }: {
   archiveDisabled: boolean;
   disabled: boolean;
   onArchive?: () => void;
   onChange: (value: string) => void;
   value: string;
+  required?: boolean;
 }) {
   return (
     <div>
@@ -1131,7 +1206,7 @@ function ExternalSourceSection({
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           placeholder="https://"
-          required
+          required={required}
           type="url"
           value={value}
         />
@@ -1392,6 +1467,7 @@ function buildMetadata(
   faceSheetHashes: Record<number, string[]>,
   targetWorkId: number | null,
   defaults: AssociationDefaults,
+  admin?: AdminSettings,
 ): ArchiveCommitMetadata {
   const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
   if (!releaseDate) throw new Error(ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
@@ -1422,13 +1498,15 @@ function buildMetadata(
   );
   const authorStaff = form.authors
     .filter((value): value is CreatorSelection => value !== null)
-    .map((selection) => ({
-      selection,
-      roleKey: "author" as const,
-      roleLabel:
-        authorDefaults.get(creatorSelectionKey(selection))?.roleLabel ?? "作者",
-      notes: authorDefaults.get(creatorSelectionKey(selection))?.notes ?? null,
-    }));
+    .map((selection) => {
+      const existing = authorDefaults.get(creatorSelectionKey(selection));
+      return {
+        selection,
+        roleKey: "author" as const,
+        roleLabel: existing ? existing.roleLabel : admin ? null : "作者",
+        notes: existing?.notes ?? null,
+      };
+    });
   return {
     game: {
       originalTitle: form.originalTitle.trim(),
@@ -1450,6 +1528,7 @@ function buildMetadata(
       },
     },
     target: { mode: targetWorkId ? "update" : "create", workId: targetWorkId },
+    ...(admin ? { admin } : {}),
     archiveVersion: {
       sourceName: null,
       sourceUrl: cleanNullable(form.archiveSourceUrl),
@@ -1575,12 +1654,13 @@ async function submitExternalWork(
   return { workId: payload.workId, translators: payload.translators };
 }
 
-async function submitOwnedWork(
+async function submitEditedWork(
   workId: number,
   distribution: "archive" | "external",
   form: FlatMetadata,
   images: ImageSelections,
   faceSheets: PreparedCharacterFaceSheets,
+  admin?: AdminEditSubmission,
 ): Promise<ConfirmedCreatorSelection[]> {
   const body = new FormData();
   body.set("more_info", JSON.stringify(normalizeWorkMoreInfo(form.moreInfo)));
@@ -1618,6 +1698,22 @@ async function submitOwnedWork(
     "download_url",
     distribution === "external" ? form.externalDownloadUrl.trim() : "",
   );
+  if (admin) {
+    body.set("work_id", String(workId));
+    body.set("status", admin.settings.status);
+    body.set("archive_source_url", distribution === "archive" ? form.archiveSourceUrl.trim() : "");
+    body.set("cover_blob_sha256", admin.initialWork.coverBlobSha256);
+    body.set("preview_blob_sha256s", admin.initialWork.previewBlobSha256s.join("\n"));
+    body.set("work_staff", JSON.stringify(buildMetadata(form, {
+      coverBlobSha256: admin.initialWork.coverBlobSha256,
+      previewBlobSha256s: admin.initialWork.previewBlobSha256s,
+    }, faceSheets.hashesByIndex, workId, admin.associationDefaults, admin.settings).workStaff));
+    const links = [...admin.settings.externalLinks];
+    if (distribution === "external" && form.externalDownloadUrl.trim()) {
+      links.push({ label: admin.downloadLink?.label ?? "外部下载", url: form.externalDownloadUrl.trim(), linkType: "download_page" });
+    }
+    body.set("external_links", serializeExternalLinks(links));
+  }
   if (images.cover) body.set("cover", images.cover);
   if (images.replacePreviews) {
     body.set("replace_previews", "1");
@@ -1627,10 +1723,11 @@ async function submitOwnedWork(
   for (const faceSheet of faceSheets.blobs) {
     body.append("character_face_sheets[]", faceSheet.file);
   }
-  const response = await fetch(`/api/works/${workId}/owned`, {
+  const response = await fetch(admin ? `/api/admin/works/${workId}/update` : `/api/works/${workId}/owned`, {
     method: "POST",
     body,
     credentials: "same-origin",
+    headers: { Accept: "application/json" },
   });
   const payload = (await response.json().catch(() => null)) as {
     ok?: boolean;

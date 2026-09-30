@@ -1,4 +1,5 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
+import { getWorkTranslators } from "@/app/.server/db/creators";
 import {
   getWorkForAdminEdit,
   parseWorkEditForm,
@@ -6,6 +7,11 @@ import {
 } from "@/app/.server/db/game-library";
 import { redirectResponse } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
+import {
+  ensureCharacterFaceSheets,
+  readCharacterFaceSheet,
+  storeCharacterFaceSheets,
+} from "@/app/.server/storage/character-portraits";
 import { readWorkImage, storeWorkImages, storeWorkPreviews } from "@/app/.server/storage/work-images";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError, json, jsonError } from "@/lib/http";
@@ -47,6 +53,10 @@ export async function POST(
       (current.status === "deleted" || (input.status && input.status !== current.status))) {
       throw new HttpError(403, "没有调整作品状态的权限");
     }
+    const characterFaceSheets = formData
+      .getAll("character_face_sheets[]")
+      .filter((value): value is File => value instanceof File && value.size > 0)
+      .map((value) => readCharacterFaceSheet(value));
     const coverFile = formData.get("cover");
     if (coverFile instanceof File && coverFile.size > 0) {
       input.coverBlobSha256 = (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0];
@@ -54,6 +64,15 @@ export async function POST(
     if (formData.has("replace_previews")) {
       input.previewBlobSha256s = await storeWorkPreviews(runtime, formData, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256));
     }
+    await storeCharacterFaceSheets(runtime, characterFaceSheets);
+    await ensureCharacterFaceSheets(
+      runtime,
+      input.characters.flatMap((credit) => [
+        ...credit.faceSheetBlobSha256s,
+        ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+      ]),
+      auth.user.id,
+    );
 
     await updateWorkForAdmin(runtime, input, auth.user);
 
@@ -63,6 +82,7 @@ export async function POST(
       return json({
         ok: true,
         work,
+        translators: await getWorkTranslators(runtime, workId),
       });
     }
 

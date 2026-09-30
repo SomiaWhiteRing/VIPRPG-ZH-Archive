@@ -126,6 +126,7 @@ export type ForumFloor = ForumContent & {
 export type ForumDetail = {
   topic: ForumTopic;
   posts: ForumPage<ForumFloor>;
+  onlyAuthor: boolean;
   floor: number | null;
   comment: number | null;
 };

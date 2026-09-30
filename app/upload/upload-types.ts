@@ -55,6 +55,8 @@ export type UploadFormDraft = {
   characterFaceSheetFiles: Record<number, File[]>;
   sourceFaceSheetFiles?: File[];
   sourceFaceSheetWarnings?: string[];
+  adminSettings?: ArchiveCommitMetadata["admin"];
+  coverBlobSha256?: string;
 };
 
 export type UploadTaskStatus =

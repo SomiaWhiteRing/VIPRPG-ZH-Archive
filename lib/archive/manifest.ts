@@ -123,6 +123,11 @@ export type ArchiveCommitMetadata = {
     mode: "create" | "update";
     workId: number | null;
   };
+  // Optional console settings, validated separately from the public manifest.
+  admin?: {
+    status: "published" | "hidden" | "deleted";
+    externalLinks: Array<{ label: string; url: string; linkType: string }>;
+  };
   archiveVersion: {
     sourceName: string | null;
     sourceUrl: string | null;

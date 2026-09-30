@@ -163,6 +163,15 @@ export type AdminWorkEdit = {
   translations: GameTranslationRelation[];
   parallelTranslations: GameTranslationRelation[];
   externalLinks: GameExternalLink[];
+  currentArchive: {
+    id: number;
+    sourceName: string;
+    sourceFileCount: number;
+    sourceSizeBytes: number;
+    publishedAt: string | null;
+    sourceUrl: string | null;
+    usesSharedPlayer: boolean;
+  } | null;
 };
 
 export type AdminArchiveVersionEdit = {
@@ -224,15 +233,6 @@ export type UploaderWorkEdit = AdminWorkEdit & {
   distribution: "archive" | "external";
   externalDownloadUrl: string | null;
   hasCurrentArchive: boolean;
-  currentArchive: {
-    id: number;
-    sourceName: string;
-    sourceFileCount: number;
-    sourceSizeBytes: number;
-    publishedAt: string | null;
-    sourceUrl: string | null;
-    usesSharedPlayer: boolean;
-  } | null;
 };
 
 export type UploaderWorkUpdateInput = {

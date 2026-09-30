@@ -1,28 +1,21 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
-import { Textarea } from "@/app/components/ui/textarea";
 import type { GameExternalLink } from "@/lib/dto/db/game-library";
-import { useState } from "react";
+
+type ExternalLink = Pick<GameExternalLink, "label" | "url" | "linkType">;
 
 export function ExternalLinkList({
-  initialValues,
+  values,
+  onChange,
 }: {
-  initialValues: GameExternalLink[];
+  values: ExternalLink[];
+  onChange: (values: ExternalLink[]) => void;
 }) {
-  const empty = { id: 0, label: "", url: "", linkType: "other" };
-  const [values, setValues] = useState(
-    initialValues.length ? initialValues : [empty],
-  );
-  const serialized = values
-    .filter((item) => item.label || item.url)
-    .map((item) =>
-      [item.label, item.url, item.linkType].map(escapePart).join("|"),
-    )
-    .join("\n");
-  function update(index: number, value: Partial<GameExternalLink>) {
-    setValues((current) =>
-      current.map((item, itemIndex) =>
+  const empty = { label: "", url: "", linkType: "other" };
+  function update(index: number, value: Partial<ExternalLink>) {
+    onChange(
+      values.map((item, itemIndex) =>
         itemIndex === index ? { ...item, ...value } : item,
       ),
     );
@@ -30,12 +23,6 @@ export function ExternalLinkList({
   return (
     <fieldset className="grid gap-3 rounded-md border border-border p-3">
       <legend className="px-1 text-sm font-semibold">外部链接</legend>
-      <Textarea
-        className="hidden"
-        name="external_links"
-        readOnly
-        value={serialized}
-      />
       {values.map((link, index) => (
         <div
           className="grid gap-2 border-b border-border pb-3 last:border-0 last:pb-0 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_160px_auto]"
@@ -63,14 +50,13 @@ export function ExternalLinkList({
               { value: "wiki", label: "Wiki" },
               { value: "source", label: "来源" },
               { value: "video", label: "视频" },
-              { value: "download_page", label: "下载页" },
               { value: "other", label: "其他" },
             ]}
           />
           <Button
             onClick={() =>
-              setValues((current) =>
-                current.filter((_, itemIndex) => itemIndex !== index),
+              onChange(
+                values.filter((_, itemIndex) => itemIndex !== index),
               )
             }
             type="button"
@@ -83,7 +69,7 @@ export function ExternalLinkList({
       <Button
         className="w-fit"
         onClick={() =>
-          setValues((current) => [...current, { ...empty, id: current.length }])
+          onChange([...values, empty])
         }
         size="sm"
         type="button"
@@ -93,6 +79,12 @@ export function ExternalLinkList({
       </Button>
     </fieldset>
   );
+}
+
+export function serializeExternalLinks(values: ExternalLink[]): string {
+  return values.filter((item) => item.label || item.url)
+    .map((item) => [item.label, item.url, item.linkType].map(escapePart).join("|"))
+    .join("\n");
 }
 
 function escapePart(value: string): string {
