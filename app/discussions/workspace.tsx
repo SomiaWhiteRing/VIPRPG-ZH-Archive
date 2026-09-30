@@ -10,6 +10,7 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
+import type { loader as rootLoader } from "@/app/root";
 import type {
   ForumContent,
   ForumDetail,
@@ -42,6 +43,7 @@ import {
   useNavigate,
   useNavigationType,
   useRevalidator,
+  useRouteLoaderData,
 } from "react-router";
 import type { ForumDialogAction, ForumMenuItem } from "./actions";
 import { ForumActionDialog, ForumMenu } from "./actions";
@@ -139,6 +141,8 @@ export function DiscussionWorkspace({
   returnTo,
   initialReply,
 }: Props) {
+  const root = useRouteLoaderData<typeof rootLoader>("root");
+  const hideDeletedContent = root?.session?.preferences.hideDeletedContent ?? false;
   const location = useLocation();
   const toast = useToast();
   const navigationType = useNavigationType();
@@ -156,6 +160,7 @@ export function DiscussionWorkspace({
     [error, setError] = useState(""),
     [requestError, setRequestError] = useState<ForumRequestError | null>(null);
   const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
+  const visiblePosts = detail?.posts.items.filter((post) => !hideDeletedContent || post.state !== "deleted") ?? [];
   useBeforeUnload(useCallback((event) => {
     if (!dirty && !busy) return;
     event.preventDefault();
@@ -911,7 +916,7 @@ export function DiscussionWorkspace({
           </header>
           {detail.posts.page > 1 ? topicPagination : null}
           <section aria-label="帖子流">
-            {detail.posts.items.map((post, index) => (
+            {visiblePosts.map((post, index) => (
               <Fragment key={post.id}>
                 <ForumFloorView
                   key={post.id}
@@ -919,6 +924,7 @@ export function DiscussionWorkspace({
                   topic={detail.topic}
                   emojis={currentEmojis}
                   viewer={viewer}
+                  hideDeletedContent={hideDeletedContent}
                   page={detail.posts.page}
                   onlyAuthor={detail.onlyAuthor}
                   authorFilter={post.postNumber === 1 ? authorFilter : null}
@@ -944,7 +950,7 @@ export function DiscussionWorkspace({
                 {index === 0 ? replyBar : null}
               </Fragment>
             ))}
-            {!detail.posts.items.length ? replyBar : null}
+            {!visiblePosts.length ? replyBar : null}
           </section>
           <div ref={bottomPaginationRef} className="flow-root">
             {topicPagination}
@@ -1163,6 +1169,7 @@ function ForumFloorView({
   topic,
   viewer,
   page,
+  hideDeletedContent,
   onlyAuthor,
   authorFilter,
   returnTo,
@@ -1177,6 +1184,7 @@ function ForumFloorView({
   topic: ForumTopic;
   viewer: ForumViewer;
   page: number;
+  hideDeletedContent: boolean;
   onlyAuthor: boolean;
   authorFilter: React.ReactNode;
   returnTo?: string;
@@ -1282,7 +1290,8 @@ function ForumFloorView({
       setLiking(false);
     }
   }
-  const visibleComments = expanded ? comments.items : preview;
+  const visibleComments = (expanded ? comments.items : preview)
+    .filter((comment) => !hideDeletedContent || comment.state !== "deleted");
   return (
     <article
       className="scroll-mt-24 border-b border-border py-6 focus-visible:outline focus-visible:outline-primary target:bg-primary/5 md:flex md:gap-6"
@@ -1398,7 +1407,7 @@ function ForumFloorView({
             <ForumMenu items={menu(post)} />
           </div>
         </div>
-        {post.postNumber > 1 && post.commentsAvailable && (post.comments.total > 0 || editor) ? (
+        {post.postNumber > 1 && post.commentsAvailable && (visibleComments.length > 0 || post.comments.total > FORUM_PREVIEW_SIZE || editor) ? (
           <section
             id={`floor-comments-${post.id}`}
             aria-label={`#${post.postNumber}的回复`}

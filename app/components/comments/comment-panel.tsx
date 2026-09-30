@@ -8,6 +8,7 @@ import { CommentImages } from "./images";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
 
 import type { CommentTarget } from "@/app/.server/db/work-community";
+import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -21,7 +22,7 @@ import type {
 } from "@/lib/dto/db/work-community";
 import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 
 
 type Props = {
@@ -34,10 +35,12 @@ type Props = {
 };
 
 export function CommentPanel(props: Props) {
+  const root = useRouteLoaderData<typeof rootLoader>("root");
   return (
     <CommentPanelContent
       key={`${props.target.kind}:${props.target.id}:${props.currentUserId}`}
       {...props}
+      hideDeletedContent={root?.session?.preferences.hideDeletedContent ?? false}
     />
   );
 }
@@ -49,7 +52,8 @@ function CommentPanelContent({
   currentUserId,
   initialComments,
   initialNextCursor,
-}: Props) {
+  hideDeletedContent,
+}: Props & { hideDeletedContent: boolean }) {
   const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
@@ -199,6 +203,9 @@ function CommentPanelContent({
     ));
     setNewReplies((current) => ({ ...current, [rootId]: reply }));
   }
+  const visibleComments = comments.filter((comment) =>
+    !hideDeletedContent || (commentUpdates[comment.id]?.status ?? comment.status) !== "deleted",
+  );
 
   return (
     <div className="@container/comments grid gap-4" id="comments">
@@ -211,13 +218,14 @@ function CommentPanelContent({
       )}
 
       <div className="grid">
-        {comments.length ? (
-          comments.map((comment) => (
+        {visibleComments.length ? (
+          visibleComments.map((comment) => (
             <CommentCard
               comment={comment}
               pinControl={canPin ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
               commentUpdates={commentUpdates}
               currentUserId={currentUserId}
+              hideDeletedContent={hideDeletedContent}
               newReply={newReplies[comment.id] ?? null}
               key={comment.id}
               onDelete={removeComment}
@@ -235,7 +243,7 @@ function CommentPanelContent({
             />
           ))
         ) : (
-          <EmptyState title="还没有评论。" variant="plain" />
+          <EmptyState title={comments.length ? "没有可显示的评论。" : "还没有评论。"} variant="plain" />
         )}
       </div>
       {nextCursor ? (
@@ -265,6 +273,7 @@ function CommentCard({
   commentUpdates,
   currentUserId,
   newReply,
+  hideDeletedContent,
   endpoint,
   onReplyCreated,
   onLike,
@@ -275,6 +284,7 @@ function CommentCard({
   pinControl: React.ReactNode;
   commentUpdates: Record<number, Partial<CommentDto>>;
   currentUserId: number | null;
+  hideDeletedContent: boolean;
   newReply: CommentDto | null;
   endpoint: string;
   onReplyCreated: (rootId: number, reply: CommentDto) => void;
@@ -360,7 +370,8 @@ function CommentCard({
   }, [focusedReplyId, replies]);
 
   const preview = replies?.preview ?? comment.replyPreview ?? [];
-  const visibleReplies = expanded && replies ? replies.items : preview;
+  const visibleReplies = (expanded && replies ? replies.items : preview)
+    .filter((reply) => !hideDeletedContent || (commentUpdates[reply.id]?.status ?? reply.status) !== "deleted");
   const replyCount = replies?.total ?? comment.replyCount ?? 0;
   const currentComment = { ...comment, ...commentUpdates[comment.id] };
 
@@ -406,7 +417,7 @@ function CommentCard({
           {currentComment.status === "published" ? pinControl : null}
         </div>
         {editEditor(currentComment)}
-        {replyCount > 0 || loading || error || replyTarget ? (
+        {visibleReplies.length > 0 || replyCount > COMMENT_REPLY_PREVIEW_SIZE || loading || error || replyTarget ? (
           <section
             aria-label={`${comment.floorNumber} 楼的回复`}
             aria-busy={loading}
