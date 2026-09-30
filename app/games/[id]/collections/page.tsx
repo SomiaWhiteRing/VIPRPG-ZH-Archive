@@ -17,6 +17,10 @@ import { formatDate, formatExactTimestamp, parseTimestamp } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { useWorkFavorite } from "@/app/components/work/use-work-favorite";
+import { requestJson } from "@/lib/ui/api-response";
+import { useEffect, useState } from "react";
+import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -39,7 +43,22 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   }, error);
 
 export default function WorkCollectionsPage() {
-  const { work, sidebar, collections } = useLoaderData<typeof loader>();
+  const { work, sidebar, collections: initialCollections } = useLoaderData<typeof loader>();
+  const favorite = useWorkFavorite(sidebar.community);
+  const [snapshot, setSnapshot] = useState({ source: initialCollections, collections: initialCollections });
+  const collections = snapshot.source === initialCollections ? snapshot.collections : initialCollections;
+  useEffect(() => {
+    const title = pageMetaDescriptors({ title: [work.chineseTitle || work.originalTitle, "收藏与吐槽"], page: collections.page })
+      .find((descriptor) => "title" in descriptor);
+    if (title && "title" in title && typeof title.title === "string") document.title = title.title;
+  }, [work.chineseTitle, work.originalTitle, collections.page]);
+  async function onFavoriteSaved(update: WorkFavoriteUpdate) {
+    favorite.onSaved(update);
+    const result = await requestJson<{ ok: true; collections: typeof collections }>(
+      `/api/works/${work.id}/collections?page=${collections.page}`, {}, "收藏列表加载失败",
+    );
+    setSnapshot({ source: initialCollections, collections: result.collections });
+  }
   const current = work.archiveVersions[0] ?? null;
   return (
     <DetailPageShell key={`${work.id}:${sidebar.currentUser?.id ?? "anonymous"}`}>
@@ -58,7 +77,7 @@ export default function WorkCollectionsPage() {
       />
       <DetailPageLayout
         sidebarLabel="作品操作与资料"
-        sidebar={<WorkOverviewSidebar work={work} data={sidebar} />}
+        sidebar={<WorkOverviewSidebar work={work} data={{ ...sidebar, community: favorite.community }} onFavoriteSaved={onFavoriteSaved} />}
         main={
           <section aria-labelledby="collections-title" className="py-4.5">
             {collections.items.length ? (

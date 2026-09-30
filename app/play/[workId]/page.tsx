@@ -16,6 +16,7 @@ import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
+import { useWorkFavorite } from "@/app/components/work/use-work-favorite";
 import {
   WorkPageHeader,
   WorkPageNotice,
@@ -120,8 +121,10 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function WebPlayPage() {
-  const { record, currentUser, work, community, comments, current, metadata } =
+  const { record, currentUser, work, community: initialCommunity, comments, current, metadata } =
     useLoaderData<typeof loader>();
+  const favorite = useWorkFavorite(initialCommunity);
+  const { community } = favorite;
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   if (native) return <DetailPageShell>
     <WorkPageHeader chineseTitle={work.chineseTitle} originalTitle={work.originalTitle}
@@ -164,6 +167,8 @@ export default function WebPlayPage() {
         }
         engagement={
           <WorkFavoriteButton
+            summary="counts"
+            onSaved={favorite.onSaved}
             currentUserId={currentUser?.id ?? null}
             initialFavorited={community.favoritedByMe}
             workId={work.id}

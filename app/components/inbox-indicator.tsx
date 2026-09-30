@@ -11,7 +11,9 @@ export function InboxIndicator({
   children: (unread: number) => ReactNode;
 }) {
   const pathname = useLocation().pathname;
-  const query = useSearchParams()[0].toString();
+  const navigationParams = new URLSearchParams(useSearchParams()[0]);
+  if (pathname === "/me/permissions") navigationParams.delete("role");
+  const query = navigationParams.toString();
   const [snapshot, setSnapshot] = useState({
     initial: initialUnread,
     unread: initialUnread,

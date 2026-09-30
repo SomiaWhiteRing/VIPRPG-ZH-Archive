@@ -13,7 +13,7 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate, formatNumber } from "@/lib/format";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { CatalogSummaryEditor } from "../catalog-manager";
@@ -67,13 +67,20 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function CatalogPage() {
   const {
-    catalog,
+    catalog: initialCatalog,
     currentUser,
     otherCatalogs,
     canEditSummary,
     canDelete,
     canEditItems,
   } = useLoaderData<typeof loader>();
+  const [snapshot, setSnapshot] = useState({ source: initialCatalog, catalog: initialCatalog });
+  const catalog = snapshot.source === initialCatalog ? snapshot.catalog : initialCatalog;
+  const updateCatalog = (next: typeof catalog) => setSnapshot({ source: initialCatalog, catalog: next });
+  useEffect(() => {
+    const title = pageMetaDescriptors({ title: catalog.title }).find((descriptor) => "title" in descriptor);
+    if (title && "title" in title && typeof title.title === "string") document.title = title.title;
+  }, [catalog.title]);
   return (
     <main
       key={`${catalog.id}:${currentUser?.id ?? "anonymous"}`}
@@ -140,6 +147,7 @@ export default function CatalogPage() {
                     canDelete={canDelete}
                     canEdit={canEditSummary}
                     catalog={catalog}
+                    onSaved={updateCatalog}
                   />
                 </div>
               ) : null}
@@ -150,6 +158,7 @@ export default function CatalogPage() {
             canEdit={canEditItems}
             catalogId={catalog.id}
             items={catalog.items}
+            onSaved={updateCatalog}
           />
         </div>
 

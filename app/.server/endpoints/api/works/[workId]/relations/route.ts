@@ -1,8 +1,25 @@
 import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import { createWorkRelation } from "@/app/.server/db/relations";
+import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
+import { getGameWorkRelations } from "@/app/.server/db/game-library";
+import { requireUser } from "@/app/.server/auth/guards";
+import { hasPermission } from "@/lib/authz/permissions";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError, json, jsonError } from "@/lib/http";
+
+export async function GET(runtime: AppRuntime, request: Request, context: { params: { workId: string } }) {
+  const auth = await requireUser(runtime, request);
+  if ("response" in auth) return auth.response;
+  try {
+    const workId = parsePositiveId(context.params.workId, "work id");
+    const work = await getGameWorkRelations(runtime, workId, hasPermission(auth.user, "work.metadata.update_any"));
+    if (!work) throw new HttpError(404, "作品不存在");
+    return json({ ok: true, work, capabilities: await getWorkRelationEditorCapabilities(runtime, workId, auth.user) });
+  } catch (error) {
+    return jsonError("作品关联加载失败", error);
+  }
+}
 
 export async function POST(
   runtime: AppRuntime,

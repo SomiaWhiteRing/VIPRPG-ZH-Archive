@@ -16,6 +16,7 @@ import { cn } from "@/lib/ui/cn";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { useState, useTransition, type FormEvent } from "react";
 import { Link, useLoaderData, useRevalidator, useSearchParams, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);

@@ -9,6 +9,7 @@ import { AccountPageHeader } from "@/app/me/account-page-header";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { useRouteRefresh } from "@/app/components/use-route-refresh";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -33,11 +34,11 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: "我的收藏", page: loaderData?.page }, error);
 
 export default function FavoritesPage() {
-  const data = useLoaderData<typeof loader>();
+  const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
   return (
     <div>
       <AccountPageHeader title="收藏" subtitle={data.unavailable.total > 0 ? `${data.total} 部可访问作品，${data.unavailable.total} 部暂不可访问` : `共 ${data.total} 部作品`} />
-      <FavoriteLibrary data={data} currentUserId={data.currentUserId} unavailableCount={data.unavailable.total} />
+      <FavoriteLibrary data={data} currentUserId={data.currentUserId} unavailableCount={data.unavailable.total} onSaved={refresh} />
       {data.unavailable.total > 0 ? (
         <section className="mt-6" aria-labelledby="unavailable-favorites-title">
           <h2 id="unavailable-favorites-title" className="text-lg font-semibold">暂不可访问的收藏（{data.unavailable.total}）</h2>
@@ -46,7 +47,7 @@ export default function FavoritesPage() {
             {data.unavailable.items.map(({ workId }) => (
               <li key={workId} className="flex items-center justify-between gap-3">
                 <span>暂不可访问的作品 #{workId}</span>
-                <WorkFavoriteButton appearance="remove" currentUserId={data.currentUserId} initialFavorited workId={workId} workTitle={`暂不可访问的作品 #${workId}`} />
+                <WorkFavoriteButton onSaved={refresh} appearance="remove" currentUserId={data.currentUserId} initialFavorited workId={workId} workTitle={`暂不可访问的作品 #${workId}`} />
               </li>
             ))}
           </ul>

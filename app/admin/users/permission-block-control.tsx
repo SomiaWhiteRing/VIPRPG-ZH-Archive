@@ -1,5 +1,5 @@
-import { useState, useTransition } from "react";
-import { useRevalidator } from "react-router";
+import { useState } from "react";
+import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -13,16 +13,21 @@ export function PermissionBlockControl({
   displayName,
   blockedKeys,
   grantedKeys,
+  onSaved,
+  disabled = false,
+  onBusyChange,
 }: {
   userId: number;
   displayName: string;
   blockedKeys: PermissionKey[];
   grantedKeys: PermissionKey[];
+  onSaved: (access: AdminUserAccessUpdate) => Promise<void>;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [selected, setSelected] = useState("");
   const [saving, setSaving] = useState(false);
-  const [refreshing, startTransition] = useTransition();
-  const revalidator = useRevalidator();
+  const busy = saving || disabled;
   const toast = useToast();
   const available = PERMISSION_LIST.filter((permission) => !blockedKeys.includes(permission.key));
   const selectedKey = available.find((permission) => permission.key === selected)?.key
@@ -30,29 +35,32 @@ export function PermissionBlockControl({
     ?? available[0]?.key;
 
   async function update(permissionKey: PermissionKey, blocked: boolean) {
+    if (busy) return;
     setSaving(true);
+    onBusyChange(true);
     try {
       const response = await fetch(`/api/admin/users/${userId}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissionKey, blocked }),
       });
-      const payload = await response.json() as { ok?: boolean; detail?: string; error?: string };
+      const payload = await response.json() as { ok?: boolean; detail?: string; error?: string; access: AdminUserAccessUpdate };
       if (!response.ok || !payload.ok)
         throw new Error(payload.detail ?? payload.error ?? "权限设置失败");
-      startTransition(() => revalidator.revalidate());
+      await onSaved(payload.access);
       toast.success(blocked ? "已为此用户禁用该权限。" : "已取消单独禁用，按角色授权生效。");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "权限设置失败");
     } finally {
       setSaving(false);
+      onBusyChange(false);
     }
   }
 
   return (
     <Dialog.Root>
       <Dialog.Trigger asChild>
-        <Button type="button" size="sm" variant="outline">单独禁用权限</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy}>单独禁用权限</Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay />
@@ -71,7 +79,7 @@ export function PermissionBlockControl({
               {blockedKeys.map((key) => (
                 <li key={key} className="flex items-center justify-between gap-3 text-sm">
                   <span>{PERMISSIONS[key].label}</span>
-                  <Button type="button" size="sm" variant="outline" disabled={saving || refreshing} onClick={() => update(key, false)}>恢复</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => update(key, false)}>恢复</Button>
                 </li>
               ))}
             </ul>
@@ -83,10 +91,10 @@ export function PermissionBlockControl({
                 className="min-w-0 flex-1"
                 value={selectedKey}
                 onValueChange={setSelected}
-                disabled={saving || refreshing}
+                disabled={busy}
                 options={available.map((permission) => ({ value: permission.key, label: permission.label }))}
               />
-              <Button type="button" variant="destructive" disabled={saving || refreshing} onClick={() => update(selectedKey, true)}>禁用</Button>
+              <Button type="button" variant="destructive" disabled={busy} onClick={() => update(selectedKey, true)}>禁用</Button>
             </div>
           ) : null}
         </Dialog.Content>

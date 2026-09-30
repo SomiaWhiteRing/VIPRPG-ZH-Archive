@@ -380,17 +380,23 @@ export function DiscussionWorkspace({
     try {
       const params = new URLSearchParams(location.search);
       if (removed) {
+        const parent = detail.posts.items.find((post) =>
+          removed.kind === "comment"
+            ? [...post.comments.items, ...post.commentPreview].some((comment) => comment.id === removed.id)
+            : post.id === removed.id,
+        );
+        removalFocus.current = { targetId: parent ? `post-${parent.postNumber}` : null };
         params.delete("comment");
         if (removed.kind !== "comment" && hidden) {
           params.delete("floor");
           params.delete("commentPage");
         }
         const href = location.pathname + (params.size ? `?${params}` : "");
-        localNavigation.current = {
-          href: normalizedLocation(href),
-          targetId: null,
-        };
-        await navigateAccepted(href, { replace: true, preventScrollReset: true });
+        if (href !== location.pathname + location.search) {
+          localNavigation.current = { href: normalizedLocation(href), targetId: null };
+          await navigateAccepted(href, { replace: true, preventScrollReset: true });
+          return;
+        }
       }
       const result = await forumRequest<{
         detail: ForumDetail;
@@ -406,18 +412,6 @@ export function DiscussionWorkspace({
           comment: params.get("comment"),
         }),
       );
-      if (removed) {
-        const parent = detail.posts.items.find((post) =>
-          removed.kind === "comment"
-            ? [...post.comments.items, ...post.commentPreview].some(
-                (comment) => comment.id === removed.id,
-              )
-            : post.id === removed.id,
-        );
-        removalFocus.current = {
-          targetId: parent ? `post-${parent.postNumber}` : null,
-        };
-      }
       setCurrentEmojis(result.emojis);
       setDetail(result.detail);
     } catch (e) {
@@ -456,13 +450,13 @@ export function DiscussionWorkspace({
       ),
     );
   }
-  async function edit(content: ForumContent) {
+  async function edit(content: ForumContent | ForumTarget) {
     if (busy) return;
     const sequence = ++restoreSequence.current;
     trigger.current = document.activeElement as HTMLElement;
     try {
       const target: ForumTarget =
-        content.kind === "post" && content.postNumber === 1
+        "postNumber" in content && content.kind === "post" && content.postNumber === 1
           ? { kind: "topic", id: content.topicId }
           : { kind: content.kind, id: content.id };
       const result = await readForumEditVersion(target);
@@ -471,8 +465,8 @@ export function DiscussionWorkspace({
         editorId: crypto.randomUUID(),
         mode: target.kind,
         target,
-        postId: content.postId,
-        postNumber: content.postNumber,
+        postId: "postId" in content ? content.postId : undefined,
+        postNumber: "postNumber" in content ? content.postNumber : undefined,
         title: result.topic.title,
         body: result.body,
         images: existingDraftImages(result.images),
@@ -556,12 +550,16 @@ export function DiscussionWorkspace({
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
       if (detail?.topic.id === result.topicId) {
-        await navigateAccepted(
-          destination.pathname + destination.search + destination.hash,
-          { preventScrollReset: true },
-        );
-        // Hash-only navigation does not reload data after an edit or reply.
-        await revalidator.revalidate();
+        const href = destination.pathname + destination.search + destination.hash;
+        if (destination.pathname + destination.search !== location.pathname + location.search) {
+          await navigateAccepted(href, { preventScrollReset: true });
+        } else {
+          // An unchanged data URL needs only topic data, including for hash-only navigation.
+          if (destination.hash === location.hash) handledNavigation.current = null;
+          await refreshDetail();
+          if (destination.hash !== location.hash)
+            await navigateAccepted(href, { preventScrollReset: true });
+        }
       } else {
         navigate(destination.pathname + destination.search + destination.hash);
       }
@@ -644,16 +642,7 @@ export function DiscussionWorkspace({
           ? [
               {
                 label: "编辑主题",
-                run: () => {
-                  void forumRequest<{ detail: ForumDetail }>(
-                    forumHref("/api/discussions", {
-                      op: "detail",
-                      topicId: topic.id,
-                    }),
-                  )
-                    .then((r) => edit(r.detail.posts.items[0]))
-                    .catch((e) => toast.error(e.message));
-                },
+                run: () => void edit({ kind: "topic", id: topic.id }),
               },
             ]
           : []),
@@ -1161,7 +1150,7 @@ export function DiscussionWorkspace({
                 ? "已提交，处理结果不会公开显示。"
                 : "操作已保存。",
             );
-            void refreshDetail(
+            if (action.kind !== "report") void refreshDetail(
               action.kind === "delete" || action.action === "hide"
                 ? action.target
                 : undefined,

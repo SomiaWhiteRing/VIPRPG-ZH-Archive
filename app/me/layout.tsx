@@ -9,6 +9,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useMatch } from "react-router";
 import { AccountNavigation } from "./account-navigation";
 import type { AccountOutletContext } from "./mobile-account-navigation";
+export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);

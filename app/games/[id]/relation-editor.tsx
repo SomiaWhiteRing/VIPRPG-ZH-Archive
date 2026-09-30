@@ -27,7 +27,9 @@ import {
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
-import { useRevalidator } from "react-router";
+import { requestJson } from "@/lib/ui/api-response";
+import type { getGameWorkRelations } from "@/app/.server/db/game-library";
+import type { RelationEditorCapabilities } from "@/lib/authz/permissions";
 
 type Candidate = WorkListItemData & {
   id: number;
@@ -50,11 +52,12 @@ type RelationEditorProps = {
   canUpdate: boolean;
   canDeleteRelation: boolean;
   canDeleteTranslation: boolean;
+  onSaved: () => Promise<void>;
 };
 
 type RelationCreateFormProps = Pick<
   RelationEditorProps,
-  "workId" | "language" | "canCreateRelation" | "canCreateTranslation"
+  "workId" | "language" | "canCreateRelation" | "canCreateTranslation" | "onSaved"
 > & { excludedWorkIds: number[] };
 
 type PendingRemoval = {
@@ -66,27 +69,39 @@ type PendingRemoval = {
 const menuItemClass =
   "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
-export function RelationEditor(props: RelationEditorProps) {
-  const showCreate = props.canCreateRelation || props.canCreateTranslation;
+export function RelationEditor(props: Omit<RelationEditorProps, "onSaved">) {
+  const [snapshot, setSnapshot] = useState({ source: props.relations, value: props });
+  const sequence = useRef(0);
+  const data = snapshot.source === props.relations ? snapshot.value : props;
+  const showCreate = data.canCreateRelation || data.canCreateTranslation;
+  async function refresh() {
+    const current = ++sequence.current;
+    const result = await requestJson<{
+      ok: true; work: NonNullable<Awaited<ReturnType<typeof getGameWorkRelations>>>; capabilities: RelationEditorCapabilities;
+    }>(`/api/works/${props.workId}/relations`, {}, "作品关联加载失败");
+    if (current === sequence.current)
+      setSnapshot({ source: props.relations, value: { ...props, ...result.work, ...result.capabilities } });
+  }
 
   return (
     <div className="grid gap-5 border-t border-border pt-5">
       {showCreate ? (
         <div className="flex justify-end">
           <RelationCreateForm
-            canCreateRelation={props.canCreateRelation}
-            canCreateTranslation={props.canCreateTranslation}
-            language={props.language}
-            workId={props.workId}
+            canCreateRelation={data.canCreateRelation}
+            canCreateTranslation={data.canCreateTranslation}
+            language={data.language}
+            workId={data.workId}
+            onSaved={refresh}
             excludedWorkIds={[
-              ...props.relations,
-              ...props.translations,
-              ...props.parallelTranslations,
+              ...data.relations,
+              ...data.translations,
+              ...data.parallelTranslations,
             ].map((item) => item.workId)}
           />
         </div>
       ) : null}
-      <RelationManager {...props} />
+      <RelationManager {...data} onSaved={refresh} />
     </div>
   );
 }
@@ -97,8 +112,8 @@ export function RelationCreateForm({
   canCreateRelation,
   canCreateTranslation,
   excludedWorkIds,
+  onSaved,
 }: RelationCreateFormProps) {
-  const revalidator = useRevalidator();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -227,7 +242,7 @@ export function RelationCreateForm({
       setSearching(false);
       setSearchError("");
       toast.success("关联已建立。");
-      await revalidator.revalidate();
+      await onSaved();
     } catch {
       toast.error("网络请求失败，请检查连接后重试。");
     } finally {
@@ -369,8 +384,8 @@ export function RelationManager({
   canUpdate,
   canDeleteRelation,
   canDeleteTranslation,
+  onSaved,
 }: RelationEditorProps) {
-  const revalidator = useRevalidator();
   const toast = useToast();
   const removalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -457,7 +472,7 @@ export function RelationManager({
         return false;
       }
       toast.success(successMessage);
-      revalidator.revalidate();
+      await onSaved();
       return true;
     } catch {
       toast.error("网络请求失败，请检查连接后重试。");

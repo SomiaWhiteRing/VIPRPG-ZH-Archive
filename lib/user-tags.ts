@@ -6,6 +6,7 @@ export type UserTagSummary = { name: string; workCount: number };
 export type CombinedTagSummary = { name: string; usageCount: number };
 export type WorkTagSummary = CombinedTagSummary & { source: "public" | "user" };
 export type FavoriteDetails = { tags: string[]; note: string };
+export type WorkFavoriteUpdate = { favorited: boolean; favoriteCount?: number; tags?: WorkTagSummary[] };
 export type WorkFavorite = {
   favorited: boolean;
   tags: string[];

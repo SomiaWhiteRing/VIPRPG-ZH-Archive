@@ -2,6 +2,7 @@ import { requirePermission } from "@/app/.server/auth/authorize";
 import { assignRoleToUser } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
+import { readAdminUserAccess } from "@/app/.server/admin-user-access";
 
 export async function POST(
   runtime: AppRuntime,
@@ -30,7 +31,7 @@ export async function POST(
       roleId,
       reason: "direct_admin_assignment",
     });
-    return json({ ok: true });
+    return json({ ok: true, access: await readAdminUserAccess(runtime, auth.user, userId) });
   } catch (error) {
     return jsonError("Failed to assign role", error);
   }

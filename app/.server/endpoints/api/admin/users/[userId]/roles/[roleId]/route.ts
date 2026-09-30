@@ -2,6 +2,7 @@ import { requirePermission } from "@/app/.server/auth/authorize";
 import { removeRoleFromUser } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
+import { readAdminUserAccess } from "@/app/.server/admin-user-access";
 
 export async function DELETE(
   runtime: AppRuntime,
@@ -25,7 +26,7 @@ export async function DELETE(
       roleId,
       reason: "direct_admin_removal",
     });
-    return json({ ok: true });
+    return json({ ok: true, access: await readAdminUserAccess(runtime, auth.user, userId) });
   } catch (error) {
     return jsonError("Failed to remove role", error);
   }
