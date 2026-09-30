@@ -1357,6 +1357,7 @@ function ForumFloorView({
               >
                 <ThumbsUp
                   aria-hidden
+                  fill={liked ? "currentColor" : "none"}
                   className={liked ? "size-4 text-primary" : "size-4"}
                 />
                 <span className={liked ? "text-primary" : undefined}>
