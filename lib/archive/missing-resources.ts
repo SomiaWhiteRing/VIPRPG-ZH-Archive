@@ -1,5 +1,6 @@
 import { LcfReferenceScan, mayUseDynamicPictureName, type ResourceFile, type ReferenceObserver } from "./lcf-reference-scan";
 import type { RtpResource } from "./rtp-restore";
+import { detectSourceEngine } from "./source-engine";
 
 export type MissingResourceReport = {
   missing: { path: string; source: string }[];
@@ -41,6 +42,7 @@ export class MissingResourceScan {
   readonly rtpResources = new Map<string, RtpResource>();
   private readonly rtpReferences = new Map<string, string>();
   private readonly paths: Set<string>;
+  private readonly skipMissingForManiac: boolean;
   private readonly missing = new Map<string, { path: string; source: string }>();
   private limited = false;
   private decoders = ["utf-8", "shift_jis", "gb18030", "big5", "euc-kr", "windows-1252"]
@@ -49,6 +51,7 @@ export class MissingResourceScan {
   constructor(files: readonly ResourceFile[], ini?: Uint8Array,
     private readonly resolveRtp?: (directory: string, names: readonly string[]) => RtpResource | null) {
     this.paths = new Set(files.map((file) => normalize(file.path)));
+    this.skipMissingForManiac = detectSourceEngine(files) === "rpg_maker_2003_maniac";
     const encoding = ini && new TextDecoder().decode(ini).match(/^\s*Encoding\s*=\s*(\S+)/im)?.[1];
     if (encoding) {
       const aliases: Record<string, string> = { "932": "shift_jis", "936": "gb18030", "950": "big5",
@@ -100,12 +103,16 @@ export class MissingResourceScan {
       // Keep the diagnostic until the caller adds the fixed SHA reference.
       break;
     }
-    if (this.missing.has(key)) return;
+    // Maniac skips diagnostics, but known static RTP references still restore.
+    if (this.skipMissingForManiac || this.missing.has(key)) return;
     if (this.missing.size >= 200) { this.limited = true; return; }
     this.missing.set(key, { path, source: `${source} · ${kind}/${id}` });
   };
 
   finish(linkedRtp: ReadonlySet<string> = new Set()): MissingResourceReport {
+    if (this.skipMissingForManiac) {
+      return { missing: [], limited: false, reasons: ["检测到Maniac补丁，自动跳过缺失检测"] };
+    }
     const report = this.scanner.finish();
     return { missing: [...this.missing.entries()]
       .filter(([key]) => !linkedRtp.has(this.rtpReferences.get(key) ?? ""))

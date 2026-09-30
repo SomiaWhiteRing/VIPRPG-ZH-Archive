@@ -16,7 +16,6 @@ import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
 import { createRtpResolver } from "@/lib/archive/rtp-restore";
-import { detectSourceEngine } from "@/lib/archive/source-engine";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import type {
   ArchiveCommitMetadata,
@@ -745,10 +744,9 @@ async function scanAndHash(
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
     const references = cleanupResources ? new ResourceReferenceScan(includedFiles) : null;
     const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
-    const skipMissingForManiac = detectSourceEngine(includedFiles) === "rpg_maker_2003_maniac";
-    const missing = !skipMissingForManiac
-      ? new MissingResourceScan(includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()), createRtpResolver(includedFiles))
-      : null;
+    const missing = new MissingResourceScan(
+      includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()), createRtpResolver(includedFiles),
+    );
     missingScan = missing;
     for (let index = 0; index < includedFiles.length && (references?.needsScan || missing?.scanner.needsScan); index++) {
       const file = includedFiles[index];
@@ -773,9 +771,9 @@ async function scanAndHash(
     includedFiles = includedFiles.filter((file) => !removed.has(file.path));
     // The checkbox controls diagnostics only; automatic RTP restoration is
     // always enabled. Do not expose missing-file warnings in silent mode.
-    task = { ...task, stats: { ...task.stats, resourceCleanup, missingResources: !checkMissingResources ? null : skipMissingForManiac
-      ? { missing: [], limited: false, reasons: ["检测到Maniac补丁，自动跳过缺失检测"] }
-      : missing?.finish() ?? null } };
+    task = { ...task, stats: { ...task.stats, resourceCleanup,
+      missingResources: checkMissingResources ? missing.finish() : null,
+    } };
   }
 
   includedFiles.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
