@@ -256,29 +256,45 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   const [recent, original, random] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12 }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
-    db.prepare(
-      `SELECT ${columns}
-       FROM works w
-       LEFT JOIN archive_versions av
-         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
-       WHERE w.id IN (SELECT id FROM public_works ORDER BY RANDOM() LIMIT 4)
-       GROUP BY w.id
-       ORDER BY RANDOM()`,
-    ),
+    randomGameWorksStatement(db, columns),
   ]);
-  const allRows = [...recent.results, ...original.results, ...random.results];
-  const [playerSize, counts, plays] = await Promise.all([
-    sharedPlayerSize(runtime, allRows),
-    viewCounts(runtime, "work", allRows.map((row) => row.id)),
-    viewCounts(runtime, "play", allRows.map((row) => row.id),
-      Object.fromEntries(allRows.map((row) => [row.id, row.legacy_player_count]))),
-  ]);
-  const card = (row: CardRow) => mapCardRow(row, playerSize, counts[row.id], plays[row.id]);
+  const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results]);
+  const originalStart = recent.results.length;
+  const randomStart = originalStart + original.results.length;
   return {
-    recentWorks: recent.results.map(card),
-    recentOriginalWorks: original.results.map(card),
-    randomWorks: random.results.map(card),
+    recentWorks: cards.slice(0, originalStart),
+    recentOriginalWorks: cards.slice(originalStart, randomStart),
+    randomWorks: cards.slice(randomStart),
   };
+}
+
+export async function listRandomGameWorks(runtime: AppRuntime): Promise<GameCardSummary[]> {
+  const rows = await randomGameWorksStatement(getD1(runtime), cardColumnsSql()).all<CardRow>();
+  return hydrateCards(runtime, rows.results);
+}
+
+function randomGameWorksStatement(db: D1Database, columns: string) {
+  return db.prepare(
+    `SELECT ${columns}
+     FROM works w
+     LEFT JOIN archive_versions av
+       ON av.work_id=w.id AND av.status='published' AND av.is_current=1
+     WHERE w.id IN (SELECT id FROM public_works ORDER BY RANDOM() LIMIT 4)
+     GROUP BY w.id
+     ORDER BY RANDOM()`,
+  );
+}
+
+async function hydrateCards(runtime: AppRuntime, rows: CardRow[]): Promise<GameCardSummary[]> {
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  const [playerSize, counts, plays] = await Promise.all([
+    sharedPlayerSize(runtime, rows),
+    viewCounts(runtime, "work", ids),
+    viewCounts(runtime, "play", ids,
+      Object.fromEntries(rows.map((row) => [row.id, row.legacy_player_count]))),
+  ]);
+  return rows.map((row) => mapCardRow(row, playerSize, counts[row.id], plays[row.id]));
 }
 
 export async function getPublicGameWorkSummaries(
