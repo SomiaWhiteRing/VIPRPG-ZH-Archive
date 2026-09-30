@@ -174,6 +174,12 @@ export type AdminWorkEdit = {
   } | null;
 };
 
+export type GameCardSummary = Pick<GameWorkSummary,
+  "id" | "originalTitle" | "chineseTitle" | "originalReleaseDate" |
+  "engineFamily" | "language" | "coverBlobSha256" | "distribution" |
+  "totalSizeBytes" | "embeddedPlayerSizeBytes" | "downloadSizeBytes"
+>;
+
 export type AdminArchiveVersionEdit = {
   id: number;
   workId: number;

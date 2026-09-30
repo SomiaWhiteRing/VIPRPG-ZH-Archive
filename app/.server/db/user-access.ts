@@ -38,8 +38,6 @@ export type UserAccessRow = UserRow & {
   permission_key: string | null;
 };
 
-export type SessionUserAccessRow = UserAccessRow & { session_id: number };
-
 export type ProfileVisibilityRow = Pick<
   UserRow,
   | "profile_show_bio"
@@ -51,7 +49,7 @@ export type ProfileVisibilityRow = Pick<
   | "profile_show_discussions"
 >;
 
-export const USER_ACCESS_COLUMNS = `
+export const USER_PROFILE_COLUMNS = `
   u.id,
   u.external_auth_id,
   u.email,
@@ -72,7 +70,9 @@ export const USER_ACCESS_COLUMNS = `
   u.email_verified_at,
   u.last_login_at,
   u.created_at,
-  u.updated_at,
+  u.updated_at`;
+
+export const USER_ACCESS_COLUMNS = `${USER_PROFILE_COLUMNS},
   r.id AS role_id,
   r.key AS role_key,
   r.name AS role_name,
@@ -81,8 +81,10 @@ export const USER_ACCESS_COLUMNS = `
   rp.permission_key`;
 
 export const USER_ACCESS_JOINS = `
-  LEFT JOIN effective_user_roles ur ON ur.user_id=u.id
-  LEFT JOIN roles r ON r.id=ur.role_id AND r.status='active'
+  LEFT JOIN roles r ON r.status='active' AND (
+    (u.status='active' AND r.available_to_all=1)
+    OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=u.id AND ur.role_id=r.id)
+  )
   LEFT JOIN role_permissions rp ON rp.role_id=r.id`;
 
 export function mapUserAccessRows(rows: UserAccessRow[]): ArchiveUser[] {

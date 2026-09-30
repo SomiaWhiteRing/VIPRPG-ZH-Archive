@@ -98,10 +98,39 @@ export function CharacterPicker({
   } | null>(null);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
+  const loadedSheets = useRef(new Map<number, CharacterFaceSheet[]>());
+  const [sheetResults, setSheetResults] = useState<Record<number, CharacterFaceSheet[]>>({});
+  const [sheetErrors, setSheetErrors] = useState<Record<number, string>>({});
+  const wantedSheetIds = [...new Set(values.flatMap((credit, index) =>
+    credit.selection.kind === "existing" && (credit.portrait || index === portraitIndex)
+      ? [credit.selection.characterId] : [],
+  ))].sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    const controller = new AbortController();
+    for (const id of wantedSheetIds.split(",").filter(Boolean).map(Number)) {
+      if (loadedSheets.current.has(id)) continue;
+      void fetch(`/api/characters/${id}/face-sheets`, { signal: controller.signal })
+        .then(async (response) => {
+          const result = await response.json() as { ok: boolean; sheets?: CharacterFaceSheet[] };
+          if (!response.ok || !result.ok || !result.sheets) throw new Error("无法读取角色脸图，请重新打开后重试。");
+          if (controller.signal.aborted) return;
+          loadedSheets.current.set(id, result.sheets);
+          setSheetResults((current) => ({ ...current, [id]: result.sheets! }));
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) setSheetErrors((current) => ({
+            ...current, [id]: error instanceof Error ? error.message : "无法读取角色脸图。",
+          }));
+        });
+    }
+    return () => controller.abort();
+  }, [wantedSheetIds, portraitIndex]);
   const aliasReturnFocusRef = useRef<HTMLElement | null>(null);
   const suggestionsById = useMemo(
-    () => new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])),
-    [suggestions],
+    () => new Map(suggestions.map((suggestion) => [suggestion.id, {
+      ...suggestion, faceSheets: sheetResults[suggestion.id] ?? suggestion.faceSheets,
+    }])),
+    [suggestions, sheetResults],
   );
   const options = useMemo<CharacterOption[]>(() => {
     const queryKey = characterNameKey(query);
@@ -320,6 +349,8 @@ export function CharacterPicker({
               key={`${characterSelectionKey(activeCredit.selection)}:${portraitIndex}`}
               onConfirm={confirmPortrait}
               suggestion={activeSuggestion}
+              sheetsLoading={Boolean(activeSuggestion && !sheetResults[activeSuggestion.id] && !sheetErrors[activeSuggestion.id])}
+              sheetsError={activeSuggestion && !sheetResults[activeSuggestion.id] ? sheetErrors[activeSuggestion.id] : undefined}
             />
           ) : null}
         </Dialog.Content>
@@ -706,6 +737,8 @@ function PortraitSelectionWorkbench({
   files,
   onConfirm,
   suggestion,
+  sheetsLoading,
+  sheetsError,
 }: {
   canUpload: boolean;
   credit: CharacterCreditSelection;
@@ -713,6 +746,8 @@ function PortraitSelectionWorkbench({
   files: File[];
   onConfirm: (draft: PortraitDraft) => void;
   suggestion: CharacterSuggestion | null;
+  sheetsLoading: boolean;
+  sheetsError?: string;
 }) {
   const [draft, setDraft] = useState<PortraitDraft>(() => ({
     files,
@@ -755,8 +790,8 @@ function PortraitSelectionWorkbench({
       ? null
       : suggestion?.defaultPortrait ?? null;
   const targetHash = locateHash ?? effectivePortrait?.blobSha256;
-  const busy = disabled || uploading;
-  const readingPreviews = draft.files.length > previews.length;
+  const busy = disabled || uploading || sheetsLoading;
+  const readingPreviews = draft.files.length > previews.length || sheetsLoading;
 
   async function addFaceSheetFiles(nextFiles: File[]) {
     if (!canUpload || busy || !nextFiles.length) return;
@@ -854,9 +889,9 @@ function PortraitSelectionWorkbench({
               />
             </Label>
           ) : null}
-          {portraitError ? (
+          {portraitError || sheetsError ? (
             <p role="alert" className="w-full text-xs font-semibold text-red-700">
-              {portraitError}
+              {portraitError || sheetsError}
             </p>
           ) : null}
         </header>
@@ -911,7 +946,7 @@ function PortraitSelectionWorkbench({
           {readingPreviews ? (
             <p role="status" className="text-sm text-muted">正在读取脸图…</p>
           ) : null}
-          {!sheets.length && !draft.files.length ? (
+          {!sheets.length && !draft.files.length && !sheetsLoading && !sheetsError ? (
             <EmptyState title={canUpload ? "暂无脸图，可添加脸图素材表" : "暂无可用脸图"} variant="plain" />
           ) : null}
         </div>
@@ -983,6 +1018,9 @@ function resolvePortrait(
   suggestion: CharacterSuggestion | null,
 ): CharacterPortraitValue | null {
   if (!credit.portrait) return suggestion?.defaultPortrait ?? null;
+  if (credit.portrait.blobSha256 === suggestion?.defaultPortrait?.blobSha256) {
+    return { ...suggestion.defaultPortrait, row: credit.portrait.row, column: credit.portrait.column };
+  }
   const sheet = suggestion?.faceSheets.find(
     (item) => item.blobSha256 === credit.portrait?.blobSha256,
   );

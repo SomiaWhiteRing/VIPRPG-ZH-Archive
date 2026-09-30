@@ -11,10 +11,20 @@ import { drainViewMerges } from "./app/.server/views/service";
 
 export { ViewStats } from "./app/.server/views/durable-object";
 
-const render = createRequestHandler(
+const developmentRender = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   import.meta.env.MODE,
 );
+let productionRender: Promise<ReturnType<typeof createRequestHandler>> | undefined;
+function render(request: Request, context: RouterContextProvider) {
+  if (import.meta.env.DEV) return developmentRender(request, context);
+  // A function build asks React Router to derive its route matcher on every call.
+  // Production builds are immutable for the lifetime of this Worker isolate.
+  productionRender ??= import("virtual:react-router/server-build").then((build) =>
+    createRequestHandler(build, import.meta.env.MODE),
+  );
+  return productionRender.then((handler) => handler(request, context));
+}
 const app = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
@@ -57,7 +67,9 @@ app.all("*", async (c) => {
   context.set(runtimeContext, c.get("runtime"));
   const response = await render(c.req.raw, context);
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", "private, no-store");
+  if (c.req.path !== "/__manifest" || response.status !== 200) {
+    headers.set("Cache-Control", "private, no-store");
+  }
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

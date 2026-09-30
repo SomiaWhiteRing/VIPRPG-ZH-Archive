@@ -47,6 +47,7 @@ import type {
   ExternalWorkInput,
   GameArchiveVersionDetail,
   GameCharacter,
+  GameCardSummary,
   GameCreatorCredit,
   GameExternalLink,
   GameMediaAsset,
@@ -210,6 +211,59 @@ export async function listGameWorks(
     input,
   ).all<SummaryRow>();
   return hydrate(runtime, rows.results ?? []);
+}
+
+export async function listHomeGameWorks(runtime: AppRuntime) {
+  const db = getD1(runtime);
+  const columns = `w.id,w.original_title,w.chinese_title,w.original_release_date,
+    w.engine_family,w.language,av.id AS current_archive_version_id,
+    av.uses_shared_player,av.embedded_player_size_bytes,av.total_size_bytes,
+    (SELECT ma.blob_sha256 FROM work_media_assets wma
+     JOIN media_assets ma ON ma.id=wma.media_asset_id
+     WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
+    EXISTS(SELECT 1 FROM work_external_links wel
+      WHERE wel.work_id=w.id AND wel.link_type='download_page') AS download_link_count`;
+  type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" |
+    "original_release_date" | "engine_family" | "language" | "current_archive_version_id" |
+    "uses_shared_player" | "embedded_player_size_bytes" | "total_size_bytes" |
+    "cover_blob_sha256" | "download_link_count">;
+  const [recent, original, random] = await db.batch<CardRow>([
+    gameWorksListStatement(db, { limit: 12 }, columns),
+    gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
+    db.prepare(
+      `SELECT ${columns}
+       FROM works w
+       LEFT JOIN archive_versions av
+         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
+       WHERE w.id IN (SELECT id FROM public_works ORDER BY RANDOM() LIMIT 4)
+       GROUP BY w.id
+       ORDER BY RANDOM()`,
+    ),
+  ]);
+  const playerSize = await sharedPlayerSize(runtime, [...recent.results, ...original.results, ...random.results]);
+  const card = (row: CardRow): GameCardSummary => ({
+    id: row.id,
+    originalTitle: row.original_title,
+    chineseTitle: row.chinese_title,
+    originalReleaseDate: row.original_release_date,
+    engineFamily: row.engine_family,
+    language: row.language,
+    coverBlobSha256: row.cover_blob_sha256,
+    totalSizeBytes: row.total_size_bytes ?? 0,
+    embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
+    downloadSizeBytes: row.current_archive_version_id === null
+      || (row.uses_shared_player === 1 && playerSize === null)
+      ? null : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
+    distribution: deriveWorkDistribution({
+      hasCurrentArchive: row.current_archive_version_id !== null,
+      downloadLinkCount: row.download_link_count,
+    }),
+  });
+  return {
+    recentWorks: recent.results.map(card),
+    recentOriginalWorks: original.results.map(card),
+    randomWorks: random.results.map(card),
+  };
 }
 
 export async function getPublicGameWorkSummaries(
@@ -1352,6 +1406,7 @@ function summarySql(): string {
 function gameWorksListStatement(
   database: D1Database,
   input: ListInput,
+  columns = summarySql(),
 ): D1PreparedStatement {
   const { where, binds } = buildWhere(input);
   const limit = clamp(input.limit ?? 80, 1, 200);
@@ -1359,7 +1414,7 @@ function gameWorksListStatement(
   const { order, orderBinds } = gameWorksOrder(input);
   return database
     .prepare(
-      `SELECT ${summarySql()}
+      `SELECT ${columns}
        FROM works w
        LEFT JOIN archive_versions av
          ON av.work_id=w.id AND av.status='published' AND av.is_current=1
@@ -1640,7 +1695,7 @@ async function hydrate(
   );
 }
 
-async function sharedPlayerSize(runtime: AppRuntime, rows: SummaryRow[]): Promise<number | null> {
+async function sharedPlayerSize(runtime: AppRuntime, rows: Pick<SummaryRow, "uses_shared_player">[]): Promise<number | null> {
   if (!rows.some((row) => row.uses_shared_player === 1)) return 0;
   return getSharedArchivePlayer(getD1(runtime))
     .then((player) => player.size_bytes)
