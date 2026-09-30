@@ -35,9 +35,9 @@ export default function HomePage() {
     useLoaderData<typeof loader>();
   return (
     <PageContainer>
-      <div className="grid gap-7 min-[561px]:gap-8 min-[851px]:grid-cols-[minmax(0,1fr)_205px] min-[851px]:gap-6 min-[1101px]:grid-cols-[minmax(0,1fr)_237px] min-[1101px]:gap-9">
+      <div className="flex flex-col gap-7 min-[561px]:gap-8 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-9">
         <section
-          className="min-w-0 scroll-mt-24"
+          className="min-w-0 flex-1 scroll-mt-24"
           id="recent-updates"
           aria-labelledby="recent-heading"
         >
@@ -63,11 +63,11 @@ export default function HomePage() {
       </div>
 
       <section
-        className="mt-7 grid gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:grid-cols-[135px_minmax(0,1fr)] min-[851px]:gap-6 min-[1101px]:grid-cols-[170px_minmax(0,1fr)] min-[1101px]:gap-8 scroll-mt-24"
+        className="mt-7 flex flex-col gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-8 scroll-mt-24"
         id="recent-original"
         aria-labelledby="original-heading"
       >
-        <div className="flex flex-wrap items-end justify-between gap-3 min-[851px]:block">
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
           <div>
             <h2
               className="text-2xl font-bold tracking-tight"
@@ -83,7 +83,9 @@ export default function HomePage() {
             查看全部 →
           </Link>
         </div>
-        <HomeWorkGrid original works={recentOriginalWorks} />
+        <div className="min-w-0 flex-1">
+          <HomeWorkGrid original works={recentOriginalWorks} />
+        </div>
       </section>
     </PageContainer>
   );

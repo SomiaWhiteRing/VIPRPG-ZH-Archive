@@ -12,7 +12,7 @@ const directoryLinks = [
 export function HomeCommunity({ topics }: { topics: PublicForumTopic[] }) {
   return (
     <aside
-      className="min-w-0 scroll-mt-24 border-t border-foreground pt-5 min-[851px]:border-t-0 min-[851px]:border-l min-[851px]:border-border min-[851px]:pt-0 min-[851px]:pl-5 min-[1101px]:pl-6"
+      className="min-w-0 shrink-0 scroll-mt-24 border-t border-foreground pt-5 min-[851px]:w-[205px] min-[851px]:border-t-0 min-[851px]:border-l min-[851px]:border-border min-[851px]:pt-0 min-[851px]:pl-5 min-[1101px]:w-[237px] min-[1101px]:pl-6"
       id="community"
       aria-labelledby="community-heading"
     >

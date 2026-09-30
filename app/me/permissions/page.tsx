@@ -69,8 +69,8 @@ export default function AccountPermissionsPage() {
     <div>
       <AccountPageHeader title="权限申请" />
       {role && state ? (
-        <div className="grid items-start gap-5 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-6">
-          <nav className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-1" aria-label="选择要申请的权限">
+        <div className="flex flex-col items-start gap-5 lg:flex-row lg:gap-6">
+          <nav className="grid w-full min-w-0 shrink-0 grid-cols-2 gap-2 lg:w-44 lg:grid-cols-1" aria-label="选择要申请的权限">
             {roles.map((item) => {
               const itemState = applicationState(item);
               return (
@@ -96,7 +96,7 @@ export default function AccountPermissionsPage() {
               );
             })}
           </nav>
-          <Card id="permission-detail" className="grid min-w-0 gap-4 p-4 sm:p-6" aria-labelledby="permission-heading">
+          <Card id="permission-detail" className="grid w-full min-w-0 flex-1 gap-4 p-4 sm:p-6" aria-labelledby="permission-heading">
             <div>
               <h2 id="permission-heading" className="break-words text-lg font-semibold">{role.name}</h2>
               {role.description ? (
