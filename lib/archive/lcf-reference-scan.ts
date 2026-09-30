@@ -69,7 +69,12 @@ export class LcfReferenceScan {
     }
   }
 
-  get needsScan(): boolean { return (this.candidates.length > 0 || Boolean(this.observe)) && !this.protectedDirs.has("*"); }
+  get needsScan(): boolean {
+    if (this.steps > ANALYSIS_STEP_LIMIT || this.totalBytes > 256 * 1024 * 1024) return false;
+    // Protection prevents pruning; read-only observers can still collect known
+    // static references for RTP restoration within the same analysis budgets.
+    return Boolean(this.observe) || (this.candidates.length > 0 && !this.protectedDirs.has("*"));
+  }
 
   consume(path: string, bytes: Uint8Array): void {
     if (!this.needsScan) return;
@@ -202,7 +207,12 @@ export class LcfReferenceScan {
       seen.add(id);
       const block = new Reader(reader.take(reader.integer()));
       const kind = fields[id];
-      if (!kind) throw new Error(`未支持的字段：${type}/${id}`);
+      if (!kind) {
+        if (!this.observe) throw new Error(`未支持的字段：${type}/${id}`);
+        // Field payloads are length-delimited; skip unknown extension fields.
+        this.protect("*", `${this.currentPath}：未支持的字段：${type}/${id}`);
+        continue;
+      }
       if (kind === "string") {
         const bytes = block.take(block.remaining);
         this.string(bytes, id === 1 && (type === "Skill" || type === "Item"));
@@ -265,7 +275,13 @@ export class LcfReferenceScan {
       if (count > reader.remaining || count > 100_000) throw new Error("事件参数数量无效");
       const parameters = Array.from({ length: count }, () => reader.integer());
       this.observe?.(bytes, this.currentPath, "command", code, parameters);
-      if (!commandNames[code]) throw new Error(`未支持的事件指令：${code}`);
+      if (!commandNames[code]) {
+        if (!this.observe) throw new Error(`未支持的事件指令：${code}`);
+        // The command envelope has already been read. Preserve all candidates
+        // and keep observing subsequent standard commands without guessing.
+        this.protect("*", `${this.currentPath}：未支持的事件指令：${code}`);
+        continue;
+      }
       if (code === 11330) {
         if (parameters.length < 4 || parameters.slice(4).some((value) => value > 255)) throw new Error("移动路线参数无效");
         this.moves(new Reader(Uint8Array.from(parameters.slice(4))));
