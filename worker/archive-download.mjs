@@ -58,6 +58,11 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
   let record = null;
   let cacheKey = null;
   let player = null;
+  const metrics = { r2GetCount: 0 };
+  const bucket = {
+    get(...args) { metrics.r2GetCount += 1; return env.ARCHIVE_BUCKET.get(...args); },
+    head(...args) { return env.ARCHIVE_BUCKET.head(...args); },
+  };
 
   try {
     record = await getDownloadRecord(env.DB, Number(match[1]));
@@ -104,6 +109,10 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     if (request.method === "GET" && !bypassDownloadCache) {
       let cached = await caches.default.match(cacheRequest);
       const cachedSize = cached ? numberHeader(cached.headers.get("Content-Length")) : null;
+      if (cached && cachedSize === null) {
+        await cached.body?.cancel();
+        cached = null;
+      }
       if (cached && rangeHeader) {
         await cached.body?.cancel();
         if (cachedSize !== null) {
@@ -129,22 +138,19 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
           ...record,
           estimatedR2GetCount: numberHeader(cached.headers.get("X-Estimated-R2-Get-Count")) ?? record.estimatedR2GetCount,
         };
-        ctx.waitUntil(
-          recordDownloadAccess(env.DB, {
-            record,
-            cacheKey,
-            cacheStatus: "HIT",
-            sizeBytes: cachedSize ?? record.totalSizeBytes,
-            actualR2GetCount: 0,
-            durationMs: Date.now() - startedAt,
-          }),
-        );
-
-        return player || rangeHeader ? withDownloadCacheHeader(cached, "HIT", "no-store, no-transform") : cached;
+        const range = rangeHeader ? parseDownloadRange(rangeHeader, cachedSize) : null;
+        const responseSizeBytes = range ? range.end - range.start + 1 : cachedSize;
+        const stream = new FixedLengthStream(responseSizeBytes);
+        observeDownloadCompletion(cached.body.pipeTo(stream.writable), env.DB, ctx, request, {
+          record, cacheKey, cacheStatus: "HIT", sizeBytes: cachedSize,
+          responseSizeBytes, isRange: Boolean(range), metrics, startedAt, stage: "cache-read",
+        });
+        const response = new Response(stream.readable, { status: cached.status, headers: cached.headers });
+        return player || rangeHeader ? withDownloadCacheHeader(response, "HIT", "no-store, no-transform") : response;
       }
     }
 
-    const layout = await downloadLayout(request, env.ARCHIVE_BUCKET, record, profile, player, ctx, cacheKey);
+    const layout = await downloadLayout(request, bucket, record, profile, player, ctx, cacheKey, env.ARCHIVE_BUCKET);
     const zipSizeBytes = layout.size;
     if (profile || player) record = { ...record, estimatedR2GetCount: layout.estimatedR2GetCount };
     const cacheStatus =
@@ -167,32 +173,16 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       return new Response(null, { headers });
     }
 
-    const zipStream = createFixedLengthZipStream(layout, env.ARCHIVE_BUCKET, player, range);
+    const zipStream = createFixedLengthZipStream(layout, bucket, player, range);
     const response = new Response(zipStream.readable, {
       status: range ? 206 : 200,
       headers,
     });
-    ctx.waitUntil(
-      zipStream.completion.then(
-        () => recordDownloadAccess(env.DB, {
-          record,
-          cacheKey,
-          cacheStatus,
-          sizeBytes: zipSizeBytes,
-          actualR2GetCount: record.estimatedR2GetCount,
-          durationMs: Date.now() - startedAt,
-        }),
-        (error) => {
-          console.error("Native fixed-length ZIP stream failed", error?.message ?? error);
-          return recordDownloadFailure(env.DB, {
-            record,
-            cacheKey,
-            durationMs: Date.now() - startedAt,
-            errorMessage: error?.message ?? "Unknown error",
-          });
-        },
-      ),
-    );
+    observeDownloadCompletion(zipStream.completion, env.DB, ctx, request, {
+      record, cacheKey, cacheStatus, sizeBytes: zipSizeBytes,
+      responseSizeBytes: range ? range.end - range.start + 1 : zipSizeBytes,
+      isRange: Boolean(range), metrics, startedAt, stage: "zip-stream",
+    });
 
     if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
@@ -206,18 +196,21 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     return response;
   } catch (error) {
-    if (record && cacheKey) {
+    const failureKind = downloadFailureKind(error);
+    if (request.method === "GET" && record && cacheKey) {
       ctx.waitUntil(
         recordDownloadFailure(env.DB, {
           record,
           cacheKey,
+          failureKind,
+          actualR2GetCount: metrics.r2GetCount,
           durationMs: Date.now() - startedAt,
           errorMessage: error?.message ?? "Unknown error",
         }),
       );
     }
 
-    console.error("Native archive download failed", error?.message ?? error);
+    logDownloadFailure(error, request, record, failureKind, "prepare");
 
     return request.method === "HEAD"
       ? new Response(null, { status: error?.status ?? 500, headers: importHeaders })
@@ -369,9 +362,9 @@ function buildZipEntries(files) {
     }));
 }
 
-async function downloadLayout(request, bucket, record, profile, player, ctx, key) {
-  let cache = zipLayoutCaches.get(bucket);
-  if (!cache) zipLayoutCaches.set(bucket, cache = { layouts: new Map(), bytes: 0 });
+async function downloadLayout(request, bucket, record, profile, player, ctx, key, cacheBucket) {
+  let cache = zipLayoutCaches.get(cacheBucket);
+  if (!cache) zipLayoutCaches.set(cacheBucket, cache = { layouts: new Map(), bytes: 0 });
   let layout = cache.layouts.get(key);
   if (layout) {
     cache.layouts.delete(key);
@@ -980,11 +973,18 @@ async function recordDownloadAccess(db, input) {
         cache_miss_count,
         cache_bypass_count,
         total_r2_get_count,
+        full_download_count,
+        range_download_count,
+        full_cache_hit_count,
+        total_bytes_served,
+        cached_bytes_served,
+        observed_r2_get_count,
         last_cache_status,
         last_duration_ms,
+        last_success_at,
         created_at,
         last_accessed_at
-      ) VALUES (?, ?, ?, 'ready', ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, 'ready', ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(cache_key) DO UPDATE SET
         status = 'ready',
         size_bytes = excluded.size_bytes,
@@ -995,9 +995,15 @@ async function recordDownloadAccess(db, input) {
         cache_miss_count = download_builds.cache_miss_count + excluded.cache_miss_count,
         cache_bypass_count = download_builds.cache_bypass_count + excluded.cache_bypass_count,
         total_r2_get_count = download_builds.total_r2_get_count + excluded.total_r2_get_count,
+        full_download_count = download_builds.full_download_count + excluded.full_download_count,
+        range_download_count = download_builds.range_download_count + excluded.range_download_count,
+        full_cache_hit_count = download_builds.full_cache_hit_count + excluded.full_cache_hit_count,
+        total_bytes_served = download_builds.total_bytes_served + excluded.total_bytes_served,
+        cached_bytes_served = download_builds.cached_bytes_served + excluded.cached_bytes_served,
+        observed_r2_get_count = download_builds.observed_r2_get_count + excluded.observed_r2_get_count,
         last_cache_status = excluded.last_cache_status,
         last_duration_ms = excluded.last_duration_ms,
-        last_error_message = NULL,
+        last_success_at = CURRENT_TIMESTAMP,
         last_accessed_at = CURRENT_TIMESTAMP`,
     )
     .bind(
@@ -1010,6 +1016,12 @@ async function recordDownloadAccess(db, input) {
       hitIncrement,
       missIncrement,
       bypassIncrement,
+      input.actualR2GetCount,
+      input.isRange ? 0 : 1,
+      input.isRange ? 1 : 0,
+      !input.isRange ? hitIncrement : 0,
+      input.responseSizeBytes,
+      hitIncrement ? input.responseSizeBytes : 0,
       input.actualR2GetCount,
       input.cacheStatus,
       input.durationMs,
@@ -1032,17 +1044,31 @@ async function recordDownloadFailure(db, input) {
         estimated_r2_get_count,
         download_count,
         failure_count,
+        interrupted_count,
+        server_failure_count,
+        observed_r2_get_count,
         last_duration_ms,
         last_error_message,
+        last_failure_kind,
+        last_failure_at,
+        last_failure_message,
+        last_failure_duration_ms,
         created_at,
         last_accessed_at
-      ) VALUES (?, ?, ?, 'failed', ?, 0, 1, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, 'failed', ?, 0, 1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(cache_key) DO UPDATE SET
         status = 'failed',
         estimated_r2_get_count = excluded.estimated_r2_get_count,
         failure_count = download_builds.failure_count + 1,
+        interrupted_count = download_builds.interrupted_count + excluded.interrupted_count,
+        server_failure_count = download_builds.server_failure_count + excluded.server_failure_count,
+        observed_r2_get_count = download_builds.observed_r2_get_count + excluded.observed_r2_get_count,
         last_duration_ms = excluded.last_duration_ms,
         last_error_message = excluded.last_error_message,
+        last_failure_kind = excluded.last_failure_kind,
+        last_failure_at = CURRENT_TIMESTAMP,
+        last_failure_message = excluded.last_failure_message,
+        last_failure_duration_ms = excluded.last_failure_duration_ms,
         last_accessed_at = CURRENT_TIMESTAMP`,
     )
     .bind(
@@ -1050,13 +1076,54 @@ async function recordDownloadFailure(db, input) {
       input.record.manifestSha256,
       input.cacheKey,
       input.record.estimatedR2GetCount,
+      input.failureKind === "interrupted" ? 1 : 0,
+      input.failureKind === "server" ? 1 : 0,
+      input.actualR2GetCount,
       Math.max(0, input.durationMs),
       String(input.errorMessage ?? "Unknown error").slice(0, 1000),
+      input.failureKind,
+      String(input.errorMessage ?? "Unknown error").slice(0, 1000),
+      Math.max(0, input.durationMs),
     )
     .run()
     .catch((error) => {
       console.warn("Download failure observability write failed", error?.message ?? error);
     });
+}
+
+function downloadFailureKind(error) {
+  // A transport interruption can come from either side. Do not claim that
+  // "Network connection lost" proves a user deliberately canceled a download.
+  return error?.name === "AbortError" ||
+    /^Network connection lost\.?$/i.test(String(error?.message ?? ""))
+    ? "interrupted" : "server";
+}
+
+function logDownloadFailure(error, request, record, failureKind, stage) {
+  const log = failureKind === "interrupted" ? console.warn : console.error;
+  log.call(console, `Native archive download ${failureKind === "interrupted" ? "interrupted" : "failed"}`, {
+    archiveVersionId: record?.id ?? null, stage, failureKind,
+    range: request.headers.get("Range")?.slice(0, 160) ?? null,
+    errorMessage: String(error?.message ?? "Unknown error").slice(0, 1000),
+  });
+}
+
+function observeDownloadCompletion(completion, db, ctx, request, input) {
+  ctx.waitUntil(completion.then(
+    () => recordDownloadAccess(db, {
+      ...input, actualR2GetCount: input.metrics.r2GetCount,
+      durationMs: Date.now() - input.startedAt,
+    }),
+    (error) => {
+      const failureKind = downloadFailureKind(error);
+      logDownloadFailure(error, request, input.record, failureKind, input.stage);
+      return recordDownloadFailure(db, {
+        record: input.record, cacheKey: input.cacheKey, failureKind,
+        actualR2GetCount: input.metrics.r2GetCount,
+        durationMs: Date.now() - input.startedAt, errorMessage: error?.message ?? "Unknown error",
+      });
+    },
+  ));
 }
 
 function withDownloadCacheHeader(response, cacheStatus, cacheControl) {

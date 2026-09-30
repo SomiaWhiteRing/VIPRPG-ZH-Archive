@@ -117,24 +117,26 @@ export default function AdminPage() {
             className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50"
             to="/admin/maintenance"
           >
-            <strong>下载构建</strong>
+            <strong>下载观测</strong>
             <span
               className={
-                observability.downloads.failureCount
+                observability.downloads.currentServerFailureBuildCount
                   ? "text-sm text-red-700"
                   : "text-sm text-muted"
               }
             >
-              失败 {formatNumber(observability.downloads.failureCount)} · 累计{" "}
-              {formatNumber(observability.downloads.totalDownloadCount)}
+              当前版本最近请求出错{" "}
+              {formatNumber(observability.downloads.currentServerFailureBuildCount)}
+              {" · "}累计连接中断 {formatNumber(observability.downloads.interruptedCount)}
+              {" · "}历史未分类 {formatNumber(observability.downloads.unclassifiedFailureCount)}
             </span>
           </Link>
         </div>
         {!failedImports?.count &&
         !totalPending &&
-        !observability.downloads.failureCount ? (
+        !observability.downloads.currentServerFailureBuildCount ? (
           <EmptyState
-            title="当前没有待处理的任务或失败记录。"
+            title="当前没有待处理任务或已识别的服务端错误。"
             variant="plain"
             className="mt-3"
           />
