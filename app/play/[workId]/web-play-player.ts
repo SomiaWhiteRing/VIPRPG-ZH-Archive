@@ -61,7 +61,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "engineFamily"
 >;
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -209,6 +209,7 @@ export function createPlayerSession(
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
     const args: string[] = [];
+    if (metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
     runtimeCreation = playerWindow.createEasyRpgPlayer({
