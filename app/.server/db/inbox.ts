@@ -442,11 +442,13 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     sender.id AS actor_id,sender.display_name AS actor_name,sender.status AS actor_status,
     sender.avatar_blob_sha256 AS actor_avatar,c.reply_to_id
     FROM inbox_items i JOIN forum_public_topics t ON t.id=i.forum_topic_id
-    JOIN forum_public_posts p ON p.id=i.forum_post_id AND p.topic_id=t.id
+    JOIN forum_posts p ON p.id=i.forum_post_id AND p.topic_id=t.id
     JOIN users sender ON sender.id=i.sender_user_id AND sender.status IN ('active','deleted')
     LEFT JOIN forum_public_comments c ON c.id=i.forum_comment_id AND c.post_id=p.id
     WHERE i.id IN (SELECT value FROM json_each(?))
-      AND (i.forum_comment_id IS NULL OR (c.id IS NOT NULL AND (c.reply_to_id IS NULL OR
+      AND ((i.type='forum_like' AND i.forum_comment_id IS NOT NULL) OR
+        EXISTS(SELECT 1 FROM forum_public_posts visible_post WHERE visible_post.id=p.id))
+      AND (i.forum_comment_id IS NULL OR (c.id IS NOT NULL AND (i.type='forum_like' OR c.reply_to_id IS NULL OR
         EXISTS(SELECT 1 FROM forum_public_comments target WHERE target.id=c.reply_to_id AND target.post_id=p.id))))`,
     )
     .bind(JSON.stringify(interactions.map((item) => item.id)))
@@ -463,7 +465,9 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     const name = row.actor_status === "deleted" ? "账户已注销" : row.actor_name;
     const action =
       item.type === "forum_like"
-        ? "赞了你的帖子"
+        ? row.comment_id
+          ? "赞了你的回复"
+          : "赞了你的帖子"
         : row.comment_id
           ? row.reply_to_id
             ? "回复了你的回复"

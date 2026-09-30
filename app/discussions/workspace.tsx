@@ -1205,6 +1205,9 @@ function ForumFloorView({
     [liked, setLiked] = useState(post.liked),
     [likes, setLikes] = useState(post.likes),
     [liking, setLiking] = useState(false);
+  const pendingCommentLikes = useRef(new Set<number>());
+  const [likingComments, setLikingComments] = useState<number[]>([]);
+  const [commentLikeStatus, setCommentLikeStatus] = useState("");
   const [contentSource, setContentSource] = useState({
     post,
     emojis,
@@ -1225,11 +1228,13 @@ function ForumFloorView({
     if (initialExpanded) setExpanded(true);
   }
   async function load(page: number) {
+    if (loading || pendingCommentLikes.current.size) return;
     setLoading(true);
     setError("");
     try {
       const result = await forumRequest<{
         comments: ForumPage<PublicForumContent>;
+        likedComments: number[];
       }>(
         forumHref("/api/discussions", {
           op: "comments",
@@ -1240,7 +1245,7 @@ function ForumFloorView({
       const mapped = {
         ...result.comments,
         items: result.comments.items.map((item) => {
-          const content = interactiveContent(item, topic, viewer);
+          const content = interactiveContent(item, topic, viewer, result.likedComments);
           content.capabilities.reply &&= post.state === "published";
           return content;
         }),
@@ -1287,6 +1292,37 @@ function ForumFloorView({
       toast.error(e instanceof Error ? e.message : "点赞失败。");
     } finally {
       setLiking(false);
+    }
+  }
+  function updateCommentLike(id: number, state: { liked: boolean; likes: number }) {
+    const update = (comment: ForumContent) =>
+      comment.id === id && comment.body !== null ? { ...comment, ...state } : comment;
+    setComments((current) => ({ ...current, items: current.items.map(update) }));
+    setPreview((current) => current.map(update));
+  }
+  async function toggleCommentLike(comment: ForumContent) {
+    if (!comment.capabilities.like || pendingCommentLikes.current.has(comment.id)) return;
+    setCommentLikeStatus("");
+    pendingCommentLikes.current.add(comment.id);
+    setLikingComments([...pendingCommentLikes.current]);
+    const next = !comment.liked;
+    updateCommentLike(comment.id, {
+      liked: next,
+      likes: Math.max(0, comment.likes + (next ? 1 : -1)),
+    });
+    try {
+      const result = await forumRequest<{ liked: boolean; likes: number }>(
+        "/api/discussions",
+        { op: "like", target: { kind: "comment", id: comment.id }, liked: next },
+      );
+      updateCommentLike(comment.id, { liked: result.liked, likes: result.likes });
+      setCommentLikeStatus(`${result.liked ? "已赞这条回复" : "已取消赞"}，${result.likes} 个赞。`);
+    } catch (e) {
+      updateCommentLike(comment.id, { liked: comment.liked, likes: comment.likes });
+      toast.error(e instanceof Error ? e.message : "点赞失败。");
+    } finally {
+      pendingCommentLikes.current.delete(comment.id);
+      setLikingComments([...pendingCommentLikes.current]);
     }
   }
   const visibleComments = (expanded ? comments.items : preview)
@@ -1422,6 +1458,25 @@ function ForumFloorView({
                     {comment.editedAt ? " · 已编辑" : ""}
                 </>}
                 actions={<>
+                  {comment.body !== null ? (
+                    <Button
+                      className={cn("min-h-10 px-2", !comment.capabilities.like && "disabled:opacity-100")}
+                      size="sm"
+                      variant="ghost"
+                      type="button"
+                      disabled={!comment.capabilities.like || loading || likingComments.includes(comment.id)}
+                      aria-label={`${comment.liked ? "取消赞" : "赞"}，${comment.likes} 个赞`}
+                      aria-pressed={comment.liked}
+                      onClick={() => void toggleCommentLike(comment)}
+                    >
+                      <ThumbsUp
+                        aria-hidden
+                        fill={comment.liked ? "currentColor" : "none"}
+                        className={comment.liked ? "size-4 text-primary" : "size-4"}
+                      />
+                      <span className={comment.liked ? "text-primary" : undefined}>{comment.likes}</span>
+                    </Button>
+                  ) : null}
                   {comment.capabilities.reply ? (
                     <Button
                       className="min-h-10 px-2"
@@ -1475,7 +1530,7 @@ function ForumFloorView({
                 variant="ghost"
                 aria-expanded={expanded}
                 aria-controls={`floor-comments-${post.id}`}
-                disabled={loading}
+                disabled={loading || likingComments.length > 0}
                 onClick={() => {
                   if (expanded) {
                     setExpanded(false);
@@ -1506,11 +1561,12 @@ function ForumFloorView({
                 page={comments.page}
                 pageSize={comments.pageSize}
                 total={comments.total}
-                disabled={loading}
+                disabled={loading || likingComments.length > 0}
                 onPageChange={(page) => void load(page)}
               />
             ) : null}
             {editor}
+            <span className="sr-only" role="status">{commentLikeStatus}</span>
           </section>
         ) : null}
         {error ? (

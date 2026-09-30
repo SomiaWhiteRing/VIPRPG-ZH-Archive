@@ -5,6 +5,7 @@ import { loadRequestSession } from "../auth/request-auth";
 import { parsePositiveId } from "../http/request";
 import { getForumRequestRuntime } from "./context";
 import { forumDetail, forumEmojis } from "./detail";
+import { forumCommentLikes } from "./engagement";
 import { forumLocation } from "./location";
 import {
   deleteForum,
@@ -88,14 +89,16 @@ async function read(runtime: AppRuntime, request: Request) {
           query: p.get("q") ?? "",
         }),
       );
-    case "comments":
+    case "comments": {
+      const comments = await publicCommentPage(ctx, id("postId"), forumPage(p.get("page")));
+      const viewer = forumViewer(
+        (await loadRequestSession(ctx.db, request.headers.get("cookie")))?.user ?? null,
+      );
       return result({
-        comments: await publicCommentPage(
-          ctx,
-          id("postId"),
-          forumPage(p.get("page")),
-        ),
+        comments,
+        likedComments: await forumCommentLikes(ctx, viewer, comments.items.map((item) => item.id)),
       });
+    }
     case "tags": {
       const selectable = p.get("mode") === "suggest";
       const list = await publicTagList(
