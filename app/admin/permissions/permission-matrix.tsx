@@ -542,7 +542,7 @@ export function PermissionMatrix({
 
             <div className="pt-2">
               <h3 className="text-base font-semibold">功能权限</h3>
-              <p className="mt-1 text-sm text-muted">{editable ? "功能权限单独保存；多角色权限取并集。" : "系统角色的功能固定，仅供查看。"}</p>
+              <p className="mt-1 text-sm text-muted">{editable ? "功能权限单独保存；用户的单独禁用优先于角色授权。" : "系统角色的功能固定，仅供查看。"}</p>
             </div>
 
             {editable && warnings.length > 0 ? (

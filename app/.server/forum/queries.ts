@@ -94,6 +94,7 @@ export function forumViewer(user: ArchiveUser | null): ForumViewer {
         id: user.id,
         name: user.displayName,
         avatar: user.avatarBlobSha256,
+        use: hasPermission(user, "forum.use"),
         moderate: hasPermission(user, "forum.content.moderate_any"),
         feature: hasPermission(user, "forum.topic.feature_any"),
         tags: hasPermission(user, "forum.tag.manage"),
@@ -155,7 +156,7 @@ export function mapTopic(
   viewer: ForumViewer,
   tags: ForumTag[],
 ): ForumTopic {
-  const own = viewer?.id === row.user_id && !!row.public;
+  const own = !!viewer?.use && viewer.id === row.user_id && !!row.public;
   return {
     id: row.id,
     title: row.title,
@@ -186,9 +187,9 @@ export function mapTopic(
     capabilities: {
       edit: own && !row.locked,
       delete: own && !!row.deletable,
-      reply: !!viewer && !!row.public && !row.locked,
-      like: !!viewer && !!row.public,
-      report: !!viewer && !!row.public,
+      reply: !!viewer?.use && !!row.public && !row.locked,
+      like: !!viewer?.use && !!row.public,
+      report: !!viewer?.use && !!row.public,
       moderate: !!viewer?.moderate,
       feature: !!viewer?.feature && !!row.public,
     },
@@ -315,7 +316,7 @@ export function mapContent(
   viewer: ForumViewer,
 ): ForumContent {
   const readable = !!row.public;
-  const own = readable && row.user_id === viewer?.id;
+  const own = readable && !!viewer?.use && row.user_id === viewer.id;
   const capability: ForumCapabilities = {
     edit: own && !topic.locked,
     delete: own,
@@ -324,9 +325,9 @@ export function mapContent(
       readable &&
       !topic.locked &&
       row.parent_status === "published" &&
-      !!viewer,
-    like: readable && row.kind === "post" && !!viewer,
-    report: readable && !!viewer,
+      !!viewer?.use,
+    like: readable && row.kind === "post" && !!viewer?.use,
+    report: readable && !!viewer?.use,
     moderate: !!viewer?.moderate && row.status !== "deleted",
     feature: false,
   };

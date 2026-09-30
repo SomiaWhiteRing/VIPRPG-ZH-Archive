@@ -27,6 +27,7 @@ import {
   PASSWORD_MIN_LENGTH,
 } from "@/lib/auth/password-rules";
 import { hasPermission } from "@/lib/authz/permissions";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 
 import { getD1 } from "@/app/.server/db/d1";
 import {
@@ -361,22 +362,32 @@ export async function updateOwnProfile(
     bio: string;
   },
 ): Promise<void> {
-  const displayName = normalizeDisplayName(input.displayName);
+  const displayName = input.displayName === input.user.displayName
+    ? input.user.displayName
+    : normalizeDisplayName(input.displayName);
+  if (displayName !== input.user.displayName && !hasPermission(input.user, "user.rename_own"))
+    throw new HttpError(403, "没有修改显示名的权限。");
   const bio = input.bio.trim();
   if ([...bio].length > 500)
     throw new HttpError(400, "简介不能超过 500 个字符");
-  await getD1(runtime).batch([
-    getD1(runtime)
+  const database = getD1(runtime);
+  const [updated] = await database.batch([
+    database
       .prepare(
-        `UPDATE users SET display_name=?,bio=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        `UPDATE users SET display_name=?,bio=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'
+          AND (display_name=? OR ${userPermissionSql("users.id", "user.rename_own")})
+          RETURNING id`,
       )
-      .bind(displayName, bio, input.user.id),
-    getD1(runtime)
+      .bind(displayName, bio, input.user.id, displayName),
+    database
       .prepare(
-        `INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'profile_updated')`,
+        `INSERT INTO auth_audit_logs(user_id,email,event_type)
+          SELECT ?,?,'profile_updated' WHERE changes()=1`,
       )
       .bind(input.user.id, input.user.email),
   ]);
+  if ((updated.results[0] as { id: number } | undefined)?.id !== input.user.id)
+    throw new HttpError(403, "账户或改名权限已变化，请刷新后重试。");
 }
 
 export async function updateOwnProfileVisibility(

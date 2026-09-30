@@ -1,4 +1,5 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { normalizeCreatorLinks, parseCreatorLinks } from "@/lib/creator-links";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { CREATOR_EDIT_LIMITS, creatorMetadataSnapshot, type CreatorMetadata } from "@/lib/creator-edit";
@@ -7,11 +8,7 @@ import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
 
 const PUBLIC_CREATOR_SQL = "public_at IS NOT NULL";
-const EDITOR_PERMISSION_SQL = `EXISTS (SELECT 1 FROM users u
-  JOIN effective_user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
-  JOIN role_permissions rp ON rp.role_id=r.id
-  WHERE u.id=? AND u.status='active' AND r.status='active'
-    AND rp.permission_key IN ('creator.metadata.update_public','creator.metadata.update_any'))`;
+const EDITOR_PERMISSION_SQL = userPermissionSql("?", ["creator.metadata.update_public", "creator.metadata.update_any"]);
 
 // The audit entry and all dependent writes share one D1 transaction. Its unique
 // edit ID gates every write, so a failed comparison cannot replace aliases.

@@ -89,7 +89,9 @@ export const USER_ACCESS_JOINS = `
     (u.status='active' AND r.available_to_all=1)
     OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=u.id AND ur.role_id=r.id)
   )
-  LEFT JOIN role_permissions rp ON rp.role_id=r.id`;
+  LEFT JOIN role_permissions rp ON rp.role_id=r.id
+    AND NOT EXISTS (SELECT 1 FROM user_permission_blocks blocked
+      WHERE blocked.user_id=u.id AND blocked.permission_key=rp.permission_key)`;
 
 export function mapUserAccessRows(rows: UserAccessRow[]): ArchiveUser[] {
   const users = new Map<

@@ -140,6 +140,7 @@ export type ForumViewer = {
   id: number;
   name: string;
   avatar: string | null;
+  use: boolean;
   moderate: boolean;
   feature: boolean;
   tags: boolean;

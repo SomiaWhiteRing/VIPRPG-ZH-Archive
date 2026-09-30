@@ -1,4 +1,5 @@
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { bodyLength } from "@/lib/face-emojis";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import { hasPermission } from "@/lib/authz/permissions";
@@ -34,14 +35,8 @@ import { contentIdentity, rawTopic, unavailable } from "./queries";
 type Bind = string | number | null;
 type Predicate = { sql: string; args: Bind[] };
 export const forumActorSql = (
-  permission?: PermissionKey,
-) => `EXISTS(SELECT 1 FROM users actor WHERE actor.id=? AND actor.status='active'
-  ${
-    permission
-      ? `AND EXISTS(SELECT 1 FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id JOIN role_permissions rp ON rp.role_id=r.id
-    WHERE ur.user_id=actor.id AND r.status='active' AND rp.permission_key='${permission}')`
-      : ""
-  })`;
+  permission: PermissionKey = "forum.use",
+) => userPermissionSql("?", permission);
 const publicTopicSql =
   "EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id)";
 const rateSql = `((SELECT COUNT(*) FROM forum_posts WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
@@ -276,6 +271,7 @@ export async function publishForum(
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
+  checkPermission(actor, "forum.use");
   const identity = await requestIdentity(input);
   const kind = input.kind;
   if (kind !== "topic" && kind !== "post" && kind !== "comment")
@@ -509,6 +505,7 @@ export async function editForum(
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
+  checkPermission(actor, "forum.use");
   let target = forumTarget(input.target);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
@@ -585,6 +582,7 @@ export async function deleteForum(
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
+  checkPermission(actor, "forum.use");
   let target = forumTarget(input.target);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
@@ -645,6 +643,7 @@ export async function likeForum(
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
+  checkPermission(actor, "forum.use");
   const postId = id(input.postId);
   if (typeof input.liked !== "boolean")
     throw new HttpError(400, "点赞状态无效。");
@@ -688,6 +687,7 @@ export async function reportForum(
   actor: ArchiveUser,
   input: Record<string, unknown>,
 ) {
+  checkPermission(actor, "forum.use");
   let target = forumTarget(input.target);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);

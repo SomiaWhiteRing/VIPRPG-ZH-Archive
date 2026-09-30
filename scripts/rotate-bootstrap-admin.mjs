@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { runWrangler } from "./run-wrangler.mjs";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
@@ -14,6 +15,32 @@ if (!target.local && options.apply && options.confirm !== email) {
 const rotationKey = crypto.randomUUID();
 const quotedEmail = sqlString(email);
 const quotedRotationKey = sqlString(rotationKey);
+function query(sql) {
+  const result = spawnSync(process.execPath, [resolve("node_modules/wrangler/bin/wrangler.js"),
+    "d1", "execute", target.database, "--config", "wrangler.jsonc", ...target.args, "--json", "--command", sql], {
+    env: { ...process.env, CLOUDFLARE_ENV: "", CI: "true", WRANGLER_SEND_METRICS: "false" },
+    encoding: "utf8", windowsHide: true, timeout: 60000,
+  });
+  if (result.error || result.status !== 0)
+    throw new Error(`Cannot read rotation target: ${result.error?.message ?? result.stderr}`);
+  const response = JSON.parse(result.stdout);
+  if (!Array.isArray(response) || response.some((item) => item.success !== true))
+    throw new Error("Invalid D1 query result");
+  return response.flatMap((item) => item.results);
+}
+const targetUser = query(`SELECT id FROM users WHERE email=${quotedEmail}
+  AND status='active' AND email_verified_at IS NOT NULL`)[0];
+if (!targetUser) throw new Error("Rotation target must be an active account with a verified email");
+// The deployed schema may still precede 0018 while preparing its upgrade.
+const hasPermissionBlocks = query("SELECT name FROM sqlite_master WHERE type='table' AND name='user_permission_blocks'").length > 0;
+const permissionBlockGuard = hasPermissionBlocks
+  ? "AND NOT EXISTS (SELECT 1 FROM user_permission_blocks blocked WHERE blocked.user_id=users.id)"
+  : "";
+if (hasPermissionBlocks) {
+  const blocked = query(`SELECT permission_key FROM user_permission_blocks
+    WHERE user_id IN (SELECT id FROM users WHERE email=${quotedEmail}) ORDER BY permission_key`);
+  if (blocked.length) throw new Error(`Restore the target account's individual permission blocks before rotation: ${blocked.map((row) => row.permission_key).join(", ")}`);
+}
 const tempDir = mkdtempSync(join(tmpdir(), "viprpg-bootstrap-rotation-"));
 const sqlPath = join(tempDir, "rotate.sql");
 
@@ -47,7 +74,8 @@ WHERE role_id IN (SELECT id FROM roles WHERE kind = 'bootstrap_admin');
 INSERT INTO user_roles (user_id, role_id)
 VALUES (
   COALESCE((SELECT id FROM users
-    WHERE email = ${quotedEmail} AND status = 'active' AND email_verified_at IS NOT NULL), 0),
+    WHERE email = ${quotedEmail} AND status = 'active' AND email_verified_at IS NOT NULL
+      ${permissionBlockGuard}), 0),
   COALESCE((SELECT id FROM roles WHERE key = 'super_admin' AND kind = 'bootstrap_admin'), 0)
 );
 
@@ -74,8 +102,8 @@ FROM users u WHERE u.email = ${quotedEmail};
 ${target.local ? "COMMIT;" : ""}
 `, "utf8");
 
-  console.log(JSON.stringify({ environment: target.label, database: target.identity ?? target.database, email,
-    effects: ["Move bootstrap admin role", "Revoke old and new administrator sessions", "Write role and authentication audit events"],
+  console.log(JSON.stringify({ environment: target.label, database: target.identity ?? target.database, email, targetUserId: targetUser.id,
+    effects: ["Reject targets with individual permission blocks", "Move bootstrap admin role", "Revoke old and new administrator sessions", "Write role and authentication audit events"],
     apply: !options.plan && (target.local || options.apply === true) }, null, 2));
   if (!options.plan && (target.local || options.apply)) {
     process.env.CLOUDFLARE_ENV = "";

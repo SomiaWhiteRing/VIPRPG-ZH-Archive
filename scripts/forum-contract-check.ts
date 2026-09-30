@@ -85,7 +85,7 @@ const ctx = { db } as ForumRuntime;
 const actor = {
   id: 1,
   status: "active",
-  permissionKeys: [],
+  permissionKeys: ["forum.use"],
   roleKeys: [],
 } as unknown as ArchiveUser;
 const requestCtx = {

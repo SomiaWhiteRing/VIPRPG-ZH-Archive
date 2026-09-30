@@ -1,8 +1,10 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import {
   hasPermission,
+  isPermissionKey,
   parsePermissionKeys,
   PERMISSION_LIST,
 } from "@/lib/authz/permissions";
@@ -66,8 +68,7 @@ export function userManagementScopeSql(
 ): string {
   return `EXISTS (SELECT 1 FROM users manager WHERE manager.id=? AND manager.status='active'
     AND manager.id<>${target}
-    AND EXISTS (SELECT 1 FROM effective_user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
-      JOIN role_permissions p ON p.role_id=r.id WHERE mr.user_id=manager.id AND p.permission_key='${permission}')
+    AND ${userPermissionSql("manager.id", permission)}
     AND COALESCE((SELECT MAX(r.priority) FROM effective_user_roles mr JOIN roles r ON r.id=mr.role_id AND r.status='active'
       WHERE mr.user_id=manager.id),0) > COALESCE((SELECT MAX(r.priority) FROM effective_user_roles tr
       JOIN roles r ON r.id=tr.role_id AND r.status='active' WHERE tr.user_id=${target}),0))`;
@@ -89,7 +90,9 @@ export function roleAccessSql(userId: string, roleId: string): string {
       AND EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId})
       AND NOT EXISTS (SELECT 1 FROM role_permissions wanted WHERE wanted.role_id=${roleId}
         AND NOT EXISTS (SELECT 1 FROM effective_user_roles granted JOIN role_permissions p ON p.role_id=granted.role_id
-          WHERE granted.user_id=${userId} AND p.permission_key=wanted.permission_key))))`;
+          WHERE granted.user_id=${userId} AND p.permission_key=wanted.permission_key
+            AND NOT EXISTS (SELECT 1 FROM user_permission_blocks blocked
+              WHERE blocked.user_id=${userId} AND blocked.permission_key=p.permission_key)))))`;
 }
 
 type RoleRequestTarget = {
@@ -151,6 +154,57 @@ export async function listUserRoleMemberships(
   for (const row of rows.results ?? [])
     result.set(row.user_id, [...(result.get(row.user_id) ?? []), row.role_id]);
   return result;
+}
+
+export async function listUserPermissionBlocks(
+  runtime: AppRuntime,
+  userIds: number[],
+): Promise<Map<number, PermissionKey[]>> {
+  const blocks = new Map<number, PermissionKey[]>();
+  if (!userIds.length) return blocks;
+  const rows = await getD1(runtime).prepare(`SELECT user_id,permission_key FROM user_permission_blocks
+    WHERE user_id IN (SELECT value FROM json_each(?)) ORDER BY user_id,permission_key`)
+    .bind(JSON.stringify(userIds)).all<{ user_id: number; permission_key: string }>();
+  for (const row of rows.results) {
+    const keys = blocks.get(row.user_id) ?? [];
+    keys.push(...parsePermissionKeys([row.permission_key]));
+    blocks.set(row.user_id, keys);
+  }
+  return blocks;
+}
+
+export async function setUserPermissionBlocked(
+  runtime: AppRuntime,
+  input: { actor: ArchiveUser; targetUserId: number; permissionKey: PermissionKey; blocked: boolean },
+): Promise<void> {
+  requireBootstrapAdmin(input.actor);
+  if (!Number.isSafeInteger(input.targetUserId) || input.targetUserId <= 0 ||
+    !isPermissionKey(input.permissionKey) || typeof input.blocked !== "boolean")
+    throw new HttpError(400, "用户或权限设置无效");
+  const database = getD1(runtime);
+  const eventKey = crypto.randomUUID();
+  const authorized = `EXISTS (SELECT 1 FROM auth_audit_logs WHERE user_id=?
+    AND event_type='user_permission_updated' AND json_extract(detail_json,'$.eventKey')=?)`;
+  const [audit] = await database.batch([
+    database.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
+      SELECT ?,?,'user_permission_updated',json_object('eventKey',?,'targetUserId',target.id,
+        'permissionKey',?,'beforeBlocked',EXISTS(SELECT 1 FROM user_permission_blocks
+          WHERE user_id=target.id AND permission_key=?),'afterBlocked',?)
+      FROM users target WHERE target.id=? AND target.status IN ('active','disabled') AND target.id<>?
+        AND NOT EXISTS(SELECT 1 FROM user_roles membership JOIN roles r ON r.id=membership.role_id
+          WHERE membership.user_id=target.id AND r.kind='bootstrap_admin')
+        AND ${CURRENT_BOOTSTRAP_SQL} RETURNING id`)
+      .bind(input.actor.id, input.actor.email, eventKey, input.permissionKey, input.permissionKey,
+        Number(input.blocked), input.targetUserId, input.actor.id, input.actor.id),
+    input.blocked
+      ? database.prepare(`INSERT OR IGNORE INTO user_permission_blocks(user_id,permission_key,created_by_user_id)
+        SELECT ?,?,? WHERE ${authorized}`)
+        .bind(input.targetUserId, input.permissionKey, input.actor.id, input.actor.id, eventKey)
+      : database.prepare(`DELETE FROM user_permission_blocks WHERE user_id=? AND permission_key=? AND ${authorized}`)
+        .bind(input.targetUserId, input.permissionKey, input.actor.id, eventKey),
+  ]);
+  if (!audit.results.length)
+    throw new HttpError(403, "当前无权修改此用户的单独权限设置");
 }
 
 export async function listAccountRoleOptions(
@@ -839,8 +893,7 @@ function roleChangeAuditStatement(
         AND (role.key IN ('uploader','admin') OR role.kind='custom')
         AND ${administratorSql("?", "role.key")}
         ${action === "assigned" ? `AND NOT ${roleAccessSql("target.id", "role.id")}` : ""}
-        AND EXISTS (SELECT 1 FROM effective_user_roles ar JOIN roles r ON r.id=ar.role_id AND r.status='active'
-          JOIN role_permissions p ON p.role_id=r.id WHERE ar.user_id=? AND p.permission_key='inbox.role_request.resolve')`
+        AND ${userPermissionSql("?", "inbox.role_request.resolve")}`
           : ""
       }`,
     )

@@ -290,6 +290,12 @@ export const PERMISSIONS = {
     scope: "全部未删除评论",
     description: "隐藏评论或恢复被隐藏的评论；已删除评论不能恢复。",
   },
+  "forum.use": {
+    category: "forum",
+    label: "使用讨论版",
+    scope: "本人的讨论操作",
+    description: "发布主题和回复、编辑或删除自己的讨论内容、点赞、举报和上传讨论图片。公开浏览无需此权限。",
+  },
   "forum.content.moderate_any": {
     category: "forum", label: "审核讨论内容", scope: "全部讨论与举报",
     description: "查看审核上下文，隐藏或恢复被隐藏内容，锁定或解锁主题并处理举报。",
@@ -378,6 +384,12 @@ export const PERMISSIONS = {
     label: "取消自己的上传任务",
     scope: "本人可取消的上传任务",
     description: "取消本人尚可取消的上传任务，不能操作他人的任务。",
+  },
+  "user.rename_own": {
+    category: "user",
+    label: "修改自己的显示名",
+    scope: "本人的显示名",
+    description: "在个人资料中修改本人显示名。",
   },
   "user.read": {
     category: "user",
@@ -629,6 +641,8 @@ export const CHARACTER_ADMIN_PERMISSIONS = [
 
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
+    "user.rename_own",
+    "forum.use",
     "work.lookup_non_deleted",
     "relation.create",
     "translation_relation.create",
