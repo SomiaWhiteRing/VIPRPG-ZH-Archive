@@ -314,7 +314,10 @@ export async function characterSheets(
 ) {
   const order =
     "cb.sort_order IS NULL,cb.sort_order,fs.source_order IS NULL,fs.source_order,fs.id";
-  const from = `FROM face_sheets fs JOIN character_face_sheet_bindings cb ON cb.face_sheet_id=fs.id JOIN blobs b ON b.sha256=fs.blob_sha256
+  // Start with this character's bindings instead of scanning all approved sheets.
+  const from = `FROM character_face_sheet_bindings cb
+    CROSS JOIN face_sheets fs ON fs.id=cb.face_sheet_id
+    CROSS JOIN blobs b ON b.sha256=fs.blob_sha256
     WHERE cb.character_id=? AND fs.library_status='approved' AND b.status='active' AND b.content_type_hint LIKE 'image/%'`;
   if (focus) {
     const target = await db

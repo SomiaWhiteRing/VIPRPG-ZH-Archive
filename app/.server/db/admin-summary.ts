@@ -11,12 +11,14 @@ export async function getAdminSummary(
        (SELECT COUNT(*) FROM users) AS users,
        (SELECT COUNT(*) FROM works) AS works,
        (SELECT COUNT(*) FROM archive_versions) AS archive_versions,
-       (SELECT COUNT(*) FROM blobs) AS blobs,
-       (SELECT COALESCE(SUM(size_bytes),0) FROM blobs) AS blob_size,
-       (SELECT COUNT(*) FROM core_packs) AS core_packs,
-       (SELECT COALESCE(SUM(size_bytes),0) FROM core_packs) AS core_pack_size,
+       blob_totals.count AS blobs,
+       blob_totals.size AS blob_size,
+       pack_totals.count AS core_packs,
+       pack_totals.size AS core_pack_size,
        (SELECT COUNT(*) FROM import_jobs) AS import_jobs,
-       (SELECT COUNT(*) FROM download_builds) AS download_builds`,
+       (SELECT COUNT(*) FROM download_builds) AS download_builds
+       FROM (SELECT COUNT(*) AS count,COALESCE(SUM(size_bytes),0) AS size FROM blobs) blob_totals
+       CROSS JOIN (SELECT COUNT(*) AS count,COALESCE(SUM(size_bytes),0) AS size FROM core_packs) pack_totals`,
     )
     .first<{
       users: number;

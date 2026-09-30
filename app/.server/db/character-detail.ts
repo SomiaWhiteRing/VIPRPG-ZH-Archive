@@ -83,8 +83,8 @@ export async function getPublicCharacterDetail(
       db
         .prepare(
           `SELECT 'faceset:' || fs.id AS id,'faceset' AS kind,fs.blob_sha256 AS blobSha256,fs.width_px AS width,fs.height_px AS height
-      FROM character_face_sheet_bindings binding JOIN face_sheets fs ON fs.id=binding.face_sheet_id
-      JOIN blobs b ON b.sha256=fs.blob_sha256
+      FROM character_face_sheet_bindings binding CROSS JOIN face_sheets fs ON fs.id=binding.face_sheet_id
+      CROSS JOIN blobs b ON b.sha256=fs.blob_sha256
       WHERE binding.character_id=? AND fs.library_status='approved' AND b.status='active' AND b.content_type_hint LIKE 'image/%'
       ORDER BY binding.sort_order IS NULL,binding.sort_order,fs.source_order IS NULL,fs.source_order,fs.id`,
         )
