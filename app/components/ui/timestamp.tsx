@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { useRouteLoaderData } from "react-router";
+import type { loader as rootLoader } from "@/app/root";
 import { formatExactTimestamp, formatRelativeTimestamp, parseTimestamp } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
 
@@ -25,10 +27,11 @@ function subscribe(listener: () => void) {
 }
 
 const getSnapshot = () => now;
-const getServerSnapshot = () => null;
 
 export function Timestamp({ value, className }: { value: string; className?: string }) {
-  const currentTime = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const serverTime = useRouteLoaderData<typeof rootLoader>("root")?.serverTime ?? null;
+  // SSR and hydration share the serialized time before the live clock takes over.
+  const currentTime = useSyncExternalStore(subscribe, getSnapshot, () => serverTime) ?? serverTime;
   const date = parseTimestamp(value);
   const exact = formatExactTimestamp(value);
   return (
@@ -37,7 +40,7 @@ export function Timestamp({ value, className }: { value: string; className?: str
       dateTime={Number.isNaN(date.getTime()) ? undefined : date.toISOString()}
       title={exact}
     >
-      {currentTime === null ? exact : formatRelativeTimestamp(value, currentTime)}
+      {currentTime === null ? null : formatRelativeTimestamp(value, currentTime)}
     </time>
   );
 }
