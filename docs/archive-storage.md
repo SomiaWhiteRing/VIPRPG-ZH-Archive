@@ -216,6 +216,8 @@ published Work + published current ArchiveVersion
 
 GC 实现位于 `app/.server/storage/admin-storage-checks.ts` 和 `worker/archive-gc.mjs`。最终 sweep 必须有权限、显式确认、固定批次上限和审计；dry-run 不得产生删除副作用。
 
+超过 24 小时无活动的 processing 归档由定时 GC 处理：先失效上传任务，再在同一 D1 batch 中以 `purged_at` 锁定归档、将 blob/core pack 的 `first_seen_archive_version_id` 转移给其他引用归档（没有其他引用时置空），并解除对象引用。D1 成功后才删除独占 manifest；归档记录保留到 R2 删除成功，失败时下轮直接重试，不重新等待 24 小时。最后删除归档记录及没有其他归档或外部链接的 processing 作品。共享对象仍按全局引用和原有宽限期回收。
+
 两种 sweep 共用 `gc-candidates.ts`：每类对象先按 SHA 索引取最多 `10 × limitPerType` 条活动记录，再检查宽限期和全部引用，最多清理 `limitPerType` 条。`archive_gc_cursors` 保存下一轮起点，清理完成后以条件更新推进；达到清理上限时只推进至最后选中的对象，避免遗漏后续候选。扫到末尾后下一次从头开始，较早位置新解除的引用及删除失败对象在后续巡检再次检查。对象较多时一次完整巡检可能跨多次调用，不再保证一轮找到所有可清理对象。
 
 `candidateScanCount` 和 `scanCompleted` 表达本轮候选窗口大小和是否到达末尾；原有 `scannedCount` 继续表示进入清理阶段的候选数。保留删除前的原子引用复核及失败恢复。预览统计仍为只读全量统计，并使用反向引用索引；它不推进游标。

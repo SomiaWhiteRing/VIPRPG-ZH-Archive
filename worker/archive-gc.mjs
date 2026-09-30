@@ -68,6 +68,7 @@ async function expireStaleProcessing(env, limit) {
         av.work_id,
         av.manifest_sha256,
         av.created_at AS archive_created_at,
+        av.purged_at,
         w.status AS work_status,
         ij.id AS import_job_id,
         ij.updated_at AS import_updated_at
@@ -82,8 +83,12 @@ async function expireStaleProcessing(env, limit) {
          LIMIT 1
        )
        WHERE av.status = 'processing'
-         AND datetime(COALESCE(ij.updated_at, av.created_at)) <= datetime('now', ?)
-       ORDER BY datetime(COALESCE(ij.updated_at, av.created_at)) ASC, av.id ASC
+         AND (
+           av.purged_at IS NOT NULL
+           OR (ij.status = 'expired' AND ij.failed_stage = 'processing_expiry')
+           OR datetime(COALESCE(ij.updated_at, av.created_at)) <= datetime('now', ?)
+         )
+       ORDER BY datetime(COALESCE(av.purged_at, ij.updated_at, av.created_at)) ASC, av.id ASC
        LIMIT ?`,
     )
     .bind(cutoff, limit)
@@ -94,27 +99,25 @@ async function expireStaleProcessing(env, limit) {
   const failed = [];
 
   for (const row of candidates.results ?? []) {
-    if (!(await expireProcessingImportJob(env.DB, row.import_job_id, cutoff))) {
-      skipped.push({ archiveVersionId: row.archive_version_id });
-      continue;
-    }
-
     try {
+      if (
+        (!row.purged_at && !(await expireProcessingImportJob(env.DB, row.import_job_id, cutoff)))
+        || !(await reserveProcessingArchiveCleanup(env.DB, row))
+      ) {
+        skipped.push({ archiveVersionId: row.archive_version_id });
+        continue;
+      }
+
       if (!(await hasOtherManifestReferences(env.DB, row.manifest_sha256, row.archive_version_id))) {
         await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
       }
 
-      await env.DB.batch([
-        env.DB
-          .prepare(`DELETE FROM archive_version_blob_refs WHERE archive_version_id = ?`)
-          .bind(row.archive_version_id),
-        env.DB
-          .prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id = ?`)
-          .bind(row.archive_version_id),
-        env.DB
-          .prepare(`DELETE FROM archive_versions WHERE id = ? AND status = 'processing'`)
-          .bind(row.archive_version_id),
-      ]);
+      // Keep the reserved row until its manifest is gone, so an R2 failure has
+      // a durable retry target without reopening the expired upload.
+      await env.DB
+        .prepare(`DELETE FROM archive_versions WHERE id = ? AND status = 'processing' AND purged_at IS NOT NULL`)
+        .bind(row.archive_version_id)
+        .run();
 
       const workCleanup = await env.DB
         .prepare(
@@ -214,6 +217,47 @@ async function expireStaleProcessing(env, limit) {
   };
 }
 
+async function reserveProcessingArchiveCleanup(db, row) {
+  const archiveVersionId = row.archive_version_id;
+  const reserved = `EXISTS (
+    SELECT 1 FROM archive_versions
+    WHERE id = ? AND status = 'processing' AND purged_at IS NOT NULL
+  )`;
+  const results = await db.batch([
+    db.prepare(`UPDATE archive_versions
+      SET purged_at = COALESCE(purged_at, CURRENT_TIMESTAMP), is_current = 0
+      WHERE id = ? AND status = 'processing'
+        AND (
+          purged_at IS NOT NULL OR (
+            COALESCE((SELECT ij.id FROM import_jobs ij
+              WHERE ij.archive_version_id = archive_versions.id
+                OR (ij.work_id = archive_versions.work_id AND ij.archive_version_id IS NULL)
+              ORDER BY datetime(ij.updated_at) DESC, ij.id DESC LIMIT 1), 0) = COALESCE(?, 0)
+            AND (? IS NULL OR EXISTS (SELECT 1 FROM import_jobs
+              WHERE id = ? AND status = 'expired' AND failed_stage = 'processing_expiry'))
+          )
+        )`)
+      .bind(archiveVersionId, row.import_job_id, row.import_job_id, row.import_job_id),
+    // first_seen is provenance, not an ownership reference. Keep a surviving
+    // archive as its origin when possible; otherwise clear the nullable FK.
+    db.prepare(`UPDATE blobs SET first_seen_archive_version_id = (
+      SELECT MIN(archive_version_id) FROM archive_version_blob_refs
+      WHERE blob_sha256 = blobs.sha256 AND archive_version_id <> ?
+    ) WHERE first_seen_archive_version_id = ? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId, archiveVersionId),
+    db.prepare(`UPDATE core_packs SET first_seen_archive_version_id = (
+      SELECT MIN(archive_version_id) FROM archive_version_core_pack_refs
+      WHERE core_pack_id = core_packs.id AND archive_version_id <> ?
+    ) WHERE first_seen_archive_version_id = ? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId, archiveVersionId),
+    db.prepare(`DELETE FROM archive_version_blob_refs WHERE archive_version_id = ? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId),
+    db.prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id = ? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId),
+  ]);
+  return (results[0].meta?.changes ?? 0) > 0;
+}
+
 async function expireProcessingImportJob(db, importJobId, cutoff) {
   if (!importJobId) return true;
   const result = await db
@@ -229,7 +273,10 @@ async function expireProcessingImportJob(db, importJobId, cutoff) {
            'created', 'preflighted', 'uploading_source', 'awaiting_metadata',
            'uploading_metadata', 'committing', 'failed', 'canceled', 'expired'
          )
-         AND datetime(updated_at) <= datetime('now', ?)`,
+         AND (
+           (status = 'expired' AND failed_stage = 'processing_expiry')
+           OR datetime(updated_at) <= datetime('now', ?)
+         )`,
     )
     .bind(importJobId, cutoff)
     .run();
