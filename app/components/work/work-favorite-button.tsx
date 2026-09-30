@@ -11,7 +11,8 @@ import { MAX_FAVORITE_NOTE_LENGTH, MAX_USER_TAGS, parseFavoriteNote, parseUserTa
 import { EllipsisVertical, Heart } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
-import { Link, useLocation, useRevalidator } from "react-router";
+import { Link, useLocation } from "react-router";
+import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 
 type Props = {
   currentUserId: number | null;
@@ -19,12 +20,14 @@ type Props = {
   workId: number;
   workTitle?: string;
   appearance?: "button" | "compact" | "manage" | "remove";
+  summary?: "counts" | "tags";
+  onSaved: (update: WorkFavoriteUpdate) => void | Promise<void>;
 };
 
 export function WorkFavoriteButton(props: Props) {
   return (
     <WorkFavoriteButtonContent
-      key={`${props.workId}:${props.currentUserId}:${props.initialFavorited}`}
+      key={`${props.workId}:${props.currentUserId}`}
       {...props}
     />
   );
@@ -36,8 +39,14 @@ function WorkFavoriteButtonContent({
   workId,
   workTitle,
   appearance = "button",
+  summary,
+  onSaved,
 }: Props) {
-  const [favorited, setFavorited] = useState(initialFavorited);
+  const [favoriteState, setFavoriteState] = useState({ source: initialFavorited, favorited: initialFavorited });
+  if (favoriteState.source !== initialFavorited)
+    setFavoriteState({ source: initialFavorited, favorited: initialFavorited });
+  const favorited = favoriteState.source === initialFavorited ? favoriteState.favorited : initialFavorited;
+  const setFavorited = (next: boolean) => setFavoriteState({ source: initialFavorited, favorited: next });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,7 +59,6 @@ function WorkFavoriteButtonContent({
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
-  const revalidator = useRevalidator();
   const location = useLocation();
   const returnFocus = useRef<HTMLElement | null>(null);
   const dialogId = `favorite-edit-${workId}`;
@@ -84,7 +92,7 @@ function WorkFavoriteButtonContent({
   async function persistFavorite(next: boolean) {
     const pending = normalizeEntityName(tagQuery);
     const savedTags = next ? parseUserTags(pending && !tags.some((tag) => tagNameKey(tag) === tagNameKey(pending)) ? [...tags, pending] : tags) : [];
-    const response = await fetch(`/api/works/${workId}/me`, {
+    const response = await fetch(`/api/works/${workId}/me${summary ? `?summary=${summary}` : ""}`, {
       method: "PATCH",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
@@ -94,10 +102,11 @@ function WorkFavoriteButtonContent({
       const result = await response.json() as { detail?: string; error?: string };
       throw new Error(result.detail || result.error || "收藏状态保存失败，请稍后重试。");
     }
-    setFavorited(next);
+    const result = await response.json() as Partial<WorkFavoriteUpdate>;
+    setFavorited(result.favorited ?? next);
     setOpen(false);
     toast.success(next ? "收藏已保存。" : "已取消收藏。");
-    void revalidator.revalidate();
+    await onSaved({ ...result, favorited: result.favorited ?? next });
   }
 
   async function saveFavorite(next: boolean) {

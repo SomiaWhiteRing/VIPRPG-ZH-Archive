@@ -2,25 +2,30 @@ import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import { SelectField } from "@/app/components/ui/select";
 import type { RoleSummary } from "@/lib/dto/db/permissions";
-import { useState, useTransition } from "react";
-import { useRevalidator } from "react-router";
+import { useState } from "react";
+import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 
 export function RoleAssignmentControl({
   userId,
   initialRoleIds,
   roles,
+  onSaved,
+  disabled = false,
+  onBusyChange,
 }: {
   userId: number;
   initialRoleIds: number[];
   roles: RoleSummary[];
+  onSaved: (access: AdminUserAccessUpdate) => Promise<void>;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const toast = useToast();
   const roleIds = initialRoleIds;
 
-  const revalidator = useRevalidator();
-  const [refreshing, startTransition] = useTransition();
   const [selectedRoleId, setSelectedRoleId] = useState(roles[0]?.id ?? 0);
   const [saving, setSaving] = useState(false);
+  const busy = saving || disabled;
   const assigned = roles.filter((role) => roleIds.includes(role.id));
   const available = roles.filter(
     (role) => role.status === "active" && !roleIds.includes(role.id),
@@ -33,25 +38,29 @@ export function RoleAssignmentControl({
 
   async function request(url: string, init: RequestInit) {
     setSaving(true);
+    onBusyChange(true);
     try {
       const response = await fetch(url, init);
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
         detail?: string;
+        access: AdminUserAccessUpdate;
       };
       if (!response.ok || !payload.ok)
         throw new Error(payload.detail ?? payload.error ?? "操作失败");
-      startTransition(() => revalidator.revalidate());
+      await onSaved(payload.access);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "操作失败");
       throw cause;
     } finally {
       setSaving(false);
+      onBusyChange(false);
     }
   }
 
   async function assign() {
+    if (busy) return;
     if (!effectiveSelectedRoleId) return;
     try {
       await request(`/api/admin/users/${userId}/roles`, {
@@ -67,6 +76,7 @@ export function RoleAssignmentControl({
   }
 
   async function remove(roleId: number) {
+    if (busy) return;
     try {
       await request(`/api/admin/users/${userId}/roles/${roleId}`, {
         method: "DELETE",
@@ -87,7 +97,7 @@ export function RoleAssignmentControl({
             {role.status === "active" && role.availableToAll ? "（移除单独授权后仍全员可用）" : ""}
           </span>
           <Button
-            disabled={saving || refreshing}
+            disabled={busy}
             onClick={() => remove(role.id)}
             size="sm"
             type="button"
@@ -110,7 +120,7 @@ export function RoleAssignmentControl({
             value={String(effectiveSelectedRoleId)}
           />
           <Button
-            disabled={saving || refreshing}
+            disabled={busy}
             onClick={assign}
             size="sm"
             type="button"

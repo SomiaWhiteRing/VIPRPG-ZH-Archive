@@ -8,21 +8,28 @@ import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
+import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 export function WorkEngagementActions({
+  onSaved,
+  summary,
   currentUserId,
   initialFavorited,
   workId,
 }: {
+  onSaved: (update: WorkFavoriteUpdate) => void | Promise<void>;
+  summary?: "counts" | "tags";
   currentUserId: number | null;
   initialFavorited: boolean;
   workId: number;
 }) {
   return (
     <WorkFavoriteButton
+      onSaved={onSaved}
+      summary={summary}
       currentUserId={currentUserId}
       initialFavorited={initialFavorited}
       workId={workId}

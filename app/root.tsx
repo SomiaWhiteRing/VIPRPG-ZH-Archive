@@ -27,6 +27,7 @@ import { NavigationProgress } from "./components/ui/navigation-progress";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
 import "./globals.css";
+export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 const subscribeFrame = () => () => {};
 const frameSnapshot = () => window.self !== window.top;

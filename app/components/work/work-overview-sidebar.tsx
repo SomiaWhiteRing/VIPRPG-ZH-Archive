@@ -9,8 +9,13 @@ import type { GameWorkDetail } from "@/lib/dto/db/game-library";
 import type { WorkOverviewSidebarData } from "@/lib/dto/db/work-community";
 import { ExternalLink, Link2 } from "lucide-react";
 import { Link } from "react-router";
+import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 
-export function WorkOverviewSidebar({ work, data }: { work: GameWorkDetail; data: WorkOverviewSidebarData }) {
+export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSummary = "counts" }: {
+  work: GameWorkDetail; data: WorkOverviewSidebarData;
+  onFavoriteSaved: (update: WorkFavoriteUpdate) => void | Promise<void>;
+  favoriteSummary?: "counts" | "tags";
+}) {
   const { currentUser, community, containingCatalogs, userCatalogs, showRelationEditor, editInfoHref } = data;
   const current = work.archiveVersions[0] ?? null;
   const externalDownload = work.externalLinks.find((link) => link.linkType === "download_page") ?? null;
@@ -19,6 +24,8 @@ export function WorkOverviewSidebar({ work, data }: { work: GameWorkDetail; data
     <WorkSidebar
       engagement={
         <WorkEngagementActions
+          onSaved={onFavoriteSaved}
+          summary={favoriteSummary}
           currentUserId={currentUser?.id ?? null}
           initialFavorited={community.favoritedByMe}
           workId={work.id}

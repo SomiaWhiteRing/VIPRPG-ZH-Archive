@@ -86,6 +86,7 @@ import * as endpoint78 from "@/app/.server/endpoints/api/media/blobs/[sha256]/ro
 import * as endpoint79 from "@/app/.server/endpoints/api/translation-relations/[relationId]/route";
 import * as endpoint80 from "@/app/.server/endpoints/api/work-relations/[relationId]/route";
 import * as endpoint81 from "@/app/.server/endpoints/api/works/[workId]/comments/route";
+import * as workCollectionsEndpoint from "@/app/.server/endpoints/api/works/[workId]/collections/route";
 import * as endpoint82 from "@/app/.server/endpoints/api/works/[workId]/delete/route";
 import * as endpoint83 from "@/app/.server/endpoints/api/works/[workId]/me/route";
 import * as endpoint84 from "@/app/.server/endpoints/api/works/[workId]/owned/route";
@@ -1312,17 +1313,26 @@ api.all("/api/works/:workId/played", (c) =>
     Allow: "POST, OPTIONS",
   }),
 );
+api.on(["GET", "HEAD"], "/api/works/:workId/relations", (c) =>
+  endpoint86.GET(c.get("runtime"), c.req.raw, { params: { workId: c.req.param("workId") } }),
+);
+api.on(["GET", "HEAD"], "/api/works/:workId/collections", (c) =>
+  workCollectionsEndpoint.GET(c.get("runtime"), c.req.raw, { params: { workId: c.req.param("workId") } }),
+);
+api.options("/api/works/:workId/collections", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/works/:workId/collections", (c) => c.json({ ok: false, error: "Method not allowed" }, 405,
+  { Allow: "GET, HEAD, OPTIONS" }));
 api.on("POST", "/api/works/:workId/relations", (c) =>
   endpoint86.POST(c.get("runtime"), c.req.raw, {
     params: { workId: c.req.param("workId") },
   }),
 );
 api.options("/api/works/:workId/relations", (c) =>
-  c.body(null, 204, { Allow: "POST, OPTIONS" }),
+  c.body(null, 204, { Allow: "GET, HEAD, POST, OPTIONS" }),
 );
 api.all("/api/works/:workId/relations", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
-    Allow: "POST, OPTIONS",
+    Allow: "GET, HEAD, POST, OPTIONS",
   }),
 );
 api.on("POST", "/api/works/:workId/translation-relations", (c) =>

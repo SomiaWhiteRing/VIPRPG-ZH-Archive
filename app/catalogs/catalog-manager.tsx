@@ -19,7 +19,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { CatalogCreateFields } from "./catalog-create-fields";
 import type { CatalogDetail } from "@/lib/dto/db/catalogs";
 import { useMemo, useRef, useState } from "react";
-import { useNavigate, useRevalidator } from "react-router";
+import { useNavigate } from "react-router";
 
 export function CatalogCreateForm() {
   const createButtonRef = useRef<HTMLElement | null>(null);
@@ -77,15 +77,16 @@ export function CatalogCreateForm() {
 }
 export function CatalogSummaryEditor({
   catalog,
+  onSaved,
   canEdit = true,
   canDelete = true,
 }: {
   catalog: CatalogDetail;
+  onSaved: (catalog: CatalogDetail) => void;
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
   const navigate = useNavigate();
-  const revalidator = useRevalidator();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(catalog.title);
@@ -128,14 +129,14 @@ export function CatalogSummaryEditor({
         credentials: "same-origin",
         body: form,
       });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
+      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
       if (!response.ok || !body.ok) {
         toast.error(body.detail ?? "目录保存失败。");
         return;
       }
       setOpen(false);
       toast.success("目录资料已保存。");
-      revalidator.revalidate();
+      onSaved(body.catalog);
     } catch {
       toast.error("网络请求失败。");
     } finally {

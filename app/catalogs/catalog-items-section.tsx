@@ -16,12 +16,11 @@ import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { WorkListItem } from "@/app/components/work/work-list-item";
-import type { CatalogItem } from "@/lib/dto/db/catalogs";
+import type { CatalogDetail, CatalogItem } from "@/lib/dto/db/catalogs";
 import { formatNumber } from "@/lib/format";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
-import { useRevalidator } from "react-router";
 
 type Candidate = {
   id: number;
@@ -37,12 +36,13 @@ export function CatalogItemsSection({
   canEdit,
   catalogId,
   items,
+  onSaved,
 }: {
   canEdit: boolean;
   catalogId: number;
   items: CatalogItem[];
+  onSaved: (catalog: CatalogDetail) => void;
 }) {
-  const revalidator = useRevalidator();
   const toast = useToast();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -124,14 +124,14 @@ export function CatalogItemsSection({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ workId: candidate.id }),
       });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
+      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
       if (!response.ok || !body.ok) {
         toast.error(body.detail ?? "游戏添加失败。");
         return;
       }
       setAddOpen(false);
       toast.success("游戏已添加到目录。");
-      revalidator.revalidate();
+      onSaved(body.catalog);
     } catch {
       toast.error("网络请求失败。");
     } finally {
@@ -171,14 +171,14 @@ export function CatalogItemsSection({
           note: note.trim() || null,
         }),
       });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
+      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
       if (!response.ok || !body.ok) {
         toast.error(body.detail ?? "条目保存失败。");
         return;
       }
       setSelectedWorkId(null);
       toast.success("目录条目已保存。");
-      revalidator.revalidate();
+      onSaved(body.catalog);
     } catch {
       toast.error("网络请求失败。");
     } finally {
@@ -193,7 +193,7 @@ export function CatalogItemsSection({
         `/api/catalogs/${catalogId}/items?workId=${workId}`,
         { method: "DELETE", credentials: "same-origin" },
       );
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
+      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
       if (!response.ok || !body.ok) {
         toast.error(body.detail ?? "条目移除失败。");
         return;
@@ -201,7 +201,7 @@ export function CatalogItemsSection({
       removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
       toast.success("游戏已从目录移除。");
-      revalidator.revalidate();
+      onSaved(body.catalog);
     } catch {
       toast.error("网络请求失败。");
     } finally {

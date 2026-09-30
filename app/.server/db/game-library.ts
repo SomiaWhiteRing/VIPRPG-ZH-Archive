@@ -532,6 +532,70 @@ export async function getGameWorkDetail(
       : [],
   };
 }
+type WorkRelationCardRow = {
+  id: number;
+  relation_type: string;
+  vice_versa: number;
+  created_by_user_id: number | null;
+  work_id: number;
+  title: string;
+  original_title: string;
+  chinese_title: string | null;
+  original_release_date: string | null;
+  engine_family: string;
+  language: string;
+  cover_blob_sha256: string | null;
+};
+function mapWorkRelationRow(row: WorkRelationCardRow): GameWorkRelation {
+  return {
+    id: row.id,
+    direction: "from",
+    relationType: row.relation_type,
+    viceVersa: row.vice_versa === 1,
+    createdByUserId: row.created_by_user_id,
+    workId: row.work_id,
+    title: row.title,
+    originalTitle: row.original_title,
+    chineseTitle: row.chinese_title,
+    originalReleaseDate: row.original_release_date,
+    engineFamily: row.engine_family,
+    language: row.language,
+    coverBlobSha256: row.cover_blob_sha256,
+  };
+}
+function workRelationsStatement(database: D1Database, workId: number) {
+  return database
+    .prepare(
+    `SELECT wr.id,wr.relation_type,wr.vice_versa,
+             wr.created_by_user_id,w.id AS work_id,
+             COALESCE(w.chinese_title,w.original_title) AS title,
+             w.original_title,w.chinese_title,w.original_release_date,
+             w.engine_family,w.language,${RELATED_COVER_SQL}
+      FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
+      WHERE wr.from_work_id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
+      ORDER BY wr.relation_type,title,w.id,wr.id`,
+    )
+    .bind(workId);
+}
+export async function getGameWorkRelations(runtime: AppRuntime, id: number, includeNonPublic = false) {
+  const db = getD1(runtime);
+  const work = await db.prepare(
+    `SELECT id,original_title AS originalTitle,chinese_title AS chineseTitle,language FROM ${includeNonPublic ? "works" : "public_works"} WHERE id=?`,
+  ).bind(id).first<{ id: number; originalTitle: string; chineseTitle: string | null; language: string }>();
+  if (!work) return null;
+  const [relations, translations] = await Promise.all([
+    workRelationsStatement(db, id).all<WorkRelationCardRow>(),
+    listTranslations(runtime, id),
+  ]);
+  const originalId = translations.find((item) => item.role === "original")?.workId
+    ?? (translations.some((item) => item.role === "translation") ? id : null);
+  return {
+    ...work,
+    relations: relations.results.map(mapWorkRelationRow),
+    translations,
+    parallelTranslations: originalId === id ? translations : originalId ? await listTranslations(runtime, originalId) : [],
+  };
+}
 export async function searchEditableWorksForAdmin(
   runtime: AppRuntime,
   input: {
@@ -1976,18 +2040,7 @@ async function loadWorkCollections(
          ORDER BY av.id DESC`,
       )
       .bind(workId),
-    database
-      .prepare(
-        `SELECT wr.id,wr.relation_type,wr.vice_versa,
-                 wr.created_by_user_id,w.id AS work_id,
-                 COALESCE(w.chinese_title,w.original_title) AS title,
-                 w.original_title,w.chinese_title,w.original_release_date,
-                 w.engine_family,w.language,${RELATED_COVER_SQL}
-          FROM work_relations wr JOIN works w ON w.id=wr.to_work_id
-          WHERE wr.from_work_id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id)
-          ORDER BY wr.relation_type,title,w.id,wr.id`,
-      )
-      .bind(workId),
+    workRelationsStatement(database, workId),
     database
       .prepare(
         `SELECT tr.id,tr.target_role AS role,tr.created_by_user_id,
@@ -2105,34 +2158,7 @@ async function loadWorkCollections(
       uploaderName: row.uploader_name,
       uploaderAvatarBlobSha256: row.uploader_avatar_blob_sha256,
     })),
-    relations: batchRows<{
-      id: number;
-      relation_type: string;
-      vice_versa: number;
-      created_by_user_id: number | null;
-      work_id: number;
-      title: string;
-      original_title: string;
-      chinese_title: string | null;
-      original_release_date: string | null;
-      engine_family: string;
-      language: string;
-      cover_blob_sha256: string | null;
-    }>(results[7]).map((row) => ({
-      id: row.id,
-      direction: "from" as const,
-      relationType: row.relation_type,
-      viceVersa: row.vice_versa === 1,
-      createdByUserId: row.created_by_user_id,
-      workId: row.work_id,
-      title: row.title,
-      originalTitle: row.original_title,
-      chineseTitle: row.chinese_title,
-      originalReleaseDate: row.original_release_date,
-      engineFamily: row.engine_family,
-      language: row.language,
-      coverBlobSha256: row.cover_blob_sha256,
-    })),
+    relations: batchRows<WorkRelationCardRow>(results[7]).map(mapWorkRelationRow),
     translations: batchRows<{
       id: number;
       role: "original" | "translation";

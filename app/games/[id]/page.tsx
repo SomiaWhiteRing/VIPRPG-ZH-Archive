@@ -24,6 +24,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { WorkMediaGallery } from "./work-media-gallery";
 import { WorkDescription } from "./work-description";
+import { useWorkFavorite } from "@/app/components/work/use-work-favorite";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -56,8 +57,10 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: loaderData?.title || "游戏详情" }, error);
 
 export default function GameDetailPage() {
-  const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags, comments, relationCards } = useLoaderData<typeof loader>();
-  const { currentUser, community } = sidebar;
+  const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, relationCards } = useLoaderData<typeof loader>();
+  const favorite = useWorkFavorite(sidebar.community, initialTags);
+  const { community, tags } = favorite;
+  const { currentUser } = sidebar;
   const relationGroups = new Map<string, typeof relationCards>();
   for (const relation of relationCards) {
     const group = relationGroups.get(relation.type);
@@ -306,7 +309,7 @@ export default function GameDetailPage() {
             </section>
           </>
         }
-        sidebar={<WorkOverviewSidebar work={work} data={sidebar} />}
+        sidebar={<WorkOverviewSidebar work={work} data={{ ...sidebar, community }} onFavoriteSaved={favorite.onSaved} favoriteSummary="tags" />}
       />
     </DetailPageShell>
   );

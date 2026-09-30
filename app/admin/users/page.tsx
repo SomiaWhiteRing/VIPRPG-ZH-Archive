@@ -22,7 +22,10 @@ import { hasPermission, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permiss
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
+import { useState } from "react";
+import { useRouteRefresh } from "@/app/components/use-route-refresh";
+import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { RoleAssignmentControl } from "./role-assignment-control";
 import { PermissionBlockControl } from "./permission-block-control";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
@@ -98,20 +101,46 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: ["用户与角色", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminUsersPage() {
+  const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
+  const revalidator = useRevalidator();
+  const [pendingUsers, setPendingUsers] = useState(new Set<number>());
+  // Share a row's busy state so role and permission saves cannot race each other.
+  function setUserSaving(id: number, saving: boolean) {
+    setPendingUsers((previous) => {
+      const next = new Set(previous);
+      if (saving) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+  const [snapshot, setSnapshot] = useState({ source: data, updates: new Map<number, AdminUserAccessUpdate>() });
+  const updates = snapshot.source === data ? snapshot.updates : new Map<number, AdminUserAccessUpdate>();
   const {
     canAssignRoles,
     canUpdateStatus,
     canBlockPermissions,
-    permissionBlocks,
+    permissionBlocks: initialPermissionBlocks,
     query,
     status,
     sort,
     page,
-    result,
+    result: initialResult,
     roles,
-    memberships,
+    memberships: initialMemberships,
     assignableRoles,
-  } = useLoaderData<typeof loader>();
+  } = data;
+  const result = { ...initialResult, items: initialResult.items.map((user) => ({ ...user, ...updates.get(user.id)?.user })) };
+  const memberships = new Map(initialMemberships);
+  const permissionBlocks = new Map(initialPermissionBlocks);
+  for (const [id, update] of updates) {
+    memberships.set(id, update.roleIds);
+    permissionBlocks.set(id, update.blockedKeys);
+  }
+  async function onAccessSaved(access: AdminUserAccessUpdate) {
+    if (access.actorChanged) { await revalidator.revalidate(); return; }
+    if (!access.user) { await refresh(); return; }
+    setSnapshot((previous) => ({ source: data,
+      updates: new Map(previous.source === data ? previous.updates : []).set(access.userId, access) }));
+  }
   return (
     <main>
       <PageHeader
@@ -221,6 +250,9 @@ export default function AdminUsersPage() {
                   <div className="flex flex-wrap items-center gap-3">
                     {canBlockPermissions && user.status !== "deleted" ? (
                       <PermissionBlockControl
+                        disabled={pendingUsers.has(user.id)}
+                        onBusyChange={(busy) => setUserSaving(user.id, busy)}
+                        onSaved={onAccessSaved}
                         userId={user.id}
                         displayName={user.displayName}
                         blockedKeys={permissionBlocks.get(user.id) ?? []}
@@ -229,6 +261,9 @@ export default function AdminUsersPage() {
                     ) : null}
                     {canAssignRoles && user.status === "active" ? (
                       <RoleAssignmentControl
+                        disabled={pendingUsers.has(user.id)}
+                        onBusyChange={(busy) => setUserSaving(user.id, busy)}
+                        onSaved={onAccessSaved}
                         initialRoleIds={memberships.get(user.id) ?? []}
                         roles={assignableRoles}
                         userId={user.id}
