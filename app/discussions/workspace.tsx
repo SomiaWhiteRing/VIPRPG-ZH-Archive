@@ -63,6 +63,7 @@ import {
 import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
 import { ForumReplyBar } from "./reply-bar";
 import {
+  DiscussionTagLink,
   ForumAuthorName,
   ForumBody,
   ForumRequestError,
@@ -1038,11 +1039,12 @@ export function DiscussionWorkspace({
                 disabled={pending}
               />
             </div>
-            <div className="my-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1">
               {selected.map((tag) => (
                 <Button
                   type="button"
                   key={tag.id}
+                  className="min-h-7 px-[7px] py-0.5 pointer-coarse:min-h-11"
                   variant="ghost"
                   size="sm"
                   disabled={pending}
@@ -1063,7 +1065,7 @@ export function DiscussionWorkspace({
               </p>
             ) : topics?.items.length ? (
               <section aria-label="讨论主题" aria-busy={pending}>
-                <div className="hidden gap-2 border-b border-border py-2 text-right text-xs text-muted md:flex">
+                <div className="hidden gap-2 border-b border-border py-2 text-right text-xs text-muted md:grid md:grid-cols-[minmax(0,1fr)_72px_96px] lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
                   <span className="min-w-0 flex-1" />
                   <span className="w-[72px] shrink-0">回复</span>
                   <span className="hidden w-[72px] shrink-0 lg:block">浏览</span>
@@ -1071,25 +1073,29 @@ export function DiscussionWorkspace({
                 </div>
                 {topics.items.map((item) => (
                   <article
-                    className="flex min-w-0 flex-col gap-2 border-b border-border py-4 hover:bg-primary/5 focus-within:bg-primary/5 md:flex-row md:items-center"
+                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
                     key={item.id}
                   >
                     <div className="min-w-0 flex-1">
                       {item.tags.length > 0 || item.featured || item.pinned || item.locked ? (
-                        <div className="mb-1 break-words text-sm">
-                          <TopicTags tags={item.tags} />
-                          <TopicStatus topic={item} />
+                        <div className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-[3px] text-sm leading-[21px]">
+                          {item.tags.map((tag) => (
+                            <DiscussionTagLink key={tag.id} tag={tag} />
+                          ))}
+                          {item.featured || item.pinned || item.locked ? (
+                            <TopicStatus topic={item} compact />
+                          ) : null}
                         </div>
                       ) : null}
                       <Link
-                        className="line-clamp-2 break-words font-bold text-foreground hover:text-primary"
+                        className="line-clamp-2 break-words text-base font-bold leading-6 text-foreground hover:text-primary"
                         to={forumHref(`/discussions/${item.id}`, {
                           from: listHref === "/discussions" ? null : listHref,
                         })}
                       >
                         {item.title}
                       </Link>
-                      <div className="mt-2 text-xs text-muted">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-1.5 text-xs leading-[18px] text-muted">
                         <ForumAuthorName author={item.author} />
                         <span className="md:hidden">
                           {" "}
@@ -1112,8 +1118,8 @@ export function DiscussionWorkspace({
                     <span className="hidden w-[72px] shrink-0 text-right font-mono text-sm tabular-nums lg:block">
                       {item.views}
                     </span>
-                    <span className="hidden w-[96px] shrink-0 text-right md:flex md:items-center md:justify-end">
-                      <Timestamp value={item.activeAt} />
+                    <span className="hidden w-[96px] shrink-0 text-right text-muted md:flex md:items-center md:justify-end">
+                      <Timestamp value={item.activeAt} className="leading-5" />
                     </span>
                   </article>
                 ))}
