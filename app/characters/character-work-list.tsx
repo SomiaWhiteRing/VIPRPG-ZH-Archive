@@ -8,9 +8,11 @@ import type {
 
 export function CharacterWorkList({
   works,
+  characterName,
   standalone = false,
 }: {
   works: CharacterWork[];
+  characterName: string;
   standalone?: boolean;
 }) {
   return (
@@ -33,10 +35,10 @@ export function CharacterWorkList({
                   <summary className="cursor-pointer text-muted">
                     登场信息（含剧透）
                   </summary>
-                  <CharacterCredit work={credit} />
+                  <CharacterCredit work={credit} characterName={characterName} />
                 </details>
               ) : (
-                <CharacterCredit key={credit.creditId} work={credit} />
+                <CharacterCredit key={credit.creditId} work={credit} characterName={characterName} />
               ),
             )}
           </WorkListRow>
@@ -46,11 +48,16 @@ export function CharacterWorkList({
   );
 }
 
-function CharacterCredit({ work }: { work: CharacterWorkCredit }) {
+function CharacterCredit({ work, characterName }: {
+  work: CharacterWorkCredit;
+  characterName: string;
+}) {
   return (
     <div className="mt-1.5 text-sm">
       <Badge variant="credit">{CHARACTER_ROLE_LABELS[work.roleKey]}</Badge>
-      <span className="ml-2 text-muted">{work.displayName}</span>
+      {work.displayName !== characterName ? (
+        <span className="ml-2 text-muted">{work.displayName}</span>
+      ) : null}
       {work.notes ? (
         <p className="m-0 mt-1 text-muted wrap-anywhere">{work.notes}</p>
       ) : null}
