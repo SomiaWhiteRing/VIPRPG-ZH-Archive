@@ -37,7 +37,8 @@ export async function loadGameLibrary(
   const requestedSort = stringParam(params.sort);
   const sort =
     requestedSort === "title" || requestedSort === "release" ||
-    requestedSort === "views" || requestedSort === "players" || requestedSort === "comments"
+    requestedSort === "views" || requestedSort === "players" || requestedSort === "comments" ||
+    requestedSort === "favorites"
       ? requestedSort
       : "id";
   const page = Math.max(

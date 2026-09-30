@@ -112,6 +112,7 @@ export function GameLibrary({
                 { value: "views", label: "最多浏览" },
                 { value: "players", label: "最多游玩" },
                 { value: "comments", label: "最多评论" },
+                { value: "favorites", label: "最多收藏" },
               ] as const).map(({ value, label }) => (
                 <Link
                   className={

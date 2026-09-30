@@ -96,7 +96,7 @@ type Filters = {
   includeDeleted?: boolean;
 };
 type ListInput = Filters & {
-  sort?: "id" | "title" | "release" | "relevance" | "views" | "players" | "comments";
+  sort?: "id" | "title" | "release" | "relevance" | "views" | "players" | "comments" | "favorites";
   workIds?: number[];
   limit?: number;
   offset?: number;
@@ -125,6 +125,7 @@ type SummaryRow = {
   download_link_count: number;
   player_count: number;
   comment_count: number;
+  favorite_count: number;
 };
 type WorkRow = {
   extra_json: string;
@@ -248,7 +249,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" |
     "original_release_date" | "engine_family" | "language" | "current_archive_version_id" |
     "uses_shared_player" | "embedded_player_size_bytes" | "total_size_bytes" |
-    "cover_blob_sha256" | "download_link_count" | "player_count" | "comment_count">;
+    "cover_blob_sha256" | "download_link_count" | "player_count" | "comment_count" | "favorite_count">;
   const [recent, original, random] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12 }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
@@ -278,6 +279,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
     viewCount: counts[row.id],
     playerCount: row.player_count,
     commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
     totalSizeBytes: row.total_size_bytes ?? 0,
     embeddedPlayerSizeBytes: row.embedded_player_size_bytes ?? 0,
     downloadSizeBytes: row.current_archive_version_id === null
@@ -1380,7 +1382,9 @@ export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
 }
 function workCountsSql(): string {
   return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS player_count,
-    (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count`;
+    (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
+    (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
+     WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count`;
 }
 
 function summarySql(): string {
@@ -1516,6 +1520,9 @@ function gameWorksOrder(input: ListInput): {
       order: `${input.sort === "players" ? "player_count" : "comment_count"} DESC`,
       orderBinds: [],
     };
+  }
+  if (input.sort === "favorites") {
+    return { order: "favorite_count DESC", orderBinds: [] };
   }
   return { order: "w.id DESC", orderBinds: [] };
 }
@@ -1791,6 +1798,7 @@ function mapSummaryRow(
     viewCount,
     playerCount: row.player_count,
     commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
     distribution: deriveWorkDistribution({
       hasCurrentArchive: row.current_archive_version_id !== null,
       downloadLinkCount: row.download_link_count,

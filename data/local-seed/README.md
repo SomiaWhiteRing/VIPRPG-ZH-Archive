@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The game-card interaction preference refresh applies
+`0016_game_card_interaction_preference.sql`. Existing and new accounts default to
+showing interaction counts; the schema and migration ledger are synchronized.
+Existing business records and R2 objects are preserved.
+
 The comment reply refresh applies `0012_comment_reply_notifications.sql`,
 adding a nullable inbox reference for replies on works, creators and characters.
 The migration ledger is synchronized; existing records and R2 objects are preserved.

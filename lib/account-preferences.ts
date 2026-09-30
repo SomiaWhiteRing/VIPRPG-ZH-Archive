@@ -8,6 +8,7 @@ export const DEFAULT_ACCOUNT_SHORTCUTS = ["/me/favorites", "/me/emojis", "/me/ca
 export type AccountPreferences = {
   notifyUploadedWorkComments: boolean;
   includePlayerInZip: boolean;
+  showGameCardInteractionData: boolean;
   shortcuts: string[];
 };
 
@@ -20,10 +21,11 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number): AccountPreferences {
   return {
     notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
     includePlayerInZip: includePlayer !== 0,
+    showGameCardInteractionData: showGameCardInteractionData !== 0,
     shortcuts: shortcuts === null ? [...DEFAULT_ACCOUNT_SHORTCUTS] : parseAccountShortcuts(JSON.parse(shortcuts)),
   };
 }

@@ -1,4 +1,5 @@
 import { WorkListRow } from "@/app/components/work/work-list-row";
+import { WorkPopularityStats, useShowGameCardInteractionData } from "@/app/components/work/work-popularity-stats";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
 import type { GameWorkSummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
@@ -14,6 +15,7 @@ export function GameLibraryListRow({
 }) {
   const title = work.chineseTitle || work.originalTitle;
   const { downloadUrl, downloadSize } = useArchiveDownload();
+  const showInteractionData = useShowGameCardInteractionData();
   const sizeBytes = downloadSize(work);
   const download = work.currentArchiveVersionId
     ? {
@@ -61,6 +63,7 @@ export function GameLibraryListRow({
         </a>
       ) : null)}
     >
+      {showInteractionData ? <WorkPopularityStats stats={work} showLabels /> : null}
       {children}
     </WorkListRow>
   );
