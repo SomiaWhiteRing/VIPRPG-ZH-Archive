@@ -1,5 +1,11 @@
 # Fixed Local Seed
 
+The download observability refresh applies `0020_download_observability.sql`.
+Full and range responses, transport interruptions and server failures are counted
+separately. Historical counters remain unclassified; completed response bytes and
+R2 GET calls use the new observation counters. Later success retains the last
+failure reason and timestamp. The schema and migration ledger are synchronized.
+
 The display-name refresh applies `0019_unique_user_display_names.sql` and records
 it in the migration ledger. Active and disabled accounts have unique names under
 SQLite NOCASE comparison; actual renames record their old and new names through

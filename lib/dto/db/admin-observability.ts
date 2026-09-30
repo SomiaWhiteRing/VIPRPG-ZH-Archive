@@ -34,17 +34,31 @@ export type RecentImportJob = {
 
 export type RecentDownloadBuild = {
   id: number;
+  workId: number;
   archiveVersionId: number;
+  archiveStatus: string;
+  isCurrent: boolean;
+  status: string;
   workTitle: string;
+  downloadProfile: "download" | "web-play";
   downloadCount: number;
+  fullDownloadCount: number;
+  rangeDownloadCount: number;
   cacheHitCount: number;
   cacheMissCount: number;
   failureCount: number;
+  interruptedCount: number;
+  serverFailureCount: number;
+  unclassifiedFailureCount: number;
   totalR2GetCount: number;
   sizeBytes: number | null;
   lastCacheStatus: string | null;
   lastDurationMs: number | null;
   lastErrorMessage: string | null;
+  lastFailureKind: "interrupted" | "server" | "unknown" | null;
+  lastFailureAt: string | null;
+  lastFailureDurationMs: number | null;
+  lastSuccessAt: string | null;
   lastAccessedAt: string | null;
 };
 
@@ -80,15 +94,23 @@ export type AdminObservability = {
   downloads: {
     buildCount: number;
     totalDownloadCount: number;
+    fullDownloadCount: number;
+    rangeDownloadCount: number;
+    unclassifiedDownloadCount: number;
     cacheHitCount: number;
     cacheMissCount: number;
     cacheBypassCount: number;
     failureCount: number;
+    interruptedCount: number;
+    serverFailureCount: number;
+    unclassifiedFailureCount: number;
+    currentServerFailureBuildCount: number;
     totalR2GetCount: number;
     totalBytesServed: number;
     cachedBytesServed: number;
     estimatedR2GetSavedByCache: number;
     recent: RecentDownloadBuild[];
+    recentFailures: RecentDownloadBuild[];
     expensiveArchives: ExpensiveArchiveVersion[];
   };
 };

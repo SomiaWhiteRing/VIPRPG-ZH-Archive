@@ -4,6 +4,7 @@ import type {
   AdminImportJobDetail,
   AdminObservability,
   RecentImportJob,
+  RecentDownloadBuild,
   StatusCount,
 } from "@/lib/dto/db/admin-observability";
 
@@ -29,10 +30,17 @@ type ImportTotalsRow = {
 type DownloadTotalsRow = {
   build_count: number | null;
   total_download_count: number | null;
+  full_download_count: number | null;
+  range_download_count: number | null;
+  unclassified_download_count: number | null;
   cache_hit_count: number | null;
   cache_miss_count: number | null;
   cache_bypass_count: number | null;
   failure_count: number | null;
+  interrupted_count: number | null;
+  server_failure_count: number | null;
+  unclassified_failure_count: number | null;
+  current_server_failure_build_count: number | null;
   total_r2_get_count: number | null;
   total_bytes_served: number | null;
   cached_bytes_served: number | null;
@@ -70,17 +78,30 @@ type RecentImportRow = {
 
 type RecentDownloadRow = {
   id: number;
+  work_id: number;
   archive_version_id: number;
+  archive_status: string;
+  is_current: number;
+  status: string;
   work_title: string;
+  download_profile: RecentDownloadBuild["downloadProfile"];
   download_count: number;
+  full_download_count: number;
+  range_download_count: number;
   cache_hit_count: number;
   cache_miss_count: number;
   failure_count: number;
+  interrupted_count: number;
+  server_failure_count: number;
   total_r2_get_count: number;
   size_bytes: number | null;
   last_cache_status: string | null;
   last_duration_ms: number | null;
   last_error_message: string | null;
+  last_failure_kind: RecentDownloadBuild["lastFailureKind"];
+  last_failure_at: string | null;
+  last_failure_duration_ms: number | null;
+  last_success_at: string | null;
   last_accessed_at: string | null;
 };
 
@@ -127,26 +148,29 @@ export async function getAdminObservability(
     database.prepare(
       `SELECT COUNT(*) AS build_count,
          SUM(download_count) AS total_download_count,
+         SUM(full_download_count) AS full_download_count,
+         SUM(range_download_count) AS range_download_count,
+         SUM(MAX(0,download_count-full_download_count-range_download_count)) AS unclassified_download_count,
          SUM(cache_hit_count) AS cache_hit_count,
          SUM(cache_miss_count) AS cache_miss_count,
          SUM(cache_bypass_count) AS cache_bypass_count,
          SUM(failure_count) AS failure_count,
-         SUM(total_r2_get_count) AS total_r2_get_count,
-         SUM(COALESCE(size_bytes,0)*download_count) AS total_bytes_served,
-         SUM(COALESCE(size_bytes,0)*cache_hit_count) AS cached_bytes_served,
-         SUM(COALESCE(estimated_r2_get_count,0)*cache_hit_count) AS estimated_r2_get_saved_by_cache
+         SUM(interrupted_count) AS interrupted_count,
+         SUM(server_failure_count) AS server_failure_count,
+         SUM(MAX(0,failure_count-interrupted_count-server_failure_count)) AS unclassified_failure_count,
+         SUM(CASE WHEN status='failed' AND last_failure_kind='server' AND EXISTS (
+           SELECT 1 FROM archive_versions av JOIN works w ON w.id=av.work_id
+           WHERE av.id=download_builds.archive_version_id AND av.status='published'
+             AND av.is_current=1 AND w.status='published'
+         ) THEN 1 ELSE 0 END) AS current_server_failure_build_count,
+         SUM(observed_r2_get_count) AS total_r2_get_count,
+         SUM(total_bytes_served) AS total_bytes_served,
+         SUM(cached_bytes_served) AS cached_bytes_served,
+         SUM(COALESCE(estimated_r2_get_count,0)*full_cache_hit_count) AS estimated_r2_get_saved_by_cache
        FROM download_builds`,
     ),
     database.prepare(
-      `SELECT db.id,db.archive_version_id,
-         COALESCE(w.chinese_title,w.original_title) AS work_title,
-         db.download_count,db.cache_hit_count,db.cache_miss_count,db.failure_count,
-         db.total_r2_get_count,db.size_bytes,db.last_cache_status,db.last_duration_ms,
-         db.last_error_message,db.last_accessed_at
-       FROM download_builds db
-       JOIN archive_versions av ON av.id=db.archive_version_id
-       JOIN works w ON w.id=av.work_id
-       ORDER BY db.last_accessed_at DESC LIMIT 10`,
+      `${adminDownloadSelect()} ORDER BY db.last_accessed_at DESC,db.id DESC LIMIT 10`,
     ),
     database.prepare(
       `SELECT av.id AS archive_version_id,
@@ -155,6 +179,10 @@ export async function getAdminObservability(
        FROM archive_versions av JOIN works w ON w.id=av.work_id
        WHERE av.status='published'
        ORDER BY av.estimated_r2_get_count DESC,av.total_size_bytes DESC LIMIT 10`,
+    ),
+    database.prepare(
+      `${adminDownloadSelect()} WHERE db.failure_count>0
+       ORDER BY db.last_failure_at DESC,db.last_accessed_at DESC,db.id DESC LIMIT 10`,
     ),
   ]);
   const importStatusCounts = (results[0].results ?? []) as StatusCount[];
@@ -167,21 +195,7 @@ export async function getAdminObservability(
     {}) as Partial<DownloadTotalsRow>;
   const recentDownloads = (
     (results[4].results ?? []) as RecentDownloadRow[]
-  ).map((row) => ({
-    id: row.id,
-    archiveVersionId: row.archive_version_id,
-    workTitle: row.work_title,
-    downloadCount: row.download_count,
-    cacheHitCount: row.cache_hit_count,
-    cacheMissCount: row.cache_miss_count,
-    failureCount: row.failure_count,
-    totalR2GetCount: row.total_r2_get_count,
-    sizeBytes: row.size_bytes,
-    lastCacheStatus: row.last_cache_status,
-    lastDurationMs: row.last_duration_ms,
-    lastErrorMessage: row.last_error_message,
-    lastAccessedAt: row.last_accessed_at,
-  }));
+  ).map(mapRecentDownload);
   const expensiveArchives = (
     (results[5].results ?? []) as ExpensiveArchiveRow[]
   ).map((row) => ({
@@ -223,18 +237,57 @@ export async function getAdminObservability(
     downloads: {
       buildCount: downloadTotals.build_count ?? 0,
       totalDownloadCount: downloadTotals.total_download_count ?? 0,
+      fullDownloadCount: downloadTotals.full_download_count ?? 0,
+      rangeDownloadCount: downloadTotals.range_download_count ?? 0,
+      unclassifiedDownloadCount: downloadTotals.unclassified_download_count ?? 0,
       cacheHitCount: downloadTotals.cache_hit_count ?? 0,
       cacheMissCount: downloadTotals.cache_miss_count ?? 0,
       cacheBypassCount: downloadTotals.cache_bypass_count ?? 0,
       failureCount: downloadTotals.failure_count ?? 0,
+      interruptedCount: downloadTotals.interrupted_count ?? 0,
+      serverFailureCount: downloadTotals.server_failure_count ?? 0,
+      unclassifiedFailureCount: downloadTotals.unclassified_failure_count ?? 0,
+      currentServerFailureBuildCount: downloadTotals.current_server_failure_build_count ?? 0,
       totalR2GetCount: downloadTotals.total_r2_get_count ?? 0,
       totalBytesServed: downloadTotals.total_bytes_served ?? 0,
       cachedBytesServed: downloadTotals.cached_bytes_served ?? 0,
       estimatedR2GetSavedByCache:
         downloadTotals.estimated_r2_get_saved_by_cache ?? 0,
       recent: recentDownloads,
+      recentFailures: ((results[6].results ?? []) as RecentDownloadRow[]).map(mapRecentDownload),
       expensiveArchives,
     },
+  };
+}
+
+function adminDownloadSelect(): string {
+  return `SELECT db.id,av.work_id,db.archive_version_id,av.status AS archive_status,av.is_current,db.status,
+    COALESCE(NULLIF(w.chinese_title,''),w.original_title) AS work_title,
+    CASE WHEN db.cache_key GLOB '*/web-play-v[0-9]*' THEN 'web-play' ELSE 'download' END AS download_profile,
+    db.download_count,db.full_download_count,db.range_download_count,db.cache_hit_count,db.cache_miss_count,
+    db.failure_count,db.interrupted_count,db.server_failure_count,
+    db.observed_r2_get_count AS total_r2_get_count,db.size_bytes,db.last_cache_status,db.last_duration_ms,
+    COALESCE(db.last_failure_message,db.last_error_message) AS last_error_message,
+    db.last_failure_kind,db.last_failure_at,db.last_failure_duration_ms,
+    db.last_success_at,db.last_accessed_at
+    FROM download_builds db JOIN archive_versions av ON av.id=db.archive_version_id
+    JOIN works w ON w.id=av.work_id`;
+}
+
+function mapRecentDownload(row: RecentDownloadRow): RecentDownloadBuild {
+  return {
+    id: row.id, workId: row.work_id, archiveVersionId: row.archive_version_id,
+    archiveStatus: row.archive_status, isCurrent: Boolean(row.is_current), status: row.status,
+    workTitle: row.work_title, downloadProfile: row.download_profile, downloadCount: row.download_count,
+    fullDownloadCount: row.full_download_count, rangeDownloadCount: row.range_download_count,
+    cacheHitCount: row.cache_hit_count, cacheMissCount: row.cache_miss_count,
+    failureCount: row.failure_count, interruptedCount: row.interrupted_count, serverFailureCount: row.server_failure_count,
+    unclassifiedFailureCount: Math.max(0,row.failure_count-row.interrupted_count-row.server_failure_count),
+    totalR2GetCount: row.total_r2_get_count, sizeBytes: row.size_bytes,
+    lastCacheStatus: row.last_cache_status, lastDurationMs: row.last_duration_ms,
+    lastErrorMessage: row.last_error_message, lastFailureKind: row.last_failure_kind,
+    lastFailureAt: row.last_failure_at, lastFailureDurationMs: row.last_failure_duration_ms,
+    lastSuccessAt: row.last_success_at, lastAccessedAt: row.last_accessed_at,
   };
 }
 
