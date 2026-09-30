@@ -8,25 +8,19 @@ import { runtimeContext } from "@/app/.server/router-context";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { CharacterContentTabs } from "@/app/characters/[id]/character-content-tabs";
 import { CharacterMaterials } from "@/app/characters/[id]/character-materials";
+import { CharacterWorkList } from "@/app/characters/character-work-list";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { BackLink } from "@/app/components/ui/back-link";
-import { Badge } from "@/app/components/ui/badge";
 import { buttonVariants } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { InfoRow } from "@/app/components/ui/info-row";
-import { WorkListRow } from "@/app/components/work/work-list-row";
 import {
   CHARACTER_EDIT_PERMISSIONS,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { CHARACTER_ROLE_LABELS } from "@/lib/character-names";
-import type {
-  CharacterWork,
-  CharacterWorkCredit,
-} from "@/lib/dto/db/character-detail";
 import { formatNumber } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { ExternalLink, Pencil } from "lucide-react";
@@ -98,9 +92,29 @@ export default function CharacterDetailPage() {
         </p>
       </header>
       <CharacterContentTabs
-        workCount={character.works.length}
+        workCount={character.workCount}
         materialCount={character.materials.length}
-        works={<CharacterWorks works={character.works} />}
+        works={
+          <section aria-labelledby="works-title" className="scroll-mt-20" id="sec-works">
+            <div className="mb-3.5 flex items-baseline justify-between gap-4">
+              <h2 className="m-0 text-base font-bold" id="works-title">
+                登场作品
+              </h2>
+              {character.works.length ? (
+                <Link
+                  aria-label="查看全部登场作品"
+                  className="text-sm font-medium text-secondary hover:underline"
+                  to={`/characters/${character.id}/works`}
+                >
+                  更多
+                </Link>
+              ) : null}
+            </div>
+            {character.works.length ? (
+              <CharacterWorkList works={character.works} />
+            ) : <EmptyState title="暂无登场作品。" variant="plain" />}
+          </section>
+        }
         materials={
           <CharacterMaterials
             characterId={character.id}
@@ -138,7 +152,7 @@ export default function CharacterDetailPage() {
                 ) : null;
               })}
               <InfoRow label="登场作品">
-                {formatNumber(character.works.length)} 部
+                {formatNumber(character.workCount)} 部
               </InfoRow>
               <InfoRow label="素材">
                 {formatNumber(character.materials.length)} 张
@@ -195,53 +209,5 @@ export default function CharacterDetailPage() {
         </section>
       </CharacterContentTabs>
     </DetailPageShell>
-  );
-}
-
-function CharacterWorks({ works }: { works: CharacterWork[] }) {
-  if (!works.length)
-    return <EmptyState title="暂无登场作品。" variant="plain" />;
-  return (
-    <ul className="m-0 list-none divide-y divide-border p-0">
-      {works.map((work) => (
-        <li key={work.id}>
-          <WorkListRow
-            href={`/games/${work.id}`}
-            title={work.title}
-            originalTitle={work.originalTitle}
-            coverBlobSha256={work.coverBlobSha256}
-            authorName={work.authorName}
-            releaseDate={work.releaseDate}
-            engineFamily={work.engineFamily}
-            language={work.language}
-          >
-            {work.credits.map((credit) =>
-              credit.spoilerLevel > 0 ? (
-                <details className="mt-1.5 text-sm" key={credit.creditId}>
-                  <summary className="cursor-pointer text-muted">
-                    登场信息（含剧透）
-                  </summary>
-                  <CharacterCredit work={credit} />
-                </details>
-              ) : (
-                <CharacterCredit key={credit.creditId} work={credit} />
-              ),
-            )}
-          </WorkListRow>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CharacterCredit({ work }: { work: CharacterWorkCredit }) {
-  return (
-    <div className="mt-1.5 text-sm">
-      <Badge variant="credit">{CHARACTER_ROLE_LABELS[work.roleKey]}</Badge>
-      <span className="ml-2 text-muted">{work.displayName}</span>
-      {work.notes ? (
-        <p className="m-0 mt-1 text-muted wrap-anywhere">{work.notes}</p>
-      ) : null}
-    </div>
   );
 }

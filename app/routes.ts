@@ -7,6 +7,7 @@ export default [
   route("catalogs/:id", "catalogs/[id]/page.tsx"),
   route("characters", "characters/page.tsx"),
   route("characters/:id", "characters/[id]/page.tsx"),
+  route("characters/:id/works", "characters/[id]/works/page.tsx"),
   route("creators", "creators/page.tsx"),
   route("creators/:id", "creators/[id]/page.tsx"),
   route("creators/:id/works", "creators/[id]/works/page.tsx"),
