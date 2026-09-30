@@ -563,7 +563,7 @@ function CommentNestedReply({
           aria-label={`${comment.likedByMe ? "取消赞" : "赞"}，${comment.likeCount} 个赞`}
           onClick={() => onLike(comment)}
         >
-          <ThumbsUp aria-hidden className={comment.likedByMe ? "text-primary" : undefined} />
+          <ThumbsUp aria-hidden fill={comment.likedByMe ? "currentColor" : "none"} className={comment.likedByMe ? "text-primary" : undefined} />
           <span className={comment.likedByMe ? "text-primary" : undefined}>{comment.likeCount}</span>
         </Button>
         {currentUserId === comment.author?.id ? (
@@ -685,9 +685,9 @@ function CommentControls({
         onClick={() => onLike(comment)}
         size="sm"
         type="button"
-        variant={comment.likedByMe ? "outline" : "ghost"}
+        variant="ghost"
       >
-        <ThumbsUp aria-hidden />
+        <ThumbsUp aria-hidden fill={comment.likedByMe ? "currentColor" : "none"} />
         {comment.likeCount}
       </Button>
       {currentUserId === comment.author?.id ? (
