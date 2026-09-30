@@ -178,7 +178,7 @@ export default function WebPlayPage() {
                 className="mt-0.5 shrink-0"
                 size={16}
               />
-              <span>该游戏使用了 EasyRPG 不支持的 Maniac 语法，可能无法正常游玩。</span>
+              <span>该游戏使用了EasyRPG不支持的Maniac语法，可能无法正常在线游玩。</span>
             </WorkPageNotice>
           ) : null
         }
