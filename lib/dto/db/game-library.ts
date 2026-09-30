@@ -121,6 +121,7 @@ export type GameWorkSummary = {
   viewCount: number;
   playerCount: number;
   commentCount: number;
+  favoriteCount: number;
   tags: GameTag[];
   characters: GameCharacter[];
   creators: GameCreatorCredit[];
@@ -181,7 +182,7 @@ export type GameCardSummary = Pick<GameWorkSummary,
   "id" | "originalTitle" | "chineseTitle" | "originalReleaseDate" |
   "engineFamily" | "language" | "coverBlobSha256" | "distribution" |
   "totalSizeBytes" | "embeddedPlayerSizeBytes" | "downloadSizeBytes" |
-  "viewCount" | "playerCount" | "commentCount"
+  "viewCount" | "playerCount" | "commentCount" | "favoriteCount"
 >;
 
 export type AdminArchiveVersionEdit = {

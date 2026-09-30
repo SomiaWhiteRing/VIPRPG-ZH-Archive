@@ -34,6 +34,10 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
         <CheckboxField name="notifyUploadedWorkComments" label="接收上传的作品的评论提醒" defaultChecked={preferences.notifyUploadedWorkComments} />
       </div>
       <CheckboxField name="includePlayerInZip" label="下载ZIP时附带EasyRPG Player（若有）" defaultChecked={preferences.includePlayerInZip} />
+      <div className="mt-3">
+        <input name="showGameCardInteractionData" type="hidden" value="0" />
+        <CheckboxField name="showGameCardInteractionData" label="在游戏卡片展示互动数据" defaultChecked={preferences.showGameCardInteractionData} />
+      </div>
       <h3 className="mb-2 mt-5 text-sm font-semibold" id="shortcut-heading">头像菜单显示的快捷入口</h3>
       <DndContext
         id={dndId}

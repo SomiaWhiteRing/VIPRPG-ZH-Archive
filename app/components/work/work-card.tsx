@@ -45,7 +45,9 @@ export function WorkCard({
             </div>
           ) : null}
           {imageBadge && !action ? (
-            <span className="absolute top-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white">
+            <span className={imageMetadata
+              ? "absolute top-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white"
+              : "absolute right-1.5 bottom-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white max-[640px]:hidden"}>
               {imageBadge}
             </span>
           ) : null}
@@ -67,7 +69,9 @@ export function WorkCard({
       </Link>
       {action ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-4/3">
-          <div className="pointer-events-auto absolute top-1.5 right-1.5">{action}</div>
+          <div className={imageMetadata
+            ? "pointer-events-auto absolute top-1.5 right-1.5"
+            : "pointer-events-auto absolute right-1.5 bottom-1.5"}>{action}</div>
         </div>
       ) : null}
     </div>
