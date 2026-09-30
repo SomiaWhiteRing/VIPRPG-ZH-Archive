@@ -1,11 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
-import { VIEW_DAY_MS, VIEW_DAY_OFFSET_MS, viewDay, type ViewKind } from "@/lib/view-stats";
+import { VIEW_DAY_MS, VIEW_DAY_OFFSET_MS, viewDay, type StatKind } from "@/lib/view-stats";
 
 const MAX_IDS = 128;
 const CLEANUP_BATCH = 5000;
 
-function target(kind: ViewKind, id: number) {
-  if ((kind !== "work" && kind !== "topic") || !Number.isSafeInteger(id) || id <= 0)
+function target(kind: StatKind, id: number) {
+  if ((kind !== "work" && kind !== "topic" && kind !== "play") || !Number.isSafeInteger(id) || id <= 0)
     throw new Error("Invalid view target");
 }
 
@@ -26,8 +26,9 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     `);
   }
 
-  async record(kind: ViewKind, id: number, site: string, ip: string, userAgent: string) {
+  async record(kind: StatKind, id: number, site: string, ip: string, userAgent: string, initialCount = 0) {
     target(kind, id);
+    if (!Number.isSafeInteger(initialCount) || initialCount < 0) throw new Error("Invalid initial count");
     if (!ip || ip.length > 64 || !userAgent || userAgent.length > 1024 || site.length > 256)
       throw new Error("Invalid view identity");
     // Keep salt creation, hashing and the unique insert in one serialized event.
@@ -46,6 +47,9 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
       const key = await crypto.subtle.importKey("raw", salt, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
       const visitor = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(JSON.stringify([site, ip, userAgent])));
       this.ctx.storage.transactionSync(() => {
+        if (kind === "play") this.ctx.storage.sql.exec(
+          "INSERT OR IGNORE INTO totals(kind,id,count) VALUES('play',?,?)", id, initialCount,
+        );
         const inserted = this.ctx.storage.sql.exec(
           "INSERT OR IGNORE INTO seen(day,kind,id,visitor) VALUES(?,?,?,?) RETURNING id",
           day, kind, id, visitor,
@@ -58,9 +62,10 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     });
   }
 
-  counts(kind: ViewKind, ids: number[]): Record<number, number> {
+  counts(kind: StatKind, ids: number[], initialCounts: Record<number, number> = {}): Record<number, number> {
     if (ids.length > MAX_IDS) throw new Error("Too many view targets");
     for (const id of ids) target(kind, id);
+    if (kind === "play") this.#seedPlays(ids, initialCounts);
     const rows = this.ctx.storage.sql.exec<{ id: number; count: number }>(
       "SELECT id,count FROM totals WHERE kind=? AND id IN (SELECT value FROM json_each(?))",
       kind, JSON.stringify(ids),
@@ -70,17 +75,18 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     return result;
   }
 
-  rankWorks(ids: number[], limit: number, offset: number): Array<{ id: number; count: number }> {
+  rankWorks(ids: number[], limit: number, offset: number, kind: "work" | "play" = "work", initialCounts: Record<number, number> = {}): Array<{ id: number; count: number }> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0)
       throw new Error("Invalid view ranking page");
-    for (const id of ids) target("work", id);
+    for (const id of ids) target(kind, id);
+    if (kind === "play") this.#seedPlays(ids, initialCounts);
     // D1 supplies the complete filtered ID set; return only this page of counts.
-    // LEFT JOIN keeps works with no recorded views in the same stable ordering.
+    // LEFT JOIN keeps works with no recorded activity in the same stable ordering.
     return this.ctx.storage.sql.exec<{ id: number; count: number }>(
       `SELECT candidate.value AS id,COALESCE(t.count,0) AS count
-       FROM json_each(?) candidate LEFT JOIN totals t ON t.kind='work' AND t.id=candidate.value
+       FROM json_each(?) candidate LEFT JOIN totals t ON t.kind=? AND t.id=candidate.value
        ORDER BY COALESCE(t.count,0) DESC,candidate.value DESC LIMIT ? OFFSET ?`,
-      JSON.stringify(ids), limit, offset,
+      JSON.stringify(ids), kind, limit, offset,
     ).toArray();
   }
 
@@ -92,14 +98,27 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     this.ctx.storage.transactionSync(() => {
       if (!this.ctx.storage.sql.exec("INSERT OR IGNORE INTO applied_merges(id) VALUES(?) RETURNING id", operation).toArray().length)
         return;
-      this.ctx.storage.sql.exec(`INSERT INTO totals(kind,id,count)
-        SELECT 'work',?,count FROM totals WHERE kind='work' AND id=?
-        ON CONFLICT(kind,id) DO UPDATE SET count=count+excluded.count`, destination, source);
-      this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO seen(day,kind,id,visitor)
-        SELECT day,kind,?,visitor FROM seen WHERE kind='work' AND id=?`, destination, source);
-      this.ctx.storage.sql.exec("DELETE FROM totals WHERE kind='work' AND id=?", source);
-      this.ctx.storage.sql.exec("DELETE FROM seen WHERE kind='work' AND id=?", source);
+      for (const kind of ["work", "play"]) {
+        this.ctx.storage.sql.exec(`INSERT INTO totals(kind,id,count)
+          SELECT kind,?,count FROM totals WHERE kind=? AND id=?
+          ON CONFLICT(kind,id) DO UPDATE SET count=count+excluded.count`, destination, kind, source);
+        this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO seen(day,kind,id,visitor)
+          SELECT day,kind,?,visitor FROM seen WHERE kind=? AND id=?`, destination, kind, source);
+        this.ctx.storage.sql.exec("DELETE FROM totals WHERE kind=? AND id=?", kind, source);
+        this.ctx.storage.sql.exec("DELETE FROM seen WHERE kind=? AND id=?", kind, source);
+      }
     });
+  }
+
+  #seedPlays(ids: number[], initialCounts: Record<number, number>) {
+    const counts = Object.fromEntries(ids.map((id) => {
+      const count = initialCounts[id] ?? 0;
+      if (!Number.isSafeInteger(count) || count < 0) throw new Error("Invalid initial count");
+      return [id, count];
+    }));
+    // Import the existing account count once; subsequent history updates are not added again.
+    this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO totals(kind,id,count)
+      SELECT 'play',CAST(key AS INTEGER),value FROM json_each(?)`, JSON.stringify(counts));
   }
 
   async alarm() {

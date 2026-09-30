@@ -80,7 +80,6 @@ type LockableScreenOrientation = ScreenOrientation & {
 type WebPlayClientProps = {
   comments: ReactNode;
   engagement: ReactNode;
-  isAuthenticated: boolean;
   metadata: WebPlayMetadata;
   notice?: ReactNode;
   secondary: ReactNode;
@@ -90,7 +89,6 @@ type WebPlayClientProps = {
 export function WebPlayClient({
   comments,
   engagement,
-  isAuthenticated,
   metadata,
   notice,
   secondary,
@@ -506,13 +504,11 @@ export function WebPlayClient({
       setRunning(true);
       focusPlayerCanvas();
       signal.throwIfAborted();
-      if (isAuthenticated) {
-        void fetch(`/api/works/${metadata.workId}/played`, {
-          method: "POST",
-          credentials: "same-origin",
-          keepalive: true,
-        }).catch(() => undefined);
-      }
+      void fetch(`/api/works/${metadata.workId}/played`, {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+      }).catch(() => undefined);
       return true;
     } catch (error) {
       if (signal.aborted) return false;
@@ -531,7 +527,7 @@ export function WebPlayClient({
       startingRef.current = false;
       if (!signal.aborted) setPlayerStarting(false);
     }
-  }, [addLog, installed, isAuthenticated, metadata, running]);
+  }, [addLog, installed, metadata, running]);
 
   const lockOrientation = useCallback(
     async (next: DisplayOrientation): Promise<boolean> => {

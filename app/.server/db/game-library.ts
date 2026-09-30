@@ -32,7 +32,7 @@ import {
   parseWorkMoreInfoJson,
 } from "@/app/.server/http/work-more-info";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { rankWorkViews, viewCounts } from "@/app/.server/views/service";
+import { rankWorkStats, viewCounts } from "@/app/.server/views/service";
 import { hasPermission } from "@/lib/authz/permissions";
 import type {
   CharacterCreditSelection,
@@ -123,7 +123,7 @@ type SummaryRow = {
   total_size_bytes: number | null;
   latest_published_at: string | null;
   download_link_count: number;
-  player_count: number;
+  legacy_player_count: number;
   comment_count: number;
   favorite_count: number;
 };
@@ -211,22 +211,27 @@ export async function listGameWorks(
   runtime: AppRuntime,
   input: ListInput = {},
 ): Promise<GameWorkSummary[]> {
-  if (input.sort === "views") {
+  if (input.sort === "views" || input.sort === "players") {
     const database = getD1(runtime);
     const { where, binds } = buildWhere(input);
+    const kind = input.sort === "views" ? "work" : "play";
     // Rank only IDs and counts across the filtered library, then hydrate this page.
-    const candidates = await database.prepare(`SELECT w.id FROM works w WHERE ${where}`)
-      .bind(...binds).all<{ id: number }>();
-    const ranked = await rankWorkViews(runtime, candidates.results.map((row) => row.id),
-      clamp(input.limit ?? 80, 1, 200), clamp(input.offset ?? 0, 0, Number.MAX_SAFE_INTEGER));
+    const candidates = await database.prepare(`SELECT w.id,
+      ${kind === "play" ? legacyPlayCountSql() : "0 AS legacy_player_count"}
+      FROM works w WHERE ${where}`)
+      .bind(...binds).all<{ id: number; legacy_player_count: number }>();
+    const ranked = await rankWorkStats(runtime, kind, candidates.results.map((row) => row.id),
+      clamp(input.limit ?? 80, 1, 200), clamp(input.offset ?? 0, 0, Number.MAX_SAFE_INTEGER),
+      kind === "play" ? Object.fromEntries(candidates.results.map((row) => [row.id, row.legacy_player_count])) : {});
     const pageIds = ranked.map((row) => row.id);
     if (!pageIds.length) return [];
     const result = await gameWorksListStatement(database, {
       ...input, sort: "id", workIds: pageIds, limit: pageIds.length, offset: 0,
     }).all<SummaryRow>();
     const byId = new Map(result.results.map((row) => [row.id, row]));
+    const counts = Object.fromEntries(ranked.map((row) => [row.id, row.count]));
     return hydrate(runtime, pageIds.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []),
-      Object.fromEntries(ranked.map((row) => [row.id, row.count])));
+      kind === "work" ? counts : undefined, kind === "play" ? counts : undefined);
   }
   const rows = await gameWorksListStatement(
     getD1(runtime),
@@ -249,7 +254,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" |
     "original_release_date" | "engine_family" | "language" | "current_archive_version_id" |
     "uses_shared_player" | "embedded_player_size_bytes" | "total_size_bytes" |
-    "cover_blob_sha256" | "download_link_count" | "player_count" | "comment_count" | "favorite_count">;
+    "cover_blob_sha256" | "download_link_count" | "legacy_player_count" | "comment_count" | "favorite_count">;
   const [recent, original, random] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12 }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
@@ -264,9 +269,11 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
     ),
   ]);
   const allRows = [...recent.results, ...original.results, ...random.results];
-  const [playerSize, counts] = await Promise.all([
+  const [playerSize, counts, plays] = await Promise.all([
     sharedPlayerSize(runtime, allRows),
     viewCounts(runtime, "work", allRows.map((row) => row.id)),
+    viewCounts(runtime, "play", allRows.map((row) => row.id),
+      Object.fromEntries(allRows.map((row) => [row.id, row.legacy_player_count]))),
   ]);
   const card = (row: CardRow): GameCardSummary => ({
     id: row.id,
@@ -277,7 +284,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
     language: row.language,
     coverBlobSha256: row.cover_blob_sha256,
     viewCount: counts[row.id],
-    playerCount: row.player_count,
+    playerCount: plays[row.id],
     commentCount: row.comment_count,
     favoriteCount: row.favorite_count,
     totalSizeBytes: row.total_size_bytes ?? 0,
@@ -489,10 +496,11 @@ export async function getGameWorkDetail(
     .first<SummaryRow & { extra_json: string }>();
   if (!row) return null;
   runtime.memo.set(`public-target:work:${row.id}`, true);
-  const [collections, playerSize, counts] = await Promise.all([
+  const [collections, playerSize, counts, plays] = await Promise.all([
     loadWorkCollections(runtime, row.id),
     sharedPlayerSize(runtime, [row]),
     viewCounts(runtime, "work", [row.id]),
+    viewCounts(runtime, "play", [row.id], { [row.id]: row.legacy_player_count }),
   ]);
   const summary = mapSummaryRow(
     row,
@@ -501,6 +509,7 @@ export async function getGameWorkDetail(
     collections.creators,
     playerSize,
     counts[row.id],
+    plays[row.id],
   );
   const originalId =
     collections.translations.find((item) => item.role === "original")?.workId ??
@@ -1380,8 +1389,12 @@ export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
     sourceUrl: clean(form.get("source_url")),
   };
 }
+function legacyPlayCountSql(): string {
+  return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS legacy_player_count`;
+}
+
 function workCountsSql(): string {
-  return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS player_count,
+  return `${legacyPlayCountSql()},
     (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
     (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
      WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count`;
@@ -1515,9 +1528,9 @@ function gameWorksOrder(input: ListInput): {
       orderBinds: [],
     };
   }
-  if (input.sort === "players" || input.sort === "comments") {
+  if (input.sort === "comments") {
     return {
-      order: `${input.sort === "players" ? "player_count" : "comment_count"} DESC`,
+      order: "comment_count DESC",
       orderBinds: [],
     };
   }
@@ -1624,12 +1637,15 @@ async function hydrate(
   runtime: AppRuntime,
   rows: SummaryRow[],
   knownViewCounts?: Record<number, number>,
+  knownPlayCounts?: Record<number, number>,
 ): Promise<GameWorkSummary[]> {
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((row) => row.id))];
-  const [playerSize, counts] = await Promise.all([
+  const [playerSize, counts, plays] = await Promise.all([
     sharedPlayerSize(runtime, rows),
     knownViewCounts ? Promise.resolve(knownViewCounts) : viewCounts(runtime, "work", ids),
+    knownPlayCounts ? Promise.resolve(knownPlayCounts) : viewCounts(runtime, "play", ids,
+      Object.fromEntries(rows.map((row) => [row.id, row.legacy_player_count]))),
   ]);
   const database = getD1(runtime);
   const queries: Array<{
@@ -1750,6 +1766,7 @@ async function hydrate(
       creatorsByWork.get(row.id) ?? [],
       playerSize,
       counts[row.id],
+      plays[row.id],
     ),
   );
 }
@@ -1768,6 +1785,7 @@ function mapSummaryRow(
   creators: GameCreatorCredit[],
   playerSize: number | null,
   viewCount: number,
+  playerCount: number,
 ): GameWorkSummary {
   return {
     id: row.id,
@@ -1796,7 +1814,7 @@ function mapSummaryRow(
       : (row.total_size_bytes ?? 0) + (row.uses_shared_player === 1 ? playerSize! : 0),
     latestPublishedAt: row.latest_published_at,
     viewCount,
-    playerCount: row.player_count,
+    playerCount,
     commentCount: row.comment_count,
     favoriteCount: row.favorite_count,
     distribution: deriveWorkDistribution({
