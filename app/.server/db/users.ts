@@ -28,6 +28,7 @@ import {
 } from "@/lib/auth/password-rules";
 import { hasPermission } from "@/lib/authz/permissions";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
+import { normalizeEntityName } from "@/lib/entity-name";
 
 import { getD1 } from "@/app/.server/db/d1";
 import {
@@ -113,10 +114,39 @@ export function normalizeEmail(value: string): string {
 }
 
 export function normalizeDisplayName(value: string): string {
-  const displayName = value.trim();
+  if (/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]/u.test(value))
+    throw new HttpError(400, "显示名不能包含控制字符或不可见字符");
+  const displayName = normalizeEntityName(value);
   if (!displayName || [...displayName].length > 80)
     throw new HttpError(400, "显示名长度必须为 1 至 80 个字符");
   return displayName;
+}
+
+export async function assertDisplayNameAvailable(
+  runtime: AppRuntime,
+  displayName: string,
+  userId = 0,
+): Promise<void> {
+  const existing = await getD1(runtime)
+    .prepare(
+      `SELECT id FROM users WHERE display_name=? COLLATE NOCASE
+       AND status IN ('active','disabled') AND id<>? LIMIT 1`,
+    )
+    .bind(displayName, userId)
+    .first<{ id: number }>();
+  if (existing) throwDisplayNameTaken();
+}
+
+function throwDisplayNameTaken(): never {
+  throw new HttpError(409, "该显示名已被使用，请换一个", "display_name_taken");
+}
+
+function rethrowDisplayNameConflict(error: unknown): never {
+  for (let cause = error; cause instanceof Error; cause = cause.cause) {
+    if (cause.message.includes("UNIQUE constraint failed: users.display_name"))
+      throwDisplayNameTaken();
+  }
+  throw error;
 }
 
 export async function findUserById(
@@ -210,6 +240,7 @@ export async function createOrActivateVerifiedUser(
   if (existing?.status === "disabled") {
     throw new Error("账户已被禁用");
   }
+  await assertDisplayNameAvailable(runtime, displayName, existing?.id);
 
   if (existing) {
     await getD1(runtime)
@@ -227,7 +258,8 @@ export async function createOrActivateVerifiedUser(
         WHERE id = ?`,
       )
       .bind(email, displayName, input.passwordHash, existing.id)
-      .run();
+      .run()
+      .catch(rethrowDisplayNameConflict);
 
     await ensureInitialBootstrapRole(runtime, existing.id, email);
     return requiredUserById(runtime, existing.id);
@@ -247,7 +279,8 @@ export async function createOrActivateVerifiedUser(
       ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(externalAuthId, email, displayName, input.passwordHash)
-    .run();
+    .run()
+    .catch(rethrowDisplayNameConflict);
 
   const created = await findUserRowByEmail(runtime, email);
   if (created) {
@@ -370,6 +403,7 @@ export async function updateOwnProfile(
   const bio = input.bio.trim();
   if ([...bio].length > 500)
     throw new HttpError(400, "简介不能超过 500 个字符");
+  await assertDisplayNameAvailable(runtime, displayName, input.user.id);
   const database = getD1(runtime);
   const [updated] = await database.batch([
     database
@@ -385,7 +419,7 @@ export async function updateOwnProfile(
           SELECT ?,?,'profile_updated' WHERE changes()=1`,
       )
       .bind(input.user.id, input.user.email),
-  ]);
+  ]).catch(rethrowDisplayNameConflict);
   if ((updated.results[0] as { id: number } | undefined)?.id !== input.user.id)
     throw new HttpError(403, "账户或改名权限已变化，请刷新后重试。");
 }

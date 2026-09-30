@@ -91,6 +91,14 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 - 密码使用原生 `node:crypto` scrypt，格式和透明升级规则以 `app/.server/auth/password.ts` 为准，参数由 `password-policy.json` 发布。当前采用 [OWASP 建议](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)的 `N=32768, r=8, p=3`（32 MiB），原生分配上限 48 MiB，满足 [Workers 的 `N*r*p <= 2^20` 限制](https://github.com/cloudflare/workerd/blob/main/src/workerd/io/limit-enforcer.h)。参数调整需同步开发 seed，运行 `npm run auth:calibrate-password` 测量当前策略，并在部署后的 Workers 验证；本地耗时不能证明远端支持。Workers 原生 PBKDF2 上限为 100,000 次，不能按本机校准结果选择更高迭代数。
 - 正式、预生产和开发环境使用相同的首账号初始化逻辑：第一个完成邮箱验证并创建的账号（用户表中 ID 最小的账号）自动获得 `super_admin`。系统已有超级管理员时不重复授予，后续注册账号仅获得基础角色，不依赖预设邮箱。`scripts/rotate-bootstrap-admin.mjs` 用于需要人工轮换根账户的维护操作，不是首次注册的必需步骤。
 
+### 显示名与改名审计
+
+- 注册与实际改名共用显示名校验：拒绝控制字符、不可见格式字符和 Unicode 默认忽略字符，按 NFKC 规范化、去除首尾空白并合并连续空白，规范化后长度为 1 至 80 个字符。仅修改简介时不改变既有显示名。
+- 规范化后的显示名在活跃和禁用账户之间唯一，ASCII 拉丁字母大小写视为相同；禁用账户保留名称。注册发送验证码前、验证创建账户时和个人改名时均检查名称，数据库唯一索引保证并发写入仍不能重名。
+- 名称由注册成功或改名成功的账户占用，待验证注册不预留。显示名被占用时提示换名；注销账户使用统一匿名名称，不参与唯一性约束。
+- 每次实际改名由数据库触发器写入 `display_name_changed` 审计，`detail_json` 保存 `oldDisplayName` 和 `newDisplayName`，与改名同事务提交。仅修改简介或保存相同名称不产生改名事件；账号注销继续记录原有注销事件。
+- 显示名唯一性通过 `0019_unique_user_display_names.sql` 增量迁移建立。应用前核对存量昵称的规范化结果；旧昵称需要规范化或出现冲突时先预览并按已批准范围处理，不自动改名。昵称相似字和复制头像仍可能造成视觉冒充。
+
 ### 账户注销
 
 本人输入当前密码并二次确认后可注销。保留用户 ID 和公共贡献，状态变为 deleted，名称改为“账户已注销”，头像恢复默认、简介清空、所有个人主页可见性关闭。撤销全部会话与附加角色，仅保留不可移除的基础角色；非活跃账号不获得任何权限。登录统一显示“邮箱或密码不正确”；后台不能重新启用，注册与找回密码不能复活原身份。作品、评论、目录及其关联保留，评论仍可在原目标下阅读。根账户须先通过既有运维流程轮换后注销。
