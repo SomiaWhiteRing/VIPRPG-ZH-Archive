@@ -69,7 +69,14 @@ export class MissingResourceScan {
       const command = commands[id];
       if (!command) return;
       if (id === 10710 && parameters[2] !== 1) return;
-      if (id === 11110 ? mayUseDynamicPictureName(parameters) : parameters.length > command[1]) {
+      // Maniac audio adds a filename variable after its mode bitfield. Only
+      // the low nibble selects the filename; other nibbles affect playback.
+      const dynamicName = id === 11110 ? mayUseDynamicPictureName(parameters)
+        : id === 11510 || id === 11550
+          ? parameters.length > command[1] &&
+            (parameters.length !== command[1] + 2 || (parameters[command[1]] & 0xf) !== 0)
+          : parameters.length > command[1];
+      if (dynamicName) {
         this.limited = true;
         return;
       }
