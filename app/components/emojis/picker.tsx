@@ -19,12 +19,14 @@ import { Popover } from "radix-ui";
 import { createPortal } from "react-dom";
 import { HeightBox } from "@/app/components/ui/height-box";
 import { Button } from "@/app/components/ui/button";
-import type { FaceEmoji } from "@/lib/face-emojis";
+import { emojiInGroup, type FaceEmoji, type EmojiGroup, type EmojiLibraryData } from "@/lib/face-emojis";
 import { cn } from "@/lib/ui/cn";
 import { emojiRequest } from "./client";
 import { EmojiDialog } from "./dialog";
 import { EmojiLibrary } from "./library";
 import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
+import { EmojiPickerTabs } from "./picker-tabs";
+import { useEmojiGroupSelection } from "./group-selection";
 
 const desktopQuery = "(min-width: 640px)";
 function subscribeDesktop(callback: () => void) {
@@ -58,6 +60,8 @@ export function EmojiPicker({
   );
   const [mode, setMode] = useState<Mode>("closed");
   const [emojis, setEmojis] = useState<FaceEmoji[]>([]);
+  const [groups, setGroups] = useState<EmojiGroup[]>([]);
+  const { groupId, selectGroup, syncGroups } = useEmojiGroupSelection();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [keyboardHeight, setKeyboardHeight] = useState<number | null>(null);
@@ -72,10 +76,10 @@ export function EmojiPicker({
     },
     [onMobilePanelOpenChange],
   );
-  const scrollTop = useRef(0);
+  const scrollTop = useRef(new Map<number | null, number>());
   const restoreScroll = useCallback((node: HTMLDivElement | null) => {
-    if (node) node.scrollTop = scrollTop.current;
-  }, []);
+    if (node) node.scrollTop = scrollTop.current.get(groupId) ?? 0;
+  }, [groupId]);
   const request = useRef<AbortController | null>(null);
   const keyboardOpen = useRef(false);
   const panelId = useId();
@@ -83,7 +87,7 @@ export function EmojiPicker({
   const mobileHeight = keyboardHeight
     ? `min(${keyboardHeight}px, 60svh)`
     : "min(20rem, 45svh)";
-  const available = emojis.filter((emoji) => emoji.available);
+  const available = emojis.filter((emoji) => emoji.available && emojiInGroup(emoji, groupId));
   const changeMode = useCallback(
     (next: Mode) => {
       setMode(next);
@@ -159,12 +163,16 @@ export function EmojiPicker({
     setLoading(true);
     setError("");
     try {
-      const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+      const result = await emojiRequest<EmojiLibraryData>(
         "/api/emojis",
         { op: "initialize" },
         controller.signal,
       );
-      if (!controller.signal.aborted) setEmojis(result.emojis);
+      if (!controller.signal.aborted) {
+        setEmojis(result.emojis);
+        setGroups(result.groups);
+        syncGroups(result, true);
+      }
     } catch (error) {
       if (!controller.signal.aborted)
         setError(error instanceof Error ? error.message : "表情加载失败。");
@@ -217,18 +225,15 @@ export function EmojiPicker({
   const contents = (
     <>
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-2 sm:px-2">
-        <span className="inline-flex h-11 items-center gap-2 border-b-2 border-primary text-xs text-primary sm:px-2">
-          <Smile size={18} aria-hidden />
-          我的表情
-        </span>
+        <EmojiPickerTabs groups={groups} value={groupId} onSelect={selectGroup} disabled={loading || disabled} />
         {loading ? (
           <LoaderCircle
             size={14}
-            className="animate-spin text-muted motion-reduce:animate-none"
+            className="shrink-0 animate-spin text-muted motion-reduce:animate-none"
             aria-label="正在加载"
           />
         ) : null}
-        <div className="ml-auto flex items-center">
+        <div className="flex shrink-0 items-center">
           {!desktop ? (
             <Button
               type="button"
@@ -268,9 +273,9 @@ export function EmojiPicker({
       <div
         ref={restoreScroll}
         onScroll={(event) => {
-          scrollTop.current = event.currentTarget.scrollTop;
+          scrollTop.current.set(groupId, event.currentTarget.scrollTop);
         }}
-        className="@container/emoji-picker min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/5 sm:h-60 sm:flex-none sm:bg-card sm:p-2"
+        className="emoji-scroll-viewport @container/emoji-picker min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/5 sm:h-60 sm:flex-none sm:bg-card sm:p-2"
       >
         {error ? (
           <div role="alert" className="p-2 text-sm">

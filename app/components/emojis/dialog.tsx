@@ -38,7 +38,7 @@ export function EmojiDialog({
               </Button>
             </Dialog.Close>
           </div>
-          <div className="min-h-0 overflow-y-auto p-3 sm:p-4">{children}</div>
+          <div className="emoji-scroll-viewport min-h-0 overflow-y-auto p-3 sm:p-4">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

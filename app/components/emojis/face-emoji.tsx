@@ -4,9 +4,10 @@ import { Popover } from "radix-ui";
 import { Link } from "react-router";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
-import type { FaceEmoji } from "@/lib/face-emojis";
+import { emojiInGroup, type FaceEmoji, type EmojiLibraryData } from "@/lib/face-emojis";
 import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
 import { emojiCells, emojiRequest } from "./client";
+import { readEmojiGroup } from "./group-selection";
 
 export function FaceEmojiView({
   emoji,
@@ -32,6 +33,7 @@ export function FaceEmojiView({
     const timer = setTimeout(() => {
       collecting.current = false;
       setOpen(false);
+      setAddedId(null);
     }, 1000);
     return () => clearTimeout(timer);
   }, [addedId]);
@@ -128,7 +130,7 @@ export function FaceEmojiView({
         >
           {emoji.sources.length ? (
             <div
-              className="flex max-h-20 w-full flex-wrap justify-center gap-x-2 gap-y-1 overflow-y-auto text-center text-sm leading-5 text-muted"
+              className="emoji-scroll-viewport flex max-h-20 w-full flex-wrap justify-center gap-x-2 gap-y-1 overflow-y-auto text-center text-sm leading-5 text-muted"
               aria-label="相关角色"
             >
               {emoji.sources.map((source) => (
@@ -160,10 +162,11 @@ export function FaceEmojiView({
                 collecting.current = true;
                 setBusy(true);
                 try {
-                  await emojiRequest("/api/emojis", {
-                    op: "add",
-                    cells: emojiCells([emoji]),
-                  });
+                  const data = await emojiRequest<EmojiLibraryData>();
+                  const groupId = readEmojiGroup(data.userId, data.groups);
+                  const favorite = data.emojis.find((item) => item.id === emoji.id);
+                  if (!favorite || !emojiInGroup(favorite, groupId))
+                    await emojiRequest("/api/emojis", { op: "add", cells: emojiCells([emoji]), groupId });
                   setAddedId(emoji.id);
                 } catch (error) {
                   collecting.current = false;

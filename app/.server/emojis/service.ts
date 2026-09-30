@@ -4,6 +4,8 @@ import {
   type FaceEmoji,
   type FaceEmojiCell,
   type EmojiSheet,
+  type EmojiGroup,
+  type EmojiLibraryData,
 } from "@/lib/face-emojis";
 import { HttpError } from "@/lib/http";
 import {
@@ -88,22 +90,27 @@ export async function defaults(db: D1Database) {
     rows.results.map((r) => r.id),
   );
 }
-export async function library(db: D1Database, userId: number) {
-  const rows = await db
-    .prepare(
-      "SELECT emoji_id AS id FROM user_face_emojis WHERE user_id=? ORDER BY touched_at DESC,position,emoji_id",
-    )
-    .bind(userId)
-    .all<{ id: number }>();
-  return readEmojis(
-    db,
-    rows.results.map((r) => r.id),
-  );
+export async function libraryData(db: D1Database, userId: number): Promise<EmojiLibraryData> {
+  const [favorites, groups, assignments] = await db.batch([
+    db.prepare("SELECT emoji_id AS id FROM user_face_emojis WHERE user_id=? ORDER BY touched_at DESC,position,emoji_id").bind(userId),
+    db.prepare("SELECT id,name FROM user_emoji_groups WHERE user_id=? ORDER BY position,id").bind(userId),
+    db.prepare(`SELECT i.emoji_id AS emojiId,i.group_id AS groupId FROM user_emoji_group_items i
+      JOIN user_emoji_groups g ON g.user_id=i.user_id AND g.id=i.group_id
+      WHERE i.user_id=? ORDER BY g.position,g.id,i.emoji_id`).bind(userId),
+  ]);
+  const rows = favorites.results as { id: number }[];
+  const emojis = await readEmojis(db, rows.map((row) => row.id));
+  const memberships = new Map<number, number[]>();
+  for (const row of assignments.results as { emojiId: number; groupId: number }[]) {
+    const list = memberships.get(row.emojiId) ?? [];
+    list.push(row.groupId);
+    memberships.set(row.emojiId, list);
+  }
+  return { userId, groups: groups.results as EmojiGroup[], emojis: emojis.map((emoji) => ({ ...emoji, groupIds: memberships.get(emoji.id) ?? [] })) };
 }
 export async function initializeLibrary(
   db: D1Database,
   userId: number,
-  replenish = false,
 ) {
   const token = crypto.randomUUID();
   await db.batch([
@@ -114,18 +121,18 @@ export async function initializeLibrary(
       .bind(userId, token),
     db
       .prepare(
-        `UPDATE user_emoji_library_state SET activity=activity+1 WHERE user_id=? AND (?=1 OR initialization_token=?)`,
+        `UPDATE user_emoji_library_state SET activity=activity+1 WHERE user_id=? AND initialization_token=?`,
       )
-      .bind(userId, replenish ? 1 : 0, token),
+      .bind(userId, token),
     db
       .prepare(
         `INSERT INTO user_face_emojis(user_id,emoji_id,touched_at,position)
       SELECT s.user_id,d.emoji_id,s.activity,d.position FROM user_emoji_library_state s,default_face_emojis d
       JOIN available_face_emojis a ON a.id=d.emoji_id
-      WHERE s.user_id=? AND (?=1 OR s.initialization_token=?)
+      WHERE s.user_id=? AND s.initialization_token=?
       AND NOT EXISTS(SELECT 1 FROM user_face_emojis mine WHERE mine.user_id=s.user_id AND mine.emoji_id=d.emoji_id)`,
       )
-      .bind(userId, replenish ? 1 : 0, token),
+      .bind(userId, token),
   ]);
 }
 export function parseCells(value: unknown): FaceEmojiCell[] {
@@ -160,6 +167,91 @@ export function parseIds(value: unknown) {
   )
     throw new HttpError(400, "表情集合无效。");
   return [...new Set(value as number[])];
+}
+export function parseGroupId(value: unknown): number | null | undefined {
+  return value === null || value === undefined ? value : parseIds([value])[0];
+}
+export function parseGroupIds(value: unknown): number[] {
+  if (!Array.isArray(value) || value.some((id) => !Number.isSafeInteger(id) || id <= 0))
+    throw new HttpError(400, "表情分组集合无效。");
+  return [...new Set(value as number[])];
+}
+function groupGate(userId: number, groupId: number | null | undefined) {
+  return groupId === undefined
+    ? { sql: "NOT EXISTS(SELECT 1 FROM user_emoji_groups WHERE user_id=?)", args: [userId] }
+    : groupId === null
+      ? { sql: "1", args: [] }
+      : { sql: "EXISTS(SELECT 1 FROM user_emoji_groups WHERE user_id=? AND id=?)", args: [userId, groupId] };
+}
+export async function createEmojiGroup(db: D1Database, userId: number) {
+  const result = await db.prepare(`WITH RECURSIVE candidates(n) AS (
+    SELECT 1 UNION ALL SELECT n+1 FROM candidates
+    WHERE n<(SELECT COUNT(*)+1 FROM user_emoji_groups WHERE user_id=?)
+  ) INSERT INTO user_emoji_groups(user_id,name,position)
+    SELECT ?, '表情组'||MIN(n),
+      (SELECT COALESCE(MAX(position),-1)+1 FROM user_emoji_groups WHERE user_id=?)
+    FROM candidates WHERE NOT EXISTS(
+      SELECT 1 FROM user_emoji_groups WHERE user_id=? AND name='表情组'||n
+    )`).bind(userId, userId, userId, userId).run();
+  return result.meta.last_row_id;
+}
+export async function renameEmojiGroup(db: D1Database, userId: number, id: number, value: unknown) {
+  if (typeof value !== "string") throw new HttpError(400, "分组名称无效。");
+  const name = value.trim().normalize("NFC");
+  if (!name || [...name].length > 20 || name === "全部") throw new HttpError(400, "分组名称须为 1 至 20 个字符，且不能使用全部。");
+  const result = await db.prepare("UPDATE user_emoji_groups SET name=? WHERE user_id=? AND id=?").bind(name, userId, id).run();
+  if (!result.meta.changes) throw new HttpError(409, "分组已变化，请刷新后重试。");
+}
+export async function deleteEmojiGroup(db: D1Database, userId: number, id: number) {
+  const result = await db.prepare("DELETE FROM user_emoji_groups WHERE user_id=? AND id=?").bind(userId, id).run();
+  if (!result.meta.changes) throw new HttpError(409, "分组已变化，请刷新后重试。");
+}
+export async function reorderEmojiGroup(db: D1Database, userId: number, id: number, beforeId: number | null) {
+  const result = await db.prepare(`WITH ordered AS MATERIALIZED (
+      SELECT id,ROW_NUMBER() OVER(ORDER BY position,id)-1 AS ordinal FROM user_emoji_groups WHERE user_id=?
+    ), destination AS (
+      SELECT CASE WHEN ? IS NULL THEN (SELECT COUNT(*) FROM ordered)
+        ELSE (SELECT ordinal FROM ordered WHERE id=?) END AS ordinal
+    ), reordered AS MATERIALIZED (
+      SELECT id,ROW_NUMBER() OVER(ORDER BY
+        CASE WHEN id=? THEN (SELECT ordinal FROM destination) ELSE ordinal END,
+        CASE WHEN id=? THEN 0 ELSE 1 END)-1 AS position FROM ordered
+    ) UPDATE user_emoji_groups SET position=(SELECT position FROM reordered WHERE reordered.id=user_emoji_groups.id)
+      WHERE user_id=? AND EXISTS(SELECT 1 FROM ordered WHERE id=?)
+        AND (? IS NULL OR EXISTS(SELECT 1 FROM ordered WHERE id=?))`)
+    .bind(userId, beforeId, beforeId, id, id, userId, id, beforeId, beforeId).run();
+  if (!result.meta.changes) throw new HttpError(409, "分组已变化，请刷新后重试。");
+}
+export async function addEmojiGroupMemberships(db: D1Database, userId: number, ids: number[], groupId: number) {
+  if (!ids.length) throw new HttpError(400, "请选择要加入的表情。");
+  const gate = groupGate(userId, groupId);
+  const input = JSON.stringify(ids);
+  const allowed = `${gate.sql} AND (SELECT COUNT(*) FROM user_face_emojis WHERE user_id=? AND emoji_id IN(SELECT value FROM json_each(?)))=json_array_length(?)`;
+  const args = [...gate.args, userId, input, input];
+  const statement = db.prepare(`INSERT INTO user_emoji_group_items(user_id,emoji_id,group_id)
+    SELECT ?,value,? FROM json_each(?) WHERE ${allowed}
+    ON CONFLICT(user_id,emoji_id,group_id) DO NOTHING`).bind(userId, groupId, input, ...args);
+  const [valid] = await db.batch([db.prepare(`SELECT ${allowed} AS allowed`).bind(...args), statement]);
+  if (!(valid.results[0] as { allowed: number }).allowed) throw new HttpError(409, "表情或分组已变化，请刷新后重试。");
+}
+export async function editEmojiGroupMemberships(db: D1Database, userId: number, ids: number[], includeGroupIds: number[], excludeGroupIds: number[]) {
+  if (!ids.length) throw new HttpError(400, "请选择要编辑的表情。");
+  const included = new Set(includeGroupIds);
+  if (excludeGroupIds.some((id) => included.has(id))) throw new HttpError(400, "同一分组不能同时勾选和取消。");
+  const input = JSON.stringify(ids), targets = JSON.stringify([...includeGroupIds, ...excludeGroupIds]);
+  const allowed = `(SELECT COUNT(*) FROM user_face_emojis WHERE user_id=? AND emoji_id IN(SELECT value FROM json_each(?)))=json_array_length(?)
+    AND (SELECT COUNT(*) FROM user_emoji_groups WHERE user_id=? AND id IN(SELECT value FROM json_each(?)))=json_array_length(?)`;
+  const args = [userId, input, input, userId, targets, targets];
+  const [valid] = await db.batch([
+    db.prepare(`SELECT ${allowed} AS allowed`).bind(...args),
+    db.prepare(`DELETE FROM user_emoji_group_items WHERE user_id=?
+      AND emoji_id IN(SELECT value FROM json_each(?)) AND group_id IN(SELECT value FROM json_each(?))
+      AND ${allowed}`).bind(userId, input, JSON.stringify(excludeGroupIds), ...args),
+    db.prepare(`INSERT INTO user_emoji_group_items(user_id,emoji_id,group_id)
+      SELECT ?,e.value,g.value FROM json_each(?) e CROSS JOIN json_each(?) g WHERE ${allowed}
+      ON CONFLICT(user_id,emoji_id,group_id) DO NOTHING`).bind(userId, input, JSON.stringify(includeGroupIds), ...args),
+  ]);
+  if (!(valid.results[0] as { allowed: number }).allowed) throw new HttpError(409, "表情或分组已变化，请刷新后重试。");
 }
 async function registerCells(db: D1Database, cells: FaceEmojiCell[]) {
   if (!cells.length) return [];
@@ -196,30 +288,52 @@ export async function addEmojis(
   db: D1Database,
   userId: number,
   cells: FaceEmojiCell[],
+  groupId?: number | null,
 ) {
   const ids = await registerCells(db, cells);
   await initializeLibrary(db, userId);
-  await db.batch([
+  const gate = groupGate(userId, groupId);
+  const input = JSON.stringify(ids);
+  const statements = [
+    db.prepare(`SELECT ${gate.sql} AS allowed`).bind(...gate.args),
     db
       .prepare(
-        "UPDATE user_emoji_library_state SET activity=activity+1 WHERE user_id=?",
+        `UPDATE user_emoji_library_state SET activity=activity+1 WHERE user_id=? AND ${gate.sql}
+          AND EXISTS(SELECT 1 FROM json_each(?) j WHERE NOT EXISTS(
+            SELECT 1 FROM user_face_emojis u WHERE u.user_id=user_emoji_library_state.user_id AND u.emoji_id=j.value))`,
       )
-      .bind(userId),
+      .bind(userId, ...gate.args, input),
     db
       .prepare(
         `INSERT INTO user_face_emojis(user_id,emoji_id,touched_at,position)
       SELECT s.user_id,j.value,s.activity,CAST(j.key AS INTEGER) FROM user_emoji_library_state s,json_each(?) j
-      WHERE s.user_id=? AND NOT EXISTS(SELECT 1 FROM user_face_emojis mine WHERE mine.user_id=s.user_id AND mine.emoji_id=j.value)`,
+      WHERE s.user_id=? AND ${gate.sql} AND NOT EXISTS(SELECT 1 FROM user_face_emojis mine WHERE mine.user_id=s.user_id AND mine.emoji_id=j.value)`,
       )
-      .bind(JSON.stringify(ids), userId),
-  ]);
-  return library(db, userId);
+      .bind(input, userId, ...gate.args),
+  ];
+  if (groupId != null) statements.push(db.prepare(`INSERT INTO user_emoji_group_items(user_id,emoji_id,group_id)
+      SELECT u.user_id,u.emoji_id,? FROM user_face_emojis u
+      WHERE u.user_id=? AND u.emoji_id IN(SELECT value FROM json_each(?)) AND ${gate.sql}
+      ON CONFLICT(user_id,emoji_id,group_id) DO NOTHING`).bind(groupId, userId, input, ...gate.args));
+  const [valid] = await db.batch(statements);
+  if (!(valid.results[0] as { allowed: number }).allowed) throw new HttpError(409, "请选择当前可用的表情分组。");
 }
 export async function removeEmojis(
   db: D1Database,
   userId: number,
   ids: number[],
+  groupId?: number | null,
 ) {
+  if (groupId != null) {
+    const gate = groupGate(userId, groupId);
+    const [valid] = await db.batch([
+      db.prepare(`SELECT ${gate.sql} AS allowed`).bind(...gate.args),
+      db.prepare(`DELETE FROM user_emoji_group_items WHERE user_id=? AND group_id=?
+        AND emoji_id IN(SELECT value FROM json_each(?)) AND ${gate.sql}`).bind(userId, groupId, JSON.stringify(ids), ...gate.args),
+    ]);
+    if (!(valid.results[0] as { allowed: number }).allowed) throw new HttpError(409, "分组已变化，请刷新后重试。");
+    return;
+  }
   await db
     .prepare(
       "DELETE FROM user_face_emojis WHERE user_id=? AND emoji_id IN(SELECT value FROM json_each(?))",

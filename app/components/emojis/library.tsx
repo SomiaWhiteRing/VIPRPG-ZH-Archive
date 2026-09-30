@@ -1,15 +1,14 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   ListChecks,
   ListX,
-  MoreHorizontal,
+  FolderCog,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
 import { Button } from "@/app/components/ui/button";
 import { DndContext, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, closestCenter, type CollisionDetection, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -19,14 +18,22 @@ import { useToast } from "@/app/components/ui/toast";
 import { cn } from "@/lib/ui/cn";
 import {
   emojiCellKey,
+  emojiInGroup,
   type FaceEmoji,
   type EmojiCharacter,
   type EmojiSheet,
+  type EmojiGroup,
+  type EmojiLibraryData,
+  type EmojiGroupMembershipEdit,
 } from "@/lib/face-emojis";
 import { emojiCells, emojiRequest } from "./client";
 import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
 import { EmojiSourcePicker } from "./source-picker";
 import { SourceFaces, sourceKey, type EmojiSource } from "./source-faces";
+import { EmojiGroupTabs } from "./group-tabs";
+import { EmojiGroupManager } from "./group-manager";
+import { EmojiGroupEditor } from "./group-editor";
+import { useEmojiGroupSelection } from "./group-selection";
 
 const failure = (error: unknown) =>
   error instanceof Error ? error.message : "表情操作失败。";
@@ -35,10 +42,13 @@ type EmojiDrag = {
   emojis: FaceEmoji[];
   from: "source" | "library";
   order: FaceEmoji[];
+  groupId: number | null;
 };
 const collisionDetection: CollisionDetection = (args) => {
   if (args.pointerCoordinates) {
     const hits = pointerWithin(args);
+    const groups = hits.filter((hit) => args.droppableContainers.find((item) => item.id === hit.id)?.data.current?.groupId !== undefined);
+    if (groups.length) return groups;
     if (hits.some((hit) => hit.id === "source")) return hits.filter((hit) => hit.id === "source");
     if (!hits.some((hit) => hit.id === "library")) return [];
     const cells = args.droppableContainers.filter((item) => item.data.current?.from === "library");
@@ -89,8 +99,23 @@ export function EmojiLibrary({
         : { kind: "hot" },
   );
   const [mine, setMine] = useState<FaceEmoji[]>([]);
+  const [groups, setGroups] = useState<EmojiGroup[]>([]);
+  const { groupId, selectGroup, syncGroups } = useEmojiGroupSelection();
+  const [manageGroups, setManageGroups] = useState(false);
+  const [editingGroups, setEditingGroups] = useState<FaceEmoji[] | null>(null);
+  const groupRef = useRef(groupId);
+  groupRef.current = groupId;
+  const groupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mineViewport = useRef<HTMLDivElement>(null);
+  const groupScroll = useRef(new Map<number | null, number>());
+  const applyLibraryData = useCallback((data: EmojiLibraryData) => {
+    setMine(data.emojis);
+    setGroups(data.groups);
+    syncGroups(data);
+  }, [syncGroups]);
   const [defaults, setDefaults] = useState<FaceEmoji[]>([]);
   const [active, setActive] = useState<FaceEmoji | null>(null);
+  const [activeFrom, setActiveFrom] = useState<EmojiDrag["from"]>("source");
   const [multiSelect, setMultiSelect] = useState<EmojiDrag["from"] | null>(null);
   const [selected, setSelected] = useState<FaceEmoji[]>([]);
   const [locateVersion, setLocateVersion] = useState(0);
@@ -115,17 +140,26 @@ export function EmojiLibrary({
   const mutation = useRef(false);
   const workbench = useRef<HTMLDivElement>(null);
   const previewBar = useRef<HTMLDivElement>(null);
-  const owned = new Set(mine.map(emojiCellKey));
+  const mineByCell = new Map(mine.map((emoji) => [emojiCellKey(emoji), emoji]));
+  const visibleMine = admin ? mine : mine.filter((emoji) => emojiInGroup(emoji, groupId));
+  const owned = new Set(visibleMine.map(emojiCellKey));
+  function needsAddition(emoji: FaceEmoji, targetGroup: number | null) {
+    const favorite = mineByCell.get(emojiCellKey(emoji));
+    return !favorite || !emojiInGroup(favorite, targetGroup);
+  }
+  function hasAddition(emojis: FaceEmoji[], targetGroup: number | null) {
+    return emojis.some((emoji) => (emoji.available || mineByCell.has(emojiCellKey(emoji))) && needsAddition(emoji, targetGroup));
+  }
   const selectedKeys = new Set(selected.map(emojiCellKey));
   const hasSelection = selected.length > 0;
   const canAddSelection = selected.some(
-    (emoji) => emoji.available && !owned.has(emojiCellKey(emoji)),
+    (emoji) => emoji.available && needsAddition(emoji, groupId),
   );
   const activeKey = active ? emojiCellKey(active) : null;
   const activeIndex = mine.findIndex(
     (emoji) => emojiCellKey(emoji) === activeKey,
   );
-  const isRemoval = hasSelection ? multiSelect === "library" : activeIndex >= 0;
+  const isRemoval = hasSelection ? multiSelect === "library" : activeIndex >= 0 && (admin || activeFrom === "library");
   const preview = selected.at(-1) ?? mine[activeIndex] ?? active;
   const hasPreview = !!preview;
   const character = source.kind === "character" ? source.character : undefined;
@@ -134,7 +168,7 @@ export function EmojiLibrary({
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
-      const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+      const result = await emojiRequest<EmojiLibraryData>(
         admin ? "/api/admin/emojis" : "/api/emojis",
         admin ? undefined : { op: "initialize" },
         controller.signal,
@@ -145,6 +179,7 @@ export function EmojiLibrary({
         controller.signal,
       );
       setMine(result.emojis);
+      if (!admin) { setGroups(result.groups); syncGroups(result, true); }
       setDefaults(recommendations.emojis);
       setReady(true);
       setLoadError("");
@@ -152,7 +187,16 @@ export function EmojiLibrary({
       if (!controller.signal.aborted) setLoadError(failure(error));
     });
     return () => controller.abort();
-  }, [admin, retry]);
+  }, [admin, retry, syncGroups]);
+  useLayoutEffect(() => {
+    if (mineViewport.current) mineViewport.current.scrollTop = groupScroll.current.get(groupId) ?? 0;
+  }, [groupId]);
+  useEffect(() => () => { if (groupTimer.current) clearTimeout(groupTimer.current); }, []);
+  function chooseGroup(id: number | null, duringDrag = false) {
+    if (mineViewport.current) groupScroll.current.set(groupRef.current, mineViewport.current.scrollTop);
+    selectGroup(id);
+    if (!duringDrag) { setSelected([]); setActive(null); }
+  }
 
   // Reserve the fixed mobile preview's actual height, including safe-area padding.
   useEffect(() => {
@@ -179,15 +223,17 @@ export function EmojiLibrary({
   ) {
     if (mutation.current) {
       toast.info("正在保存，请稍后再操作。");
-      return;
+      return false;
     }
     mutation.current = true;
     if (showBusy) setBusy(true);
     else setSavingOrder(true);
     try {
       await action();
+      return true;
     } catch (error) {
       toast.error(failure(error));
+      return false;
     } finally {
       mutation.current = false;
       if (showBusy) setBusy(false);
@@ -214,6 +260,7 @@ export function EmojiLibrary({
       }
       return;
     }
+    setActiveFrom(from);
     if (from === "library") {
       locate(emoji);
       return;
@@ -227,30 +274,30 @@ export function EmojiLibrary({
     if (!preview || busy || !ready) return;
     const emojis = hasSelection ? selected : [preview];
     if (isRemoval) await remove(emojis);
-    else await add(emojis);
+    else await add(emojis, groupId);
   }
-  async function add(emojis: FaceEmoji[]) {
-    if (busy || !ready) return;
+  async function add(emojis: FaceEmoji[], targetGroup: number | null) {
+    if (busy || !ready) return false;
     const additions = emojis.filter(
-      (emoji) => emoji.available && !owned.has(emojiCellKey(emoji)),
+      (emoji) => emoji.available && needsAddition(emoji, targetGroup),
     );
-    if (!additions.length) return;
+    if (!additions.length) return true;
     if (admin) {
       if (mine.length + additions.length > 256) {
         toast.error("默认清单最多保留 256 个表情。");
-        return;
+        return false;
       }
       setMine((current) => [...current, ...additions]);
       setSelected([]);
       setDirty(true);
-      return;
+      return true;
     }
-    await update(async () => {
-      const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+    return update(async () => {
+      const result = await emojiRequest<EmojiLibraryData>(
         "/api/emojis",
-        { op: "add", cells: emojiCells(additions) },
+        { op: "add", cells: emojiCells(additions), groupId: targetGroup },
       );
-      setMine(result.emojis);
+      applyLibraryData(result);
       setSelected([]);
       setActive((current) =>
         current
@@ -261,9 +308,51 @@ export function EmojiLibrary({
       );
     });
   }
+  async function addToGroup(emojis: FaceEmoji[], targetGroup: number | null) {
+    if (busy || !ready || !emojis.length) return false;
+    if (targetGroup === null) return true;
+    const additions = emojis.filter((emoji) => mineByCell.has(emojiCellKey(emoji)) && needsAddition(emoji, targetGroup));
+    if (!additions.length) return true;
+    return update(async () => {
+      const result = await emojiRequest<EmojiLibraryData>("/api/emojis", { op: "group.add", ids: additions.map((emoji) => mineByCell.get(emojiCellKey(emoji))!.id), groupId: targetGroup });
+      applyLibraryData(result);
+      selectGroup(targetGroup);
+      setSelected([]);
+      setActive((current) => result.emojis.find((emoji) => emoji.id === current?.id) ?? current);
+    });
+  }
+  async function createGroup() {
+    await update(async () => {
+      const result = await emojiRequest<EmojiLibraryData & { createdGroupId: number }>("/api/emojis", { op: "group.create" });
+      applyLibraryData(result);
+      chooseGroup(result.createdGroupId);
+    });
+  }
+  async function editGroups(edit: EmojiGroupMembershipEdit) {
+    if (!editingGroups?.length || busy || !ready) return false;
+    return update(async () => {
+      const result = await emojiRequest<EmojiLibraryData>("/api/emojis", { op: "groups.update", ids: editingGroups.map((emoji) => emoji.id), ...edit });
+      applyLibraryData(result);
+      const visibleGroup = groupId === null || result.groups.some((group) => group.id === groupId) ? groupId : null;
+      const updated = new Map(result.emojis.map((emoji) => [emojiCellKey(emoji), emoji]));
+      setSelected((current) => current.flatMap((emoji) => {
+        const next = updated.get(emojiCellKey(emoji));
+        return next && emojiInGroup(next, visibleGroup) ? [next] : [];
+      }));
+      setActive((current) => {
+        const next = current ? updated.get(emojiCellKey(current)) : null;
+        return next && emojiInGroup(next, visibleGroup) ? next : null;
+      });
+    });
+  }
   async function remove(emojis: FaceEmoji[]) {
     if (busy || !ready || !emojis.length) return;
-    const keys = new Set(emojis.map(emojiCellKey));
+    const removals = emojis.flatMap((emoji) => {
+      const favorite = mineByCell.get(emojiCellKey(emoji));
+      return favorite ? [favorite] : [];
+    });
+    if (!removals.length) return;
+    const keys = new Set(removals.map(emojiCellKey));
     if (admin) {
       setMine((current) =>
         current.filter((item) => !keys.has(emojiCellKey(item))),
@@ -275,17 +364,20 @@ export function EmojiLibrary({
       return;
     }
     await update(async () => {
-      const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+      const result = await emojiRequest<EmojiLibraryData>(
         "/api/emojis",
-        { op: "remove", ids: emojis.map((emoji) => emoji.id) },
+        { op: "remove", ids: removals.map((emoji) => emoji.id) },
       );
-      setMine(result.emojis);
+      applyLibraryData(result);
       setSelected((current) =>
         current.filter((item) => !keys.has(emojiCellKey(item))),
       );
+      setActive((current) => current && keys.has(emojiCellKey(current)) ? null : current);
     });
   }
   function endDrag() {
+    if (groupTimer.current) clearTimeout(groupTimer.current);
+    groupTimer.current = null;
     dragRef.current = null;
     setDrag(null);
     setDropTarget(null);
@@ -310,7 +402,7 @@ export function EmojiLibrary({
     await update(
       async () => {
         try {
-          const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
+          const result = await emojiRequest<EmojiLibraryData>(
             "/api/emojis",
             {
               op: "reorder",
@@ -318,7 +410,7 @@ export function EmojiLibrary({
               beforeId: next[index + 1]?.id ?? null,
             },
           );
-          setMine(result.emojis);
+          applyLibraryData(result);
         } catch (error) {
           setMine(previous);
           throw error;
@@ -373,16 +465,6 @@ export function EmojiLibrary({
     });
     setDirty(true);
   }
-  async function replenish() {
-    await update(async () => {
-      const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
-        "/api/emojis",
-        { op: "replenish" },
-      );
-      setMine(result.emojis);
-      toast.success("已补充缺少的默认表情。");
-    });
-  }
   async function save() {
     await update(async () => {
       const result = await emojiRequest<{ emojis: FaceEmoji[] }>(
@@ -416,7 +498,7 @@ export function EmojiLibrary({
           multiSelect === data.from && selectedKeys.has(emojiCellKey(data.emoji))
             ? data.from === "source"
               ? selected.filter(
-                  (emoji) => emoji.available && !owned.has(emojiCellKey(emoji)),
+                  (emoji) => emoji.available,
                 )
               : selected
             : [data.emoji];
@@ -425,21 +507,34 @@ export function EmojiLibrary({
           emojis,
           from: data.from,
           order: mine,
+          groupId,
         };
         dragRef.current = value;
         setDrag(value);
       }}
-      onDragOver={({ over }) => setDropTarget(over ? over.id === "source" ? "source" : "library" : null)}
+      onDragOver={({ over }) => {
+        if (groupTimer.current) clearTimeout(groupTimer.current);
+        groupTimer.current = null;
+        const target = over?.data.current?.groupId;
+        setDropTarget(over && target === undefined ? over.id === "source" ? "source" : "library" : null);
+        if (target !== undefined && target !== groupRef.current) groupTimer.current = setTimeout(() => chooseGroup(target, true), 300);
+      }}
       onDragCancel={endDrag}
       onDragEnd={({ over }) => {
         const value = dragRef.current;
         endDrag();
         if (!value || !over || busy || mutation.current) return;
+        const targetGroup = over.data.current?.groupId;
+        if (targetGroup !== undefined) chooseGroup(targetGroup, true);
         if (over.id === "source") {
           if (value.from === "library") void remove(value.emojis);
         } else if (value.from === "source") {
-          void add(value.emojis);
+          void add(value.emojis, targetGroup === undefined ? groupRef.current : targetGroup);
         } else {
+          if (!admin && (targetGroup !== undefined || value.groupId !== groupRef.current)) {
+            void addToGroup(value.emojis, targetGroup === undefined ? groupRef.current : targetGroup);
+            return;
+          }
           if (value.emojis.length > 1) return;
           const from = mine.findIndex((item) => emojiCellKey(item) === emojiCellKey(value.emoji));
           const to = mine.findIndex((item) => emojiDragId("library", item) === over.id);
@@ -526,10 +621,8 @@ export function EmojiLibrary({
             if (multiSelect === "source") setSelected([]);
           }}
           className={cn(
-            "relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]",
-            dropTarget === "library" &&
-              drag?.from === "source" &&
-              "bg-primary/5 ring-2 ring-inset ring-primary",
+            "relative grid min-h-0 min-w-0",
+            admin ? "grid-rows-[auto_minmax(0,1fr)_auto]" : "grid-rows-[auto_auto_minmax(0,1fr)_auto]",
           )}
         >
           <header className="flex min-h-[65px] items-center gap-2 border-b border-border p-3">
@@ -556,38 +649,13 @@ export function EmojiLibrary({
             >
               {multiSelect === "library" ? <ListX aria-hidden /> : <ListChecks aria-hidden />}
             </Button>
-            {!admin ? (
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={busy || savingOrder || !ready}
-                    aria-label="表情库更多操作"
-                  >
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    align="end"
-                    sideOffset={4}
-                    className="z-[75] rounded-md border border-border bg-card p-1 text-sm text-foreground shadow-surface"
-                  >
-                    <DropdownMenu.Item
-                      className="cursor-pointer rounded px-3 py-2 outline-none data-[highlighted]:bg-muted/10"
-                      onSelect={() => void replenish()}
-                    >
-                      补充默认表情
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
-            ) : null}
+            {!admin ? <Button type="button" size="icon" variant="ghost" disabled={busy || savingOrder || !ready} aria-label="分组管理" title="分组管理" onClick={() => setManageGroups(true)}><FolderCog aria-hidden /></Button> : null}
           </header>
+          {!admin ? <EmojiGroupTabs management droppable groups={groups} emojis={mine} value={groupId} onSelect={chooseGroup} onCreate={() => void createGroup()} canAdd={(id) => !!drag && hasAddition(drag.emojis, id)} disabled={busy || savingOrder || !ready} /> : null}
           <div
-            className="h-64 min-h-0 overflow-y-auto p-3 sm:h-auto"
+            ref={mineViewport}
+            onScroll={(event) => groupScroll.current.set(groupId, event.currentTarget.scrollTop)}
+            className="emoji-scroll-viewport h-64 min-h-0 overflow-y-auto p-3 sm:h-auto"
           >
             {loadError ? (
               <div role="alert" className="text-sm">
@@ -606,16 +674,16 @@ export function EmojiLibrary({
                 正在加载表情库…
               </p>
             ) : null}
-            {ready && !mine.length ? (
+            {ready && !visibleMine.length ? (
               <div className="grid min-h-48 place-content-center gap-2 text-center text-sm text-muted">
-                <p className="m-0">还没有表情</p>
+                <p className="m-0">{groupId === null ? "还没有表情" : "这个分组还没有表情"}</p>
               </div>
             ) : null}
-            <SortableContext items={mine.map((emoji) => emojiDragId("library", emoji))} strategy={rectSortingStrategy}>
+            <SortableContext items={visibleMine.map((emoji) => emojiDragId("library", emoji))} strategy={rectSortingStrategy}>
             <div
               className="relative flex flex-wrap content-start gap-2"
             >
-              {mine.map((emoji) => {
+              {visibleMine.map((emoji) => {
                 const key = emojiCellKey(emoji);
                 const isSelected =
                   multiSelect === "library"
@@ -687,7 +755,7 @@ export function EmojiLibrary({
                 <div className="flex items-center gap-3">
                   <FaceEmojiImage emoji={preview} size={96} />
                   <div className="grid min-w-0 flex-1 gap-2">
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                       <Button
                         type="button"
                         size="sm"
@@ -698,7 +766,7 @@ export function EmojiLibrary({
                           !ready ||
                           (hasSelection
                             ? !isRemoval && !canAddSelection
-                            : activeIndex < 0 && !preview.available)
+                            : !isRemoval && (!preview.available || !hasAddition([preview], groupId)))
                         }
                         onClick={() => void changeCollection()}
                       >
@@ -715,6 +783,13 @@ export function EmojiLibrary({
                             ? "加入默认清单"
                             : "加入我的表情"}
                       </Button>
+                      {!admin && isRemoval ? <Button type="button" size="sm" variant="outline" disabled={busy || savingOrder || !ready} onClick={() => {
+                        const favorites = (hasSelection ? selected : [preview]).flatMap((emoji) => {
+                          const favorite = mineByCell.get(emojiCellKey(emoji));
+                          return favorite ? [favorite] : [];
+                        });
+                        if (favorites.length) setEditingGroups(favorites);
+                      }}><FolderCog aria-hidden />编辑分组</Button> : null}
                       <Button
                         type="button"
                         size="icon"
@@ -735,7 +810,7 @@ export function EmojiLibrary({
                       </p>
                     ) : preview.sources.length ? (
                       <div
-                        className="flex max-h-14 flex-wrap gap-1 overflow-y-auto"
+                        className="emoji-scroll-viewport flex max-h-14 flex-wrap gap-1 overflow-y-auto"
                         aria-label="相关角色"
                       >
                         {preview.sources.map((item) => (
@@ -830,6 +905,8 @@ export function EmojiLibrary({
         </div>
       ) : null}
     </SortableOverlay>
+    <EmojiGroupManager open={manageGroups} onOpenChange={setManageGroups} groups={groups} onChange={applyLibraryData} onCreated={chooseGroup} />
+    {editingGroups ? <EmojiGroupEditor onOpenChange={(open) => { if (!open) setEditingGroups(null); }} groups={groups} emojis={editingGroups} onConfirm={editGroups} /> : null}
     </DndContext>
   );
 }
