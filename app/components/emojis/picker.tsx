@@ -216,7 +216,7 @@ export function EmojiPicker({
   );
   const contents = (
     <>
-      <div className="order-last flex min-h-11 shrink-0 items-center gap-2 border-t border-border bg-card sm:order-first sm:border-b sm:border-t-0 sm:px-2">
+      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-2 sm:px-2">
         <span className="inline-flex h-11 items-center gap-2 border-b-2 border-primary text-xs text-primary sm:px-2">
           <Smile size={18} aria-hidden />
           我的表情
@@ -308,10 +308,7 @@ export function EmojiPicker({
                 }
                 disabled={disabled}
                 onPointerDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  if (desktop) changeMode("closed");
-                  onSelect(emoji, { focus: desktop });
-                }}
+                onClick={() => onSelect(emoji, { focus: false })}
               >
                 <FaceEmojiImage emoji={emoji} />
               </Button>
