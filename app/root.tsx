@@ -3,6 +3,7 @@ import { copyFaceEmojis } from "@/app/components/emojis/client";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useIsSSR } from "react-aria/SSRProvider";
 import { useFocusVisible } from "react-aria/useFocusVisible";
+import { useSyncExternalStore } from "react";
 import {
   isRouteErrorResponse,
   Link,
@@ -12,6 +13,7 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useLocation,
   useRouteError,
 } from "react-router";
 import { getCurrentUser } from "./.server/auth/current-user";
@@ -26,6 +28,9 @@ import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
 import "./globals.css";
 
+const subscribeFrame = () => () => {};
+const frameSnapshot = () => window.self !== window.top;
+
 export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors(undefined, error);
 
@@ -34,6 +39,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const user = await getCurrentUser(runtime);
   const unread = user ? await countUnreadInboxItemsForUser(runtime, user) : 0;
   return {
+    embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
     session: user
       ? {
           id: user.id,
@@ -91,12 +97,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session } = useLoaderData<typeof loader>();
+  const { session, embedded } = useLoaderData<typeof loader>();
+  const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
+  const { pathname } = useLocation();
   return (
     <>
-      <GameStorageBoundary />
+      {!inFrame ? <GameStorageBoundary /> : null}
       <NavigationProgress />
-      <SiteHeaderNav
+      {!inFrame ? <SiteHeaderNav
         session={session}
         loginLink={
           !session ? (
@@ -108,9 +116,13 @@ export default function App() {
             </Link>
           ) : null
         }
-      />
-      <Outlet />
-      <SiteFooter />
+      /> : null}
+      {inFrame ? (
+        <div className="[--site-header-height:0px]">
+          <Outlet />
+        </div>
+      ) : <Outlet />}
+      {!inFrame && pathname !== "/rakuen" ? <SiteFooter /> : null}
     </>
   );
 }

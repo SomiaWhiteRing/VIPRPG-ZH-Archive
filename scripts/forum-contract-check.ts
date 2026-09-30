@@ -206,13 +206,31 @@ await db.batch([
   userSearchVisibilityStatement(db, 1),
 ]);
 assert.equal((await search()).items.length, 1);
+await assert.rejects(
+  publishForum(ctx, actor, {
+    kind: "comment",
+    postId: root.id,
+    body: "Invalid first-post comment",
+    requestKey: "comment-contract-first-post",
+  }),
+  { status: 400 },
+);
+const parentPost = await publishForum(ctx, actor, {
+  kind: "post",
+  topicId,
+  body: "普通回复楼层",
+  requestKey: "post-contract-parent",
+});
+const parent = sqlite
+  .prepare("SELECT * FROM forum_posts WHERE id=?")
+  .get(parentPost.target.id)!;
 const parentRevision = sqlite
   .prepare("SELECT revision FROM forum_posts WHERE id=?")
-  .get(root.id)!.revision;
+  .get(parent.id)!.revision;
 
 const commentInput = {
   kind: "comment",
-  postId: root.id,
+  postId: parent.id,
   body: "楼内汉化",
   requestKey: "comment-contract-00001",
 };
@@ -221,17 +239,17 @@ assert.deepEqual(await publishForum(ctx, actor, commentInput), comment);
 assert.equal(
   sqlite
     .prepare("SELECT next_comment_number FROM forum_posts WHERE id=?")
-    .get(root.id)!.next_comment_number,
+    .get(parent.id)!.next_comment_number,
   2,
 );
 assert.equal(
   sqlite
     .prepare("SELECT reply_count FROM forum_topics WHERE id=?")
     .get(topicId)!.reply_count,
-  1,
+  2,
 );
 assert.equal(
-  sqlite.prepare("SELECT revision FROM forum_posts WHERE id=?").get(root.id)!
+  sqlite.prepare("SELECT revision FROM forum_posts WHERE id=?").get(parent.id)!
     .revision,
   parentRevision,
 );
@@ -241,7 +259,7 @@ await assert.rejects(
 
 const beforeFailure = sqlite
   .prepare("SELECT next_comment_number FROM forum_posts WHERE id=?")
-  .get(root.id);
+  .get(parent.id);
 const beforeDocuments = sqlite
   .prepare("SELECT COUNT(*) AS n FROM forum_search_documents")
   .get();
@@ -256,7 +274,7 @@ await assert.rejects(
 assert.deepEqual(
   sqlite
     .prepare("SELECT next_comment_number FROM forum_posts WHERE id=?")
-    .get(root.id),
+    .get(parent.id),
   beforeFailure,
 );
 assert.deepEqual(
@@ -318,7 +336,7 @@ assert.equal(
   sqlite
     .prepare("SELECT reply_count FROM forum_topics WHERE id=?")
     .get(topicId)!.reply_count,
-  1,
+  2,
 );
 await assert.rejects(
   publishForum(ctx, actor, {
@@ -329,7 +347,7 @@ await assert.rejects(
   }),
 );
 // A missing floor stays in its original numbered page; nested previews stay bounded.
-for (let n = 2; n <= 22; n++)
+for (let n = 3; n <= 22; n++)
   sqlite
     .prepare(
       `INSERT INTO forum_posts(topic_id,post_number,user_id,body,revision,request_key,request_hash,status)
@@ -345,10 +363,10 @@ for (let n = 2; n <= 26; n++)
       `INSERT INTO forum_post_comments(post_id,user_id,body,revision,request_key,request_hash,comment_number)
   VALUES(?,1,'fixture','r',?,'h',?)`,
     )
-    .run(root.id, `fixture-comment-${n}`, n);
+    .run(parent.id, `fixture-comment-${n}`, n);
 sqlite
   .prepare("UPDATE forum_posts SET next_comment_number=27 WHERE id=?")
-  .run(root.id);
+  .run(parent.id);
 const page1 = await forumPostPage(ctx, topicId, 1);
 const page2 = await forumPostPage(ctx, topicId, 2);
 assert.equal(page1.posts.items.length, 20);
@@ -358,11 +376,11 @@ assert.deepEqual(
   [21, 22],
 );
 assert.equal(page2.posts.total, 22);
-const preview = await forumPreviews(ctx, topicId, [Number(root.id)]);
+const preview = await forumPreviews(ctx, topicId, [Number(parent.id)]);
 assert.equal(preview[0].comments.total, 26);
 assert.equal(preview[0].comments.items.length, 5);
 assert.equal(
-  (await publicCommentPage(ctx, Number(root.id), 2)).items.length,
+  (await publicCommentPage(ctx, Number(parent.id), 2)).items.length,
   10,
 );
 const lastComment = Number(
@@ -370,7 +388,7 @@ const lastComment = Number(
     .prepare(
       "SELECT id FROM forum_post_comments WHERE post_id=? AND comment_number=26",
     )
-    .get(root.id)!.id,
+    .get(parent.id)!.id,
 );
 assert.equal(
   (await forumLocation(ctx, topicId, { commentId: lastComment })).commentPage,
@@ -378,17 +396,17 @@ assert.equal(
 );
 sqlite
   .prepare("UPDATE forum_posts SET status='deleted' WHERE id=?")
-  .run(root.id);
+  .run(parent.id);
 assert.equal(
-  (await publicCommentPage(ctx, Number(root.id), 3)).items.length,
+  (await publicCommentPage(ctx, Number(parent.id), 3)).items.length,
   6,
 );
 sqlite
   .prepare("UPDATE forum_posts SET status='hidden' WHERE id=?")
-  .run(root.id);
-await assert.rejects(publicCommentPage(ctx, Number(root.id), 3));
+  .run(parent.id);
+await assert.rejects(publicCommentPage(ctx, Number(parent.id), 3));
 assert.equal(
-  (await forumPreviews(ctx, topicId, [Number(root.id)]))[0].available,
+  (await forumPreviews(ctx, topicId, [Number(parent.id)]))[0].available,
   false,
 );
 
@@ -405,11 +423,20 @@ const concurrentTopic = await publishForum(ctx, concurrentActor, {
   requestKey: "concurrent-topic-contract",
 });
 const concurrentRoot = sqlite
-  .prepare("SELECT id,revision FROM forum_posts WHERE topic_id=?")
+  .prepare("SELECT id,revision FROM forum_posts WHERE topic_id=? AND post_number=1")
   .get(concurrentTopic.target.id)!;
+const concurrentPost = await publishForum(ctx, concurrentActor, {
+  kind: "post",
+  topicId: concurrentTopic.target.id,
+  body: "Concurrent reply floor",
+  requestKey: "concurrent-parent-contract",
+});
+const concurrentParent = sqlite
+  .prepare("SELECT id,revision FROM forum_posts WHERE id=?")
+  .get(concurrentPost.target.id)!;
 const inputs = ["a", "b"].map((key) => ({
   kind: "comment",
-  postId: concurrentRoot.id,
+  postId: concurrentParent.id,
   body: key,
   requestKey: `concurrent-comment-${key}`,
 }));
@@ -427,7 +454,7 @@ assert.deepEqual(
     .prepare(
       "SELECT comment_number FROM forum_post_comments WHERE post_id=? ORDER BY comment_number",
     )
-    .all(concurrentRoot.id)
+    .all(concurrentParent.id)
     .map((r) => r.comment_number),
   [1, 2],
 );
@@ -435,13 +462,13 @@ assert.equal(
   sqlite
     .prepare("SELECT reply_count FROM forum_topics WHERE id=?")
     .get(concurrentTopic.target.id)!.reply_count,
-  2,
+  3,
 );
 assert.equal(
   sqlite
     .prepare("SELECT revision FROM forum_posts WHERE id=?")
-    .get(concurrentRoot.id)!.revision,
-  concurrentRoot.revision,
+    .get(concurrentParent.id)!.revision,
+  concurrentParent.revision,
 );
 const revision = sqlite
   .prepare("SELECT revision FROM forum_topics WHERE id=?")

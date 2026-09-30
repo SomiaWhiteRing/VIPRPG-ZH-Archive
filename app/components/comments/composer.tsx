@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useBeforeUnload } from "react-router";
 import { ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
@@ -52,6 +53,15 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   const requestIdentity = useRef<{ payload: string; key: string } | null>(null);
   const toast = useToast();
   const busy = !!progress;
+  const unchangedImages = editing?.images ?? [];
+  const dirty = body !== (editing?.bodySource ?? "") ||
+    images.length !== unchangedImages.length ||
+    images.some((image, index) => image.uploaded?.id !== unchangedImages[index]?.id);
+  useBeforeUnload(useCallback((event) => {
+    if (!dirty && !busy) return;
+    event.preventDefault();
+    event.returnValue = "";
+  }, [dirty, busy]));
 
   useEffect(() => {
     mounted.current = true;
