@@ -4,6 +4,35 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website emoji grids and dialogs keep their width when overflow changes. */
+.emoji-scroll-viewport {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 22%, transparent) transparent;
+}
+
+.emoji-scroll-viewport:is(:hover, :focus-within) {
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 50%, transparent) transparent;
+}
+
+.emoji-scroll-viewport::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.emoji-scroll-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.emoji-scroll-viewport::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+}
+
+.emoji-scroll-viewport:is(:hover, :focus-within)::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
 /* Website-only rakuen: the list and original-page iframe scroll independently. */
 .rakuen-page {
   min-width: 0;

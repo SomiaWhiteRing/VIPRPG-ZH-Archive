@@ -191,7 +191,7 @@ export function SourceFaces({
           collected = owned.has(key),
           isSelected = selected?.has(key) ?? activeKey === key;
         return (
-          <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || collected || !emoji.available}>
+          <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || !emoji.available}>
           <Button
             variant="ghost"
             size="icon"
@@ -238,7 +238,7 @@ export function SourceFaces({
   return (
     <div
       ref={viewport}
-      className="h-80 min-h-0 overflow-auto p-3 [overflow-anchor:none] sm:h-auto"
+      className="emoji-scroll-viewport h-80 min-h-0 overflow-auto p-3 [overflow-anchor:none] sm:h-auto"
     >
       {start > 0 ? (
         <Button
@@ -277,7 +277,7 @@ export function SourceFaces({
           }
           renderCell={(sheet, row, column, button) => {
             const emoji = sheetCell(sheet, row, column);
-            return <EmojiDragSource key={`${row}:${column}`} emoji={emoji} disabled={dragDisabled || owned.has(emojiCellKey(emoji))}>{button}</EmojiDragSource>;
+            return <EmojiDragSource key={`${row}:${column}`} emoji={emoji} disabled={dragDisabled}>{button}</EmojiDragSource>;
           }}
           cellState={(sheet, row, column) => {
             const key = emojiCellKey(sheetCell(sheet, row, column));

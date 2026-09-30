@@ -11,7 +11,15 @@ import {
   emojiCategories,
   hotEmojis,
   initializeLibrary,
-  library,
+  libraryData,
+  createEmojiGroup,
+  renameEmojiGroup,
+  deleteEmojiGroup,
+  reorderEmojiGroup,
+  addEmojiGroupMemberships,
+  editEmojiGroupMemberships,
+  parseGroupId,
+  parseGroupIds,
   parseCells,
   parseIds,
   readEmojis,
@@ -90,18 +98,37 @@ emojiApi.all("/api/emojis", async (c) => {
     if (!user) throw new HttpError(401, "请登录后使用表情库。");
     if (request.method === "POST") {
       const body = await emojiRequestBody(request);
+      let createdGroupId: number | undefined;
       switch (body.op) {
         case "initialize":
           await initializeLibrary(db, user.id);
           break;
-        case "replenish":
-          await initializeLibrary(db, user.id, true);
-          break;
         case "add":
-          await addEmojis(db, user.id, parseCells(body.cells));
+          await addEmojis(db, user.id, parseCells(body.cells), parseGroupId(body.groupId));
           break;
         case "remove":
-          await removeEmojis(db, user.id, parseIds(body.ids));
+          await removeEmojis(db, user.id, parseIds(body.ids), parseGroupId(body.groupId));
+          break;
+        case "group.add": {
+          const groupId = parseGroupId(body.groupId);
+          if (groupId == null) throw new HttpError(400, "请选择要加入的分组。");
+          await addEmojiGroupMemberships(db, user.id, parseIds(body.ids), groupId);
+          break;
+        }
+        case "groups.update":
+          await editEmojiGroupMemberships(db, user.id, parseIds(body.ids), parseGroupIds(body.includeGroupIds), parseGroupIds(body.excludeGroupIds));
+          break;
+        case "group.create":
+          createdGroupId = await createEmojiGroup(db, user.id);
+          break;
+        case "group.rename":
+          await renameEmojiGroup(db, user.id, parseIds([body.id])[0], body.name);
+          break;
+        case "group.delete":
+          await deleteEmojiGroup(db, user.id, parseIds([body.id])[0]);
+          break;
+        case "group.reorder":
+          await reorderEmojiGroup(db, user.id, parseIds([body.id])[0], body.beforeId === null ? null : parseIds([body.beforeId])[0]);
           break;
         case "reorder":
           await reorderEmoji(
@@ -114,14 +141,14 @@ emojiApi.all("/api/emojis", async (c) => {
         default:
           throw new HttpError(400, "未知表情操作。");
       }
-      return emojiJson({ emojis: await library(db, user.id) });
+      return emojiJson({ ...await libraryData(db, user.id), ...(createdGroupId === undefined ? {} : { createdGroupId }) });
     }
     const offset = Number(params.get("offset") ?? 0);
     if (!Number.isSafeInteger(offset) || offset < 0)
       throw new HttpError(400, "分页位置无效。");
     switch (params.get("op") ?? "library") {
       case "library":
-        return emojiJson({ emojis: await library(db, user.id) });
+        return emojiJson(await libraryData(db, user.id));
       case "defaults":
         return emojiJson({ emojis: await defaults(db) });
       case "hot":
@@ -149,6 +176,8 @@ emojiApi.all("/api/emojis", async (c) => {
         throw new HttpError(400, "未知表情查询。");
     }
   } catch (error) {
+    if (String(error).includes("UNIQUE constraint failed: user_emoji_groups.user_id, user_emoji_groups.name"))
+      return jsonError("分组名称重复", new HttpError(409, "这个分组名称已存在。"));
     if (error instanceof SameOriginError)
       return jsonError("请求来源无效", new HttpError(403, error.message));
     if (String(error).includes("face emoji unavailable"))

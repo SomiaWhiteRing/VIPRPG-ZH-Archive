@@ -6,6 +6,12 @@ separately. Historical counters remain unclassified; completed response bytes an
 R2 GET calls use the new observation counters. Later success retains the last
 failure reason and timestamp. The schema and migration ledger are synchronized.
 
+The personal emoji group migration `0021_face_emoji_groups.sql` adds empty
+account-owned groups and many-to-many favorite assignment tables. Each favorite
+can belong to multiple groups. Existing favorites, their order, immutable face
+references, default emojis and published content remain unchanged. The fixed
+seed keeps its group tables empty and synchronizes the schema and migration ledger.
+
 The display-name refresh applies `0019_unique_user_display_names.sql` and records
 it in the migration ledger. Active and disabled accounts have unique names under
 SQLite NOCASE comparison; actual renames record their old and new names through

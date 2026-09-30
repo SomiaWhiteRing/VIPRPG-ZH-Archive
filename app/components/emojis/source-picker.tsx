@@ -331,7 +331,7 @@ export function EmojiSourcePicker({
             ref={tree}
             role="tree"
             aria-label="角色分类"
-            className="max-h-[min(24rem,50dvh)] overflow-y-auto"
+            className="emoji-scroll-viewport max-h-[min(24rem,50dvh)] overflow-y-auto"
             onScroll={(event) => {
               scrollTop.current = event.currentTarget.scrollTop;
             }}

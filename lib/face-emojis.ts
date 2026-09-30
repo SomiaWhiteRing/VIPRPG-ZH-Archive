@@ -8,6 +8,14 @@ export type FaceEmoji = FaceEmojiCell & {
   available: boolean;
   sources: { id: number; name: string }[];
   users?: number;
+  groupIds?: number[];
+};
+export type EmojiGroup = { id: number; name: string };
+export type EmojiGroupMembershipEdit = { includeGroupIds: number[]; excludeGroupIds: number[] };
+export type EmojiLibraryData = {
+  userId: number;
+  emojis: FaceEmoji[];
+  groups: EmojiGroup[];
 };
 export type EmojiCharacter = {
   id: number;
@@ -51,4 +59,7 @@ export function bodyLength(body: string): number {
 }
 export function emojiCellKey(cell: FaceEmojiCell): string {
   return `${cell.blobSha256}:${cell.row}:${cell.column}`;
+}
+export function emojiInGroup(emoji: FaceEmoji, groupId: number | null): boolean {
+  return groupId === null || !!emoji.groupIds?.includes(groupId);
 }
