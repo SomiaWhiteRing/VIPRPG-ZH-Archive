@@ -165,73 +165,34 @@ export async function listCharactersForAdmin(
 export async function listCharacterSuggestions(
   runtime: AppRuntime,
 ): Promise<CharacterSuggestion[]> {
-  const database = getD1(runtime);
-  const [namesResult, sheetsResult] = await database.batch([
-    database.prepare(
-      `${characterSql(
-        ",ca.name AS alias_name,ca.language AS alias_language",
-        "LEFT JOIN character_aliases ca ON ca.character_id=ch.id",
-        true,
-      )}
-       ORDER BY work_count DESC,ch.primary_name ASC,ca.language,ca.name
-       LIMIT 5000`,
-    ),
-    database.prepare(
-      `SELECT cfsb.character_id,fs.id,fs.blob_sha256,fs.width_px,fs.height_px,
-              fs.source_page_title,fs.source_section_title
-       FROM character_face_sheet_bindings cfsb
-       JOIN face_sheets fs ON fs.id=cfsb.face_sheet_id
-       WHERE fs.library_status='approved'
-       ORDER BY cfsb.character_id,fs.source_order IS NULL,fs.source_order,fs.id`,
-    ),
-  ]);
-  const rows = (namesResult.results ?? []) as Array<
-    CharacterRow & {
-      alias_name: string | null;
-      alias_language: "ja" | "zh" | null;
-    }
-  >;
-  const suggestions = new Map<number, CharacterSuggestion>();
-  for (const row of rows) {
-    let suggestion = suggestions.get(row.id);
-    if (!suggestion) {
-      suggestion = {
-        id: row.id,
-        originalName: row.original_name,
-        primaryName: row.primary_name,
-        defaultPortrait: mapCharacterPortrait(row),
-        faceSheets: [],
-        aliases: [],
-        workCount: row.work_count,
-      };
-      suggestions.set(row.id, suggestion);
-    }
-    if (row.alias_name && row.alias_language) {
-      suggestion.aliases.push({
-        name: row.alias_name,
-        language: row.alias_language,
-      });
-    }
-  }
-  for (const row of (sheetsResult.results ?? []) as Array<{
-    character_id: number;
-    id: number;
-    blob_sha256: string;
-    width_px: number;
-    height_px: number;
-    source_page_title: string | null;
-    source_section_title: string | null;
-  }>) {
-    suggestions.get(row.character_id)?.faceSheets.push({
-      id: row.id,
-      blobSha256: row.blob_sha256,
-      width: row.width_px,
-      height: row.height_px,
-      sourcePageTitle: row.source_page_title,
-      sourceSectionTitle: row.source_section_title,
-    });
-  }
-  return [...suggestions.values()];
+  // Names and portraits are small; the picker loads sheets for selected characters.
+  const characters = await listPublicCharacterIndex(runtime);
+  return characters.sort((a, b) => b.workCount - a.workCount).map((character) => ({
+    id: character.id,
+    originalName: character.originalName,
+    primaryName: character.primaryName,
+    defaultPortrait: character.defaultPortrait,
+    faceSheets: [],
+    aliases: character.aliases,
+    workCount: character.workCount,
+  }));
+}
+
+export async function listPublicCharacterFaceSheets(
+  runtime: AppRuntime,
+  characterId: number,
+) {
+  const result = await getD1(runtime).prepare(`
+    SELECT fs.id,fs.blob_sha256 AS blobSha256,fs.width_px AS width,fs.height_px AS height,
+      fs.source_page_title AS sourcePageTitle,fs.source_section_title AS sourceSectionTitle
+    FROM character_face_sheet_bindings binding
+    CROSS JOIN face_sheets fs ON fs.id=binding.face_sheet_id
+    CROSS JOIN blobs b ON b.sha256=fs.blob_sha256
+    WHERE binding.character_id=? AND fs.library_status='approved'
+      AND b.status='active' AND b.public_at IS NOT NULL AND b.content_type_hint LIKE 'image/%'
+    ORDER BY fs.source_order IS NULL,fs.source_order,fs.id`)
+    .bind(characterId).all<import('@/lib/character-names').CharacterFaceSheet>();
+  return result.results;
 }
 export async function searchCharactersForAdmin(
   runtime: AppRuntime,

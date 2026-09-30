@@ -1,5 +1,5 @@
 import { EmptyState } from "@/app/components/ui/empty-state";
-import type { PublicForumTopic } from "@/lib/forum-public";
+import type { HomeForumTopic } from "@/lib/forum-public";
 import { Link } from "react-router";
 
 const directoryLinks = [
@@ -9,7 +9,7 @@ const directoryLinks = [
   { href: "/catalogs", label: "专题目录" },
 ];
 
-export function HomeCommunity({ topics }: { topics: PublicForumTopic[] }) {
+export function HomeCommunity({ topics }: { topics: HomeForumTopic[] }) {
   return (
     <aside
       className="min-w-0 shrink-0 scroll-mt-24 border-t border-foreground pt-5 min-[851px]:w-[205px] min-[851px]:border-t-0 min-[851px]:border-l min-[851px]:border-border min-[851px]:pt-0 min-[851px]:pl-5 min-[1101px]:w-[237px] min-[1101px]:pl-6"
@@ -39,10 +39,10 @@ export function HomeCommunity({ topics }: { topics: PublicForumTopic[] }) {
                   {topic.title}
                 </h3>
                 <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-xs leading-relaxed text-muted">
-                  <span className="wrap-anywhere">{topic.author.name}</span>
+                  <span className="wrap-anywhere">{topic.authorName}</span>
                   <span>{topic.replies} 回复</span>
-                  {topic.tags[0] ? (
-                    <span className="wrap-anywhere">{topic.tags[0].name}</span>
+                  {topic.tagName ? (
+                    <span className="wrap-anywhere">{topic.tagName}</span>
                   ) : null}
                 </p>
               </Link>

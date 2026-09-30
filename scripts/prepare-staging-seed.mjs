@@ -116,7 +116,8 @@ try {
   const populated = {};
   for (const { name } of selected.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'forum_search_index%' ORDER BY name").all()) {
     const count = selected.prepare(`SELECT count(*) n FROM ${quote(name)}`).get().n;
-    if (count && !rowsByTable.has(name) && !["roles", "role_permissions"].includes(name)) throw new Error(`Unexpected data in ${name}.`);
+    // Material counts are derived by binding triggers while importing the seed.
+    if (count && !rowsByTable.has(name) && !["roles", "role_permissions", "character_material_counts"].includes(name)) throw new Error(`Unexpected data in ${name}.`);
     populated[name] = count;
   }
   const sourceObjects = new Map(sourceManifest.objects.map((item) => [item.key, item]));

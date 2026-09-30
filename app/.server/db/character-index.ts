@@ -82,7 +82,7 @@ export async function readCharacterCounts(
   const materialFilter =
     selected === null
       ? ""
-      : " AND binding.character_id IN (SELECT value FROM json_each(?))";
+      : " WHERE character_id IN (SELECT value FROM json_each(?))";
   const [comments, materials] = await database.batch([
     database
       .prepare(
@@ -92,17 +92,10 @@ export async function readCharacterCounts(
       .bind(...(selected === null ? [] : [selected])),
     database
       .prepare(
-        `SELECT characterId,COUNT(*) AS count FROM (
-      SELECT binding.character_id AS characterId FROM character_face_sheet_bindings binding
-      JOIN face_sheets fs ON fs.id=binding.face_sheet_id JOIN blobs b ON b.sha256=fs.blob_sha256
-      WHERE fs.library_status='approved' AND b.status='active' AND b.content_type_hint LIKE 'image/%'${materialFilter}
-      UNION ALL
-      SELECT binding.character_id AS characterId FROM character_material_bindings binding
-      JOIN character_materials m ON m.id=binding.material_id JOIN blobs b ON b.sha256=m.blob_sha256
-      WHERE b.status='active' AND b.content_type_hint LIKE 'image/%'${materialFilter}
-    ) GROUP BY characterId`,
+        `SELECT character_id AS characterId,material_count AS count
+         FROM character_material_counts${materialFilter}`,
       )
-      .bind(...(selected === null ? [] : [selected, selected])),
+      .bind(...(selected === null ? [] : [selected])),
   ]);
   const commentCounts = new Map(
     (comments.results as { characterId: number; count: number }[]).map(

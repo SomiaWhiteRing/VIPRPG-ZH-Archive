@@ -1,11 +1,11 @@
 import { WorkCard } from "@/app/components/work/work-card";
-import type { GameWorkSummary } from "@/lib/dto/db/game-library";
+import type { GameCardSummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import { engineLabel, engineShortLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
 
-export function GameCard({ work, action, children }: { work: GameWorkSummary; action?: ReactNode; children?: ReactNode }) {
+export function GameCard({ work, action, children }: { work: GameCardSummary; action?: ReactNode; children?: ReactNode }) {
   const { downloadSize } = useArchiveDownload();
   const sizeBytes = downloadSize(work);
   const title = work.chineseTitle || work.originalTitle;

@@ -1,6 +1,13 @@
 import type { ForumContent, ForumTopic } from "./forum";
 
 export type PublicForumTopic = Omit<ForumTopic,"capabilities">;
+export type HomeForumTopic = {
+  id: number;
+  title: string;
+  authorName: string;
+  replies: number;
+  tagName: string | null;
+};
 export type PublicForumContent = Omit<ForumContent,"capabilities"|"liked">;
 
 export function publicTopicDto(topic:ForumTopic):PublicForumTopic {

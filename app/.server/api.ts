@@ -101,12 +101,22 @@ import { Hono } from "hono";
 import type { AppRuntime } from "./runtime";
 import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
+import { listPublicCharacterFaceSheets } from "./db/taxonomy-library";
 
 export const api = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.get("/api/characters/:characterId/face-sheets", async (c) => {
+  const rawId = c.req.param("characterId");
+  const id = Number(rawId);
+  if (!/^\d+$/.test(rawId) || !Number.isSafeInteger(id) || id <= 0) {
+    return c.json({ ok: false, error: "角色 ID 不合法" }, 400);
+  }
+  return c.json({ ok: true, sheets: await listPublicCharacterFaceSheets(c.get("runtime"), id) }, 200,
+    { "Cache-Control": "no-store" });
+});
 api.post("/api/comments/images", (c) => uploadCommentImage(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/comments/images/:id", (c) => readCommentImage(c.get("runtime"), c.req.param("id")));
 api.options("/api/comments/images", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));

@@ -18,7 +18,7 @@ type BlobMediaRow = {
 
 export async function GET(
   runtime: AppRuntime,
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ) {
   try {
@@ -42,9 +42,18 @@ export async function GET(
       );
     }
 
+    // Check current visibility before reusing an immutable, already-sniffed image.
+    const cache = await caches.open("public-images-v1");
+    const cacheRequest = new Request(new URL(`/api/media/blobs/${sha256}`, runtime.origin));
+    const cached = await cache.match(cacheRequest).catch(() => undefined);
+    if (cached) {
+      if (request.method !== "HEAD") return cached;
+      await cached.body?.cancel();
+      return new Response(null, { headers: cached.headers });
+    }
     const object = await streamValidatedImage(runtime, sha256);
 
-    return new Response(object.body, {
+    const response = new Response(object.body, {
       headers: {
         "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Length": String(object.size),
@@ -53,6 +62,10 @@ export async function GET(
         ETag: `"blob-${sha256}"`,
       },
     });
+    if (request.method === "GET") {
+      runtime.execution.waitUntil(cache.put(cacheRequest, response.clone()).catch(() => undefined));
+    }
+    return response;
   } catch (error) {
     return jsonError("Media blob fetch failed", error);
   }

@@ -1,38 +1,36 @@
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { listGameWorks } from "@/app/.server/db/game-library";
+import { listHomeGameWorks } from "@/app/.server/db/game-library";
 import { getForumRuntime } from "@/app/.server/forum/context";
-import { publicTopicList } from "@/app/.server/forum/public-queries";
+import { homeTopics } from "@/app/.server/forum/public-queries";
+import type { GameCardSummary } from "@/lib/dto/db/game-library";
 import { runtimeContext } from "@/app/.server/router-context";
 import { GameCard } from "@/app/components/home/game-card";
 import { HomeCommunity } from "@/app/components/home/home-community";
+import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
 
-  const [recentWorks, recentOriginalWorks, topics] = await Promise.all([
-    listGameWorks(runtime, { limit: 12 }),
-    listGameWorks(runtime, { limit: 4, isOriginal: true }),
-    publicTopicList(getForumRuntime(runtime), {
-      tags: [],
-      featured: false,
-      page: 1,
-    }),
+  const [works, topics] = await Promise.all([
+    listHomeGameWorks(runtime),
+    homeTopics(getForumRuntime(runtime)),
   ]);
 
-  return { recentWorks, recentOriginalWorks, topics };
+  return { ...works, topics };
 }
 
 export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors(undefined, error);
 
 export default function HomePage() {
-  const { recentWorks, recentOriginalWorks, topics } =
+  const { recentWorks, recentOriginalWorks, randomWorks, topics } =
     useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
   return (
     <PageContainer>
       <div className="flex flex-col gap-7 min-[561px]:gap-8 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-9">
@@ -59,7 +57,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <HomeCommunity topics={topics.items.slice(0, 5)} />
+        <HomeCommunity topics={topics} />
       </div>
 
       <section
@@ -87,6 +85,40 @@ export default function HomePage() {
           <HomeWorkGrid original works={recentOriginalWorks} />
         </div>
       </section>
+
+      <section
+        className="mt-7 flex flex-col gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-8 scroll-mt-24"
+        id="random-works"
+        aria-labelledby="random-heading"
+      >
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
+          <div>
+            <h2
+              className="text-2xl font-bold tracking-tight"
+              id="random-heading"
+            >
+              随机作品
+            </h2>
+          </div>
+          <Button
+            variant="ghost"
+            className="ml-auto min-h-0 rounded-none p-0 font-bold text-primary hover:bg-transparent hover:text-accent min-[851px]:mt-5"
+            type="button"
+            disabled={revalidator.state !== "idle"}
+            aria-controls="random-work-grid"
+            onClick={() => void revalidator.revalidate()}
+          >
+            试试手气
+          </Button>
+        </div>
+        <div
+          className="min-w-0 flex-1"
+          id="random-work-grid"
+          aria-busy={revalidator.state !== "idle"}
+        >
+          <HomeWorkGrid singleRow works={randomWorks} />
+        </div>
+      </section>
     </PageContainer>
   );
 }
@@ -94,9 +126,11 @@ export default function HomePage() {
 function HomeWorkGrid({
   works,
   original = false,
+  singleRow = false,
 }: {
-  works: Awaited<ReturnType<typeof listGameWorks>>;
+  works: GameCardSummary[];
   original?: boolean;
+  singleRow?: boolean;
 }) {
   if (!works.length) {
     return (
@@ -112,7 +146,7 @@ function HomeWorkGrid({
     <div className="@container min-w-0">
       <div
         className={`grid grid-cols-2 gap-x-2.5 gap-y-3 @min-[609px]:grid-cols-3 @min-[609px]:gap-3.5 @min-[889px]:grid-cols-4 @min-[889px]:gap-4 ${
-          original
+          original || singleRow
             ? "@max-[609px]:[&>*:nth-child(n+3)]:hidden @max-[889px]:[&>*:nth-child(n+4)]:hidden"
             : "@max-[609px]:[&>*:nth-child(n+7)]:hidden @max-[889px]:[&>*:nth-child(n+10)]:hidden"
         }`}

@@ -23,6 +23,9 @@ const zipEntryOpenPrefetch = 6;
 const zipWriteBufferBytes = 64 * 1024;
 const blobReadCacheMaxEntryBytes = 2 * 1024 * 1024;
 const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
+// Cache only immutable layout metadata. R2 streams and promises remain request-local.
+const zipLayoutCaches = new WeakMap();
+const zipLayoutCacheMaxBytes = 8 * 1024 * 1024;
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
   const startedAt = Date.now();
@@ -141,36 +144,9 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       }
     }
 
-    const manifest = await loadManifest(env.ARCHIVE_BUCKET, record.manifestSha256);
-    if (Boolean(manifest.archiveVersion.sharedPlayer) !== record.usesSharedPlayer) {
-      throw new Error("Shared player policy does not match archive record");
-    }
-    const files = profile === webPlayDownloadProfile
-      ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
-      : profile === legacyWebPlayDownloadProfile
-        ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
-        : manifest.files;
-    if (profile) {
-      record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) };
-    }
-    const zipEntries = buildZipEntries(manifest, env.ARCHIVE_BUCKET, files);
-    if (player) {
-      if (files.some((file) => isSharedPlayerPath(file.path))) throw new Error("Shared player path conflicts with archive files");
-      zipEntries.push({
-        path: "Player.exe",
-        size: player.size_bytes,
-        crc32: await sharedPlayerCrc32(request, env.ARCHIVE_BUCKET, player, ctx),
-        mtimeMs: Date.UTC(1980, 0, 1),
-        open: async (range) => {
-          const object = await env.ARCHIVE_BUCKET.get(player.object_key, range ? { range } : undefined);
-          assertSharedPlayerObject(player, object);
-          return object.body;
-        },
-      });
-      zipEntries.sort(compareManifestFiles);
-      record = { ...record, estimatedR2GetCount: estimateR2GetCount(manifest, files) + 1 };
-    }
-    const { entries: plannedEntries, size: zipSizeBytes } = prepareZipLayout(zipEntries);
+    const layout = await downloadLayout(request, env.ARCHIVE_BUCKET, record, profile, player, ctx, cacheKey);
+    const zipSizeBytes = layout.size;
+    if (profile || player) record = { ...record, estimatedR2GetCount: layout.estimatedR2GetCount };
     const cacheStatus =
       request.method === "HEAD" || rangeHeader || bypassDownloadCache ? "BYPASS" : "MISS";
     const headers = downloadHeaders(record, cacheStatus, zipSizeBytes, profile);
@@ -191,7 +167,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       return new Response(null, { headers });
     }
 
-    const zipStream = createFixedLengthZipStream(plannedEntries, zipSizeBytes, range);
+    const zipStream = createFixedLengthZipStream(layout, env.ARCHIVE_BUCKET, player, range);
     const response = new Response(zipStream.readable, {
       status: range ? 206 : 200,
       headers,
@@ -315,7 +291,7 @@ async function kaiImportMetadata(request, bucket, record) {
   }
   const manifest = await loadManifest(bucket, record.manifestSha256);
   const files = manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path));
-  const zipSizeBytes = prepareZipLayout(buildZipEntries(manifest, bucket, files)).size;
+  const zipSizeBytes = prepareZipLayout(buildZipEntries(files)).size;
   const paths = new Set(files.map((file) => file.path.toLowerCase()));
   if (zipSizeBytes > 1024 ** 3 || files.length > 50000 ||
       !paths.has("rpg_rt.ldb") || !paths.has("rpg_rt.lmt")) {
@@ -380,15 +356,7 @@ function estimateR2GetCount(manifest, files) {
   return blobs.size + packs.size;
 }
 
-function buildZipEntries(manifest, bucket, files = manifest.files) {
-  const storage = {
-    bucket,
-    corePacks: new Map(manifest.corePacks.map((pack) => [pack.id, pack])),
-    corePackCache: new Map(),
-    corePackEntries: new Map(),
-    blobReadCache: new BlobReadCache(bucket),
-  };
-
+function buildZipEntries(files) {
   return files
     .slice()
     .sort(compareManifestFiles)
@@ -397,16 +365,57 @@ function buildZipEntries(manifest, bucket, files = manifest.files) {
       size: file.size,
       crc32: file.crc32,
       mtimeMs: file.mtimeMs,
-      selectForRead: () => {
-        if (file.storage.kind === "blob") return;
-        const pack = storage.corePacks.get(file.storage.packId);
-        if (!pack) throw new Error(`Missing core pack declaration: ${file.storage.packId}`);
-        let names = storage.corePackEntries.get(pack.sha256);
-        if (!names) storage.corePackEntries.set(pack.sha256, names = new Set());
-        names.add(file.storage.entry);
-      },
-      open: (range) => openManifestFile(file, storage, range),
+      storage: file.storage,
     }));
+}
+
+async function downloadLayout(request, bucket, record, profile, player, ctx, key) {
+  let cache = zipLayoutCaches.get(bucket);
+  if (!cache) zipLayoutCaches.set(bucket, cache = { layouts: new Map(), bytes: 0 });
+  let layout = cache.layouts.get(key);
+  if (layout) {
+    cache.layouts.delete(key);
+    cache.layouts.set(key, layout);
+  } else {
+    const manifest = await loadManifest(bucket, record.manifestSha256);
+    const files = profile === webPlayDownloadProfile
+      ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
+      : profile === legacyWebPlayDownloadProfile
+        ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
+        : manifest.files;
+    const entries = buildZipEntries(files);
+    if (player) {
+      if (files.some((file) => isSharedPlayerPath(file.path))) throw new Error("Shared player path conflicts with archive files");
+      entries.push({ path: "Player.exe", size: player.size_bytes,
+        crc32: await sharedPlayerCrc32(request, bucket, player, ctx), mtimeMs: Date.UTC(1980, 0, 1),
+        storage: { kind: "shared_player" } });
+      entries.sort(compareManifestFiles);
+    }
+    layout = { ...prepareZipLayout(entries),
+      usesSharedPlayer: Boolean(manifest.archiveVersion.sharedPlayer),
+      corePacks: new Map(manifest.corePacks.map(({ id, sha256 }) => [id, { sha256 }])),
+      estimatedR2GetCount: estimateR2GetCount(manifest, files) + (player ? 1 : 0) };
+    // Conservative metadata budget, including object overhead and retained strings.
+    layout.weight = layout.entries.reduce((sum, entry) => sum + 512 + entry.pathBytes.length +
+      2 * (entry.path.length + (entry.storage.entry?.length ?? 0) + (entry.storage.packId?.length ?? 0)),
+    512 + layout.corePacks.size * 256);
+    if (layout.weight <= zipLayoutCacheMaxBytes) {
+      // Another request may have populated this key while we read its manifest.
+      cache.bytes -= cache.layouts.get(key)?.weight ?? 0;
+      cache.layouts.delete(key);
+      cache.layouts.set(key, layout);
+      cache.bytes += layout.weight;
+      while (cache.layouts.size > 16 || cache.bytes > zipLayoutCacheMaxBytes) {
+        const oldest = cache.layouts.keys().next().value;
+        cache.bytes -= cache.layouts.get(oldest).weight;
+        cache.layouts.delete(oldest);
+      }
+    }
+  }
+  if (layout.usesSharedPlayer !== record.usesSharedPlayer) {
+    throw new Error("Shared player policy does not match archive record");
+  }
+  return layout;
 }
 
 function compareManifestFiles(left, right) {
@@ -542,16 +551,37 @@ function parseDownloadRange(value, size) {
   return { start, end };
 }
 
-function createFixedLengthZipStream(entries, expectedLength, range) {
-  for (const entry of entries) {
-    const dataStart = entry.dataStart;
-    if (!range || (entry.size > 0 && dataStart <= range.end && dataStart + entry.size > range.start)) {
-      entry.selectForRead?.();
-    }
+// Find the first segment whose exclusive end lies after the requested byte.
+function firstOverlappingEntry(entries, offset, endOf) {
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (endOf(entries[middle]) <= offset) low = middle + 1;
+    else high = middle;
   }
-  const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : expectedLength);
+  return low;
+}
+
+function createFixedLengthZipStream(layout, bucket, player, range) {
+  const { entries } = layout;
+  const firstLocal = range ? firstOverlappingEntry(entries, range.start, (entry) => entry.dataStart + entry.size) : 0;
+  let lastLocal = firstLocal;
+  const storage = { bucket, player, corePacks: layout.corePacks,
+    corePackCache: new Map(), corePackEntries: new Map(), blobReadCache: new BlobReadCache(bucket) };
+  while (lastLocal < entries.length && (!range || entries[lastLocal].localHeaderOffset <= range.end)) {
+    const entry = entries[lastLocal++];
+    if (entry.storage.kind !== "core_pack" || (range &&
+        (entry.size === 0 || entry.dataStart > range.end || entry.dataStart + entry.size <= range.start))) continue;
+    const pack = storage.corePacks.get(entry.storage.packId);
+    if (!pack) throw new Error(`Missing core pack declaration: ${entry.storage.packId}`);
+    let names = storage.corePackEntries.get(pack.sha256);
+    if (!names) storage.corePackEntries.set(pack.sha256, names = new Set());
+    names.add(entry.storage.entry);
+  }
+  const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : layout.size);
   const writer = writable.getWriter();
-  const completion = writeZip(writer, entries, range)
+  const completion = writeZip(writer, layout, storage, range, firstLocal, lastLocal)
     .catch(async (error) => {
       await writer.abort(error).catch(() => undefined);
       throw error;
@@ -561,11 +591,10 @@ function createFixedLengthZipStream(entries, expectedLength, range) {
   return { readable, completion };
 }
 
-async function writeZip(writer, entries, range) {
-  let offset = 0;
-  const centralEntries = [];
+async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
+  const { entries } = layout;
   const openPromises = new Map();
-  let nextToPrefetch = 0;
+  let nextToPrefetch = firstLocal;
   let buffer = new Uint8Array(zipWriteBufferBytes);
   let buffered = 0;
 
@@ -589,15 +618,14 @@ async function writeZip(writer, entries, range) {
     if (buffered === buffer.byteLength) await flush();
   }
 
-  async function write(bytes) {
+  async function write(bytes, offset) {
     const start = range ? Math.max(0, range.start - offset) : 0;
     const end = range ? Math.min(bytes.byteLength, range.end + 1 - offset) : bytes.byteLength;
     if (start < end) await emit(bytes.subarray(start, end));
-    offset += bytes.byteLength;
   }
 
   function prefetchThrough(exclusiveIndex) {
-    while (nextToPrefetch < entries.length && nextToPrefetch < exclusiveIndex) {
+    while (nextToPrefetch < lastLocal && nextToPrefetch < exclusiveIndex) {
       const entry = entries[nextToPrefetch];
       const dataStart = entry.dataStart;
       const dataEnd = dataStart + entry.size;
@@ -606,7 +634,7 @@ async function writeZip(writer, entries, range) {
           offset: Math.max(0, range.start - dataStart),
           length: Math.min(dataEnd, range.end + 1) - Math.max(dataStart, range.start),
         } : null;
-        const promise = entry.open(fileRange);
+        const promise = openZipEntry(entry, storage, fileRange);
         promise.catch(() => undefined);
         openPromises.set(nextToPrefetch, { promise, range: fileRange });
       }
@@ -615,22 +643,24 @@ async function writeZip(writer, entries, range) {
   }
 
   try {
-    for (let index = 0; index < entries.length; index += 1) {
+    for (let index = firstLocal; index < lastLocal; index += 1) {
       prefetchThrough(index + zipEntryOpenPrefetch);
 
       const entry = entries[index];
 
       const { pathBytes, dosTime, dosDate, localHeaderOffset } = entry;
 
-      await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate));
+      if (!range || entry.dataStart > range.start) {
+        await write(localFileHeader(pathBytes, entry.crc32, entry.size, dosTime, dosDate), localHeaderOffset);
+      }
       // Deliver the first available ZIP bytes before awaiting the first object.
-      if (index === 0) await flush();
+      if (index === firstLocal) await flush();
 
       if (openPromises.has(index)) {
         const pending = openPromises.get(index);
         const expectedSize = pending.range?.length ?? entry.size;
         let actualSize = 0;
-        offset += pending.range?.offset ?? 0;
+        let offset = entry.dataStart + (pending.range?.offset ?? 0);
         const stream = await pending.promise;
         const reader = stream.getReader();
         openPromises.delete(index);
@@ -646,7 +676,8 @@ async function writeZip(writer, entries, range) {
             const chunk = normalizeChunk(result.value);
             actualSize += chunk.byteLength;
             if (actualSize > expectedSize) throw new Error(`ZIP entry exceeded requested length: ${entry.path}`);
-            await write(chunk);
+            await write(chunk, offset);
+            offset += chunk.byteLength;
           }
         } catch (error) {
           await reader.cancel(error).catch(() => undefined);
@@ -660,20 +691,7 @@ async function writeZip(writer, entries, range) {
             `ZIP entry size mismatch for ${entry.path}: expected ${expectedSize}, got ${actualSize}`,
           );
         }
-        offset += entry.size - (pending.range?.offset ?? 0) - actualSize;
-      } else {
-        // The deterministic STORE ZIP lets resumed requests skip complete earlier files.
-        offset += entry.size;
       }
-
-      centralEntries.push({
-        pathBytes,
-        crc32: entry.crc32,
-        size: entry.size,
-        localHeaderOffset,
-        dosTime,
-        dosDate,
-      });
     }
   } finally {
     // A failed read, write or canceled consumer must not leave prefetched
@@ -686,21 +704,23 @@ async function writeZip(writer, entries, range) {
     );
   }
 
-  const centralDirectoryOffset = offset;
-
-  for (const entry of centralEntries) {
-    await write(centralDirectoryHeader(entry));
+  const firstCentral = range ? firstOverlappingEntry(entries, range.start,
+    (entry) => entry.centralHeaderOffset + 46 + entry.pathBytes.length) : 0;
+  for (let index = firstCentral; index < entries.length; index++) {
+    const entry = entries[index];
+    if (range && entry.centralHeaderOffset > range.end) break;
+    await write(centralDirectoryHeader(entry), entry.centralHeaderOffset);
   }
-
-  const centralDirectorySize = offset - centralDirectoryOffset;
-
-  assertZip16Value(centralEntries.length, "ZIP entry count");
-  assertZip32Value(centralDirectoryOffset, "ZIP central directory offset");
-  assertZip32Value(centralDirectorySize, "ZIP central directory size");
-
-  await write(endOfCentralDirectory(centralEntries.length, centralDirectorySize, centralDirectoryOffset));
+  await write(layout.endRecord, layout.size - layout.endRecord.length);
   await flush();
   await writer.close();
+}
+
+async function openZipEntry(entry, storage, range) {
+  if (entry.storage.kind !== "shared_player") return openManifestFile(entry, storage, range);
+  const object = await storage.bucket.get(storage.player.object_key, range ? { range } : undefined);
+  assertSharedPlayerObject(storage.player, object);
+  return object.body;
 }
 
 function prepareZipLayout(entries) {
@@ -736,7 +756,13 @@ function prepareZipLayout(entries) {
 
   assertSafeZipSize(totalSize, "ZIP total size");
 
-  return { entries: planned, size: totalSize };
+  let centralHeaderOffset = offset;
+  for (const entry of planned) {
+    entry.centralHeaderOffset = centralHeaderOffset;
+    centralHeaderOffset += 46 + entry.pathBytes.length;
+  }
+  return { entries: planned, size: totalSize,
+    endRecord: endOfCentralDirectory(entries.length, centralDirectorySize, offset) };
 }
 
 function localFileHeader(pathBytes, crc32, size, dosTime, dosDate) {
