@@ -173,7 +173,7 @@ function InboxRow({
   const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
   const Icon =
-    item.type === "forum_like"
+    item.type === "forum_like" || item.commentNotification?.kind === "like"
       ? ThumbsUp
       : item.type === "forum_reply" || item.commentNotification
         ? MessageCircle

@@ -48,6 +48,7 @@ type InboxItemRow = {
   can_reject: number;
   work_comment_id: number | null;
   reply_comment_id: number | null;
+  like_comment_id: number | null;
 };
 
 const INBOX_SELECT = `SELECT
@@ -55,6 +56,7 @@ const INBOX_SELECT = `SELECT
   i.type,
   i.work_comment_id,
   i.reply_comment_id,
+  i.like_comment_id,
   i.status,
   i.sender_user_id,
   sender.display_name AS sender_display_name,
@@ -150,9 +152,9 @@ export async function listInboxItemsForUser(
     comments: "work_comment_id IS NOT NULL",
     replies: "reply_comment_id IS NOT NULL",
     forum: "type='forum_reply'",
-    likes: "type='forum_like'",
+    likes: "(type='forum_like' OR like_comment_id IS NOT NULL)",
     system:
-      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL",
+      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL",
     pending: "can_reject=1",
   }[input.category];
   const filter = `${categorySql} AND ${input.unread ? "read_at IS NULL" : "1"}`;
@@ -356,24 +358,24 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
 }
 
 async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
-  const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null).map((row) => row.id);
+  const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
-  const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,
+  const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
       c.work_id,c.creator_id,c.character_id,
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
       sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
-    FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.reply_comment_id,i.work_comment_id)
+    FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
     LEFT JOIN public_works w ON w.id=c.work_id
     LEFT JOIN creators cr ON cr.id=c.creator_id
     LEFT JOIN characters ch ON ch.id=c.character_id
-    JOIN users sender ON sender.id=c.user_id
+    JOIN users sender ON sender.id=i.sender_user_id AND sender.status IN ('active','deleted')
     WHERE i.id IN (SELECT value FROM json_each(?))
       AND (i.reply_comment_id IS NULL OR EXISTS (
         SELECT 1 FROM public_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
       ))`)
     .bind(JSON.stringify(ids)).all<{
-      id: number; body: string; reply_comment_id: number | null;
+      id: number; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
       work_id: number | null; creator_id: number | null; character_id: number | null; target_title: string;
       display_name: string; sender_status: string; image_count: number;
     }>();
@@ -388,8 +390,11 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     const row = byId.get(item.id);
     if (!row) continue;
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
-    item.title = row.reply_comment_id ? `${name}回复了你的评论` : `${name}评论了你上传的作品`;
+    item.title = row.like_comment_id
+      ? `${name}赞了你的${row.root_comment_id ? "回复" : "评论"}`
+      : row.reply_comment_id ? `${name}回复了你的评论` : `${name}评论了你上传的作品`;
     item.commentNotification = {
+      kind: row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
       href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,
       excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),

@@ -1,10 +1,9 @@
 // Hidden comments and temporarily non-public targets remain recoverable.
+// Parent deletion preserves published replies and their images.
 const disposable = `(i.comment_id IS NULL OR EXISTS(
-  SELECT 1 FROM comments c LEFT JOIN comments root ON root.id=c.root_comment_id
-  WHERE c.id=i.comment_id AND (
-    (c.status='deleted' AND datetime(c.deleted_at)<=datetime('now','-7 days')) OR
-    (root.status='deleted' AND datetime(root.deleted_at)<=datetime('now','-7 days'))
-  )
+  SELECT 1 FROM comments c
+  WHERE c.id=i.comment_id AND c.status='deleted'
+    AND datetime(c.deleted_at)<=datetime('now','-7 days')
 ))`;
 
 export async function cleanupCommentImages(db: D1Database, bucket: R2Bucket) {
