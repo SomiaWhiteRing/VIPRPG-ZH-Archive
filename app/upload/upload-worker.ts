@@ -212,7 +212,7 @@ async function startSource(
         throw new Error("共享 Kai 播放器不可用，请先在“链接”中推荐 Windows EXE，或关闭共享播放器选项。");
       }
     }
-    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer, message.checkMissingResources);
+    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer, message.checkMissingResources, message.includeSaves);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
 
@@ -675,6 +675,7 @@ async function scanAndHash(
   cleanupResources: boolean,
   useSharedPlayer: boolean,
   checkMissingResources: boolean,
+  includeSaves: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -704,7 +705,7 @@ async function scanAndHash(
     hashByteBudgetBytes,
     async (source): Promise<ScanFileResult> => source === player
       ? { kind: "excluded", source, fileType: "shared-player" }
-      : scanOneFile(task.localTaskId, source),
+      : scanOneFile(task.localTaskId, source, includeSaves),
     async (result) => {
       recordResult = recordResult.then(async () => {
         processedFiles += 1;
@@ -827,10 +828,11 @@ async function scanAndHash(
 async function scanOneFile(
   localTaskId: string,
   source: SourceFile,
+  includeSaves: boolean,
 ): Promise<ScanFileResult> {
   assertRuntimeActive(localTaskId);
 
-  const classification = classifyArchivePath(source.path);
+  const classification = classifyArchivePath(source.path, undefined, includeSaves);
 
   if (!classification.included) {
     return {

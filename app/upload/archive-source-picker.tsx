@@ -40,6 +40,8 @@ export function ArchiveSourcePicker({
   onCleanupResourcesChange,
   useSharedPlayer,
   onUseSharedPlayerChange,
+  includeSaves,
+  onIncludeSavesChange,
   disabled,
   externalDisabled = false,
   existingSource = null,
@@ -60,6 +62,8 @@ export function ArchiveSourcePicker({
   cleanupResources: boolean;
   useSharedPlayer: boolean;
   onUseSharedPlayerChange: (value: boolean) => void;
+  includeSaves: boolean;
+  onIncludeSavesChange: (value: boolean) => void;
   onCleanupResourcesChange: (value: boolean) => void;
   disabled: boolean;
   externalDisabled?: boolean;
@@ -103,6 +107,8 @@ export function ArchiveSourcePicker({
           onUseSharedPlayerChange={onUseSharedPlayerChange}
           task={sourceSummary ? task : null}
           useSharedPlayer={useSharedPlayer}
+          includeSaves={includeSaves}
+          onIncludeSavesChange={onIncludeSavesChange}
         />
       </header>
       {sourceSummary ? (
@@ -241,6 +247,8 @@ function ArchiveAdvancedOptions({
   onUseSharedPlayerChange,
   task,
   useSharedPlayer,
+  includeSaves,
+  onIncludeSavesChange,
 }: {
   checkMissingResources: boolean;
   onCheckMissingResourcesChange: (value: boolean) => void;
@@ -250,10 +258,13 @@ function ArchiveAdvancedOptions({
   onUseSharedPlayerChange: (value: boolean) => void;
   task: BrowserUploadTaskSnapshot | null;
   useSharedPlayer: boolean;
+  includeSaves: boolean;
+  onIncludeSavesChange: (value: boolean) => void;
 }) {
   const cleanupResourcesId = useId();
   const sharedPlayerId = useId();
   const missingResourcesId = useId();
+  const includeSavesId = useId();
 
   return (
     <Popover.Root>
@@ -322,6 +333,16 @@ function ArchiveAdvancedOptions({
               />
               <Label className="flex-1 py-1.5" htmlFor={sharedPlayerId}>使用共享EasyRPG</Label>
               <InfoTooltip>移除根目录中的Player.exe，下载时使用最新的EasyRPG Player Kai。</InfoTooltip>
+            </div>
+            <div className="flex min-h-7 items-center gap-2">
+              <Checkbox
+                checked={includeSaves}
+                disabled={disabled}
+                id={includeSavesId}
+                onCheckedChange={(checked) => onIncludeSavesChange(checked === true)}
+              />
+              <Label className="flex-1 py-1.5" htmlFor={includeSavesId}>上传存档</Label>
+              <InfoTooltip>保留游戏中的LSD存档，用来应对有的作者把开发室或者章节选择放存档之类的情况。为防止误传，该选项不会默认开启。</InfoTooltip>
             </div>
           </div>
           <UploadCleanupLog task={task} />

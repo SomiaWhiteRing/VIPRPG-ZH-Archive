@@ -201,6 +201,7 @@ export type UploadWorkerInput =
       cleanupResources: boolean;
       checkMissingResources: boolean;
       useSharedPlayer: boolean;
+      includeSaves: boolean;
       files: UploadSourceFile[];
       targetWorkId: number | null;
     }

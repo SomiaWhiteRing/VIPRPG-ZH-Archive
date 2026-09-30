@@ -173,6 +173,7 @@ export function UploadClient({
   );
   const useSharedPlayer = sharedPlayerOverride ?? sharedPlayerPreference;
   const [checkMissingResources, setCheckMissingResources] = useMissingResourcesPreference();
+  const [includeSaves, setIncludeSaves] = useState(false);
 
   function changeSharedPlayer(enabled: boolean) {
     setSharedPlayerOverride(enabled);
@@ -483,7 +484,7 @@ export function UploadClient({
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
     upload.startSource(
-      { sourceKind, sourceName, files, cleanupResources, useSharedPlayer, checkMissingResources, targetWorkId: initialWork?.id ?? null },
+      { sourceKind, sourceName, files, cleanupResources, useSharedPlayer, checkMissingResources, includeSaves, targetWorkId: initialWork?.id ?? null },
       (prefill) => prefillSourceMetadata(prefill, canPrefill, generation),
     );
   }
@@ -912,6 +913,8 @@ export function UploadClient({
                     onCleanupResourcesChange={setCleanupResources}
                     useSharedPlayer={useSharedPlayer}
                     onUseSharedPlayerChange={changeSharedPlayer}
+                    includeSaves={includeSaves}
+                    onIncludeSavesChange={setIncludeSaves}
                     disabled={
                       !canArchiveUpload ||
                       formDisabled ||
