@@ -15,7 +15,10 @@ import type {
   CharacterBrowseNode,
   CharacterIndexData,
 } from "@/lib/character-index";
-import { buildCharacterBrowseTree } from "@/lib/character-index";
+import {
+  buildCharacterBrowseTree,
+  UNCLASSIFIED_GROUP_ID,
+} from "@/lib/character-index";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
 import { ChevronRight, FolderPen, ListTree, Search, X } from "lucide-react";
@@ -69,15 +72,23 @@ export function CharacterIndexBrowser({
   const [draftQuery, setDraftQuery] = useState(initialQuery);
   const [expanded, setExpanded] = useState(() =>
     initialQuery
-      ? matchingBranches(buildCharacterBrowseTree(data, initialQuery).roots)
+      ? matchingBranches(
+          buildCharacterBrowseTree(data, initialQuery, {
+            includeUnclassified: true,
+          }).roots,
+        )
       : new Set<string>(),
   );
   const { roots, matchCount } = useMemo(
-    () => buildCharacterBrowseTree(data, ""),
+    () => buildCharacterBrowseTree(data, "", { includeUnclassified: true }),
     [data],
   );
   const matchingRoots = useMemo(
-    () => (query ? buildCharacterBrowseTree(data, query).roots : roots),
+    () =>
+      query
+        ? buildCharacterBrowseTree(data, query, { includeUnclassified: true })
+            .roots
+        : roots,
     [data, query, roots],
   );
   const listRef = useRef<VirtualListHandle>(null);
@@ -100,7 +111,11 @@ export function CharacterIndexBrowser({
     setQuery(nextQuery);
     if (nextQuery)
       setExpanded(
-        matchingBranches(buildCharacterBrowseTree(data, nextQuery).roots),
+        matchingBranches(
+          buildCharacterBrowseTree(data, nextQuery, {
+            includeUnclassified: true,
+          }).roots,
+        ),
       );
   };
   const changeDraft = (value: string) => {
@@ -467,7 +482,7 @@ export function CharacterIndexBrowser({
                       <span className="text-xs tabular-nums text-muted">
                         {formatNumber(characterCount(node))}
                       </span>
-                      {canEditIndex ? (
+                      {canEditIndex && node.id !== UNCLASSIFIED_GROUP_ID ? (
                         <a
                           aria-label={`编辑分类 ${node.label}`}
                           className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
