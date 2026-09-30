@@ -160,6 +160,14 @@ export async function getWorkCommunitySummary(
   workId: number,
   userId: number | null,
 ): Promise<WorkCommunitySummary> {
+  // The public detail query already supplies these numbers in this request.
+  const known = runtime.memo.get(`work-public-stats:${workId}`) as Omit<WorkCommunitySummary, "favoritedByMe"> | undefined;
+  if (known) {
+    const favorite = userId === null ? null : await getD1(runtime).prepare(
+      "SELECT 1 FROM user_work_entries WHERE work_id=? AND user_id=? AND favorited_at IS NOT NULL",
+    ).bind(workId, userId).first();
+    return { ...known, favoritedByMe: favorite !== null };
+  }
   const row = await getD1(runtime)
     .prepare(
       `SELECT

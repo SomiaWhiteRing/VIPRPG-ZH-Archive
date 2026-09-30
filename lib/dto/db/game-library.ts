@@ -186,6 +186,12 @@ export type GameCardSummary = Pick<GameWorkSummary,
   "viewCount" | "playerCount" | "commentCount" | "favoriteCount"
 >;
 
+export type GameLibrarySummary = GameCardSummary & Pick<GameWorkSummary,
+  "currentArchiveVersionId" | "externalDownloadUrl"
+> & {
+  creators: Pick<GameCreatorCredit, "displayName" | "roleKey">[];
+};
+
 export type AdminArchiveVersionEdit = {
   id: number;
   workId: number;
