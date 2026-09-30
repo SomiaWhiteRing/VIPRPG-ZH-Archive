@@ -39,6 +39,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const user = await getCurrentUser(runtime);
   const unread = user ? await countUnreadInboxItemsForUser(runtime, user) : 0;
   return {
+    serverTime: Date.now(),
     embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
     session: user
       ? {
