@@ -47,8 +47,8 @@ export function CharacterContentTabs({
   const sidebarId = useId();
 
   return (
-    <div className="group/character grid grid-cols-[300px_minmax(0,1fr)] items-start gap-x-[clamp(24px,3vw,40px)] pt-1 [transition:grid-template-columns_280ms_ease,column-gap_280ms_ease] data-[collapsed=true]:grid-cols-[0px_minmax(0,1fr)] data-[collapsed=true]:gap-x-6 [@media(max-width:980px)]:flex [@media(max-width:980px)]:flex-col [@media(max-width:980px)]:gap-[clamp(24px,3vw,40px)] motion-reduce:transition-none" data-collapsed={collapsed}>
-      <div className="sticky top-[74px] min-w-0 [@media(max-width:980px)]:static [@media(max-width:980px)]:w-full">
+    <div className="group/character flex items-start gap-x-[clamp(24px,3vw,40px)] pt-1 [transition:column-gap_280ms_ease] data-[collapsed=true]:gap-x-6 [@media(max-width:980px)]:flex-col [@media(max-width:980px)]:gap-[clamp(24px,3vw,40px)] motion-reduce:transition-none" data-collapsed={collapsed}>
+      <div className="sticky top-[74px] w-[300px] min-w-0 shrink-0 [transition:width_280ms_ease] min-[981px]:group-data-[collapsed=true]/character:w-0 [@media(max-width:980px)]:static [@media(max-width:980px)]:w-full motion-reduce:transition-none">
         <aside
           aria-label="角色资料"
           className="max-h-[calc(100dvh-5.5rem)] overflow-x-hidden overflow-y-auto visible opacity-100 [transition:max-height_280ms_ease,opacity_280ms_ease,visibility_280ms] group-data-[collapsed=true]/character:max-h-0 group-data-[collapsed=true]/character:invisible group-data-[collapsed=true]/character:opacity-0 [@media(max-width:980px)]:max-h-none [@media(max-width:980px)]:overflow-visible motion-reduce:transition-none"
@@ -70,7 +70,7 @@ export function CharacterContentTabs({
           <span aria-hidden className="size-[7px] border-t-2 border-r-2 border-current [transform:rotate(-135deg)] transition-transform duration-[280ms] ease-[ease] group-data-[collapsed=true]/character:[transform:translateX(8px)_rotate(45deg)] motion-reduce:transition-none" />
         </Button>
       </div>
-      <div className="min-w-0 [@media(max-width:980px)]:w-full">
+      <div className="min-w-0 flex-1 [@media(max-width:980px)]:w-full">
         <Tabs
           value={tab}
           onValueChange={(value) => {

@@ -93,9 +93,9 @@ export function GameLibrary({
         }
       /> : null}
       <div className={isFavoriteLibrary
-        ? "grid gap-x-9 gap-y-5 pb-11 @min-[681px]/library:grid-cols-[minmax(0,1fr)_190px]"
-        : data.userWorkKind ? "pb-11" : "grid gap-x-9 pb-11 @min-[981px]/library:grid-cols-[minmax(0,1fr)_252px]"}>
-        <div className="@container min-w-0">
+        ? "flex flex-col gap-x-9 gap-y-5 pb-11 @min-[681px]/library:flex-row"
+        : data.userWorkKind ? "pb-11" : "flex flex-col gap-x-9 pb-11 @min-[981px]/library:flex-row"}>
+        <div className="@container min-w-0 flex-1">
           <div
             className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5"
             aria-label="游戏工具栏"
@@ -273,7 +273,7 @@ export function GameLibrary({
           selectedTag={selectedTag?.name ?? tag}
           basePath={basePath}
         /> : !data.userWorkKind ? <aside
-          className="mt-5 rounded-lg border border-border bg-muted/5 p-3 @min-[981px]/library:sticky @min-[981px]/library:top-18.5 @min-[981px]/library:mt-1 @min-[981px]/library:self-start @min-[981px]/library:border-0 @min-[981px]/library:bg-transparent @min-[981px]/library:p-0"
+          className="mt-5 shrink-0 rounded-lg border border-border bg-muted/5 p-3 @min-[981px]/library:sticky @min-[981px]/library:top-18.5 @min-[981px]/library:mt-1 @min-[981px]/library:w-[252px] @min-[981px]/library:self-start @min-[981px]/library:border-0 @min-[981px]/library:bg-transparent @min-[981px]/library:p-0"
           aria-label={sidebar ? "标签浏览" : "游戏筛选"}
         >
           {sidebar ? sidebar(releaseFilter) : <>

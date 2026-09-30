@@ -900,8 +900,8 @@ export function UploadClient({
             />
           </div>
 
-          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="min-w-0 divide-y divide-border">
+          <div className="lg:flex">
+            <div className="min-w-0 flex-1 divide-y divide-border">
               <section className="p-4 sm:p-5">
                 {archiveMode ? (
                   <ArchiveSourcePicker
@@ -1010,7 +1010,7 @@ export function UploadClient({
               </section>
             </div>
 
-            <aside className="min-w-0 border-t border-border bg-background/40 lg:border-l lg:border-t-0">
+            <aside className="min-w-0 shrink-0 border-t border-border bg-background/40 lg:w-[300px] lg:border-l lg:border-t-0">
               <div className="lg:sticky lg:top-16">
                 <div className="border-b border-border p-4">
                   <CoverPicker

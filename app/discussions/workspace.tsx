@@ -951,8 +951,8 @@ export function DiscussionWorkspace({
           </div>
         </>
       ) : (
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[192px_minmax(0,1fr)]">
-          <aside className="hidden self-start lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
+        <div className="min-w-0 lg:flex lg:gap-6">
+          <aside className="hidden w-[192px] shrink-0 self-start lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
             <h2 className="mb-4 font-bold">讨论版</h2>
             <nav className="grid gap-2" aria-label="讨论版导航">
               {[false, true].map((value) => (
@@ -983,7 +983,7 @@ export function DiscussionWorkspace({
               disabled={pending}
             />
           </aside>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <span className="sr-only" role="status">
               {pending ? "正在更新讨论…" : ""}
             </span>
@@ -1053,18 +1053,18 @@ export function DiscussionWorkspace({
               </p>
             ) : topics?.items.length ? (
               <section aria-label="讨论主题" aria-busy={pending}>
-                <div className="hidden grid-cols-[minmax(0,1fr)_72px_96px] gap-2 border-b border-border py-2 text-right text-xs text-muted md:grid lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
-                  <span />
-                  <span>回复</span>
-                  <span className="hidden lg:block">浏览</span>
-                  <span>活跃</span>
+                <div className="hidden gap-2 border-b border-border py-2 text-right text-xs text-muted md:flex">
+                  <span className="min-w-0 flex-1" />
+                  <span className="w-[72px] shrink-0">回复</span>
+                  <span className="hidden w-[72px] shrink-0 lg:block">浏览</span>
+                  <span className="w-[96px] shrink-0">活跃</span>
                 </div>
                 {topics.items.map((item) => (
                   <article
-                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-primary/5 focus-within:bg-primary/5 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
+                    className="flex min-w-0 flex-col gap-2 border-b border-border py-4 hover:bg-primary/5 focus-within:bg-primary/5 md:flex-row md:items-center"
                     key={item.id}
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       {item.tags.length > 0 || item.featured || item.pinned || item.locked ? (
                         <div className="mb-1 break-words text-sm">
                           <TopicTags tags={item.tags} />
@@ -1096,13 +1096,13 @@ export function DiscussionWorkspace({
                         ) : null}
                       </div>
                     </div>
-                    <span className="hidden text-right font-mono text-sm tabular-nums md:block">
+                    <span className="hidden w-[72px] shrink-0 text-right font-mono text-sm tabular-nums md:block">
                       {item.replies}
                     </span>
-                    <span className="hidden text-right font-mono text-sm tabular-nums lg:block">
+                    <span className="hidden w-[72px] shrink-0 text-right font-mono text-sm tabular-nums lg:block">
                       {item.views}
                     </span>
-                    <span className="hidden text-right md:flex md:items-center md:justify-end">
+                    <span className="hidden w-[96px] shrink-0 text-right md:flex md:items-center md:justify-end">
                       <Timestamp value={item.activeAt} />
                     </span>
                   </article>
@@ -1285,12 +1285,12 @@ function ForumFloorView({
   const visibleComments = expanded ? comments.items : preview;
   return (
     <article
-      className="scroll-mt-24 border-b border-border py-6 focus-visible:outline focus-visible:outline-primary target:bg-primary/5 md:grid md:grid-cols-[136px_minmax(0,1fr)] md:gap-6"
+      className="scroll-mt-24 border-b border-border py-6 focus-visible:outline focus-visible:outline-primary target:bg-primary/5 md:flex md:gap-6"
       id={`post-${post.postNumber}`}
       tabIndex={-1}
       data-forum-post
     >
-      <div className="mb-3 flex min-w-0 items-center gap-2 md:mb-0 md:block">
+      <div className="mb-3 flex min-w-0 items-center gap-2 md:mb-0 md:block md:w-[136px] md:shrink-0">
         {post.author ? (
           <>
             <UserAvatar
@@ -1304,7 +1304,7 @@ function ForumFloorView({
           </>
         ) : null}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {post.body !== null ? (
           <>
             <ForumImages

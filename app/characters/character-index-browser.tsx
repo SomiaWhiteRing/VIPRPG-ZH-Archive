@@ -314,10 +314,10 @@ export function CharacterIndexBrowser({
   }, []);
 
   return (
-    <div className="grid items-start gap-5 md:grid-cols-[13rem_minmax(0,1fr)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+    <div className="flex flex-col items-start gap-5 md:flex-row lg:gap-8">
       <nav
         aria-label="角色分类目录"
-        className="hidden max-h-[calc(100dvh-6rem)] flex-col overflow-hidden border-border pb-3 md:sticky md:top-20 md:flex md:border-r md:pr-3"
+        className="hidden max-h-[calc(100dvh-6rem)] shrink-0 flex-col overflow-hidden border-border pb-3 md:sticky md:top-20 md:flex md:w-52 md:border-r md:pr-3 lg:w-60"
       >
         <CharacterFilter
           draftQuery={draftQuery}
@@ -402,7 +402,7 @@ export function CharacterIndexBrowser({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-      <div className="min-w-0" ref={cardsRef}>
+      <div className="w-full min-w-0 flex-1" ref={cardsRef}>
         {matchCount > 0 ? (
           <VirtualList
             className="min-w-0 [--character-indent:0.5rem] md:[--character-indent:1rem]"

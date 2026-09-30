@@ -19,7 +19,7 @@ export function FavoriteTagSidebar({
   ];
 
   return (
-    <aside className="min-w-0 self-start pt-2.5" aria-labelledby="favorite-tags-title">
+    <aside className="w-full min-w-0 shrink-0 self-start pt-2.5 @min-[681px]/library:w-[190px]" aria-labelledby="favorite-tags-title">
       <h2 id="favorite-tags-title" className="m-0 border-b border-border py-1.5 text-[15px] font-normal">
         收藏标签
       </h2>

@@ -285,8 +285,8 @@ export function PermissionMatrix({
 
   return (
     <div className="grid gap-6">
-      <div className="grid items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <aside className="grid gap-3 lg:sticky lg:top-20" aria-label="账户角色">
+      <div className="flex flex-col items-start gap-4 lg:flex-row">
+        <aside className="grid w-full shrink-0 gap-3 lg:sticky lg:top-20 lg:w-52" aria-label="账户角色">
           <div className="lg:hidden">
             <Label className="grid gap-2">
               账户角色
@@ -350,7 +350,7 @@ export function PermissionMatrix({
 
         {role && saved ? (
           <section
-            className="grid min-w-0 gap-3"
+            className="grid w-full min-w-0 flex-1 gap-3"
             aria-labelledby="selected-role-heading"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
