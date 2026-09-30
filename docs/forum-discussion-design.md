@@ -278,7 +278,7 @@
 
 #### 浏览器图片处理
 
-静态 PNG 使用 UPNG.js（cnum=256），JPEG 使用 @jsquash/jpeg 的 MozJPEG（quality=85），静态 WebP 使用 @jsquash/webp（quality=85、method=4、lossless=0、alpha_quality=100）。保持格式、正常显示方向和尺寸，只编码一次；输出有效且更小时采用输出，否则使用原文件。编码异常或无效输出报错并保留既有草稿，不静默降级、不循环编码。JPEG 方向在浏览器解码时处理一次，不把旧 EXIF 方向复制到编码结果。GIF、APNG、动态 WebP 保留原始字节。
+静态 PNG 总像素不超过 1,024（例如 32×32）时，通过文件头、尺寸及浏览器解码校验后保留原始字节，避开 UPNG.js 2.1.0 在极小图片上的输出缓冲区不足问题。其余静态 PNG 使用 UPNG.js（cnum=256），JPEG 使用 @jsquash/jpeg 的 MozJPEG（quality=85），静态 WebP 使用 @jsquash/webp（quality=85、method=4、lossless=0、alpha_quality=100）。保持格式、正常显示方向和尺寸，只编码一次；输出有效且更小时采用输出，否则使用原文件。编码异常或无效输出报错并保留既有草稿，不静默降级、不循环编码。JPEG 方向在浏览器解码时处理一次，不把旧 EXIF 方向复制到编码结果。GIF、APNG、动态 WebP 保留原始字节。
 
 编码器及 WASM 固定依赖版本、按格式懒加载并随本站打包，不访问 CDN，不使用 SharedArrayBuffer 或全站 COOP/COEP。处理取消或编辑器销毁时终止 Worker，释放预览资源，禁止过期结果写回。压缩可能改变像素、颜色及 EXIF 等元数据，不承诺固定压缩率、无可见损失或永久保存；这不是游戏资源的无损归档。
 
