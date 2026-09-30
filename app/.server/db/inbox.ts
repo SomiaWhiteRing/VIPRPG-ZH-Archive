@@ -236,17 +236,31 @@ export async function countUnreadInboxItemsForUser(
   runtime: AppRuntime,
   user: ArchiveUser,
 ): Promise<number> {
-  const visibility = buildInboxVisibilityClause(user);
+  // Keep each audience on its index. UNION removes items visible in multiple ways.
+  const permissionAudience = user.permissionKeys.length
+    ? `UNION SELECT id FROM inbox_items
+        WHERE type<>'role_change_request'
+          AND required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})`
+    : "";
   const row = await getD1(runtime)
     .prepare(
-      `SELECT COUNT(*) AS count
-      FROM inbox_items i
-      LEFT JOIN inbox_item_reads reads
-        ON reads.item_id = i.id AND reads.user_id = ?
-      WHERE (${visibility.sql})
-        AND reads.read_at IS NULL`,
+      `WITH current_administrator AS MATERIALIZED (
+        SELECT ${administratorSql("?", "'admin'")} AS can_review_admin
+        WHERE ${administratorSql("?")}
+      ), visible AS (
+        SELECT id FROM inbox_items WHERE recipient_user_id=?
+        ${permissionAudience}
+        UNION SELECT i.id FROM current_administrator CROSS JOIN inbox_items i
+          WHERE i.type='role_change_request'
+            AND (current_administrator.can_review_admin OR
+              COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)<>'admin')
+      )
+      SELECT COUNT(*) AS count FROM visible i
+      WHERE NOT EXISTS (
+        SELECT 1 FROM inbox_item_reads reads WHERE reads.item_id=i.id AND reads.user_id=?
+      )`,
     )
-    .bind(user.id, user.id, ...visibility.audienceBinds)
+    .bind(user.id, user.id, user.id, ...user.permissionKeys, user.id)
     .first<{ count: number }>();
   return row?.count ?? 0;
 }

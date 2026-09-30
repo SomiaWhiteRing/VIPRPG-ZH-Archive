@@ -6,7 +6,7 @@ import {
   mapCharacterPortrait,
 } from "@/app/.server/db/character-portrait-library";
 import { getD1 } from "@/app/.server/db/d1";
-import type { AppRuntime } from "@/app/.server/runtime";
+import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import type {
   CharacterAliasSuggestion,
   CharacterSuggestion,
@@ -71,7 +71,7 @@ export async function listPublicCharacters(
   }
   const rows = await getD1(runtime)
     .prepare(
-      `${characterSql("", "", true)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY work_count DESC,ch.primary_name ASC LIMIT ?`,
+      `${characterSql(true)}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY work_count DESC,ch.primary_name ASC LIMIT ?`,
     )
     .bind(...binds, limitValue(input.limit ?? 120, 300))
     .all<CharacterRow>();
@@ -98,7 +98,7 @@ export async function searchPublicCharacters(
   const [rows, count] = await database.batch([
     database
       .prepare(
-        `${characterSql("", "", true)}${clause} ORDER BY work_count DESC,ch.primary_name ASC,ch.id ASC LIMIT ? OFFSET ?`,
+        `${characterSql(true)}${clause} ORDER BY work_count DESC,ch.primary_name ASC,ch.id ASC LIMIT ? OFFSET ?`,
       )
       .bind(...binds, pageSize, (page - 1) * pageSize),
     database
@@ -122,13 +122,21 @@ export async function getPublicCharacterSummary(
 }
 
 // Character identities are public taxonomy. Counts include only published works.
-export async function listPublicCharacterIndex(
+export function listPublicCharacterIndex(
+  runtime: AppRuntime,
+): Promise<PublicCharacterIndexEntry[]> {
+  return memoizeRequest(runtime, "public-character-index", () =>
+    readPublicCharacterIndex(runtime),
+  );
+}
+
+async function readPublicCharacterIndex(
   runtime: AppRuntime,
 ): Promise<PublicCharacterIndexEntry[]> {
   const database = getD1(runtime);
   const [characters, aliases] = await database.batch([
     database.prepare(
-      `${characterSql("", "", true)} ORDER BY ch.primary_name,ch.id`,
+      `${characterSql(true, true)} ORDER BY ch.primary_name,ch.id`,
     ),
     database.prepare(
       "SELECT character_id,name,language FROM character_aliases ORDER BY character_id,language,name",
@@ -167,7 +175,7 @@ export async function listCharacterSuggestions(
 ): Promise<CharacterSuggestion[]> {
   // Names and portraits are small; the picker loads sheets for selected characters.
   const characters = await listPublicCharacterIndex(runtime);
-  return characters.sort((a, b) => b.workCount - a.workCount).map((character) => ({
+  return [...characters].sort((a, b) => b.workCount - a.workCount).map((character) => ({
     id: character.id,
     originalName: character.originalName,
     primaryName: character.primaryName,
@@ -629,7 +637,7 @@ async function getCharacter(
   includeNonPublic: boolean,
 ): Promise<PublicCharacterSummary | null> {
   const row = await getD1(runtime)
-    .prepare(`${characterSql("", "", !includeNonPublic)} WHERE ch.id=? LIMIT 1`)
+    .prepare(`${characterSql(!includeNonPublic)} WHERE ch.id=? LIMIT 1`)
     .bind(id)
     .first<CharacterRow>();
   if (!row) return null;
@@ -839,12 +847,19 @@ async function prepareCharacterMerge(
     statements,
   };
 }
-function characterSql(
-  extraColumns = "",
-  extraJoins = "",
-  publicPortrait = false,
-): string {
-  return `SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works)) AS work_count,ch.updated_at${extraColumns} FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""} ${extraJoins}`;
+function characterSql(publicPortrait = false, groupedWorkCounts = false): string {
+  // Full indexes count public credits once; individual lookups keep their indexed count.
+  const counts = groupedWorkCounts
+    ? `WITH character_work_counts AS MATERIALIZED (
+        SELECT character_id,COUNT(DISTINCT work_id) AS work_count
+        FROM work_characters WHERE work_id IN (SELECT id FROM public_works)
+        GROUP BY character_id
+      ) `
+    : "";
+  const workCount = groupedWorkCounts
+    ? "COALESCE(work_counts.work_count,0)"
+    : "(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works))";
+  return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count,ch.updated_at FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
 }
 function tagSql(): string {
   return `SELECT t.name,t.namespace,t.description,COALESCE((SELECT public_count FROM tag_usage_stats WHERE name=t.name),0) AS work_count,t.updated_at`;
