@@ -143,14 +143,25 @@ export function TopicTags({
 }
 export function TopicStatus({
   topic,
+  compact = false,
 }: {
   topic: Pick<ForumTopic, "featured" | "locked" | "pinned">;
+  compact?: boolean;
 }) {
+  const className = compact
+    ? "min-h-0 rounded bg-[#e1ece5] px-[5px] py-0 font-normal leading-[18px] text-primary"
+    : undefined;
   return (
-    <div className="inline-flex flex-wrap gap-2">
-      {topic.pinned ? <Badge>置顶</Badge> : null}
-      {topic.featured ? <Badge>★ 精品</Badge> : null}
-      {topic.locked ? <Badge variant="neutral">已锁定</Badge> : null}
+    <div
+      className={
+        compact
+          ? "inline-flex flex-wrap items-center gap-1.5"
+          : "inline-flex flex-wrap gap-2"
+      }
+    >
+      {topic.pinned ? <Badge className={className}>置顶</Badge> : null}
+      {topic.featured ? <Badge className={className}>★ 精品</Badge> : null}
+      {topic.locked ? <Badge className={className} variant="neutral">已锁定</Badge> : null}
     </div>
   );
 }
