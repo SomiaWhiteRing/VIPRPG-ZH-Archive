@@ -20,9 +20,10 @@ type DetailRow = CharacterPortraitRow & {
   id: number;
   primaryName: string;
   originalName: string;
+  workCount: number;
 };
 
-export async function getPublicCharacterDetail(
+async function readPublicCharacter(
   runtime: AppRuntime,
   id: number,
 ) {
@@ -30,7 +31,9 @@ export async function getPublicCharacterDetail(
   const row = await db
     .prepare(
       `SELECT ch.id,ch.primary_name AS primaryName,
-    ch.original_name AS originalName,${CHARACTER_PORTRAIT_COLUMNS}
+    ch.original_name AS originalName,${CHARACTER_PORTRAIT_COLUMNS},
+    (SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc
+      WHERE wc.character_id=ch.id AND wc.work_id IN (SELECT id FROM public_works)) AS workCount
     FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}
       AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
     WHERE ch.id=? LIMIT 1`,
@@ -39,6 +42,22 @@ export async function getPublicCharacterDetail(
     .first<DetailRow>();
   if (!row) return null;
   runtime.memo.set(`public-target:character:${row.id}`, true);
+  return {
+    id: row.id,
+    primaryName: row.primaryName,
+    originalName: row.originalName,
+    portrait: mapCharacterPortrait(row),
+    workCount: Number(row.workCount),
+  };
+}
+
+export async function getPublicCharacterDetail(
+  runtime: AppRuntime,
+  id: number,
+) {
+  const character = await readPublicCharacter(runtime, id);
+  if (!character) return null;
+  const db = getD1(runtime);
 
   const [aliases, sources, categories, memberships, works, faces, materials] =
     await db.batch([
@@ -60,24 +79,7 @@ export async function getPublicCharacterDetail(
           "SELECT category_id AS categoryId FROM character_category_memberships WHERE character_id=? ORDER BY category_id",
         )
         .bind(id),
-      db
-        .prepare(
-          `SELECT w.id,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
-      wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
-      w.original_release_date AS releaseDate,w.engine_family AS engineFamily,w.language,
-      COALESCE((SELECT group_concat(author_name,'、') FROM (
-        SELECT trim(staff.display_name) AS author_name
-        FROM work_staff staff JOIN creators author ON author.id=staff.creator_id
-        WHERE staff.work_id=w.id AND staff.role_key='author' AND trim(staff.display_name)<>''
-        ORDER BY staff.sort_order,author.name
-      )),'') AS authorName,
-      (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
-       WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS coverBlobSha256
-      FROM work_characters wc JOIN works w ON w.id=wc.work_id
-      WHERE wc.character_id=? AND w.id IN (SELECT id FROM public_works)
-      ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title,w.id,wc.sort_order,wc.id`,
-        )
-        .bind(id),
+      characterWorksStatement(db, id, 5, 0),
       db
         .prepare(
           `SELECT 'faceset:' || fs.id AS id,'faceset' AS kind,fs.blob_sha256 AS blobSha256,fs.width_px AS width,fs.height_px AS height
@@ -97,17 +99,8 @@ export async function getPublicCharacterDetail(
         )
         .bind(id),
     ]);
-  const groupedWorks = new Map<number, CharacterWork>();
-  for (const credit of works.results as CharacterWorkCredit[]) {
-    const work = groupedWorks.get(credit.id);
-    if (work) work.credits.push(credit);
-    else groupedWorks.set(credit.id, { ...credit, credits: [credit] });
-  }
   return {
-    id: row.id,
-    primaryName: row.primaryName,
-    originalName: row.originalName,
-    portrait: mapCharacterPortrait(row),
+    ...character,
     aliases: aliases.results as CharacterAliasSuggestion[],
     sourceUrls: (sources.results as { url: string }[]).map(
       (source) => source.url,
@@ -121,7 +114,68 @@ export async function getPublicCharacterDetail(
         ),
       }),
     ),
-    works: [...groupedWorks.values()],
+    works: groupCharacterWorks(works.results as CharacterWorkCredit[]),
     materials: [...faces.results, ...materials.results] as CharacterMaterial[],
   };
+}
+
+export async function browsePublicCharacterWorks(
+  runtime: AppRuntime,
+  id: number,
+  input: { page: number; pageSize: number },
+) {
+  const character = await readPublicCharacter(runtime, id);
+  if (!character) return null;
+  const total = character.workCount;
+  const pageSize = Number.isFinite(input.pageSize)
+    ? Math.max(1, Math.min(50, Math.floor(input.pageSize)))
+    : 1;
+  const page = Number.isFinite(input.page)
+    ? Math.max(1, Math.min(Math.max(1, Math.ceil(total / pageSize)), Math.floor(input.page)))
+    : 1;
+  const credits = await characterWorksStatement(
+    getD1(runtime), id, pageSize, (page - 1) * pageSize,
+  ).all<CharacterWorkCredit>();
+  return { character, items: groupCharacterWorks(credits.results), total, page, pageSize };
+}
+
+function characterWorksStatement(
+  db: D1Database,
+  id: number,
+  pageSize: number,
+  offset: number,
+) {
+  return db.prepare(
+    `SELECT w.id,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
+      wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
+      w.original_release_date AS releaseDate,w.engine_family AS engineFamily,w.language,
+      COALESCE((SELECT group_concat(author_name,'、') FROM (
+        SELECT trim(staff.display_name) AS author_name
+        FROM work_staff staff JOIN creators author ON author.id=staff.creator_id
+        WHERE staff.work_id=w.id AND staff.role_key='author' AND trim(staff.display_name)<>''
+        ORDER BY staff.sort_order,author.name
+      )),'') AS authorName,
+      (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id
+       WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS coverBlobSha256
+      FROM work_characters wc JOIN works w ON w.id=wc.work_id
+      WHERE wc.character_id=? AND w.id IN (
+        SELECT w.id FROM works w
+        WHERE w.id IN (SELECT id FROM public_works) AND EXISTS (
+          SELECT 1 FROM work_characters credit WHERE credit.work_id=w.id AND credit.character_id=?
+        )
+        ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title ASC,w.id DESC
+        LIMIT ? OFFSET ?
+      )
+      ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title ASC,w.id DESC,wc.sort_order,wc.id`,
+  ).bind(id, id, pageSize, offset);
+}
+
+function groupCharacterWorks(credits: CharacterWorkCredit[]): CharacterWork[] {
+  const groupedWorks = new Map<number, CharacterWork>();
+  for (const credit of credits) {
+    const work = groupedWorks.get(credit.id);
+    if (work) work.credits.push(credit);
+    else groupedWorks.set(credit.id, { ...credit, credits: [credit] });
+  }
+  return [...groupedWorks.values()];
 }
