@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { normalizeEntityName } from "../lib/entity-name.ts";
+import { inspectDisplayName } from "../lib/display-name.ts";
 import { readConfig, validateDeployment, validateIsolation, deploymentSummary, confirmProduction, migrationManifest } from "./deployment-config.mjs";
 
 const { values } = parseArgs({ options: {
@@ -30,11 +30,8 @@ function inspectDisplayNames() {
     const rows = query(`SELECT id,display_name FROM users WHERE status IN ('active','disabled')
       AND id>${cursor} ORDER BY id LIMIT 1000`);
     for (const row of rows) {
-      const normalized = normalizeEntityName(row.display_name);
-      // Match registration/profile validation without changing existing accounts.
-      if (!normalized || [...normalized].length > 80 ||
-        /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]/u.test(row.display_name))
-        invalidUserIds.push(row.id);
+      const { displayName: normalized, error } = inspectDisplayName(row.display_name);
+      if (error) invalidUserIds.push(row.id);
       if (normalized !== row.display_name) nonNormalizedUserIds.push(row.id);
       const key = normalized.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
       const ids = names.get(key) ?? [];
