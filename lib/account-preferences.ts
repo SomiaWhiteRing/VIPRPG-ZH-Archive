@@ -9,6 +9,7 @@ export type AccountPreferences = {
   notifyUploadedWorkComments: boolean;
   includePlayerInZip: boolean;
   showGameCardInteractionData: boolean;
+  hideDeletedContent: boolean;
   shortcuts: string[];
 };
 
@@ -21,11 +22,12 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number): AccountPreferences {
   return {
     notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
     includePlayerInZip: includePlayer !== 0,
     showGameCardInteractionData: showGameCardInteractionData !== 0,
+    hideDeletedContent: hideDeletedContent === 1,
     shortcuts: shortcuts === null ? [...DEFAULT_ACCOUNT_SHORTCUTS] : parseAccountShortcuts(JSON.parse(shortcuts)),
   };
 }

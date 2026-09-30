@@ -125,7 +125,7 @@ function fakeUser(
     externalAuthId: `email:${id}@example.test`,
     displayName: `user-${id}`,
     avatarBlobSha256: null,
-    preferences: { notifyUploadedWorkComments: true, includePlayerInZip: true, showGameCardInteractionData: true, shortcuts: ["/me/favorites", "/me/emojis", "/me/catalogs"] },
+    preferences: { notifyUploadedWorkComments: true, includePlayerInZip: true, showGameCardInteractionData: true, hideDeletedContent: false, shortcuts: ["/me/favorites", "/me/emojis", "/me/catalogs"] },
     bio: "",
     profileVisibility: {
       bio: true,

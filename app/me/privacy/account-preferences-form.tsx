@@ -38,6 +38,10 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
         <input name="showGameCardInteractionData" type="hidden" value="0" />
         <CheckboxField name="showGameCardInteractionData" label="在游戏卡片展示互动数据" defaultChecked={preferences.showGameCardInteractionData} />
       </div>
+      <div className="mt-3">
+        <input name="hideDeletedContent" type="hidden" value="0" />
+        <CheckboxField name="hideDeletedContent" label="隐藏已删除的帖子和评论" defaultChecked={preferences.hideDeletedContent} />
+      </div>
       <h3 className="mb-2 mt-5 text-sm font-semibold" id="shortcut-heading">头像菜单显示的快捷入口</h3>
       <DndContext
         id={dndId}
