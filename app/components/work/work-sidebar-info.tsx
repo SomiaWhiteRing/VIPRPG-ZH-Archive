@@ -1,5 +1,6 @@
 import { InfoRow } from "@/app/components/ui/info-row";
 import { Button } from "@/app/components/ui/button";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type {
   GameArchiveVersionDetail,
   GameWorkDetail,
@@ -134,12 +135,26 @@ export function WorkSidebarInfo({
                 {current.uploaderName ? (
                   <InfoRow label="上传者">
                     {current.uploaderId ? (
-                      <Link
-                        className="font-medium text-secondary hover:underline"
-                        to={`/games?uploader=${current.uploaderId}`}
-                      >
-                        {current.uploaderName}
-                      </Link>
+                      <span className="inline-flex max-w-full items-center gap-1.5">
+                        <Link
+                          aria-label={`${current.uploaderName}的个人主页`}
+                          className="shrink-0 rounded-full"
+                          to={`/users/${current.uploaderId}`}
+                        >
+                          <UserAvatar
+                            avatarBlobSha256={current.uploaderAvatarBlobSha256}
+                            className="size-[1em]"
+                            displayName={current.uploaderName}
+                            size={14}
+                          />
+                        </Link>
+                        <Link
+                          className="min-w-0 font-medium text-secondary hover:underline"
+                          to={`/games?uploader=${current.uploaderId}`}
+                        >
+                          {current.uploaderName}
+                        </Link>
+                      </span>
                     ) : current.uploaderName}
                   </InfoRow>
                 ) : null}

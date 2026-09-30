@@ -1903,7 +1903,8 @@ async function loadWorkCollections(
       .prepare(
         `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
                 av.uses_shared_player,av.embedded_player_size_bytes,av.web_play_file_count,av.web_play_size_bytes,
-                av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name
+                av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name,
+                u.avatar_blob_sha256 AS uploader_avatar_blob_sha256
          FROM archive_versions av
          JOIN works w ON w.id=av.work_id
          LEFT JOIN users u ON u.id=av.uploader_id
@@ -2023,6 +2024,7 @@ async function loadWorkCollections(
       published_at: string | null;
       uploader_id: number | null;
       uploader_name: string | null;
+      uploader_avatar_blob_sha256: string | null;
     }>(results[6]).map((row) => ({
       usesSharedPlayer: row.uses_shared_player === 1,
       embeddedPlayerSizeBytes: row.embedded_player_size_bytes,
@@ -2037,6 +2039,7 @@ async function loadWorkCollections(
       publishedAt: row.published_at,
       uploaderId: row.uploader_id,
       uploaderName: row.uploader_name,
+      uploaderAvatarBlobSha256: row.uploader_avatar_blob_sha256,
     })),
     relations: batchRows<{
       id: number;
