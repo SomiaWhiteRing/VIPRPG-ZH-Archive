@@ -15,6 +15,10 @@ async function processImage(file: File): Promise<File> {
   try {
     if (bitmap.width !== meta.width || bitmap.height !== meta.height)
       throw new Error("浏览器无法保持图片的显示方向及尺寸。");
+    // UPNG 2.1.0 allocates RGBA bytes + 100 for output; tiny palette PNGs
+    // can exceed that buffer. Keep the decoded original before encoding.
+    if (meta.format === "png" && meta.width * meta.height <= 1024)
+      return new File([original], file.name, { type: "image/png" });
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("浏览器无法处理此图片。");
