@@ -65,6 +65,7 @@ export type GameArchiveVersionDetail = {
   publishedAt: string | null;
   uploaderId: number | null;
   uploaderName: string | null;
+  uploaderAvatarBlobSha256: string | null;
 };
 
 export type GameWorkRelation = {
