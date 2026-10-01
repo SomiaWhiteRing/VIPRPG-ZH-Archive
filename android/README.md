@@ -2,6 +2,8 @@
 
 Android 主站负责发现作品；仅在本 App 中隐藏作品的在线游玩 tab，概览按钮变为「安装到本地 / 查看下载进度 / 启动游戏」。普通 Android 浏览器保留在线游玩。原生游戏库、截图图库和版本页沿用现有 Material 控件。
 
+应用随设备的浅色／深色设置变化，原生游戏库、图库、看图器、版本页、底栏和系统栏即时更新，不重建 Activity 或重载游戏。在线网页保留账号的「浅色／深色／跟随系统」偏好；仅「跟随系统」读取 Android 传入的 `data-system-theme`。离线 WebPlayer 同样接收设备主题，游戏画面与沉浸背景维持原本配色。支持文档启动脚本的 WebView 会在页面脚本前注入状态，旧 WebView 在页面加载完成后同步；设备主题变化会更新当前页面，无需刷新。
+
 首次启动无需选择目录。游戏和存档保存在应用私有持久目录，截图保存到系统相册 **VIPRPG.org**。不读取、不迁移、不删除首发前的 OPFS、旧授权目录和旧私有格式。
 
 - `games/<archiveVersionId>/`：校验后的 ZIP、索引、完成记录和封面；删除游戏仅删除这些文件。
@@ -27,7 +29,7 @@ APK 内 `/_android/` 只承载 WebPlayer。原生来源受限的 `VIPRPGLocal` �
 原生图库提供「时间轴」和「按游戏」两个入口。时间轴按拍摄时间倒序、按天分组，使用三列方形缩略图；按游戏显示封面合集，进入合集后显示该游戏的时间轴。同一稳定游戏 ID 改名后仍合并，并优先显示最新截图的名称。点击后原生全屏完整看图，左右滑动切换时相邻图片间有 12dp 间隔；轻点时顶部、底部控件与图片外的背景同时切换为黑色沉浸视图，再次轻点恢复，不使用明暗渐变；双指或双击缩放。上拉会退出沉浸模式，图片保持宽度向上移动，详情元素随手指连续进入；松手后展开或收回，收回后仍保持普通看图界面。点击「详情」也可展开，显示拍摄时间、游戏名称、文件名、尺寸、文件大小和保存目录。长按或右上角「选择截图」进入多选，可选择当天或当前列表全部截图，使用系统分享或批量删除。删除需确认，会永久删除原文件，无回收站；任务可取消剩余操作，逐项显示处理数量，失败项保留选择供重试。图库不提供 ZIP 导出。
 
 
-图库交互参考红魔手机上的 Google Photos 实际操作：日期分组图片流、封面合集、手势切图和随拖动连续显示的详情。前期参考项目包括 [ReFra](https://github.com/IacobIonut01/Gallery) 和 [Fossify Gallery](https://github.com/FossifyOrg/Gallery)。使用项目暖白 `#f5f4ef`、青绿 `#1f6f67` 与线性图标；目录与刷新收进更多菜单，多选操作只在选择模式显示。查看器使用 AndroidX ViewPager2 与 [ZoomImage](https://github.com/panpf/zoomimage) 1.4.0。Material Components 1.12.0 仅使用截图模块的局部主题，不改变其他页面。ZoomImage 1.5+ 要求 SDK 37，因此当前 SDK 35 项目固定使用兼容稳定版。依赖均通过 Gradle/Maven Central 引入，许可证随 APK 的 `assets/licenses/` 分发；没有复制参考应用源码或图片。
+图库交互参考红魔手机上的 Google Photos 实际操作：日期分组图片流、封面合集、手势切图和随拖动连续显示的详情。前期参考项目包括 [ReFra](https://github.com/IacobIonut01/Gallery) 和 [Fossify Gallery](https://github.com/FossifyOrg/Gallery)。使用项目暖白 `#f5f4ef`、青绿 `#1f6f67` 与线性图标；目录与刷新收进更多菜单，多选操作只在选择模式显示。查看器使用 AndroidX ViewPager2 与 [ZoomImage](https://github.com/panpf/zoomimage) 1.4.0。Material Components 1.12.0 用于原生页面，统一使用随系统切换的 DayNight 主题。ZoomImage 1.5+ 要求 SDK 37，因此当前 SDK 35 项目固定使用兼容稳定版。依赖均通过 Gradle/Maven Central 引入，许可证随 APK 的 `assets/licenses/` 分发；没有复制参考应用源码或图片。
 
 ## 应用更新与发布
 

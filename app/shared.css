@@ -65,3 +65,42 @@
   --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", Consolas, Menlo, Monaco, "Liberation Mono", ui-monospace, monospace;
 }
+
+/* Consumers: app/root.tsx body, android/web/offline.css body and the shared Button/Input.
+   Android supplies data-system-theme before page scripts and on device changes;
+   browsers resolve system appearance with the media query before paint. */
+@layer base {
+  :root { color-scheme: light; }
+
+  :root:is([data-theme="dark"], [data-theme="system"][data-system-theme="dark"]) {
+    color-scheme: dark;
+    --color-background: #151c1b;
+    --color-foreground: #e6ede9;
+    --color-card: #202a27;
+    --color-muted: #a4b5ad;
+    --color-border: #43564d;
+    --color-input: #6a8175;
+    --color-primary: #65c6b3;
+    --color-primary-foreground: #102b25;
+    --color-accent: #f2a16f;
+    --color-destructive: #f3948a;
+    --color-destructive-foreground: #351713;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="system"]:not([data-system-theme]) {
+      color-scheme: dark;
+      --color-background: #151c1b;
+      --color-foreground: #e6ede9;
+      --color-card: #202a27;
+      --color-muted: #a4b5ad;
+      --color-border: #43564d;
+      --color-input: #6a8175;
+      --color-primary: #65c6b3;
+      --color-primary-foreground: #102b25;
+      --color-accent: #f2a16f;
+      --color-destructive: #f3948a;
+      --color-destructive-foreground: #351713;
+    }
+  }
+}

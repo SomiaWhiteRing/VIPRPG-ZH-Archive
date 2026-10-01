@@ -39,7 +39,7 @@ final class SwipeGameRow extends FrameLayout {
         delete.setContentDescription("删除 " + title);
         delete.setVisibility(INVISIBLE);
         addView(delete, new FrameLayout.LayoutParams(revealWidth, -1, Gravity.RIGHT));
-        content.setBackgroundColor(0xfff5f4ef);
+        content.setBackgroundColor(context.getColor(R.color.native_background));
         addView(content, new FrameLayout.LayoutParams(-1, -2));
         // Screen-reader users can reveal the same action without a swipe.
         ViewCompat.setImportantForAccessibility(content, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_YES);

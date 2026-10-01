@@ -42,6 +42,9 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+import androidx.webkit.WebSettingsCompat;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +55,13 @@ import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    // Run before page scripts/paint where supported; onPageFinished covers older WebViews.
+    private static final String SYSTEM_THEME_SCRIPT = "(() => {"
+        + "const apply = () => document.documentElement.setAttribute('data-system-theme', VIPRPGAndroid.getSystemTheme());"
+        + "if (document.documentElement) apply();"
+        + "else new MutationObserver((_, observer) => { if (document.documentElement) { apply(); observer.disconnect(); } })"
+        + ".observe(document, {childList:true});"
+        + "})()";
     private final String offlineUrl = BuildConfig.SITE_ORIGIN + "/_android/index.html";
     private final Uri origin = Uri.parse(BuildConfig.SITE_ORIGIN);
     private WebView browser;
@@ -93,6 +103,7 @@ public final class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private View fullscreenView;
     private ValueCallback<Uri[]> fileChooser;
+    private int deviceNightMode;
     private boolean playing;
     private boolean onlinePlaying;
     private boolean onlineImmersive;
@@ -177,10 +188,22 @@ public final class MainActivity extends Activity {
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setSupportMultipleWindows(false);
             settings.setSafeBrowsingEnabled(true);
+            view.setForceDarkAllowed(false);
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false);
+            }
         }
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         browser.addJavascriptInterface(new OnlineBridge(), "VIPRPGAndroid");
         offlineBrowser.addJavascriptInterface(new LibraryBridge(), "VIPRPGAndroid");
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            for (WebView view : new WebView[]{browser, offlineBrowser}) {
+                WebViewCompat.addDocumentStartJavaScript(view, SYSTEM_THEME_SCRIPT,
+                    java.util.Collections.singleton(BuildConfig.SITE_ORIGIN));
+            }
+        }
+        bindVersionTheme();
+        applyDeviceTheme();
 
         WebViewAssetLoader.AssetsPathHandler packagedAssets = new WebViewAssetLoader.AssetsPathHandler(this);
         WebViewAssetLoader assets = new WebViewAssetLoader.Builder()
@@ -224,6 +247,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                sendSystemTheme(view);
                 updateNavigation();
             }
 
@@ -676,17 +700,75 @@ public final class MainActivity extends Activity {
         return fullscreenView != null || playing || (!library && !gallery && !version && onlineImmersive);
     }
 
+    private boolean isDeviceDark() {
+        return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+            == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    private void bindVersionTheme() {
+        for (int id : new int[]{R.id.version_app_name, R.id.update_heading, R.id.update_status, R.id.release_notes_heading}) {
+            NativeControls.textColor((TextView) findViewById(id), R.color.native_ink);
+        }
+        for (int id : new int[]{R.id.installed_version, R.id.update_detail, R.id.release_notes, R.id.auto_check_updates}) {
+            NativeControls.textColor((TextView) findViewById(id), R.color.native_muted);
+        }
+        NativeControls.bindTheme(versionPage, () -> versionPage.setBackgroundColor(getColor(R.color.native_background)));
+        View divider = findViewById(R.id.version_divider);
+        NativeControls.bindTheme(divider, () -> divider.setBackgroundColor(getColor(R.color.native_border)));
+        NativeControls.bindTheme(updateStatusIcon, () -> updateStatusIcon.setColorFilter(getColor(R.color.native_primary)));
+        NativeControls.bindTheme(checkUpdate, () -> checkUpdate.setTextColor(getColor(R.color.native_primary)));
+        NativeControls.bindTheme(downloadUpdate, () -> {
+            downloadUpdate.setBackgroundTintList(getColorStateList(R.color.native_primary));
+            downloadUpdate.setTextColor(getColor(R.color.native_on_primary));
+        });
+        MaterialSwitch autoCheck = findViewById(R.id.auto_check_updates);
+        NativeControls.bindTheme(autoCheck, () -> {
+            autoCheck.setTextColor(getColor(R.color.native_muted));
+            // Resolve the public widget style again after rebasing the DayNight theme.
+            android.content.res.TypedArray colors = autoCheck.getContext().obtainStyledAttributes(null,
+                new int[]{androidx.appcompat.R.attr.thumbTint, androidx.appcompat.R.attr.trackTint,
+                    com.google.android.material.R.attr.thumbIconTint, com.google.android.material.R.attr.trackDecorationTint},
+                com.google.android.material.R.attr.materialSwitchStyle, 0);
+            try {
+                autoCheck.setThumbTintList(colors.getColorStateList(0));
+                autoCheck.setTrackTintList(colors.getColorStateList(1));
+                autoCheck.setThumbIconTintList(colors.getColorStateList(2));
+                autoCheck.setTrackDecorationTintList(colors.getColorStateList(3));
+            } finally {
+                colors.recycle();
+            }
+        });
+    }
+
+    private void applyDeviceTheme() {
+        deviceNightMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        getTheme().rebase();
+        NativeControls.refreshTheme(root);
+        bottomNavigation.setBackgroundColor(getColor(R.color.native_surface));
+        for (WebView view : new WebView[]{browser, offlineBrowser}) {
+            view.setBackgroundColor(getColor(R.color.native_background));
+            sendSystemTheme(view);
+        }
+        updateNavigation();
+    }
+
+    private void sendSystemTheme(WebView view) {
+        if (view.getUrl() != null && sameOrigin(Uri.parse(view.getUrl()))) {
+            view.evaluateJavascript(SYSTEM_THEME_SCRIPT, null);
+        }
+    }
+
     private void updateNavigation() {
         boolean immersive = isContentImmersive();
-        getWindow().setBackgroundDrawable(new ColorDrawable(immersive ? Color.BLACK : Color.rgb(245, 244, 239)));
+        getWindow().setBackgroundDrawable(new ColorDrawable(immersive ? Color.BLACK : getColor(R.color.native_background)));
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
         tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
         tintTab(libraryTab, R.id.library_icon, R.id.library_label, !version && !gallery && library);
         tintTab(galleryTab, R.id.gallery_icon, R.id.gallery_label, gallery);
         tintTab(versionTab, R.id.version_icon, R.id.version_label, version);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), root);
-        controller.setAppearanceLightStatusBars(!immersive);
-        controller.setAppearanceLightNavigationBars(!immersive);
+        controller.setAppearanceLightStatusBars(!immersive && !isDeviceDark());
+        controller.setAppearanceLightNavigationBars(!immersive && !isDeviceDark());
         controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         if (immersive) {
             controller.hide(WindowInsetsCompat.Type.systemBars());
@@ -697,7 +779,7 @@ public final class MainActivity extends Activity {
     }
 
     private void tintTab(LinearLayout tab, int iconId, int labelId, boolean active) {
-        int color = active ? Color.rgb(31, 111, 103) : Color.rgb(104, 115, 125);
+        int color = getColor(active ? R.color.native_primary : R.color.native_muted);
         tab.setSelected(active);
         tab.setEnabled(!active);
         ((ImageView) tab.findViewById(iconId)).setColorFilter(color);
@@ -787,6 +869,7 @@ public final class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
+        if (deviceNightMode != (configuration.uiMode & Configuration.UI_MODE_NIGHT_MASK)) applyDeviceTheme();
         ViewCompat.requestApplyInsets(root);
         browser.requestLayout();
         offlineBrowser.requestLayout();
@@ -805,6 +888,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (deviceNightMode != (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)) applyDeviceTheme();
         if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
@@ -845,7 +929,14 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state);
     }
 
-    private final class OnlineBridge {
+    private class DeviceBridge {
+        @JavascriptInterface
+        public String getSystemTheme() {
+            return isDeviceDark() ? "dark" : "light";
+        }
+    }
+
+    private final class OnlineBridge extends DeviceBridge {
         @JavascriptInterface
         public void setPlaying(boolean value) {
             runOnUiThread(() -> setOnlinePlaying(value, value));
@@ -861,7 +952,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private final class LibraryBridge {
+    private final class LibraryBridge extends DeviceBridge {
         @JavascriptInterface
         public void requestPlayerFocus() {
             runOnUiThread(() -> restoreOfflinePlayerFocus());

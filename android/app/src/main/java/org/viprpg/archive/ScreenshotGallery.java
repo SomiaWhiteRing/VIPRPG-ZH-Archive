@@ -35,8 +35,11 @@ import java.util.function.Consumer;
 
 /** Android owns timeline, selection and viewer; the website never reads directory files. */
 final class ScreenshotGallery extends LinearLayout {
-    private static final int PAPER = 0xfff5f4ef, INK = 0xff17212b, MUTED = 0xff68737d,
-        TEAL = 0xff1f6f67, TINT = 0xffe0f0eb, DARK = 0xff101418;
+    private int paper() { return getContext().getColor(R.color.native_background); }
+    private int ink() { return getContext().getColor(R.color.native_ink); }
+    private int muted() { return getContext().getColor(R.color.native_muted); }
+    private int teal() { return getContext().getColor(R.color.native_primary); }
+    private int tint() { return getContext().getColor(R.color.native_tint); }
     private final MainActivity activity;
     private final ScreenshotController controller;
     private final ScreenshotImageLoader images;
@@ -75,7 +78,7 @@ final class ScreenshotGallery extends LinearLayout {
         super(new ContextThemeWrapper(activity, R.style.GalleryTheme));
         this.activity = activity; this.controller = controller;
         images = new ScreenshotImageLoader(controller.store);
-        setOrientation(VERTICAL); setBackgroundColor(PAPER);
+        setOrientation(VERTICAL); setBackgroundColor(paper());
         normalHeader = new ArchivePageHeader(activity, "图库");
         gameBack = icon(normalHeader.leading(), "返回游戏合集", GalleryIcons.BACK, () -> { gameId = 0; selected.clear(); rebuild(); }, false);
         manage = icon(normalHeader.actions(), "选择截图", GalleryIcons.SELECT, () -> { selecting = true; selected.clear(); rebuild(); }, false);
@@ -91,17 +94,17 @@ final class ScreenshotGallery extends LinearLayout {
         });
         addView(selectionHeader);
         LinearLayout feedback = row(); feedback.setPadding(dp(20), 0, dp(12), 0);
-        status = text("", 12); status.setTextColor(MUTED); status.setPadding(0, dp(4), 0, dp(6));
+        status = text("", 12); status.setTextColor(muted()); status.setPadding(0, dp(4), 0, dp(6));
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         feedback.addView(status, new LinearLayout.LayoutParams(0, -2, 1));
         cancel = button(feedback, "取消任务", this::cancelOperation);
         cancel.setVisibility(GONE); addView(feedback);
         progress = new ProgressBar(getContext(), null, android.R.attr.progressBarStyleHorizontal);
-        progress.setIndeterminate(true); progress.setIndeterminateTintList(ColorStateList.valueOf(TEAL));
+        progress.setIndeterminate(true); progress.setIndeterminateTintList(ColorStateList.valueOf(teal()));
         addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
         refreshLayout = new androidx.swiperefreshlayout.widget.SwipeRefreshLayout(getContext());
-        refreshLayout.setColorSchemeColors(TEAL);
-        refreshLayout.setProgressBackgroundColorSchemeColor(Color.WHITE);
+        refreshLayout.setColorSchemeColors(teal());
+        refreshLayout.setProgressBackgroundColorSchemeColor(getContext().getColor(R.color.native_surface));
         refreshLayout.setOnRefreshListener(() -> refresh(null, true));
         addView(refreshLayout, new LinearLayout.LayoutParams(-1, 0, 1));
         FrameLayout body = new FrameLayout(getContext()); refreshLayout.addView(body, new androidx.swiperefreshlayout.widget.SwipeRefreshLayout.LayoutParams(-1, -1));
@@ -114,25 +117,49 @@ final class ScreenshotGallery extends LinearLayout {
         body.addView(gameGrid, new FrameLayout.LayoutParams(-1, -1));
         refreshLayout.setOnChildScrollUpCallback((parent, child) -> (gamesPage && gameId == 0 ? gameGrid : list).canScrollVertically(-1));
         empty = new LinearLayout(getContext()); empty.setOrientation(VERTICAL); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(32), 0, dp(32), dp(48));
-        ImageView emptyIcon = new ImageView(getContext()); emptyIcon.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, TEAL));
-        emptyIcon.setPadding(dp(20), dp(20), dp(20), dp(20)); emptyIcon.setBackground(shape(TINT, 24));
+        ImageView emptyIcon = new ImageView(getContext()); emptyIcon.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, teal()));
+        emptyIcon.setPadding(dp(20), dp(20), dp(20), dp(20)); emptyIcon.setBackground(shape(tint(), 24));
         empty.addView(emptyIcon, new LinearLayout.LayoutParams(dp(80), dp(80)));
         emptyTitle = text("暂无截图", 21); emptyTitle.setTypeface(null, Typeface.BOLD); emptyTitle.setGravity(Gravity.CENTER); emptyTitle.setPadding(0, dp(20), 0, dp(8)); empty.addView(emptyTitle);
         body.addView(empty, new FrameLayout.LayoutParams(-1, -1));
         tabs = row(); tabs.setGravity(Gravity.CENTER); tabs.setPadding(dp(6), dp(6), dp(6), dp(6));
-        tabs.setBackground(shape(0xfff8f7fa, 36)); tabs.setElevation(dp(10));
+        tabs.setBackground(shape(getContext().getColor(R.color.native_tabs), 36)); tabs.setElevation(dp(10));
         timelineTab = button(tabs, "时间轴", () -> { gamesPage = false; gameId = 0; selected.clear(); rebuild(); list.setSelection(0); });
         gamesTab = button(tabs, "按游戏", () -> { gamesPage = true; gameId = 0; selected.clear(); rebuild(); });
+        timelineTab.setTag(R.id.native_theme_binding, null); gamesTab.setTag(R.id.native_theme_binding, null);
         timelineTab.setContentDescription("时间轴"); gamesTab.setContentDescription("按游戏");
         FrameLayout.LayoutParams tabPosition = new FrameLayout.LayoutParams(-2, dp(64), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         tabPosition.bottomMargin = dp(16); body.addView(tabs, tabPosition);
-        selectionBar = row(); selectionBar.setGravity(Gravity.CENTER); selectionBar.setPadding(dp(16), dp(8), dp(16), dp(8)); selectionBar.setBackgroundColor(Color.WHITE);
-        share = button(selectionBar, "分享", () -> shareEntries(selectedEntries())); share.setIcon(new GalleryIcons(GalleryIcons.SHARE, TEAL));
-        delete = button(selectionBar, "删除", () -> confirmDelete(selectedEntries())); delete.setIcon(new GalleryIcons(GalleryIcons.DELETE, 0xffad4037)); delete.setTextColor(0xffad4037); delete.setIconTint(ColorStateList.valueOf(0xffad4037));
+        selectionBar = row(); selectionBar.setGravity(Gravity.CENTER); selectionBar.setPadding(dp(16), dp(8), dp(16), dp(8)); selectionBar.setBackgroundColor(getContext().getColor(R.color.native_surface));
+        share = button(selectionBar, "分享", () -> shareEntries(selectedEntries())); share.setIcon(new GalleryIcons(GalleryIcons.SHARE, teal()));
+        delete = button(selectionBar, "删除", () -> confirmDelete(selectedEntries())); delete.setIcon(new GalleryIcons(GalleryIcons.DELETE, getContext().getColor(R.color.native_destructive))); delete.setTextColor(getContext().getColor(R.color.native_destructive)); delete.setIconTint(ColorStateList.valueOf(getContext().getColor(R.color.native_destructive)));
         share.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1)); delete.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1));
         addView(selectionBar);
         activity.getContentResolver().registerContentObserver(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, mediaObserver);
+        NativeControls.bindTheme(delete, () -> {
+            int color = getContext().getColor(R.color.native_destructive);
+            delete.setTextColor(color); delete.setIconTint(ColorStateList.valueOf(color));
+        });
+        NativeControls.bindTheme(this, this::applyTheme);
+    }
+
+    private void applyTheme() {
+        setBackgroundColor(paper());
+        status.setTextColor(muted()); selectionCount.setTextColor(ink()); emptyTitle.setTextColor(ink());
+        for (MaterialButton button : new MaterialButton[]{manage, leaveSelection, gameBack}) {
+            button.setIconTint(ColorStateList.valueOf(ink()));
+        }
+        ImageView emptyIcon = (ImageView) empty.getChildAt(0);
+        emptyIcon.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, teal()));
+        emptyIcon.setBackground(shape(tint(), 24));
+        tabs.setBackground(shape(getContext().getColor(R.color.native_tabs), 36));
+        selectionBar.setBackgroundColor(getContext().getColor(R.color.native_surface));
+        progress.setIndeterminateTintList(ColorStateList.valueOf(teal()));
+        refreshLayout.setColorSchemeColors(teal());
+        refreshLayout.setProgressBackgroundColorSchemeColor(getContext().getColor(R.color.native_surface));
+        adapter.notifyDataSetChanged(); gameAdapter.notifyDataSetChanged();
         updateControls();
+        if (viewer instanceof ScreenshotViewer) ((ScreenshotViewer) viewer).applyTheme();
     }
 
     void open() { refresh(null); }
@@ -233,11 +260,11 @@ final class ScreenshotGallery extends LinearLayout {
     private void styleTab(MaterialButton tab, boolean active, String icon) {
         tab.setCornerRadius(dp(30)); tab.setElevation(0);
         tab.setTextSize(15); tab.setIconSize(dp(20)); tab.setIconPadding(dp(7));
-        tab.setIcon(active ? new GalleryIcons(icon, INK) : null);
+        tab.setIcon(active ? new GalleryIcons(icon, ink()) : null);
         tab.setLayoutParams(new LinearLayout.LayoutParams(dp(active ? 108 : 84), dp(52)));
-        tab.setBackgroundTintList(ColorStateList.valueOf(active ? 0xffdfe5fb : 0xfff8f7fa));
-        tab.setTextColor(active ? INK : 0xff4e515c);
-        tab.setIconTint(ColorStateList.valueOf(INK));
+        tab.setBackgroundTintList(ColorStateList.valueOf(active ? getContext().getColor(R.color.native_active_tab) : getContext().getColor(R.color.native_tabs)));
+        tab.setTextColor(active ? ink() : muted());
+        tab.setIconTint(ColorStateList.valueOf(ink()));
         tab.setSelected(active);
     }
 
@@ -343,7 +370,7 @@ final class ScreenshotGallery extends LinearLayout {
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-    private TextView text(String value, int size) { TextView view = new TextView(getContext()); view.setText(value); view.setTextSize(size); view.setTextColor(INK); return view; }
+    private TextView text(String value, int size) { TextView view = new TextView(getContext()); view.setText(value); view.setTextSize(size); view.setTextColor(ink()); return view; }
     private GradientDrawable shape(int color, int radius) { GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable; }
     private LinearLayout row() { LinearLayout row = new LinearLayout(getContext()); row.setGravity(Gravity.CENTER_VERTICAL); return row; }
     private MaterialButton button(LinearLayout parent, String label, Runnable action) {
@@ -351,7 +378,7 @@ final class ScreenshotGallery extends LinearLayout {
         parent.addView(button, new LinearLayout.LayoutParams(-2, dp(48))); return button;
     }
     private MaterialButton icon(LinearLayout parent, String label, String path, Runnable action, boolean dark) {
-        MaterialButton button = NativeControls.icon(getContext(), path, dark ? Color.WHITE : INK, action);
+        MaterialButton button = NativeControls.icon(getContext(), path, dark ? Color.WHITE : ink(), action);
         button.setContentDescription(label); button.setTooltipText(label);
         parent.addView(button, new LinearLayout.LayoutParams(dp(48), dp(48))); return button;
     }
@@ -392,21 +419,24 @@ final class ScreenshotGallery extends LinearLayout {
                 LinearLayout line = row();
                 for (int x = 0; x < 2; x++) {
                     ImageView image = new ImageView(getContext()); image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    image.setBackgroundColor(TINT);
+                    image.setBackgroundColor(tint());
                     LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, 0, 1);
                     tile.height = dp(82); tile.setMargins(dp(1), dp(1), dp(1), dp(1)); line.addView(image, tile);
                     covers[y * 2 + x] = image;
                 }
                 mosaic.addView(line, new LinearLayout.LayoutParams(-1, dp(84)));
             }
-            mosaic.setBackground(shape(TINT, 14)); mosaic.setClipToOutline(true); addView(mosaic);
+            mosaic.setBackground(shape(tint(), 14)); mosaic.setClipToOutline(true); addView(mosaic);
             title = text("", 16); title.setTypeface(null, Typeface.BOLD); title.setSingleLine();
             title.setEllipsize(TextUtils.TruncateAt.END); title.setPadding(dp(2), dp(9), dp(2), 0); addView(title);
-            count = text("", 12); count.setTextColor(MUTED); count.setPadding(dp(2), dp(3), dp(2), 0); addView(count);
+            count = text("", 12); count.setTextColor(muted()); count.setPadding(dp(2), dp(3), dp(2), 0); addView(count);
         }
         void bind(GameGroup group) {
             cancel(); final int token = bindGeneration;
             current = group;
+            title.setTextColor(ink()); count.setTextColor(muted());
+            ((View) covers[0].getParent().getParent()).setBackground(shape(tint(), 14));
+            for (ImageView cover : covers) cover.setBackgroundColor(tint());
             title.setText(group.title); count.setText(group.items.size() + " 张截图");
             boolean mosaic = group.items.size() >= 4;
             LinearLayout firstRow = (LinearLayout) covers[0].getParent();
@@ -468,7 +498,7 @@ final class ScreenshotGallery extends LinearLayout {
                 TextView day = text(date, 17); day.setTypeface(null, Typeface.BOLD);
                 section.addView(day, new LinearLayout.LayoutParams(0, dp(40), 1)); day.setGravity(Gravity.CENTER_VERTICAL);
                 if (selecting) {
-                    MaterialCheckBox check = new MaterialCheckBox(getContext()); check.setButtonTintList(ColorStateList.valueOf(TEAL));
+                    MaterialCheckBox check = new MaterialCheckBox(getContext()); check.setButtonTintList(ColorStateList.valueOf(teal()));
                     check.setContentDescription("选择" + date + "的截图"); check.setMinHeight(dp(48)); check.setMinWidth(dp(48));
                     check.setChecked(row.items.stream().allMatch(item -> selected.contains(item.id)));
                     check.setEnabled(!operating);
@@ -496,7 +526,7 @@ final class ScreenshotGallery extends LinearLayout {
         ScreenshotStore.Entry currentEntry;
         Cell() {
             super(ScreenshotGallery.this.getContext()); setPadding(dp(1), dp(1), dp(1), dp(1));
-            image = new ImageView(getContext()); image.setScaleType(ImageView.ScaleType.CENTER_CROP); image.setBackgroundColor(TINT);
+            image = new ImageView(getContext()); image.setScaleType(ImageView.ScaleType.CENTER_CROP); image.setBackgroundColor(tint());
             addView(image, new FrameLayout.LayoutParams(-1, -1));
             badge = text("", 14); badge.setTextColor(Color.WHITE); badge.setGravity(Gravity.CENTER);
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.END); params.setMargins(dp(8), dp(8), dp(8), 0); addView(badge, params);
@@ -504,6 +534,7 @@ final class ScreenshotGallery extends LinearLayout {
         }
         void cancel() { ++bindGeneration; if (request != null) request.cancel(true); request = null; }
         void bind(ScreenshotStore.Entry entry) {
+            image.setBackgroundColor(tint());
             boolean sameImage = entry != null && entry.id.equals(bound) && currentEntry != null && entry.modified == currentEntry.modified && entry.bytes == currentEntry.bytes && image.getDrawable() != null;
             cancel();
             if (!sameImage) image.setImageDrawable(null);
@@ -511,10 +542,11 @@ final class ScreenshotGallery extends LinearLayout {
             bound = entry == null ? null : entry.id; setVisibility(entry == null ? INVISIBLE : VISIBLE);
             if (entry == null) return;
             boolean checked = selected.contains(entry.id);
+            badge.setTextColor(checked ? getContext().getColor(R.color.native_on_primary) : Color.WHITE);
             badge.setText(checked ? "✓" : ""); badge.setVisibility(selecting ? VISIBLE : GONE);
-            GradientDrawable circle = shape(checked ? TEAL : 0x88000000, 24); circle.setStroke(dp(2), Color.WHITE); badge.setBackground(circle);
+            GradientDrawable circle = shape(checked ? teal() : 0x88000000, 24); circle.setStroke(dp(2), Color.WHITE); badge.setBackground(circle);
             int inset = dp(selecting && checked ? 7 : 1); setPadding(inset, inset, inset, inset);
-            setBackground(checked && selecting ? shape(TINT, 8) : null);
+            setBackground(checked && selecting ? shape(tint(), 8) : null);
             setContentDescription(entry.title + "，" + entry.createdAt + (selecting ? checked ? "，已选" : "，未选" : ""));
             setOnClickListener(view -> { if (!operating) { if (selecting) toggle(entry); else showViewer(entry); } });
             setOnLongClickListener(view -> { toggle(entry); return true; });

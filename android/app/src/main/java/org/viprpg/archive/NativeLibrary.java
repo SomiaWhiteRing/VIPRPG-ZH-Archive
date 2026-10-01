@@ -54,8 +54,11 @@ final class NativeLibrary extends LinearLayout {
         void saves(String key);
     }
 
-    private static final int PAPER = 0xfff5f4ef, INK = 0xff17212b, MUTED = 0xff68737d;
-    private static final int TEAL = 0xff1f6f67, BORDER = 0xffd9ddd9;
+    private int paper() { return getContext().getColor(R.color.native_background); }
+    private int ink() { return getContext().getColor(R.color.native_ink); }
+    private int muted() { return getContext().getColor(R.color.native_muted); }
+    private int teal() { return getContext().getColor(R.color.native_primary); }
+    private int border() { return getContext().getColor(R.color.native_border); }
     private final Actions actions;
     private final List<Entry> entries = new ArrayList<>();
     private final Map<String, Bitmap> covers = new HashMap<>();
@@ -91,13 +94,13 @@ final class NativeLibrary extends LinearLayout {
         super(context);
         this.actions = actions;
         setOrientation(VERTICAL);
-        setBackgroundColor(PAPER);
+        setBackgroundColor(paper());
         header = new ArchivePageHeader(context, "本地游戏");
-        searchButton = icon(GalleryIcons.SEARCH, INK, this::showSearch);
+        searchButton = icon(GalleryIcons.SEARCH, ink(), this::showSearch);
         searchButton.setTooltipText("搜索作品");
         searchButton.setContentDescription("搜索作品");
         header.actions().addView(searchButton, new LayoutParams(dp(48), dp(48)));
-        manageButton = icon(GalleryIcons.SELECT, INK, () -> enterSelection(null));
+        manageButton = icon(GalleryIcons.SELECT, ink(), () -> enterSelection(null));
         manageButton.setTooltipText("批量管理");
         manageButton.setContentDescription("批量管理");
         header.actions().addView(manageButton, new LayoutParams(dp(48), dp(48)));
@@ -105,13 +108,13 @@ final class NativeLibrary extends LinearLayout {
         // Toolbar defaults buttonGravity to TOP, independently of title gravity.
         selectionToolbar = (MaterialToolbar) android.view.LayoutInflater.from(context)
             .inflate(R.layout.library_selection_toolbar, this, false);
-        selectionToolbar.setBackgroundColor(0xffe0f0eb);
-        selectionToolbar.setTitleTextColor(INK);
-        selectionToolbar.setNavigationIcon(new GalleryIcons(GalleryIcons.CLOSE, INK, dp(24)));
+        selectionToolbar.setBackgroundColor(getContext().getColor(R.color.native_tint));
+        selectionToolbar.setTitleTextColor(ink());
+        selectionToolbar.setNavigationIcon(new GalleryIcons(GalleryIcons.CLOSE, ink(), dp(24)));
         selectionToolbar.setNavigationContentDescription("退出选择");
         selectionToolbar.setNavigationOnClickListener(view -> exitSelection());
         selectionToolbar.getMenu().add(0, 1, 0, "删除")
-            .setIcon(new GalleryIcons(GalleryIcons.DELETE, INK, dp(24)))
+            .setIcon(new GalleryIcons(GalleryIcons.DELETE, ink(), dp(24)))
             .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS);
         selectionToolbar.getMenu().add(0, 2, 1, "全选当前结果");
         selectionToolbar.setOnMenuItemClickListener(item -> {
@@ -123,8 +126,8 @@ final class NativeLibrary extends LinearLayout {
             dp(ArchivePageHeader.CONTENT_HEIGHT_DP) + dp(ArchivePageHeader.DIVIDER_HEIGHT_DP)));
 
         refreshLayout = new SwipeRefreshLayout(context);
-        refreshLayout.setColorSchemeColors(TEAL);
-        refreshLayout.setProgressBackgroundColorSchemeColor(Color.WHITE);
+        refreshLayout.setColorSchemeColors(teal());
+        refreshLayout.setProgressBackgroundColorSchemeColor(getContext().getColor(R.color.native_surface));
         refreshLayout.setOnRefreshListener(actions::refresh);
         addView(refreshLayout, new LayoutParams(-1, 0, 1));
         ScrollView scroll = new ScrollView(context);
@@ -134,7 +137,7 @@ final class NativeLibrary extends LinearLayout {
         LinearLayout content = column();
         content.setPadding(dp(16), 0, dp(16), dp(24));
         scroll.addView(content);
-        summary = label("", 12, MUTED, false);
+        summary = label("", 12, muted(), false);
         summary.setPadding(0, dp(13), 0, dp(12));
         content.addView(summary);
 
@@ -165,19 +168,39 @@ final class NativeLibrary extends LinearLayout {
         filterScroll.setHorizontalScrollBarEnabled(false);
         filterScroll.addView(filters);
         filterRow.addView(filterScroll, new LayoutParams(0, -2, 1));
-        sorting = icon(GalleryIcons.SORT, INK, this::showSorting);
+        sorting = icon(GalleryIcons.SORT, ink(), this::showSorting);
         sorting.setTooltipText("排序");
         filterRow.addView(sorting, new LayoutParams(dp(48), dp(48)));
         content.addView(filterRow, new LayoutParams(-1, -2));
 
-        View rule = new View(context); rule.setBackgroundColor(BORDER);
+        View rule = new View(context); NativeControls.bindTheme(rule, () -> rule.setBackgroundColor(border()));
         content.addView(rule, new LayoutParams(-1, dp(1)));
-        message = label("读取本地游戏…", 14, MUTED, false);
+        message = label("读取本地游戏…", 14, muted(), false);
         message.setGravity(Gravity.CENTER);
         message.setPadding(dp(12), dp(64), dp(12), dp(40));
         content.addView(message);
         items = column();
         content.addView(items);
+        NativeControls.bindTheme(this, this::applyTheme);
+    }
+
+    private void applyTheme() {
+        setBackgroundColor(paper());
+        summary.setTextColor(muted()); message.setTextColor(muted());
+        sorting.setIconTint(ColorStateList.valueOf(ink()));
+        selectionToolbar.setBackgroundColor(getContext().getColor(R.color.native_tint));
+        selectionToolbar.setTitleTextColor(ink());
+        selectionToolbar.setNavigationIcon(new GalleryIcons(GalleryIcons.CLOSE, ink(), dp(24)));
+        selectionToolbar.getMenu().findItem(1).setIcon(new GalleryIcons(GalleryIcons.DELETE, ink(), dp(24)));
+        selectionToolbar.setOverflowIcon(new GalleryIcons(GalleryIcons.MORE, ink(), dp(24)));
+        for (Chip chip : filterButtons) {
+            chip.setChipBackgroundColor(getContext().getColorStateList(R.color.native_chip_background));
+            chip.setTextColor(getContext().getColorStateList(R.color.native_chip_text));
+            chip.setChipStrokeColor(ColorStateList.valueOf(border()));
+        }
+        refreshLayout.setColorSchemeColors(teal());
+        refreshLayout.setProgressBackgroundColorSchemeColor(getContext().getColor(R.color.native_surface));
+        renderedRows = "";
         render();
     }
 
@@ -287,9 +310,9 @@ final class NativeLibrary extends LinearLayout {
         int ready = 0; for (Entry item : entries) if (item.ready) ready++;
         summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  游戏文件 " + bytes(usage))
             + (searchQuery.isEmpty() ? "" : "\n搜索：" + searchQuery));
-        searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? INK : TEAL));
-        manageButton.setIconTint(ColorStateList.valueOf(managing ? TEAL : INK));
-        manageButton.setIcon(new GalleryIcons(managing ? GalleryIcons.CLOSE : GalleryIcons.SELECT, INK));
+        searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? ink() : teal()));
+        manageButton.setIconTint(ColorStateList.valueOf(managing ? teal() : ink()));
+        manageButton.setIcon(new GalleryIcons(managing ? GalleryIcons.CLOSE : GalleryIcons.SELECT, ink()));
         manageButton.setContentDescription(managing ? "完成管理" : "批量管理");
         manageButton.setTooltipText(managing ? "完成管理" : "批量管理");
         refreshLayout.setEnabled(!loading && !managing);
@@ -323,7 +346,7 @@ final class NativeLibrary extends LinearLayout {
         line.setPadding(0, dp(10), 0, dp(10));
         if (managing) {
             MaterialCheckBox check = new MaterialCheckBox(getContext());
-            check.setButtonTintList(ColorStateList.valueOf(TEAL));
+            check.setButtonTintList(ColorStateList.valueOf(teal()));
             check.setChecked(selected.contains(entry.key));
             check.setContentDescription("选择 " + entry.title);
             selectionChecks.put(entry.key, check);
@@ -333,11 +356,11 @@ final class NativeLibrary extends LinearLayout {
         FrameLayout coverFrame = new FrameLayout(getContext());
         ImageView cover = new ImageView(getContext());
         cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        cover.setBackground(box(0xffe0f0eb, dp(5), 0xffe0f0eb));
+        cover.setBackground(box(getContext().getColor(R.color.native_tint), dp(5), getContext().getColor(R.color.native_tint)));
         Bitmap bitmap = covers.get(entry.key);
-        TextView placeholder = label(entry.title.isEmpty() ? "?" : entry.title.substring(0, 1), 20, TEAL, true);
+        TextView placeholder = label(entry.title.isEmpty() ? "?" : entry.title.substring(0, 1), 20, teal(), true);
         placeholder.setGravity(Gravity.CENTER);
-        placeholder.setBackground(box(0xffe0f0eb, dp(5), 0xffe0f0eb));
+        placeholder.setBackground(box(getContext().getColor(R.color.native_tint), dp(5), getContext().getColor(R.color.native_tint)));
         placeholder.setVisibility(bitmap == null ? VISIBLE : GONE);
         coverFrame.addView(placeholder, new FrameLayout.LayoutParams(-1, -1));
         if (bitmap != null) cover.setImageBitmap(bitmap);
@@ -353,17 +376,17 @@ final class NativeLibrary extends LinearLayout {
         }
         line.addView(coverFrame, new LayoutParams(dp(96), dp(72)));
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
-        TextView title = label(entry.title, 14, INK, true); title.setSingleLine(true);
+        TextView title = label(entry.title, 14, ink(), true); title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         if (entry.ready) {
             details.addView(title);
             String detailsText = bytes(entry.bytes);
             if (!entry.lastPlayed.isEmpty()) detailsText += "  ·  " + date(entry.lastPlayed);
-            TextView subtitle = label(detailsText, 12, MUTED, false);
+            TextView subtitle = label(detailsText, 12, muted(), false);
             subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
             line.addView(details, new LayoutParams(0, -2, 1));
             if (!managing) {
-                MaterialButton play = icon(GalleryIcons.PLAY, TEAL, () -> actions.play(entry.key));
+                MaterialButton play = icon(GalleryIcons.PLAY, teal(), () -> actions.play(entry.key));
                 play.setContentDescription("游玩 " + entry.title);
                 line.addView(play, new LayoutParams(dp(48), dp(48)));
             }
@@ -371,20 +394,20 @@ final class NativeLibrary extends LinearLayout {
             DownloadViews views = new DownloadViews();
             LinearLayout top = row(); top.setGravity(Gravity.CENTER_VERTICAL);
             top.addView(title, new LayoutParams(0, -2, 1));
-            views.toggle = icon(GalleryIcons.PAUSE, TEAL, () -> actions.toggleDownload(entry.key));
+            views.toggle = icon(GalleryIcons.PAUSE, teal(), () -> actions.toggleDownload(entry.key));
             views.toggle.setVisibility(managing ? GONE : VISIBLE);
             top.addView(views.toggle, new LayoutParams(dp(48), dp(48)));
             details.addView(top, new LayoutParams(-1, dp(48)));
             LinearLayout numbers = row(); numbers.setGravity(Gravity.CENTER_VERTICAL);
-            views.progress = label("", 11, MUTED, false); views.progress.setSingleLine(true);
+            views.progress = label("", 11, muted(), false); views.progress.setSingleLine(true);
             views.progress.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            views.speed = label("", 11, MUTED, false); views.speed.setGravity(Gravity.RIGHT); views.speed.setSingleLine(true);
+            views.speed = label("", 11, muted(), false); views.speed.setGravity(Gravity.RIGHT); views.speed.setSingleLine(true);
             numbers.addView(views.progress, new LayoutParams(0, dp(20), 1));
             numbers.addView(views.speed, new LayoutParams(-2, dp(20)));
             details.addView(numbers, new LayoutParams(-1, dp(20)));
             views.bar = new android.widget.ProgressBar(getContext(), null, android.R.attr.progressBarStyleHorizontal);
-            android.graphics.drawable.GradientDrawable track = box(BORDER, 0, BORDER);
-            android.graphics.drawable.ClipDrawable fill = new android.graphics.drawable.ClipDrawable(box(TEAL, 0, TEAL), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+            android.graphics.drawable.GradientDrawable track = box(border(), 0, border());
+            android.graphics.drawable.ClipDrawable fill = new android.graphics.drawable.ClipDrawable(box(teal(), 0, teal()), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
             android.graphics.drawable.LayerDrawable layers = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{track, fill});
             layers.setId(0, android.R.id.background); layers.setId(1, android.R.id.progress);
             views.bar.setProgressDrawable(layers); views.bar.setMax(1000);
@@ -407,7 +430,7 @@ final class NativeLibrary extends LinearLayout {
                 });
             items.addView(swipe, new LayoutParams(-1, -2));
         }
-        View rule = new View(getContext()); rule.setBackgroundColor(BORDER);
+        View rule = new View(getContext()); rule.setBackgroundColor(border());
         items.addView(rule, new LayoutParams(-1, dp(1)));
     }
 
@@ -416,7 +439,7 @@ final class NativeLibrary extends LinearLayout {
         views.progress.setText(entry.progress);
         views.speed.setText(entry.installing ? bytes(entry.speed) + "/s" : "");
         views.bar.setProgress(entry.total > 0 ? (int)Math.min(1000, entry.downloaded * 1000 / entry.total) : 0);
-        views.toggle.setIcon(new GalleryIcons(entry.installing ? GalleryIcons.PAUSE : GalleryIcons.PLAY, TEAL));
+        views.toggle.setIcon(new GalleryIcons(entry.installing ? GalleryIcons.PAUSE : GalleryIcons.PLAY, teal()));
         views.toggle.setContentDescription((entry.installing ? "暂停下载 " : "继续下载 ") + entry.title);
         views.toggle.setTooltipText(entry.installing ? "暂停" : "继续");
     }
@@ -455,7 +478,7 @@ final class NativeLibrary extends LinearLayout {
             View row = selectionRows.get(item.getKey());
             row.setSelected(checked); row.setEnabled(!loading);
             row.setBackground(new RippleDrawable(ColorStateList.valueOf(0x221f6f67),
-                box(checked ? 0xffe0f0eb : PAPER, dp(12), checked ? 0xffe0f0eb : PAPER), null));
+                box(checked ? getContext().getColor(R.color.native_tint) : paper(), dp(12), checked ? getContext().getColor(R.color.native_tint) : paper()), null));
         }
     }
 

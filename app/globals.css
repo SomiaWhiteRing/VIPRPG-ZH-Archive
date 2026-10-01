@@ -4,42 +4,26 @@
 @import "./shared.css";
 @source "../lib";
 
-/* Website account appearance, including dialogs and other body portals.
-   System appearance is resolved by CSS before paint and follows OS changes. */
+/* Website dark utilities also respect the Android system appearance override. */
 @custom-variant dark {
-  &:where(:root[data-theme="dark"], :root[data-theme="dark"] *) {
+  &:where(:root[data-theme="dark"], :root[data-theme="dark"] *, :root[data-theme="system"][data-system-theme="dark"], :root[data-theme="system"][data-system-theme="dark"] *) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:where(:root[data-theme="system"], :root[data-theme="system"] *) {
+    &:where(:root[data-theme="system"]:not([data-system-theme]), :root[data-theme="system"]:not([data-system-theme]) *) {
       @slot;
     }
   }
 }
 
+/* Website-only card labels, semantic colors and shadows. */
 @layer base {
-  :root {
-    color-scheme: light;
-  }
-
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --color-background: #151c1b;
-    --color-foreground: #e6ede9;
-    --color-card: #202a27;
+  :root:is([data-theme="dark"], [data-theme="system"][data-system-theme="dark"]) {
     --color-card-foreground: #e6ede9;
-    --color-muted: #a4b5ad;
     --color-muted-foreground: #a4b5ad;
-    --color-border: #43564d;
-    --color-input: #6a8175;
-    --color-primary: #65c6b3;
-    --color-primary-foreground: #102b25;
     --color-secondary: #98d6c9;
     --color-secondary-foreground: #102b25;
-    --color-accent: #f2a16f;
     --color-accent-foreground: #302016;
-    --color-destructive: #f3948a;
-    --color-destructive-foreground: #351713;
     --color-info: #7dcaf3;
     --color-success: #81d3a5;
     --shadow-surface: 0 4px 12px rgb(0 0 0 / 24%);
@@ -47,24 +31,12 @@
   }
 
   @media (prefers-color-scheme: dark) {
-    :root[data-theme="system"] {
-      color-scheme: dark;
-      --color-background: #151c1b;
-      --color-foreground: #e6ede9;
-      --color-card: #202a27;
+    :root[data-theme="system"]:not([data-system-theme]) {
       --color-card-foreground: #e6ede9;
-      --color-muted: #a4b5ad;
       --color-muted-foreground: #a4b5ad;
-      --color-border: #43564d;
-      --color-input: #6a8175;
-      --color-primary: #65c6b3;
-      --color-primary-foreground: #102b25;
       --color-secondary: #98d6c9;
       --color-secondary-foreground: #102b25;
-      --color-accent: #f2a16f;
       --color-accent-foreground: #302016;
-      --color-destructive: #f3948a;
-      --color-destructive-foreground: #351713;
       --color-info: #7dcaf3;
       --color-success: #81d3a5;
       --shadow-surface: 0 4px 12px rgb(0 0 0 / 24%);
