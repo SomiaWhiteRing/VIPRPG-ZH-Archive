@@ -1,4 +1,4 @@
-export const FILE_POLICY_VERSION = "rpgm2000-2003-resources-v11";
+export const FILE_POLICY_VERSION = "rpgm2000-2003-resources-v13";
 export const PACKER_VERSION = "browser-upload-phase-d-2026-05";
 
 export type ArchiveFileRole =
@@ -40,6 +40,7 @@ const allowedFileTypeKeys = new Set([
   ".lmu",
   ".lsd",
   ".png",
+  ".po",
   ".jpg",
   ".bmp",
   ".xyz",
@@ -86,6 +87,7 @@ const contentTypes: Record<string, string> = {
   ".opus": "audio/opus",
   ".otf": "font/otf",
   ".png": "image/png",
+  ".po": "text/plain; charset=utf-8",
   ".ttc": "font/collection",
   ".ttf": "font/ttf",
   ".txt": "text/plain; charset=utf-8",
@@ -158,7 +160,8 @@ export function classifyArchivePath(
 }
 
 function isCorePackFile(path: string): boolean {
-  return isCoreFile(path) || isStringScriptTxt(path);
+  const ext = extension(path);
+  return isCoreFile(path) || isStringScriptTxt(path) || ext === ".po" || ext === ".lsd";
 }
 
 function forcedExclusionReason(path: string): string | null {
@@ -171,7 +174,7 @@ function forcedExclusionReason(path: string): string | null {
   const top = parts[0].toLowerCase();
   const name = parts.at(-1)?.toLowerCase() ?? "";
 
-  if (stringScriptDirs.has(top) && extension(name).toLowerCase() !== ".txt") {
+  if (stringScriptDirs.has(top) && extension(name) !== ".txt" && extension(name) !== ".po") {
     return "string-scripts-non-txt";
   }
 
@@ -198,7 +201,7 @@ function roleFor(path: string, metadataPaths: Set<string>): ArchiveFileRole {
     return ext === ".lmu" ? "map" : "database";
   }
 
-  if (ext === ".lsd" || isStringScriptTxt(path)) {
+  if (ext === ".lsd" || ext === ".po" || isStringScriptTxt(path)) {
     return "other";
   }
 
