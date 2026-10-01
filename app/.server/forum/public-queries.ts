@@ -327,7 +327,7 @@ export async function homeTopics(ctx: ForumRuntime): Promise<HomeForumTopic[]> {
     (SELECT g.name FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id
      WHERE x.topic_id=t.id AND g.status<>'hidden' ORDER BY x.position LIMIT 1) AS tagName
     FROM forum_public_topics t JOIN users u ON u.id=t.user_id
-    ORDER BY (t.pinned_at IS NOT NULL) DESC,t.pinned_at DESC,t.last_activity_at DESC,t.id DESC LIMIT 5`)
+    ORDER BY t.last_activity_at DESC,t.id DESC LIMIT 5`)
     .all<HomeForumTopic>();
   return rows.results;
 }
