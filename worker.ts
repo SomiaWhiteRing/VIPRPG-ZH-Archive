@@ -42,7 +42,7 @@ app.use("*", async (c, next) => {
 });
 app.get("/robots.txt", (c) => c.text(c.env.SITE_NOINDEX === "true"
   ? "User-agent: *\nDisallow: /\n"
-  : "User-agent: *\nAllow: /\n"));
+  : `User-agent: *\nAllow: /\n\nSitemap: ${c.get("runtime").origin}/sitemap.xml\n`));
 app.all(
   "/api/archive-versions/:id/kai-import",
   async (c) =>

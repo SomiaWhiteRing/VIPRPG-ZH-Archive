@@ -105,12 +105,14 @@ import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
 import { listPublicCharacterFaceSheets } from "./db/taxonomy-library";
 import { listRandomGameWorks } from "./db/game-library";
+import { sitemapApi } from "./sitemap";
 
 export const api = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.route("/", sitemapApi);
 api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
   c.json({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, 200,
     { "Cache-Control": "no-store" }),

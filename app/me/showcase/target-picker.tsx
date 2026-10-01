@@ -125,11 +125,6 @@ export function ShowcaseTargetPicker({
                 重新搜索
               </Button>
             ) : null}
-            {!loading && !error && options.length === 12 ? (
-              <p className="p-2 text-xs text-muted">
-                显示前 12 项，请补充名称缩小范围。
-              </p>
-            ) : null}
           </>
         }
       />
