@@ -2,22 +2,42 @@ package org.viprpg.archive;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.view.View;
+import android.view.ViewGroup;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /** Shared controls for the library, gallery and version page, based on the gallery UI. */
 final class NativeControls {
-    static final int TEAL = 0xff1f6f67;
     private NativeControls() {}
+    static void bindTheme(View view, Runnable update) {
+        view.setTag(R.id.native_theme_binding, update);
+        update.run();
+    }
+    /** Reapply only appearance, preserving WebViews, selection and in-flight work. */
+    static void refreshTheme(View view) {
+        view.getContext().getTheme().rebase();
+        Runnable update = (Runnable) view.getTag(R.id.native_theme_binding);
+        if (update != null) update.run();
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) refreshTheme(group.getChildAt(i));
+        }
+    }
+    static void textColor(android.widget.TextView view, int color) {
+        bindTheme(view, () -> view.setTextColor(view.getContext().getColor(color)));
+    }
     static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
     static MaterialButton button(Context context, String label, Runnable action) {
         MaterialButton button = new MaterialButton(context, null, com.google.android.material.R.attr.borderlessButtonStyle);
         button.setText(label); button.setAllCaps(false); button.setTextSize(14);
-        button.setTextColor(TEAL); button.setIconTint(ColorStateList.valueOf(TEAL));
+        bindTheme(button, () -> {
+            int color = context.getColor(R.color.native_primary);
+            button.setTextColor(color); button.setIconTint(ColorStateList.valueOf(color));
+        });
         button.setIconSize(dp(context, 20)); button.setCornerRadius(dp(context, 12));
         button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
         button.setMinHeight(dp(context, 48)); button.setMinimumHeight(dp(context, 48));
@@ -27,6 +47,7 @@ final class NativeControls {
     }
     static MaterialButton icon(Context context, String path, int color, Runnable action) {
         MaterialButton button = button(context, "", action);
+        button.setTag(R.id.native_theme_binding, null);
         button.setIcon(new GalleryIcons(path, color)); button.setIconTint(ColorStateList.valueOf(color));
         button.setIconPadding(0); button.setPadding(dp(context, 12), 0, dp(context, 12), 0);
         button.setMinWidth(0); button.setMinimumWidth(0);
@@ -37,7 +58,8 @@ final class NativeControls {
     }
     static MaterialAlertDialogBuilder dialog(Context context, int theme) {
         GradientDrawable background = new GradientDrawable();
-        background.setColor(Color.WHITE); background.setCornerRadius(dp(context, 20));
+        context.getTheme().rebase();
+        background.setColor(context.getColor(R.color.native_surface)); background.setCornerRadius(dp(context, 20));
         return new MaterialAlertDialogBuilder(context, theme).setBackground(background);
     }
 }

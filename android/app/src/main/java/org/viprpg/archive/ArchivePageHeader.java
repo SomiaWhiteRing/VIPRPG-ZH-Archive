@@ -40,18 +40,18 @@ final class ArchivePageHeader extends LinearLayout {
         labels.setPadding(dp(12), 0, 0, 0);
         labels.setTranslationY(-dp(1));
         brand = new TextView(context); brand.setText(R.string.app_name);
-        brand.setTextSize(12); brand.setTextColor(0xff2f9f92); brand.setTypeface(null, Typeface.BOLD);
+        brand.setTextSize(12); NativeControls.textColor(brand, R.color.native_accent); brand.setTypeface(null, Typeface.BOLD);
         brand.setTextScaleX(1.05f);
         labels.addView(brand);
         title = new TextView(context); title.setText(heading); title.setTextSize(20);
         title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        title.setTextColor(0xff17212b); title.setTypeface(null, Typeface.BOLD);
+        NativeControls.textColor(title, R.color.native_ink); title.setTypeface(null, Typeface.BOLD);
         labels.addView(title);
         line.addView(labels, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
         actions = new LinearLayout(context); actions.setGravity(Gravity.CENTER_VERTICAL); line.addView(actions);
         // Keep the title baseline fixed regardless of the page's action controls.
         addView(line, new LayoutParams(LayoutParams.MATCH_PARENT, dp(CONTENT_HEIGHT_DP)));
-        View divider = new View(context); divider.setBackgroundColor(0xffd9ddd9);
+        View divider = new View(context); NativeControls.bindTheme(divider, () -> divider.setBackgroundColor(context.getColor(R.color.native_border)));
         LayoutParams dividerLayout = new LayoutParams(LayoutParams.MATCH_PARENT, dp(DIVIDER_HEIGHT_DP));
         dividerLayout.setMargins(dp(16), 0, dp(16), 0);
         addView(divider, dividerLayout);

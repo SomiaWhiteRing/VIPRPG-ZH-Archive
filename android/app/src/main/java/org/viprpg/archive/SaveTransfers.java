@@ -165,7 +165,7 @@ final class SaveTransfers {
         }
         android.widget.TextView titleView = new android.widget.TextView(activity);
         titleView.setText("选择要覆盖的存档\n未勾选的保留本地存档" + (fresh > 0 ? "；另有 " + fresh + " 个新存档将导入" : ""));
-        titleView.setTextSize(18); titleView.setTextColor(0xff17212b);
+        titleView.setTextSize(18); NativeControls.textColor(titleView, R.color.native_ink);
         int padding = NativeControls.dp(activity, 24); titleView.setPadding(padding, padding, padding, NativeControls.dp(activity, 12));
         androidx.appcompat.app.AlertDialog dialog = NativeControls.dialog(activity, R.style.SaveExportDialogTheme).setCustomTitle(titleView)
             .setMultiChoiceItems(labels, checked, (d, which, value) -> {

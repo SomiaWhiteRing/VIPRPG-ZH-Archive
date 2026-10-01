@@ -151,6 +151,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       workId: installation.workId!,
       archiveVersionId: installation.archiveVersionId,
       manifestSha256: installation.manifestSha256,
+      engineFamily: installation.engineFamily!,
       playKey: installation.playKey,
       runtimeBasePath: easyRpgRuntimeBasePath,
     }, (level, text) => {

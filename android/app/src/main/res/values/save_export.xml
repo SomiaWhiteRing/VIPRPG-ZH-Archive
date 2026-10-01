@@ -1,5 +1,5 @@
 <resources>
-    <color name="save_export_checked">#1F6F67</color>
+    <color name="save_export_checked">@color/native_primary</color>
     <style name="SaveExportDialogTheme" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="alertDialogStyle">@style/SaveExportDialogStyle</item>
     </style>

@@ -1,0 +1,16 @@
+<resources>
+    <color name="native_background">#151C1B</color>
+    <color name="native_surface">#202A27</color>
+    <color name="native_ink">#E6EDE9</color>
+    <color name="native_muted">#A4B5AD</color>
+    <color name="native_primary">#65C6B3</color>
+    <color name="native_on_primary">#102B25</color>
+    <color name="native_accent">#65C6B3</color>
+    <color name="native_tint">#29453D</color>
+    <color name="native_on_tint">#98D6C9</color>
+    <color name="native_variant">#293730</color>
+    <color name="native_border">#43564D</color>
+    <color name="native_destructive">#F3948A</color>
+    <color name="native_tabs">#202A27</color>
+    <color name="native_active_tab">#29453D</color>
+</resources>

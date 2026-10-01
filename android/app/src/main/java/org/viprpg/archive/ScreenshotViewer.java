@@ -68,7 +68,7 @@ final class ScreenshotViewer extends Dialog {
         super.onCreate(state);
         // Use the scoped Material theme supplied by the gallery for library widgets.
         Context context = new android.view.ContextThemeWrapper(getContext(), R.style.GalleryTheme);
-        root = new ViewerRoot(context); root.setBackgroundColor(Color.WHITE);
+        root = new ViewerRoot(context); root.setBackgroundColor(surface());
         root.setAlpha(0);
         pager = new ViewPager2(context); pager.setBackgroundColor(Color.TRANSPARENT);
         pager.setPageTransformer(new MarginPageTransformer(dp(12)));
@@ -82,15 +82,15 @@ final class ScreenshotViewer extends Dialog {
             @Override public int getItemCount() { return items.size(); }
         });
         top = new LinearLayout(context); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(8), dp(8), dp(12), dp(8));
-        top.setBackgroundColor(Color.WHITE);
+        top.setBackgroundColor(surface());
         icon(top, "返回", GalleryIcons.BACK, this::dismiss);
         LinearLayout info = new LinearLayout(context); info.setOrientation(LinearLayout.VERTICAL); info.setPadding(dp(8), 0, 0, 0);
         title = text(context, 17); title.setTypeface(null, Typeface.BOLD); title.setMaxLines(1); title.setEllipsize(TextUtils.TruncateAt.END); info.addView(title);
-        subtitle = text(context, 12); subtitle.setTextColor(0xff68737d); subtitle.setPadding(0, dp(3), 0, 0); info.addView(subtitle);
+        subtitle = text(context, 12); NativeControls.textColor(subtitle, R.color.native_muted); subtitle.setPadding(0, dp(3), 0, 0); info.addView(subtitle);
         top.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
         bottom = new LinearLayout(context); bottom.setGravity(Gravity.CENTER); bottom.setPadding(dp(16), dp(8), dp(16), dp(10));
-        bottom.setBackgroundColor(Color.WHITE);
+        bottom.setBackgroundColor(surface());
         action(bottom, "分享", GalleryIcons.SHARE, () -> share.accept(items.get(pager.getCurrentItem())));
         action(bottom, "详情", GalleryIcons.INFO, this::showDetails);
         action(bottom, "删除", GalleryIcons.DELETE, () -> delete.accept(items.get(pager.getCurrentItem())));
@@ -98,13 +98,13 @@ final class ScreenshotViewer extends Dialog {
         details = new ScrollView(context); details.setFillViewport(true);
         detailContent = new LinearLayout(context); detailContent.setOrientation(LinearLayout.VERTICAL);
         detailContent.setPadding(dp(20), dp(12), dp(20), dp(28)); details.addView(detailContent);
-        GradientDrawable paper = new GradientDrawable(); paper.setColor(Color.WHITE);
+        GradientDrawable paper = new GradientDrawable(); paper.setColor(surface());
         paper.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
         details.setBackground(paper); details.setClipToOutline(true); details.setVisibility(View.INVISIBLE);
         root.addView(details, new FrameLayout.LayoutParams(-1, -1));
-        detailBack = new android.widget.ImageView(context); detailBack.setImageDrawable(new GalleryIcons(GalleryIcons.BACK, 0xff17212b));
+        detailBack = new android.widget.ImageView(context); detailBack.setImageDrawable(new GalleryIcons(GalleryIcons.BACK, getContext().getColor(R.color.native_ink)));
         detailBack.setPadding(dp(12), dp(12), dp(12), dp(12));
-        GradientDrawable backCircle = new GradientDrawable(); backCircle.setColor(Color.WHITE); backCircle.setCornerRadius(dp(24));
+        GradientDrawable backCircle = new GradientDrawable(); backCircle.setColor(surface()); backCircle.setCornerRadius(dp(24));
         detailBack.setBackground(backCircle); detailBack.setContentDescription("收起详情");
         detailBack.setOnClickListener(view -> animateDetails(0));
         FrameLayout.LayoutParams backParams = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.START);
@@ -116,14 +116,28 @@ final class ScreenshotViewer extends Dialog {
         pager.setCurrentItem(start, false); updateTitle(start);
         Window window = getWindow();
         if (window != null) {
-            window.setStatusBarColor(Color.WHITE); window.setNavigationBarColor(Color.WHITE);
-            window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            window.setStatusBarColor(surface()); window.setNavigationBarColor(surface());
+            window.getDecorView().setSystemUiVisibility(Color.red(surface()) > 128
+                ? View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
             window.setLayout(-1, -1);
             window.setBackgroundDrawableResource(android.R.color.transparent);
             window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             window.setWindowAnimations(0);
         }
         root.post(() -> thumbnailTarget.find(items.get(start), source -> animateImage(source, true)));
+    }
+
+    private int surface() { return getContext().getColor(R.color.native_surface); }
+
+    void applyTheme() {
+        getContext().getTheme().rebase();
+        if (root == null) return;
+        NativeControls.refreshTheme(root);
+        top.setBackgroundColor(surface()); bottom.setBackgroundColor(surface());
+        ((GradientDrawable) details.getBackground()).setColor(surface());
+        ((GradientDrawable) detailBack.getBackground()).setColor(surface());
+        detailBack.setImageDrawable(new GalleryIcons(GalleryIcons.BACK, getContext().getColor(R.color.native_ink)));
+        applyDetails(detailReveal);
     }
 
     private void updateTitle(int position) {
@@ -143,7 +157,8 @@ final class ScreenshotViewer extends Dialog {
         Context context = root.getContext();
         detailContent.removeAllViews(); details.scrollTo(0, 0);
         View handle = new View(context); GradientDrawable shape = new GradientDrawable();
-        shape.setColor(0xffc4d1cc); shape.setCornerRadius(dp(4)); handle.setBackground(shape);
+        shape.setCornerRadius(dp(4)); handle.setBackground(shape);
+        NativeControls.bindTheme(handle, () -> shape.setColor(context.getColor(R.color.native_border)));
         LinearLayout handleRow = new LinearLayout(context); handleRow.setGravity(Gravity.CENTER);
         handleRow.addView(handle, new LinearLayout.LayoutParams(dp(28), dp(4)));
         detailContent.addView(handleRow, new LinearLayout.LayoutParams(-1, dp(24)));
@@ -164,23 +179,29 @@ final class ScreenshotViewer extends Dialog {
         detailContent.addView(card, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout row = new LinearLayout(context); row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(16), dp(16), dp(8), dp(16));
-        GradientDrawable upper = new GradientDrawable(); upper.setColor(0xffedf3ef); upper.setCornerRadius(dp(24)); row.setBackground(upper);
+        GradientDrawable upper = new GradientDrawable(); upper.setCornerRadius(dp(24)); row.setBackground(upper);
+        NativeControls.bindTheme(row, () -> upper.setColor(context.getColor(R.color.native_variant)));
         android.widget.ImageView image = new android.widget.ImageView(context);
-        image.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, 0xff1f6f67)); row.addView(image, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        NativeControls.bindTheme(image, () -> image.setImageDrawable(new GalleryIcons(GalleryIcons.IMAGE, context.getColor(R.color.native_primary)))); row.addView(image, new LinearLayout.LayoutParams(dp(24), dp(24)));
         LinearLayout labels = new LinearLayout(context); labels.setOrientation(LinearLayout.VERTICAL); labels.setPadding(dp(16), 0, dp(8), 0);
         TextView name = text(context, 15); name.setText(item.name); name.setTextIsSelectable(true); labels.addView(name);
-        TextView info = text(context, 13); info.setTextColor(0xff68737d); info.setText(resolution == null ? "图片" : resolution); info.setPadding(0, dp(8), 0, 0); labels.addView(info);
+        TextView info = text(context, 13); NativeControls.textColor(info, R.color.native_muted); info.setText(resolution == null ? "图片" : resolution); info.setPadding(0, dp(8), 0, 0); labels.addView(info);
         row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-        MaterialButton arrow = NativeControls.icon(context, GalleryIcons.DOWN, 0xff1f6f67, () -> {});
+        MaterialButton arrow = NativeControls.icon(context, GalleryIcons.DOWN, context.getColor(R.color.native_primary), () -> {});
+        NativeControls.bindTheme(arrow, () -> arrow.setIconTint(ColorStateList.valueOf(context.getColor(R.color.native_primary))));
         arrow.setContentDescription("展开文件路径");
         row.addView(arrow, new LinearLayout.LayoutParams(dp(48), dp(48)));
         card.addView(row, new LinearLayout.LayoutParams(-1, -2));
         FrameLayout reveal = new FrameLayout(context); reveal.setClipChildren(true);
         LinearLayout.LayoutParams revealParams = new LinearLayout.LayoutParams(-1, 0); card.addView(reveal, revealParams);
-        TextView path = text(context, 14); path.setTextColor(0xff68737d); path.setTextIsSelectable(true);
+        TextView path = text(context, 14); NativeControls.textColor(path, R.color.native_muted); path.setTextIsSelectable(true);
         path.setText("设备端 · " + formatBytes(item.bytes) + "\n" + (item.folderPath.isEmpty() ? "系统未提供文件路径" : item.folderPath));
         path.setPadding(dp(20), dp(18), dp(20), dp(20));
-        GradientDrawable lower = new GradientDrawable(); lower.setColor(0xfff3f6f4); lower.setCornerRadius(dp(24)); path.setBackground(lower);
+        GradientDrawable lower = new GradientDrawable(); lower.setCornerRadius(dp(24)); path.setBackground(lower);
+        NativeControls.bindTheme(path, () -> {
+            path.setTextColor(context.getColor(R.color.native_muted));
+            lower.setColor(context.getColor(R.color.native_background));
+        });
         reveal.addView(path, new FrameLayout.LayoutParams(-1, -2));
         final float[] fraction = {0}; final boolean[] expanded = {false};
         arrow.setOnClickListener(view -> {
@@ -227,7 +248,7 @@ final class ScreenshotViewer extends Dialog {
         top.setVisibility(showChrome ? View.VISIBLE : View.INVISIBLE);
         bottom.setVisibility(showChrome ? View.VISIBLE : View.INVISIBLE);
         detailBack.setVisibility(reveal > 0 ? View.VISIBLE : View.INVISIBLE);
-        int background = chromeVisible || reveal > 0 ? Color.WHITE : Color.BLACK;
+        int background = chromeVisible || reveal > 0 ? surface() : Color.BLACK;
         root.setBackgroundColor(background);
         pager.setBackgroundColor(background);
         for (Page page : pages) page.itemView.setBackgroundColor(background);
@@ -393,14 +414,15 @@ final class ScreenshotViewer extends Dialog {
         // The thumbnail belongs to a different window. Keep it drawn until the
         // opaque transition image covers it; cross-window alpha updates can leave a blank frame.
         root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
-        root.setBackgroundColor(opening ? Color.TRANSPARENT : (chromeVisible || detailReveal > 0 ? Color.WHITE : Color.BLACK));
+        root.setBackgroundColor(opening ? Color.TRANSPARENT : (chromeVisible || detailReveal > 0 ? surface() : Color.BLACK));
         top.setAlpha(opening ? 0f : 1f); bottom.setAlpha(opening ? 0f : 1f);
         details.setAlpha(opening ? 0f : 1f); detailBack.setAlpha(opening ? 0f : 1f);
         imageAnimation = ValueAnimator.ofFloat(opening ? 0 : 1, opening ? 1 : 0);
         imageAnimation.setDuration(280); imageAnimation.setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator());
         imageAnimation.addUpdateListener(animation -> {
             fraction[0] = (float) animation.getAnimatedValue(); float alpha = fraction[0];
-            root.setBackgroundColor(Color.argb(Math.round(255 * alpha), chromeVisible || detailReveal > 0 ? 255 : 0, chromeVisible || detailReveal > 0 ? 255 : 0, chromeVisible || detailReveal > 0 ? 255 : 0));
+            int background = chromeVisible || detailReveal > 0 ? surface() : Color.BLACK;
+            root.setBackgroundColor(Color.argb(Math.round(255 * alpha), Color.red(background), Color.green(background), Color.blue(background)));
             top.setAlpha(alpha); bottom.setAlpha(alpha); details.setAlpha(alpha); detailBack.setAlpha(alpha); overlay.invalidate();
         });
         imageAnimation.addListener(new android.animation.AnimatorListenerAdapter() {
@@ -461,13 +483,13 @@ final class ScreenshotViewer extends Dialog {
         void clear() { generation++; if (request != null) request.cancel(true); request = null; image.setImageDrawable(null); }
     }
 
-    private TextView text(Context context, int size) { TextView view = new TextView(context); view.setTextColor(0xff17212b); view.setTextSize(size); return view; }
+    private TextView text(Context context, int size) { TextView view = new TextView(context); NativeControls.textColor(view, R.color.native_ink); view.setTextSize(size); return view; }
     private int dp(int value) { return Math.round(value * getContext().getResources().getDisplayMetrics().density); }
     private void action(LinearLayout parent, String label, String path, Runnable callback) {
         LinearLayout box = new LinearLayout(parent.getContext()); box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER); box.setContentDescription(label); box.setOnClickListener(view -> callback.run());
         android.widget.ImageView image = new android.widget.ImageView(parent.getContext());
-        image.setImageDrawable(new GalleryIcons(path, 0xff1f6f67));
+        NativeControls.bindTheme(image, () -> image.setImageDrawable(new GalleryIcons(path, getContext().getColor(R.color.native_primary))));
         box.addView(image, new LinearLayout.LayoutParams(dp(24), dp(24)));
         TextView caption = text(parent.getContext(), 12); caption.setText(label); caption.setGravity(Gravity.CENTER);
         caption.setIncludeFontPadding(false); caption.setPadding(0, dp(7), 0, 0);
@@ -476,7 +498,8 @@ final class ScreenshotViewer extends Dialog {
     }
     private MaterialButton icon(LinearLayout parent, String label, String path, Runnable action) {
         MaterialButton button = new MaterialButton(parent.getContext(), null, com.google.android.material.R.attr.borderlessButtonStyle);
-        button.setIcon(new GalleryIcons(path, 0xff17212b)); button.setIconTint(ColorStateList.valueOf(0xff17212b));
+        button.setIcon(new GalleryIcons(path, getContext().getColor(R.color.native_ink)));
+        NativeControls.bindTheme(button, () -> button.setIconTint(ColorStateList.valueOf(getContext().getColor(R.color.native_ink))));
         button.setIconSize(dp(24)); button.setIconPadding(0); button.setPadding(dp(12), 0, dp(12), 0);
         button.setMinWidth(0); button.setMinimumWidth(0); button.setInsetTop(0); button.setInsetBottom(0);
         button.setContentDescription(label); button.setTooltipText(label); button.setCornerRadius(dp(24));

@@ -38,7 +38,7 @@
                 android:layout_height="match_parent"
                 android:orientation="vertical"
                 android:visibility="gone"
-                android:background="#F5F4EF">
+                android:background="@color/native_background">
                 <FrameLayout
                     android:id="@+id/version_header"
                     android:layout_width="match_parent"
@@ -66,10 +66,11 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:gravity="center"
+                        android:id="@+id/version_app_name"
                         android:text="@string/app_name"
                         android:textSize="18sp"
                         android:textStyle="bold"
-                        android:textColor="#17212B" />
+                        android:textColor="@color/native_ink" />
                     <TextView
                         android:id="@+id/installed_version"
                         android:layout_width="match_parent"
@@ -77,20 +78,22 @@
                         android:layout_marginTop="4dp"
                         android:gravity="center"
                         android:textSize="14sp"
-                        android:textColor="#68737D" />
+                        android:textColor="@color/native_muted" />
                     <View
+                        android:id="@+id/version_divider"
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginTop="20dp"
-                        android:background="#D9DDD9" />
+                        android:background="@color/native_border" />
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
+                        android:id="@+id/update_heading"
                         android:text="@string/update_heading"
                         android:textSize="16sp"
                         android:textStyle="bold"
-                        android:textColor="#17212B" />
+                        android:textColor="@color/native_ink" />
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -103,7 +106,7 @@
                             android:layout_height="24dp"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_version"
-                            app:tint="#1F6F67" />
+                            app:tint="@color/native_primary" />
                         <TextView
                             android:id="@+id/update_status"
                             android:layout_width="match_parent"
@@ -112,7 +115,7 @@
                             android:text="@string/not_checked"
                             android:textSize="16sp"
                             android:textStyle="bold"
-                            android:textColor="#17212B" />
+                            android:textColor="@color/native_ink" />
                     </LinearLayout>
                     <TextView
                         android:id="@+id/update_detail"
@@ -123,7 +126,7 @@
                         android:lineSpacingExtra="3dp"
                         android:text="@string/not_checked_detail"
                         android:textSize="14sp"
-                        android:textColor="#68737D" />
+                        android:textColor="@color/native_muted" />
                     <TextView
                         android:id="@+id/release_notes_heading"
                         android:layout_width="match_parent"
@@ -132,7 +135,7 @@
                         android:text="@string/release_notes_title"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="#17212B"
+                        android:textColor="@color/native_ink"
                         android:visibility="gone" />
                     <TextView
                         android:id="@+id/release_notes"
@@ -141,7 +144,7 @@
                         android:layout_marginTop="10dp"
                         android:lineSpacingExtra="3dp"
                         android:textSize="14sp"
-                        android:textColor="#68737D"
+                        android:textColor="@color/native_muted"
                         android:visibility="gone" />
                     <com.google.android.material.button.MaterialButton
                         style="@style/NativePrimaryButton"
@@ -167,7 +170,7 @@
                         android:minHeight="48dp"
                         android:layout_marginTop="16dp"
                         android:text="@string/auto_check_updates"
-                        android:textColor="#68737D" />
+                        android:textColor="@color/native_muted" />
                 </LinearLayout>
                 </ScrollView>
             </LinearLayout>
@@ -181,7 +184,7 @@
             android:id="@+id/bottom_navigation"
             android:layout_width="match_parent"
             android:layout_height="64dp"
-            android:background="#FFFFFF"
+            android:background="@color/native_surface"
             android:elevation="8dp"
             android:orientation="horizontal">
             <LinearLayout
