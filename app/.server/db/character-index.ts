@@ -4,7 +4,7 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { characterIndexPermission } from "@/lib/authz/character-permissions";
 import { listPublicCharacterIndex } from "@/app/.server/db/taxonomy-library";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
-import type { AppRuntime } from "@/app/.server/runtime";
+import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import type {
   CharacterCategory,
   CharacterIndexData,
@@ -30,15 +30,25 @@ function structureStatements(database: D1Database) {
   ];
 }
 
-export async function readCharacterIndex(
+export function readCharacterIndex(
+  runtime: AppRuntime,
+): Promise<CharacterIndexData> {
+  return memoizeRequest(runtime, "character-index", () => loadCharacterIndex(runtime));
+}
+
+async function loadCharacterIndex(
   runtime: AppRuntime,
 ): Promise<CharacterIndexData> {
   const database = getD1(runtime);
-  const [categories, memberships, sources] = await database.batch([
-    ...structureStatements(database),
-    database.prepare(
-      "SELECT character_id AS characterId,url FROM character_sources ORDER BY sort_order,url",
-    ),
+  const [[categories, memberships, sources], { commentCounts, materialCounts }, characters] = await Promise.all([
+    database.batch([
+      ...structureStatements(database),
+      database.prepare(
+        "SELECT character_id AS characterId,url FROM character_sources ORDER BY sort_order,url",
+      ),
+    ]),
+    readCharacterCounts(runtime),
+    listPublicCharacterIndex(runtime),
   ]);
   const urlsByCharacter = new Map<number, string[]>();
   for (const row of sources.results as { characterId: number; url: string }[]) {
@@ -46,11 +56,10 @@ export async function readCharacterIndex(
     urls.push(row.url);
     urlsByCharacter.set(row.characterId, urls);
   }
-  const { commentCounts, materialCounts } = await readCharacterCounts(runtime);
   return {
     categories: categories.results as CharacterCategory[],
     memberships: memberships.results as CharacterMembership[],
-    characters: (await listPublicCharacterIndex(runtime)).map((character) => ({
+    characters: characters.map((character) => ({
       id: character.id,
       key: `character-${character.id}`,
       primaryName: character.primaryName,

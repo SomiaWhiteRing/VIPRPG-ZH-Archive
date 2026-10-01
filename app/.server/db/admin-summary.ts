@@ -1,11 +1,25 @@
 import { getD1 } from "@/app/.server/db/d1";
-import type { AppRuntime } from "@/app/.server/runtime";
+import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import type { AdminSummary } from "@/lib/dto/db/admin-summary";
 
-export async function getAdminSummary(
+// Advisory totals may lag by 30 seconds. Authorization still runs on each
+// page/API request; only settled aggregate numbers cross request boundaries.
+const summaries = new WeakMap<D1Database, { at: number; value: AdminSummary }>();
+const summaryFreshMs = 30_000;
+
+export function getAdminSummary(
   runtime: AppRuntime,
 ): Promise<AdminSummary> {
-  const row = await getD1(runtime)
+  return memoizeRequest(runtime, "admin-summary", () => readAdminSummary(runtime));
+}
+
+async function readAdminSummary(
+  runtime: AppRuntime,
+): Promise<AdminSummary> {
+  const database = getD1(runtime);
+  const cached = summaries.get(database);
+  if (cached && Date.now() - cached.at < summaryFreshMs) return cached.value;
+  const row = await database
     .prepare(
       `SELECT
        (SELECT COUNT(*) FROM users) AS users,
@@ -33,7 +47,7 @@ export async function getAdminSummary(
     }>();
   if (!row) throw new Error("Admin summary query returned no row");
 
-  return {
+  const value: AdminSummary = {
     users: row.users,
     works: row.works,
     archiveVersions: row.archive_versions,
@@ -48,4 +62,6 @@ export async function getAdminSummary(
     importJobs: row.import_jobs,
     downloadBuilds: row.download_builds,
   };
+  summaries.set(database, { at: Date.now(), value });
+  return value;
 }

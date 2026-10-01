@@ -18,7 +18,9 @@ export type AdminCharacterEdit = PublicCharacterSummary & {
   extra: Record<string, unknown>;
 };
 
-export type PublicCharacterIndexEntry = PublicCharacterSummary & {
+export type PublicCharacterIndexEntry = Pick<PublicCharacterSummary,
+  "id" | "primaryName" | "originalName" | "defaultPortrait" | "workCount"
+> & {
   aliases: CharacterAliasSuggestion[];
 };
 
