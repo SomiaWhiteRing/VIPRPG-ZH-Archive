@@ -737,8 +737,8 @@ export async function getOwnedWorkForEdit(
     .first<{ id: number }>();
   if (!owned) return null;
   const work = await getWorkForAdminEdit(runtime, workId);
-  if (!work || work.status === "processing" || work.status === "deleted")
-    return null;
+  // Failed uploads keep a processing work so its uploader can retry or remove it.
+  if (!work || work.status === "deleted") return null;
   const downloadLink = work.externalLinks.find(
     (link) => link.linkType === "download_page",
   );

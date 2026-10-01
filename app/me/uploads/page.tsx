@@ -11,6 +11,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Button } from "@/app/components/ui/button";
+import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
@@ -72,9 +73,9 @@ export default function UploadsPage() {
               key={work.id}
             >
               <Link
-                aria-label={`查看作品：${work.chineseTitle || work.originalTitle}`}
+                aria-label={`${work.status === "processing" ? "编辑作品" : "查看作品"}：${work.chineseTitle || work.originalTitle}`}
                 className="row-span-2 block aspect-4/3 w-26 self-start overflow-hidden rounded-md border border-border bg-muted/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:row-span-1 sm:w-32"
-                to={`/games/${work.id}`}
+                to={work.status === "processing" ? `/me/uploads/${work.id}` : `/games/${work.id}`}
               >
                 <WorkThumbnail
                   blobSha256={work.coverBlobSha256}
@@ -88,7 +89,7 @@ export default function UploadsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     className="truncate font-semibold"
-                    to={`/games/${work.id}`}
+                    to={work.status === "processing" ? `/me/uploads/${work.id}` : `/games/${work.id}`}
                   >
                     {work.chineseTitle || work.originalTitle}
                   </Link>
@@ -124,6 +125,19 @@ export default function UploadsPage() {
                   >
                     <Link to={`/me/uploads/${work.id}`}>编辑信息</Link>
                   </Button>
+                ) : null}
+                {work.status === "processing" && hasPermission(user, "work.update_own") ? (
+                  <ConfirmingForm
+                    action={`/api/works/${work.id}/delete`}
+                    confirmField="confirm"
+                    title="确认删除上传记录？"
+                    description="删除后，这条未完成的上传将从“我的上传”中移除，只有管理员可以恢复。"
+                  >
+                    <input name="confirm" type="hidden" value="delete" />
+                    <Button type="submit" variant="destructive" size="sm" className="px-3 text-xs">
+                      删除记录
+                    </Button>
+                  </ConfirmingForm>
                 ) : null}
               </div>
             </li>
