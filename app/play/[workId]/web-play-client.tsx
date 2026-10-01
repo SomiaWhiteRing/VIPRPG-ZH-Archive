@@ -5,6 +5,7 @@ import { useToast } from "@/app/components/ui/toast";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { setAndroidOnlinePlaying } from "@/lib/browser/android-screenshots";
 import { isAndroidClient } from "@/lib/browser/client-environment";
+import { reportWorkPlayed } from "@/lib/browser/work-play";
 
 import {
   AlertDialog,
@@ -504,11 +505,7 @@ export function WebPlayClient({
       setRunning(true);
       focusPlayerCanvas();
       signal.throwIfAborted();
-      void fetch(`/api/works/${metadata.workId}/played`, {
-        method: "POST",
-        credentials: "same-origin",
-        keepalive: true,
-      }).catch(() => undefined);
+      reportWorkPlayed(metadata.workId);
       return true;
     } catch (error) {
       if (signal.aborted) return false;

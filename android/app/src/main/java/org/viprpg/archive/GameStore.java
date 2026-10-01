@@ -238,6 +238,25 @@ final class GameStore {
         if (cover.isFile()) try (InputStream in = new FileInputStream(cover)) {
             storage.write(storage.child(folder, "cover.jpg", "image/jpeg", true), readStream(in, 150000));
         } catch (Exception optionalCover) { }
+        reportInstalledPlay(task.getLong("workId"));
+    }
+    private void reportInstalledPlay(long workId) {
+        try {
+            HttpURLConnection request = connect("/api/works/" + workId + "/played", 0);
+            try {
+                request.setConnectTimeout(10000); request.setReadTimeout(10000);
+                request.setRequestMethod("POST"); request.setRequestProperty("Origin", BuildConfig.SITE_ORIGIN);
+                request.setRequestProperty("User-Agent", android.webkit.WebSettings.getDefaultUserAgent(context));
+                String cookies = android.webkit.CookieManager.getInstance().getCookie(BuildConfig.SITE_ORIGIN);
+                if (cookies != null) request.setRequestProperty("Cookie", cookies);
+                request.setDoOutput(true); request.setFixedLengthStreamingMode(0);
+                request.getOutputStream().close();
+                if (request.getResponseCode() != 204) throw new IOException("安装统计上报失败（" + request.getResponseCode() + "）。");
+            } finally { request.disconnect(); }
+        } catch (Exception unavailable) {
+            // Counting is independent of a completed installation and never runs on game launch.
+            android.util.Log.w("GameStore", "Installation play report unavailable", unavailable);
+        }
     }
     private void cacheCover(JSONObject task) {
         String hash = task.optString("coverBlobSha256");

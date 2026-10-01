@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { VIEW_DAY_MS, VIEW_DAY_OFFSET_MS, viewDay, type StatKind } from "@/lib/view-stats";
+import { VIEW_DAY_MS, VIEW_DAY_OFFSET_MS, viewDay, type StatKind, type ViewKind } from "@/lib/view-stats";
 
 const MAX_IDS = 128;
 const CLEANUP_BATCH = 5000;
@@ -23,33 +23,28 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
         PRIMARY KEY (day,kind,id,visitor)
       ) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS applied_merges (id INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS play_users (
+        id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+        PRIMARY KEY (id,user_id)
+      ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS play_user_initializations (id INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS play_visitors (
+        day INTEGER NOT NULL, id INTEGER NOT NULL, visitor BLOB NOT NULL, expires_at INTEGER NOT NULL,
+        PRIMARY KEY (day,id,visitor)
+      ) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS play_visitors_expiry ON play_visitors(expires_at);
     `);
   }
 
-  async record(kind: StatKind, id: number, site: string, ip: string, userAgent: string, initialCount = 0) {
+  async record(kind: ViewKind, id: number, site: string, ip: string, userAgent: string) {
     target(kind, id);
-    if (!Number.isSafeInteger(initialCount) || initialCount < 0) throw new Error("Invalid initial count");
     if (!ip || ip.length > 64 || !userAgent || userAgent.length > 1024 || site.length > 256)
       throw new Error("Invalid view identity");
     // Keep salt creation, hashing and the unique insert in one serialized event.
     await this.ctx.blockConcurrencyWhile(async () => {
       const day = viewDay();
-      let salt = this.ctx.storage.sql.exec<{ salt: ArrayBuffer }>(
-        "SELECT salt FROM days WHERE day=?", day,
-      ).toArray()[0]?.salt;
-      if (!salt) {
-        // Arm cleanup before persisting identity data, including on a cold start.
-        if (await this.ctx.storage.getAlarm() === null)
-          await this.ctx.storage.setAlarm((day + 2) * VIEW_DAY_MS - VIEW_DAY_OFFSET_MS);
-        salt = crypto.getRandomValues(new Uint8Array(32)).buffer;
-        this.ctx.storage.sql.exec("INSERT INTO days(day,salt) VALUES(?,?)", day, salt);
-      }
-      const key = await crypto.subtle.importKey("raw", salt, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-      const visitor = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(JSON.stringify([site, ip, userAgent])));
+      const visitor = await this.#visitor(day, site, ip, userAgent, true);
       this.ctx.storage.transactionSync(() => {
-        if (kind === "play") this.ctx.storage.sql.exec(
-          "INSERT OR IGNORE INTO totals(kind,id,count) VALUES('play',?,?)", id, initialCount,
-        );
         const inserted = this.ctx.storage.sql.exec(
           "INSERT OR IGNORE INTO seen(day,kind,id,visitor) VALUES(?,?,?,?) RETURNING id",
           day, kind, id, visitor,
@@ -60,6 +55,71 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
         );
       });
     });
+  }
+
+  initializePlayUsers(id: number, userIds: number[], initialCount: number) {
+    target("play", id);
+    if (!Number.isSafeInteger(initialCount) || initialCount < 0 ||
+        userIds.some((userId) => !Number.isSafeInteger(userId) || userId <= 0))
+      throw new Error("Invalid initial play users");
+    this.ctx.storage.transactionSync(() => {
+      if (this.#playUsersInitialized(id)) return;
+      this.#seedPlays([id], { [id]: initialCount });
+      this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO play_users(id,user_id)
+        SELECT ?,value FROM json_each(?)`, id, JSON.stringify(userIds));
+      this.ctx.storage.sql.exec("INSERT INTO play_user_initializations(id) VALUES(?)", id);
+    });
+  }
+
+  async recordPlay(id: number, site: string, ip: string, userAgent: string, userId: number | null): Promise<boolean> {
+    target("play", id);
+    if (userId !== null && (!Number.isSafeInteger(userId) || userId <= 0)) throw new Error("Invalid play user");
+    if (!ip || ip.length > 64 || !userAgent || userAgent.length > 1024 || site.length > 256)
+      throw new Error("Invalid play identity");
+    return this.ctx.blockConcurrencyWhile(async () => {
+      // Request the legacy account IDs once, before any new history can be written.
+      if (!this.#playUsersInitialized(id)) return false;
+      const now = Date.now();
+      const day = viewDay(now);
+      const visitor = userId === null ? await this.#visitor(day, site, ip, userAgent, true) : null;
+      const previous = userId === null ? await this.#visitor(day - 1, site, ip, userAgent, false) : null;
+      return this.ctx.storage.transactionSync(() => {
+        let inserted: number;
+        if (userId !== null) {
+          inserted = this.ctx.storage.sql.exec(
+            "INSERT OR IGNORE INTO play_users(id,user_id) VALUES(?,?) RETURNING id", id, userId,
+          ).toArray().length;
+        } else {
+          const alreadySeen = this.ctx.storage.sql.exec(`SELECT 1 FROM play_visitors
+            WHERE id=? AND expires_at>? AND ((day=? AND visitor=?) OR (day=? AND visitor=?)) LIMIT 1`,
+            id, now, day, visitor, day - 1, previous).toArray().length;
+          if (alreadySeen) return true;
+          inserted = this.ctx.storage.sql.exec(`INSERT INTO play_visitors(day,id,visitor,expires_at) VALUES(?,?,?,?)
+            ON CONFLICT(day,id,visitor) DO UPDATE SET expires_at=excluded.expires_at RETURNING id`,
+            day, id, visitor, now + VIEW_DAY_MS).toArray().length;
+        }
+        if (inserted) this.ctx.storage.sql.exec("UPDATE totals SET count=count+1 WHERE kind='play' AND id=?", id);
+        return true;
+      });
+    });
+  }
+
+  #playUsersInitialized(id: number): boolean {
+    return this.ctx.storage.sql.exec("SELECT 1 FROM play_user_initializations WHERE id=?", id).toArray().length > 0;
+  }
+
+  async #visitor(day: number, site: string, ip: string, userAgent: string, create: boolean): Promise<ArrayBuffer | null> {
+    let salt = this.ctx.storage.sql.exec<{ salt: ArrayBuffer }>("SELECT salt FROM days WHERE day=?", day).toArray()[0]?.salt;
+    if (!salt) {
+      if (!create) return null;
+      // Arm cleanup before persisting identity data, including on a cold start.
+      if (await this.ctx.storage.getAlarm() === null)
+        await this.ctx.storage.setAlarm((day + 2) * VIEW_DAY_MS - VIEW_DAY_OFFSET_MS);
+      salt = crypto.getRandomValues(new Uint8Array(32)).buffer;
+      this.ctx.storage.sql.exec("INSERT INTO days(day,salt) VALUES(?,?)", day, salt);
+    }
+    const key = await crypto.subtle.importKey("raw", salt, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(JSON.stringify([site, ip, userAgent])));
   }
 
   counts(kind: StatKind, ids: number[], initialCounts: Record<number, number> = {}): Record<number, number> {
@@ -107,6 +167,14 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
         this.ctx.storage.sql.exec("DELETE FROM totals WHERE kind=? AND id=?", kind, source);
         this.ctx.storage.sql.exec("DELETE FROM seen WHERE kind=? AND id=?", kind, source);
       }
+      this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO play_users(id,user_id)
+        SELECT ?,user_id FROM play_users WHERE id=?`, destination, source);
+      this.ctx.storage.sql.exec(`INSERT INTO play_visitors(day,id,visitor,expires_at)
+        SELECT day,?,visitor,expires_at FROM play_visitors WHERE id=?
+        ON CONFLICT(day,id,visitor) DO UPDATE SET expires_at=MAX(play_visitors.expires_at,excluded.expires_at)`, destination, source);
+      this.ctx.storage.sql.exec("DELETE FROM play_users WHERE id=?", source);
+      this.ctx.storage.sql.exec("DELETE FROM play_visitors WHERE id=?", source);
+      this.ctx.storage.sql.exec("DELETE FROM play_user_initializations WHERE id=?", source);
     });
   }
 
@@ -127,7 +195,11 @@ export class ViewStats extends DurableObject<CloudflareEnv> {
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec(`DELETE FROM seen WHERE (day,kind,id,visitor) IN
         (SELECT day,kind,id,visitor FROM seen WHERE day<? LIMIT ?)`, cutoff, CLEANUP_BATCH);
-      this.ctx.storage.sql.exec("DELETE FROM days WHERE day<? AND NOT EXISTS(SELECT 1 FROM seen WHERE seen.day=days.day)", cutoff);
+      this.ctx.storage.sql.exec(`DELETE FROM play_visitors WHERE (day,id,visitor) IN
+        (SELECT day,id,visitor FROM play_visitors WHERE expires_at<=? LIMIT ?)`, Date.now(), CLEANUP_BATCH);
+      this.ctx.storage.sql.exec(`DELETE FROM days WHERE day<?
+        AND NOT EXISTS(SELECT 1 FROM seen WHERE seen.day=days.day)
+        AND NOT EXISTS(SELECT 1 FROM play_visitors WHERE play_visitors.day=days.day)`, cutoff);
     });
     const oldest = this.ctx.storage.sql.exec<{ day: number | null }>("SELECT MIN(day) AS day FROM days").one().day;
     if (oldest !== null) await this.ctx.storage.setAlarm(Math.max(

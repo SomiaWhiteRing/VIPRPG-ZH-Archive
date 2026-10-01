@@ -1,6 +1,7 @@
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import { WorkPopularityStats, useShowGameCardInteractionData } from "@/app/components/work/work-popularity-stats";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
+import { reportWorkPlayed } from "@/lib/browser/work-play";
 import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import type { ReactNode } from "react";
@@ -51,6 +52,8 @@ export function GameLibraryListRow({
         <a
           className="hidden min-h-11 shrink-0 self-center flex-col items-center justify-center rounded-md border border-border bg-card px-3.5 text-center hover:border-primary/50 hover:bg-primary/10 min-[561px]:inline-flex"
           href={download.href}
+          onClick={() => reportWorkPlayed(work.id)}
+          onAuxClick={(event) => { if (event.button === 1) reportWorkPlayed(work.id); }}
           rel={download.external ? "noreferrer" : undefined}
           target={download.external ? "_blank" : undefined}
         >
