@@ -41,6 +41,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -65,6 +66,7 @@ public final class MainActivity extends Activity {
     private final String offlineUrl = BuildConfig.SITE_ORIGIN + "/_android/index.html";
     private final Uri origin = Uri.parse(BuildConfig.SITE_ORIGIN);
     private WebView browser;
+    private SwipeRefreshLayout onlineRefresh;
     private WebView offlineBrowser;
     private LinearLayout bottomNavigation;
     private LinearLayout onlineTab;
@@ -137,6 +139,13 @@ public final class MainActivity extends Activity {
         downloadUpdate = findViewById(R.id.download_update);
         progress = findViewById(R.id.progress);
         browser = findViewById(R.id.browser);
+        onlineRefresh = findViewById(R.id.online_refresh);
+        onlineRefresh.setOnChildScrollUpCallback((parent, child) -> browser.canScrollVertically(-1));
+        onlineRefresh.setOnRefreshListener(browser::reload);
+        NativeControls.bindTheme(onlineRefresh, () -> {
+            onlineRefresh.setColorSchemeColors(getColor(R.color.native_primary));
+            onlineRefresh.setProgressBackgroundColorSchemeColor(getColor(R.color.native_surface));
+        });
         offlineBrowser = findViewById(R.id.offline_browser);
         libraryPanel = findViewById(R.id.library_panel);
         nativeLibrary = new NativeLibrary(this, new NativeLibrary.Actions() {
@@ -247,6 +256,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (view == browser) onlineRefresh.setRefreshing(false);
                 sendSystemTheme(view);
                 updateNavigation();
             }
@@ -264,6 +274,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (view == browser && request.isForMainFrame()) onlineRefresh.setRefreshing(false);
                 if (view == browser && request.isForMainFrame() && !isOffline(request.getUrl()) && !library && !version && !gallery) {
                     onlineLoadFailed = true;
                     Toast.makeText(MainActivity.this, "网络不可用，已打开本地游戏", Toast.LENGTH_SHORT).show();
@@ -273,6 +284,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                if (view == browser && request.isForMainFrame()) onlineRefresh.setRefreshing(false);
                 if (view == browser && request.isForMainFrame() && !isOffline(request.getUrl()) && !library && !version && !gallery && response.getStatusCode() >= 500) {
                     onlineLoadFailed = true;
                     showLibrary();
@@ -760,6 +772,10 @@ public final class MainActivity extends Activity {
 
     private void updateNavigation() {
         boolean immersive = isContentImmersive();
+        boolean online = !library && !gallery && !version;
+        onlineRefresh.setVisibility(online ? View.VISIBLE : View.GONE);
+        onlineRefresh.setEnabled(online && !immersive && !onlinePlaying);
+        if (!onlineRefresh.isEnabled()) onlineRefresh.setRefreshing(false);
         getWindow().setBackgroundDrawable(new ColorDrawable(immersive ? Color.BLACK : getColor(R.color.native_background)));
         bottomNavigation.setVisibility(immersive ? View.GONE : View.VISIBLE);
         tintTab(onlineTab, R.id.online_icon, R.id.online_label, !version && !gallery && !library);
