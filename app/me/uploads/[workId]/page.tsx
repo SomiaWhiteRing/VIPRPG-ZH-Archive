@@ -8,6 +8,7 @@ import { loadUploadSuggestions } from "@/app/.server/upload-suggestions";
 import { BackLink } from "@/app/components/ui/back-link";
 import { Button } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
+import { Notice } from "@/app/components/ui/notice";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { uploadInitialWork } from "@/app/upload/initial-work";
 import { UploadClient } from "@/app/upload/upload-client";
@@ -63,6 +64,11 @@ export default function UploadedWorkPage() {
         }
         title={`编辑作品：${work.chineseTitle || work.originalTitle}`}
       />
+      {work.status === "processing" ? (
+        <Notice tone="warning" className="mb-4">
+          这条上传尚未完成。上传失败后，可以重新选择游戏文件并保存资料，也可以删除这条记录；仍在提交时请等待上传结束。
+        </Notice>
+      ) : null}
       <UploadClient
         saveRedirectTo={fromGameDetail ? `/games/${work.id}` : "/me/uploads"}
         currentUser={{
