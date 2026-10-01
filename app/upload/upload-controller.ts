@@ -61,6 +61,9 @@ export function useUploadController(accountId: number) {
   const disposedRef = useRef(false);
 
   function updateTask(nextTask: BrowserUploadTaskSnapshot | null) {
+    if (nextTask?.status === "failed" || nextTask?.status === "canceled") {
+      setMetadataConfirmed(false);
+    }
     taskRef.current = nextTask;
     setTask(nextTask);
   }
@@ -422,11 +425,11 @@ export function useUploadController(accountId: number) {
   function cancelTask(clearError = true): Promise<boolean> {
     if (clearError) setControllerError(null);
     const currentTask = taskRef.current;
+    if (!workerRef.current) return Promise.resolve(true);
     if (currentTask?.phase === "committing") {
       setControllerError("任务正在提交，当前不能取消或离开上传页。");
       return Promise.resolve(false);
     }
-    if (!workerRef.current) return Promise.resolve(true);
     if (pendingCancelRef.current) return pendingCancelRef.current.promise;
     const localTaskId =
       currentTask?.localTaskId ?? pendingLocalTaskIdRef.current;

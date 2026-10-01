@@ -494,6 +494,10 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
       runtime.metadataBlobs,
       importJobId,
       sourceBlobSha256s,
+      new Set((metadata.characters ?? []).flatMap((credit) => [
+        ...credit.faceSheetBlobSha256s,
+        ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+      ])),
     );
     await waitForCancellation(runtime);
     const manifestResult = await buildManifest(preparedSource, metadata);
@@ -1304,7 +1308,7 @@ async function settleRuntime(
 ): Promise<void> {
   if (runtime.settled) return;
   runtime.settled = true;
-  runtime.task = emitTask(task, true);
+  runtime.task = emitTask({ ...task, commitStarted: false }, true);
   const draftRemoved = await removeRuntimeDraft(runtime);
   postMessage({
     type: "settled",
@@ -1384,17 +1388,22 @@ async function uploadMetadataBlobs(
   blobs: MetadataBlobUpload[],
   importJobId: number | null,
   sourceBlobSha256s: ReadonlySet<string>,
+  faceSheetHashes: ReadonlySet<string>,
 ): Promise<void> {
   if (!importJobId) throw new Error("上传任务缺少导入记录");
   for (const blob of blobs) {
-    if (sourceBlobSha256s.has(blob.sha256)) continue;
+    const isFaceSheet = faceSheetHashes.has(blob.sha256);
+    if (sourceBlobSha256s.has(blob.sha256) && !isFaceSheet) continue;
     await retry(async () => {
       const response = await fetch(
         uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId),
         {
           method: "PUT",
           credentials: "same-origin",
-          headers: { "content-type": blob.contentType },
+          headers: {
+            "content-type": blob.contentType,
+            ...(isFaceSheet ? { "x-character-face-sheet": "1" } : {}),
+          },
           body: await blob.file.arrayBuffer(),
         },
       );
@@ -1548,7 +1557,11 @@ function emitTask(
   if (runtime) {
     if (runtime.settled && !isTerminal(task.status)) return runtime.task;
     // File-processing snapshots may predate a metadata confirmation or revocation.
-    task = { ...task, metadataConfirmed: runtime.metadata !== null };
+    task = {
+      ...task,
+      metadataConfirmed: runtime.metadata !== null &&
+        task.status !== "failed" && task.status !== "canceled",
+    };
     runtime.task = task;
   }
   const now = Date.now();

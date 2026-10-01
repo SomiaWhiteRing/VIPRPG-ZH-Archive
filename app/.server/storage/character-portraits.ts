@@ -68,7 +68,7 @@ export async function registerUserCharacterFaceSheets(
   if (!values.length) return;
   const database = getD1(runtime);
   await database.batch(
-    values.map((sheet) =>
+    values.flatMap((sheet) => [
       database
         .prepare(
           `INSERT OR IGNORE INTO face_sheets(
@@ -76,7 +76,13 @@ export async function registerUserCharacterFaceSheets(
            ) VALUES(?,?,?,'user_upload','pending',?)`,
         )
         .bind(sheet.sha256, sheet.width, sheet.height, userId),
-    ),
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO face_sheet_uploaders(face_sheet_id,user_id)
+           SELECT id,? FROM face_sheets WHERE blob_sha256=?`,
+        )
+        .bind(userId, sheet.sha256),
+    ]),
   );
 }
 

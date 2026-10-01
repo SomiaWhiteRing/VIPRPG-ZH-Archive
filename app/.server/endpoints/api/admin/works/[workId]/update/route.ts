@@ -10,6 +10,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import {
   ensureCharacterFaceSheets,
   readCharacterFaceSheet,
+  registerUserCharacterFaceSheets,
   storeCharacterFaceSheets,
 } from "@/app/.server/storage/character-portraits";
 import { readWorkImage, storeWorkImages, storeWorkPreviews } from "@/app/.server/storage/work-images";
@@ -64,7 +65,8 @@ export async function POST(
     if (formData.has("replace_previews")) {
       input.previewBlobSha256s = await storeWorkPreviews(runtime, formData, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256));
     }
-    await storeCharacterFaceSheets(runtime, characterFaceSheets);
+    const uploadedFaceSheets = await storeCharacterFaceSheets(runtime, characterFaceSheets);
+    await registerUserCharacterFaceSheets(runtime, uploadedFaceSheets, auth.user.id);
     await ensureCharacterFaceSheets(
       runtime,
       input.characters.flatMap((credit) => [

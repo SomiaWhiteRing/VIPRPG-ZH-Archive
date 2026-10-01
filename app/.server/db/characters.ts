@@ -25,7 +25,7 @@ type FaceSheetChoice = {
   width_px: number;
   height_px: number;
   library_status: "pending" | "approved" | "rejected";
-  created_by_user_id: number | null;
+  uploaded_by_actor: number;
   characterIds: Set<number>;
 };
 
@@ -124,6 +124,7 @@ export async function prepareWorkCharacterStatements(input: {
 
   const sheets = await loadFaceSheetChoices(
     input.database,
+    input.actorUserId,
     credits.flatMap((credit) => [
       ...credit.faceSheetBlobSha256s,
       ...(credit.portrait ? [credit.portrait.blobSha256] : []),
@@ -261,7 +262,7 @@ export async function prepareWorkCharacterStatements(input: {
     const uploadedSheetHashes = [...sheets.values()]
       .filter((sheet) =>
         sheet.library_status === "pending" &&
-        sheet.created_by_user_id === input.actorUserId,
+        sheet.uploaded_by_actor === 1,
       )
       .map((sheet) => sheet.blob_sha256);
     if (uploadedSheetHashes.length) {
@@ -271,7 +272,9 @@ export async function prepareWorkCharacterStatements(input: {
         input.database
           .prepare(
             `UPDATE face_sheets SET library_status='approved',updated_at=CURRENT_TIMESTAMP
-             WHERE library_status='pending' AND created_by_user_id=?
+             WHERE library_status='pending'
+               AND EXISTS(SELECT 1 FROM face_sheet_uploaders fsu
+                          WHERE fsu.face_sheet_id=face_sheets.id AND fsu.user_id=?)
                AND blob_sha256 IN (SELECT value FROM json_each(?))`,
           )
           .bind(input.actorUserId, JSON.stringify(uploadedSheetHashes)),
@@ -363,6 +366,7 @@ async function resolveNewCharacters(
 
 async function loadFaceSheetChoices(
   database: D1Database,
+  actorUserId: number,
   rawHashes: string[],
 ): Promise<Map<string, FaceSheetChoice>> {
   const hashes = [...new Set(rawHashes.map(normalizeSha256))];
@@ -370,19 +374,21 @@ async function loadFaceSheetChoices(
   const rows = await database
     .prepare(
       `SELECT fs.id,fs.blob_sha256,fs.width_px,fs.height_px,fs.library_status,
-              fs.created_by_user_id,cfsb.character_id
+              EXISTS(SELECT 1 FROM face_sheet_uploaders fsu
+                     WHERE fsu.face_sheet_id=fs.id AND fsu.user_id=?) AS uploaded_by_actor,
+              cfsb.character_id
        FROM face_sheets fs
        LEFT JOIN character_face_sheet_bindings cfsb ON cfsb.face_sheet_id=fs.id
        WHERE fs.blob_sha256 IN (${hashes.map(() => "?").join(",")})`,
     )
-    .bind(...hashes)
+    .bind(actorUserId, ...hashes)
     .all<{
       id: number;
       blob_sha256: string;
       width_px: number;
       height_px: number;
       library_status: FaceSheetChoice["library_status"];
-      created_by_user_id: number | null;
+      uploaded_by_actor: number;
       character_id: number | null;
     }>();
   const sheets = new Map<string, FaceSheetChoice>();
@@ -421,7 +427,7 @@ function validatePortraitChoice(
   if (character && sheet.characterIds.has(character.id)) return sheet;
   const mayBind =
     input.source === "admin" ||
-    sheet.created_by_user_id === input.actorUserId;
+    sheet.uploaded_by_actor === 1;
   if (!mayBind) throw new HttpError(409, "这张脸图没有绑定到所选角色");
   return sheet;
 }
@@ -441,7 +447,7 @@ function validateFaceSheetBindings(
     if (character && sheet.characterIds.has(character.id)) continue;
     if (
       input.source !== "admin" &&
-      sheet.created_by_user_id !== input.actorUserId
+      sheet.uploaded_by_actor !== 1
     ) {
       throw new HttpError(409, "这张素材表不能绑定到所选角色");
     }

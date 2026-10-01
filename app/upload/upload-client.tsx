@@ -1269,13 +1269,15 @@ function ReadinessList({
           label: "发布",
           value: task?.result
             ? "已完成"
-            : task?.commitStarted
-              ? uploadPhaseLabel(task.phase)
-              : task?.sourceReady && !metadataConfirmed
-                ? "等待作品资料"
-                : !task?.sourceReady && metadataConfirmed
-                  ? "等待游戏文件"
-                  : "等待两项就绪",
+            : task?.status === "failed"
+              ? "提交失败"
+              : task?.commitStarted
+                ? uploadPhaseLabel(task.phase)
+                : task?.sourceReady && !metadataConfirmed
+                  ? "等待作品资料"
+                  : !task?.sourceReady && metadataConfirmed
+                    ? "等待游戏文件"
+                    : "等待两项就绪",
           tone: task?.result
             ? "ready"
             : task?.commitStarted
