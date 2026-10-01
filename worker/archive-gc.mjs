@@ -1,5 +1,6 @@
 import { scanGcCandidates, advanceGcCursor } from "../app/.server/storage/gc-candidates.ts";
 import { sweepToolArtifacts } from "./tool-artifact-gc.mjs";
+import { sweepDownloadCache } from "./download-cache.mjs";
 
 const defaultGcGraceDays = 7;
 const processingExpiryHours = 24;
@@ -40,6 +41,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
   const blobs = await sweepCandidatePage(env, "blob", graceDays, limitPerType);
   const corePacks = await sweepCandidatePage(env, "core_pack", graceDays, limitPerType);
   const toolArtifacts = await sweepToolArtifacts(env, limitPerType);
+  const downloadCache = await sweepDownloadCache(env);
   const report = {
     checkedAt: new Date().toISOString(),
     trigger: input.trigger ?? "scheduled",
@@ -52,6 +54,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     blobs,
     corePacks,
     toolArtifacts,
+    downloadCache,
   };
 
   await writeGcAuditLog(env.DB, report);
@@ -618,6 +621,11 @@ async function writeGcAuditLog(db, report) {
         purgedToolArtifactSizeBytes: report.toolArtifacts.purgedSizeBytes,
         failedToolArtifactCount: report.toolArtifacts.failedCount,
         failedToolArtifacts: report.toolArtifacts.failed,
+        downloadCacheScanCount: report.downloadCache.scannedCount,
+        purgedDownloadCacheCount: report.downloadCache.purgedCount,
+        purgedDownloadCacheSizeBytes: report.downloadCache.purgedSizeBytes,
+        failedDownloadCacheCount: report.downloadCache.failedCount,
+        failedDownloadCaches: report.downloadCache.failed,
       }),
     )
     .run();
