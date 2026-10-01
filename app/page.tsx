@@ -23,11 +23,11 @@ export async function loader(args: LoaderFunctionArgs) {
     homeTopics(getForumRuntime(runtime)),
   ]);
 
-  return { ...works, topics };
+  return { ...works, topics, canonical: `${runtime.origin}/` };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors(undefined, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
+  pageMetaDescriptors({ alternates: { canonical: loaderData?.canonical } }, error);
 
 export default function HomePage() {
   const { recentWorks, recentOriginalWorks, randomWorks, topics } =

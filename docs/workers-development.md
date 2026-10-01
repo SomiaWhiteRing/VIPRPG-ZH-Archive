@@ -10,6 +10,16 @@
 
 服务实现位于 app/.server/，Vite 在构建时拒绝将其带入客户端。loader 直接调用业务服务，只返回显示所需数据；认证记录、密钥和配置不得序列化给浏览器。HTML 与页面数据响应采用 private, no-store。归档下载保持流式响应与独立缓存策略。
 
+## 站点地图与搜索引擎发现
+
+`/sitemap.xml` 是全站 XML 索引，直接列出 `/sitemap-pages.xml` 与 `/sitemap-{games|creators|characters|catalogs|discussions}-:shard.xml`，不嵌套另一份索引。全站分片放在根目录，确保仅通过 `robots.txt` 发现时也覆盖全站；目录作用范围见 [Google 站点地图说明](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)。论坛既有 `/discussions/sitemap.xml` 与 `/discussions/sitemaps/:shard.xml` 继续可用，和全站讨论分片使用相同的公开查询。固定页面地图只列首页、关于与公开栏目入口，不伪造更新时间。
+
+动态内容按每 1,000 个 ID 范围自动分片，每份最多 1,000 个详情网址；索引只列仍有公开内容的分片。作品沿用 `public_works`，作者要求 `public_at IS NOT NULL`，角色身份均公开，目录要求 `status='published'`，讨论沿用 `forum_public_topics`。不列账户、后台、上传、游玩、搜索筛选组合或重复的评论定位网址。
+
+XML 响应使用 Cloudflare Cache API 与 `public, max-age=86400`，内容发布、隐藏和删除后最多可能保留 24 小时旧地图；实际详情页仍按当前公开权限读取。缓存键与 XML 中的绝对网址使用 `AppRuntime.origin`，不依赖访客的 Cookie 或查询参数。
+
+允许索引的环境在 `/robots.txt` 声明全站地图入口。`SITE_NOINDEX="true"` 的环境继续禁止抓取，并返回 `X-Robots-Tag: noindex, nofollow`，不声明地图入口。首页输出当前环境 origin 的自引用 canonical。正式发布后，可在 Search Console 的“站点地图”提交 `https://viprpg.org/sitemap.xml`；地图帮助发现内容，不保证抓取或收录。
+
 ## 本地运行
 
 首次安装 Node 24 后执行 npm ci，将 wrangler.example.jsonc 复制为 wrangler.jsonc，将 .env.example 复制为 .env.local。已有配置不覆盖。填写本地 AUTH_SECRET；远程资源 ID 只存本地配置或 CI secret。
