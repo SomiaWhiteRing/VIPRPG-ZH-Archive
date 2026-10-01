@@ -52,6 +52,7 @@ export type GameExternalLink = {
 };
 
 export type GameArchiveVersionDetail = {
+  sourceUrl: string | null;
   embeddedPlayerSizeBytes: number;
   usesSharedPlayer: boolean;
   webPlayFileCount: number;

@@ -2035,7 +2035,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,
+        `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,av.source_url,
                 av.uses_shared_player,av.embedded_player_size_bytes,av.web_play_file_count,av.web_play_size_bytes,
                 av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name,
                 u.avatar_blob_sha256 AS uploader_avatar_blob_sha256
@@ -2134,6 +2134,7 @@ async function loadWorkCollections(
         linkType: row.link_type,
       })),
     archives: batchRows<{
+      source_url: string | null;
       uses_shared_player: number;
       embedded_player_size_bytes: number;
       web_play_file_count: number;
@@ -2149,6 +2150,7 @@ async function loadWorkCollections(
       uploader_name: string | null;
       uploader_avatar_blob_sha256: string | null;
     }>(results[6]).map((row) => ({
+      sourceUrl: row.source_url && isHttpUrl(row.source_url) ? row.source_url : null,
       usesSharedPlayer: row.uses_shared_player === 1,
       embeddedPlayerSizeBytes: row.embedded_player_size_bytes,
       webPlayFileCount: row.web_play_file_count,

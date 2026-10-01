@@ -103,6 +103,18 @@ export function WorkSidebarInfo({
             {work.originalReleaseDate}
           </InfoRow>
         ) : null}
+        {current?.sourceUrl ? (
+          <InfoRow label="发布地址">
+            <a
+              className="font-medium text-secondary hover:underline"
+              href={current.sourceUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {current.sourceUrl}
+            </a>
+          </InfoRow>
+        ) : null}
       </dl>
 
       <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
