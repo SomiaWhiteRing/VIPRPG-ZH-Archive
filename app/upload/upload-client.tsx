@@ -160,7 +160,9 @@ export function UploadClient({
 }) {
   const navigate = useNavigate();
   const upload = useUploadController(currentUser.id);
-  const canArchiveUpload = ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
+  const canEditMetadata = !adminOptions || currentUser.permissionKeys.includes("work.metadata.update_any");
+  const canEditDistribution = !adminOptions || currentUser.permissionKeys.includes("work.distribution.update_any");
+  const canArchiveUpload = canEditDistribution && ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
     currentUser.permissionKeys.includes(key),
   );
   const canExternalPublish = Boolean(initialWork) ||
@@ -251,6 +253,7 @@ export function UploadClient({
   const canSaveWithoutSource = Boolean(adminOptions && !initialWork?.currentArchive && !initialWork?.externalDownloadUrl);
   const relevantDrafts = upload.drafts.filter(
     (draft) =>
+      canArchiveUpload &&
       draft.targetWorkId === (initialWork?.id ?? null) &&
       (adminOptions || !(draft.metadata?.admin || draft.formDraft?.adminSettings)) &&
       draft.serverImportJobId !== upload.task?.serverImportJobId,
@@ -384,6 +387,7 @@ export function UploadClient({
   }
 
   function changeSourceMode(nextMode: "archive" | "external") {
+    if (!canEditDistribution) return;
     if (formDisabled) return;
     if (nextMode === "external" && (!canExternalPublish || hasGameFiles)) return;
     if (nextMode === "archive" && (!canArchiveUpload || !isArchiveEngineFamily(form.engineFamily))) return;
@@ -397,7 +401,7 @@ export function UploadClient({
     canPrefill: { originalTitle: boolean; chineseTitle: boolean },
     generation: number,
   ) {
-    if (generation !== sourceInspectionGenerationRef.current) return;
+    if (generation !== sourceInspectionGenerationRef.current || !canEditMetadata) return;
     if (prefill.hasManiacPatch) {
       setForm((current) => current.engineFamily === "rpg_maker_2000" || current.engineFamily === "rpg_maker_2003"
         ? { ...current, engineFamily: "rpg_maker_2003_maniac" }
@@ -873,10 +877,13 @@ export function UploadClient({
           <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-[84px_minmax(0,1fr)] sm:items-start sm:gap-x-3">
             <span className="text-sm font-bold sm:pt-2">游戏引擎</span>
             <EnginePicker
-              disabled={formDisabled}
+              disabled={formDisabled || !canEditMetadata}
               disabledReason={(option) => {
                 const targetArchive = archiveMode && isArchiveEngineFamily(option.value);
-                if (targetArchive && !canArchiveUpload) {
+                if (targetArchive !== archiveMode && !canEditDistribution) {
+                  return "切换下载方式需要归档内容/外链编辑权限";
+                }
+                if (targetArchive && !canArchiveUpload && !initialWork) {
                   return "当前账户没有本站归档上传权限";
                 }
                 if (!targetArchive && !canExternalPublish) {
@@ -922,7 +929,7 @@ export function UploadClient({
                       upload.active
                     }
                     existingSource={sourceSummary ? null : existingArchive}
-                    externalDisabled={formDisabled || hasGameFiles || !canExternalPublish}
+                    externalDisabled={formDisabled || !canEditDistribution || hasGameFiles || !canExternalPublish}
                     mode={mode}
                     onCancel={() => void cancelUpload()}
                     onDrop={onSourceDrop}
@@ -930,7 +937,7 @@ export function UploadClient({
                     onFolder={(files, sourceName) =>
                       void startFolder(files, sourceName)
                     }
-                    onRemoveExisting={() => {
+                    onRemoveExisting={!canEditDistribution ? undefined : () => {
                       setExistingArchive(null);
                       setSubmitError(null);
                     }}
@@ -942,7 +949,7 @@ export function UploadClient({
                 ) : (
                   <ExternalSourceSection
                     archiveDisabled={formDisabled || !canArchiveUpload}
-                    disabled={formDisabled}
+                    disabled={formDisabled || !canEditDistribution}
                     required={!canSaveWithoutSource}
                     onArchive={isArchiveEngineFamily(form.engineFamily) ? () => changeSourceMode("archive") : undefined}
                     onChange={(externalDownloadUrl) =>
@@ -996,7 +1003,8 @@ export function UploadClient({
                     }
                     changeTranslationDeclaration={changeTranslationDeclaration}
                     changeTranslator={changeTranslator}
-                    disabled={preparing}
+                    disabled={preparing || !canEditMetadata}
+                    archiveSourceDisabled={preparing || !canEditDistribution}
                     existingPreviewHashes={initialWork?.previewBlobSha256s ?? []}
                     existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
                     form={form}
@@ -1018,7 +1026,7 @@ export function UploadClient({
                 <div className="border-b border-border p-4">
                   <CoverPicker
                     candidateFiles={coverCandidates}
-                    disabled={formDisabled}
+                    disabled={formDisabled || !canEditMetadata}
                     existingBlobSha256s={initialWork?.previewBlobSha256s}
                     existingCoverBlobSha256={coverBlobSha256}
                     existingImageBaseUrl={initialWork ? `/api/works/${initialWork.id}/media/` : undefined}
@@ -1057,6 +1065,7 @@ export function UploadClient({
                       游戏语言 <span className="text-accent">*</span>
                     </span>
                     <LanguageField
+                      disabled={!canEditMetadata}
                       onValueChange={(language) =>
                         setForm((current) => ({ ...current, language }))
                       }
@@ -1150,15 +1159,17 @@ export function UploadClient({
           <fieldset className="mt-4 grid gap-4" disabled={formDisabled}>
             <Pane heading="管理设置">
               <div className="grid gap-4">
-                <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
-                  setAdminSettings((current) => current ? { ...current, externalLinks } : current)} />
+                <fieldset disabled={!canEditDistribution}>
+                  <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
+                    setAdminSettings((current) => current ? { ...current, externalLinks } : current)} />
+                </fieldset>
                 <details>
                   <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
                   <div className="mt-3 grid gap-4">
                     <p className="text-sm text-muted">选择新封面后，将优先使用新图片。</p>
                     <WorkbenchField controlId="admin-cover-hash" label="封面 SHA-256">
                       <Input id="admin-cover-hash" value={coverBlobSha256} onChange={(event) => setCoverBlobSha256(event.target.value)}
-                        pattern="[a-fA-F0-9]{64}" disabled={Boolean(imageSelections.cover)} />
+                        pattern="[a-fA-F0-9]{64}" disabled={!canEditMetadata || Boolean(imageSelections.cover)} />
                     </WorkbenchField>
                   </div>
                 </details>

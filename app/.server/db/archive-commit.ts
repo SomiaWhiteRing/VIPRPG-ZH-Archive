@@ -14,7 +14,7 @@ import {
 import { getD1 } from "@/app/.server/db/d1";
 import type { ImportJobRow } from "@/app/.server/db/import-jobs";
 import { assertWorkCanReceiveArchive } from "@/app/.server/db/import-jobs";
-import { normalizeExternalLinks } from "@/app/.server/db/game-library";
+import { getWorkForAdminEdit, normalizeExternalLinks } from "@/app/.server/db/game-library";
 import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relations";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
 import { parseWorkMoreInfo } from "@/app/.server/http/work-more-info";
@@ -137,8 +137,8 @@ export async function commitArchiveImport(
     );
   }
 
-  if (metadata.admin && !hasPermission(input.user, "work.metadata.update_any")) {
-    throw new HttpError(403, "没有编辑作品资料的权限");
+  if (metadata.admin && !hasPermission(input.user, "work.distribution.update_any")) {
+    throw new HttpError(403, "没有编辑作品归档内容/外链的权限");
   }
   const sourceManifest = sourceManifestFromArchive(manifest);
   await verifySharedPlayerAvailability(runtime, sourceManifest);
@@ -1093,6 +1093,21 @@ async function resolveTargetWork(
       throw new HttpError(403, "没有调整作品状态的权限");
     }
     if (adminEdit) game.originalTitle = current.original_title;
+    if (adminEdit && !hasPermission(user, "work.metadata.update_any")) {
+      const work = await getWorkForAdminEdit(runtime, metadata.target.workId);
+      if (!work) throw new HttpError(404, "作品不存在");
+      if (game.engineFamily !== work.engineFamily) {
+        throw new HttpError(403, "修改游戏引擎需要作品信息编辑权限");
+      }
+      Object.assign(game, {
+        chineseTitle: work.chineseTitle, description: work.description, genre: work.genre,
+        isOriginal: work.isOriginal, isTranslation: work.isTranslation, language: work.language,
+        originalReleaseDate: work.originalReleaseDate, originalReleasePrecision: work.originalReleasePrecision,
+        coverBlobSha256: work.media.find((media) => media.role === "cover")?.blobSha256 ?? "",
+        previewBlobSha256s: work.media.filter((media) => media.role === "preview").map((media) => media.blobSha256),
+        extra: {},
+      });
+    }
     await assertTranslationLanguageChangeAllowed(
       runtime,
       metadata.target.workId,
@@ -1260,97 +1275,104 @@ async function finalizeArchiveCommit(
     .prepare(`SELECT original_title,status FROM works WHERE id=? LIMIT 1`)
     .bind(input.workId)
     .first<{ original_title: string; status: string }>();
-
-  statements.push(
-    database
-      .prepare(
-        `UPDATE works
-       SET original_title = ?,
-         chinese_title = ?,
-         description = ?,
-         genre = CASE WHEN ? THEN genre ELSE ? END,
-         is_original = ?,
-         is_translation = ?,
-         language = ?,
-         original_release_date = ?,
-         original_release_precision = ?,
-         engine_family = ?,
-         status = ?,
-         extra_json = ?,
-         updated_at = CURRENT_TIMESTAMP,
-         published_at = CASE
-           WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP)
-           ELSE published_at
-         END
-       WHERE id = ? AND (status <> 'deleted' OR ?)`,
-      )
-      .bind(
-        game.originalTitle,
-        game.chineseTitle,
-        game.description,
-        game.genre === undefined ? 1 : 0,
-        game.genre ?? null,
-        game.isOriginal ? 1 : 0,
-        game.isTranslation ? 1 : 0,
-        game.language,
-        game.originalReleaseDate,
-        game.originalReleasePrecision,
-        game.engineFamily,
-        status,
-        jsonText(game.extra),
-        status,
-        input.workId,
-        input.metadata.admin && hasPermission(input.user, "work.status.update_any") ? 1 : 0,
-      ),
-  );
-
-  statements.push(
-    database
-      .prepare(`DELETE FROM work_titles WHERE work_id = ?`)
-      .bind(input.workId),
-  );
-  for (const title of input.metadata.workTitles) {
+  const canEditOwnWork = !input.metadata.admin && await canEditWork(runtime, input.workId, input.user);
+  const canUpdateMetadata = input.metadata.target.mode === "create" ||
+    hasPermission(input.user, "work.metadata.update_any") || canEditOwnWork;
+  const canUpdateStatus = input.metadata.target.mode === "create" ||
+    hasPermission(input.user, "work.status.update_any") || canEditOwnWork;
+  if (canUpdateMetadata) {
     statements.push(
       database
         .prepare(
-          `INSERT OR IGNORE INTO work_titles (
-             work_id, title, language, title_type, is_searchable
-           ) VALUES (?, ?, ?, ?, 1)`,
+          `UPDATE works
+         SET original_title = ?,
+           chinese_title = ?,
+           description = ?,
+           genre = CASE WHEN ? THEN genre ELSE ? END,
+           is_original = ?,
+           is_translation = ?,
+           language = ?,
+           original_release_date = ?,
+           original_release_precision = ?,
+           engine_family = ?,
+           ${canUpdateStatus ? "status = ?," : ""}
+           extra_json = ?,
+           ${canUpdateStatus ? "published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND (status <> 'deleted' OR ?)`,
         )
-        .bind(input.workId, title.title, title.language, title.titleType),
+        .bind(
+          game.originalTitle,
+          game.chineseTitle,
+          game.description,
+          game.genre === undefined ? 1 : 0,
+          game.genre ?? null,
+          game.isOriginal ? 1 : 0,
+          game.isTranslation ? 1 : 0,
+          game.language,
+          game.originalReleaseDate,
+          game.originalReleasePrecision,
+          game.engineFamily,
+          ...(canUpdateStatus ? [status] : []),
+          jsonText(game.extra),
+          ...(canUpdateStatus ? [status] : []),
+          input.workId,
+          input.metadata.admin && hasPermission(input.user, "work.status.update_any") ? 1 : 0,
+        ),
     );
+
+    statements.push(
+      database
+        .prepare(`DELETE FROM work_titles WHERE work_id = ?`)
+        .bind(input.workId),
+    );
+    for (const title of input.metadata.workTitles) {
+      statements.push(
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO work_titles (
+               work_id, title, language, title_type, is_searchable
+             ) VALUES (?, ?, ?, ?, 1)`,
+          )
+          .bind(input.workId, title.title, title.language, title.titleType),
+      );
+    }
+
+    statements.push(
+      database
+        .prepare(`DELETE FROM work_staff WHERE work_id = ?`)
+        .bind(input.workId),
+    );
+    statements.push(
+      ...(await prepareWorkStaffStatements({
+        database,
+        workId: input.workId,
+        credits: input.metadata.workStaff,
+        submitter: { user: input.user, origin: runtime.origin },
+      })),
+    );
+
+    statements.push(
+      ...(await prepareWorkCharacterStatements({
+        database,
+        workId: input.workId,
+        credits: characters,
+        source: input.metadata.admin ? "admin" : "user",
+        actorUserId: input.user.id,
+        requirePortrait: !input.metadata.admin,
+      })),
+    );
+
+    statements.push(
+      ...workTagStatements(database, input.workId, input.metadata.tags, input.metadata.admin ? "admin" : "uploader"),
+      ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
+    );
+  } else {
+    statements.push(database.prepare(`UPDATE works SET updated_at=CURRENT_TIMESTAMP
+      ${canUpdateStatus ? ", status=?, published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
+      WHERE id=?`).bind(...(canUpdateStatus ? [status, status] : []), input.workId));
   }
-
-  statements.push(
-    database
-      .prepare(`DELETE FROM work_staff WHERE work_id = ?`)
-      .bind(input.workId),
-  );
-  statements.push(
-    ...(await prepareWorkStaffStatements({
-      database,
-      workId: input.workId,
-      credits: input.metadata.workStaff,
-      submitter: { user: input.user, origin: runtime.origin },
-    })),
-  );
-
-  statements.push(
-    ...(await prepareWorkCharacterStatements({
-      database,
-      workId: input.workId,
-      credits: characters,
-      source: input.metadata.admin ? "admin" : "user",
-      actorUserId: input.user.id,
-      requirePortrait: !input.metadata.admin,
-    })),
-  );
-
-  statements.push(
-    ...workTagStatements(database, input.workId, input.metadata.tags, input.metadata.admin ? "admin" : "uploader"),
-    database.prepare(`DELETE FROM work_external_links WHERE work_id=?${input.metadata.admin ? "" : " AND link_type='download_page'"}`).bind(input.workId),
-    ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
-  );
+  statements.push(database.prepare(`DELETE FROM work_external_links WHERE work_id=?${input.metadata.admin ? "" : " AND link_type='download_page'"}`).bind(input.workId));
   for (const link of input.metadata.admin?.externalLinks ?? []) {
     statements.push(database.prepare(`INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(?,?,?,?)`).bind(input.workId, link.label, link.url, link.linkType));
   }

@@ -14,10 +14,12 @@ export function LanguageField({
   value,
   onValueChange,
   name,
+  disabled = false,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   name?: string;
+  disabled?: boolean;
 }) {
   const primary = value === "zh-CN" || value === "ja" ? value : "other";
   const otherOptions = LANGUAGE_OPTIONS.filter(
@@ -27,6 +29,7 @@ export function LanguageField({
     <>
       <RadioGroup
         aria-label="游戏语言"
+        disabled={disabled}
         onValueChange={(next) =>
           onValueChange(
             next === "other"
@@ -48,6 +51,7 @@ export function LanguageField({
       {primary === "other" ? (
         <SelectField
           aria-label="其他语言"
+          disabled={disabled}
           onValueChange={onValueChange}
           options={otherOptions.map((option) => ({
             value: option.value,

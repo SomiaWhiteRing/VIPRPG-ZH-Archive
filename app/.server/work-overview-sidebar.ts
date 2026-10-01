@@ -28,6 +28,6 @@ export async function loadWorkOverviewSidebar(
     showRelationEditor: capabilities.canCreateRelation || capabilities.canCreateTranslation ||
       capabilities.canUpdate || capabilities.canDeleteRelation || capabilities.canDeleteTranslation,
     editInfoHref: canEditOwnWork ? `/me/uploads/${workId}?from=game`
-      : hasPermission(currentUser, "work.metadata.update_any") ? `/admin/works/${workId}` : null,
+      : hasPermission(currentUser, "work.metadata.update_any") || hasPermission(currentUser, "work.distribution.update_any") ? `/admin/works/${workId}` : null,
   };
 }

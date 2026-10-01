@@ -1,4 +1,4 @@
-import { requirePermission } from "@/app/.server/auth/authorize";
+import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import { getWorkTranslators } from "@/app/.server/db/creators";
 import {
   getWorkForAdminEdit,
@@ -28,10 +28,10 @@ export async function POST(
   request: Request,
   context: RouteContext,
 ) {
-  const auth = await requirePermission(
+  const auth = await requireAnyPermission(
     runtime,
     request,
-    "work.metadata.update_any",
+    ["work.metadata.update_any", "work.distribution.update_any"],
   );
 
   if ("response" in auth) {
@@ -54,27 +54,29 @@ export async function POST(
       (current.status === "deleted" || (input.status && input.status !== current.status))) {
       throw new HttpError(403, "没有调整作品状态的权限");
     }
-    const characterFaceSheets = formData
-      .getAll("character_face_sheets[]")
-      .filter((value): value is File => value instanceof File && value.size > 0)
-      .map((value) => readCharacterFaceSheet(value));
-    const coverFile = formData.get("cover");
-    if (coverFile instanceof File && coverFile.size > 0) {
-      input.coverBlobSha256 = (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0];
+    if (hasPermission(auth.user, "work.metadata.update_any")) {
+      const characterFaceSheets = formData
+        .getAll("character_face_sheets[]")
+        .filter((value): value is File => value instanceof File && value.size > 0)
+        .map((value) => readCharacterFaceSheet(value));
+      const coverFile = formData.get("cover");
+      if (coverFile instanceof File && coverFile.size > 0) {
+        input.coverBlobSha256 = (await storeWorkImages(runtime, [readWorkImage(coverFile, "cover")]))[0];
+      }
+      if (formData.has("replace_previews")) {
+        input.previewBlobSha256s = await storeWorkPreviews(runtime, formData, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256));
+      }
+      const uploadedFaceSheets = await storeCharacterFaceSheets(runtime, characterFaceSheets);
+      await registerUserCharacterFaceSheets(runtime, uploadedFaceSheets, auth.user.id);
+      await ensureCharacterFaceSheets(
+        runtime,
+        input.characters.flatMap((credit) => [
+          ...credit.faceSheetBlobSha256s,
+          ...(credit.portrait ? [credit.portrait.blobSha256] : []),
+        ]),
+        auth.user.id,
+      );
     }
-    if (formData.has("replace_previews")) {
-      input.previewBlobSha256s = await storeWorkPreviews(runtime, formData, current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256));
-    }
-    const uploadedFaceSheets = await storeCharacterFaceSheets(runtime, characterFaceSheets);
-    await registerUserCharacterFaceSheets(runtime, uploadedFaceSheets, auth.user.id);
-    await ensureCharacterFaceSheets(
-      runtime,
-      input.characters.flatMap((credit) => [
-        ...credit.faceSheetBlobSha256s,
-        ...(credit.portrait ? [credit.portrait.blobSha256] : []),
-      ]),
-      auth.user.id,
-    );
 
     await updateWorkForAdmin(runtime, input, auth.user);
 

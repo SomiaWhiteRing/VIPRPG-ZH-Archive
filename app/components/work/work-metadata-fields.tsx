@@ -23,6 +23,7 @@ export function WorkMetadataFields({
   originalTitleReadOnly = false,
   originalDeclarationLabel = "本作品为我原创。",
   showArchiveSource = true,
+  archiveSourceDisabled,
   characterFaceSheetFiles,
   sourceFaceSheetFiles,
   sourceFaceSheetWarnings,
@@ -48,6 +49,7 @@ export function WorkMetadataFields({
   originalTitleReadOnly?: boolean;
   originalDeclarationLabel?: string;
   showArchiveSource?: boolean;
+  archiveSourceDisabled?: boolean;
   characterFaceSheetFiles?: Record<number, File[]>;
   sourceFaceSheetFiles?: File[];
   sourceFaceSheetWarnings?: string[];
@@ -358,7 +360,7 @@ export function WorkMetadataFields({
             </WorkbenchField>
             {showArchiveSource && isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label="发布地址">
               <Input
-                disabled={disabled}
+                disabled={archiveSourceDisabled ?? disabled}
                 id="upload-source-url"
                 onChange={(event) =>
                   setForm((current) => ({

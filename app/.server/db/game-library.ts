@@ -989,25 +989,38 @@ export async function updateWorkForAdmin(
   input: WorkEditInput,
   actor: ArchiveUser,
 ): Promise<void> {
-  if (!hasPermission(actor, "work.metadata.update_any")) {
-    throw new HttpError(403, "没有编辑作品资料的权限");
+  const canUpdateMetadata = hasPermission(actor, "work.metadata.update_any");
+  const canUpdateDistribution = hasPermission(actor, "work.distribution.update_any");
+  if (!canUpdateMetadata && !canUpdateDistribution) {
+    throw new HttpError(403, "没有编辑作品的权限");
   }
-  const currentStatus = await getD1(runtime)
-    .prepare(`SELECT status FROM works WHERE id=?`)
-    .bind(input.workId)
-    .first<{ status: string }>();
-  if (!currentStatus) throw new HttpError(404, "作品不存在");
+  const current = await getWorkForAdminEdit(runtime, input.workId);
+  if (!current) throw new HttpError(404, "作品不存在");
+  // Ignore fields outside the actor's grant and never rewrite their tables.
+  if (!canUpdateMetadata) {
+    input = { ...input, chineseTitle: current.chineseTitle, description: current.description,
+      genre: current.genre, moreInfo: current.moreInfo, originalReleaseDate: current.originalReleaseDate,
+      engineFamily: current.engineFamily, isOriginal: current.isOriginal, isTranslation: current.isTranslation,
+      usesUnsupportedManiac: current.usesUnsupportedManiac, language: current.language,
+      workStaff: [], aliases: current.aliases, tags: current.tags, characters: current.characters,
+      coverBlobSha256: current.media.find((media) => media.role === "cover")?.blobSha256 ?? "",
+      previewBlobSha256s: current.media.filter((media) => media.role === "preview").map((media) => media.blobSha256),
+    };
+  }
+  if (!canUpdateDistribution) {
+    input = { ...input, externalLinks: current.externalLinks, distribution: undefined, archiveSourceUrl: undefined };
+  }
   const canUpdateStatus = hasPermission(actor, "work.status.update_any");
-  if (currentStatus.status === "deleted" && !canUpdateStatus)
+  if (current.status === "deleted" && !canUpdateStatus)
     throw new HttpError(403, "已删除作品须由有状态管理权限的账户恢复");
   if (
     input.status &&
-    input.status !== currentStatus.status &&
+    input.status !== current.status &&
     !canUpdateStatus
   ) {
     throw new HttpError(403, "没有调整作品状态的权限");
   }
-  if (!canUpdateStatus) input.status = currentStatus.status;
+  if (!canUpdateStatus) input.status = current.status;
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   if (
     !input.isTranslation &&
@@ -1051,7 +1064,7 @@ export async function updateWorkForAdmin(
     status: input.status,
     engineFamily: input.engineFamily,
     hasCurrentArchive: input.distribution !== "external" && distributionState.hasCurrentArchive,
-    allowMissing: input.status === "hidden" || input.status === currentStatus.status,
+    allowMissing: input.status === "hidden" || input.status === current.status,
     downloadLinkCount: externalLinks.filter(
       (link) => link.linkType === "download_page",
     ).length,
@@ -1070,8 +1083,6 @@ export async function updateWorkForAdmin(
   const aliases = uniqueText(input.aliases);
   const tags = normalizeWorkTags(input.tags);
   const characters = input.characters.map(parseCharacterCreditSelection);
-  const current = await getWorkForAdminEdit(runtime, input.workId);
-  if (!current) throw new HttpError(404, "作品不存在");
   const existingCharacters = groupCharactersByIdentity(
     current.characterCredits,
   );
@@ -1086,7 +1097,8 @@ export async function updateWorkForAdmin(
   });
   const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
   const database = getD1(runtime);
-  const statements: D1PreparedStatement[] = [
+  const statements: D1PreparedStatement[] = [];
+  if (canUpdateMetadata) statements.push(
     database
       .prepare(
         `UPDATE works
@@ -1131,36 +1143,43 @@ export async function updateWorkForAdmin(
     database
       .prepare(`DELETE FROM work_titles WHERE work_id=?`)
       .bind(input.workId),
-    database
-      .prepare(`DELETE FROM work_external_links WHERE work_id=?`)
-      .bind(input.workId),
-  ];
-  if (input.distribution === "external") {
+  );
+  if (!canUpdateMetadata) {
+    statements.push(database.prepare(`UPDATE works SET updated_at=CURRENT_TIMESTAMP
+      ${canUpdateStatus ? ", status=?, published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
+      WHERE id=?`).bind(...(canUpdateStatus ? [input.status, input.status] : []), input.workId));
+  }
+  if (canUpdateDistribution) {
+    statements.push(database.prepare(`DELETE FROM work_external_links WHERE work_id=?`).bind(input.workId));
+  }
+  if (canUpdateDistribution && input.distribution === "external") {
     statements.push(database.prepare(`UPDATE archive_versions SET is_current=0 WHERE work_id=?`).bind(input.workId));
-  } else if (archiveSourceUrl !== undefined) {
+  } else if (canUpdateDistribution && archiveSourceUrl !== undefined) {
     statements.push(database.prepare(`UPDATE archive_versions SET source_url=? WHERE work_id=? AND is_current=1`).bind(archiveSourceUrl, input.workId));
   }
-  for (const alias of aliases) {
+  if (canUpdateMetadata) {
+    for (const alias of aliases) {
+      statements.push(
+        database
+          .prepare(
+            `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?,'alias')`,
+          )
+          .bind(input.workId, alias),
+      );
+    }
+    statements.push(...workTagStatements(database, input.workId, tags, "admin"));
     statements.push(
-      database
-        .prepare(
-          `INSERT OR IGNORE INTO work_titles(work_id,title,title_type) VALUES(?,?,'alias')`,
-        )
-        .bind(input.workId, alias),
+      ...(await prepareWorkCharacterStatements({
+        database,
+        workId: input.workId,
+        credits: characterCredits,
+        source: "admin",
+        actorUserId: actor.id,
+      })),
     );
+    statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
   }
-  statements.push(...workTagStatements(database, input.workId, tags, "admin"));
-  statements.push(
-    ...(await prepareWorkCharacterStatements({
-      database,
-      workId: input.workId,
-      credits: characterCredits,
-      source: "admin",
-      actorUserId: actor.id,
-    })),
-  );
-  statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
-  for (const link of externalLinks) {
+  if (canUpdateDistribution) for (const link of externalLinks) {
     statements.push(
       database
         .prepare(
