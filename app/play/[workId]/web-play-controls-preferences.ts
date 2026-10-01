@@ -89,7 +89,6 @@ function readNumber(value: unknown, fallback: number, min: number, max: number) 
 export function useWebPlayControlsPreferences() {
   const [preferences, setPreferences] = useState(defaultPreferences);
   const [loaded, setLoaded] = useState(false);
-  const [storageError, setStorageError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -114,9 +113,8 @@ export function useWebPlayControlsPreferences() {
     if (!loaded) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(preferences));
-      setStorageError(null);
     } catch {
-      setStorageError("设置已应用，但浏览器未能保存，下次进入需要重新设置。");
+      // Preferences remain active for this session if storage is unavailable.
     }
   }, [loaded, preferences]);
 
@@ -135,5 +133,5 @@ export function useWebPlayControlsPreferences() {
     }));
   }, []);
 
-  return { preferences, loaded, setOrientation, setTouchEnabled, saveLayout, storageError };
+  return { preferences, loaded, setOrientation, setTouchEnabled, saveLayout };
 }
