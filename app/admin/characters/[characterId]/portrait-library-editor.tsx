@@ -1276,7 +1276,7 @@ export function PortraitLibraryEditor({
 
       {error ? (
         <div
-          className="whitespace-pre-line break-words rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700"
+          className="whitespace-pre-line break-words rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300"
           role="alert"
         >
           {error}

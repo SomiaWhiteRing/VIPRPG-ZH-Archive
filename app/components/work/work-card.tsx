@@ -47,7 +47,7 @@ export function WorkCard({
           {imageBadge && !action ? (
             <span className={imageMetadata
               ? "absolute top-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white"
-              : "absolute right-1.5 bottom-1.5 rounded-md bg-foreground/80 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white max-[640px]:hidden"}>
+              : "absolute right-1.5 bottom-1.5 rounded-md bg-foreground/80 dark:bg-black/80 px-1.5 py-0.5 font-mono text-[11px] font-normal text-white max-[640px]:hidden"}>
               {imageBadge}
             </span>
           ) : null}

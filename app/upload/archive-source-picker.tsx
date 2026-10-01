@@ -394,12 +394,12 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
         >
           <ul className="grid gap-1 whitespace-nowrap">
             {missing?.missing.map((file) => (
-              <li className="min-w-max text-red-600" key={`missing:${file.path}`}>疑似缺失：{file.path} — {file.source}</li>
+              <li className="min-w-max text-red-600 dark:text-red-300" key={`missing:${file.path}`}>疑似缺失：{file.path} — {file.source}</li>
             ))}
             {missing?.reasons.map((reason) => (
-              <li className="min-w-max text-red-600" key={`missing:${reason}`}>{reason}</li>
+              <li className="min-w-max text-red-600 dark:text-red-300" key={`missing:${reason}`}>{reason}</li>
             ))}
-            {missing?.limited ? <li className="min-w-max text-red-600">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
+            {missing?.limited ? <li className="min-w-max text-red-600 dark:text-red-300">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
             {cleanup?.reasons.filter((reason) => !missing?.reasons.includes(reason)).map((reason) => (
               <li className="min-w-max text-muted" key={reason}>{reason}</li>
             ))}
@@ -411,7 +411,7 @@ function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) 
               </li>
             ))}
             {restoredRtpFiles.map((file) => (
-              <li className="min-w-max text-blue-600" key={`rtp:${file.path}`}>自动补充 RTP：{file.path}</li>
+              <li className="min-w-max text-blue-600 dark:text-blue-300" key={`rtp:${file.path}`}>自动补充 RTP：{file.path}</li>
             ))}
           </ul>
         </div>
@@ -532,7 +532,7 @@ function UploadTaskCard({
           ) : null}
         </div>
         {missing && (missing.missing.length > 0 || missing.limited) ? (
-          <p className="mt-2 text-xs text-red-600" role="status">
+          <p className="mt-2 text-xs text-red-600 dark:text-red-300" role="status">
             {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的清理日志，不影响上传。
           </p>
         ) : null}

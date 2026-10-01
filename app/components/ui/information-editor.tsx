@@ -26,7 +26,7 @@ export function InformationRow({
           if (removeFocusId) focusField(removeFocusId);
         }}>移除</Button>
       {details ? <div className="col-span-full min-w-0">{details}</div> : null}
-      {error ? <p className="col-span-full text-xs text-red-600" id={error.id} role="alert">{error.message}</p> : null}
+      {error ? <p className="col-span-full text-xs text-red-600 dark:text-red-300" id={error.id} role="alert">{error.message}</p> : null}
     </div>
   );
 }

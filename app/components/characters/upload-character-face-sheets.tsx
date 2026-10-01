@@ -255,8 +255,8 @@ export function UploadCharacterFaceSheets({
               </div>
             ))}
           </div>
-          {error ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700">{error}</p> : null}
-          {assignedPreviews.errors.length ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700">{assignedPreviews.errors.join("\n")}</p> : null}
+          {error ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700 dark:text-red-300">{error}</p> : null}
+          {assignedPreviews.errors.length ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700 dark:text-red-300">{assignedPreviews.errors.join("\n")}</p> : null}
         </div>
         <footer className="flex flex-wrap items-center gap-3 border-t border-border p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
           <CharacterPortrait className="size-12 shrink-0 rounded" displayName={credit.selection.displayName} portrait={portrait} previewSrc={portraitSheet?.src} size={48} toneKey={credit.selection.originalName} />

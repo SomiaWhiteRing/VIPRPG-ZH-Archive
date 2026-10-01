@@ -254,7 +254,7 @@ export function GameLibrary({
                     </WorkCard>
                     {isFavoriteLibrary && !isListView ? details : null}
                     {favorite?.note ? (
-                      <p className={`w-full whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-card px-2.5 py-1.5 text-[13px] leading-[1.6] text-black shadow-sm ${isListView ? "mb-3.5" : "mt-2"}`}>
+                      <p className={`w-full whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-card px-2.5 py-1.5 text-[13px] leading-[1.6] text-black dark:text-foreground shadow-sm ${isListView ? "mb-3.5" : "mt-2"}`}>
                         {favorite.note}
                       </p>
                     ) : null}

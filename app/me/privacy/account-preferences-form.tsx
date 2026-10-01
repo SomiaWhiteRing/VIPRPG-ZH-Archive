@@ -1,22 +1,38 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
+import { ToggleGroup } from "radix-ui";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Checkbox } from "react-aria-components";
 import { Button } from "@/app/components/ui/button";
 import { SortableListItem, SortableOverlay } from "@/app/components/ui/sortable-list-item";
 import { Check, GripVertical } from "lucide-react";
-import { ACCOUNT_SHORTCUTS, type AccountPreferences } from "@/lib/account-preferences";
+import { ACCOUNT_SHORTCUTS, COLOR_THEME_OPTIONS, parseColorTheme, type AccountPreferences } from "@/lib/account-preferences";
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
+import { useColorThemePreview } from "@/app/components/color-theme-preview";
 
 export function AccountPreferencesForm({ preferences }: { preferences: AccountPreferences }) {
+  const [colorTheme, setColorTheme] = useState(preferences.colorTheme);
+  const setThemePreview = useColorThemePreview();
+  useLayoutEffect(() => {
+    setThemePreview(colorTheme);
+    return () => setThemePreview(null);
+  }, [colorTheme, setThemePreview]);
+  useEffect(() => {
+    function restoreSavedTheme(event: PageTransitionEvent) {
+      if (event.persisted) setColorTheme(preferences.colorTheme);
+    }
+    window.addEventListener("pageshow", restoreSavedTheme);
+    return () => window.removeEventListener("pageshow", restoreSavedTheme);
+  }, [preferences.colorTheme]);
   const [order, setOrder] = useState(() => [
     ...preferences.shortcuts,
     ...ACCOUNT_SHORTCUTS.map((item) => item.href).filter((href) => !preferences.shortcuts.includes(href)),
   ]);
   const [selected, setSelected] = useState(new Set(preferences.shortcuts));
   const dndId = useId();
+  const themeId = useId();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const activeItem = ACCOUNT_SHORTCUTS.find((item) => item.href === activeKey);
   const sensors = useSensors(
@@ -30,6 +46,26 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
       <input name="section" type="hidden" value="preferences" />
       <input name="shortcuts" type="hidden" value={JSON.stringify(order.filter((href) => selected.has(href)))} />
       <h2 className="mb-3 text-lg font-semibold">偏好</h2>
+      <input name="colorTheme" type="hidden" value={colorTheme} />
+      <div className="mb-5 flex items-center gap-3">
+        <span id={themeId} className="shrink-0 text-sm font-semibold">外观</span>
+        <ToggleGroup.Root
+          type="single"
+          orientation="horizontal"
+          aria-labelledby={themeId}
+          value={colorTheme}
+          onValueChange={(value) => { if (value) setColorTheme(parseColorTheme(value)); }}
+          className="inline-flex shrink-0 gap-1 rounded-full border border-border bg-muted/10 p-1"
+        >
+          {COLOR_THEME_OPTIONS.map((option) => (
+            <ToggleGroup.Item key={option.value} value={option.value} asChild>
+              <Button type="button" variant="ghost" size="sm" className="min-h-8 rounded-full px-3 text-xs font-medium data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm data-[state=on]:hover:bg-primary/90">
+                {option.label}
+              </Button>
+            </ToggleGroup.Item>
+          ))}
+        </ToggleGroup.Root>
+      </div>
       <div className="mb-3">
         <CheckboxField name="notifyUploadedWorkComments" label="接收上传的作品的评论提醒" defaultChecked={preferences.notifyUploadedWorkComments} />
       </div>

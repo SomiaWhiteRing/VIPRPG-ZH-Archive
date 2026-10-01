@@ -114,7 +114,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <Portal.Root asChild>
         <div
           ref={host}
-          className="[--toastify-color-light:var(--color-card)] [--toastify-text-color-light:var(--color-card-foreground)] [--toastify-color-info:#0369a1] [--toastify-color-success:#047857] [--toastify-color-error:var(--color-destructive)] [--toastify-color-progress-info:var(--toastify-color-info)] [--toastify-color-progress-success:var(--toastify-color-success)] [--toastify-color-progress-error:var(--toastify-color-error)] [--toastify-font-family:var(--font-sans)] [--toastify-z-index:2000]"
+          className="[--toastify-color-light:var(--color-card)] [--toastify-text-color-light:var(--color-card-foreground)] [--toastify-color-info:var(--color-info)] [--toastify-color-success:var(--color-success)] [--toastify-color-error:var(--color-destructive)] [--toastify-color-progress-info:var(--toastify-color-info)] [--toastify-color-progress-success:var(--toastify-color-success)] [--toastify-color-progress-error:var(--toastify-color-error)] [--toastify-font-family:var(--font-sans)] [--toastify-z-index:2000]"
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             const current = (event.target as HTMLElement).closest<HTMLElement>(

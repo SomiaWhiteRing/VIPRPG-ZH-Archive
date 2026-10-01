@@ -149,7 +149,7 @@ export function TopicStatus({
   compact?: boolean;
 }) {
   const className = compact
-    ? "min-h-0 rounded bg-[#e1ece5] px-[5px] py-0 font-normal leading-[18px] text-primary"
+    ? "min-h-0 rounded bg-[#e1ece5] dark:bg-primary/15 px-[5px] py-0 font-normal leading-[18px] text-primary"
     : undefined;
   return (
     <div

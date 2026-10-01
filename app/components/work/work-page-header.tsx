@@ -75,7 +75,7 @@ export function WorkPageHeader({
 export function WorkPageNotice({ children }: { children: ReactNode }) {
   return (
     <div
-      className="flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]"
+      className="flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00] dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200"
       role="note"
     >
       {children}

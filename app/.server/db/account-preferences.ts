@@ -1,4 +1,4 @@
-import { DEFAULT_ACCOUNT_SHORTCUTS, parseAccountShortcuts } from "@/lib/account-preferences";
+import { DEFAULT_ACCOUNT_SHORTCUTS, parseAccountShortcuts, parseColorTheme } from "@/lib/account-preferences";
 import type { AppRuntime } from "../runtime";
 
 export async function updateAccountPreferences(runtime: AppRuntime, userId: number, form: FormData) {
@@ -12,9 +12,11 @@ export async function updateAccountPreferences(runtime: AppRuntime, userId: numb
   const hideDeletedContent = form.has("hideDeletedContent")
     ? form.getAll("hideDeletedContent").includes("1") ? 1 : 0
     : null;
-  await runtime.db.prepare(`UPDATE users SET notify_uploaded_work_comments=?,include_player_in_zip=?,show_game_card_interaction_data=COALESCE(?,show_game_card_interaction_data),hide_deleted_content=COALESCE(?,hide_deleted_content),account_shortcuts=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+  const colorTheme = form.has("colorTheme") ? parseColorTheme(form.get("colorTheme")) : null;
+  await runtime.db.prepare(`UPDATE users SET notify_uploaded_work_comments=?,include_player_in_zip=?,show_game_card_interaction_data=COALESCE(?,show_game_card_interaction_data),hide_deleted_content=COALESCE(?,hide_deleted_content),color_theme=COALESCE(?,color_theme),account_shortcuts=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
     .bind(form.get("notifyUploadedWorkComments") === "1" ? 1 : 0, form.get("includePlayerInZip") === "1" ? 1 : 0,
       showInteractionData,
       hideDeletedContent,
+      colorTheme,
       serialized === JSON.stringify(DEFAULT_ACCOUNT_SHORTCUTS) ? null : serialized, userId).run();
 }

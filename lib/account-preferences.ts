@@ -5,7 +5,24 @@ export const ACCOUNT_SHORTCUTS = ACCOUNT_NAVIGATION.filter(
 );
 export const DEFAULT_ACCOUNT_SHORTCUTS = ["/me/favorites", "/me/emojis", "/me/catalogs"];
 
+export type ColorTheme = "light" | "dark" | "system";
+export const DEFAULT_COLOR_THEME: ColorTheme = "system";
+
+export const COLOR_THEME_OPTIONS = [
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
+  { value: "system", label: "跟随系统" },
+];
+
+export function parseColorTheme(value: unknown): ColorTheme {
+  if (value !== "light" && value !== "dark" && value !== "system") {
+    throw new Error("外观设置无效，请刷新后重试。");
+  }
+  return value;
+}
+
 export type AccountPreferences = {
+  colorTheme: ColorTheme;
   notifyUploadedWorkComments: boolean;
   includePlayerInZip: boolean;
   showGameCardInteractionData: boolean;
@@ -22,8 +39,9 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number, colorTheme: string): AccountPreferences {
   return {
+    colorTheme: parseColorTheme(colorTheme),
     notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
     includePlayerInZip: includePlayer !== 0,
     showGameCardInteractionData: showGameCardInteractionData !== 0,

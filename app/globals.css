@@ -4,6 +4,75 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website account appearance, including dialogs and other body portals.
+   System appearance is resolved by CSS before paint and follows OS changes. */
+@custom-variant dark {
+  &:where(:root[data-theme="dark"], :root[data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root[data-theme="system"], :root[data-theme="system"] *) {
+      @slot;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-background: #151c1b;
+    --color-foreground: #e6ede9;
+    --color-card: #202a27;
+    --color-card-foreground: #e6ede9;
+    --color-muted: #a4b5ad;
+    --color-muted-foreground: #a4b5ad;
+    --color-border: #43564d;
+    --color-input: #6a8175;
+    --color-primary: #65c6b3;
+    --color-primary-foreground: #102b25;
+    --color-secondary: #98d6c9;
+    --color-secondary-foreground: #102b25;
+    --color-accent: #f2a16f;
+    --color-accent-foreground: #302016;
+    --color-destructive: #f3948a;
+    --color-destructive-foreground: #351713;
+    --color-info: #7dcaf3;
+    --color-success: #81d3a5;
+    --shadow-surface: 0 4px 12px rgb(0 0 0 / 24%);
+    --shadow-card-hover: 0 6px 16px rgb(0 0 0 / 32%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="system"] {
+      color-scheme: dark;
+      --color-background: #151c1b;
+      --color-foreground: #e6ede9;
+      --color-card: #202a27;
+      --color-card-foreground: #e6ede9;
+      --color-muted: #a4b5ad;
+      --color-muted-foreground: #a4b5ad;
+      --color-border: #43564d;
+      --color-input: #6a8175;
+      --color-primary: #65c6b3;
+      --color-primary-foreground: #102b25;
+      --color-secondary: #98d6c9;
+      --color-secondary-foreground: #102b25;
+      --color-accent: #f2a16f;
+      --color-accent-foreground: #302016;
+      --color-destructive: #f3948a;
+      --color-destructive-foreground: #351713;
+      --color-info: #7dcaf3;
+      --color-success: #81d3a5;
+      --shadow-surface: 0 4px 12px rgb(0 0 0 / 24%);
+      --shadow-card-hover: 0 6px 16px rgb(0 0 0 / 32%);
+    }
+  }
+}
+
 /* Website emoji grids and dialogs keep their width when overflow changes. */
 .emoji-scroll-viewport {
   scrollbar-gutter: stable;
@@ -92,6 +161,8 @@
   --color-secondary: #1f6f67;
   --color-secondary-foreground: #ffffff;
   --color-accent-foreground: #ffffff;
+  --color-info: #0369a1;
+  --color-success: #047857;
   --font-display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
   --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
   --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
