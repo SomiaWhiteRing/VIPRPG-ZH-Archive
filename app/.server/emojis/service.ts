@@ -258,8 +258,8 @@ async function registerCells(db: D1Database, cells: FaceEmojiCell[]) {
   const input = JSON.stringify(cells);
   const valid = await db
     .prepare(
-      `SELECT count(*) AS n FROM json_each(?) j JOIN face_sheets fs ON fs.blob_sha256=json_extract(j.value,'$.blobSha256')
-    JOIN blobs b ON b.sha256=fs.blob_sha256 WHERE fs.library_status='approved' AND b.status='active'
+      `SELECT count(*) AS n FROM json_each(?) j CROSS JOIN face_sheets fs ON fs.blob_sha256=json_extract(j.value,'$.blobSha256')
+    CROSS JOIN blobs b ON b.sha256=fs.blob_sha256 WHERE fs.library_status='approved' AND b.status='active'
     AND json_extract(j.value,'$.row')*48<fs.height_px AND json_extract(j.value,'$.column')*48<fs.width_px`,
     )
     .bind(input)

@@ -285,7 +285,7 @@ export async function listRootComments(
     database
       .prepare(
         `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
-          ${commentFloorSql()} AS floor_number,
+          ${commentFloorSql(target.kind)} AS floor_number,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           (SELECT COUNT(*) FROM comments r LEFT JOIN users ru ON ru.id=r.user_id
@@ -931,13 +931,20 @@ async function emojiMap(
 }
 
 // Number all roots, including hidden/deleted ones, so moderation never renumbers a floor.
-function commentFloorSql(): string {
-  return `CASE WHEN c.root_comment_id IS NULL THEN (
+function commentFloorSql(kind?: CommentTarget["kind"]): string {
+  const count = (target: CommentTarget["kind"]) => `(
     SELECT COUNT(*) FROM comments floor
     WHERE floor.root_comment_id IS NULL
-      AND (floor.work_id=c.work_id OR floor.creator_id=c.creator_id OR floor.character_id=c.character_id)
-      AND (floor.created_at<c.created_at OR (floor.created_at=c.created_at AND floor.id<=c.id))
-  ) ELSE NULL END`;
+      AND floor.${target}_id=c.${target}_id
+      AND (floor.created_at,floor.id)<=(c.created_at,c.id)
+  )`;
+  // A known target avoids an OR across three unrelated indexes. Single-comment
+  // lookups choose the same indexed count using the row's one non-null target.
+  return `CASE WHEN c.root_comment_id IS NOT NULL THEN NULL ELSE ${kind
+    ? count(kind)
+    : `CASE WHEN c.work_id IS NOT NULL THEN ${count("work")}
+        WHEN c.creator_id IS NOT NULL THEN ${count("creator")}
+        ELSE ${count("character")} END`} END`;
 }
 
 function mapComment(
