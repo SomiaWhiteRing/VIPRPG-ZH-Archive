@@ -327,6 +327,12 @@ export async function registerAdminFaceSheetForCharacter(
       ),
     database
       .prepare(
+        `INSERT OR IGNORE INTO face_sheet_uploaders(face_sheet_id,user_id)
+         SELECT id,? FROM face_sheets WHERE blob_sha256=?`,
+      )
+      .bind(input.actorUserId, input.sha256),
+    database
+      .prepare(
         `INSERT OR IGNORE INTO character_face_sheet_bindings(character_id,face_sheet_id)
          SELECT ?,id FROM face_sheets WHERE blob_sha256=?`,
       )

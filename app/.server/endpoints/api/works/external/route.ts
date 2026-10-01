@@ -12,6 +12,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import {
   ensureCharacterFaceSheets,
   readCharacterFaceSheet,
+  registerUserCharacterFaceSheets,
   storeCharacterFaceSheets,
 } from "@/app/.server/storage/character-portraits";
 import {
@@ -47,7 +48,8 @@ export async function POST(runtime: AppRuntime, request: Request) {
       .map((value) => readCharacterFaceSheet(value));
     const [coverBlobSha256] = await storeWorkImages(runtime, [cover]);
     const previewBlobSha256s = await storeWorkImages(runtime, browsingImages);
-    await storeCharacterFaceSheets(runtime, characterFaceSheets);
+    const uploadedFaceSheets = await storeCharacterFaceSheets(runtime, characterFaceSheets);
+    await registerUserCharacterFaceSheets(runtime, uploadedFaceSheets, auth.user.id);
     await ensureCharacterFaceSheets(
       runtime,
       metadata.characters.flatMap((credit) => [

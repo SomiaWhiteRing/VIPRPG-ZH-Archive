@@ -12,6 +12,11 @@ import { parseImportJobId } from "@/app/.server/db/import-jobs";
 import { readContentType } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { putBlob } from "@/app/.server/storage/archive-bucket";
+import {
+  assertCharacterFaceSheetPng,
+  readCharacterFaceSheet,
+  registerUserCharacterFaceSheets,
+} from "@/app/.server/storage/character-portraits";
 import { HttpError, json, jsonError } from "@/lib/http";
 
 type RouteContext = {
@@ -47,7 +52,8 @@ export async function PUT(
       userId: auth.user.id,
     });
 
-    if (uploadState === "exists") {
+    const isFaceSheetUpload = request.headers.get("x-character-face-sheet") === "1";
+    if (uploadState === "exists" && !isFaceSheetUpload) {
       return json({
         ok: true,
         status: "exists",
@@ -70,25 +76,36 @@ export async function PUT(
     }
 
     const contentTypeHint = readContentType(request);
-    await putBlob(runtime, sha256, body, body.byteLength, contentTypeHint);
-
-    await recordUploadedBlob(runtime, {
-      sha256,
-      sizeBytes: body.byteLength,
-      contentTypeHint,
-      observedExt: null,
-      importJobId,
-      durationMs: Date.now() - startedAt,
-    });
+    let faceSheet = null;
+    if (isFaceSheetUpload) {
+      readCharacterFaceSheet(new File([body], "脸图素材表", { type: contentTypeHint }));
+      faceSheet = { sha256, ...assertCharacterFaceSheetPng(body) };
+    }
+    if (uploadState === "missing") {
+      await putBlob(runtime, sha256, body, body.byteLength, contentTypeHint);
+      await recordUploadedBlob(runtime, {
+        sha256,
+        sizeBytes: body.byteLength,
+        contentTypeHint,
+        observedExt: null,
+        importJobId,
+        durationMs: Date.now() - startedAt,
+      });
+    }
+    if (faceSheet) {
+      // Verify the bytes even when deduplication skips the object write. Knowing
+      // a public hash alone must not grant permission to rebind its face sheet.
+      await registerUserCharacterFaceSheets(runtime, [faceSheet], auth.user.id);
+    }
 
     return json(
       {
         ok: true,
-        status: "uploaded",
+        status: uploadState === "exists" ? "exists" : "uploaded",
         sha256,
         sizeBytes: body.byteLength,
       },
-      { status: 201 },
+      { status: uploadState === "exists" ? 200 : 201 },
     );
   } catch (error) {
     return jsonError("Blob upload failed", error);

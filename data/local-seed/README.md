@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The face sheet uploader migration `0023_face_sheet_uploaders.sql` records each
+verified uploader independently of content deduplication. Existing first uploaders
+are backfilled; face sheets, bindings, and business rows are preserved. The schema
+and migration ledger are synchronized.
+
 The nested forum reply like migration `0022_forum_comment_likes.sql` adds an
 empty per-user like relation and enables live nested reply targets for forum like
 notifications. Existing inbox IDs, read/archive timestamps, role-event sources,
