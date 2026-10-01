@@ -147,7 +147,7 @@ export default function AdminWorksPage() {
                   )}
                 </td>
                 <td>
-                  {hasPermission(adminUser, "work.metadata.update_any") &&
+                  {(hasPermission(adminUser, "work.metadata.update_any") || hasPermission(adminUser, "work.distribution.update_any")) &&
                   (work.status !== "deleted" ||
                     hasPermission(adminUser, "work.status.update_any")) ? (
                     <Link

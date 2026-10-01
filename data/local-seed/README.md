@@ -1,5 +1,11 @@
 # Fixed Local Seed
 
+The work editing refresh applies `0025_split_work_edit_permissions.sql` and
+records it in the migration ledger. Work information and archive/external-link
+editing have independent grants; only admin and super_admin retain these grants.
+The wiki_editor and work_editor grants and shipped descriptions are updated.
+Own-work maintenance, memberships, business records and R2 objects are preserved.
+
 The appearance migration `0024_color_theme_preference.sql` adds the account
 color theme with `light`, `dark`, and `system` choices. Existing accounts default
 to system. The schema and migration ledger are synchronized; other preferences,

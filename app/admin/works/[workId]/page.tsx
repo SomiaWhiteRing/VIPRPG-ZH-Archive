@@ -1,7 +1,7 @@
 import { WorkEditForm } from "../work-edit-form";
 import { loadUploadSuggestions } from "@/app/.server/upload-suggestions";
 import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
-import { requirePagePermission } from "@/app/.server/auth/authorize";
+import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
 import { listWorkMaintainers } from "@/app/.server/db/catalog-maintenance";
 import { getWorkForAdminEdit } from "@/app/.server/db/game-library";
 import { throwNotFound } from "@/app/.server/http/page-response";
@@ -30,10 +30,10 @@ export async function loader(args: LoaderFunctionArgs) {
   const { params } = routeInput(args);
 
   const workId = parseId((await params).workId);
-  const adminUser = await requirePagePermission(
+  const adminUser = await requireAnyPagePermission(
     runtime,
     `/admin/works/${workId}`,
-    "work.metadata.update_any",
+    ["work.metadata.update_any", "work.distribution.update_any"],
   );
   const [work, suggestions] = await Promise.all([
     getWorkForAdminEdit(runtime, workId),

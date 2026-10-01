@@ -55,10 +55,16 @@ export const PERMISSIONS = {
   },
   "work.metadata.update_any": {
     category: "work",
-    label: "编辑所有作品资料",
-    scope: "全部作品资料",
+    label: "编辑所有作品信息",
+    scope: "全部作品信息",
     description:
-      "编辑任意作品的名称、简介、标签、作者、角色和展示资料；不改变发布状态、维护者或文件。",
+      "编辑任意作品的名称、简介、标签、作者、角色和展示资料；归档内容、来源及外链需单独授权。",
+  },
+  "work.distribution.update_any": {
+    category: "work",
+    label: "编辑所有作品归档内容/外链",
+    scope: "全部作品的归档内容、来源及外链",
+    description: "替换任意作品的归档内容、修改归档来源和外部链接或切换下载方式；上传归档还需本站归档上传能力，不授予作品信息或状态修改权限。",
   },
   "work.status.update_any": {
     category: "work",
@@ -562,6 +568,7 @@ export function permissionConfigurationWarnings(
   }
   const dependencies: Partial<Record<PermissionKey, PermissionKey>> = {
     "work.metadata.update_any": "work.read_private",
+    "work.distribution.update_any": "work.read_private",
     "work.status.update_any": "work.metadata.update_any",
     "work.maintainer.manage_any": "work.metadata.update_any",
     "work.merge_any": "work.metadata.update_any",
@@ -686,7 +693,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.delete_own",
     "catalog.reorder_own",
     "work.read_private",
-    "work.metadata.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
+    "work.metadata.update_any", "work.distribution.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
     ...CHARACTER_ADMIN_PERMISSIONS,
@@ -729,7 +736,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.delete_own",
     "catalog.reorder_own",
     "work.read_private",
-    "work.metadata.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
+    "work.metadata.update_any", "work.distribution.update_any", "work.status.update_any", "work.maintainer.manage_any", "work.merge_any",
     "creator.read_private",
     "creator.metadata.update_any", "creator.merge_any",
     ...CHARACTER_ADMIN_PERMISSIONS,

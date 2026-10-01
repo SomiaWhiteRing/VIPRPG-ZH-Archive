@@ -68,7 +68,7 @@ export default function AdminArchiveVersionEditPage() {
         actions={
           <>
             <BackLink href="/admin/archive-versions" label="返回归档管理" />
-            {hasPermission(adminUser, "work.metadata.update_any") ? (
+            {hasPermission(adminUser, "work.metadata.update_any") || hasPermission(adminUser, "work.distribution.update_any") ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
                 to={`/admin/works/${archiveVersion.workId}`}

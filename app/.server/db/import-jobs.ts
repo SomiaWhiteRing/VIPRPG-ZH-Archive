@@ -138,7 +138,7 @@ export async function assertWorkCanReceiveArchive(
       is_uploader: number;
     }>();
 
-  const canAdminEdit = hasPermission(user, "work.metadata.update_any");
+  const canAdminEdit = hasPermission(user, "work.distribution.update_any");
   if (!row || (row.status === "deleted" && !(canAdminEdit && hasPermission(user, "work.status.update_any")))) {
     throw new HttpError(404, "作品不存在");
   }
@@ -190,7 +190,7 @@ export async function requiredOwnedImportJob(
   if (
     !job ||
     job.uploader_id !== user.id ||
-    (job.work_id && !(hasPermission(user, "work.metadata.update_any") && hasPermission(user, "work.status.update_any")) &&
+    (job.work_id && !(hasPermission(user, "work.distribution.update_any") && hasPermission(user, "work.status.update_any")) &&
       (await getD1(runtime)
         .prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`)
         .bind(job.work_id)

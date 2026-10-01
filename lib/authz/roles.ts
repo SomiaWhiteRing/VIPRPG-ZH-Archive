@@ -13,12 +13,11 @@ export const ROLE_TEMPLATES = {
     key: "wiki_editor",
     name: "维基人",
     description:
-      "综合维护作品、作者和游戏角色资料，整理标签、作品关联、角色分类、来源与素材。修改直接生效并记录操作；不包含实体合并、作品上下架、归档文件或账户管理。",
+      "维护作者和游戏角色资料，整理标签、作品关联、角色分类、来源与素材。修改直接生效并记录操作。",
     priority: 300,
     permissionKeys: [
       "work.lookup_non_deleted",
       "work.read_private",
-      "work.metadata.update_any",
       "creator.metadata.update_public",
       "creator.read_private",
       "creator.metadata.update_any",
