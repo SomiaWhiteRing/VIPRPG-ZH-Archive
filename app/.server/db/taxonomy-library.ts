@@ -138,7 +138,7 @@ async function readPublicCharacterIndex(
   const database = getD1(runtime);
   const [characters, aliases] = await database.batch([
     database.prepare(
-      `${characterSql(true, true)} ORDER BY ch.primary_name,ch.id`,
+      `${characterSql(true, true, "index")} ORDER BY ch.primary_name,ch.id`,
     ),
     database.prepare(
       "SELECT character_id,name,language FROM character_aliases ORDER BY character_id,language,name",
@@ -155,7 +155,11 @@ async function readPublicCharacterIndex(
     byCharacter.set(row.character_id, names);
   }
   return ((characters.results ?? []) as CharacterRow[]).map((row) => ({
-    ...mapCharacter(row),
+    id: row.id,
+    primaryName: row.primary_name,
+    originalName: row.original_name,
+    defaultPortrait: mapCharacterPortrait(row),
+    workCount: row.work_count,
     aliases: byCharacter.get(row.id) ?? [],
   }));
 }
@@ -872,7 +876,7 @@ async function prepareCharacterMerge(
     statements,
   };
 }
-function characterSql(publicPortrait = false, groupedWorkCounts = false): string {
+function characterSql(publicPortrait = false, groupedWorkCounts = false, fields: "summary" | "index" = "summary"): string {
   // Full indexes count public credits once; individual lookups keep their indexed count.
   const counts = groupedWorkCounts
     ? `WITH character_work_counts AS MATERIALIZED (
@@ -884,7 +888,7 @@ function characterSql(publicPortrait = false, groupedWorkCounts = false): string
   const workCount = groupedWorkCounts
     ? "COALESCE(work_counts.work_count,0)"
     : "(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works))";
-  return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,ch.description,ch.extra_json,${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count,ch.updated_at FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
+  return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,${fields === "summary" ? "ch.description,ch.extra_json,ch.updated_at," : ""}${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
 }
 function tagSql(): string {
   return `SELECT t.name,t.namespace,t.description,COALESCE((SELECT public_count FROM tag_usage_stats WHERE name=t.name),0) AS work_count,t.updated_at`;
