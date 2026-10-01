@@ -172,6 +172,7 @@ function InboxRow({
   const rowRef = useRef<HTMLLIElement>(null);
   const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
+  const actor = interaction ?? item.commentNotification;
   const Icon =
     item.type === "forum_like" || item.commentNotification?.kind === "like"
       ? ThumbsUp
@@ -212,21 +213,25 @@ function InboxRow({
         ) : null}
       </div>
       <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-        {interaction ? (
-          <>
-            <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
-              {interaction.actorHref ? (
+        <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
+          {actor ? (
+            <>
+              {actor.actorHref ? (
                 <Link
                   className="hover:underline focus-visible:outline-2 focus-visible:outline-primary"
-                  to={interaction.actorHref}
+                  to={actor.actorHref}
                 >
-                  {interaction.actorName}
+                  {actor.actorName}
                 </Link>
               ) : (
-                interaction.actorName
+                actor.actorName
               )}
-              <span>{interaction.action}</span>
-            </p>
+              <span>{actor.action}</span>
+            </>
+          ) : item.title}
+        </p>
+        {interaction ? (
+          <>
             <Link
               to={`/inbox/${item.id}`}
               prefetch="none"
@@ -248,9 +253,6 @@ function InboxRow({
           </>
         ) : (
           <>
-            <p className={`text-sm ${readAt ? "" : "font-semibold"}`}>
-              {item.title}
-            </p>
             {item.commentNotification ? (
               <Link to={`/inbox/${item.id}`} prefetch="none" className="mt-1 block rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-primary">
                 <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.commentNotification.targetTitle}</span>
