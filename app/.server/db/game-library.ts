@@ -496,6 +496,14 @@ export async function getGameWorkDetail(
     viewCounts(runtime, "work", [row.id]),
     viewCounts(runtime, "play", [row.id], { [row.id]: row.legacy_player_count }),
   ]);
+  const maintainers = collections.archives[0]?.uploaderName ? [] : (
+    await getD1(runtime)
+      .prepare(`SELECT u.id,u.display_name AS displayName,u.avatar_blob_sha256 AS avatarBlobSha256
+        FROM work_uploaders wu JOIN users u ON u.id=wu.user_id
+        WHERE wu.work_id=? ORDER BY wu.created_at,u.id`)
+      .bind(row.id)
+      .all<GameWorkDetail["maintainers"][number]>()
+  ).results ?? [];
   const summary = mapSummaryRow(
     row,
     collections.tags,
@@ -518,6 +526,7 @@ export async function getGameWorkDetail(
       : null);
   return {
     ...summary,
+    maintainers,
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
     usesUnsupportedManiac:
       row.engine_family === "rpg_maker_2003_maniac" &&

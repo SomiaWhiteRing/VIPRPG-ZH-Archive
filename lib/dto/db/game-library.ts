@@ -131,6 +131,7 @@ export type GameWorkSummary = {
 
 export type GameWorkDetail = GameWorkSummary & {
   usesUnsupportedManiac: boolean;
+  maintainers: { id: number; displayName: string; avatarBlobSha256: string | null }[];
   moreInfo: WorkMoreInfo[];
   aliases: string[];
   creators: GameCreatorCredit[];

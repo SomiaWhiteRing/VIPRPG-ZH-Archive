@@ -25,6 +25,7 @@ export function WorkSidebarInfo({
     | "language"
     | "genre"
     | "moreInfo"
+    | "maintainers"
     | "originalReleaseDate"
     | "originalReleasePrecision"
     | "downloadSizeBytes"
@@ -35,6 +36,39 @@ export function WorkSidebarInfo({
   const sizeBytes = current ? downloadSize({ ...current, downloadSizeBytes: work.downloadSizeBytes }) : null;
   const filesId = useId();
   const filesToggled = useRef(false);
+  const people = current?.uploaderName ? [{
+    id: current.uploaderId,
+    displayName: current.uploaderName,
+    avatarBlobSha256: current.uploaderAvatarBlobSha256,
+  }] : work.maintainers;
+  const peopleInfo = people.length ? (
+    <InfoRow label={current?.uploaderName ? "上传者" : "维护者"}>
+      <span className="inline-flex max-w-full flex-wrap gap-x-3 gap-y-1">
+        {people.map((person) => person.id ? (
+          <span className="inline-flex max-w-full items-center gap-1.5" key={person.id}>
+            <Link
+              aria-label={`${person.displayName}的个人主页`}
+              className="shrink-0 rounded-full"
+              to={`/users/${person.id}`}
+            >
+              <UserAvatar
+                avatarBlobSha256={person.avatarBlobSha256}
+                className="size-[1em]"
+                displayName={person.displayName}
+                size={14}
+              />
+            </Link>
+            <Link
+              className="min-w-0 font-medium text-secondary hover:underline"
+              to={`/games?uploader=${person.id}`}
+            >
+              {person.displayName}
+            </Link>
+          </span>
+        ) : <span key={person.displayName}>{person.displayName}</span>)}
+      </span>
+    </InfoRow>
+  ) : null;
 
   useLayoutEffect(() => {
     if (!filesToggled.current) return;
@@ -132,32 +166,7 @@ export function WorkSidebarInfo({
                 <InfoRow label="体积" mono>
                   {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
                 </InfoRow>
-                {current.uploaderName ? (
-                  <InfoRow label="上传者">
-                    {current.uploaderId ? (
-                      <span className="inline-flex max-w-full items-center gap-1.5">
-                        <Link
-                          aria-label={`${current.uploaderName}的个人主页`}
-                          className="shrink-0 rounded-full"
-                          to={`/users/${current.uploaderId}`}
-                        >
-                          <UserAvatar
-                            avatarBlobSha256={current.uploaderAvatarBlobSha256}
-                            className="size-[1em]"
-                            displayName={current.uploaderName}
-                            size={14}
-                          />
-                        </Link>
-                        <Link
-                          className="min-w-0 font-medium text-secondary hover:underline"
-                          to={`/games?uploader=${current.uploaderId}`}
-                        >
-                          {current.uploaderName}
-                        </Link>
-                      </span>
-                    ) : current.uploaderName}
-                  </InfoRow>
-                ) : null}
+                {peopleInfo}
                 {current.publishedAt ? (
                   <InfoRow label="收录" mono>
                     {current.publishedAt.slice(0, 10)}
@@ -167,7 +176,7 @@ export function WorkSidebarInfo({
             </div>
           </div>
         </div>
-      ) : null}
+      ) : peopleInfo ? <dl className="m-0 mt-[0.65rem]">{peopleInfo}</dl> : null}
     </div>
   );
 }
