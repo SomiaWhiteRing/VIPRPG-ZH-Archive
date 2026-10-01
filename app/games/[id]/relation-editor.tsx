@@ -9,9 +9,9 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { WorkRelationGuide, WorkRelationHint } from "@/app/components/work/work-relation-guide";
 import { SelectField } from "@/app/components/ui/select";
 import type { WorkListItemData } from "@/app/components/work/work-list-item";
 import { WorkListItem } from "@/app/components/work/work-list-item";
@@ -215,8 +215,7 @@ export function RelationCreateForm({
     const payload = translationRole
       ? {
           targetWorkId: selected.id,
-          targetRole:
-            translationRole === "original" ? "translation" : "original",
+          targetRole: translationRole,
         }
       : {
           targetWorkId: selected.id,
@@ -362,7 +361,7 @@ export function RelationCreateForm({
             options={relationOptions}
             value={relationChoice}
           />
-          <InfoTooltip>关联对象之于本作品的关系。</InfoTooltip>
+          <WorkRelationHint type={relationChoice.slice(relationChoice.indexOf(":") + 1)} />
         </div>
         <Button
           disabled={busy || !selected || excludedIds.has(selected.id)}
@@ -371,6 +370,7 @@ export function RelationCreateForm({
         >
           {busy ? "正在添加…" : "添加关联"}
         </Button>
+        <WorkRelationGuide />
       </div>
     </div>
   );

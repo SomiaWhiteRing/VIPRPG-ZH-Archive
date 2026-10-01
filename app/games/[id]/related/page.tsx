@@ -5,6 +5,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { WorkRelationGuide } from "@/app/components/work/work-relation-guide";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -48,7 +49,12 @@ export default function WorkRelatedPage() {
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
       <PageHeader
-        actions={<BackLink href={`/games/${workId}#sec-relations`} label="返回作品" />}
+        actions={
+          <>
+            <WorkRelationGuide />
+            <BackLink href={`/games/${workId}#sec-relations`} label="返回作品" />
+          </>
+        }
         subtitle={title}
         title="关联作品"
       />

@@ -437,8 +437,7 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
   const rows = await getD1(runtime)
     .prepare(
       `SELECT i.id,t.id AS topic_id,p.post_number,c.id AS comment_id,
-    t.title AS topic_title,CASE WHEN i.type='forum_like' THEN ''
-      WHEN i.forum_comment_id IS NOT NULL THEN c.body ELSE p.body END AS excerpt,
+    t.title AS topic_title,CASE WHEN i.forum_comment_id IS NOT NULL THEN c.body ELSE p.body END AS excerpt,
     sender.id AS actor_id,sender.display_name AS actor_name,sender.status AS actor_status,
     sender.avatar_blob_sha256 AS actor_avatar,c.reply_to_id
     FROM inbox_items i JOIN forum_public_topics t ON t.id=i.forum_topic_id
