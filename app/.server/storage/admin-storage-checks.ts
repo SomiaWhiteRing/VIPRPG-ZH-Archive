@@ -1,4 +1,5 @@
 import { scanGcCandidates, advanceGcCursor, type GcObjectType } from "./gc-candidates";
+import { isDownloadCacheSlotKey } from "@/lib/archive/download";
 import { chunkArray } from "@/app/.server/db/chunks";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -430,8 +431,9 @@ async function scanR2Objects(
   const zipOutsideCorePack: R2OrphanObject[] = [];
 
   for (const object of listedObjects.objects) {
-    // Forum images have their own visibility and manual cleanup lifecycle.
-    if (object.key.startsWith("forum-images/") || object.key.startsWith("tools/artifacts/")) continue;
+    // These namespaces have independent lifecycle checks. Only the exact 16
+    // derived ZIP slots are excluded, not arbitrary files under their prefix.
+    if (object.key.startsWith("forum-images/") || object.key.startsWith("tools/artifacts/") || isDownloadCacheSlotKey(object.key)) continue;
     const info = parseR2Key(object.key);
 
     if (info.type === "unknown") {

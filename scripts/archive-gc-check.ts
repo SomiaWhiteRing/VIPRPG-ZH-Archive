@@ -73,6 +73,7 @@ function createFixture() {
       },
     },
     ARCHIVE_BUCKET: {
+      async list() { return { objects: [] }; },
       async delete(key: string) {
         deleted.push(key);
         if (faults.failNextR2Delete) {

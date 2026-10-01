@@ -18,10 +18,10 @@
 
 非目标：
 
-- 不把完整游戏 ZIP、源 ZIP 或上传暂存包保存到 R2。
+- 不把完整游戏 ZIP 当作 canonical 归档；源 ZIP 和上传暂存包不保存到 R2。热门下载可使用下述有界、可丢弃的 R2 ZIP 缓存。
 - 不以文件名、R2 key、ETag 或数据库自增 ID 作为内容身份。
 - 不让 D1 成为第二份 manifest。
-- 不为网页在线游玩保存另一套 canonical 文件；过滤 ZIP 只作为响应流或边缘缓存存在。
+- 不为网页在线游玩保存另一套 canonical 文件；过滤 ZIP 只作为响应流或可丢弃下载缓存存在。
 - 不保留已废弃的文件行模型、旧对象路径或兼容写入。
 
 ## 2. Canonical 对象
@@ -180,7 +180,8 @@ CorePack 校验按实际解压字节增长 entry 缓冲，不按未验证的声�
 
 ```text
 published Work + published current ArchiveVersion
-  -> 读取 manifest
+  -> 检查 Workers Cache，再检查热门变体的有界 R2 缓存
+  -> 未命中时读取 manifest
   -> 并发打开 blob/core pack 对象
   -> 按 manifest 顺序输出 ZIP local header 和文件字节
   -> 写入中央目录
@@ -193,11 +194,14 @@ published Work + published current ArchiveVersion
 - 输出顺序由 manifest 固定，相同输入和 builder 版本产生稳定 cache key。
 - ZIP 使用 STORE；local header 写入明确 CRC32、compressed size 和 uncompressed size，不依赖 data descriptor。
 - 预取窗口包含正在消费的条目，最多保留 6 个打开或待消费的对象；应用层窗口覆盖整个正文消费周期，避免未消费响应积压，异常或取消时须取消剩余预取响应。这不同于平台“等待响应头的并发连接”计数。2026-09-22 同一大游戏的 4/5/6 冷 ZIP 缓存串行实测中，6 的两轮完整下载最快且均校验通过；该结果不代表多用户高负载验收。
-- 布局生成时按实际入选文件统计 blob 复用次数，单次使用的文件直接流过，仅重复小 blob 可在当前请求缓存字节（单项不超过 2 MiB，总量不超过 64 MiB）；已有条目的复用不再受新增缓存预算影响。不能改变输出顺序或把完整 ZIP 写回 R2。
+- 布局生成时按实际入选文件统计 blob 复用次数，单次使用的文件直接流过，仅重复小 blob 可在当前请求缓存字节（单项不超过 2 MiB，总量不超过 64 MiB）；已有条目的复用不再受新增缓存预算影响。不能改变输出顺序；完整 ZIP 只可进入下述有界派生缓存。
 - ZIP 小块和头部追加在 64 KiB 输出缓冲内同步完成，只有实际刷新或写出时等待背压，避免纯内存追加创建异步链；完整输出块直接写出。首个 ZIP 头仍在等待文件正文前发出。
 - Range 映射到 ZIP 内各文件的偏移与长度，blob 和共享播放器直接使用 R2 范围读取；只涉及 ZIP 头部或中央目录时不读取文件正文。核心包仍读取压缩包，但只解压本次区间涉及的条目。同一 builder 的字节顺序、CRC、长度和 ETag 不变。
 - 排序结果和本地头／中央目录偏移按内容版本、profile、播放器 hash 和 builder 复用；每个 bucket 的 isolate 缓存最多 16 份布局，估算元数据上限 8 MiB。命中布局后的 Range 用二分查找定位，再处理相交条目；冷请求仍需构建布局。缓存仅持有不可变元数据，R2 流、读取 Promise 和正文缓存均属于当前请求，公开状态检查仍逐次执行。
-- Workers Cache/CDN 是可丢弃派生缓存；`download_builds` 只记录 cache key 和观测数据，不拥有文件内容。
+- Workers Cache/CDN 和 R2 热缓存均为可丢弃派生缓存；`download_builds` 只记录 cache key 和观测数据，不拥有文件内容。
+- R2 热缓存只接收同一固定变体已成功完整输出至少两次、ZIP 不超过 64 MiB 的后续完整构建。key 包含版本、manifest、packer、ZIP builder、profile 与播放器摘要，其 SHA-256 首位映射到 `download-cache/v1/slots/[0-f].zip`。只有 16 个槽位，总对象大小上限 1 GiB；碰撞可覆盖缓存，但读取必须复核完整 key 摘要。冷门和大包继续按需生成。
+- 热缓存命中前仍校验作品、版本及播放器资格。完整请求只需一个缓存对象 GET；Range 先 HEAD，再用该对象 ETag 作条件范围 GET，覆盖竞争或缓存故障回退到原始生成路径。HEAD、If-Range、ETag、CRC 和 ZIP 字节合同不变；`X-Download-Cache-Tier` 区分 `workers` 与 `r2` 命中，既有 HIT 统计同时涵盖两者。
+- 热缓存从上传时起 7 天内有效，不因命中续期。定时 GC 只清理这 16 个固定路径中过期的对象，失败留待下轮重试并记入审计。GC 与覆盖竞争最多导致新缓存被提前淘汰，不影响原始对象或下载正确性。作品下架后立即拒绝读取其缓存，残留字节在覆盖或过期 GC 时移除。写入热缓存的本次构建不再同时写 Workers Cache，避免增加第三个流消费者。
 - 构建失败必须记录错误并中止响应，不能跳过缺失 entry 生成“可下载”的残缺 ZIP。
 - MISS/BYPASS 在 ZIP 输出流完整关闭后记录成功；HIT 同样等缓存正文流完成后记录。完整 ZIP 和 Range 分段请求分别累计；分段只累计其实际响应长度。输出字节只包含完成的服务端输出，不包含中断前的部分，也不证明客户端已将文件落盘或安装；冷请求的缓存写入分支可能继续消费客户端已取消的输出。
 - `0020_download_observability.sql` 启用后的连接中断／取消与服务端错误分开累计。`Network connection lost.` 只能证明传输中断，不能直接认定为用户主动取消；后续成功保留最后一次异常的原因、时间与耗时，另外记录最后成功时间。控制台只将当前已发布版本最近请求中的已分类服务端错误列为告警，旧版本、历史未分类异常与连接中断单列。
@@ -208,7 +212,7 @@ published Work + published current ArchiveVersion
 
 在线游玩通过下载接口的 `profile=web-play-v1` 获取过滤 ZIP，服务端按 `shouldSkipWebPlayLocalWrite` 排除 `.exe`、`.txt` 和普通 `.dll`，保留五个根目录引擎/补丁识别 DLL。过滤发生在打开文件对象之前，减少不需要的对象读取和网络传输；如果保留文件位于 core pack 中，仍需读取该 pack。普通下载和 Kai 导入继续取得完整归档。两种响应使用不同的 cache key 和 ETag，`Content-Length` 与 Range 均按各自的 ZIP 计算。
 
-浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；R2 和 D1 不新增 Web Play 文件副本，`download_builds` 仍只记录各自的缓存和观测数据。过滤响应按实际入选文件引用的 blob/core pack 估算 R2 GET 数。
+浏览器顺序解析 ZIP，把可运行文件写入 OPFS pack，并在完成后丢弃 ZIP；不新增 Web Play canonical 文件副本，R2 热缓存遵循上述统一容量和期限。`download_builds` 仍只记录各自的缓存和观测数据。过滤响应按实际入选文件引用的 blob/core pack 估算 R2 GET 数。
 
 本地安装的版本键、IndexedDB 状态、OPFS pack、Worker 本地播放器、重试和存档策略由[EasyRPG 在线游玩架构](./easyrpg-web-play-architecture.md)定义。存储层只保证下载 ZIP 与 manifest 可验证且字节稳定。
 
@@ -247,7 +251,7 @@ GC 实现位于 `app/.server/storage/admin-storage-checks.ts` 和 `worker/archiv
 - 内容身份只有 SHA-256。
 - 文件路径只由 manifest 持有。
 - D1 只保存对象引用，不保存完整文件行副本。
-- R2 不保存完整游戏 ZIP。
+- R2 中的 ZIP 下载副本只能是有界、可丢弃的热缓存，不承担 canonical 归档职责。
 - Work 表示作品，ArchiveVersion 表示不可变文件快照。
 - 发布后的 manifest 不原地修改；修正通过新 ArchiveVersion 完成。
 - 对象只有在全局零引用且满足宽限期时才能清理。

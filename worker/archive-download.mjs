@@ -1,11 +1,12 @@
 import { unzipSync } from "fflate";
-import { downloadZipBuilderVersion } from "../lib/archive/download.ts";
+import { downloadCacheMaxBytes, downloadZipBuilderVersion } from "../lib/archive/download.ts";
 import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
 import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
   shouldSkipWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
+import { hotDownloadCache, readDownloadCache, writeDownloadCache } from "./download-cache.mjs";
 
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
@@ -105,6 +106,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     const rangeHeader = request.method === "GET" && (!ifRange || ifRange === currentEtag)
       ? request.headers.get("Range") : null;
     const bypassDownloadCache = shouldBypassDownloadCache(request, env);
+    let sharedCache = null;
 
     if (request.method === "GET" && !bypassDownloadCache) {
       let cached = await caches.default.match(cacheRequest);
@@ -146,7 +148,40 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
           responseSizeBytes, isRange: Boolean(range), metrics, startedAt, stage: "cache-read",
         });
         const response = new Response(stream.readable, { status: cached.status, headers: cached.headers });
+        response.headers.set("X-Download-Cache-Tier", "workers");
         return player || rangeHeader ? withDownloadCacheHeader(response, "HIT", "no-store, no-transform") : response;
+      }
+    }
+
+    if (!bypassDownloadCache) {
+      try {
+        sharedCache = await hotDownloadCache(env.DB, cacheKey);
+        const cached = sharedCache && await readDownloadCache(bucket, sharedCache, request.method, rangeHeader, parseDownloadRange);
+        if (cached?.invalidRange) return new Response(null, {
+          status: 416, headers: { "Content-Range": `bytes */${cached.size}`, "Cache-Control": "no-store" },
+        });
+        if (cached) {
+          if (Number.isSafeInteger(cached.estimatedR2GetCount) && cached.estimatedR2GetCount >= 0)
+            record = { ...record, estimatedR2GetCount: cached.estimatedR2GetCount };
+          const headers = downloadHeaders(record, "HIT", cached.size, profile);
+          headers.set("X-Download-Cache-Tier", "r2");
+          const responseSizeBytes = cached.range ? cached.range.end - cached.range.start + 1 : cached.size;
+          if (cached.range) {
+            headers.set("Content-Range", `bytes ${cached.range.start}-${cached.range.end}/${cached.size}`);
+            headers.set("Content-Length", String(responseSizeBytes));
+            headers.set("Cache-Control", "no-store, no-transform");
+          }
+          if (request.method === "HEAD") return new Response(null, { headers });
+          const stream = new FixedLengthStream(responseSizeBytes);
+          observeDownloadCompletion(cached.body.pipeTo(stream.writable), env.DB, ctx, request, {
+            record, cacheKey, cacheStatus: "HIT", sizeBytes: cached.size, responseSizeBytes,
+            isRange: Boolean(cached.range), metrics, startedAt, stage: "shared-cache-read",
+          });
+          return new Response(stream.readable, { status: cached.range ? 206 : 200, headers });
+        }
+      } catch (error) {
+        // Cache metadata/storage failures must not prevent an original build.
+        console.warn("Shared download cache read failed", error?.message ?? error);
       }
     }
 
@@ -184,7 +219,12 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       isRange: Boolean(range), metrics, startedAt, stage: "zip-stream",
     });
 
-    if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
+    if (!range && sharedCache && zipSizeBytes <= downloadCacheMaxBytes) {
+      // Use one background consumer on a promotion; do not also tee this build
+      // into the colo cache. A failed/partial PUT never publishes an R2 object.
+      ctx.waitUntil(writeDownloadCache(env.ARCHIVE_BUCKET, sharedCache, response.clone(), record.estimatedR2GetCount)
+        .catch((error) => console.warn("Shared download cache put failed", error?.message ?? error)));
+    } else if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT", "public, max-age=31536000, immutable"))

@@ -33,7 +33,7 @@
 
 结构由 migrations 中的首发基线及有序增量迁移维护；正式初始化后不改写已应用文件。图标复用 `blobs`，公开媒体查询、SQL 防清理触发器、手动 GC 和定时 GC 均保护链接图标的有效引用，包括隐藏／草稿链接。图标支持 PNG、GIF 和 JPG／JPEG、最多 512 KiB，宽高各为 1–512px；根据文件内容识别格式，原样存储，保留透明背景和动画，后台草稿通过根管理员接口预览。
 
-软件原始包存入私有 R2 的 `tools/artifacts/<artifactId>/<sha256>`。不走游戏 import job、文件白名单、解包重组或 core pack。工具对象由链接后台独立检查，通用归档扫描不再将此命名空间报告为异常游戏对象。开启共享播放器的游戏在下载时直接将 Kai Windows EXE 原始字节写入 ZIP，不产生新的 R2 文件副本。
+软件原始包存入私有 R2 的 `tools/artifacts/<artifactId>/<sha256>`。不走游戏 import job、文件白名单、解包重组或 core pack。工具对象由链接后台独立检查，通用归档扫描不再将此命名空间报告为异常游戏对象。开启共享播放器的游戏在下载时直接将 Kai Windows EXE 原始字节写入 ZIP；热门 ZIP 可以进入[有界派生缓存](./archive-storage.md#6-下载重组)，不产生新的 canonical 播放器对象。
 
 支持 Windows x64 的 ZIP／EXE 和 Android universal APK。Windy 固定为 `windows-x64`／ZIP，以匹配现有客户端。平台与格式分别保存；同一版本、同一平台只允许一个未清理的安装包。
 
