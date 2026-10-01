@@ -1,5 +1,4 @@
 import { requireUser } from "@/app/.server/auth/guards";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import {
   readCharacterIndex,
   updateCharacterIndex,
@@ -19,17 +18,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     if (!permission) throw new HttpError(400, "不支持的分类操作");
     if (!hasPermission(auth.user, permission))
       return json({ ok: false, error: "Permission denied" }, { status: 403 });
-    const result = await updateCharacterIndex(runtime, body);
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_classification_update",
-      detail: {
-        operation: String(body.operation),
-        categoryId: result.categoryId,
-        characterId: result.characterId,
-      },
-    });
+    const result = await updateCharacterIndex(runtime, body, auth.user);
     return json({
       ok: true,
       ...result,

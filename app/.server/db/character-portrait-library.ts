@@ -1,4 +1,6 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, characterAuditSnapshot } from "@/app/.server/db/entity-audit";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { CHARACTER_MATERIAL_CATEGORIES } from "@/lib/character-materials";
 import type {
@@ -297,6 +299,7 @@ export async function registerAdminFaceSheetForCharacter(
     fileName: string;
     actorUserId: number;
   },
+  actor: ArchiveUser,
 ): Promise<AdminFaceSheet> {
   const database = getD1(runtime);
   const character = await database
@@ -307,7 +310,7 @@ export async function registerAdminFaceSheetForCharacter(
     throw new HttpError(404, "角色不存在，请返回角色维护页重新进入。");
 
   const fileName = input.fileName.trim().slice(0, 255) || "上传的素材表";
-  await database.batch([
+  await auditedEntityBatch(database, [
     database
       .prepare(
         `INSERT INTO face_sheets(
@@ -337,7 +340,8 @@ export async function registerAdminFaceSheetForCharacter(
          SELECT ?,id FROM face_sheets WHERE blob_sha256=?`,
       )
       .bind(input.characterId, input.sha256),
-  ]);
+  ], { actor, eventType: "admin_character_face_sheet_upload", targets: [{ type: "character", id: input.characterId }],
+    snapshot: characterAuditSnapshot(input.characterId), permission: "character.portrait.upload", source: "admin" });
 
   const row = await database
     .prepare(
@@ -364,9 +368,12 @@ export async function updateCharacterPortraitLibraryForAdmin(
     defaultPortrait: CharacterPortraitChoice | null;
     actorUserId: number;
   },
+  actor: ArchiveUser,
 ): Promise<void> {
-  await getD1(runtime).batch(
+  await auditedEntityBatch(getD1(runtime),
     await prepareCharacterPortraitLibraryUpdate(runtime, input),
+    { actor, eventType: "admin_character_portrait_update", targets: [{ type: "character", id: input.characterId }],
+      snapshot: characterAuditSnapshot(input.characterId), permission: "character.portrait.manage_any", source: "admin" },
   );
 }
 

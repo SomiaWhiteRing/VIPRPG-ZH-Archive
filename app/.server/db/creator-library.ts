@@ -1,4 +1,6 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, creatorAuditSnapshot } from "@/app/.server/db/entity-audit";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeCreatorLinks, parseCreatorLinks, type CreatorLink } from "@/lib/creator-links";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { CreatorSuggestion } from "@/lib/creator-names";
@@ -308,6 +310,7 @@ export async function updateCreatorForAdmin(
     bio: string | null;
     aliases: string[];
   },
+  actor: ArchiveUser,
 ): Promise<AdminCreatorEdit> {
   const name = normalizeEntityName(input.name);
   if (!name) throw new Error("作者名不能为空");
@@ -323,7 +326,7 @@ export async function updateCreatorForAdmin(
   const links = normalizeCreatorLinks(input.links);
   const database = getD1(runtime);
   try {
-    await database.batch([
+    await auditedEntityBatch(database, [
       database
         .prepare(`DELETE FROM creator_aliases WHERE creator_id=?`)
         .bind(input.creatorId),
@@ -360,7 +363,8 @@ export async function updateCreatorForAdmin(
             creatorNameKey(alias),
           ),
       ),
-    ]);
+    ], { actor, eventType: "admin_creator_update", targets: [{ type: "creator", id: input.creatorId }],
+      snapshot: creatorAuditSnapshot(input.creatorId), permission: "creator.metadata.update_any", source: "admin" });
   } catch (error) {
     if (isCreatorIdentityConstraintError(error)) {
       throw new HttpError(
@@ -380,15 +384,20 @@ export async function updateCreatorAvatar(
   runtime: AppRuntime,
   creatorId: number,
   avatarBlobSha256: string | null,
+  actor: ArchiveUser,
 ): Promise<void> {
-  const result = await getD1(runtime)
+  const database = getD1(runtime);
+  const [result] = await auditedEntityBatch(database, [database
     .prepare(
       `UPDATE creators
        SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP
        WHERE id=?`,
     )
-    .bind(avatarBlobSha256, creatorId)
-    .run();
+    .bind(avatarBlobSha256, creatorId)], {
+      actor, eventType: avatarBlobSha256 ? "admin_creator_avatar_update" : "admin_creator_avatar_delete",
+      targets: [{ type: "creator", id: creatorId }], snapshot: creatorAuditSnapshot(creatorId),
+      permission: "creator.metadata.update_any", source: "admin",
+    });
   if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作者不存在");
 }
 

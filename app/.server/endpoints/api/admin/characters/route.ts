@@ -1,5 +1,4 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { createCharacterForAdmin } from "@/app/.server/db/taxonomy-library";
 import { readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -14,16 +13,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     const result = await createCharacterForAdmin(runtime, {
       originalName: String(body.originalName ?? ""),
       primaryName: String(body.displayName ?? ""),
-    });
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_create",
-      detail: {
-        characterId: result.character.id,
-        created: result.created,
-      },
-    });
+    }, auth.user);
 
     return json(
       {

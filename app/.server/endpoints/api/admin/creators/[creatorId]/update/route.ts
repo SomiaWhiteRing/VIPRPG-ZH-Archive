@@ -1,5 +1,4 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import {
   parseCreatorEditForm,
   updateCreatorForAdmin,
@@ -39,17 +38,7 @@ export async function POST(
       throw new Error("Creator id mismatch");
     }
 
-    const creator = await updateCreatorForAdmin(runtime, input);
-
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_creator_update",
-      detail: {
-        creatorId: creator.id,
-        name: creator.name,
-      },
-    });
+    const creator = await updateCreatorForAdmin(runtime, input, auth.user);
 
     if (request.headers.get("accept")?.includes("application/json")) {
       return json({

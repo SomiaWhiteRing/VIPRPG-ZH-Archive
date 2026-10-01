@@ -14,6 +14,9 @@ import { Label } from "@/app/components/ui/label";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
+import { SelectField } from "@/app/components/ui/select";
+import { AUDIT_TARGET_LABELS, auditRecord, entityAuditChanges, entityAuditTargets, entityAuditTargetHref } from "@/lib/entity-audit";
+import { PERMISSIONS } from "@/lib/authz/permissions";
 import { formatDate } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -29,35 +32,41 @@ export async function loader(args: LoaderFunctionArgs) {
   const params = await searchParams;
   const query = searchParam(params.q);
   const eventType = searchParam(params.action);
+  const rawTargetType = searchParam(params.targetType);
+  const targetType = Object.hasOwn(AUDIT_TARGET_LABELS, rawTargetType) ? rawTargetType : "";
+  const targetId = searchParam(params.targetId);
   const page = parseAdminPage(params.page);
   const [auditResult, roleEvents] = await Promise.all([
     searchAdminAuditLogs(runtime, {
       query,
       eventType,
+      targetType,
+      targetId,
       page,
       pageSize: PAGE_SIZE,
     }),
     listAdminRoleEvents(runtime, 100),
   ]);
 
-  return { query, eventType, page, auditResult, roleEvents };
+  return { query, eventType, targetType, targetId, page, auditResult, roleEvents };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: ["审计日志", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminAuditPage() {
-  const { query, eventType, page, auditResult, roleEvents } =
+  const { query, eventType, targetType, targetId, page, auditResult, roleEvents } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
         title="审计日志"
-        subtitle="登录、版本维护与权限调整的审计日志。"
+        subtitle="按操作者或条目核查资料修改、关联整理与授权记录。"
       />
 
       <form
+        key={JSON.stringify([query, eventType, targetType, targetId])}
         action="/admin/audit"
         className="flex flex-wrap items-end gap-2 border-b border-border pb-3"
         method="get"
@@ -67,7 +76,7 @@ export default function AdminAuditPage() {
           <Input
             defaultValue={query}
             name="q"
-            placeholder="名称、邮箱或用户 ID"
+            placeholder="当前或操作时名称、邮箱、用户 ID"
           />
         </Label>
         <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">
@@ -78,8 +87,17 @@ export default function AdminAuditPage() {
             placeholder="事件类型"
           />
         </Label>
+        <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
+          条目类型
+          <SelectField aria-label="条目类型" name="targetType" defaultValue={targetType}
+            options={[{ value: "", label: "全部类型" }, ...Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => ({ value, label }))]} />
+        </Label>
+        <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
+          条目 ID／标签名
+          <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
+        </Label>
         <Button type="submit">应用</Button>
-        {query || eventType ? (
+        {query || eventType || targetType || targetId ? (
           <Link
             className={buttonVariants({ variant: "ghost" })}
             to="/admin/audit"
@@ -155,7 +173,7 @@ export default function AdminAuditPage() {
                 <th>时间</th>
                 <th>事件</th>
                 <th>操作者</th>
-                <th>上下文</th>
+                <th>条目与修改</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +189,7 @@ export default function AdminAuditPage() {
                     </span>
                   </td>
                   <td>
-                    {log.actorName ?? log.email ?? "系统"}
+                    {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? "系统")}
                     {log.userId ? (
                       <span className="font-mono text-sm text-muted">
                         #{log.userId}
@@ -182,9 +200,7 @@ export default function AdminAuditPage() {
                     ) : null}
                   </td>
                   <td>
-                    <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs grid gap-4">
-                      {formatDetail(log.detail)}
-                    </pre>
+                    <AuditDetail detail={log.detail} />
                   </td>
                 </tr>
               ))}
@@ -199,16 +215,54 @@ export default function AdminAuditPage() {
         page={page}
         pageSize={PAGE_SIZE}
         total={auditResult.total}
-        params={{ q: query || undefined, action: eventType || undefined }}
+        params={{ q: query || undefined, action: eventType || undefined, targetType: targetType || undefined, targetId: targetId || undefined }}
       />
     </main>
   );
 }
 
+function AuditDetail({ detail }: { detail: unknown }) {
+  const data = auditRecord(detail);
+  const targets = entityAuditTargets(detail);
+  const hasSnapshots = data && Object.hasOwn(data, "before") && Object.hasOwn(data, "after");
+  const changes = hasSnapshots ? entityAuditChanges(data.before, data.after) : [];
+  const authorization = auditRecord(data?.authorization);
+  const actor = auditRecord(data?.actor);
+  const permission = typeof authorization?.permission === "string" ? authorization.permission : null;
+  const permissionLabel = permission && Object.hasOwn(PERMISSIONS, permission)
+    ? PERMISSIONS[permission as keyof typeof PERMISSIONS].label : permission;
+  return <div className="grid min-w-80 gap-3">
+    {targets.length ? <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+      {targets.map((target) => <li key={`${target.type}:${target.id}`}>
+        <Link className="text-primary hover:underline" to={entityAuditTargetHref(target)}>
+          {AUDIT_TARGET_LABELS[target.type]} {target.name ?? ""} <span className="font-mono">#{target.id}</span>
+        </Link>{" "}
+        <Link className="text-xs text-muted hover:underline" to={`/admin/audit?targetType=${target.type}&targetId=${encodeURIComponent(String(target.id))}`}>编辑历史</Link>
+      </li>)}
+    </ul> : null}
+    {authorization ? <p className="text-sm text-muted">
+      操作时角色：{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || "无角色" : "未记录"}；
+      授权依据：{authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}
+      {data?.source ? `；入口：${data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}` : ""}
+    </p> : null}
+    {hasSnapshots ? (changes.length ? <TableWrap compact label="字段修改前后" minWidth={760}>
+      <thead><tr><th>修改字段</th><th>修改前</th><th>修改后</th></tr></thead>
+      <tbody>{changes.map((change, index) => <tr key={`${change.field}:${index}`}>
+        <td className="wrap-anywhere text-xs">{change.field}</td>
+        <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.before)}</pre></td>
+        <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.after)}</pre></td>
+      </tr>)}</tbody>
+    </TableWrap> : <p className="text-sm text-muted">未检测到字段变化。</p>) : targets.length ?
+      <p className="text-sm text-muted">此记录没有完整前后快照，无法还原全部字段修改。</p> : null}
+    <details><summary className="cursor-pointer text-xs text-muted">原始审计记录</summary>
+      <pre className="mt-2 max-w-3xl overflow-x-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs">{formatDetail(detail)}</pre>
+    </details>
+  </div>;
+}
+
 function formatDetail(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "null";
-  }
+  if (value === undefined) return "（不存在）";
+  if (value === null) return "（空）";
 
   if (typeof value === "string") {
     return value;

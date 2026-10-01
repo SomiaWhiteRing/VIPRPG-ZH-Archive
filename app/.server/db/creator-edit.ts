@@ -6,6 +6,8 @@ import { CREATOR_EDIT_LIMITS, creatorMetadataSnapshot, type CreatorMetadata } fr
 import { creatorNameKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
+import { hasPermission } from "@/lib/authz/permissions";
 
 const PUBLIC_CREATOR_SQL = "public_at IS NOT NULL";
 const EDITOR_PERMISSION_SQL = userPermissionSql("?", ["creator.metadata.update_public", "creator.metadata.update_any"]);
@@ -18,10 +20,11 @@ const EDIT_APPLIED_SQL = `EXISTS (SELECT 1 FROM auth_audit_logs
 export async function editPublicCreator(
   runtime: AppRuntime,
   creatorId: number,
-  userId: number,
+  actor: ArchiveUser,
   change: { metadata: CreatorMetadata; snapshot: string } | { avatarBlobSha256: string | null; previousAvatar: string | null },
 ): Promise<void> {
   const metadata = "metadata" in change ? normalizeMetadata(change.metadata) : null;
+  const userId = actor.id;
   const db = getD1(runtime);
   const editId = crypto.randomUUID();
   const current = await db.prepare(`SELECT name,links_json,extra_json,avatar_blob_sha256,
@@ -46,10 +49,18 @@ export async function editPublicCreator(
     : `avatar_blob_sha256 IS ?`;
   const expected = metadata ? [current.name, current.links_json, current.extra_json, current.aliases] : ["previousAvatar" in change ? change.previousAvatar : null];
   const beforeDetail = metadata ? before : { avatarBlobSha256: current.avatar_blob_sha256 };
-  const afterDetail = metadata ?? { avatarBlobSha256: "avatarBlobSha256" in change ? change.avatarBlobSha256 : null };
+  const afterDetail = metadata ? { name: metadata.name, links: metadata.links, bio: metadata.bio, aliases: [...metadata.aliases].sort() }
+    : { avatarBlobSha256: "avatarBlobSha256" in change ? change.avatarBlobSha256 : null };
   const statements = [db.prepare(`INSERT INTO auth_audit_logs(user_id,event_type,detail_json)
     SELECT ?,?,? FROM creators WHERE id=? AND ${PUBLIC_CREATOR_SQL} AND ${EDITOR_PERMISSION_SQL} AND ${predicate}`)
-    .bind(userId, metadata ? "creator_metadata_update" : "creator_avatar_update", JSON.stringify({ creatorId, editId, before: beforeDetail, after: afterDetail }), creatorId, userId, ...expected)];
+    .bind(userId, metadata ? "creator_metadata_update" : "creator_avatar_update", JSON.stringify({
+      auditVersion: 1, creatorId, editId,
+      targets: [{ type: "creator", id: creatorId, name: before.name }], source: "public",
+      actor: { userId: actor.id, displayName: actor.displayName, roleKeys: actor.roleKeys, roleNames: actor.roleNames },
+      authorization: { permission: hasPermission(actor, "creator.metadata.update_any") ? "creator.metadata.update_any" : "creator.metadata.update_public",
+        permissionKeys: actor.permissionKeys, isBootstrapAdmin: actor.isBootstrapAdmin },
+      before: beforeDetail, after: afterDetail,
+    }), creatorId, userId, ...expected)];
 
   if (metadata) {
     if (metadata.bio) extra.bio = metadata.bio;
@@ -67,6 +78,8 @@ export async function editPublicCreator(
   } else if ("avatarBlobSha256" in change) {
     statements.push(db.prepare(`UPDATE creators SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND ${EDIT_APPLIED_SQL}`).bind(change.avatarBlobSha256, creatorId, editId));
   }
+  statements.push(db.prepare(`DELETE FROM auth_audit_logs WHERE id=(SELECT MAX(id) FROM auth_audit_logs)
+    AND json_extract(detail_json,'$.editId')=? AND json_extract(detail_json,'$.before') IS json_extract(detail_json,'$.after')`).bind(editId));
   try {
     const result = await db.batch(statements);
     if (result[0].meta.changes !== 1) throw conflict();

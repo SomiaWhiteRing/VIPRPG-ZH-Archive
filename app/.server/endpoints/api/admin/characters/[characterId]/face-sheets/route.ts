@@ -1,5 +1,4 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { registerAdminFaceSheetForCharacter } from "@/app/.server/db/character-portrait-library";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
@@ -41,19 +40,7 @@ export async function POST(
       height: stored.height,
       sha256: stored.sha256,
       width: stored.width,
-    });
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_face_sheet_upload",
-      detail: {
-        characterId,
-        faceSheetId: sheet.id,
-        sha256: sheet.blobSha256,
-        width: sheet.width,
-        height: sheet.height,
-      },
-    });
+    }, auth.user);
     return json({ ok: true, sheet }, { status: 201 });
   } catch (error) {
     return jsonError("角色脸图素材表上传失败", error);

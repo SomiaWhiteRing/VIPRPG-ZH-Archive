@@ -23,7 +23,7 @@ export async function POST(
     }
     const aliases = form.getAll("alias");
     if (aliases.some((value) => typeof value !== "string")) throw new HttpError(400, "别名格式不正确");
-    await editPublicCreator(runtime, id, auth.user.id, {
+    await editPublicCreator(runtime, id, auth.user, {
       snapshot: field("snapshot"),
       metadata: { name: field("name"), links: parseCreatorLinks(field("links_json")), bio: field("bio"), aliases: aliases as string[] },
     });
