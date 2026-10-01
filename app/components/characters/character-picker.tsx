@@ -94,7 +94,6 @@ export function CharacterPicker({
     index: number;
     value: string;
     roleKey: CharacterRoleKey;
-    portraitDraft: PortraitDraft | null;
   } | null>(null);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -170,15 +169,9 @@ export function CharacterPicker({
   const recommended = suggestions
     .filter((item) => !selectedCharacterIds.has(item.id))
     .slice(0, 6);
-  const selectedCredit =
+  const activeCredit =
     portraitIndex === null ? null : (values[portraitIndex] ?? null);
-  const portraitDraft = aliasEdit?.index === portraitIndex ? aliasEdit.portraitDraft : null;
-  const activeCredit = selectedCredit && portraitDraft ? {
-    ...selectedCredit,
-    portrait: portraitDraft.portrait,
-    faceSheetBlobSha256s: portraitDraft.faceSheetBlobSha256s,
-  } : selectedCredit;
-  const activeFiles = portraitDraft?.files ?? faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES;
+  const activeFiles = faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES;
   const activeSuggestion =
     activeCredit?.selection.kind === "existing"
       ? (suggestionsById.get(activeCredit.selection.characterId) ?? null)
@@ -215,9 +208,6 @@ export function CharacterPicker({
     if (disabled || !aliasEdit) return;
     const displayName = normalizeEntityName(aliasEdit.value);
     if (!displayName || !values[aliasEdit.index]) return;
-    if (aliasEdit.portraitDraft) {
-      onFaceSheetFilesChange?.(aliasEdit.index, aliasEdit.portraitDraft.files);
-    }
     onChange(
       values.map((credit, index) =>
         index === aliasEdit.index
@@ -225,10 +215,6 @@ export function CharacterPicker({
               ...credit,
               selection: { ...credit.selection, displayName },
               roleKey: aliasEdit.roleKey,
-              ...(aliasEdit.portraitDraft ? {
-                portrait: aliasEdit.portraitDraft.portrait,
-                faceSheetBlobSha256s: aliasEdit.portraitDraft.faceSheetBlobSha256s,
-              } : {}),
             }
           : credit,
       ),
@@ -263,14 +249,6 @@ export function CharacterPicker({
 
   function confirmPortrait({ files, portrait, faceSheetBlobSha256s }: PortraitDraft) {
     if (disabled || portraitIndex === null) return;
-    if (aliasEdit?.index === portraitIndex) {
-      setAliasEdit((current) => current ? {
-        ...current,
-        portraitDraft: { files, portrait, faceSheetBlobSha256s },
-      } : null);
-      setPortraitIndex(null);
-      return;
-    }
     onFaceSheetFilesChange?.(portraitIndex, files);
     onChange(
       values.map((item, index) =>
@@ -489,7 +467,6 @@ export function CharacterPicker({
                             index,
                             value: selection.displayName,
                             roleKey: credit.roleKey,
-                            portraitDraft: null,
                           });
                         }}
                         size="icon"
@@ -646,25 +623,6 @@ export function CharacterPicker({
                   value={aliasEdit?.roleKey ?? "main"}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor={`${id}-alias-portrait`}>头像与脸图</Label>
-                <Button
-                  aria-controls={`${id}-portrait-dialog`}
-                  aria-expanded={aliasEdit?.index === portraitIndex}
-                  aria-haspopup="dialog"
-                  disabled={disabled}
-                  id={`${id}-alias-portrait`}
-                  onClick={(event) => {
-                    if (!aliasEdit) return;
-                    portraitReturnFocusRef.current = event.currentTarget;
-                    setPortraitIndex(aliasEdit.index);
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  选择头像与脸图
-                </Button>
-              </div>
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
                   <Button type="button" variant="outline">
@@ -681,12 +639,11 @@ export function CharacterPicker({
                 </Button>
               </div>
             </form>
-            {portraitDialog}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
-      {aliasEdit ? null : portraitDialog}
+      {portraitDialog}
 
       {reorder.preview ? (
         <TokenDragPreview element={reorder.preview.element} {...reorder.preview.chip} />
