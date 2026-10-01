@@ -1,3 +1,4 @@
+import { MentionText } from "./mention-text";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
@@ -646,7 +647,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
 function CommentBody({ body }: { body: CommentBodySegment[] }) {
   return body.map((segment, index) =>
     segment.type === "text" ? (
-      <span key={index}>{segment.text}</span>
+      <MentionText key={index} text={segment.text} />
     ) : (
       <FaceEmojiView emoji={segment.emoji} key={index} />
     ),

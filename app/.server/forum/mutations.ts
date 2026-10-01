@@ -1,3 +1,4 @@
+import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { bodyLength } from "@/lib/face-emojis";
@@ -304,6 +305,7 @@ export async function publishForum(
   const attachments = imageGuard(images, actor.id);
   const body = mixedBody(input.body, images, kind);
   await validateBodyEmojis(ctx.db, body);
+  await validateMentions(ctx.db, body);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const token = crypto.randomUUID(),
     db = ctx.db;
@@ -348,6 +350,7 @@ export async function publishForum(
           identity.key,
           token,
         ),
+      mentionNotification(db, actor.id, body, "", "post", "SELECT id FROM forum_posts WHERE user_id=? AND revision=?", [actor.id, token]),
       ...imageStatements(ctx, images, actor.id, token, offsets),
       ...contentIndexStatements(
         ctx,
@@ -489,6 +492,7 @@ export async function publishForum(
     ...contentIndexStatements(ctx, kind, actor.id, token, "", body, "insert"),
   );
   statements.push(replyNotificationStatement(ctx, kind, actor.id, token));
+  statements.push(mentionNotification(db, actor.id, body, "", kind === "post" ? "post" : "forum-comment", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
   await db.batch(statements);
   const result = await db
     .prepare(
@@ -520,6 +524,7 @@ export async function editForum(
   const attachments = imageGuard(images, actor.id, row.id);
   const body = mixedBody(input.body, images, target.kind);
   await validateBodyEmojis(ctx.db, body, row.body ?? "");
+  await validateMentions(ctx.db, body, row.body ?? "");
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const title =
     target.kind === "topic"
@@ -574,6 +579,7 @@ export async function editForum(
       "edit",
     ),
   );
+  statements.push(mentionNotification(ctx.db, actor.id, body, row.body ?? "", target.kind === "comment" ? "forum-comment" : "post", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
   await runGuarded(ctx, statements);
   return { target };
 }

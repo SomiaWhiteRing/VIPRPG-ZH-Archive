@@ -1,3 +1,4 @@
+import { searchMentionUsers } from "./mentions";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
@@ -113,6 +114,7 @@ export const api = new Hono<{
 }>();
 api.onError((error) => jsonError("请求失败", error));
 api.route("/", sitemapApi);
+api.get("/api/users/mentions", (c) => searchMentionUsers(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
   c.json({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, 200,
     { "Cache-Control": "no-store" }),

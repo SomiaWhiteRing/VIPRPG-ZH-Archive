@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBeforeUnload } from "react-router";
-import { ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
+import { AtSign, ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { Button } from "@/app/components/ui/button";
@@ -202,7 +202,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     <div className="grid min-w-0 gap-2" role="group" aria-label="评论编辑器"
       onKeyDownCapture={(event) => {
         if (
-          event.key !== "Enter" || !event.ctrlKey ||
+          (event.target instanceof Element && !!event.target.closest("[data-mention-picker]")) ||
+            event.key !== "Enter" || !event.ctrlKey ||
           event.altKey || event.metaKey || event.shiftKey ||
           event.nativeEvent.isComposing || event.keyCode === 229 || composing.current ||
           !(event.target instanceof Node) || !event.currentTarget.contains(event.target)
@@ -247,8 +248,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void addImages(files); }} />
       <EmojiPicker disabled={busy || unavailable} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)} onClose={() => editor.current?.focus()}>
         {(trigger) => <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1">{trigger}<Button type="button" variant="ghost" size="sm" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
-            onClick={() => picker.current?.click()}><ImagePlus aria-hidden />上传图片</Button></div>
+          <div className="flex items-center gap-1">{trigger}<Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger={inputId} disabled={busy || unavailable} onClick={() => editor.current?.mention()}><AtSign aria-hidden /></Button><Button type="button" variant="ghost" size="icon" aria-label="上传图片" title="上传图片" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
+            onClick={() => picker.current?.click()}><ImagePlus aria-hidden /></Button></div>
           <div className="flex items-center gap-2">
             {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>取消</Button> : null}
             <Button ref={submitButton} type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}

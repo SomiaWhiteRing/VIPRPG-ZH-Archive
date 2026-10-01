@@ -39,7 +39,7 @@ export type InboxItem = {
   canReject: boolean;
   interaction: InboxInteraction | null;
   commentNotification: {
-    kind: "comment" | "reply" | "like";
+    kind: "comment" | "reply" | "like" | "mention";
     targetTitle: string;
     href: string;
     excerpt: string;

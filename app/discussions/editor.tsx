@@ -1,6 +1,6 @@
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { bodyLength } from "@/lib/face-emojis";
-import { ChevronDown, ImagePlus, Maximize2, Minimize2 } from "lucide-react";
+import { AtSign, ChevronDown, ImagePlus, Maximize2, Minimize2 } from "lucide-react";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
 import { draftSnapshot, forumReplyLauncherClass } from "./draft";
@@ -239,6 +239,7 @@ export function ForumEditor({
         aria-hidden={isCollapsed}
         onKeyDownCapture={(event) => {
           if (
+            (event.target instanceof Element && !!event.target.closest("[data-mention-picker]")) ||
             event.key !== "Enter" || !event.ctrlKey ||
             event.altKey || event.metaKey || event.shiftKey ||
             event.nativeEvent.isComposing || event.keyCode === 229 || composing.current ||
@@ -415,6 +416,7 @@ export function ForumEditor({
           {(trigger) => (
             <div className="flex shrink-0 flex-wrap items-center gap-1">
               {trigger}
+                <Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger="forum-body" disabled={busy} onClick={() => mixed.current?.mention()}><AtSign aria-hidden /></Button>
               {!inline ? (
                 <>
                   <Input

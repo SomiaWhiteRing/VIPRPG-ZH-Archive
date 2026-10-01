@@ -1,3 +1,5 @@
+import { AUTO_LINK_PATTERN, autoLink } from "@/lib/auto-links";
+import { MentionText } from "@/app/components/comments/mention-text";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
 import { emojiIds } from "@/lib/face-emojis";
@@ -195,7 +197,7 @@ export function ForumBody({
   inline?: boolean;
 }) {
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
-  const segments = body.split(/(https?:\/\/[^\s<>]+|:face_[1-9]\d{0,15}:)/g);
+  const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:)`, "g"));
   return (
     <span
       className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap break-words text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
@@ -208,26 +210,16 @@ export function ForumBody({
               key={index}
             />
           );
-        if (/^https?:\/\//.test(part)) {
-          try {
-            const url = new URL(part);
-            if (url.protocol === "http:" || url.protocol === "https:")
-              return (
-                <a
-                  className="text-primary underline"
-                  key={index}
-                  href={url.href}
-                  target="_blank"
-                  rel="nofollow ugc noopener noreferrer"
-                >
-                  {part}
-                </a>
-              );
-          } catch {
-            /* 无效地址按纯文本显示。 */
-          }
-        }
-        return <span key={index}>{part}</span>;
+        const link = autoLink(part);
+        if (link) return (
+          <Fragment key={index}>
+            <a className="text-primary underline" href={link.href} target="_blank" rel="nofollow ugc noopener noreferrer">
+              {link.text}
+            </a>
+            {link.suffix}
+          </Fragment>
+        );
+        return <MentionText key={index} text={part} />;
       })}
     </span>
   );

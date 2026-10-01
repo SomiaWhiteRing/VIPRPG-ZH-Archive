@@ -374,7 +374,7 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
 async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
   const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
-  const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
+  const rows = await getD1(runtime).prepare(`SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
       c.work_id,c.creator_id,c.character_id,
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
       sender.id AS sender_id,sender.display_name,sender.status AS sender_status,
@@ -389,7 +389,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
         SELECT 1 FROM public_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
       ))`)
     .bind(JSON.stringify(ids)).all<{
-      id: number; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
+      id: number; mention: number | null; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
       work_id: number | null; creator_id: number | null; character_id: number | null; target_title: string;
       sender_id: number; display_name: string; sender_status: string; image_count: number;
     }>();
@@ -404,7 +404,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     const row = byId.get(item.id);
     if (!row) continue;
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
-    const action = row.like_comment_id
+    const action = row.mention ? "在评论中提及了你" : row.like_comment_id
       ? `赞了你的${row.root_comment_id ? "回复" : "评论"}`
       : row.reply_comment_id ? "回复了你的评论" : "评论了你上传的作品";
     item.title = `${name}${action}`;
@@ -412,7 +412,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       actorName: name,
       actorHref: row.sender_status === "active" ? `/users/${row.sender_id}` : null,
       action,
-      kind: row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
+      kind: row.mention ? "mention" : row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
       href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,
       excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
@@ -437,10 +437,11 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     actor_status: string;
     actor_avatar: string | null;
     reply_to_id: number | null;
+    mention: number | null;
   };
   const rows = await getD1(runtime)
     .prepare(
-      `SELECT i.id,t.id AS topic_id,p.post_number,c.id AS comment_id,
+      `SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,t.id AS topic_id,p.post_number,c.id AS comment_id,
     t.title AS topic_title,CASE WHEN i.forum_comment_id IS NOT NULL THEN c.body ELSE p.body END AS excerpt,
     sender.id AS actor_id,sender.display_name AS actor_name,sender.status AS actor_status,
     sender.avatar_blob_sha256 AS actor_avatar,c.reply_to_id
@@ -467,7 +468,7 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     if (!row) continue;
     const name = row.actor_status === "deleted" ? "账户已注销" : row.actor_name;
     const action =
-      item.type === "forum_like"
+      row.mention ? "在讨论中提及了你" : item.type === "forum_like"
         ? row.comment_id
           ? "赞了你的回复"
           : "赞了你的帖子"
