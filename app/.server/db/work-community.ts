@@ -1,3 +1,4 @@
+import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
 import { sha256Hex } from "@/app/.server/crypto/sha256";
 import type { CommentImage } from "@/lib/comment-images";
@@ -605,6 +606,7 @@ export async function createComment(
   const previous = await previousRequest();
   if (previous) return requiredComment(runtime, previous.id, userId);
   await validateBodyEmojis(db, body);
+  await validateMentions(db, body);
   const guard = commentImageGuard(ids, userId);
   const source = "SELECT id FROM comments WHERE user_id=? AND request_key=?";
   try {
@@ -638,6 +640,7 @@ export async function createComment(
         WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NOT NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
+      mentionNotification(db, userId, body, "", "comment", source, [userId, requestKey]),
     ]);
     const id = Number((results[0].results[0] as { id: number }).id);
     return requiredComment(runtime, id, userId);
@@ -671,6 +674,7 @@ export async function updateComment(
     .first<{ body: string }>();
   if (!previous) throw new HttpError(404, "评论不存在或不可编辑");
   await validateBodyEmojis(db, body, previous.body);
+  await validateMentions(db, body, previous.body);
   const source =
     "SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')";
   const ids = imagesInput === undefined ? undefined : parseCommentImageIds(imagesInput);
@@ -684,6 +688,7 @@ export async function updateComment(
       WHERE id=? AND user_id=? AND status IN('published','hidden')`,
       )
       .bind(...guard.args, body, id, userId),
+    mentionNotification(db, userId, body, previous.body, "comment", `${source} AND changes()=1`, [id, userId]),
     ...contentEmojiStatements(
       db,
       "comment",

@@ -1,3 +1,5 @@
+import { MentionPicker } from "./mention-picker";
+import { mentionToken, readMention, type MentionUser } from "@/lib/mentions";
 import {
   bodyLength,
   emojiIds,
@@ -24,7 +26,7 @@ import { Dropcursor, Placeholder, UndoRedo } from "@tiptap/extensions";
 import { closeHistory } from "@tiptap/pm/history";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import type { SelectionBookmark } from "@tiptap/pm/state";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import type { NodeViewProps } from "@tiptap/react";
 import {
   EditorContent,
@@ -46,9 +48,17 @@ import { createImageProcessor } from "@/app/discussions/image-processor";
 import type { DraftImage } from "@/app/discussions/images";
 import { cloneDraftImage, selectDraftImages } from "@/app/discussions/images";
 
+const UserMentionNode = TiptapNode.create({
+  name: "userMention", inline: true, group: "inline", atom: true,
+  addAttributes: () => ({ id: { default: null }, displayName: { default: "" } }),
+  parseHTML: () => [{ tag: "span[data-user-mention]", getAttrs: (element) => readMention(element.getAttribute("data-user-mention") ?? "") ?? false }],
+  renderHTML: ({ node }) => ["span", { "data-user-mention": mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName }), class: "text-primary" }, `@${node.attrs.displayName}`],
+});
+
 const EMPTY_EMOJIS: FaceEmoji[] = [];
 
 export type BodyEditorHandle = {
+  mention: () => void;
   insertFiles: (files: File[]) => void;
   insertText: (text: string) => void;
   insertEmoji: (emoji: FaceEmoji, options?: { focus?: boolean }) => void;
@@ -168,6 +178,9 @@ export function BodyEditor({
 }) {
   const limit =
     maxLength ?? (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const mentionBookmark = useRef<SelectionBookmark | null>(null);
+  const mentionHost = useRef<HTMLDivElement>(null);
   const [loadedEmojis, setLoadedEmojis] = useState<FaceEmoji[]>([]);
   const [emojiError, setEmojiError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -213,6 +226,7 @@ export function BodyEditor({
       HardBreak,
       ...(textOnly ? [] : [ForumImageNode]),
       FaceEmojiNode,
+      UserMentionNode,
       UndoRedo,
       Dropcursor.configure({ color: "var(--color-primary)", width: 2 }),
       Placeholder.configure({ placeholder }),
@@ -245,6 +259,15 @@ export function BodyEditor({
         "aria-multiline": "true",
         class: "min-h-16 p-3 outline-none text-[15px] leading-[1.7] [overflow-wrap:anywhere] whitespace-pre-wrap group-data-[topic=true]/body-editor:min-h-48 group-data-[topic=false]/body-editor:max-h-[min(32dvh,20rem)] group-data-[topic=false]/body-editor:overflow-y-auto [&_p]:m-0 [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_.is-editor-empty:first-child]:before:text-muted [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:h-0 [&_[data-node-view-wrapper]]:whitespace-normal [&_.node-faceEmoji]:inline-flex [&_.node-faceEmoji]:align-bottom [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:max-h-none [[data-forum-fullscreen=true]_&]:overflow-y-visible",
       },
+      handleTextInput: (view, from, to, text) => {
+        if (text !== "@" || view.composing || busy || pending.current) return false;
+        const preceding = view.state.doc.textBetween(Math.max(0, from - 1), from, "\n", "\ufffc");
+        if (/[A-Za-z0-9._%+/@:-]/.test(preceding)) return false;
+        view.dispatch(view.state.tr.insertText(text, from, to));
+        mentionBookmark.current = TextSelection.create(view.state.doc, from, from + 1).getBookmark();
+        setMentionOpen(true);
+        return true;
+      },
       handleDOMEvents: {
         compositionstart: () => {
           onCompositionChange(true);
@@ -252,6 +275,16 @@ export function BodyEditor({
         },
         compositionend: () => {
           onCompositionChange(false);
+          // The IME transaction may land after compositionend.
+          requestAnimationFrame(() => {
+            if (!editor || editor.isDestroyed || busy || pending.current) return;
+            const { from, empty } = editor.state.selection;
+            const text = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\n", "\ufffc");
+            if (empty && text.endsWith("@") && !/[A-Za-z0-9._%+/@:-]/.test(text.slice(0, -1))) {
+              mentionBookmark.current = TextSelection.create(editor.state.doc, from - 1, from).getBookmark();
+              setMentionOpen(true);
+            }
+          });
           return false;
         },
       },
@@ -261,6 +294,8 @@ export function BodyEditor({
         slice.content.textBetween(0, slice.content.size, "\n", (node) =>
           node.type.name === "hardBreak"
             ? "\n"
+            : node.type.name === "userMention"
+              ? mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName })
             : node.type.name === "faceEmoji"
               ? emojiToken(node.attrs.id)
               : "",
@@ -294,6 +329,7 @@ export function BodyEditor({
       },
     },
     onTransaction: ({ transaction }) => {
+      if (mentionBookmark.current) mentionBookmark.current = mentionBookmark.current.map(transaction.mapping);
       if (pending.current)
         pending.current.bookmark = pending.current.bookmark.map(
           transaction.mapping,
@@ -452,7 +488,30 @@ export function BodyEditor({
       return new Slice(Fragment.from(nodes), 0, 0);
     });
   }
+  function closeMention(user?: MentionUser, restoreFocus = true) {
+    if (editor && !editor.isDestroyed) {
+      const selection = mentionBookmark.current?.resolve(editor.state.doc);
+      if (user && !busy && selection) {
+        const transaction = editor.state.tr.setSelection(selection).replaceSelectionWith(editor.schema.nodes.userMention.create(user));
+        transaction.insertText(" ");
+        const value = readDocument(transaction.doc, assets);
+        if (enforceMaxLength && bodyLength(value.body) > limit) { onError("正文超过字数限制，请减少后再提及。"); return; }
+        editor.view.dispatch(transaction);
+      } else if (selection && restoreFocus) {
+        editor.commands.setTextSelection(selection.to);
+      }
+      if (restoreFocus) requestAnimationFrame(() => { if (!editor.isDestroyed) editor.commands.focus(); });
+    }
+    mentionBookmark.current = null;
+    setMentionOpen(false);
+  }
   useImperativeHandle(ref, () => ({
+    mention: () => {
+      if (!editor || busy || pending.current) return;
+      if (mentionOpen) { closeMention(); return; }
+      mentionBookmark.current = editor.state.selection.getBookmark();
+      setMentionOpen(true);
+    },
     insertFiles: (files) => {
       if (!textOnly) void insertFiles(files);
     },
@@ -505,6 +564,9 @@ export function BodyEditor({
           </Button>
         </div>
       ) : null}
+      <div ref={mentionHost} className="contents">
+        {mentionOpen && !busy ? <MentionPicker container={mentionHost.current?.closest<HTMLElement>("[data-forum-fullscreen=true]") ?? null} anchor={editor?.view.dom ?? null} inputId={inputId} onSelect={closeMention} onClose={(restoreFocus) => closeMention(undefined, restoreFocus)} /> : null}
+      </div>
       <EditorContent
         editor={editor}
         data-topic={topic}

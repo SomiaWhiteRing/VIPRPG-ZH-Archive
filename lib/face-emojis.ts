@@ -1,3 +1,4 @@
+import { mentionText } from "./mentions";
 import type { CharacterPortrait } from "@/lib/character-names";
 
 export type FaceEmojiCell = { blobSha256: string; row: number; column: number };
@@ -52,10 +53,10 @@ export function emojiIds(body: string): number[] {
   ];
 }
 export function emojiText(body: string): string {
-  return body.replace(FACE_EMOJI_PATTERN, "[表情]");
+  return mentionText(body.replace(FACE_EMOJI_PATTERN, "[表情]"));
 }
 export function bodyLength(body: string): number {
-  return [...body.replace(FACE_EMOJI_PATTERN, "\ufffc")].length;
+  return [...mentionText(body.replace(FACE_EMOJI_PATTERN, "\ufffc"))].length;
 }
 export function emojiCellKey(cell: FaceEmojiCell): string {
   return `${cell.blobSha256}:${cell.row}:${cell.column}`;
