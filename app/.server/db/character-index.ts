@@ -1,4 +1,7 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, classificationAuditSnapshot } from "@/app/.server/db/entity-audit";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
+import { characterIndexPermission } from "@/lib/authz/character-permissions";
 import { listPublicCharacterIndex } from "@/app/.server/db/taxonomy-library";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -128,8 +131,17 @@ function text(
 export async function updateCharacterIndex(
   runtime: AppRuntime,
   body: Record<string, unknown>,
+  actor: ArchiveUser,
 ): Promise<{ categoryId: string | null; characterId: number | null }> {
   const database = getD1(runtime);
+  const permission = characterIndexPermission(body);
+  if (!permission) throw new HttpError(400, "不支持的分类操作");
+  const save = (statements: D1PreparedStatement[], categoryIds: string[], characterIds: number[], siblingParent?: string | null) =>
+    auditedEntityBatch(database, statements, {
+      actor, eventType: "admin_character_classification_update", permission, source: "admin", operation: String(body.operation),
+      targets: [...categoryIds.map((id) => ({ type: "category" as const, id })), ...characterIds.map((id) => ({ type: "character" as const, id }))],
+      snapshot: classificationAuditSnapshot(categoryIds, characterIds, siblingParent),
+    });
   const [categories, memberships, characters, aliases] = await database.batch([
     ...structureStatements(database),
     database.prepare(
@@ -242,21 +254,19 @@ export async function updateCharacterIndex(
         ? category.sortOrder
         : nextOrder(parentId);
     if (category) {
-      const result = await database
+      const [result] = await save([database
         .prepare(
           `UPDATE character_categories SET parent_id=${parentExpression},label=?,original_name=?,source_url=?,sort_order=? WHERE id=?`,
         )
-        .bind(id, parentId, id, parentId, label, original, source, order, id)
-        .run();
+        .bind(id, parentId, id, parentId, label, original, source, order, id)], [id], []);
       if (!result.meta.changes)
         throw new HttpError(409, "分类已不存在，请刷新后重试");
     } else {
-      await database
+      await save([database
         .prepare(
           `INSERT INTO character_categories(id,parent_id,label,original_name,source_url,sort_order) VALUES (?,?,?,?,?,?)`,
         )
-        .bind(id, parentId, label, original, source, order)
-        .run();
+        .bind(id, parentId, label, original, source, order)], [id], []);
     }
     return { categoryId: id, characterId: null };
   }
@@ -264,10 +274,9 @@ export async function updateCharacterIndex(
     requireCategory(categoryId);
     if (children(categoryId).length)
       throw new HttpError(409, "请先移走分类内的子分类和角色");
-    await database
+    await save([database
       .prepare("DELETE FROM character_categories WHERE id=?")
-      .bind(categoryId)
-      .run();
+      .bind(categoryId)], [categoryId!], []);
     return { categoryId: category!.parentId, characterId: null };
   }
   if (body.operation === "addCharacters") {
@@ -290,7 +299,7 @@ export async function updateCharacterIndex(
     )
       throw new HttpError(400, "同一分类不能重复选择同一角色");
     const order = nextOrder(categoryId);
-    await database.batch(
+    await save(
       selected.map((item, index) =>
         database
           .prepare(
@@ -303,7 +312,7 @@ export async function updateCharacterIndex(
             item.displayName,
             item.originalName,
           ),
-      ),
+      ), [categoryId!], selected.map((item) => item.characterId),
     );
     return {
       categoryId,
@@ -354,7 +363,7 @@ export async function updateCharacterIndex(
           .bind(names.displayName, names.originalName, categoryId, characterId),
       );
     }
-    await database.batch(statements);
+    await save(statements, [...new Set([categoryId!, target])], [characterId]);
     return { categoryId: target, characterId };
   }
   if (body.operation === "saveSources") {
@@ -369,7 +378,7 @@ export async function updateCharacterIndex(
         ),
       ),
     ];
-    await database.batch([
+    await save([
       database
         .prepare("DELETE FROM character_sources WHERE character_id=?")
         .bind(characterId),
@@ -380,7 +389,7 @@ export async function updateCharacterIndex(
           )
           .bind(characterId, url, order),
       ),
-    ]);
+    ], [], [characterId]);
     return {
       categoryId:
         data.memberships.find((member) => member.characterId === characterId)
@@ -391,12 +400,11 @@ export async function updateCharacterIndex(
   if (body.operation === "removeCharacter") {
     requireCategory(categoryId);
     const characterId = requireCharacter(body.characterId);
-    await database
+    await save([database
       .prepare(
         "DELETE FROM character_category_memberships WHERE category_id=? AND character_id=?",
       )
-      .bind(categoryId, characterId)
-      .run();
+      .bind(categoryId, characterId)], [categoryId!], [characterId]);
     return { categoryId, characterId: null };
   }
   if (body.operation === "reorder") {
@@ -416,7 +424,7 @@ export async function updateCharacterIndex(
     if (target < 0 || target >= siblings.length)
       return { categoryId, characterId };
     [siblings[index], siblings[target]] = [siblings[target], siblings[index]];
-    await database.batch(
+    await save(
       siblings.map((item, order) =>
         item.characterId === null
           ? database
@@ -429,7 +437,8 @@ export async function updateCharacterIndex(
                 "UPDATE character_category_memberships SET sort_order=? WHERE category_id=? AND character_id=?",
               )
               .bind(order, item.categoryId, item.characterId),
-      ),
+      ), [...new Set(siblings.map((item) => item.categoryId).filter((id): id is string => id !== null))],
+      siblings.flatMap((item) => item.characterId === null ? [] : [item.characterId]), parentId,
     );
     return { categoryId, characterId };
   }
@@ -458,7 +467,7 @@ export async function updateCharacterIndex(
       (target > index ? target - 1 : target) +
       (body.position === "after" ? 1 : 0);
     siblings.splice(insertAt, 0, moved);
-    await database.batch(
+    await save(
       siblings.map((item, order) =>
         item.characterId === null
           ? database
@@ -471,7 +480,7 @@ export async function updateCharacterIndex(
                 "UPDATE character_category_memberships SET sort_order=? WHERE category_id=? AND character_id=?",
               )
               .bind(order, item.categoryId, item.characterId),
-      ),
+      ), [categoryId!], siblings.flatMap((item) => item.characterId === null ? [] : [item.characterId]), parentId,
     );
     return { categoryId, characterId: null };
   }

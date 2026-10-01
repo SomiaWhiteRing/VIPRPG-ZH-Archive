@@ -2,7 +2,7 @@ import {
   requireAnyPermission,
   requirePermission,
 } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
+import { auditedEntityBatch, characterAuditSnapshot } from "@/app/.server/db/entity-audit";
 import {
   parseCharacterPortraitLibraryForm,
   prepareCharacterPortraitLibraryUpdate,
@@ -142,7 +142,7 @@ export async function POST(
       new File([file], file.name, { type: `image/${info.format}` }),
     ]);
     const db = getD1(runtime);
-    await db.batch([
+    await auditedEntityBatch(db, [
       db
         .prepare(
           `INSERT OR IGNORE INTO character_materials(blob_sha256,kind,width_px,height_px) VALUES(?,?,?,?)`,
@@ -154,7 +154,8 @@ export async function POST(
         SELECT ?,id FROM character_materials WHERE blob_sha256=? AND kind=?`,
         )
         .bind(characterId, hash, kind),
-    ]);
+    ], { actor: auth.user, eventType: "admin_character_material_upload", targets: [{ type: "character", id: characterId }],
+      snapshot: characterAuditSnapshot(characterId), permission: "character.portrait.upload", source: "admin" });
     const material = await db
       .prepare(
         `SELECT id,kind,blob_sha256 AS blobSha256,width_px AS width,height_px AS height,'' AS relatedNames,1 AS isPublic
@@ -163,12 +164,6 @@ export async function POST(
       .bind(hash, kind)
       .first<AdminCharacterMaterial>();
     if (!material) throw new HttpError(500, "素材已上传，但没有返回素材记录");
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_material_upload",
-      detail: { characterId, kind, sha256: hash },
-    });
     return json({ ok: true, material }, { status: 201 });
   } catch (error) {
     return jsonError("素材上传失败", error);
@@ -253,17 +248,9 @@ export async function PUT(
         )
         .bind(JSON.stringify(portrait.faceSheetIds), characterId),
     );
-    await db.batch(statements);
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_material_update",
-      detail: {
-        characterId,
-        faceSheetIds: JSON.stringify(portrait.faceSheetIds),
-        materialIds: selected,
-      },
-    });
+    await auditedEntityBatch(db, statements, { actor: auth.user, eventType: "admin_character_material_update",
+      targets: [{ type: "character", id: characterId }], snapshot: characterAuditSnapshot(characterId),
+      permission: "character.portrait.manage_any", source: "admin" });
     return json({ ok: true });
   } catch (error) {
     return jsonError("素材保存失败", error);

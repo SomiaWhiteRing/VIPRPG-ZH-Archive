@@ -33,7 +33,7 @@ async function updateAvatar(runtime: AppRuntime, request: Request, context: Rout
       if (!request.headers.get("content-type")?.toLowerCase().startsWith("image/png")) throw new HttpError(415, "头像必须是 PNG 文件");
       avatarBlobSha256 = await storeAvatarPng(runtime, await request.arrayBuffer());
     }
-    await editPublicCreator(runtime, creatorId, auth.user.id, { avatarBlobSha256, previousAvatar: previous });
+    await editPublicCreator(runtime, creatorId, auth.user, { avatarBlobSha256, previousAvatar: previous });
     return json({ ok: true, avatarBlobSha256 });
   } catch (error) {
     return jsonError("作者头像保存失败", error);

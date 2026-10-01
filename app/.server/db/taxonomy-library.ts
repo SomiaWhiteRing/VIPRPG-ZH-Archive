@@ -6,6 +6,8 @@ import {
   mapCharacterPortrait,
 } from "@/app/.server/db/character-portrait-library";
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, characterAuditSnapshot, combinedAuditSnapshot, tagAuditSnapshot } from "@/app/.server/db/entity-audit";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import type {
   CharacterAliasSuggestion,
@@ -284,6 +286,7 @@ export async function createCharacterForAdmin(
     primaryName: string;
     originalName: string;
   },
+  actor: ArchiveUser,
 ): Promise<{ character: AdminCharacterEdit; created: boolean }> {
   const primaryName = normalizeEntityName(input.primaryName);
   if (!primaryName)
@@ -329,14 +332,19 @@ export async function createCharacterForAdmin(
   }
 
   try {
-    await database
+    const snapshot = characterAuditSnapshot(0);
+    snapshot.sql = snapshot.sql.replace("WHERE id=?", "WHERE original_name_key=?");
+    snapshot.binds = [originalKey];
+    await auditedEntityBatch(database, [database
       .prepare(
         `INSERT INTO characters(
          primary_name,primary_name_key,original_name,original_name_key,extra_json
        ) VALUES(?,?,?,?,'{}')`,
       )
-      .bind(primaryName, primaryKey, originalName, originalKey)
-      .run();
+      .bind(primaryName, primaryKey, originalName, originalKey)], {
+        actor, eventType: "admin_character_create", targets: "character", snapshot,
+        permission: "character.create", source: "admin",
+      });
   } catch (error) {
     if (isCharacterIdentityConstraintError(error)) {
       throw new HttpError(
@@ -369,6 +377,7 @@ export async function updateCharacterForAdmin(
     mergeTargetId: number | null;
     mergeSourceId: number | null;
   },
+  actor: ArchiveUser,
 ): Promise<AdminCharacterEdit> {
   const primaryName = normalizeEntityName(input.primaryName);
   if (!primaryName)
@@ -388,7 +397,7 @@ export async function updateCharacterForAdmin(
     );
   }
   if (input.mergeTargetId) {
-    await mergeCharacter(runtime, input.characterId, input.mergeTargetId);
+    await mergeCharacter(runtime, input.characterId, input.mergeTargetId, actor);
     const target = await getCharacterById(runtime, input.mergeTargetId, true);
     if (!target)
       throw new HttpError(
@@ -441,7 +450,7 @@ export async function updateCharacterForAdmin(
     assertCharacterIdentityAvailable(identityConflicts, input.characterId);
   }
   try {
-    await database.batch([
+    await auditedEntityBatch(database, [
       ...mergeStatements,
       ...characterUpdateStatements(database, {
         characterId: input.characterId,
@@ -453,7 +462,14 @@ export async function updateCharacterForAdmin(
             : input.description,
         aliases: aliasesToSave,
       }),
-    ]);
+    ], { actor, eventType: "admin_character_update", targets: [
+      { type: "character", id: input.characterId },
+      ...(input.mergeSourceId ? [{ type: "character" as const, id: input.mergeSourceId }] : []),
+    ], snapshot: input.mergeSourceId ? combinedAuditSnapshot({
+      target: characterAuditSnapshot(input.characterId, true), source: characterAuditSnapshot(input.mergeSourceId, true),
+    }) : characterAuditSnapshot(input.characterId),
+    permission: input.mergeSourceId ? "character.merge_any" : "character.metadata.update_any", source: "admin",
+    operation: input.mergeSourceId ? "mergeSource" : "metadata" });
   } catch (error) {
     if (isCharacterIdentityConstraintError(error)) {
       throw new HttpError(
@@ -582,6 +598,7 @@ export async function updateTagForAdmin(
     namespace: string;
     description: string | null;
   },
+  actor: ArchiveUser,
 ): Promise<AdminTagEdit> {
   const name = normalizeEntityName(input.originalName);
   if (!name)
@@ -605,9 +622,12 @@ export async function updateTagForAdmin(
     );
   }
   const database = getD1(runtime);
-  const result = await database.prepare(
+  const [result] = await auditedEntityBatch(database, [database.prepare(
     `UPDATE tags SET namespace=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE name=?`,
-  ).bind(input.namespace, input.description, original.name).run();
+  ).bind(input.namespace, input.description, original.name)], {
+    actor, eventType: "admin_tag_update", targets: [{ type: "tag", id: original.name }],
+    snapshot: tagAuditSnapshot(original.name), permission: "tag.metadata.update_any", source: "admin",
+  });
   if (!result.meta.changes) {
     throw new HttpError(409, "公共标签已变更，请刷新页面后重试。", "tag_changed");
   }
@@ -666,10 +686,15 @@ async function mergeCharacter(
   runtime: AppRuntime,
   id: number,
   targetId: number,
+  actor: ArchiveUser,
 ): Promise<void> {
   const database = getD1(runtime);
   const prepared = await prepareCharacterMerge(database, id, targetId);
-  await database.batch(prepared.statements);
+  await auditedEntityBatch(database, prepared.statements, {
+    actor, eventType: "admin_character_update", targets: [{ type: "character", id }, { type: "character", id: targetId }],
+    snapshot: combinedAuditSnapshot({ source: characterAuditSnapshot(id, true), target: characterAuditSnapshot(targetId, true) }),
+    permission: "character.merge_any", source: "admin", operation: "mergeTarget",
+  });
 }
 
 async function prepareCharacterMerge(

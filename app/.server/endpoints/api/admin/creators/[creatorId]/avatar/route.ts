@@ -1,5 +1,4 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { updateCreatorAvatar } from "@/app/.server/db/creator-library";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -35,13 +34,7 @@ export async function PUT(
       "creator id",
     );
     const sha256 = await storeAvatarPng(runtime, await request.arrayBuffer());
-    await updateCreatorAvatar(runtime, creatorId, sha256);
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_creator_avatar_update",
-      detail: { creatorId, avatarBlobSha256: sha256 },
-    });
+    await updateCreatorAvatar(runtime, creatorId, sha256, auth.user);
     return json({ ok: true, avatarBlobSha256: sha256 });
   } catch (error) {
     return jsonError("作者头像上传失败", error);
@@ -64,13 +57,7 @@ export async function DELETE(
       (await context.params).creatorId,
       "creator id",
     );
-    await updateCreatorAvatar(runtime, creatorId, null);
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_creator_avatar_delete",
-      detail: { creatorId },
-    });
+    await updateCreatorAvatar(runtime, creatorId, null, auth.user);
     return json({ ok: true });
   } catch (error) {
     return jsonError("作者头像删除失败", error);

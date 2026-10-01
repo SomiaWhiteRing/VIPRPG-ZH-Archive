@@ -2,6 +2,7 @@ import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
+import { auditedEntityBatch, workEditAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { CharacterPortraitRow } from "@/app/.server/db/character-portrait-library";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
@@ -965,24 +966,10 @@ export async function updateOwnedWork(
         .bind(input.workId, downloadUrl),
     );
   }
-  statements.push(
-    database
-      .prepare(
-        `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,'uploader_work_update',?)`,
-      )
-      .bind(
-        input.user.id,
-        input.user.email,
-        JSON.stringify({
-          workId: input.workId,
-          oldOriginalTitle: before.originalTitle,
-          newOriginalTitle: originalTitle,
-          oldStatus: before.status,
-          newStatus: input.status,
-        }),
-      ),
-  );
-  await database.batch(statements);
+  await auditedEntityBatch(database, statements, {
+    actor: input.user, eventType: "uploader_work_update", targets: [{ type: "work", id: input.workId }],
+    snapshot: workEditAuditSnapshot(input.workId, characters, before.characterCredits.map((credit) => credit.id)), permission: "work.update_own", source: "owned",
+  });
 }
 export async function updateWorkForAdmin(
   runtime: AppRuntime,
@@ -1188,19 +1175,10 @@ export async function updateWorkForAdmin(
         .bind(input.workId, link.label, link.url, link.linkType),
     );
   }
-  statements.push(
-    database
-      .prepare(
-        `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
-         VALUES(?,?,'admin_work_update',?)`,
-      )
-      .bind(
-        actor.id,
-        actor.email,
-        JSON.stringify({ workId: input.workId, status: input.status }),
-      ),
-  );
-  await database.batch(statements);
+  await auditedEntityBatch(database, statements, {
+    actor, eventType: "admin_work_update", targets: [{ type: "work", id: input.workId }],
+    snapshot: workEditAuditSnapshot(input.workId, characters, current.characterCredits.map((credit) => credit.id)), permission: canUpdateMetadata ? "work.metadata.update_any" : "work.distribution.update_any", source: "admin",
+  });
 }
 
 export async function createExternalWork(

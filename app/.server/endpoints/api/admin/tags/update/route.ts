@@ -1,5 +1,4 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import {
   parseTagEditForm,
   updateTagForAdmin,
@@ -34,17 +33,7 @@ export async function POST(
       fallbackPath = `/admin/tags/edit?name=${encodeURIComponent(input.originalName)}`;
     }
 
-    const tag = await updateTagForAdmin(runtime, input);
-
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_tag_update",
-      detail: {
-        originalName: input.originalName,
-        resultingName: tag.name,
-      },
-    });
+    const tag = await updateTagForAdmin(runtime, input, auth.user);
 
     const redirectTo = `/admin/tags/edit?name=${encodeURIComponent(tag.name)}`;
     if (requestWantsJson(request)) {

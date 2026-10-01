@@ -12,6 +12,7 @@ import {
   prepareWorkStaffStatements,
 } from "@/app/.server/db/creators";
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, workEditAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { ImportJobRow } from "@/app/.server/db/import-jobs";
 import { assertWorkCanReceiveArchive } from "@/app/.server/db/import-jobs";
 import { getWorkForAdminEdit, normalizeExternalLinks } from "@/app/.server/db/game-library";
@@ -1271,10 +1272,6 @@ async function finalizeArchiveCommit(
   const status = input.metadata.admin?.status ?? game.status;
   const characters = input.metadata.characters ?? [];
   const statements: D1PreparedStatement[] = [];
-  const before = await database
-    .prepare(`SELECT original_title,status FROM works WHERE id=? LIMIT 1`)
-    .bind(input.workId)
-    .first<{ original_title: string; status: string }>();
   const canEditOwnWork = !input.metadata.admin && await canEditWork(runtime, input.workId, input.user);
   const canUpdateMetadata = input.metadata.target.mode === "create" ||
     hasPermission(input.user, "work.metadata.update_any") || canEditOwnWork;
@@ -1429,26 +1426,6 @@ async function finalizeArchiveCommit(
       ),
     database
       .prepare(
-        `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
-         SELECT ij.uploader_id,u.email,'archive_work_commit',?
-         FROM import_jobs ij
-         LEFT JOIN users u ON u.id=ij.uploader_id
-         WHERE ij.id=?`,
-      )
-      .bind(
-        JSON.stringify({
-          workId: input.workId,
-          archiveVersionId: input.archiveVersionId,
-          mode: input.metadata.target.mode,
-          oldOriginalTitle: before?.original_title ?? null,
-          newOriginalTitle: game.originalTitle,
-          oldStatus: before?.status ?? null,
-          newStatus: status,
-        }),
-        input.importJobId,
-      ),
-    database
-      .prepare(
         `DELETE FROM import_job_excluded_file_types WHERE import_job_id = ?`,
       )
       .bind(input.importJobId),
@@ -1472,7 +1449,14 @@ async function finalizeArchiveCommit(
     );
   }
 
-  await database.batch(statements);
+  await auditedEntityBatch(database, statements, {
+    actor: input.user, eventType: "archive_work_commit", targets: [{ type: "work", id: input.workId }],
+    snapshot: workEditAuditSnapshot(input.workId, characters, []), source: input.metadata.admin ? "admin" : "owned",
+    permission: input.metadata.target.mode === "create" ? "import_job.create"
+      : input.metadata.admin ? "work.distribution.update_any"
+      : hasPermission(input.user, "work.metadata.update_any") ? "work.metadata.update_any" : "work.update_own",
+    context: { archiveVersionId: input.archiveVersionId, importJobId: input.importJobId, mode: input.metadata.target.mode },
+  });
 }
 
 async function insertArchiveVersion(

@@ -1,5 +1,6 @@
 import { drainViewMerges, initializeWorkPlays } from "@/app/.server/views/service";
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, combinedAuditSnapshot, creatorAuditSnapshot, workAuditSnapshot } from "@/app/.server/db/entity-audit";
 import { findUserByEmail } from "@/app/.server/db/users";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { canMergeWorks, hasPermission } from "@/lib/authz/permissions";
@@ -39,7 +40,7 @@ export async function setWorkMaintainer(
     !(await db.prepare(`SELECT id FROM works WHERE id=?`).bind(workId).first())
   )
     throw new HttpError(404, "作品不存在");
-  await db.batch([
+  await auditedEntityBatch(db, [
     remove
       ? db
           .prepare(`DELETE FROM work_uploaders WHERE work_id=? AND user_id=?`)
@@ -49,12 +50,9 @@ export async function setWorkMaintainer(
             `INSERT OR IGNORE INTO work_uploaders(work_id,user_id) VALUES(?,?)`,
           )
           .bind(workId, user.id),
-    audit(db, actor, "work_maintainer_changed", {
-      workId,
-      userId: user.id,
-      remove,
-    }),
-  ]);
+  ], { actor, eventType: "work_maintainer_changed", targets: [{ type: "work", id: workId }],
+    snapshot: { sql: "SELECT json_object('maintainers',json((SELECT json_group_array(user_id) FROM (SELECT user_id FROM work_uploaders WHERE work_id=? ORDER BY user_id))))", binds: [workId] },
+    permission: "work.maintainer.manage_any", source: "admin", context: { userId: user.id, remove } });
 }
 
 export async function mergeCreators(
@@ -80,7 +78,7 @@ export async function mergeCreators(
       409,
       "两个人物在同一作品的相同职务中有不同署名或备注，请先统一后再合并",
     );
-  await db.batch([
+  await auditedEntityBatch(db, [
     db
       .prepare(
         `INSERT OR IGNORE INTO creator_aliases(creator_id,name,name_key,source)
@@ -103,8 +101,9 @@ export async function mergeCreators(
     db.prepare(`UPDATE creators SET public_at=COALESCE(public_at,(SELECT public_at FROM creators WHERE id=?)) WHERE id=?`)
       .bind(source, target),
     db.prepare(`DELETE FROM creators WHERE id=?`).bind(source),
-    audit(db, actor, "creators_merged", { source, target }),
-  ]);
+  ], { actor, eventType: "creators_merged", targets: [{ type: "creator", id: source }, { type: "creator", id: target }],
+    snapshot: combinedAuditSnapshot({ source: creatorAuditSnapshot(source, true), target: creatorAuditSnapshot(target, true) }),
+    permission: "creator.merge_any", source: "admin", context: { source, target } });
 }
 
 export async function mergeWorks(
@@ -348,10 +347,11 @@ export async function mergeWorks(
         `UPDATE works SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?`,
       )
       .bind(source),
-    audit(db, actor, "works_merged", { source, target }),
   );
   try {
-    await db.batch(statements);
+    await auditedEntityBatch(db, statements, { actor, eventType: "works_merged", targets: [{ type: "work", id: source }, { type: "work", id: target }],
+      snapshot: combinedAuditSnapshot({ source: workAuditSnapshot(source, true), target: workAuditSnapshot(target, true) }),
+      permission: "work.merge_any", source: "admin", context: { source, target } });
   } catch (error) {
     await assertWorkMergeDeclarations(db, source, target);
     await assertArchiveMergeStates(db, source, target);
@@ -427,19 +427,6 @@ async function requirePair(
     .first<{ n: number }>();
   if (row?.n !== 2) throw new HttpError(404, "合并来源或目标不存在");
 }
-function audit(
-  db: D1Database,
-  actor: ArchiveUser,
-  event: string,
-  detail: Record<string, unknown>,
-) {
-  return db
-    .prepare(
-      `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json) VALUES(?,?,?,?)`,
-    )
-    .bind(actor.id, actor.email, event, JSON.stringify(detail));
-}
-
 async function assertMergeCover(db: D1Database, target: number) {
   if (!await db.prepare("SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover'").bind(target).first())
     throw new HttpError(409, "目标作品缺少封面，请先指定封面再合并");

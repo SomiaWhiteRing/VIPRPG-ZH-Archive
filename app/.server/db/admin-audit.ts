@@ -1,6 +1,7 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { AdminAuditLog, AdminRoleEvent } from "@/lib/dto/db/admin-audit";
+import { auditRecord } from "@/lib/entity-audit";
 
 type AuditLogRow = {
   id: number;
@@ -34,6 +35,8 @@ export async function searchAdminAuditLogs(
   input: {
     query?: string;
     eventType?: string;
+    targetType?: string;
+    targetId?: string;
     page?: number;
     pageSize?: number;
   },
@@ -46,17 +49,32 @@ export async function searchAdminAuditLogs(
   const pageSize = clampLimit(input.pageSize ?? 50);
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const clauses: string[] = [];
+  const detailSql = "CASE WHEN json_valid(a.detail_json) THEN a.detail_json ELSE NULL END";
   const binds: Array<string | number> = [];
   if (input.query?.trim()) {
     const value = `%${input.query.trim()}%`;
     clauses.push(
-      "(u.display_name LIKE ? OR COALESCE(a.email,u.email) LIKE ? OR CAST(a.user_id AS TEXT)=?)",
+      `(u.display_name LIKE ? OR COALESCE(a.email,u.email) LIKE ? OR CAST(a.user_id AS TEXT)=? OR json_extract(${detailSql},'$.actor.displayName') LIKE ? OR CAST(json_extract(${detailSql},'$.actor.userId') AS TEXT)=?)`,
     );
-    binds.push(value, value, input.query.trim());
+    binds.push(value, value, input.query.trim(), value, input.query.trim());
   }
   if (input.eventType?.trim()) {
     clauses.push("a.event_type LIKE ?");
     binds.push(`%${input.eventType.trim()}%`);
+  }
+  if (input.targetType || input.targetId?.trim()) {
+    const targetClauses: string[] = [];
+    if (input.targetType) { targetClauses.push("json_extract(target.value,'$.type')=?"); binds.push(input.targetType); }
+    if (input.targetId?.trim()) { targetClauses.push("CAST(json_extract(target.value,'$.id') AS TEXT)=?"); binds.push(input.targetId.trim()); }
+    const legacyTypes = ["work", "creator", "character", "category", "tag"].filter((type) => !input.targetType || type === input.targetType);
+    const legacyClauses = legacyTypes.map((type) => {
+      const path = type === "tag" ? "$.originalName" : `$.${type}Id`;
+      if (!input.targetId?.trim()) return `json_extract(${detailSql},'${path}') IS NOT NULL`;
+      binds.push(input.targetId.trim());
+      return `CAST(json_extract(${detailSql},'${path}') AS TEXT)=?`;
+    });
+    clauses.push(`(EXISTS(SELECT 1 FROM json_each(${detailSql},'$.targets') target WHERE ${targetClauses.join(" AND ")})
+      ${legacyClauses.length ? `OR (${legacyClauses.join(" OR ")})` : ""})`);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const database = getD1(runtime);
@@ -143,15 +161,17 @@ function parseDetail(value: string | null): unknown {
 }
 
 function mapAuditLog(row: AuditLogRow): AdminAuditLog {
+  const detail = parseDetail(row.detail_json);
+  const historicalId = auditRecord(auditRecord(detail)?.actor)?.userId;
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: row.user_id ?? (typeof historicalId === "number" && Number.isSafeInteger(historicalId) && historicalId > 0 ? historicalId : null),
     actorName: row.actor_name,
     email: row.email,
     eventType: row.event_type,
     ipHash: row.ip_hash,
     userAgentHash: row.user_agent_hash,
-    detail: parseDetail(row.detail_json),
+    detail,
     createdAt: row.created_at,
   };
 }

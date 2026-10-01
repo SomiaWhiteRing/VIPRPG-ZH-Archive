@@ -1,5 +1,4 @@
 import { requireAnyPermission } from "@/app/.server/auth/authorize";
-import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import {
   getCharacterPortraitConfigurationForAdmin,
   parseCharacterPortraitLibraryForm,
@@ -119,7 +118,7 @@ export async function POST(
         : null;
     let character =
       metadataRequested || mergeRequested
-        ? await updateCharacterForAdmin(runtime, input)
+        ? await updateCharacterForAdmin(runtime, input, auth.user)
         : currentCharacter;
     if (portraitLibrary && !input.mergeTargetId) {
       const [currentPortraitConfiguration, sourcePortraitConfiguration] =
@@ -140,24 +139,10 @@ export async function POST(
             ? (sourcePortraitConfiguration?.defaultPortrait ?? null)
             : null),
         actorUserId: auth.user.id,
-      });
+      }, auth.user);
       character =
         (await getCharacterForAdminEdit(runtime, characterId)) ?? character;
     }
-
-    await writeAuthAuditLog(runtime, {
-      userId: auth.user.id,
-      email: auth.user.email,
-      eventType: "admin_character_update",
-      detail: {
-        characterId,
-        resultingCharacterId: character.id,
-        merged: Boolean(input.mergeTargetId || input.mergeSourceId),
-        mergedSourceCharacterId: input.mergeSourceId,
-        portraitLibraryUpdated:
-          Boolean(portraitLibrary) && !input.mergeTargetId,
-      },
-    });
 
     const redirectTo = `/admin/characters/${character.id}`;
     if (requestWantsJson(request)) {

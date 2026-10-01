@@ -1,7 +1,9 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, relationAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
   getRelationEditorCapabilities,
+  hasPermission,
   type RelationEditorCapabilities,
 } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
@@ -106,7 +108,11 @@ export async function createWorkRelation(
   }
   let result: Awaited<ReturnType<typeof database.batch>>;
   try {
-    result = await database.batch(statements);
+    result = await auditedEntityBatch(database, statements, {
+      actor, eventType: "work_relation_create", targets: [{ type: "work", id: input.fromWorkId }, { type: "work", id: input.toWorkId }],
+      snapshot: relationAuditSnapshot(input.fromWorkId, input.toWorkId),
+      permission: hasPermission(actor, "relation.create_any") ? "relation.create_any" : "relation.create", source: "public",
+    });
   } catch (error) {
     if (isConstraintError(error)) throw new HttpError(409, "该普通关联已存在");
     throw error;
@@ -194,7 +200,11 @@ export async function updateWorkRelation(
     );
   }
   try {
-    await database.batch(statements);
+    await auditedEntityBatch(database, statements, {
+      actor, eventType: "work_relation_update", targets: [{ type: "work", id: row.from_work_id }, { type: "work", id: row.to_work_id }],
+      snapshot: relationAuditSnapshot(row.from_work_id, row.to_work_id),
+      permission: hasPermission(actor, "relation.update_any") ? "relation.update_any" : null, source: "public",
+    });
   } catch (error) {
     if (isConstraintError(error)) throw new HttpError(409, "该普通关联已存在");
     throw error;
@@ -238,7 +248,11 @@ export async function deleteWorkRelation(
       );
     }
   }
-  await database.batch(statements);
+  await auditedEntityBatch(database, statements, {
+    actor, eventType: "work_relation_delete", targets: [{ type: "work", id: row.from_work_id }, { type: "work", id: row.to_work_id }],
+    snapshot: relationAuditSnapshot(row.from_work_id, row.to_work_id),
+    permission: hasPermission(actor, "relation.delete_any") ? "relation.delete_any" : null, source: "public",
+  });
 }
 
 export async function createTranslationRelation(
@@ -334,7 +348,7 @@ export async function createTranslationRelation(
 
   let result: Awaited<ReturnType<typeof database.batch>>;
   try {
-    result = await database.batch([
+    result = await auditedEntityBatch(database, [
       database
         .prepare(
           `INSERT INTO translation_relations (source_work_id,target_role,target_work_id,vice_versa,created_by_user_id)
@@ -352,7 +366,11 @@ export async function createTranslationRelation(
            VALUES (?, ?, ?, 1, ?)`,
         )
         .bind(input.targetWorkId, targetRole, input.sourceWorkId, actor.id),
-    ]);
+    ], {
+      actor, eventType: "translation_relation_create", targets: [{ type: "work", id: input.sourceWorkId }, { type: "work", id: input.targetWorkId }],
+      snapshot: relationAuditSnapshot(input.sourceWorkId, input.targetWorkId, true),
+      permission: hasPermission(actor, "translation_relation.create_any") ? "translation_relation.create_any" : "translation_relation.create", source: "public",
+    });
   } catch (error) {
     if (isConstraintError(error))
       throw new HttpError(409, "该翻译关联已存在或角色冲突");
@@ -387,7 +405,7 @@ export async function deleteTranslationRelation(
   await assertCanEditWorkRelations(
     runtime, row.source_work_id, actor, "canDeleteTranslation",
   );
-  await getD1(runtime).batch([
+  await auditedEntityBatch(getD1(runtime), [
     getD1(runtime)
       .prepare(`DELETE FROM translation_relations WHERE id=?`)
       .bind(id),
@@ -400,7 +418,11 @@ export async function deleteTranslationRelation(
         row.source_work_id,
         row.vice_versa === 0 ? 1 : 0,
       ),
-  ]);
+  ], {
+    actor, eventType: "translation_relation_delete", targets: [{ type: "work", id: row.source_work_id }, { type: "work", id: row.target_work_id }],
+    snapshot: relationAuditSnapshot(row.source_work_id, row.target_work_id, true),
+    permission: hasPermission(actor, "translation_relation.delete_any") ? "translation_relation.delete_any" : null, source: "public",
+  });
 }
 
 async function relationById(
