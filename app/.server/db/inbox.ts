@@ -377,7 +377,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
   const rows = await getD1(runtime).prepare(`SELECT i.id,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
       c.work_id,c.creator_id,c.character_id,
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
-      sender.display_name,sender.status AS sender_status,
+      sender.id AS sender_id,sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
     FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
     LEFT JOIN public_works w ON w.id=c.work_id
@@ -391,7 +391,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     .bind(JSON.stringify(ids)).all<{
       id: number; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
       work_id: number | null; creator_id: number | null; character_id: number | null; target_title: string;
-      display_name: string; sender_status: string; image_count: number;
+      sender_id: number; display_name: string; sender_status: string; image_count: number;
     }>();
   const byId = new Map(rows.results.map((row) => [row.id, row]));
   const noticeIds = new Set(ids);
@@ -404,10 +404,14 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     const row = byId.get(item.id);
     if (!row) continue;
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
-    item.title = row.like_comment_id
-      ? `${name}赞了你的${row.root_comment_id ? "回复" : "评论"}`
-      : row.reply_comment_id ? `${name}回复了你的评论` : `${name}评论了你上传的作品`;
+    const action = row.like_comment_id
+      ? `赞了你的${row.root_comment_id ? "回复" : "评论"}`
+      : row.reply_comment_id ? "回复了你的评论" : "评论了你上传的作品";
+    item.title = `${name}${action}`;
     item.commentNotification = {
+      actorName: name,
+      actorHref: row.sender_status === "active" ? `/users/${row.sender_id}` : null,
+      action,
       kind: row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
       href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,

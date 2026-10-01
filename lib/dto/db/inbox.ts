@@ -38,7 +38,15 @@ export type InboxItem = {
   canApprove: boolean;
   canReject: boolean;
   interaction: InboxInteraction | null;
-  commentNotification: { kind: "comment" | "reply" | "like"; targetTitle: string; href: string; excerpt: string } | null;
+  commentNotification: {
+    kind: "comment" | "reply" | "like";
+    targetTitle: string;
+    href: string;
+    excerpt: string;
+    actorName: string;
+    actorHref: string | null;
+    action: string;
+  } | null;
 };
 
 export type InboxInteraction = {
