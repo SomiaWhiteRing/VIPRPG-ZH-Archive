@@ -100,7 +100,6 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
             webPlaySizeBytes: current.webPlaySizeBytes,
           } : null}
           externalDownload={externalDownload ? { url: externalDownload.url } : null}
-          isAuthenticated={Boolean(currentUser)}
           workId={work.id}
         />
       }

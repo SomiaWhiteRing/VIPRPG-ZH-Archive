@@ -1,5 +1,6 @@
 import type { WorkCommunitySummary } from "@/lib/dto/db/work-community";
 import { formatNumber } from "@/lib/format";
+import { PLAY_COUNT_DESCRIPTION } from "@/lib/view-stats";
 import { Eye, Gamepad2, Heart, MessageCircle } from "lucide-react";
 import { useRouteLoaderData } from "react-router";
 import type { loader as rootLoader } from "@/app/root";
@@ -8,7 +9,7 @@ type Counts = Pick<WorkCommunitySummary, "viewCount" | "playerCount" | "commentC
 
 const metrics = [
   { key: "viewCount", Icon: Eye, label: "浏览量", shortLabel: "浏览" },
-  { key: "playerCount", Icon: Gamepad2, label: "游玩人数", shortLabel: "游玩" },
+  { key: "playerCount", Icon: Gamepad2, label: "游玩数", shortLabel: "游玩" },
   { key: "commentCount", Icon: MessageCircle, label: "评论数", shortLabel: "评论" },
   { key: "favoriteCount", Icon: Heart, label: "收藏数", shortLabel: "收藏" },
 ] as const;
@@ -35,7 +36,7 @@ export function WorkPopularityStats({ stats, showLabels = false }: { stats: Coun
       {metrics.map(({ key, Icon, label, shortLabel }) => {
         const count = stats[key];
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums" title={`${label} ${formatNumber(count)}`} key={key}>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums" title={`${label} ${formatNumber(count)}${key === "playerCount" ? `；${PLAY_COUNT_DESCRIPTION}` : ""}`} key={key}>
             <Icon aria-hidden className="size-3 shrink-0 min-[641px]:size-3.5" />
             <span className="sr-only">{label} {formatNumber(count)}</span>
             <span aria-hidden>{count >= 10000 ? compactCount.format(count) : formatNumber(count)}</span>

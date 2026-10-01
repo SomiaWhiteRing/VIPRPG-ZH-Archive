@@ -1,6 +1,6 @@
 import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
-import type { StatKind } from "@/lib/view-stats";
+import type { StatKind, ViewKind } from "@/lib/view-stats";
 
 const FRESH_MS = 15 * 60 * 1000;
 const MAX_IDS = 128;
@@ -17,7 +17,7 @@ function cacheKey(origin: string, kind: StatKind, id: number) {
   return new Request(`${origin}/__view_stats/v1/${kind}/${id}`);
 }
 
-export async function recordView(runtime: AppRuntime, kind: StatKind, id: number, initialCount = 0) {
+async function visitorIdentity(runtime: AppRuntime) {
   const request = runtime.request;
   const userAgent = request.headers.get("user-agent")?.slice(0, 1024);
   // CF sets this header at the edge. Never accept an IP supplied in the body or X-Forwarded-For.
@@ -25,7 +25,23 @@ export async function recordView(runtime: AppRuntime, kind: StatKind, id: number
   if (!ip || !userAgent || /bot\b|crawler|spider|headless|preview|facebookexternalhit/i.test(userAgent)) return;
   const limited = await runtime.env.VIEW_RATE_LIMITER.limit({ key: `${runtime.origin}:${ip}` });
   if (!limited.success) throw new HttpError(429, "请求过于频繁");
-  await stats(runtime.env).record(kind, id, runtime.origin, ip, userAgent, initialCount);
+  return { ip, userAgent };
+}
+
+export async function recordView(runtime: AppRuntime, kind: ViewKind, id: number) {
+  const visitor = await visitorIdentity(runtime);
+  if (visitor) await stats(runtime.env).record(kind, id, runtime.origin, visitor.ip, visitor.userAgent);
+}
+
+export async function recordWorkPlay(runtime: AppRuntime, id: number, userId: number | null, initialCount: number) {
+  const visitor = await visitorIdentity(runtime);
+  if (!visitor) return;
+  const counter = stats(runtime.env);
+  if (await counter.recordPlay(id, runtime.origin, visitor.ip, visitor.userAgent, userId)) return;
+  const users = await runtime.db.prepare("SELECT user_id FROM user_work_entries WHERE work_id=? AND last_played_at IS NOT NULL")
+    .bind(id).all<{ user_id: number }>();
+  await counter.initializePlayUsers(id, users.results.map((user) => user.user_id), initialCount);
+  await counter.recordPlay(id, runtime.origin, visitor.ip, visitor.userAgent, userId);
 }
 
 export async function viewCounts(runtime: AppRuntime, kind: StatKind, ids: number[], initialCounts: Record<number, number> = {}): Promise<Record<number, number>> {
@@ -118,6 +134,11 @@ export async function initializeWorkPlays(runtime: AppRuntime, ids: number[]) {
     .bind(JSON.stringify(ids)).all<{ id: number; count: number }>();
   await stats(runtime.env).counts("play", rows.results.map((row) => row.id),
     Object.fromEntries(rows.results.map((row) => [row.id, row.count])));
+  for (const row of rows.results) {
+    const users = await runtime.db.prepare("SELECT user_id FROM user_work_entries WHERE work_id=? AND last_played_at IS NOT NULL")
+      .bind(row.id).all<{ user_id: number }>();
+    await stats(runtime.env).initializePlayUsers(row.id, users.results.map((user) => user.user_id), row.count);
+  }
 }
 
 // View reports and counter reads use only the DO/cache; callers supply legacy play baselines.

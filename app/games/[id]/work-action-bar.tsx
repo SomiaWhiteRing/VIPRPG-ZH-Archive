@@ -7,12 +7,12 @@ import { formatBytes } from "@/lib/format";
 import { Download, ExternalLink } from "lucide-react";
 import { KaiImportLink } from "./kai-import-link";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
+import { reportWorkPlayed } from "@/lib/browser/work-play";
 
 type Props = {
   workId: number;
   title: string;
   coverBlobSha256: string | null;
-  isAuthenticated: boolean;
   engineFamily: string;
   archive: {
     id: number;
@@ -30,7 +30,6 @@ export function WorkActionBar({
   archive, title, coverBlobSha256,
   externalDownload,
   workId,
-  isAuthenticated,
   engineFamily,
 }: Props) {
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
@@ -45,15 +44,8 @@ export function WorkActionBar({
             {!native && <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
               href={downloadUrl(archive.id)}
-              onClick={() => {
-                if (isAuthenticated) {
-                  void fetch(`/api/works/${workId}/played`, {
-                    method: "POST",
-                    credentials: "same-origin",
-                    keepalive: true,
-                  }).catch(() => undefined);
-                }
-              }}
+              onClick={() => reportWorkPlayed(workId)}
+              onAuxClick={(event) => { if (event.button === 1) reportWorkPlayed(workId); }}
             >
               <Download aria-hidden />
               下载 ZIP
@@ -72,6 +64,8 @@ export function WorkActionBar({
           aria-label="外部下载：前往下载页"
           className={`${buttonVariants({ variant: "rm2k" })} min-h-12.5 w-full text-base`}
           href={externalDownload.url}
+          onClick={() => reportWorkPlayed(workId)}
+          onAuxClick={(event) => { if (event.button === 1) reportWorkPlayed(workId); }}
           rel="noreferrer"
           target="_blank"
         >
