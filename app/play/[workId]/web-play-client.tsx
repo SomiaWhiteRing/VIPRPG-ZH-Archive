@@ -112,8 +112,6 @@ export function WebPlayClient({
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
   const [copyingLogs, setCopyingLogs] = useState(false);
-  const [screenshotFeedback, setScreenshotFeedback] = useState<{ ok: boolean; message: string } | null>(null);
-  const immersiveRef = useRef(false);
   const [nativeFullscreen, setNativeFullscreen] = useState(false);
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [mobileControls, setMobileControls] = useState(false);
@@ -122,12 +120,10 @@ export function WebPlayClient({
     setOrientation: setDisplayOrientation,
     setTouchEnabled,
     saveLayout,
-    storageError: controlsStorageError,
   } = useWebPlayControlsPreferences();
   const displayOrientation = controlsPreferences.orientation;
   const [orientationLockActive, setOrientationLockActive] = useState(false);
   const [viewportPortrait, setViewportPortrait] = useState(false);
-  const [displayMessage, setDisplayMessage] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerSession | null>(null);
@@ -139,7 +135,6 @@ export function WebPlayClient({
     screenshots,
     loading: loadingScreenshots,
     capturing,
-    loadError: screenshotLoadError,
     capture,
   } = useWebPlayScreenshots(metadata.workId, metadata.title);
 
@@ -151,7 +146,6 @@ export function WebPlayClient({
   const playerBusy = running || playerStarting;
   const immersive = nativeFullscreen || pageFullscreen;
   const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
-  const controlsStorageMessage = mobileControls ? controlsStorageError : null;
 
   useEffect(() => {
     setAndroidOnlinePlaying(playerBusy, immersive);
@@ -161,31 +155,13 @@ export function WebPlayClient({
     return () => setAndroidOnlinePlaying(false, false);
   }, []);
 
-  useEffect(() => {
-    immersiveRef.current = immersive;
-    if (!immersive) setScreenshotFeedback(null);
-  }, [immersive]);
-
-  useEffect(() => {
-    if (!screenshotFeedback) return;
-    const duration = immersive ? 1000 : screenshotFeedback.ok ? (mobileControls ? 1000 : 5000) : 12000;
-    const timer = setTimeout(() => setScreenshotFeedback(null), duration);
-    return () => clearTimeout(timer);
-  }, [immersive, mobileControls, screenshotFeedback]);
-
-  const screenshotMessage = screenshotFeedback?.message ?? screenshotLoadError;
   const captureScreenshot = useCallback(async () => {
     const player = playerRef.current;
     if (!player || captureDisabled) return;
     focusPlayerCanvas();
-    const result = await capture(player);
-    if (result) {
-      if (mobileControls || immersiveRef.current) setScreenshotFeedback(result);
-      else if (result.ok) toast.success(result.message);
-      else toast.error(result.message);
-    }
+    await capture(player);
     if (playerRef.current === player) focusPlayerCanvas();
-  }, [capture, captureDisabled, mobileControls, toast]);
+  }, [capture, captureDisabled]);
 
   const openPlayerSettings = useCallback(() => {
     const player = playerRef.current;
@@ -531,28 +507,20 @@ export function WebPlayClient({
       if (isAndroidClient()) {
         androidOrientationBridge()?.setOrientation(next);
         setOrientationLockActive(true);
-        setDisplayMessage(null);
         return true;
       }
       const orientation = screen.orientation as LockableScreenOrientation;
       if (typeof orientation?.lock !== "function") {
         setOrientationLockActive(false);
-        setDisplayMessage(
-          "浏览器不能锁定屏幕方向；画面已按所选方向铺满，请旋转设备。",
-        );
         return false;
       }
 
       try {
         await orientation.lock(next);
         setOrientationLockActive(true);
-        setDisplayMessage(null);
         return true;
       } catch {
         setOrientationLockActive(false);
-        setDisplayMessage(
-          "浏览器未允许锁定屏幕方向；画面已按所选方向铺满，请旋转设备。",
-        );
         return false;
       }
     },
@@ -568,7 +536,6 @@ export function WebPlayClient({
       }
 
       setDisplayOrientation(next);
-      setDisplayMessage(null);
 
       if (document.fullscreenEnabled && frame.requestFullscreen) {
         try {
@@ -591,7 +558,6 @@ export function WebPlayClient({
 
   const enterPageFullscreen = useCallback(() => {
     setPageFullscreen(true);
-    setDisplayMessage(null);
     focusPlayerCanvas();
   }, []);
 
@@ -602,7 +568,6 @@ export function WebPlayClient({
     setPageFullscreen(false);
     unlockScreenOrientation();
     setOrientationLockActive(false);
-    setDisplayMessage(null);
     focusPlayerCanvas();
   }, []);
 
@@ -648,9 +613,6 @@ export function WebPlayClient({
         await lockOrientation(next);
       } else {
         setOrientationLockActive(false);
-        setDisplayMessage(
-          "画面已切换方向；如设备没有自动旋转，请手动旋转设备。",
-        );
       }
       focusPlayerCanvas();
     },
@@ -795,28 +757,9 @@ export function WebPlayClient({
                         ) : null}
                       </>
                     ) : null}
-                    feedback={immersive && (displayMessage || screenshotMessage || controlsStorageMessage) ? (
-                      <div
-                        className="pointer-events-none absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-30 w-[min(34rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-md bg-black/75 px-3 py-2 text-center text-sm text-white"
-                        role="status"
-                      >
-                        {displayMessage}
-                        {displayMessage && screenshotMessage ? <br /> : null}
-                        {screenshotMessage}
-                        {controlsStorageMessage ? <p className="m-0">{controlsStorageMessage}</p> : null}
-                      </div>
-                    ) : null}
+                    feedback={null}
                   />
                 </div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-                {!immersive && screenshotMessage ? (
-                  <span role={screenshotFeedback?.ok ? "status" : "alert"}>{screenshotMessage}</span>
-                ) : null}
-                {!immersive && displayMessage ? (
-                  <span role="status">{displayMessage}</span>
-                ) : null}
-                {!immersive && controlsStorageMessage ? <span role="status">{controlsStorageMessage}</span> : null}
               </div>
             </section>
 

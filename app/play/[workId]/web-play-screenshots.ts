@@ -14,7 +14,6 @@ export function useWebPlayScreenshots(workId: number, title: string) {
   const [screenshots, setScreenshots] = useState<ScreenshotPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const lifetimeRef = useRef<AbortController | null>(null);
   const capturingRef = useRef(false);
   const urlsRef = useRef(new Set<string>());
@@ -25,7 +24,6 @@ export function useWebPlayScreenshots(workId: number, title: string) {
     const urls = urlsRef.current;
     setScreenshots([]);
     setLoading(true);
-    setLoadError(null);
     if (isAndroidClient()) setLoading(false);
     else void listWebPlayScreenshots(workId)
       .then((rows) => {
@@ -37,7 +35,7 @@ export function useWebPlayScreenshots(workId: number, title: string) {
         }));
       })
       .catch(() => {
-        if (!lifetime.signal.aborted) setLoadError("读取本地截图失败，请刷新后重试。");
+        // Screenshot history is optional and must not interrupt playing.
       })
       .finally(() => {
         if (!lifetime.signal.aborted) setLoading(false);
@@ -92,5 +90,5 @@ export function useWebPlayScreenshots(workId: number, title: string) {
     }
   }, [loading, workId, title]);
 
-  return { screenshots, loading, capturing, loadError, capture };
+  return { screenshots, loading, capturing, capture };
 }
