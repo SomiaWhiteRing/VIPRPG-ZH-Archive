@@ -134,7 +134,7 @@ export default function GameDetailPage() {
               </div>
               {work.usesUnsupportedManiac ? (
                 <div
-                  className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00]"
+                  className="mb-3.5 flex gap-2.5 rounded-lg border border-[#b47800]/35 bg-[#fff7df] px-3 py-2.5 text-sm text-[#684a00] dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200"
                   role="note"
                 >
                   <AlertTriangle

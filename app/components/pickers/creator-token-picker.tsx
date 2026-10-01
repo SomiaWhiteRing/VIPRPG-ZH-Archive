@@ -246,7 +246,7 @@ export function CreatorTokenPicker({
               />
             </div>
             {duplicateEdit ? (
-              <p className="text-sm text-red-700" role="alert">
+              <p className="text-sm text-red-700 dark:text-red-300" role="alert">
                 该{label}已添加。
               </p>
             ) : null}

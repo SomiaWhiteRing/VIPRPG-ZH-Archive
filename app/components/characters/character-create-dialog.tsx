@@ -147,7 +147,7 @@ function CharacterCreateForm({
         />
       </div>
       {error ? (
-        <p className="m-0 text-sm text-red-700" role="alert">
+        <p className="m-0 text-sm text-red-700 dark:text-red-300" role="alert">
           {error}
         </p>
       ) : null}

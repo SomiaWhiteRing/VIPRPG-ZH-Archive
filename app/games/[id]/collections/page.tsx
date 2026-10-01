@@ -96,7 +96,7 @@ export default function WorkCollectionsPage() {
                       <time className="mt-1 block text-xs text-muted" dateTime={parseTimestamp(entry.favoritedAt).toISOString()} title={formatExactTimestamp(entry.favoritedAt)}>
                         {formatDate(entry.favoritedAt)}
                       </time>
-                      {entry.note ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-black">{entry.note}</p> : null}
+                      {entry.note ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-black dark:text-foreground">{entry.note}</p> : null}
                     </div>
                   </li>
                 ))}

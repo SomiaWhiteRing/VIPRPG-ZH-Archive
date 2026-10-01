@@ -166,7 +166,7 @@ export function WorkMetadataFields({
               />
               {translatorError ? (
                 <p
-                  className="text-sm text-red-700"
+                  className="text-sm text-red-700 dark:text-red-300"
                   id="upload-translator-error"
                   role="alert"
                 >
@@ -201,12 +201,12 @@ export function WorkMetadataFields({
             role="group"
           >
             <Label
-              className="flex w-fit items-center gap-2 text-sm text-red-700"
+              className="flex w-fit items-center gap-2 text-sm text-red-700 dark:text-red-300"
               htmlFor="upload-is-original"
             >
               <Checkbox
                 checked={form.isOriginal}
-                className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700"
+                className="data-[state=checked]:border-red-700 data-[state=checked]:bg-red-700 dark:data-[state=checked]:border-red-400 dark:data-[state=checked]:bg-red-400"
                 disabled={disabled}
                 id="upload-is-original"
                 onCheckedChange={(checked) =>

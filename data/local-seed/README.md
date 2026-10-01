@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The appearance migration `0024_color_theme_preference.sql` adds the account
+color theme with `light`, `dark`, and `system` choices. Existing accounts default
+to system. The schema and migration ledger are synchronized; other preferences,
+business rows, and R2 objects are preserved.
+
 The face sheet uploader migration `0023_face_sheet_uploaders.sql` records each
 verified uploader independently of content deduplication. Existing first uploaders
 are backfilled; face sheets, bindings, and business rows are preserved. The schema

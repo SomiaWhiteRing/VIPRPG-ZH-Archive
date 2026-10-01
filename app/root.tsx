@@ -3,7 +3,8 @@ import { copyFaceEmojis } from "@/app/components/emojis/client";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useIsSSR } from "react-aria/SSRProvider";
 import { useFocusVisible } from "react-aria/useFocusVisible";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { DEFAULT_COLOR_THEME, type ColorTheme } from "@/lib/account-preferences";
 import {
   isRouteErrorResponse,
   Link,
@@ -15,6 +16,7 @@ import {
   useLoaderData,
   useLocation,
   useRouteError,
+  useRouteLoaderData,
 } from "react-router";
 import { getCurrentUser } from "./.server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "./.server/db/inbox";
@@ -26,6 +28,7 @@ import { GameStorageBoundary } from "./components/game-storage-boundary";
 import { NavigationProgress } from "./components/ui/navigation-progress";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
+import { ColorThemePreviewContext } from "./components/color-theme-preview";
 import "./globals.css";
 export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
@@ -59,6 +62,8 @@ export async function loader(args: LoaderFunctionArgs) {
 export function Layout({ children }: { children: React.ReactNode }) {
   const isSSR = useIsSSR();
   const { isFocusVisible } = useFocusVisible();
+  const root = useRouteLoaderData<typeof loader>("root");
+  const [themePreview, setThemePreview] = useState<ColorTheme | null>(null);
 
   // Immersive Translate and other extensions can add document-root attributes
   // before hydration. Tolerate those attributes without suppressing diagnostics
@@ -69,6 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       className="scroll-smooth motion-reduce:scroll-auto"
       data-focus-visible={isSSR ? undefined : isFocusVisible}
       data-scroll-behavior="smooth"
+      data-theme={themePreview ?? root?.session?.preferences.colorTheme ?? DEFAULT_COLOR_THEME}
       suppressHydrationWarning
     >
       <head>
@@ -87,10 +93,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         className="min-h-screen bg-background font-sans text-foreground antialiased"
         suppressHydrationWarning
       >
-        <ToastProvider>
-          <ConfirmProvider>{children}</ConfirmProvider>
-          <BackToTop />
-        </ToastProvider>
+        <ColorThemePreviewContext.Provider value={setThemePreview}>
+          <ToastProvider>
+            <ConfirmProvider>{children}</ConfirmProvider>
+            <BackToTop />
+          </ToastProvider>
+        </ColorThemePreviewContext.Provider>
         <ScrollRestoration />
         <Scripts />
       </body>

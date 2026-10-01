@@ -502,7 +502,7 @@ export function CharacterPicker({
                     ) : null}
                   </span>
                   {missingPortrait ? (
-                    <span className="shrink-0 font-normal text-red-700">待选头像</span>
+                    <span className="shrink-0 font-normal text-red-700 dark:text-red-300">待选头像</span>
                   ) : null}
                 </TokenChip>
               );
@@ -890,7 +890,7 @@ function PortraitSelectionWorkbench({
             </Label>
           ) : null}
           {portraitError || sheetsError ? (
-            <p role="alert" className="w-full text-xs font-semibold text-red-700">
+            <p role="alert" className="w-full text-xs font-semibold text-red-700 dark:text-red-300">
               {portraitError || sheetsError}
             </p>
           ) : null}

@@ -38,7 +38,7 @@ export function FormField({
       {children}
       {error ? (
         <span
-          className="text-sm font-semibold text-red-700"
+          className="text-sm font-semibold text-red-700 dark:text-red-300"
           id={errorId ?? `${controlId}-error`}
           role="alert"
         >

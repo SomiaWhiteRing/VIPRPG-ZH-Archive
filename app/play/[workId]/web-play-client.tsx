@@ -1193,8 +1193,8 @@ function DiagnosticRow({ label, value, info }: { label: string; value: ReactNode
 }
 
 function logTone(level: WebPlayLog["level"]): string {
-  if (level === "error") return "text-red-700";
-  if (level === "warning") return "text-amber-700";
+  if (level === "error") return "text-red-700 dark:text-red-300";
+  if (level === "warning") return "text-amber-700 dark:text-amber-300";
   return "text-muted";
 }
 

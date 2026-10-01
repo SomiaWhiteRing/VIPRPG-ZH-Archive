@@ -32,7 +32,7 @@ export function WorkMediaGallery({
               type="button"
               variant="ghost"
             >
-              <span className="relative block aspect-4/3 overflow-hidden bg-[#e7ebe6]">
+              <span className="relative block aspect-4/3 overflow-hidden bg-[#e7ebe6] dark:bg-muted/15">
                 <img
                   alt={item.altText ?? `${title} ${label}`}
                   className={"absolute inset-0 h-full w-full " + "object-cover"}

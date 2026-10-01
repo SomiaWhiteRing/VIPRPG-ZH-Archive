@@ -1062,7 +1062,7 @@ export function DiscussionWorkspace({
                 </div>
                 {topics.items.map((item) => (
                   <article
-                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
+                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] dark:hover:bg-primary/15 dark:focus-within:bg-primary/15 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
                     key={item.id}
                   >
                     <div className="min-w-0 flex-1">

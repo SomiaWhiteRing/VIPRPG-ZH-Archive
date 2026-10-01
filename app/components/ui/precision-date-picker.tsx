@@ -27,6 +27,9 @@ const calendarClassName = [
   String.raw`[&_:is(.react-datepicker\_\_day--selected,.react-datepicker\_\_month-text--selected,.react-datepicker\_\_year-text--selected)]:bg-primary [&_:is(.react-datepicker\_\_day--selected,.react-datepicker\_\_month-text--selected,.react-datepicker\_\_year-text--selected)]:text-primary-foreground`,
   String.raw`[&_:is(.react-datepicker\_\_day--disabled,.react-datepicker\_\_month-text--disabled,.react-datepicker\_\_year-text--disabled)]:text-muted! [&_:is(.react-datepicker\_\_day--disabled,.react-datepicker\_\_month-text--disabled,.react-datepicker\_\_year-text--disabled)]:opacity-50`,
   String.raw`[&_:is(.react-datepicker\_\_day--outside-month)]:text-muted!`,
+  String.raw`dark:[&_:is(.react-datepicker\_\_day,.react-datepicker\_\_month-text,.react-datepicker\_\_year-text):hover]:bg-muted/15`,
+  String.raw`dark:[&_:is(.react-datepicker\_\_day--selected,.react-datepicker\_\_month-text--selected,.react-datepicker\_\_year-text--selected):hover]:bg-primary/90`,
+  String.raw`dark:[&_:is(.react-datepicker\_\_day--disabled,.react-datepicker\_\_month-text--disabled,.react-datepicker\_\_year-text--disabled):hover]:bg-transparent`,
 ].join(" ");
 
 type DatePrecision = Exclude<OriginalReleasePrecision, "unknown">;
@@ -251,7 +254,7 @@ export function PrecisionDatePicker({
       )}
       {pasteError ? (
         <p
-          className="mt-1 text-sm text-red-700"
+          className="mt-1 text-sm text-red-700 dark:text-red-300"
           id={`${id}-paste-error`}
           role="alert"
         >

@@ -960,7 +960,7 @@ export function UploadClient({
                 {uploadResult || upload.metadataConfirmed ? (
                   <div className="grid min-h-44 place-items-center text-center">
                     <div>
-                      <span className="mx-auto mb-3 grid size-11 place-items-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700">
+                      <span className="mx-auto mb-3 grid size-11 place-items-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-950/40 dark:text-emerald-200">
                         <Check className="size-5" />
                       </span>
                       <h2 aria-live="polite" className="m-0 text-lg font-bold">
@@ -1098,7 +1098,7 @@ export function UploadClient({
                     </Notice>
                   ) : null}
                   {upload.task?.commitStarted && !upload.task.result ? (
-                    <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200">
                       正在提交，资料已锁定，当前不能取消或离开页面。
                     </p>
                   ) : null}

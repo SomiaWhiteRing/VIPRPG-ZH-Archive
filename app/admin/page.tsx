@@ -105,7 +105,7 @@ export default function AdminPage() {
             <span
               className={
                 failedImports?.count
-                  ? "text-sm text-red-700"
+                  ? "text-sm text-red-700 dark:text-red-300"
                   : "text-sm text-muted"
               }
             >
@@ -121,7 +121,7 @@ export default function AdminPage() {
             <span
               className={
                 observability.downloads.currentServerFailureBuildCount
-                  ? "text-sm text-red-700"
+                  ? "text-sm text-red-700 dark:text-red-300"
                   : "text-sm text-muted"
               }
             >
