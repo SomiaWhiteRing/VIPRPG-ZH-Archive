@@ -51,11 +51,15 @@ export function validateUserTag(value: string): string | null {
 }
 
 export function parseUserTags(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > MAX_USER_TAGS || value.some((item) => typeof item !== "string")) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new HttpError(400, `标签必须是最多 ${MAX_USER_TAGS} 项的文字列表。`);
+  }
+  const submittedTags = (value as string[]).filter((item) => tagNameKey(item) !== "viprpg");
+  if (submittedTags.length > MAX_USER_TAGS) {
     throw new HttpError(400, `标签必须是最多 ${MAX_USER_TAGS} 项的文字列表。`);
   }
   const tags = new Map<string, string>();
-  for (const item of value as string[]) {
+  for (const item of submittedTags) {
     const error = validateUserTag(item);
     if (error) throw new HttpError(400, error);
     const name = normalizeEntityName(item);

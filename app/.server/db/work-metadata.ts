@@ -10,7 +10,8 @@ export function normalizeWorkTags(values: string[]): string[] {
   const tags = new Map<string, string>();
   for (const value of values) {
     const name = normalizeEntityName(value);
-    if (name && !tags.has(tagNameKey(name))) tags.set(tagNameKey(name), name);
+    const key = tagNameKey(name);
+    if (name && key !== "viprpg" && !tags.has(key)) tags.set(key, name);
   }
   if (tags.size > MAX_PUBLIC_TAGS) throw new HttpError(400, `作品标签最多 ${MAX_PUBLIC_TAGS} 个。`);
   return [...tags.values()];
