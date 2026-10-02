@@ -453,7 +453,10 @@ function replyRowsStatement(
   return database
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
-          target.display_name AS reply_to_display_name,root.status AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
+          (SELECT target.display_name FROM public_comments target_comment
+           JOIN users target ON target.id=target_comment.user_id
+           WHERE target_comment.id=c.reply_to_comment_id) AS reply_to_display_name,
+          root.status AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           0 AS reply_count,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
@@ -462,8 +465,6 @@ function replyRowsStatement(
        LEFT JOIN users u ON u.id=c.user_id AND u.status IN ('active','deleted')
        JOIN comments root ON root.id=c.root_comment_id
        JOIN users root_user ON root_user.id=root.user_id
-       LEFT JOIN public_comments target_comment ON target_comment.id=c.reply_to_comment_id
-       LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}
          AND root.status IN ('published','deleted') AND root_user.status IN ('active','deleted')
          AND ${publicCommentTargetSql("c")}
@@ -821,15 +822,16 @@ async function requiredComment(
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           ${commentFloorSql()} AS floor_number,
-          target.display_name AS reply_to_display_name,COALESCE(root.status,c.status) AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
+          (SELECT target.display_name FROM public_comments target_comment
+           JOIN users target ON target.id=target_comment.user_id
+           WHERE target_comment.id=c.reply_to_comment_id) AS reply_to_display_name,
+          COALESCE(root.status,c.status) AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
           (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count,
           ${viewerId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c
        LEFT JOIN users u ON u.id=c.user_id
        LEFT JOIN comments root ON root.id=c.root_comment_id
-       LEFT JOIN public_comments target_comment ON target_comment.id=c.reply_to_comment_id
-       LEFT JOIN users target ON target.id=target_comment.user_id
        WHERE c.id=? LIMIT 1`,
     )
     .bind(...(viewerId ? [viewerId, id] : [id]))
