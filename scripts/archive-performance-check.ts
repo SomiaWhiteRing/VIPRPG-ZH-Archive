@@ -6,8 +6,8 @@ import { unzipSync, zipSync } from "fflate";
 import { crc32 } from "../lib/archive/crc32";
 import { maybeHandleArchiveDownload } from "../worker/archive-download.mjs";
 import { advanceGcCursor, scanGcCandidates } from "../app/.server/storage/gc-candidates";
-import { hotDownloadCache, sweepDownloadCache } from "../worker/download-cache.mjs";
-import { downloadCacheMaxAgeMs, downloadCacheMaxBytes } from "../lib/archive/download";
+import { hotDownloadCache, sweepDownloadCache, cacheDownloadResponse, readDownloadCache } from "../worker/download-cache.mjs";
+import { downloadCacheMaxAgeMs, downloadCacheMaxBytes, downloadCacheMinR2Gets } from "../lib/archive/download";
 
 // Emulate only platform transports; exercise the public download handler itself.
 Object.defineProperty(globalThis, "FixedLengthStream", { value: class extends TransformStream<Uint8Array, Uint8Array> {
@@ -137,6 +137,26 @@ async function checkDownload(sharedPlayer: boolean, hot = false) {
     assert.equal(hit.response.headers.get("X-Download-Cache-Tier"), "r2");
     assert.equal(hit.response.headers.get("ETag"), full.response.headers.get("ETag"));
     assert.equal(reads.length, 1, "shared cache hit reads one R2 object");
+    const cacheKey = [...cacheMetadata.keys()][0];
+    objects.delete(cacheKey);
+    cacheMetadata.delete(cacheKey);
+    const tail = await download("bytes=1000-");
+    assert.deepEqual(tail.bytes, full.bytes.slice(1000));
+    assert.equal(objects.get(cacheKey)!.length, full.bytes.length - 1000, "cache only the requested interval");
+    const resume = await download("bytes=2000-3000");
+    assert.equal(resume.response.headers.get("X-Download-Cache-Tier"), "r2");
+    assert.equal(resume.response.headers.get("Content-Range"), `bytes 2000-3000/${full.bytes.length}`);
+    assert.deepEqual(resume.bytes, full.bytes.slice(2000, 3001));
+    assert.deepEqual(reads[0].range, { offset: 1000, length: 1001 }, "ZIP offsets translate to cached interval offsets");
+    const tailHead = await download(undefined, {}, "HEAD");
+    assert.equal(Number(tailHead.response.headers.get("Content-Length")), full.bytes.length);
+    assert.equal((await download(`bytes=${full.bytes.length}-`)).response.status, 416);
+    const outside = await download("bytes=0-20");
+    assert.deepEqual(outside.bytes, full.bytes.slice(0, 21), "uncovered Range falls back to source");
+    const rebuilt = await download();
+    assert.equal(rebuilt.response.status, 200);
+    assert.equal(rebuilt.response.headers.get("X-Download-Cache"), "MISS");
+    assert.deepEqual(rebuilt.bytes, full.bytes, "a partial slot is never served as a complete ZIP");
   }
   // Read offsets from the actual ZIP format, independently of the writer.
   const entries: { path: string; start: number; end: number }[] = [];
@@ -219,7 +239,7 @@ async function checkDownload(sharedPlayer: boolean, hot = false) {
 }
 
 async function checkSharedCacheBounds() {
-  const row = { full_download_count: 0, size_bytes: 1024 };
+  const row = { full_download_count: 0, range_download_count: 0, interrupted_count: 0, estimated_r2_get_count: 0 };
   const db = { prepare: () => ({ bind() { return this; }, async first() { return row; } }) };
   assert.equal(await hotDownloadCache(db, "/variant"), null);
   row.full_download_count = 1;
@@ -232,8 +252,22 @@ async function checkSharedCacheBounds() {
   assert.equal(slots.size, 16);
   assert.notEqual((await hotDownloadCache(db, "/variant/web-play-v2"))!.digest, variant.digest);
   assert.notEqual((await hotDownloadCache(db, "/variant/player/sha"))!.digest, variant.digest);
-  row.size_bytes = downloadCacheMaxBytes + 1;
-  assert.equal(await hotDownloadCache(db, "/variant"), null);
+  row.full_download_count = 0;
+  row.range_download_count = 1;
+  row.interrupted_count = 1;
+  assert.ok(await hotDownloadCache(db, "/range-only"), "resumes qualify without complete downloads");
+  row.range_download_count = row.interrupted_count = 0;
+  assert.ok(await hotDownloadCache(db, "/costly", downloadCacheMinR2Gets), "expensive variants qualify immediately");
+  assert.equal(await hotDownloadCache(db, "/cheap", downloadCacheMinR2Gets - 1), null);
+  row.estimated_r2_get_count = downloadCacheMinR2Gets;
+  assert.ok(await hotDownloadCache(db, "/previously-costly"));
+  // Check the real object bound, independently of admission/whole-archive size.
+  for (const size of [downloadCacheMaxBytes, downloadCacheMaxBytes + 1]) {
+    const result = await readDownloadCache({ async head() { return { size, uploaded: new Date(),
+      customMetadata: { cacheDigest: variant.digest, zipSize: String(size), zipOffset: "0" } }; } },
+    variant, "HEAD", null, () => null);
+    assert.equal(Boolean(result), size <= downloadCacheMaxBytes);
+  }
   const old = new Date(Date.now() - downloadCacheMaxAgeMs - 1000);
   const deleted: string[] = [];
   let fail = true;
@@ -241,15 +275,42 @@ async function checkSharedCacheBounds() {
     async list() { return { objects: [
       { key: "download-cache/v1/slots/0.zip", size: 10, uploaded: old },
       { key: "download-cache/v1/slots/1.zip", size: 20, uploaded: new Date() },
+      { key: "download-cache/v2/slots/2.zip", size: 40, uploaded: old },
       { key: "download-cache/v1/slots/source.zip", size: 30, uploaded: old },
     ] }; },
     async delete(key: string) { if (fail) throw new Error("Injected cache delete failure"); deleted.push(key); },
   } };
-  assert.equal((await sweepDownloadCache(env)).failedCount, 1);
+  assert.equal((await sweepDownloadCache(env)).failedCount, 2);
   fail = false;
   const swept = await sweepDownloadCache(env);
-  assert.deepEqual(deleted, ["download-cache/v1/slots/0.zip"]);
-  assert.equal(swept.purgedSizeBytes, 10);
+  assert.deepEqual(deleted, ["download-cache/v1/slots/0.zip", "download-cache/v2/slots/2.zip"]);
+  assert.equal(swept.purgedSizeBytes, 50);
+}
+
+async function checkCacheBackpressure() {
+  let produced = 0;
+  let published = false;
+  let cancelled = false;
+  const pending: Promise<unknown>[] = [];
+  const source = new ReadableStream({
+    pull(controller) { produced++; controller.enqueue(new Uint8Array(65536)); },
+    cancel() { cancelled = true; },
+  });
+  const response = cacheDownloadResponse({ async put(_key: string, body: ReadableStream) {
+    const reader = body.getReader();
+    while (!(await reader.read()).done) { /* fast storage consumer */ }
+    published = true;
+  } }, { objectKey: "fixture", digest: "fixture" },
+  new Response(source, { headers: { "Content-Length": String(100 * 65536) } }), 1, 100 * 65536, null,
+  { waitUntil(promise: Promise<unknown>) { pending.push(promise); } });
+  const reader = response.body!.getReader();
+  await reader.read();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(produced <= 4, "fast R2 must not buffer a whole ZIP for a stalled client");
+  await reader.cancel("client disconnected");
+  await Promise.all(pending);
+  assert.equal(cancelled, true);
+  assert.equal(published, false, "cancelled response must not publish partial cache data");
 }
 
 async function checkGc() {
@@ -326,5 +387,6 @@ await checkDownload(true);
 await checkDownload(false, true);
 await checkDownload(true, true);
 await checkSharedCacheBounds();
+await checkCacheBackpressure();
 await checkGc();
 console.log("Archive performance contracts passed: ZIP bytes/ranges, hot-cache hits/collisions/failures/publication/size/expiry/GC, shared player, GC pagination/replay/wraparound/concurrent progress.");

@@ -1,20 +1,27 @@
 // A disposable, cross-colo cache of hot ZIP variants. Direct-mapped slots bound
-// storage even with concurrent writers: 16 objects, each at most 64 MiB.
-import { downloadCacheMaxBytes, downloadCacheMaxAgeMs, downloadCachePrefix, isDownloadCacheSlotKey } from "../lib/archive/download.ts";
+// storage even with concurrent writers: 16 objects, each at most 256 MiB.
+import { downloadCacheMaxBytes, downloadCacheMaxAgeMs, downloadCacheMinR2Gets, downloadCachePrefix, isDownloadCacheSlotKey } from "../lib/archive/download.ts";
 
-export async function hotDownloadCache(db, cacheKey) {
-  const row = await db.prepare(`SELECT full_download_count,size_bytes FROM download_builds WHERE cache_key=?`)
+export async function hotDownloadCache(db, cacheKey, estimatedR2GetCount = 0) {
+  const row = await db.prepare(`SELECT full_download_count,range_download_count,interrupted_count,estimated_r2_get_count FROM download_builds WHERE cache_key=?`)
     .bind(cacheKey).first();
-  if (!(row?.full_download_count >= 2 && row.size_bytes > 0 && row.size_bytes <= downloadCacheMaxBytes)) return null;
+  // Expensive variants qualify on their first request. Resumes and interrupted
+  // downloads also demonstrate reuse; a completed full download is not required.
+  const requests = (row?.full_download_count ?? 0) + (row?.range_download_count ?? 0) + (row?.interrupted_count ?? 0);
+  if (requests < 2 && Math.max(estimatedR2GetCount, row?.estimated_r2_get_count ?? 0) < downloadCacheMinR2Gets) return null;
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(cacheKey));
   const digest = Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
   return { digest, objectKey: `${downloadCachePrefix}${digest[0]}.zip` };
 }
 
-function matches(object, cache) {
-  return object && object.customMetadata?.cacheDigest === cache.digest &&
+function cachedInterval(object, cache) {
+  if (!(object && object.customMetadata?.cacheDigest === cache.digest &&
     object.size > 0 && object.size <= downloadCacheMaxBytes &&
-    new Date(object.uploaded).getTime() > Date.now() - downloadCacheMaxAgeMs;
+    new Date(object.uploaded).getTime() > Date.now() - downloadCacheMaxAgeMs)) return null;
+  const size = Number(object.customMetadata.zipSize);
+  const start = Number(object.customMetadata.zipOffset);
+  if (!Number.isSafeInteger(size) || !Number.isSafeInteger(start) || start < 0 || size < start + object.size) return null;
+  return { size, start, end: start + object.size - 1 };
 }
 
 export async function readDownloadCache(bucket, cache, method, rangeHeader, parseRange) {
@@ -24,55 +31,98 @@ export async function readDownloadCache(bucket, cache, method, rangeHeader, pars
   let range = null;
   if (method === "HEAD" || rangeHeader) {
     object = await bucket.head(cache.objectKey);
-    if (!matches(object, cache)) return null;
+    const interval = cachedInterval(object, cache);
+    if (!interval) return null;
     if (rangeHeader) {
-      range = parseRange(rangeHeader, object.size);
-      if (!range) return { invalidRange: true, size: object.size };
+      range = parseRange(rangeHeader, interval.size);
+      if (!range) return { invalidRange: true, size: interval.size };
+      if (range.start < interval.start || range.end > interval.end) return null;
       object = await bucket.get(cache.objectKey, {
-        range: { offset: range.start, length: range.end - range.start + 1 },
+        range: { offset: range.start - interval.start, length: range.end - range.start + 1 },
         onlyIf: { etagMatches: object.etag },
       });
     }
   } else object = await bucket.get(cache.objectKey);
-  if (!matches(object, cache) || (method !== "HEAD" && !object.body)) {
+  const interval = cachedInterval(object, cache);
+  if (!interval || (method !== "HEAD" && (!object.body ||
+      (!range && (interval.start !== 0 || interval.end !== interval.size - 1))))) {
     await object?.body?.cancel();
     return null;
   }
-  return { body: object.body, size: object.size, range,
+  return { body: object.body, size: interval.size, range,
     estimatedR2GetCount: Number(object.customMetadata.estimatedR2GetCount) };
 }
 
-export async function writeDownloadCache(bucket, cache, response, estimatedR2GetCount) {
+export async function writeDownloadCache(bucket, cache, response, estimatedR2GetCount, zipSize, range) {
   const size = Number(response.headers.get("Content-Length"));
-  if (!(size > 0 && size <= downloadCacheMaxBytes)) {
+  if (!(size > 0 && size <= downloadCacheMaxBytes && Number.isSafeInteger(zipSize) &&
+      (range ? range.end - range.start + 1 === size && range.start >= 0 && range.end < zipSize : zipSize === size))) {
     await response.body?.cancel();
     return;
   }
   try {
     await bucket.put(cache.objectKey, response.body, {
       httpMetadata: { contentType: "application/zip" },
-      customMetadata: { cacheDigest: cache.digest, estimatedR2GetCount: String(estimatedR2GetCount) },
+      customMetadata: { cacheDigest: cache.digest, estimatedR2GetCount: String(estimatedR2GetCount),
+        zipSize: String(zipSize), zipOffset: String(range?.start ?? 0) },
     });
   } catch (error) {
-    // A rejected PUT may never have consumed its tee branch. Release it while
-    // the other branch continues serving the client.
+    // A rejected PUT may never have consumed its stream. Unblock its writer.
     await response.body?.cancel().catch(() => undefined);
     throw error;
   }
+}
+
+export function cacheDownloadResponse(bucket, cache, response, estimatedR2GetCount, zipSize, range, ctx) {
+  const size = Number(response.headers.get("Content-Length"));
+  const cached = new FixedLengthStream(size);
+  const writer = cached.writable.getWriter();
+  const reader = response.body.getReader();
+  let caching = true;
+  ctx.waitUntil(writeDownloadCache(bucket, cache, new Response(cached.readable, { headers: response.headers }),
+    estimatedR2GetCount, zipSize, range).catch(async (error) => {
+    caching = false;
+    await writer.abort(error).catch(() => undefined);
+    console.warn("Shared download cache put failed", error?.message ?? error);
+  }));
+  // Response.clone()/tee lets the faster consumer buffer the entire ZIP for a
+  // slow client. Pull at the pace of both consumers instead, including big ZIPs.
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          if (caching) await writer.close().catch(() => { caching = false; });
+          reader.releaseLock();
+          controller.close();
+        } else {
+          if (caching) await writer.write(value).catch(() => { caching = false; });
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+        await Promise.allSettled([reader.cancel(error), writer.abort(error)]);
+      }
+    },
+    async cancel(reason) {
+      await Promise.allSettled([reader.cancel(reason), writer.abort(reason)]);
+    },
+  });
+  return new Response(body, { status: response.status, headers: response.headers });
 }
 
 export async function sweepDownloadCache(env) {
   const report = { scannedCount: 0, purgedCount: 0, purgedSizeBytes: 0, failedCount: 0, failed: [] };
   let objects;
   try {
-    objects = await env.ARCHIVE_BUCKET.list({ prefix: downloadCachePrefix, limit: 1000 });
+    objects = await env.ARCHIVE_BUCKET.list({ prefix: "download-cache/", limit: 1000 });
   } catch (error) {
     report.failedCount++;
     report.failed.push({ key: downloadCachePrefix, error: String(error) });
     return report;
   }
-  // Only the 16 fixed slots belong to this cache. Original archives, manifests,
-  // blobs and player artifacts are never deletion candidates here.
+  // Only v1/v2 fixed slots belong to this cache; retain other objects. v1 slots
+  // age out without ever being read as a v2 interval (or vice versa on rollback).
   for (const object of objects.objects) {
     if (!isDownloadCacheSlotKey(object.key)) continue;
     report.scannedCount++;
