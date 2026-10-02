@@ -138,10 +138,7 @@
 /* Website-only theme and component animations. Cross-platform rules live in shared.css. */
 @theme {
   --color-card-foreground: #17212b;
-  --color-muted: #626d77;
-  --color-muted-foreground: #626d77;
-  --color-primary: #217c70;
-  --color-accent: #b94b19;
+  --color-muted-foreground: #68737d;
   --color-secondary: #1f6f67;
   --color-secondary-foreground: #ffffff;
   --color-accent-foreground: #ffffff;
