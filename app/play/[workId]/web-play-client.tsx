@@ -962,7 +962,7 @@ export function WebPlayClient({
                           {playerStopping ? "正在停止…" : "停止游戏"}
                         </Button>
                       ) : null}
-                      <WebPlaySaveExport key={metadata.workId} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
+                      <WebPlaySaveExport key={metadata.workId} playKey={metadata.playKey} playerBusy={playerBusy} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
                       {installation ? (
                         <Button
                           aria-controls="uninstall-game-dialog"
