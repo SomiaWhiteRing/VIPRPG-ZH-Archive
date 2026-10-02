@@ -344,14 +344,16 @@ export async function removeEmojis(
 export async function reorderEmoji(
   db: D1Database,
   userId: number,
-  emojiId: number,
+  emojiIds: number[],
   beforeId: number | null,
 ) {
-  // Use the current library order inside the transaction, so another device's
-  // additions/removals are preserved. Only the moved emoji changes its place.
-  const owned = `EXISTS(SELECT 1 FROM user_face_emojis WHERE user_id=? AND emoji_id=?)
+  if (!emojiIds.length) throw new HttpError(400, "请选择要排序的表情。");
+  // Move one block in the current transaction order, retaining concurrent
+  // additions/removals and the relative order inside and outside the block.
+  const selectedIds = JSON.stringify(emojiIds);
+  const owned = `(SELECT COUNT(*) FROM user_face_emojis WHERE user_id=? AND emoji_id IN (SELECT value FROM json_each(?)))=?
     AND (? IS NULL OR EXISTS(SELECT 1 FROM user_face_emojis WHERE user_id=? AND emoji_id=?))`;
-  const ownershipArgs = [userId, emojiId, beforeId, userId, beforeId];
+  const ownershipArgs = [userId, selectedIds, emojiIds.length, beforeId, userId, beforeId];
   const result = await db.batch([
     db
       .prepare(
@@ -368,8 +370,9 @@ export async function reorderEmoji(
         ELSE (SELECT ordinal FROM ordered WHERE emoji_id=?) END AS ordinal
     ), reordered AS MATERIALIZED (
       SELECT emoji_id,ROW_NUMBER() OVER(ORDER BY
-        CASE WHEN emoji_id=? THEN (SELECT ordinal FROM destination) ELSE ordinal END,
-        CASE WHEN emoji_id=? THEN 0 ELSE 1 END)-1 AS position FROM ordered
+        CASE WHEN emoji_id IN (SELECT value FROM json_each(?)) THEN (SELECT ordinal FROM destination) ELSE ordinal END,
+        CASE WHEN emoji_id IN (SELECT value FROM json_each(?)) THEN 0 ELSE 1 END,
+        ordinal)-1 AS position FROM ordered
     ) UPDATE user_face_emojis
       SET touched_at=(SELECT activity FROM user_emoji_library_state WHERE user_id=?),
         position=(SELECT position FROM reordered WHERE reordered.emoji_id=user_face_emojis.emoji_id)
@@ -379,8 +382,8 @@ export async function reorderEmoji(
         userId,
         beforeId,
         beforeId,
-        emojiId,
-        emojiId,
+        selectedIds,
+        selectedIds,
         userId,
         userId,
         ...ownershipArgs,
