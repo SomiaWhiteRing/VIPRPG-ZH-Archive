@@ -2,8 +2,9 @@ import { isAndroidClient } from "@/lib/browser/client-environment";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
+import { interceptPlayerSaveDownloads } from "./web-play-save-download";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
-import { acquireGameResourceReadLock } from "./web-play-locks";
+import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
 import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
 import { notifyGameResourcesChanged } from "./web-play-events";
@@ -12,6 +13,7 @@ import playerStyles from "../player.css?inline";
 type PlayerWindow = Window & {
   console: Console;
   KeyboardEvent: typeof KeyboardEvent;
+  Worker: typeof Worker;
   createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<{
     captureScreenshot: () => Promise<PlayerScreenshot>;
     stop: () => Promise<void>;
@@ -79,10 +81,12 @@ export function createPlayerSession(
   const resourceLifetime = new AbortController();
   const heldButtons = new Set<PlayerButton>();
   let disconnectLogs: (() => void) | undefined;
+  let restoreWorker: (() => void) | undefined;
   let runtime: Awaited<ReturnType<NonNullable<PlayerWindow["createEasyRpgPlayer"]>>> | undefined;
   let runtimeCreation: Promise<NonNullable<typeof runtime>> | undefined;
   let disposing: Promise<void> | undefined;
   let releaseResources: (() => void) | undefined;
+  let releaseSaves: (() => void) | undefined;
   let played = false;
   let renewalTimer: ReturnType<typeof setInterval> | undefined;
   let renewal = Promise.resolve();
@@ -148,11 +152,15 @@ export function createPlayerSession(
       if (played) await touchResources().catch(error => onLog("warning", formatLogValue(error)));
       disconnectLogs?.();
       disconnectLogs = undefined;
+      restoreWorker?.();
+      restoreWorker = undefined;
       frame.remove();
       if (nativeResources) await localRequest("stop");
       resourceLifetime.abort();
       releaseResources?.();
       releaseResources = undefined;
+      releaseSaves?.();
+      releaseSaves = undefined;
       notifyGameResourcesChanged();
     })();
     // Cleanup on unmount cannot await; retain an error report for failed saves.
@@ -168,6 +176,9 @@ export function createPlayerSession(
       packages = [];
     } else {
       releaseResources = await acquireGameResourceReadLock(metadata.playKey, resourceLifetime.signal);
+      lifetime.signal.throwIfAborted();
+      // Keep the Work-wide lock until stop() has flushed IDBFS successfully.
+      releaseSaves = await acquireGameSaveLock(metadata.workId, resourceLifetime.signal);
       lifetime.signal.throwIfAborted();
       const installation = await getWebPlayInstallation(metadata.playKey);
       const expires = installation && gameResourceExpiresAt(installation);
@@ -210,6 +221,11 @@ export function createPlayerSession(
     if (!playerWindow.createEasyRpgPlayer)
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
+    restoreWorker = interceptPlayerSaveDownloads(playerWindow, {
+      workId: metadata.workId, title: metadata.title, runtimeBasePath: metadata.runtimeBasePath,
+      nativeUrl: nativeResources?.url, signal: lifetime.signal,
+      onError: error => onLog("error", `导出存档失败：${formatLogValue(error)}`),
+    });
     const args: string[] = [];
     if (metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");

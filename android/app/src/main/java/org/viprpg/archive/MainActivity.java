@@ -418,6 +418,11 @@ public final class MainActivity extends Activity {
             || (url.getPath() != null && url.getPath().matches("/play/[0-9]+/?")));
     }
 
+    void exportLocalSave(long workId, String title, String name, byte[] bytes, java.util.function.Consumer<String> opened) {
+        if (isDestroyed() || saveTransfers == null) { opened.accept("存档导出暂不可用。"); return; }
+        saveTransfers.exportSave(workId, title, name, bytes, opened);
+    }
+
     void setOnlinePlaying(boolean value, boolean immersive) {
         if (!isScreenshotPage(browser) || isOffline(Uri.parse(browser.getUrl()))) return;
         onlinePlaying = value;

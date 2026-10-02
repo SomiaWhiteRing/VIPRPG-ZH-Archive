@@ -16,8 +16,8 @@ final class LocalGames {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private volatile Session session;
     private static final class Session {
-        final String token = UUID.randomUUID().toString(); final Uri zip; final long workId;
-        Session(Uri zip, long workId) { this.zip = zip; this.workId = workId; }
+        final String token = UUID.randomUUID().toString(); final Uri zip; final long workId; final String key, title;
+        Session(Uri zip, long workId, String key, String title) { this.zip = zip; this.workId = workId; this.key = key; this.title = title; }
     }
     LocalGames(MainActivity activity, WebView online, WebView offline) {
         this.activity = activity; store = GameStore.get(activity);
@@ -56,7 +56,7 @@ final class LocalGames {
                             if (!offline) throw new IOException("请从本地游戏启动。");
                             JSONObject task = store.start(request.getString("key"));
                             Uri folder = store.folder(task, false);
-                            Session next = new Session(store.storage.child(folder, "game.zip", "application/zip", false), task.getLong("workId"));
+                            Session next = new Session(store.storage.child(folder, "game.zip", "application/zip", false), task.getLong("workId"), task.getString("playKey"), task.getString("title"));
                             JSONObject index = store.storage.json(store.storage.child(folder, "index.json", "application/json", false));
                             JSONArray files = index.getJSONArray("files");
                             if (files.length() > 50000) throw new IOException("游戏索引过大。");
@@ -77,6 +77,18 @@ final class LocalGames {
                             Session current = session;
                             if (!offline || current == null || !request.getString("url").endsWith("/" + current.token)) throw new IOException("游玩会话已失效。");
                             store.storage.save(current.workId, request.getJSONObject("files")); value = true; break;
+                        }
+                        case "exportSave": {
+                            Session current = session;
+                            if (!offline || current == null || !current.key.equals(store.playingKey)
+                                || !(BuildConfig.SITE_ORIGIN + "/_native/read/" + current.token).equals(request.getString("url"))) throw new IOException("游玩会话已失效。");
+                            String name = request.getString("name"), requestId = id;
+                            byte[] bytes = SaveTransfers.decodeExportSave(name, request.getString("bytes"));
+                            activity.runOnUiThread(() -> {
+                                if (session != current || !current.key.equals(store.playingKey) || !activity.isScreenshotPage(view)) { respond(reply, requestId, null, "游玩会话已失效。"); return; }
+                                activity.exportLocalSave(current.workId, current.title, name, bytes, error -> respond(reply, requestId, error == null, error));
+                            });
+                            return;
                         }
                         case "stop": if (!offline) throw new IOException("无效操作。"); session = null; store.playingKey = null; value = true; break;
                         default: throw new IOException("未知本地操作。");
