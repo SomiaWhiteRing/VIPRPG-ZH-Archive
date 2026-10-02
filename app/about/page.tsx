@@ -51,7 +51,7 @@ export default function AboutPage() {
           为此，本站提供了外链机制。可以使用自己的网盘来提交2K系以外的作品。<br/>
           推荐使用<Link to="https://www.lanzou.com/">蓝奏云</Link>，<Link to="https://mega.nz/">MEGA</Link>或<Link to="https://drive.google.com/">Google Drive</Link>来提交外链。<br/>
         </p>
-        <p>
+        <p id="non-viprpg-storage" className="scroll-mt-24">
           追加：随着站点运行，该系统的另一个问题也浮现出来：<br/>
           非VIPRPG作品如果存在着巨量的非共享素材，就会占用本站昂贵的对象存储空间。<br/>
           为此，本站会不定期的视非共享素材使用量清理非VIPRPG作品的归档，并在清理前不会给出任何说明。<br/>
