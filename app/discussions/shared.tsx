@@ -200,7 +200,7 @@ export function ForumBody({
   const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:)`, "g"));
   return (
     <span
-      className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap break-words text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
+      className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
     >
       {segments.map((part, index) => {
         if (/^:face_[1-9]\d{0,15}:$/.test(part))
