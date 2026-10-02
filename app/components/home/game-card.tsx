@@ -6,7 +6,13 @@ import { engineLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
 
-export function GameCard({ work, action, children }: { work: GameCardSummary; action?: ReactNode; children?: ReactNode }) {
+export function GameCard({ work, action, children, imagePriority = false, titleAs }: {
+  work: GameCardSummary;
+  action?: ReactNode;
+  children?: ReactNode;
+  imagePriority?: boolean;
+  titleAs?: "h2" | "h3";
+}) {
   const { downloadSize } = useArchiveDownload();
   const showInteractionData = useShowGameCardInteractionData();
   const sizeBytes = downloadSize(work);
@@ -28,9 +34,11 @@ export function GameCard({ work, action, children }: { work: GameCardSummary; ac
       title={title}
       originalTitle={originalTitle}
       coverBlobSha256={work.coverBlobSha256}
-      ariaLabel={[title, engineLabel(work.engineFamily), language, year, size,
+      description={[engineLabel(work.engineFamily), language, year, size,
         showInteractionData ? workPopularityLabel(work) : null,
       ].filter(Boolean).join("，")}
+      imagePriority={imagePriority}
+      titleAs={titleAs}
       imageBadge={size}
       action={action}
       imageMetadata={showInteractionData ? <WorkPopularityStats stats={work} /> : undefined}

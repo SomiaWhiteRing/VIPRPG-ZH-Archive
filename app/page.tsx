@@ -73,7 +73,7 @@ export default function HomePage() {
             }
           />
           <div className="mt-5">
-            <HomeWorkGrid works={recentWorks} />
+            <HomeWorkGrid works={recentWorks} prioritizeImages titleAs="h2" />
           </div>
         </section>
 
@@ -147,10 +147,14 @@ function HomeWorkGrid({
   works,
   original = false,
   singleRow = false,
+  prioritizeImages = false,
+  titleAs = "h3",
 }: {
   works: GameCardSummary[];
   original?: boolean;
   singleRow?: boolean;
+  prioritizeImages?: boolean;
+  titleAs?: "h2" | "h3";
 }) {
   if (!works.length) {
     return (
@@ -171,8 +175,13 @@ function HomeWorkGrid({
             : "@max-[609px]:[&>*:nth-child(n+7)]:hidden @max-[889px]:[&>*:nth-child(n+10)]:hidden"
         }`}
       >
-        {works.map((work) => (
-          <GameCard key={work.id} work={work} />
+        {works.map((work, index) => (
+          <GameCard
+            key={work.id}
+            work={work}
+            imagePriority={prioritizeImages && index < 4}
+            titleAs={titleAs}
+          />
         ))}
       </div>
     </div>

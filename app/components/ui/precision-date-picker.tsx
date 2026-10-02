@@ -8,6 +8,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
+import "./precision-date-picker.css";
 
 const calendarClassName = [
   "w-64 border-border rounded-md bg-card text-foreground font-sans text-sm shadow-surface",

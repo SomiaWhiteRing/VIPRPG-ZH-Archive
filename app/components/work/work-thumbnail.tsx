@@ -11,6 +11,7 @@ export function WorkThumbnail({
   width,
   height,
   sizes,
+  priority = false,
 }: {
   blobSha256?: string | null;
   src?: string | null;
@@ -21,6 +22,7 @@ export function WorkThumbnail({
   width?: number;
   height?: number;
   sizes?: string;
+  priority?: boolean;
 }) {
   return src || blobSha256 ? (
     <img
@@ -32,7 +34,8 @@ export function WorkThumbnail({
       }
       src={src || `/api/media/blobs/${blobSha256}`}
       {...(width && height ? { width, height } : { sizes })}
-      loading="lazy"
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
     />
   ) : (
     <span className={fallbackClassName}>{fallback}</span>

@@ -1,6 +1,5 @@
 @import "tailwindcss" source("./");
 @import "react-toastify/ReactToastify.css" layer(components);
-@import "react-datepicker/dist/react-datepicker.css" layer(components);
 @import "./shared.css";
 @source "../lib";
 
@@ -129,13 +128,19 @@
 /* Website-only theme and component animations. Cross-platform rules live in shared.css. */
 @theme {
   --color-card-foreground: #17212b;
-  --color-muted-foreground: #68737d;
+  --color-muted: #626d77;
+  --color-muted-foreground: #626d77;
+  --color-primary: #217c70;
+  --color-accent: #b94b19;
   --color-secondary: #1f6f67;
   --color-secondary-foreground: #ffffff;
   --color-accent-foreground: #ffffff;
   --color-info: #0369a1;
   --color-success: #047857;
-  --font-display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+  /* Website typography uses installed fonts without downloading font files. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-display: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, Menlo, Monaco, "Liberation Mono", ui-monospace, monospace;
   --shadow-surface: 0 4px 12px rgb(23 33 43 / 6%);
   --shadow-card-hover: 0 6px 16px rgb(23 33 43 / 8%);
 
