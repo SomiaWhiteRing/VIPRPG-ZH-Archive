@@ -66,6 +66,7 @@ import type {
 } from "@/lib/dto/db/game-library";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeEntityName } from "@/lib/entity-name";
+import { NON_VIPRPG_TAG } from "@/lib/user-tags";
 import type { TagSource } from "@/lib/user-tags";
 import { HttpError } from "@/lib/http";
 import {
@@ -90,6 +91,7 @@ type Filters = {
   engine?: string;
   tag?: string;
   tagSource?: TagSource;
+  excludeTag?: string;
   character?: number;
   uploader?: number;
   isOriginal?: boolean;
@@ -255,8 +257,8 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
   const db = getD1(runtime);
   const columns = cardColumnsSql();
   const [recent, original, random] = await db.batch<CardRow>([
-    gameWorksListStatement(db, { limit: 12 }, columns),
-    gameWorksListStatement(db, { limit: 4, isOriginal: true }, columns),
+    gameWorksListStatement(db, { limit: 12, excludeTag: NON_VIPRPG_TAG }, columns),
+    gameWorksListStatement(db, { limit: 4, isOriginal: true, excludeTag: NON_VIPRPG_TAG }, columns),
     randomGameWorksStatement(db, columns),
   ]);
   const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results]);
@@ -275,15 +277,16 @@ export async function listRandomGameWorks(runtime: AppRuntime): Promise<GameCard
 }
 
 function randomGameWorksStatement(db: D1Database, columns: string) {
+  const { where, binds } = buildWhere({ excludeTag: NON_VIPRPG_TAG });
   return db.prepare(
     `SELECT ${columns}
      FROM works w
      LEFT JOIN archive_versions av
        ON av.work_id=w.id AND av.status='published' AND av.is_current=1
-     WHERE w.id IN (SELECT id FROM public_works ORDER BY RANDOM() LIMIT 4)
+     WHERE w.id IN (SELECT w.id FROM works w WHERE ${where} ORDER BY RANDOM() LIMIT 4)
      GROUP BY w.id
      ORDER BY RANDOM()`,
-  );
+  ).bind(...binds);
 }
 
 async function hydrateCards(runtime: AppRuntime, rows: CardRow[]): Promise<GameCardSummary[]> {
@@ -1692,6 +1695,10 @@ function buildWhere(input: Filters): {
       clauses.push(input.tagSource === "user" ? userTag : publicTag);
       binds.push(tag);
     }
+  }
+  if (input.excludeTag) {
+    clauses.push("NOT EXISTS(SELECT 1 FROM work_tags wt WHERE wt.work_id=w.id AND wt.tag_name=?)");
+    binds.push(normalizeEntityName(input.excludeTag));
   }
   if (input.character) {
     clauses.push(

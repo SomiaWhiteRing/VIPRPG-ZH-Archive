@@ -16,6 +16,7 @@ export type WorkFavorite = {
 };
 
 export const MAX_PUBLIC_TAGS = 10;
+export const NON_VIPRPG_TAG = "非VIPRPG";
 export const MAX_USER_TAGS = 10;
 export const MAX_USER_TAG_LENGTH = 20;
 export const MAX_FAVORITE_NOTE_LENGTH = 500;
