@@ -3,9 +3,9 @@
   "capturedAt": "2026-09-16T03:31:22.093Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "d0a2026bd78748401e4c8871252e87d6a86e7a319fe4da9f3325df795cbf26fe",
+    "sha256": "a97895d28afe38e42f3b8c4d75a69cdc0b8ef348305e90b067b3c7e93ae919ac",
     "size": 13033472,
-    "gzipSha256": "58d779292ad62541ce3c1d2254c26876c7fbec22d3833873f88fbe669e36810f",
+    "gzipSha256": "fc38642672f7b15680cdee3b2ac96cf46a086004b6239656866939b6e5d9591b",
     "tables": {
       "_cf_METADATA": 1,
       "archive_gc_cursors": 0,
@@ -37,7 +37,7 @@
       "counted_work_genres": 3,
       "creator_aliases": 6,
       "creators": 6,
-      "d1_migrations": 26,
+      "d1_migrations": 27,
       "default_face_emojis": 30,
       "download_builds": 2,
       "email_verification_challenges": 0,

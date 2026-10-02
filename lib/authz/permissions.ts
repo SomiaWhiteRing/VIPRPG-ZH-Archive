@@ -209,7 +209,7 @@ export const PERMISSIONS = {
     label: "管理自己维护的作品",
     scope: "自己维护的作品",
     description:
-      "编辑、隐藏或删除自己有维护资格的作品；维护资格由作品维护者名单决定。",
+      "编辑、隐藏或删除自己有维护资格的作品，添加维护者及审核维护申请；维护资格由作品维护者名单决定。",
   },
   "work.external_create": {
     category: "external_publish",

@@ -1,5 +1,6 @@
 import type { PermissionKey } from "@/lib/authz/permissions";
 import type { RoleId, RoleKey } from "@/lib/authz/roles";
+import type { MaintainerRequestStatus, MaintainerUser } from "@/lib/work-maintainers";
 
 export type InboxItemType =
   | "role_change_request"
@@ -33,10 +34,18 @@ export type InboxItem = {
   title: string;
   body: string;
   closedReason: string | null;
+  rejectionReason: string | null;
   createdAt: string;
   readAt: string | null;
   canApprove: boolean;
   canReject: boolean;
+  maintainerRequest: {
+    workId: number;
+    workTitle: string;
+    applicant: MaintainerUser;
+    status: MaintainerRequestStatus;
+    canWithdraw: boolean;
+  } | null;
   interaction: InboxInteraction | null;
   commentNotification: {
     kind: "comment" | "reply" | "like" | "mention";

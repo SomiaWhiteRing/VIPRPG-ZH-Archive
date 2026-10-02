@@ -2,6 +2,7 @@ import type { CommentTarget } from "@/lib/comment-target";
 import type { CharacterPortrait } from "@/lib/character-names";
 import type { CommentImage } from "@/lib/comment-images";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
+import type { MaintainerApplication } from '@/lib/work-maintainers';
 
 export type WorkCommunitySummary = {
   viewCount: number;
@@ -18,6 +19,7 @@ export type WorkOverviewSidebarData = {
   containingCatalogs: CatalogSummary[];
   showRelationEditor: boolean;
   editInfoHref: string | null;
+  maintainerApplication: MaintainerApplication | null;
 };
 
 export type WorkCollection = {

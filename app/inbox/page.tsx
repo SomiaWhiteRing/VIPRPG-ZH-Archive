@@ -27,6 +27,8 @@ import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "./actions";
 import { InboxControls } from "./controls";
 import { useInboxAutoRead } from "./use-auto-read";
+import { canReviewWorkMaintainerRequests } from '@/app/.server/db/work-maintainers';
+import { MaintainerRequestDetails } from './maintainer-request-details';
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -42,7 +44,7 @@ export async function loader(args: LoaderFunctionArgs) {
     redirectPage(
       `/login?next=${encodeURIComponent(inboxHref(category, unread, page, cursor))}`,
     );
-  const canResolve = canResolveInboxRequests(currentUser);
+  const canResolve = canResolveInboxRequests(currentUser) || await canReviewWorkMaintainerRequests(runtime, currentUser);
   if (category === "pending" && !canResolve)
     redirectPage(inboxHref("all", unread));
   const result = await listInboxItemsForUser(runtime, currentUser, {
@@ -267,10 +269,12 @@ function InboxRow({
                 <Badge variant="outline">{approvalLabels[item.status]}</Badge>
               </div>
             ) : null}
+            {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
             {item.body ? (
               <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
             ) : null}
             {item.closedReason ? <p className="mt-2 text-sm text-muted">{item.closedReason}</p> : null}
+            {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
           </>
         )}
       </div>
@@ -285,6 +289,9 @@ function InboxRow({
             readAt,
             canApprove: item.canApprove,
             canReject: item.canReject,
+            maintainerRequest: item.maintainerRequest,
+            title: item.title,
+            targetDisplayName: item.targetDisplayName,
           }}
         />
         {error ? (

@@ -14,6 +14,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { InboxActions } from "../actions";
 import { useInboxAutoRead } from "../use-auto-read";
+import { MaintainerRequestDetails } from '../maintainer-request-details';
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -59,12 +60,14 @@ export default function InboxTargetPage() {
       <PageHeader compact title="提醒" />
       <div ref={contentRef} className="py-6">
         <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
+        {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
         {item.commentNotification ? <>
           <Link to={item.commentNotification.href} className="mt-2 block text-primary hover:underline">{item.commentNotification.targetTitle}</Link>
           <p className="mt-2 whitespace-pre-wrap">{item.commentNotification.excerpt}</p>
         </> : null}
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}
         {item.closedReason ? <p className="mt-2 text-muted">{item.closedReason}</p> : null}
+        {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap break-words"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
       </div>
       <InboxActions
         item={{
@@ -72,6 +75,9 @@ export default function InboxTargetPage() {
           readAt,
           canApprove: item.canApprove,
           canReject: item.canReject,
+          maintainerRequest: item.maintainerRequest,
+          title: item.title,
+          targetDisplayName: item.targetDisplayName,
         }}
       />
       {error ? (

@@ -56,7 +56,7 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 ### 标题与上传者
 
 - `work_titles` 保存可搜索别名；原名与中文名仍在 Work 稳定字段中。
-- `work_uploaders` 表示可以对该 Work 执行 own-scope 维护的用户，不等同于 ArchiveVersion 的单次 `uploader_id`。创建作品时登记上传者；此后仅管理员可增删维护者。维护者须有上传权限，在“我的上传”、新版本上传及归档 own-scope 操作中与原上传者相同。
+- `work_uploaders` 表示可以对该 Work 执行 own-scope 维护的用户，不等同于 ArchiveVersion 的单次 `uploader_id`。创建作品时登记上传者；当前维护者可在编辑页添加维护者，或在提醒页通过维护申请，移除他人仍需 `work.maintainer.manage_any`。双方均须有 `work.update_own`，全站管理权限可代替操作者的本作维护资格；上传归档仍需相应上传能力。在“我的上传”及归档 own-scope 操作中与原上传者相同。申请及防滥用边界见[认证与权限基线](authentication-authorization.md#作品维护申请)。
 - 创建新 Work 的上传者在 commit 中同时成为共同上传者；复用 Work 时必须经过 ownership 或 any-scope 授权。
 
 ### 普通作品关系

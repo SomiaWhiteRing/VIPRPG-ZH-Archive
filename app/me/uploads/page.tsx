@@ -14,6 +14,7 @@ import { Button } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { StatusBadge } from "@/app/components/ui/status-badge";
+import { Badge } from '@/app/components/ui/badge';
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import {
   canAccessOwnWorks,
@@ -94,6 +95,9 @@ export default function UploadsPage() {
                     {work.chineseTitle || work.originalTitle}
                   </Link>
                   <StatusBadge kind="publication" value={work.status} />
+                  {hasPermission(user, 'work.update_own') && work.pendingMaintainerRequests > 0 ? (
+                    <Link to="/inbox?category=pending" className="hover:underline"><Badge variant="outline">{work.pendingMaintainerRequests} 条维护申请</Badge></Link>
+                  ) : null}
                 </div>
                 {work.chineseTitle ? (
                   <p className="mt-1 truncate text-sm text-muted">

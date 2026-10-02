@@ -387,7 +387,7 @@ export async function searchUploadedWorks(
     pageSize?: number;
   },
 ): Promise<{
-  items: (GameWorkSummary & { publishedAt: string | null; updatedAt: string })[];
+  items: (GameWorkSummary & { publishedAt: string | null; updatedAt: string; pendingMaintainerRequests: number })[];
   total: number;
   page: number;
   pageSize: number;
@@ -395,6 +395,7 @@ export async function searchUploadedWorks(
   const pageSize = clamp(input.pageSize ?? 20, 1, 100);
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const database = getD1(runtime);
+  const requestCount = `(SELECT COUNT(*) FROM work_maintainer_requests mr WHERE mr.work_id=w.id AND mr.status='pending')`;
   const [countResult, rowsResult] = await database.batch([
     database
       .prepare(
@@ -406,7 +407,7 @@ export async function searchUploadedWorks(
       .bind(input.userId),
     database
       .prepare(
-        `SELECT ${summarySql()},w.published_at,w.updated_at
+        `SELECT ${summarySql()},w.published_at,w.updated_at,${requestCount} AS pending_maintainer_requests
        FROM work_uploaders wu
        JOIN works w ON w.id=wu.work_id
        LEFT JOIN archive_versions av
@@ -421,6 +422,7 @@ export async function searchUploadedWorks(
   const rows = (rowsResult.results ?? []) as (SummaryRow & {
     published_at: string | null;
     updated_at: string;
+    pending_maintainer_requests: number;
   })[];
   const works = await hydrate(runtime, rows);
   return {
@@ -428,6 +430,7 @@ export async function searchUploadedWorks(
       ...work,
       publishedAt: rows[index].published_at,
       updatedAt: rows[index].updated_at,
+      pendingMaintainerRequests: rows[index].pending_maintainer_requests,
     })),
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,

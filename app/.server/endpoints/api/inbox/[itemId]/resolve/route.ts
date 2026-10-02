@@ -1,5 +1,8 @@
-import { requirePermission } from "@/app/.server/auth/authorize";
+import { requireUser } from "@/app/.server/auth/guards";
 import { resolveRoleRequest } from "@/app/.server/db/permissions";
+import { getInboxItemForUser } from "@/app/.server/db/inbox";
+import { resolveWorkMaintainerRequest } from "@/app/.server/db/work-maintainers";
+import { HttpError } from "@/lib/http";
 import {
   readRequiredFormString,
   redirectResponse,
@@ -18,11 +21,7 @@ export async function POST(
   request: Request,
   context: RouteContext,
 ) {
-  const auth = await requirePermission(
-    runtime,
-    request,
-    "inbox.role_request.resolve",
-  );
+  const auth = await requireUser(runtime, request);
 
   if ("response" in auth) {
     return auth.response;
@@ -30,20 +29,21 @@ export async function POST(
 
   try {
     const { itemId: rawItemId } = await context.params;
-    const decision = readRequiredFormString(
-      await request.formData(),
-      "decision",
-    );
+    const form = await request.formData();
+    const decision = readRequiredFormString(form, "decision");
 
-    if (decision !== "approve" && decision !== "reject") {
-      throw new Error("Invalid decision");
+    if (decision !== "approve" && decision !== "reject" && decision !== "withdraw") {
+      throw new HttpError(400, "无效的处理操作。");
     }
-
-    await resolveRoleRequest(runtime, {
-      actor: auth.user,
-      itemId: parseItemId(rawItemId),
-      decision,
-    });
+    const itemId = parseItemId(rawItemId);
+    const item = await getInboxItemForUser(runtime, itemId, auth.user);
+    if (item.maintainerRequest) {
+      if (form.get('confirm') !== '1') throw new HttpError(400, '请确认处理申请的后果。');
+      await resolveWorkMaintainerRequest(runtime, auth.user, itemId, decision, form.get('rejection_reason'));
+    } else {
+      if (decision === 'withdraw') throw new HttpError(400, '此申请不支持撤回。');
+      await resolveRoleRequest(runtime, { actor: auth.user, itemId, decision, rejectionReason: form.get('rejection_reason') });
+    }
 
     if (request.headers.get("accept")?.includes("application/json")) {
       return json({ ok: true });
