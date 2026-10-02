@@ -1,3 +1,4 @@
+import { deleteUnreferencedManifest, queueManifestDeletion, retryPendingManifestDeletions } from "../app/.server/storage/gc-manifests.ts";
 import { scanGcCandidates, advanceGcCursor } from "../app/.server/storage/gc-candidates.ts";
 import { sweepToolArtifacts } from "./tool-artifact-gc.mjs";
 import { sweepDownloadCache } from "./download-cache.mjs";
@@ -15,10 +16,6 @@ const corePackKey = (sha256) => {
   const hash = canonicalHash(sha256);
   return `core-packs/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.zip`;
 };
-const manifestKey = (sha256) => {
-  const hash = canonicalHash(sha256);
-  return `manifests/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.json`;
-};
 
 export async function runScheduledArchiveGc(env, input = {}) {
   const startedAt = Date.now();
@@ -32,6 +29,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     1,
     1000,
   );
+  const manifests = await retryPendingManifestDeletions(env.DB, env.ARCHIVE_BUCKET, limitPerType);
   const processing = await expireStaleProcessing(env, limitPerType);
   const archiveVersions = await purgeDeletedArchiveVersions(
     env,
@@ -50,6 +48,7 @@ export async function runScheduledArchiveGc(env, input = {}) {
     limitPerType,
     durationMs: Date.now() - startedAt,
     processing,
+    manifests,
     archiveVersions,
     blobs,
     corePacks,
@@ -111,8 +110,8 @@ async function expireStaleProcessing(env, limit) {
         continue;
       }
 
-      if (!(await hasOtherManifestReferences(env.DB, row.manifest_sha256, row.archive_version_id))) {
-        await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
+      if (await deleteUnreferencedManifest(env.DB, env.ARCHIVE_BUCKET, row.manifest_sha256) === "busy") {
+        throw new Error("Manifest cleanup is already in progress");
       }
 
       // Keep the reserved row until its manifest is gone, so an R2 failure has
@@ -257,6 +256,7 @@ async function reserveProcessingArchiveCleanup(db, row) {
       .bind(archiveVersionId, archiveVersionId),
     db.prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id = ? AND ${reserved}`)
       .bind(archiveVersionId, archiveVersionId),
+    queueManifestDeletion(db, row.manifest_sha256),
   ]);
   return (results[0].meta?.changes ?? 0) > 0;
 }
@@ -328,7 +328,7 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
 
   for (const row of rows) {
     const candidate = mapArchiveVersionPurgeCandidate(row);
-    const reserved = await markArchiveVersionPurged(env.DB, row.id, graceDays);
+    const reserved = await markArchiveVersionPurged(env.DB, row.id, graceDays, row.manifest_sha256);
 
     if (!reserved) {
       skipped.push(candidate);
@@ -336,15 +336,11 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
     }
 
     try {
-      if (
-        !(await hasOtherManifestReferences(env.DB, row.manifest_sha256, row.id))
-      ) {
-        await env.ARCHIVE_BUCKET.delete(manifestKey(row.manifest_sha256));
+      if (await deleteUnreferencedManifest(env.DB, env.ARCHIVE_BUCKET, row.manifest_sha256) === "busy") {
+        throw new Error("Manifest cleanup is already in progress");
       }
-      await deleteArchiveVersionRefs(env.DB, row.id);
       purged.push(candidate);
     } catch (error) {
-      await releaseArchiveVersionPurgeReservation(env.DB, row.id);
       failed.push({
         ...candidate,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -371,67 +367,23 @@ async function purgeDeletedArchiveVersions(env, graceDays, limit) {
   };
 }
 
-async function markArchiveVersionPurged(db, archiveVersionId, graceDays) {
-  const result = await db
-    .prepare(
-      `UPDATE archive_versions
-      SET purged_at = CURRENT_TIMESTAMP,
-        is_current = 0
-      WHERE id = ?
-        AND status = 'deleted'
-        AND purged_at IS NULL
-        AND deleted_at IS NOT NULL
-        AND datetime(deleted_at) <= datetime('now', ?)`,
-    )
-    .bind(archiveVersionId, `-${graceDays} days`)
-    .run();
-
-  return (result.meta?.changes ?? 0) > 0;
-}
-
-async function hasOtherManifestReferences(
-  db,
-  manifestSha256,
-  archiveVersionId,
-) {
-  const row = await db
-    .prepare(
-      `SELECT 1
-       FROM archive_versions
-       WHERE manifest_sha256 = ?
-         AND id <> ?
-         AND purged_at IS NULL
-       LIMIT 1`,
-    )
-    .bind(manifestSha256, archiveVersionId)
-    .first();
-  return Boolean(row);
-}
-
-async function releaseArchiveVersionPurgeReservation(db, archiveVersionId) {
-  await db
-    .prepare(
-      `UPDATE archive_versions
-       SET purged_at = NULL
-       WHERE id = ? AND status = 'deleted'`,
-    )
-    .bind(archiveVersionId)
-    .run();
-}
-
-async function deleteArchiveVersionRefs(db, archiveVersionId) {
-  await db.batch([
-    db.prepare(
-      `DELETE FROM archive_version_blob_refs
-       WHERE archive_version_id = ?`,
-    )
-    .bind(archiveVersionId),
-    db.prepare(
-      `DELETE FROM archive_version_core_pack_refs
-       WHERE archive_version_id = ?`,
-    )
-    .bind(archiveVersionId),
+async function markArchiveVersionPurged(db, archiveVersionId, graceDays, manifestSha256) {
+  const reserved = `EXISTS (SELECT 1 FROM archive_versions
+    WHERE id=? AND status='deleted' AND purged_at IS NOT NULL)`;
+  const results = await db.batch([
+    db.prepare(`UPDATE archive_versions SET purged_at=CURRENT_TIMESTAMP,is_current=0
+      WHERE id=? AND status='deleted' AND purged_at IS NULL AND deleted_at IS NOT NULL
+        AND datetime(deleted_at)<=datetime('now',?)`)
+      .bind(archiveVersionId, `-${graceDays} days`),
+    db.prepare(`DELETE FROM archive_version_blob_refs WHERE archive_version_id=? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId),
+    db.prepare(`DELETE FROM archive_version_core_pack_refs WHERE archive_version_id=? AND ${reserved}`)
+      .bind(archiveVersionId, archiveVersionId),
+    // Enqueue in the same transaction: a crash cannot strand a purged archive's
+    // manifest without either a live reference or a durable retry target.
+    queueManifestDeletion(db, manifestSha256),
   ]);
+  return (results[0].meta?.changes ?? 0) > 0;
 }
 
 function mapArchiveVersionPurgeCandidate(row) {
@@ -501,6 +453,8 @@ async function markCandidatePurging(db, type, id, graceDays) {
         SET status = 'purging'
         WHERE sha256 = ?
           AND status IN ('active', 'purging')
+          AND NOT EXISTS (SELECT 1 FROM archive_gc_job_items gc
+            WHERE gc.type='blob' AND gc.object_id=blobs.sha256 AND gc.state='deleting')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -537,6 +491,8 @@ async function markCandidatePurging(db, type, id, graceDays) {
         SET status = 'purging'
         WHERE sha256 = ?
           AND status IN ('active', 'purging')
+          AND NOT EXISTS (SELECT 1 FROM archive_gc_job_items gc
+            WHERE gc.type='core_pack' AND gc.object_id=core_packs.sha256 AND gc.state='deleting')
           AND datetime(created_at) <= datetime('now', ?)
           AND NOT EXISTS (
             SELECT 1
@@ -597,6 +553,8 @@ async function writeGcAuditLog(db, report) {
         cron: report.cron,
         graceDays: report.graceDays,
         processingExpiryHours: report.processing.expiryHours,
+        retriedManifestCount: report.manifests.deletedCount,
+        failedManifestRetryCount: report.manifests.failedCount,
         expiredProcessingCount: report.processing.expiredCount,
         expiredImportJobCount: report.processing.expiredImportJobCount,
         skippedProcessingCount: report.processing.skippedCount,
