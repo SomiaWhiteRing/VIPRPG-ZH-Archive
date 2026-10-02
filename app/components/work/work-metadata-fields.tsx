@@ -10,6 +10,7 @@ import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
 import { Textarea } from "@/app/components/ui/textarea";
 import { WorkMoreInfoEditor } from "@/app/components/work/work-more-info-editor";
 import { StaffEditor } from "@/app/upload/staff-editor";
+import { UploadTagPicker } from "@/app/upload/upload-tag-picker";
 import type { UploadFormMetadata as FlatMetadata, UploadImageSelections as ImageSelections, UploadTaxonomySuggestion } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
 import type { CharacterCreditSelection, CharacterSuggestion } from "@/lib/character-names";
@@ -23,6 +24,7 @@ export function WorkMetadataFields({
   originalTitleReadOnly = false,
   originalDeclarationLabel = "本作品为我原创。",
   showArchiveSource = true,
+  showUploadTagGuidance = false,
   archiveSourceDisabled,
   characterFaceSheetFiles,
   sourceFaceSheetFiles,
@@ -49,6 +51,7 @@ export function WorkMetadataFields({
   originalTitleReadOnly?: boolean;
   originalDeclarationLabel?: string;
   showArchiveSource?: boolean;
+  showUploadTagGuidance?: boolean;
   archiveSourceDisabled?: boolean;
   characterFaceSheetFiles?: Record<number, File[]>;
   sourceFaceSheetFiles?: File[];
@@ -275,7 +278,12 @@ export function WorkMetadataFields({
           controlId="upload-tags"
           label="标签"
         >
-          <TokenPicker
+          {showUploadTagGuidance ? <UploadTagPicker
+            disabled={disabled}
+            suggestions={suggestions.tags}
+            values={form.tags}
+            onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+          /> : <TokenPicker
             disabled={disabled}
             id="upload-tags"
             label="标签"
@@ -286,7 +294,7 @@ export function WorkMetadataFields({
             sortable
             suggestions={suggestions.tags}
             values={form.tags}
-          />
+          />}
         </WorkbenchField>
         <WorkbenchField
           className="md:col-span-2"
