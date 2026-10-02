@@ -75,7 +75,7 @@ export async function recordWorkPlayed(
     (SELECT COUNT(*) FROM user_work_entries WHERE work_id=w.id AND last_played_at IS NOT NULL) AS count
     FROM public_works w WHERE w.id=?`).bind(workId).first<{ count: number }>();
   if (!work) throw new HttpError(404, "作品不存在");
-  const [counter] = await Promise.allSettled([recordWorkPlay(runtime, workId, userId, work.count)]);
+  const [counter] = await Promise.allSettled([recordWorkPlay(runtime, workId, work.count)]);
   // Personal history must still update when the public counter is unavailable.
   if (userId !== null) {
     const result = await database
