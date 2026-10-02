@@ -105,6 +105,7 @@ export default function AccountPermissionsPage() {
               ) : null}
             </div>
             {state.message ? <p className="text-sm text-muted" role="status">{state.message}</p> : null}
+            {role.request?.rejectionReason ? <p className="whitespace-pre-wrap break-words text-sm"><span className="font-semibold">上次申请驳回理由：</span>{role.request.rejectionReason}</p> : null}
             {role.request ? (
               <Link className="w-fit text-sm text-primary hover:underline" to={`/inbox/${role.request.id}`}>
                 查看最近一次申请

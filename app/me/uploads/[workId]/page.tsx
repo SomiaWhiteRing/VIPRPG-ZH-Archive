@@ -1,5 +1,7 @@
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { getOwnedWorkForEdit } from "@/app/.server/db/game-library";
+import { listPublicWorkMaintainers } from '@/app/.server/db/work-maintainers';
+import { WorkMaintainerEditor } from '@/app/components/work/work-maintainer-editor';
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
@@ -33,10 +35,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const suggestions = await loadUploadSuggestions(runtime);
 
   return {
-    user: pickPageFields(user, ["id", "displayName", "permissionKeys"]),
+    user: pickPageFields(user, ["id", "displayName", "status", "permissionKeys"]),
     work,
     suggestions,
     fromGameDetail,
+    maintainers: await listPublicWorkMaintainers(runtime, workId),
   };
 }
 
@@ -52,7 +55,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function UploadedWorkPage() {
-  const { user, work, suggestions, fromGameDetail } = useLoaderData<typeof loader>();
+  const { user, work, suggestions, fromGameDetail, maintainers } = useLoaderData<typeof loader>();
   return (
     <div key={`${user.id}:${work.id}`}>
       <PageHeader
@@ -79,6 +82,7 @@ export default function UploadedWorkPage() {
         initialWork={uploadInitialWork(work)}
         suggestions={suggestions}
       />
+      <WorkMaintainerEditor workId={work.id} initialMaintainers={maintainers} canRemove={hasPermission(user, 'work.maintainer.manage_any')} />
       <ConfirmingForm
         action={`/api/works/${work.id}/delete`}
         className="mt-8"

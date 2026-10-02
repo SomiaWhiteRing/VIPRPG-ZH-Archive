@@ -7,6 +7,7 @@ import { Button } from "./button";
 import { useToast } from "./toast";
 
 type ConfirmOptions = {
+  content?: ReactNode;
   title?: string;
   confirmLabel?: string;
   destructive?: boolean;
@@ -87,6 +88,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onCloseAutoFocus={(event) => { event.preventDefault(); if (focus.current?.isConnected) focus.current.focus(); }}>
           <AlertDialogTitle className="text-lg font-bold">{request?.title ?? "确认操作"}</AlertDialogTitle>
           <AlertDialogDescription className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{request?.description}</AlertDialogDescription>
+          {request?.content}
           <AlertDialogFooter>
             <AlertDialogCancel asChild><Button type="button" variant="outline" disabled={busy}>取消</Button></AlertDialogCancel>
             <Button type="button" variant={request?.destructive ? "destructive" : "default"} disabled={busy} onClick={() => void accept()}>

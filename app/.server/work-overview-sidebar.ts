@@ -1,5 +1,6 @@
 import { searchCatalogsForOwner, sampleCatalogsContainingWork } from "@/app/.server/db/catalogs";
 import { isWorkUploader } from "@/app/.server/db/game-library";
+import { getMaintainerApplication } from '@/app/.server/db/work-maintainers';
 import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { getWorkCommunitySummary } from "@/app/.server/db/work-community";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -20,6 +21,10 @@ export async function loadWorkOverviewSidebar(
     getWorkRelationEditorCapabilities(runtime, workId, currentUser),
     currentUser && hasPermission(currentUser, "work.update_own") ? isWorkUploader(runtime, workId, currentUser.id) : false,
   ]);
+  const editInfoHref = canEditOwnWork ? `/me/uploads/${workId}?from=game`
+    : hasPermission(currentUser, 'work.metadata.update_any') || hasPermission(currentUser, 'work.distribution.update_any') ? `/admin/works/${workId}` : null;
+  const maintainerApplication = currentUser && !editInfoHref && hasPermission(currentUser, 'work.update_own')
+    ? await getMaintainerApplication(runtime, workId, currentUser) : null;
   return {
     currentUser: pickPageFields(currentUser, ["id"]),
     community,
@@ -27,7 +32,7 @@ export async function loadWorkOverviewSidebar(
     containingCatalogs,
     showRelationEditor: capabilities.canCreateRelation || capabilities.canCreateTranslation ||
       capabilities.canUpdate || capabilities.canDeleteRelation || capabilities.canDeleteTranslation,
-    editInfoHref: canEditOwnWork ? `/me/uploads/${workId}?from=game`
-      : hasPermission(currentUser, "work.metadata.update_any") || hasPermission(currentUser, "work.distribution.update_any") ? `/admin/works/${workId}` : null,
+    editInfoHref,
+    maintainerApplication,
   };
 }

@@ -16,6 +16,9 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import type { InboxCategory, InboxCursor } from "@/lib/inbox";
 import { INBOX_PAGE_SIZE } from "@/lib/inbox";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
+import { workMaintainerManagerSql, workMaintainerRecipientSql } from "./work-maintainers";
+import type { MaintainerRequestStatus } from "@/lib/work-maintainers";
 
 type InboxItemRow = {
   id: number;
@@ -37,6 +40,7 @@ type InboxItemRow = {
   title: string;
   body: string;
   closed_reason: string | null;
+  rejection_reason: string | null;
   created_at: string;
   read_at: string | null;
   target_status: string | null;
@@ -49,6 +53,14 @@ type InboxItemRow = {
   work_comment_id: number | null;
   reply_comment_id: number | null;
   like_comment_id: number | null;
+  work_maintainer_request_id: number | null;
+  maintainer_work_id: number | null;
+  maintainer_work_title: string | null;
+  maintainer_work_status: string | null;
+  maintainer_request_status: MaintainerRequestStatus | null;
+  applicant_avatar: string | null;
+  can_approve_maintainer: number;
+  is_recipient: number;
 };
 
 const INBOX_SELECT = `SELECT
@@ -57,6 +69,12 @@ const INBOX_SELECT = `SELECT
   i.work_comment_id,
   i.reply_comment_id,
   i.like_comment_id,
+  i.work_maintainer_request_id,
+  maintainer_request.work_id AS maintainer_work_id,
+  json_extract(i.metadata_json,'$.workTitle') AS maintainer_work_title,
+  maintainer_work.status AS maintainer_work_status,
+  maintainer_request.status AS maintainer_request_status,
+  target.avatar_blob_sha256 AS applicant_avatar,
   i.status,
   i.sender_user_id,
   sender.display_name AS sender_display_name,
@@ -74,6 +92,7 @@ const INBOX_SELECT = `SELECT
   i.title,
   i.body,
   json_extract(i.metadata_json,'$.closedReason') AS closed_reason,
+  json_extract(i.metadata_json,'$.rejectionReason') AS rejection_reason,
   i.created_at,
   target.status AS target_status,
   COALESCE((SELECT MAX(r.priority) FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) AS target_priority,
@@ -84,8 +103,10 @@ const INBOX_SELECT = `SELECT
   requested_role.application_enabled AS role_application_enabled,
   requested_role.available_to_all AS role_available_to_all,
   ${roleAccessSql("target.id", "i.requested_role_id")} AS already_assigned,
-  reads.read_at
+  reads.read_at AS recorded_read_at
 FROM inbox_items i
+LEFT JOIN work_maintainer_requests maintainer_request ON maintainer_request.id=i.work_maintainer_request_id
+LEFT JOIN works maintainer_work ON maintainer_work.id=maintainer_request.work_id
 LEFT JOIN users sender ON sender.id = i.sender_user_id
 LEFT JOIN users target ON target.id = i.target_user_id
 LEFT JOIN roles requested_role ON requested_role.id=i.requested_role_id
@@ -101,7 +122,10 @@ export function buildInboxVisibilityClause(
   return {
     sql: `i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?", "COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)")})
       OR (i.type<>'role_change_request' AND ${user.permissionKeys.length
-        ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})`,
+        ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})
+      OR EXISTS(SELECT 1 FROM work_maintainer_requests mr JOIN works mw ON mw.id=mr.work_id
+        WHERE mr.id=i.work_maintainer_request_id AND mw.status<>'deleted'
+          AND ${workMaintainerManagerSql('mr.work_id', String(user.id))})`,
     audienceBinds: [user.id, ...user.permissionKeys],
   };
 }
@@ -110,11 +134,20 @@ function inboxQuery(user: ArchiveUser) {
   const visibility = buildInboxVisibilityClause(user);
   return {
     sql: `WITH visible AS (${INBOX_SELECT} WHERE (${visibility.sql})), actionable AS (
-      SELECT *, (type='role_change_request' AND status='pending' AND ?
+      SELECT *, recipient_user_id=${user.id} AS is_recipient,
+        CASE WHEN work_maintainer_request_id IS NOT NULL AND
+          (recipient_user_id=${user.id} OR NOT ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))})
+          THEN COALESCE(recorded_read_at,created_at) ELSE recorded_read_at END AS read_at,
+        (${userPermissionSql('target_user_id', 'work.update_own')} AND NOT EXISTS
+          (SELECT 1 FROM work_uploaders WHERE work_id=maintainer_work_id AND user_id=target_user_id)) AS can_approve_maintainer,
+        ((type='role_change_request' AND status='pending' AND ?
         AND target_user_id<>? AND target_status='active' AND role_priority IS NOT NULL
         AND (role_kind='custom' OR role_key IN ('uploader','admin')) AND role_status='active'
         AND role_application_enabled=1 AND role_available_to_all=0
-        AND ?>target_priority AND ?>role_priority) AS can_reject
+        AND ?>target_priority AND ?>role_priority)
+        OR (work_maintainer_request_id IS NOT NULL AND maintainer_request_status='pending'
+          AND target_user_id<>${user.id} AND maintainer_work_status<>'deleted'
+          AND ${workMaintainerManagerSql('maintainer_work_id', String(user.id))})) AS can_reject
       FROM visible)`,
     binds: [
       user.id,
@@ -248,8 +281,14 @@ export async function countUnreadInboxItemsForUser(
         SELECT ${administratorSql("?", "'admin'")} AS can_review_admin
         WHERE ${administratorSql("?")}
       ), visible AS (
-        SELECT id FROM inbox_items WHERE recipient_user_id=?
+        SELECT id FROM inbox_items WHERE recipient_user_id=? AND work_maintainer_request_id IS NULL
         ${permissionAudience}
+        UNION SELECT i.id FROM work_uploaders wu
+          JOIN work_maintainer_requests mr ON mr.work_id=wu.work_id
+          JOIN works mw ON mw.id=mr.work_id AND mw.status<>'deleted'
+          JOIN inbox_items i ON i.work_maintainer_request_id=mr.id
+          WHERE wu.user_id=${user.id} AND mr.applicant_user_id<>${user.id}
+            AND ${userPermissionSql(String(user.id), 'work.update_own')}
         UNION SELECT i.id FROM current_administrator CROSS JOIN inbox_items i
           WHERE i.type='role_change_request'
             AND (current_administrator.can_review_admin OR
@@ -336,9 +375,15 @@ export async function getInboxItemForUser(
 
 function mapInboxItemRow(row: InboxItemRow): InboxItem {
   return {
-    canApprove:
-      !!row.can_reject && row.role_status === "active" && !row.already_assigned,
+    canApprove: !!row.can_reject && (row.work_maintainer_request_id !== null
+      ? !!row.can_approve_maintainer : row.role_status === "active" && !row.already_assigned),
     canReject: !!row.can_reject,
+    maintainerRequest: row.work_maintainer_request_id !== null && row.maintainer_work_id !== null ? {
+      workId: row.maintainer_work_id, workTitle: row.maintainer_work_title ?? '作品',
+      applicant: { id: row.target_user_id!, displayName: row.target_display_name ?? '账户已注销', avatarBlobSha256: row.applicant_avatar },
+      status: row.maintainer_request_status ?? 'closed',
+      canWithdraw: !!row.is_recipient && row.maintainer_request_status === 'pending',
+    } : null,
     interaction: null,
     commentNotification: null,
     id: row.id,
@@ -366,6 +411,7 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
     title: row.title,
     body: row.body,
     closedReason: row.closed_reason,
+    rejectionReason: row.rejection_reason,
     createdAt: row.created_at,
     readAt: row.read_at,
   };

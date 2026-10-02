@@ -2,22 +2,12 @@ import { drainViewMerges, initializeWorkPlays } from "@/app/.server/views/servic
 import { getD1 } from "@/app/.server/db/d1";
 import { auditedEntityBatch, combinedAuditSnapshot, creatorAuditSnapshot, workAuditSnapshot } from "@/app/.server/db/entity-audit";
 import { findUserByEmail } from "@/app/.server/db/users";
+import { addWorkMaintainer, removeWorkMaintainer } from './work-maintainers';
 import type { AppRuntime } from "@/app/.server/runtime";
 import { canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import { MAX_USER_TAG_LENGTH, MAX_USER_TAGS } from "@/lib/user-tags";
-
-export async function listWorkMaintainers(runtime: AppRuntime, workId: number) {
-  const rows = await getD1(runtime)
-    .prepare(
-      `SELECT u.id,u.display_name AS name,u.email,u.status
-    FROM work_uploaders wu JOIN users u ON u.id=wu.user_id WHERE wu.work_id=? ORDER BY u.id`,
-    )
-    .bind(workId)
-    .all<{ id: number; name: string; email: string | null; status: string }>();
-  return rows.results ?? [];
-}
 
 export async function setWorkMaintainer(
   runtime: AppRuntime,
@@ -35,24 +25,8 @@ export async function setWorkMaintainer(
       (user.status !== "active" || !hasPermission(user, "work.update_own")))
   )
     throw new HttpError(400, "请选择拥有作品维护权限的正常账户");
-  const db = getD1(runtime);
-  if (
-    !(await db.prepare(`SELECT id FROM works WHERE id=?`).bind(workId).first())
-  )
-    throw new HttpError(404, "作品不存在");
-  await auditedEntityBatch(db, [
-    remove
-      ? db
-          .prepare(`DELETE FROM work_uploaders WHERE work_id=? AND user_id=?`)
-          .bind(workId, user.id)
-      : db
-          .prepare(
-            `INSERT OR IGNORE INTO work_uploaders(work_id,user_id) VALUES(?,?)`,
-          )
-          .bind(workId, user.id),
-  ], { actor, eventType: "work_maintainer_changed", targets: [{ type: "work", id: workId }],
-    snapshot: { sql: "SELECT json_object('maintainers',json((SELECT json_group_array(user_id) FROM (SELECT user_id FROM work_uploaders WHERE work_id=? ORDER BY user_id))))", binds: [workId] },
-    permission: "work.maintainer.manage_any", source: "admin", context: { userId: user.id, remove } });
+  if (remove) await removeWorkMaintainer(runtime, actor, workId, user.id);
+  else await addWorkMaintainer(runtime, actor, workId, user.id);
 }
 
 export async function mergeCreators(

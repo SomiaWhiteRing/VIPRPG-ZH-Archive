@@ -18,6 +18,7 @@ import type {
 } from "@/lib/dto/db/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import { normalizeRejectionReason } from '@/lib/inbox';
 
 type RoleRow = {
   id: number;
@@ -216,16 +217,17 @@ export async function listAccountRoleOptions(
   const memberships = await listUserRoleMemberships(runtime, [actor.id]);
   const requests = await database.prepare(`SELECT id, status, requested_role_id AS role_id,
     requested_role_key_snapshot AS role_key, requested_role_name_snapshot AS role_name,
-    json_extract(metadata_json,'$.closedReason') AS closed_reason
+    json_extract(metadata_json,'$.closedReason') AS closed_reason,
+    json_extract(metadata_json,'$.rejectionReason') AS rejection_reason
     FROM inbox_items i WHERE type='role_change_request' AND target_user_id=?
       AND id=(SELECT MAX(latest.id) FROM inbox_items latest WHERE latest.type='role_change_request'
         AND latest.target_user_id=i.target_user_id AND latest.requested_role_id=i.requested_role_id)`)
     .bind(actor.id).all<{
       id: number; status: RoleRequestSummary["status"]; role_id: number;
-      role_key: string; role_name: string; closed_reason: string | null;
+      role_key: string; role_name: string; closed_reason: string | null; rejection_reason: string | null;
     }>();
   const byRole = new Map(requests.results.map((row) => [row.role_id, {
-    id: row.id, status: row.status, closedReason: row.closed_reason,
+    id: row.id, status: row.status, closedReason: row.closed_reason, rejectionReason: row.rejection_reason,
     requestedRole: { id: row.role_id, key: row.role_key, name: row.role_name },
   }]));
   const assigned = memberships.get(actor.id) ?? [];
@@ -270,16 +272,17 @@ export async function requestRole(
   // Read our record even if an administrator resolved it immediately after submission.
   const request = await database.prepare(`SELECT id,status,requested_role_id AS role_id,
       requested_role_key_snapshot AS role_key,requested_role_name_snapshot AS role_name,
-      json_extract(metadata_json,'$.closedReason') AS closed_reason
+      json_extract(metadata_json,'$.closedReason') AS closed_reason,
+      json_extract(metadata_json,'$.rejectionReason') AS rejection_reason
     FROM inbox_items WHERE type='role_change_request' AND target_user_id=? AND requested_role_id=?
       AND (event_key=? OR status='pending') ORDER BY id DESC LIMIT 1`)
     .bind(actor.id, input.roleId, eventKey).first<{
       id: number; status: RoleRequestSummary["status"]; role_id: number;
-      role_key: string; role_name: string; closed_reason: string | null;
+      role_key: string; role_name: string; closed_reason: string | null; rejection_reason: string | null;
     }>();
   if (!request) throw new HttpError(409, "当前权限已拥有或不再开放申请，请刷新后查看。");
   return {
-    id: request.id, status: request.status, closedReason: request.closed_reason,
+    id: request.id, status: request.status, closedReason: request.closed_reason, rejectionReason: request.rejection_reason,
     requestedRole: { id: request.role_id, key: request.role_key, name: request.role_name },
   };
 }
@@ -522,6 +525,7 @@ export async function resolveRoleRequest(
     actor: ArchiveUser;
     itemId: number;
     decision: "approve" | "reject";
+    rejectionReason?: unknown;
   },
 ): Promise<void> {
   if (
@@ -563,6 +567,7 @@ export async function resolveRoleRequest(
     return;
   }
 
+  const rejectionReason = normalizeRejectionReason(input.rejectionReason);
   const [targetResult, roleResult] = await database.batch([
     userPriorityTargetStatement(database, request.target_user_id),
     database
@@ -588,6 +593,7 @@ export async function resolveRoleRequest(
         inboxItemId: input.itemId,
         targetUserId: request.target_user_id,
         roleId: request.requested_role_id,
+        rejectionReason,
       },
       false,
       input.itemId,
@@ -598,12 +604,13 @@ export async function resolveRoleRequest(
       targetUserId: request.target_user_id,
       roleId: request.requested_role_id,
       status: "rejected",
+      rejectionReason,
     }),
     database
       .prepare(
         `
-      INSERT INTO inbox_items (type, status, sender_user_id, recipient_user_id, target_user_id, title, body)
-      SELECT 'system_notice', 'open', ?, ?, ?, ?, ?
+      INSERT INTO inbox_items (type, status, sender_user_id, recipient_user_id, target_user_id, title, body, metadata_json)
+      SELECT 'system_notice', 'open', ?, ?, ?, ?, ?, json_object('rejectionReason',?)
       WHERE changes() = 1
     `,
       )
@@ -613,6 +620,7 @@ export async function resolveRoleRequest(
         request.target_user_id,
         "角色申请未通过",
         `${input.actor.displayName} 未通过你的角色 ${role!.name} 申请。`,
+        rejectionReason,
       ),
     resolvedInboxReadStatement(database, input.itemId, input.actor.id),
   ]);
@@ -922,6 +930,7 @@ function resolvedRoleRequestStatement(
     targetUserId: number;
     roleId: number;
     status: "approved" | "rejected";
+    rejectionReason?: string;
   },
 ) {
   return database
@@ -930,7 +939,8 @@ function resolvedRoleRequestStatement(
     UPDATE inbox_items
     SET status = ?,
       resolved_by_user_id = ?,
-      resolved_at = CURRENT_TIMESTAMP
+      resolved_at = CURRENT_TIMESTAMP,
+      metadata_json=json_set(COALESCE(metadata_json,'{}'),'$.rejectionReason',?)
     WHERE id = ?
       AND changes() = 1
       AND type = 'role_change_request'
@@ -942,6 +952,7 @@ function resolvedRoleRequestStatement(
     .bind(
       input.status,
       input.actorUserId,
+      input.rejectionReason ?? null,
       input.itemId,
       input.targetUserId,
       input.roleId,

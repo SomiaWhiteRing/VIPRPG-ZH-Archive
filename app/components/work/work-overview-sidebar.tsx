@@ -10,6 +10,7 @@ import type { WorkOverviewSidebarData } from "@/lib/dto/db/work-community";
 import { ExternalLink, Link2 } from "lucide-react";
 import { Link } from "react-router";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
+import { MaintainerApplicationButton } from './maintainer-application-button';
 
 export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSummary = "counts" }: {
   work: GameWorkDetail; data: WorkOverviewSidebarData;
@@ -44,7 +45,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
                 <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline" to={editInfoHref}>
                   编辑信息
                 </Link>
-              ) : null}
+              ) : data.maintainerApplication ? <MaintainerApplicationButton workId={work.id} initialApplication={data.maintainerApplication} /> : null}
               <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
             </div>
           ) : null}

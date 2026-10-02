@@ -1,4 +1,6 @@
 import { searchMentionUsers } from "./mentions";
+import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintainers/route';
+import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
@@ -1260,6 +1262,18 @@ api.all("/api/works/:workId/comments", (c) =>
     Allow: "GET, POST, HEAD, OPTIONS",
   }),
 );
+api.on(['GET', 'HEAD'], '/api/works/:workId/maintainers', (c) =>
+  workMaintainersEndpoint.GET(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
+api.post('/api/works/:workId/maintainers', (c) =>
+  workMaintainersEndpoint.POST(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
+api.options('/api/works/:workId/maintainers', (c) => c.body(null, 204, { Allow: 'GET, HEAD, POST, OPTIONS' }));
+api.all('/api/works/:workId/maintainers', (c) => c.json({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST, OPTIONS' }));
+api.on(['GET', 'HEAD'], '/api/works/:workId/maintainer-requests', (c) =>
+  workMaintainerRequestsEndpoint.GET(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
+api.post('/api/works/:workId/maintainer-requests', (c) =>
+  workMaintainerRequestsEndpoint.POST(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
+api.options('/api/works/:workId/maintainer-requests', (c) => c.body(null, 204, { Allow: 'GET, HEAD, POST, OPTIONS' }));
+api.all('/api/works/:workId/maintainer-requests', (c) => c.json({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST, OPTIONS' }));
 api.on("POST", "/api/works/:workId/delete", (c) =>
   endpoint82.POST(c.get("runtime"), c.req.raw, {
     params: { workId: c.req.param("workId") },

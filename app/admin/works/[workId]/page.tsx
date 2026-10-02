@@ -2,7 +2,8 @@ import { WorkEditForm } from "../work-edit-form";
 import { loadUploadSuggestions } from "@/app/.server/upload-suggestions";
 import { getWorkRelationEditorCapabilities } from "@/app/.server/db/relations";
 import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
-import { listWorkMaintainers } from "@/app/.server/db/catalog-maintenance";
+import { listPublicWorkMaintainers } from "@/app/.server/db/work-maintainers";
+import { WorkMaintainerEditor } from "@/app/components/work/work-maintainer-editor";
 import { getWorkForAdminEdit } from "@/app/.server/db/game-library";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -43,7 +44,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const canUpdateStatus = hasPermission(adminUser, "work.status.update_any");
   if (work.status === "deleted" && !canUpdateStatus) throwNotFound();
   const maintainers = hasPermission(adminUser, "work.maintainer.manage_any")
-    ? await listWorkMaintainers(runtime, workId)
+    ? await listPublicWorkMaintainers(runtime, workId)
     : [];
   const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, workId, adminUser);
 
@@ -109,58 +110,7 @@ export default function AdminWorkEditPage() {
         </StickySaveBar>
       </WorkEditForm>
       {hasPermission(adminUser, "work.maintainer.manage_any") ? (
-        <Pane heading="作品维护者">
-          <ul className="grid gap-2">
-            {maintainers.map((person) => (
-              <li
-                key={person.id}
-                className="flex items-center justify-between gap-3"
-              >
-                <span>
-                  {person.name} · {person.email}
-                </span>
-                <ConfirmingForm
-                  action={`/api/admin/works/${workId}/maintainers`}
-                  confirmField="remove"
-                  title="移除维护者？"
-                  description="移除后，该用户将无法从“我的上传”维护这部作品。"
-                >
-                  <input
-                    name="email"
-                    type="hidden"
-                    value={person.email ?? ""}
-                  />
-                  <input name="remove" type="hidden" value="1" />
-                  <Button type="submit" size="sm" variant="outline">
-                    移除
-                  </Button>
-                </ConfirmingForm>
-              </li>
-            ))}
-          </ul>
-          <ConfirmingForm
-            action={`/api/admin/works/${workId}/maintainers`}
-            className="mt-4 flex items-end gap-3"
-            confirmField="confirm"
-            title="添加维护者"
-            description="该账户将获得此作品的维护权限。"
-          >
-            <FormField
-              controlId="admin-works-workId--field-9"
-              label="维护者邮箱"
-              hint="账户需有“管理自己维护的作品”权限。"
-            >
-              <Input
-                aria-describedby="admin-works-workId--field-9-hint"
-                id="admin-works-workId--field-9"
-                name="email"
-                type="email"
-                required
-              />
-            </FormField>
-            <Button type="submit">添加</Button>
-          </ConfirmingForm>
-        </Pane>
+        <WorkMaintainerEditor workId={workId} initialMaintainers={maintainers} canRemove />
       ) : null}
       {canMergeWorks(adminUser) ? (
         <Pane heading="合并重复作品" tone="danger">

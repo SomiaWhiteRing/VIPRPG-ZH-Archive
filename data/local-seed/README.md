@@ -1,5 +1,9 @@
 # Fixed Local Seed
 
+The direct inbox migration `0028_work_maintainer_direct_inbox.sql` removes obsolete
+maintainer summary notices and their index, carrying read receipts to application
+rows. The fixed seed schema and migration ledger include this migration.
+
 The maintainer request migration `0027_work_maintainer_requests.sql` adds an empty
 work-scoped application table, inbox references, and lifecycle triggers. The
 fixed seed schema and migration ledger are synchronized; existing maintainers,

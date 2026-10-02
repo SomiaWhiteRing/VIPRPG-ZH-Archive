@@ -25,6 +25,7 @@ export type RoleRequestSummary = {
   id: number;
   status: InboxItemStatus;
   closedReason: string | null;
+  rejectionReason: string | null;
   requestedRole: { id: number; key: string; name: string } | null;
 };
 
