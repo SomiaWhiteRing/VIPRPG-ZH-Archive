@@ -2,7 +2,9 @@
 
 网站的作品详情页在 Android 环境显示「导入 EasyRPG Player Kai」，适用于有当前归档的 RPG Maker 2000／2003／2003 Maniac 作品。接收端为 `org.easyrpg.player.kai`，需要安装带网站导入功能的新版 APK。既有版本不会自动获得接收能力。
 
-按钮使用 `intent://import?manifest=<编码后的清单地址>#Intent;scheme=easyrpg-kai;package=org.easyrpg.player.kai;S.browser_fallback_url=<编码后的资源页地址>;end`。未安装时支持 Intent 的浏览器回退到 `/resources#easyrpg-kai`；页面同时保留安装／更新链接和普通 ZIP 下载。浏览器支持情况仍需设备验收。
+按钮使用 `intent://import?manifest=<编码后的清单地址>#Intent;scheme=easyrpg-kai;package=org.easyrpg.player.kai;S.browser_fallback_url=<编码后的当前页回退地址>;end`。未安装时支持 Intent 的浏览器回退到当前页的 `#kai-import-failed`，页面显示安装／更新提示；超时未离开页面也显示该提示，并提供 `/resources#easyrpg-kai` 下载链接。页面同时保留普通 ZIP 下载。浏览器支持情况仍需设备验收。
+
+VIPRPG Android App 的主站 WebView 会解析此 Intent，确认指定 Kai 包、导入协议及同源归档清单后，重新构造 `ACTION_VIEW` 调用 `org.easyrpg.player.kai`。不转发链接中的任意组件、额外参数或授权标记；未安装或无法调用时保留当前页面，由已有超时逻辑显示安装／更新提示。该处理随 VIPRPG APK 发布，旧包需更新。
 
 正式目标为 [viprpg.org](https://viprpg.org)，预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)，环境来源见[部署手册](./staging-deployment.md#环境地址与配置来源)。不要把来源白名单当作已部署站点清单。
 

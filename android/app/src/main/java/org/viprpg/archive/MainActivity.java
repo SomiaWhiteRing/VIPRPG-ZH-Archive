@@ -243,6 +243,10 @@ public final class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri url = request.getUrl();
+                if ("intent".equals(url.getScheme())) {
+                    if (view == browser && view.getUrl() != null && sameOrigin(Uri.parse(view.getUrl()))) openKaiImport(url);
+                    return true;
+                }
                 if (sameOrigin(url)) {
                     String path = url.getPath();
                     if (view == browser && path != null && path.matches("/play/[0-9]+/?")) {
@@ -806,6 +810,28 @@ public final class MainActivity extends Activity {
         ConnectivityManager manager = getSystemService(ConnectivityManager.class);
         NetworkCapabilities caps = manager.getNetworkCapabilities(manager.getActiveNetwork());
         return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
+
+    private void openKaiImport(Uri url) {
+        try {
+            Intent parsed = Intent.parseUri(url.toString(), Intent.URI_INTENT_SCHEME);
+            Uri data = parsed.getData();
+            if (!"org.easyrpg.player.kai".equals(parsed.getPackage()) || data == null
+                || !"easyrpg-kai".equals(data.getScheme()) || !"import".equals(data.getEncodedAuthority())
+                || (data.getPath() != null && !data.getPath().isEmpty()) || data.getFragment() != null
+                || data.getQueryParameters("manifest").size() != 1) return;
+            Uri manifest = Uri.parse(data.getQueryParameter("manifest"));
+            if (!sameOrigin(manifest) || manifest.getPath() == null
+                || !manifest.getPath().matches("/api/archive-versions/[0-9]+/kai-import")
+                || manifest.getQuery() != null || manifest.getFragment() != null) return;
+            // Rebuild only the known import link; never forward Intent components, extras or grant flags.
+            Uri link = new Uri.Builder().scheme("easyrpg-kai").authority("import")
+                .appendQueryParameter("manifest", manifest.toString()).build();
+            startActivity(new Intent(Intent.ACTION_VIEW, link).addCategory(Intent.CATEGORY_BROWSABLE)
+                .setPackage("org.easyrpg.player.kai"));
+        } catch (java.net.URISyntaxException | ActivityNotFoundException | SecurityException ignored) {
+            // The page's existing launch timeout shows its install/update dialog without navigating away.
+        }
     }
 
     private void openExternal(Uri url) {
