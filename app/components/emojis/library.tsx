@@ -308,13 +308,21 @@ export function EmojiLibrary({
       );
     });
   }
-  async function addToGroup(emojis: FaceEmoji[], targetGroup: number | null) {
+  async function moveToGroup(emojis: FaceEmoji[], fromGroup: number | null, targetGroup: number | null) {
     if (busy || !ready || !emojis.length) return false;
-    if (targetGroup === null) return true;
-    const additions = emojis.filter((emoji) => mineByCell.has(emojiCellKey(emoji)) && needsAddition(emoji, targetGroup));
-    if (!additions.length) return true;
+    if (fromGroup === targetGroup) return true;
+    const transfers = emojis.flatMap((emoji) => {
+      const favorite = mineByCell.get(emojiCellKey(emoji));
+      return favorite && (fromGroup === null ? needsAddition(favorite, targetGroup) : emojiInGroup(favorite, fromGroup)) ? [favorite] : [];
+    });
+    if (!transfers.length) return true;
     return update(async () => {
-      const result = await emojiRequest<EmojiLibraryData>("/api/emojis", { op: "group.add", ids: additions.map((emoji) => mineByCell.get(emojiCellKey(emoji))!.id), groupId: targetGroup });
+      const result = await emojiRequest<EmojiLibraryData>("/api/emojis", {
+        ids: transfers.map((emoji) => emoji.id),
+        ...(fromGroup === null
+          ? { op: "group.add", groupId: targetGroup }
+          : { op: "groups.update", includeGroupIds: targetGroup === null ? [] : [targetGroup], excludeGroupIds: [fromGroup] }),
+      });
       applyLibraryData(result);
       selectGroup(targetGroup);
       setSelected([]);
@@ -345,7 +353,7 @@ export function EmojiLibrary({
       });
     });
   }
-  async function remove(emojis: FaceEmoji[]) {
+  async function remove(emojis: FaceEmoji[], fromGroup: number | null = null) {
     if (busy || !ready || !emojis.length) return;
     const removals = emojis.flatMap((emoji) => {
       const favorite = mineByCell.get(emojiCellKey(emoji));
@@ -366,7 +374,7 @@ export function EmojiLibrary({
     await update(async () => {
       const result = await emojiRequest<EmojiLibraryData>(
         "/api/emojis",
-        { op: "remove", ids: removals.map((emoji) => emoji.id) },
+        { op: "remove", ids: removals.map((emoji) => emoji.id), groupId: fromGroup },
       );
       applyLibraryData(result);
       setSelected((current) =>
@@ -486,7 +494,7 @@ export function EmojiLibrary({
         screenReaderInstructions: { draggable: "按空格或 Enter 开始拖动，方向键移动，空格或 Enter 确认，Escape 取消。" },
         announcements: {
           onDragStart: () => "开始拖动表情。",
-          onDragOver: ({ over }) => !over ? "已离开投放区域。" : over.id === "source" ? "松开将从表情库移除。" : "目标：表情库。",
+          onDragOver: ({ over }) => !over ? "已离开投放区域。" : over.id === "source" ? !admin && dragRef.current?.groupId != null ? "松开将从当前分组移除。" : "松开将从表情库移除。" : "目标：表情库。",
           onDragEnd: ({ over }) => over ? "拖动结束。" : "已取消拖动。",
           onDragCancel: () => "已取消拖动。",
         },
@@ -527,12 +535,12 @@ export function EmojiLibrary({
         const targetGroup = over.data.current?.groupId;
         if (targetGroup !== undefined) chooseGroup(targetGroup, true);
         if (over.id === "source") {
-          if (value.from === "library") void remove(value.emojis);
+          if (value.from === "library") void remove(value.emojis, value.groupId);
         } else if (value.from === "source") {
           void add(value.emojis, targetGroup === undefined ? groupRef.current : targetGroup);
         } else {
           if (!admin && (targetGroup !== undefined || value.groupId !== groupRef.current)) {
-            void addToGroup(value.emojis, targetGroup === undefined ? groupRef.current : targetGroup);
+            void moveToGroup(value.emojis, value.groupId, targetGroup === undefined ? groupRef.current : targetGroup);
             return;
           }
           if (value.emojis.length > 1) return;
@@ -651,7 +659,7 @@ export function EmojiLibrary({
             </Button>
             {!admin ? <Button type="button" size="icon" variant="ghost" disabled={busy || savingOrder || !ready} aria-label="分组管理" title="分组管理" onClick={() => setManageGroups(true)}><FolderCog aria-hidden /></Button> : null}
           </header>
-          {!admin ? <EmojiGroupTabs management droppable groups={groups} emojis={mine} value={groupId} onSelect={chooseGroup} onCreate={() => void createGroup()} canAdd={(id) => !!drag && hasAddition(drag.emojis, id)} disabled={busy || savingOrder || !ready} /> : null}
+          {!admin ? <EmojiGroupTabs management droppable groups={groups} emojis={mine} value={groupId} onSelect={chooseGroup} onCreate={() => void createGroup()} canAdd={(id) => !!drag && (drag.from === "library" && drag.groupId !== null ? id !== drag.groupId : hasAddition(drag.emojis, id))} disabled={busy || savingOrder || !ready} /> : null}
           <div
             ref={mineViewport}
             onScroll={(event) => groupScroll.current.set(groupId, event.currentTarget.scrollTop)}
@@ -726,11 +734,11 @@ export function EmojiLibrary({
                       size="icon"
                       type="button"
                       aria-label={
-                        admin ? "从默认清单移除表情" : "从表情库移除表情"
+                        admin ? "从默认清单移除表情" : groupId === null ? "从表情库移除表情" : "从当前分组移除表情"
                       }
-                      title="移除表情"
+                      title={!admin && groupId !== null ? "移出当前分组" : "移除表情"}
                       disabled={busy || savingOrder}
-                      onClick={() => void remove([emoji])}
+                      onClick={() => void remove([emoji], groupId)}
                       className={cn(
                         "absolute -right-0.5 -top-0.5 z-10 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:inline-flex [&_svg]:size-2.5",
                         drag && "invisible",
