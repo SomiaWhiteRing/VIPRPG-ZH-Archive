@@ -36,6 +36,20 @@ export function readCharacterIndex(
   return memoizeRequest(runtime, "character-index", () => loadCharacterIndex(runtime));
 }
 
+export function readCharacterIndexStructure(
+  runtime: AppRuntime,
+): Promise<Pick<CharacterIndexData, "categories" | "memberships">> {
+  return memoizeRequest(runtime, "character-index-structure", async () => {
+    const [categories, memberships] = await getD1(runtime).batch(
+      structureStatements(getD1(runtime)),
+    );
+    return {
+      categories: categories.results as CharacterCategory[],
+      memberships: memberships.results as CharacterMembership[],
+    };
+  });
+}
+
 async function loadCharacterIndex(
   runtime: AppRuntime,
 ): Promise<CharacterIndexData> {

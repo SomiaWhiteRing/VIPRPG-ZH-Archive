@@ -1,22 +1,18 @@
 import { listCreatorSuggestions } from "@/app/.server/db/creator-library";
+import { readCharacterIndexStructure } from "@/app/.server/db/character-index";
 import {
   listCharacterSuggestions,
   listPublicTags,
 } from "@/app/.server/db/taxonomy-library";
 import type { AppRuntime } from "@/app/.server/runtime";
-import type { UploadTaxonomySuggestion } from "@/app/upload/upload-types";
-import type { CharacterSuggestion } from "@/lib/character-names";
-import type { CreatorSuggestion } from "@/lib/creator-names";
+import type { UploadSuggestions } from "@/app/upload/upload-types";
 
-export async function loadUploadSuggestions(runtime: AppRuntime): Promise<{
-  tags: UploadTaxonomySuggestion[];
-  characters: CharacterSuggestion[];
-  creators: CreatorSuggestion[];
-}> {
-  const [tags, characters, creators] = await Promise.all([
+export async function loadUploadSuggestions(runtime: AppRuntime): Promise<UploadSuggestions> {
+  const [tags, characters, creators, characterIndex] = await Promise.all([
     listPublicTags(runtime, { limit: 120 }),
     listCharacterSuggestions(runtime),
     listCreatorSuggestions(runtime),
+    readCharacterIndexStructure(runtime),
   ]);
   return {
     tags: tags.map((tag) => ({
@@ -24,6 +20,7 @@ export async function loadUploadSuggestions(runtime: AppRuntime): Promise<{
       meta: `${tag.workCount} 部作品`,
     })),
     characters,
+    characterIndex,
     creators,
   };
 }

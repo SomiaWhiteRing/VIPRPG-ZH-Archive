@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { DragOverlay } from "@dnd-kit/core";
+import { DragOverlay, type DropAnimation } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -35,10 +35,10 @@ export function SortableSnapshot({ element }: { element: HTMLElement }) {
   return <div ref={container} aria-hidden inert className="pointer-events-none rounded-lg shadow-lg" />;
 }
 
-export function SortableOverlay({ children }: { children: ReactNode }) {
+export function SortableOverlay({ children, dropAnimation = null }: { children: ReactNode; dropAnimation?: DropAnimation | null }) {
   // Keep the overlay mounted between drags; the source list may scroll independently.
   return typeof document === "undefined" ? null : createPortal(
-    <DragOverlay dropAnimation={null} zIndex={100} className="pointer-events-none select-none">
+    <DragOverlay dropAnimation={dropAnimation} zIndex={100} className="pointer-events-none select-none">
       {children}
     </DragOverlay>,
     document.body,
