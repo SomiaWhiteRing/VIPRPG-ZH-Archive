@@ -9,7 +9,7 @@ import {
 import { characterNameKey } from "@/lib/character-names";
 import { cn } from "@/lib/ui/cn";
 import { Check, ChevronRight, Folder, ListTree, Search, X } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@/app/components/ui/popover";
 import { useId, useMemo, useRef, useState } from "react";
 import {
   Collection,
@@ -248,7 +248,7 @@ export function CharacterTreeSearch({
           </Button>
         </div>
       </Popover.Anchor>
-      <Popover.Portal>
+      <Popover.Portal anchorRef={anchor}>
         <Popover.Content
           align="end"
           sideOffset={4}
