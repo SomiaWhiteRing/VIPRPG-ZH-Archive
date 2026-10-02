@@ -2,6 +2,7 @@ import { EmojiDragSource } from "@/app/components/ui/emoji-drag";
 import {
   useEffect,
   useLayoutEffect,
+  memo,
   useRef,
   useState,
 } from "react";
@@ -35,7 +36,7 @@ type FacePage = {
   offset?: number;
 };
 
-export function SourceFaces({
+export const SourceFaces = memo(function SourceFaces({
   source,
   defaults,
   owned,
@@ -45,6 +46,8 @@ export function SourceFaces({
   disabled,
   onSelect,
   dragDisabled,
+  lifted,
+  settling,
 }: {
   source: EmojiSource;
   defaults: FaceEmoji[];
@@ -53,8 +56,10 @@ export function SourceFaces({
   selected: Set<string> | null;
   locateVersion: number;
   disabled: boolean;
-  onSelect: (emoji: FaceEmoji) => void;
+  onSelect: (emoji: FaceEmoji, additive?: boolean) => void;
   dragDisabled: boolean;
+  lifted: Set<string>;
+  settling: Set<string>;
 }) {
   const [items, setItems] = useState<(FaceEmoji | EmojiSheet)[]>(
     source.kind === "sheet" ? [source.sheet] : [],
@@ -191,7 +196,7 @@ export function SourceFaces({
           collected = owned.has(key),
           isSelected = selected?.has(key) ?? activeKey === key;
         return (
-          <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || !emoji.available}>
+          <EmojiDragSource key={key} emoji={emoji} disabled={dragDisabled || !emoji.available} lifted={lifted.has(key)} settling={settling.has(`source:${key}`)} onSelect={onSelect}>
           <Button
             variant="ghost"
             size="icon"
@@ -238,6 +243,7 @@ export function SourceFaces({
   return (
     <div
       ref={viewport}
+      data-drag-viewport
       className="emoji-scroll-viewport h-80 min-h-0 overflow-auto p-3 [overflow-anchor:none] sm:h-auto"
     >
       {start > 0 ? (
@@ -277,7 +283,8 @@ export function SourceFaces({
           }
           renderCell={(sheet, row, column, button) => {
             const emoji = sheetCell(sheet, row, column);
-            return <EmojiDragSource key={`${row}:${column}`} emoji={emoji} disabled={dragDisabled}>{button}</EmojiDragSource>;
+            const key = emojiCellKey(emoji);
+            return <EmojiDragSource key={`${row}:${column}`} emoji={emoji} disabled={dragDisabled} lifted={lifted.has(key)} settling={settling.has(`source:${key}`)} onSelect={onSelect}>{button}</EmojiDragSource>;
           }}
           cellState={(sheet, row, column) => {
             const key = emojiCellKey(sheetCell(sheet, row, column));
@@ -332,4 +339,4 @@ export function SourceFaces({
       ) : null}
     </div>
   );
-}
+});

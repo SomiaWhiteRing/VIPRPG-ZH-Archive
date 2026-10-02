@@ -134,7 +134,7 @@ emojiApi.all("/api/emojis", async (c) => {
           await reorderEmoji(
             db,
             user.id,
-            parseIds([body.id])[0],
+            parseIds(body.ids === undefined ? [body.id] : body.ids),
             body.beforeId === null ? null : parseIds([body.beforeId])[0],
           );
           break;
