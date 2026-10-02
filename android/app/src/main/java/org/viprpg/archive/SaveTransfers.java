@@ -10,13 +10,16 @@ import android.widget.Toast;
 import org.json.JSONObject;
 import java.io.*;
 import java.text.DateFormat;
+import java.text.Normalizer;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import java.util.zip.*;
 
-/** User-selected LSD import and single-file/ZIP export; no persistent storage grants. */
+/** User-selected LSD/ZIP import and ZIP export; no persistent storage grants. */
 final class SaveTransfers {
     private static final int IMPORT = 2101, EXPORT = 2102;
+    private static final int MAX_EXPORT_SAVE_BYTES = 16 * 1024 * 1024;
     private final Activity activity;
     private final GameStore store;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -42,6 +45,56 @@ final class SaveTransfers {
     }
     private String prefix() { return "/work-saves/" + workId + "/"; }
     private static boolean lsd(String name) { return name.matches("(?i)Save[0-9]{2,6}\\.lsd"); }
+    static byte[] decodeExportSave(String name, String encoded) throws IOException {
+        if (name == null || !lsd(name)) throw new IOException("存档文件名无效。");
+        if (encoded == null || encoded.length() > ((MAX_EXPORT_SAVE_BYTES + 2) / 3) * 4) throw new IOException("存档文件过大。");
+        if (encoded.length() % 4 != 0) throw new IOException("存档编码无效。");
+        int padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+        for (int i = 0; i < encoded.length() - padding; i++) {
+            char c = encoded.charAt(i);
+            if (!(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '/')) throw new IOException("存档编码无效。");
+        }
+        byte[] bytes;
+        try { bytes = Base64.decode(encoded, Base64.NO_WRAP); }
+        catch (IllegalArgumentException error) { throw new IOException("存档编码无效。", error); }
+        if (bytes.length > MAX_EXPORT_SAVE_BYTES) throw new IOException("存档文件过大。");
+        byte[] signature = "LcfSaveData".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        if (bytes.length < signature.length + 1 || bytes[0] != signature.length) throw new IOException("不是有效的 LSD 存档。");
+        for (int i = 0; i < signature.length; i++) if (bytes[i + 1] != signature[i]) throw new IOException("不是有效的 LSD 存档。");
+        return bytes;
+    }
+    void exportSave(long workId, String title, String name, byte[] bytes, Consumer<String> opened) {
+        if (busy) { opened.accept("请先完成当前存档操作。"); return; }
+        busy = true;
+        io.execute(() -> {
+            try {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (ZipOutputStream zip = new ZipOutputStream(out)) { zip.putNextEntry(new ZipEntry(name)); zip.write(bytes); zip.closeEntry(); }
+                byte[] archive = out.toByteArray(); String outputName = exportFilename(title, workId);
+                activity.runOnUiThread(() -> openExport(outputName, archive, opened));
+            } catch (Exception e) { activity.runOnUiThread(() -> { fail(e); opened.accept(e.getMessage() == null ? "存档导出失败。" : e.getMessage()); }); }
+        });
+    }
+    private static String exportFilename(String title, long workId) {
+        String stem = Normalizer.normalize(title == null ? "" : title, Normalizer.Form.NFC)
+            .replaceAll("[\\x00-\\x1f\\x7f-\\x9f\\\\/:*?\"<>|]", "_")
+            .replaceAll("^[\\s\\p{Z}\\uFEFF]+|[.\\s\\p{Z}\\uFEFF]+$", "");
+        String fallback = "game-" + workId;
+        if (stem.isEmpty()) stem = fallback;
+        if (stem.split("\\.", 2)[0].matches("(?i)CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]|CONIN\\$|CONOUT\\$")) stem = "_" + stem;
+        String suffix = "_Saves.zip";
+        StringBuilder shortened = new StringBuilder(); int bytes = suffix.length();
+        // Preserve Unicode characters while fitting both Windows and UTF-8 filename limits.
+        for (int offset = 0; offset < stem.length();) {
+            int point = stem.codePointAt(offset); offset += Character.charCount(point);
+            if (point >= 0xd800 && point <= 0xdfff) point = 0xfffd;
+            int units = Character.charCount(point), size = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+            if (shortened.length() + units + suffix.length() > 180 || bytes + size > 240) break;
+            shortened.appendCodePoint(point); bytes += size;
+        }
+        String name = shortened.toString().replaceAll("[.\\s\\p{Z}\\uFEFF]+$", "");
+        return (name.isEmpty() ? fallback : name) + suffix;
+    }
     private void listExports() {
         busy = true;
         io.execute(() -> {
@@ -69,17 +122,19 @@ final class SaveTransfers {
             try {
                 List<String> selected = new ArrayList<>(); for (int i = 0; i < paths.size(); i++) if (checked[i]) selected.add(paths.get(i));
                 if (selected.isEmpty()) throw new IOException("请选择存档。");
-                String name, mime;
-                if (selected.size() == 1) { name = selected.get(0).substring(prefix().length()); mime = "application/octet-stream"; exportBytes = Base64.decode(files.getString(selected.get(0)), Base64.NO_WRAP); }
-                else {
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    try (ZipOutputStream zip = new ZipOutputStream(out)) { for (String path : selected) { zip.putNextEntry(new ZipEntry(path.substring(prefix().length()))); zip.write(Base64.decode(files.getString(path), Base64.NO_WRAP)); zip.closeEntry(); } }
-                    exportBytes = out.toByteArray(); name = title.replaceAll("[\\\\/:*?\"<>|]", "_") + "-存档.zip"; mime = "application/zip";
-                }
-                String outputName = name, outputMime = mime;
-                activity.runOnUiThread(() -> { busy = true; try { activity.startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(outputMime).putExtra(Intent.EXTRA_TITLE, outputName), EXPORT); } catch (Exception e) { fail(e); } });
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (ZipOutputStream zip = new ZipOutputStream(out)) { for (String path : selected) { zip.putNextEntry(new ZipEntry(path.substring(prefix().length()))); zip.write(Base64.decode(files.getString(path), Base64.NO_WRAP)); zip.closeEntry(); } }
+                byte[] archive = out.toByteArray(); String outputName = exportFilename(title, workId);
+                activity.runOnUiThread(() -> openExport(outputName, archive, null));
             } catch (Exception e) { activity.runOnUiThread(() -> fail(e)); }
         });
+    }
+    private void openExport(String outputName, byte[] bytes, Consumer<String> opened) {
+        try {
+            exportBytes = bytes;
+            activity.startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip").putExtra(Intent.EXTRA_TITLE, outputName), EXPORT);
+        } catch (Exception e) { fail(e); if (opened != null) opened.accept(e.getMessage() == null ? "存档导出失败。" : e.getMessage()); return; }
+        if (opened != null) opened.accept(null);
     }
     boolean result(int code, int result, Intent data) {
         if (code != IMPORT && code != EXPORT) return false;
