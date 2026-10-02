@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+The maintainer request migration `0027_work_maintainer_requests.sql` adds an empty
+work-scoped application table, inbox references, and lifecycle triggers. The
+fixed seed schema and migration ledger are synchronized; existing maintainers,
+notifications, business records, and R2 objects are preserved.
+
 The work editing refresh applies `0025_split_work_edit_permissions.sql` and
 records it in the migration ledger. Work information and archive/external-link
 editing have independent grants; only admin and super_admin retain these grants.
