@@ -20,6 +20,7 @@ export type HeaderNavigationEntry = HeaderNavigationLink | HeaderNavigationGroup
 
 type HeaderNavigationProps = {
   ariaLabel: string;
+  inAdmin: boolean;
   mobileAriaLabel: string;
   entries: HeaderNavigationEntry[];
   pathname: string;
@@ -30,6 +31,7 @@ type HeaderNavigationProps = {
 
 export function HeaderNavigation({
   ariaLabel,
+  inAdmin,
   mobileAriaLabel,
   entries,
   pathname,
@@ -50,7 +52,7 @@ export function HeaderNavigation({
 
   useEffect(() => {
     if (!openGroup) return;
-    const breakpoint = window.matchMedia("(min-width: 64rem)");
+    const breakpoint = window.matchMedia("(min-width: 80rem)");
     const closeOnCollapse = () => {
       if (!breakpoint.matches) setOpenGroup(null);
     };
@@ -73,7 +75,7 @@ export function HeaderNavigation({
     <>
       <nav
         aria-label={ariaLabel}
-        className="hidden min-w-0 flex-1 items-center gap-1 lg:flex"
+        className="hidden min-w-0 flex-1 items-center gap-1 xl:flex"
       >
         {entries.map((entry) =>
           "links" in entry ? (
@@ -108,7 +110,7 @@ export function HeaderNavigation({
                 <DropdownMenu.Content
                   align="start"
                   aria-label={entry.label}
-                  className="z-50 hidden max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface lg:block"
+                  className="z-50 hidden max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface xl:block"
                   collisionPadding={16}
                   onCloseAutoFocus={(event) => {
                     // Radix restores focus asynchronously after unmounting.
@@ -137,6 +139,7 @@ export function HeaderNavigation({
               key={entry.href}
               active={entry.href === activeHref}
               link={entry}
+              siteNavigation={!inAdmin}
             />
           ),
         )}
@@ -144,7 +147,7 @@ export function HeaderNavigation({
       {mobileOpen ? (
         <nav
           aria-label={mobileAriaLabel}
-          className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-border bg-background shadow-lg lg:hidden"
+          className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-border bg-background shadow-lg xl:hidden"
           id="mobile-navigation"
         >
           <div className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-2">
@@ -193,22 +196,28 @@ function HeaderNavigationItem({
   link,
   layout = "desktop",
   onNavigate,
+  siteNavigation = false,
 }: {
   active: boolean;
   link: HeaderNavigationLink;
   layout?: "desktop" | "mobile" | "dropdown";
   onNavigate?: () => void;
+  siteNavigation?: boolean;
 }) {
+  const siteDesktop = siteNavigation && layout === "desktop";
   const layoutClass = {
-    desktop:
-      "inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-md px-3",
+    desktop: siteDesktop
+      ? "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5"
+      : "inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-md px-3",
     mobile: "block border-t border-border/50 px-3 py-2.5 first:border-t-0",
     dropdown:
       "flex min-h-9 cursor-pointer items-center rounded-sm px-2.5 py-2 outline-none",
   }[layout];
-  const className = `${layoutClass} text-sm font-semibold ${
+  const className = `${layoutClass} text-sm ${siteDesktop ? "font-medium" : "font-semibold"} ${
     active
-      ? "bg-primary text-primary-foreground"
+      ? siteDesktop
+        ? "bg-[#237b70] text-primary-foreground hover:bg-[#1f6f67] dark:bg-primary dark:hover:bg-primary/90"
+        : "bg-primary text-primary-foreground"
       : "hover:bg-muted/15 focus-visible:bg-muted/15 data-[highlighted]:bg-muted/15"
   }`;
 

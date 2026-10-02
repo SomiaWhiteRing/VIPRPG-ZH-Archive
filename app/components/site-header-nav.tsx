@@ -200,7 +200,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
     if (!openPanel) return;
 
     const breakpoint = window.matchMedia(
-      openPanel === "menu" ? "(min-width: 64rem)" : "(min-width: 48rem)",
+      openPanel === "menu" ? "(min-width: 80rem)" : "(min-width: 48rem)",
     );
     const closeAtBreakpoint = () => {
       if (breakpoint.matches) setOpenPanel(null);
@@ -256,7 +256,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
         {/* 折叠菜单按钮放在导航前，展开后可直接按 Tab 进入导航。 */}
         <Button
-          className="lg:hidden"
+          className="xl:hidden"
           size="icon"
           variant="ghost"
           type="button"
@@ -271,6 +271,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
         <HeaderNavigation
           ariaLabel={inAdmin ? "管理导航" : "站点导航"}
+          inAdmin={inAdmin}
           entries={inAdmin ? visibleAdminEntries : PUBLIC_LINKS}
           mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
           mobileOpen={mobileMenuOpen}
