@@ -79,9 +79,19 @@
 }
 
 @media (min-width: 64rem) {
+  /* This route owns its scrollers; discard the previous page's document height
+     and scroll offset before client-side scroll restoration runs. */
+  :root:has(.rakuen-page),
+  body:has(.rakuen-page) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: clip;
+  }
+
   .rakuen-page {
+    position: fixed;
+    inset: var(--site-header-height, 3.5rem) 0 0;
     display: flex;
-    height: calc(100dvh - var(--site-header-height, 3.5rem));
     overflow: hidden;
   }
 
