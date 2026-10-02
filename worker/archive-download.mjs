@@ -6,7 +6,7 @@ import {
   shouldSkipWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
-import { hotDownloadCache, readDownloadCache, writeDownloadCache } from "./download-cache.mjs";
+import { hotDownloadCache, readDownloadCache, cacheDownloadResponse } from "./download-cache.mjs";
 
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
@@ -155,7 +155,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     if (!bypassDownloadCache) {
       try {
-        sharedCache = await hotDownloadCache(env.DB, cacheKey);
+        sharedCache = await hotDownloadCache(env.DB, cacheKey, record.estimatedR2GetCount);
         const cached = sharedCache && await readDownloadCache(bucket, sharedCache, request.method, rangeHeader, parseDownloadRange);
         if (cached?.invalidRange) return new Response(null, {
           status: 416, headers: { "Content-Range": `bytes */${cached.size}`, "Cache-Control": "no-store" },
@@ -209,7 +209,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     }
 
     const zipStream = createFixedLengthZipStream(layout, bucket, player, range);
-    const response = new Response(zipStream.readable, {
+    let response = new Response(zipStream.readable, {
       status: range ? 206 : 200,
       headers,
     });
@@ -219,11 +219,11 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       isRange: Boolean(range), metrics, startedAt, stage: "zip-stream",
     });
 
-    if (!range && sharedCache && zipSizeBytes <= downloadCacheMaxBytes) {
-      // Use one background consumer on a promotion; do not also tee this build
-      // into the colo cache. A failed/partial PUT never publishes an R2 object.
-      ctx.waitUntil(writeDownloadCache(env.ARCHIVE_BUCKET, sharedCache, response.clone(), record.estimatedR2GetCount)
-        .catch((error) => console.warn("Shared download cache put failed", error?.message ?? error)));
+    if (sharedCache && Number(headers.get("Content-Length")) <= downloadCacheMaxBytes) {
+      // Store exactly the bytes already being served, including resumable tails.
+      // Never construct an extra full ZIP just to warm a Range request's cache.
+      response = cacheDownloadResponse(env.ARCHIVE_BUCKET, sharedCache, response,
+        record.estimatedR2GetCount, zipSizeBytes, range, ctx);
     } else if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default

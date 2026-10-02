@@ -8,10 +8,10 @@ import { tmpdir } from "node:os";
 import { join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
-import { crc32 } from "../lib/archive/crc32.ts";
+import { crc32, Crc32 } from "../lib/archive/crc32.ts";
 
-// Exercise FixedLengthStream -> Response.clone() -> R2.put and R2 conditional
-// ranges in workerd. The bucket/state are temporary; no browser or remote API.
+// Exercise backpressured ZIP -> R2.put and conditional full/partial cache reads
+// in workerd, including an archive larger than 128 MiB. Local only.
 const root = fileURLToPath(new URL("../", import.meta.url));
 const temp = mkdtempSync(join(tmpdir(), "viprpg-download-cache-"));
 const port = await new Promise((resolve, reject) => {
@@ -27,12 +27,31 @@ const manifest = JSON.stringify({ schema: "viprpg-archive.manifest.v1", archiveV
     crc32: crc32(bytes), mtimeMs: null, storage: { kind: "blob", blobSha256: blobHash } },
 ] });
 const manifestHash = sha(manifest);
+const bigSize = 142_439_000;
+const chunk = Uint8Array.from({ length: 65536 }, (_, i) => i % 251);
+const bigHashState = createHash("sha256");
+const bigCrc = new Crc32();
+for (let offset = 0; offset < bigSize; offset += chunk.length) {
+  const part = chunk.subarray(0, Math.min(chunk.length, bigSize - offset));
+  bigHashState.update(part); bigCrc.update(part);
+}
+const bigHash = bigHashState.digest("hex");
+const bigManifest = JSON.stringify({ schema: "viprpg-archive.manifest.v1", archiveVersion: { sharedPlayer: null }, corePacks: [], files: [
+  { path: "Picture/big.bin", pathSortKey: "picture/big.bin", size: bigSize, sha256: bigHash,
+    crc32: bigCrc.digest(), mtimeMs: null, storage: { kind: "blob", blobSha256: bigHash } },
+] });
+const bigManifestHash = sha(bigManifest);
 const objectKey = (kind, hash, suffix = "") => `${kind}/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}${suffix}`;
 const entry = `import { maybeHandleArchiveDownload } from ${JSON.stringify(relative(temp, resolve(root, "worker/archive-download.mjs")).replaceAll("\\", "/"))};
 const record = ${JSON.stringify({ id: 1, work_id: 1, work_original_title: "Runtime fixture", manifest_sha256: manifestHash,
   packer_version: "fixture", total_size_bytes: bytes.length, estimated_r2_get_count: 1, uses_shared_player: 0, engine_family: "rpg_maker_2000" })};
 const db = { prepare(sql) { return { bind() { return this; }, async run() { return {success:true}; }, async first() {
   return sql.includes('SELECT full_download_count') ? {full_download_count:2,size_bytes:${bytes.length}} : record;
+} }; } };
+// No completed downloads: high source cost must admit the initial Range too.
+const bigDb = { prepare(sql) { return { bind() { return this; }, async run() { return {success:true}; }, async first() {
+  return sql.includes('SELECT full_download_count') ? null : {...record,id:2,manifest_sha256:${JSON.stringify(bigManifestHash)},
+    total_size_bytes:${bigSize},estimated_r2_get_count:256};
 } }; } };
 export default { async fetch(request, env, ctx) {
   const path = new URL(request.url).pathname;
@@ -43,13 +62,27 @@ export default { async fetch(request, env, ctx) {
     return new Response('ready');
   }
   if (path === '/__cache') return Response.json((await env.ARCHIVE_BUCKET.list({prefix:'download-cache/'})).objects.map(o=>({key:o.key,size:o.size})));
+  if (path === '/__clear-cache') {
+    for (const o of (await env.ARCHIVE_BUCKET.list({prefix:'download-cache/'})).objects) await env.ARCHIVE_BUCKET.delete(o.key);
+    return new Response('cleared');
+  }
+  if (path === '/__setup-big') {
+    const stream = new FixedLengthStream(${bigSize});
+    const writer = stream.writable.getWriter();
+    const put = env.ARCHIVE_BUCKET.put(${JSON.stringify(objectKey("blobs", bigHash))}, stream.readable);
+    for (let offset=0;offset<${bigSize};offset+=65536)
+      await writer.write(Uint8Array.from({length:Math.min(65536,${bigSize}-offset)},(_,i)=>i%251));
+    await writer.close(); await put;
+    await env.ARCHIVE_BUCKET.put(${JSON.stringify(objectKey("manifests", bigManifestHash, ".json"))}, ${JSON.stringify(bigManifest)});
+    return new Response('ready');
+  }
   if (path === '/__conditional') {
     const listed = (await env.ARCHIVE_BUCKET.list({prefix:'download-cache/'})).objects[0];
     await env.ARCHIVE_BUCKET.put(listed.key, 'replaced');
     const result = await env.ARCHIVE_BUCKET.get(listed.key,{range:{offset:0,length:3},onlyIf:{etagMatches:listed.etag}});
     return Response.json({hasBody:Boolean(result?.body)});
   }
-  return await maybeHandleArchiveDownload(request,{...env,DB:db},ctx) ?? new Response('',{status:404});
+  return await maybeHandleArchiveDownload(request,{...env,DB:path.includes('/2/')?bigDb:db},ctx) ?? new Response('',{status:404});
 } };`;
 writeFileSync(join(temp, "worker.mjs"), entry);
 writeFileSync(join(temp, "wrangler.json"), JSON.stringify({
@@ -65,7 +98,18 @@ let succeeded = false;
 child.stdout.on("data", (chunk) => { log += chunk; });
 child.stderr.on("data", (chunk) => { log += chunk; });
 const origin = `http://127.0.0.1:${port}`;
-const request = (path, init = {}) => fetch(origin + path, { ...init, signal: AbortSignal.timeout(10_000) });
+const request = (path, init = {}) => fetch(origin + path, { ...init, signal: AbortSignal.timeout(120_000) });
+async function digestResponse(response, tailStart = 0, pause = false) {
+  const hash = createHash("sha256"), tail = createHash("sha256");
+  let size = 0;
+  for await (const chunk of response.body) {
+    if (!size && pause) await new Promise((resolve) => setTimeout(resolve, 100));
+    hash.update(chunk);
+    if (size + chunk.length > tailStart) tail.update(chunk.subarray(Math.max(0, tailStart - size)));
+    size += chunk.length;
+  }
+  return { size, hash: hash.digest("hex"), tail: tail.digest("hex") };
+}
 async function until(check, label) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -99,8 +143,37 @@ try {
   assert.equal(head.headers.get("Content-Length"), String(zip.length));
   assert.equal((await head.arrayBuffer()).byteLength, 0);
   assert.deepEqual(await (await request("/__conditional", { method: "POST" })).json(), { hasBody: false });
+  console.log("Small ZIP workerd/R2 contracts passed; checking streamed 142 MB ZIP and Range-only promotion.");
+  assert.equal((await request("/__setup-big", { method: "POST" })).status, 200);
+  await request("/__clear-cache", { method: "POST" });
+  const bigPath = "/api/archive-versions/2/download";
+  const tailStart = 99_957_091;
+  const big = await request(bigPath);
+  assert.equal(big.status, 200);
+  const bigZip = await digestResponse(big, tailStart, true);
+  assert.ok(bigZip.size > 128 * 1024 * 1024);
+  await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size), "large R2 PUT");
+  const bigHit = await request(bigPath);
+  assert.equal(bigHit.headers.get("X-Download-Cache-Tier"), "r2");
+  assert.deepEqual(await digestResponse(bigHit, tailStart), bigZip);
+  await request("/__clear-cache", { method: "POST" });
+  const coldTail = await request(bigPath, { headers: { Range: `bytes=${tailStart}-` } });
+  assert.equal(coldTail.status, 206);
+  assert.equal((await digestResponse(coldTail)).hash, bigZip.tail);
+  await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size-tailStart), "Range-only R2 PUT");
+  const cachedTail = await request(bigPath, { headers: { Range: `bytes=${tailStart}-` } });
+  assert.equal(cachedTail.status, 206);
+  assert.equal(cachedTail.headers.get("X-Download-Cache-Tier"), "r2");
+  assert.equal(cachedTail.headers.get("Content-Range"), `bytes ${tailStart}-${bigZip.size-1}/${bigZip.size}`);
+  assert.equal((await digestResponse(cachedTail)).hash, bigZip.tail);
+  const partialHead = await request(bigPath, { method: "HEAD" });
+  assert.equal(Number(partialHead.headers.get("Content-Length")), bigZip.size);
+  const afterPartial = await request(bigPath);
+  assert.equal(afterPartial.status, 200);
+  assert.equal(afterPartial.headers.get("X-Download-Cache"), "MISS");
+  assert.deepEqual(await digestResponse(afterPartial, tailStart), bigZip);
   succeeded = true;
-  console.log(`Download cache workerd/R2 contracts passed: streamed PUT, full HIT, conditional Range, If-Range, HEAD (${zip.length} ZIP bytes).`);
+  console.log(`Download cache workerd/R2 contracts passed: full/partial PUT and HIT, conditional Range, If-Range, HEAD, first-request admission, partial-to-full fallback (${zip.length} and ${bigZip.size} ZIP bytes).`);
 } catch (error) {
   writeFileSync(join(temp, "worker.log"), log);
   console.error(`Runtime evidence retained at ${temp}\n${log.slice(-4000)}`);
