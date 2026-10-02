@@ -68,7 +68,7 @@ final class LocalGames {
                                     || Arrays.asList(path.split("/", -1)).contains("") || !paths.add(path.toLowerCase(Locale.ROOT))
                                     || file.getLong("start") < 0 || file.getLong("end") < file.getLong("start")) throw new IOException("游戏索引无效，请重新安装。");
                             }
-                            JSONObject saves = store.storage.loadSaves(next.workId);
+                            JSONObject saves = store.storage.seedBundledSaves(next.workId, next.zip, files);
                             session = next;
                             value = new JSONObject().put("installation", task).put("files", index.getJSONArray("files"))
                                 .put("url", BuildConfig.SITE_ORIGIN + "/_native/read/" + next.token).put("saves", saves); break;

@@ -9,6 +9,7 @@ import android.provider.DocumentsContract.Document;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.text.Normalizer;
 import java.util.*;
 import org.json.*;
 
@@ -76,6 +77,34 @@ final class LocalStorage {
         return new JSONObject();
     }
     synchronized JSONObject loadSaves(long workId) throws Exception { JSONObject files = loadGeneration(workId).optJSONObject("files"); return files == null ? new JSONObject() : files; }
+    // Seed on launch so already-installed archives also gain their bundled saves after an APK update.
+    synchronized JSONObject seedBundledSaves(long workId, Uri gameZip, JSONArray gameFiles) throws Exception {
+        JSONObject saves = loadSaves(workId);
+        Set<String> paths = new HashSet<>();
+        Iterator<String> existing = saves.keys();
+        while (existing.hasNext()) paths.add(Normalizer.normalize(existing.next(), Normalizer.Form.NFC).toLowerCase(Locale.ROOT));
+        long encodedSize = saves.toString().getBytes(StandardCharsets.UTF_8).length;
+        boolean changed = false;
+        try (RandomAccessFile zip = new RandomAccessFile(file(gameZip), "r")) {
+            for (int i = 0; i < gameFiles.length(); i++) {
+                JSONObject entry = gameFiles.getJSONObject(i);
+                String name = entry.getString("filename");
+                if (!name.matches("(?i)[^/\\\\]+\\.lsd")) continue;
+                String path = "/work-saves/" + workId + "/" + name;
+                if (!paths.add(Normalizer.normalize(path, Normalizer.Form.NFC).toLowerCase(Locale.ROOT))) continue;
+                long start = entry.getLong("start"), end = entry.getLong("end"), size = end - start;
+                if (start < 0 || end < start || end > zip.length()) throw new IOException("随包存档读取范围无效。");
+                encodedSize += 4 * ((size + 2) / 3);
+                if (encodedSize > 64 * 1024 * 1024) throw new IOException("存档及播放器配置超过 64 MiB。");
+                byte[] bytes = new byte[(int)size];
+                zip.seek(start); zip.readFully(bytes);
+                saves.put(path, android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP));
+                changed = true;
+            }
+        }
+        if (changed) save(workId, saves);
+        return saves;
+    }
     synchronized JSONObject saveTimes(long workId) throws Exception { JSONObject times = loadGeneration(workId).optJSONObject("modified"); return times == null ? new JSONObject() : times; }
     synchronized void save(long workId, JSONObject files) throws Exception {
         Iterator<String> paths = files.keys();
