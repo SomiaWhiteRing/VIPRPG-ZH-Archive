@@ -20,6 +20,7 @@ export async function deleteUnreferencedManifest(
   db: D1Database,
   bucket: Pick<R2Bucket, "delete">,
   sha256: string,
+  completion?: D1PreparedStatement,
 ): Promise<ManifestDeletionResult> {
   const token = crypto.randomUUID();
   const claimed = await db.prepare(`INSERT INTO archive_gc_manifest_deletions(sha256,lock_token,locked_at)
@@ -37,8 +38,14 @@ export async function deleteUnreferencedManifest(
   }
   try {
     await bucket.delete(manifestKey(sha256));
-    await db.prepare("DELETE FROM archive_gc_manifest_deletions WHERE sha256=? AND lock_token=?")
-      .bind(sha256, token).run();
+    const release = db.prepare(`DELETE FROM archive_gc_manifest_deletions WHERE sha256=? AND lock_token=?
+      ${completion ? "AND changes()>0" : ""}`).bind(sha256, token);
+    if (completion) {
+      // Keep the hash reserved until the caller's progress is durably committed.
+      // A failed or fenced completion must not reopen imports before a retry.
+      const results = await db.batch([completion, release]);
+      if (!(results[0].meta.changes ?? 0)) throw new Error("Manifest deletion completion was not recorded");
+    } else await release.run();
     return "deleted";
   } catch (error) {
     // Keep the hash reserved after any uncertain deletion. Only the settled

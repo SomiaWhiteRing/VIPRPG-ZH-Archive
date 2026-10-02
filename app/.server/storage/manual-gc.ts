@@ -262,7 +262,7 @@ async function purgeManualObject(runtime: AppRuntime, job: Job, item: Item, toke
   const snapshot = JSON.parse(item.snapshot_json) as Snapshot;
   const head = await bucket.head(objectKey(item.type, item.object_id));
   if (item.state !== "deleting" && (head?.version ?? null) !== snapshot.version) {
-    await finishItem(db, job.id, item, token, "skipped");
+    await finishItemStatement(db, job.id, item, token, "skipped").run();
     return;
   }
   if (item.type === "manifest") {
@@ -314,9 +314,9 @@ async function skipOrDeferObject(db: D1Database, jobId: string, item: Item, toke
     .bind(blocked ? "failed" : "skipped", blocked ? "依赖的归档清理失败，请一同重试" : null, jobId, item.type, item.object_id, jobId, token).run();
 }
 
-async function finishItem(db: D1Database, jobId: string, item: Item, token: string, state: "skipped" | "deleted") {
-  await db.prepare(`UPDATE archive_gc_job_items SET state=?,error=NULL WHERE job_id=? AND type=? AND object_id=? AND ${locked(jobId, token).sql}`)
-    .bind(state, jobId, item.type, item.object_id, jobId, token).run();
+function finishItemStatement(db: D1Database, jobId: string, item: Item, token: string, state: "skipped" | "deleted") {
+  return db.prepare(`UPDATE archive_gc_job_items SET state=?,error=NULL WHERE job_id=? AND type=? AND object_id=? AND ${locked(jobId, token).sql}`)
+    .bind(state, jobId, item.type, item.object_id, jobId, token);
 }
 
 async function purgeManualManifest(
@@ -336,9 +336,10 @@ async function purgeManualManifest(
     }
   }
   if (head && head.version !== snapshot.version) throw new Error("Reserved manifest version changed");
-  const result = await deleteUnreferencedManifest(db, getArchiveBucket(runtime), item.object_id);
+  const result = await deleteUnreferencedManifest(db, getArchiveBucket(runtime), item.object_id,
+    finishItemStatement(db, job.id, item, token, "deleted"));
   if (result === "busy") throw new Error("Another manifest deletion is in progress");
-  await finishItem(db, job.id, item, token, result === "deleted" ? "deleted" : "skipped");
+  if (result === "retained") await finishItemStatement(db, job.id, item, token, "skipped").run();
 }
 
 function auditStatement(db: D1Database, actor: { id: number; email: string }, event: string, detail: Record<string, unknown>) {
