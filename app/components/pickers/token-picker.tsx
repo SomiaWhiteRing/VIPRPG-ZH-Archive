@@ -25,6 +25,7 @@ export function TokenPicker({
   includeSelectedRecommendations = false,
   showSelectionCount = true,
   suggestions,
+  pinnedValue,
   recommendations = suggestions,
   values,
   maxValues,
@@ -48,6 +49,8 @@ export function TokenPicker({
   includeSelectedRecommendations?: boolean;
   showSelectionCount?: boolean;
   suggestions: TokenSuggestion[];
+  /** Keep this suggestion first when it matches, including after selection. */
+  pinnedValue?: string;
   recommendations?: TokenSuggestion[];
   values: string[];
   maxValues?: number;
@@ -63,6 +66,7 @@ export function TokenPicker({
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const atLimit = maxValues !== undefined && values.length >= maxValues;
+  const pinnedKey = pinnedValue === undefined ? null : tokenKey(normalizeValue(pinnedValue));
   const selectedKeys = useMemo(
     () => new Set(values.map((value) => tokenKey(normalizeValue(value)))),
     [values, normalizeValue],
@@ -76,6 +80,8 @@ export function TokenPicker({
         tokenKey(normalizeValue(item.value)).includes(normalizedQuery),
       )
       .sort((left, right) =>
+        Number(tokenKey(normalizeValue(right.value)) === pinnedKey) -
+        Number(tokenKey(normalizeValue(left.value)) === pinnedKey) ||
         Number(tokenKey(normalizeValue(right.value)) === normalizedQuery) -
         Number(tokenKey(normalizeValue(left.value)) === normalizedQuery),
       )
@@ -94,11 +100,14 @@ export function TokenPicker({
       matches.push({ value: normalizedValue, meta: "新建", kind: "create" });
     }
     return matches;
-  }, [query, selectedKeys, suggestions, normalizeValue]);
+  }, [query, selectedKeys, suggestions, normalizeValue, pinnedKey]);
   const recommendedGroups = (recommendationGroups ?? [{ label: recommendationLabel, items: recommendations }])
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => includeSelectedRecommendations || !selectedKeys.has(tokenKey(normalizeValue(item.value)))).slice(0, 6),
+      items: group.items
+        .filter((item) => includeSelectedRecommendations || tokenKey(normalizeValue(item.value)) === pinnedKey || !selectedKeys.has(tokenKey(normalizeValue(item.value))))
+        .sort((left, right) => Number(tokenKey(normalizeValue(right.value)) === pinnedKey) - Number(tokenKey(normalizeValue(left.value)) === pinnedKey))
+        .slice(0, 6),
     }))
     .filter((group) => group.items.length);
 
@@ -238,7 +247,7 @@ export function TokenPicker({
             const selected = selectedKeys.has(tokenKey(normalizeValue(item.value)));
             return (
               <Button
-                aria-pressed={includeSelectedRecommendations ? selected : undefined}
+                aria-pressed={includeSelectedRecommendations || tokenKey(normalizeValue(item.value)) === pinnedKey ? selected : undefined}
                 className="min-h-7 shrink-0 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
                 disabled={disabled || atLimit || selected}
                 key={tokenKey(item.value)}
