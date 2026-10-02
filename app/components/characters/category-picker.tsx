@@ -1,5 +1,6 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import * as Popover from "@/app/components/ui/popover";
 import type {
   CharacterBrowseNode,
   CharacterCategory,
@@ -11,7 +12,6 @@ import {
 } from "@/lib/character-index";
 import { cn } from "@/lib/ui/cn";
 import { Check, ChevronDown, ChevronRight, Folder } from "lucide-react";
-import { Popover } from "radix-ui";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 
@@ -23,6 +23,10 @@ export function CategoryPicker({
   value,
   disabled,
   onValueChange,
+  counts,
+  emptyLabel,
+  triggerClassName,
+  showHeader = true,
 }: {
   id: string;
   categories: CharacterCategory[];
@@ -31,9 +35,14 @@ export function CategoryPicker({
   value: string | null;
   disabled: boolean;
   onValueChange: (value: string | null) => void;
+  counts?: ReadonlyMap<string, number>;
+  emptyLabel?: string;
+  triggerClassName?: string;
+  showHeader?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const trigger = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const viewport = useRef<HTMLDivElement>(null);
   const scrollTop = useRef(0);
@@ -81,7 +90,7 @@ export function CategoryPicker({
   }
 
   function choose(next: string | null) {
-    if (disabled || (mode === "membership" && next === null)) return;
+    if (disabled || (mode === "membership" && next === null && !emptyLabel)) return;
     onValueChange(next);
     browsingContext.current = JSON.stringify([mode, categoryId, next]);
     setOpen(false);
@@ -139,6 +148,7 @@ export function CategoryPicker({
             >
               <Folder aria-hidden />
               <span className="min-w-0 flex-1 break-words">{node.label}</span>
+              {counts?.has(node.id) ? <span className="text-xs text-muted tabular-nums">{counts.get(node.id)}</span> : null}
               {selected ? <Check aria-hidden /> : null}
             </Button>
           </div>
@@ -156,17 +166,18 @@ export function CategoryPicker({
     <Popover.Root open={open && !disabled} onOpenChange={changeOpen}>
       <Popover.Trigger asChild>
         <Button
+          ref={trigger}
           id={id}
           type="button"
           variant="outline"
           disabled={disabled}
-          className="w-full min-w-0 justify-between whitespace-normal text-left font-normal"
+          className={cn("w-full min-w-0 justify-between whitespace-normal text-left font-normal", triggerClassName)}
         >
-          <span className="min-w-0 break-words">{selectedPath}</span>
+          <span className="min-w-0 break-words" title={selectedPath}>{selectedPath}</span>
           <ChevronDown aria-hidden />
         </Button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal anchorRef={trigger}>
         <Popover.Content
           align="start"
           sideOffset={4}
@@ -176,7 +187,7 @@ export function CategoryPicker({
           aria-label={`选择${fieldLabel}`}
           className="z-50 flex max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-card text-foreground shadow-surface"
         >
-          <div className="grid gap-2 border-b border-border p-3">
+          {showHeader ? <div className="grid gap-2 border-b border-border p-3">
             <Input
               type="search"
               aria-label={`搜索${fieldLabel}`}
@@ -185,13 +196,14 @@ export function CategoryPicker({
               disabled={disabled}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") event.preventDefault();
+                if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                event.preventDefault(); event.stopPropagation();
               }}
             />
             <p className="break-words text-xs text-muted">
               当前选择：{selectedPath}
             </p>
-          </div>
+          </div> : null}
           <div
             ref={viewport}
             onScroll={(event) => {
@@ -199,7 +211,7 @@ export function CategoryPicker({
             }}
             className="min-h-0 overflow-y-auto overscroll-contain p-2"
           >
-            {mode === "parent" ? (
+            {mode === "parent" || emptyLabel ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -212,13 +224,13 @@ export function CategoryPicker({
                 onClick={() => choose(null)}
               >
                 <Folder aria-hidden />
-                <span className="flex-1">一级分类（无上级）</span>
+                <span className="flex-1">{emptyLabel ?? "一级分类（无上级）"}</span>
                 {value === null ? <Check aria-hidden /> : null}
               </Button>
             ) : null}
             <ul
               aria-label={`可选${fieldLabel}`}
-              className={cn(mode === "parent" && "border-t border-border pt-1")}
+              className={cn((mode === "parent" || emptyLabel) && "border-t border-border pt-1")}
             >
               {renderNodes(roots)}
             </ul>

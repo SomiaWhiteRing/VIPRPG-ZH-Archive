@@ -1,7 +1,7 @@
 import { CharacterMembershipPicker, CharacterNameFields } from "./character-membership-picker";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
-import { CategoryPicker } from "@/app/admin/characters/index/category-picker";
+import { CategoryPicker } from "@/app/components/characters/category-picker";
 import { SortableCategoryMembers } from "@/app/admin/characters/index/sortable-category-members";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";

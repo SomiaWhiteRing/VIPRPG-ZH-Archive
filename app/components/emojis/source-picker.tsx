@@ -7,7 +7,7 @@ import {
   Folder,
   Search,
 } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@/app/components/ui/popover";
 import { Button } from "@/app/components/ui/button";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { Input } from "@/app/components/ui/input";
@@ -49,6 +49,7 @@ export function EmojiSourcePicker({
   const [branches, setBranches] = useState<Record<string, Branch>>({});
   const pending = useRef(new Set<string>());
   const tree = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const scrollTop = useRef(0);
   const [offset, setOffset] = useState(0);
   const [results, setResults] = useState<CharacterPage & { query: string }>({
@@ -273,6 +274,7 @@ export function EmojiSourcePicker({
     <Popover.Root open={open && !disabled} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <Button
+          ref={trigger}
           type="button"
           id={id}
           disabled={disabled}
@@ -289,16 +291,16 @@ export function EmojiSourcePicker({
           <ChevronDown aria-hidden />
         </Button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal anchorRef={trigger}>
         <Popover.Content
           align="start"
           sideOffset={4}
           onOpenAutoFocus={() => {
             if (tree.current) tree.current.scrollTop = scrollTop.current;
           }}
-          className="z-[75] w-96 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 text-foreground shadow-surface"
+          className="z-[75] flex max-h-[var(--radix-popover-content-available-height)] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-card p-2 text-foreground shadow-surface"
         >
-          <div className="relative mb-2">
+          <div className="relative mb-2 shrink-0">
             <Search
               aria-hidden
               className="absolute left-3 top-3 size-4 text-muted"
@@ -331,7 +333,7 @@ export function EmojiSourcePicker({
             ref={tree}
             role="tree"
             aria-label="角色分类"
-            className="emoji-scroll-viewport max-h-[min(24rem,50dvh)] overflow-y-auto"
+            className="emoji-scroll-viewport min-h-0 max-h-[min(24rem,50dvh)] shrink overflow-y-auto overscroll-contain"
             onScroll={(event) => {
               scrollTop.current = event.currentTarget.scrollTop;
             }}
