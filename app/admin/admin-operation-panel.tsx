@@ -1,26 +1,15 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
+import { FinalCleanupPanel } from "@/app/admin/final-cleanup-panel";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 import { useToast } from "@/app/components/ui/toast";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
 import {
   gcDefaultGraceDays,
   gcDefaultSweepLimitPerType,
-  gcManualSweepGraceDays,
 } from "@/lib/archive/gc-policy";
 import { useRef, useState } from "react";
 
-type OperationKind = "consistency" | "gc" | "sweep";
+type OperationKind = "consistency" | "gc";
 
 type OperationState = {
   kind: OperationKind | null;
@@ -41,19 +30,15 @@ export function AdminOperationPanel({
   canRunFinalCleanup: boolean;
 }) {
   const toast = useToast();
-  const sweepButtonRef = useRef<HTMLButtonElement>(null);
+  const requestPendingRef = useRef(false);
   const [state, setState] = useState<OperationState>({
     kind: null,
     loading: false,
     result: null,
   });
-  const [sweepConfirm, setSweepConfirm] = useState("");
-  const [sweepDialogOpen, setSweepDialogOpen] = useState(false);
-  const [sweepGraceDays, setSweepGraceDays] = useState(
-    String(gcManualSweepGraceDays),
-  );
-
   async function run(kind: OperationKind): Promise<void> {
+    if (requestPendingRef.current) return;
+    requestPendingRef.current = true;
     const url = operationUrl(kind);
 
     setState({
@@ -63,26 +48,9 @@ export function AdminOperationPanel({
     });
 
     try {
-      const response =
-        kind === "sweep"
-          ? await fetch(url, {
-              method: "POST",
-              credentials: "same-origin",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                confirm: sweepConfirm,
-                graceDays: parseIntegerInput(
-                  sweepGraceDays,
-                  gcManualSweepGraceDays,
-                ),
-                limitPerType: gcDefaultSweepLimitPerType,
-              }),
-            })
-          : await fetch(url, {
-              credentials: "same-origin",
-            });
+      const response = await fetch(url, {
+        credentials: "same-origin",
+      });
       const payload = (await response.json()) as ApiPayload;
 
       if (!response.ok || payload.ok === false) {
@@ -105,6 +73,8 @@ export function AdminOperationPanel({
         loading: false,
         result: null,
       });
+    } finally {
+      requestPendingRef.current = false;
     }
   }
 
@@ -129,73 +99,7 @@ export function AdminOperationPanel({
         </Button>
       </div>
       {canRunFinalCleanup ? (
-        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
-          <Label htmlFor="gc-sweep-confirm">
-            最终清理
-            <span className="text-sm text-muted">
-              此操作会永久删除且不可恢复。 自动任务最终清理超过{" "}
-              {gcDefaultGraceDays} 天的回收站版本和零引用对象； 手动可填 0
-              立即清理，每轮每类最多 {gcDefaultSweepLimitPerType} 个对象。
-            </span>
-          </Label>
-          <Input
-            aria-label="最终清理手动保留天数"
-            min="0"
-            step="1"
-            type="number"
-            value={sweepGraceDays}
-            onChange={(event) => setSweepGraceDays(event.target.value)}
-          />
-          <Input
-            id="gc-sweep-confirm"
-            value={sweepConfirm}
-            onChange={(event) => setSweepConfirm(event.target.value)}
-            placeholder="SWEEP"
-          />
-          <Button
-            aria-controls="admin-sweep-confirm-dialog"
-            aria-expanded={sweepDialogOpen}
-            aria-haspopup="dialog"
-            ref={sweepButtonRef}
-            variant="outline"
-            disabled={state.loading || sweepConfirm !== "SWEEP"}
-            onClick={() => setSweepDialogOpen(true)}
-            type="button"
-          >
-            执行最终清理
-          </Button>
-          <AlertDialog onOpenChange={setSweepDialogOpen} open={sweepDialogOpen}>
-            <AlertDialogContent
-              id="admin-sweep-confirm-dialog"
-              onCloseAutoFocus={(event) => {
-                event.preventDefault();
-                sweepButtonRef.current?.focus();
-              }}
-            >
-              <AlertDialogTitle>确认执行最终清理</AlertDialogTitle>
-              <AlertDialogDescription>
-                此操作会永久删除回收站版本的文件引用和零引用 R2
-                对象，不能恢复。只有在确认清理范围正确后继续。
-              </AlertDialogDescription>
-              <AlertDialogFooter>
-                <AlertDialogCancel asChild>
-                  <Button variant="outline">取消</Button>
-                </AlertDialogCancel>
-                <AlertDialogAction asChild>
-                  <Button
-                    onClick={() => {
-                      setSweepDialogOpen(false);
-                      void run("sweep");
-                    }}
-                    variant="destructive"
-                  >
-                    确认清理
-                  </Button>
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        <FinalCleanupPanel />
       ) : (
         <p className="text-sm text-muted">
           最终清理会永久删除回收站版本的文件引用和零引用 R2
@@ -217,17 +121,7 @@ function operationUrl(kind: OperationKind): string {
     return "/api/admin/consistency?db_limit=150&r2_limit=1000";
   }
 
-  if (kind === "gc") {
-    return `/api/admin/gc/dry-run?grace_days=${gcDefaultGraceDays}&limit=${gcDefaultSweepLimitPerType}`;
-  }
-
-  return "/api/admin/gc/sweep";
-}
-
-function parseIntegerInput(value: string, fallback: number): number {
-  const parsed = Number.parseInt(value, 10);
-
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+  return `/api/admin/gc/dry-run?grace_days=${gcDefaultGraceDays}&limit=${gcDefaultSweepLimitPerType}`;
 }
 
 function summarize(kind: OperationKind, report: unknown): unknown {
