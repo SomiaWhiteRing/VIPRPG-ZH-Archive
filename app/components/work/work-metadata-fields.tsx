@@ -11,10 +11,10 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { WorkMoreInfoEditor } from "@/app/components/work/work-more-info-editor";
 import { StaffEditor } from "@/app/upload/staff-editor";
 import { UploadTagPicker } from "@/app/upload/upload-tag-picker";
-import type { UploadFormMetadata as FlatMetadata, UploadImageSelections as ImageSelections, UploadTaxonomySuggestion } from "@/app/upload/upload-types";
+import type { UploadFormMetadata as FlatMetadata, UploadImageSelections as ImageSelections, UploadSuggestions } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
-import type { CharacterCreditSelection, CharacterSuggestion } from "@/lib/character-names";
-import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
+import type { CharacterCreditSelection } from "@/lib/character-names";
+import type { CreatorSelection } from "@/lib/creator-names";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import { MAX_PUBLIC_TAGS } from "@/lib/user-tags";
 import type { Dispatch, SetStateAction } from "react";
@@ -73,11 +73,7 @@ export function WorkMetadataFields({
   removeCharacterFaceSheetFiles?: (index: number) => void;
   setForm: Dispatch<SetStateAction<FlatMetadata>>;
   setImageSelections: Dispatch<SetStateAction<ImageSelections>>;
-  suggestions: {
-    tags: UploadTaxonomySuggestion[];
-    characters: CharacterSuggestion[];
-    creators: CreatorSuggestion[];
-  };
+  suggestions: UploadSuggestions;
   translatorError: string | null;
   staffErrorsVisible: boolean;
   moreInfoErrorsVisible: boolean;
@@ -302,6 +298,7 @@ export function WorkMetadataFields({
           label="登场角色"
         >
           <CharacterPicker
+            characterIndex={suggestions.characterIndex}
             disabled={disabled}
             faceSheetFiles={characterFaceSheetFiles}
             sourceFaceSheetFiles={sourceFaceSheetFiles}

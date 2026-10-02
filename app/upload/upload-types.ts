@@ -3,13 +3,21 @@ import type {
   ArchiveManifestFile,
   ExcludedFileTypeSummary,
 } from "@/lib/archive/manifest";
-import type { CharacterCreditSelection } from "@/lib/character-names";
-import type { CreatorSelection } from "@/lib/creator-names";
+import type { CharacterCreditSelection, CharacterSuggestion } from "@/lib/character-names";
+import type { CharacterIndexData } from "@/lib/character-index";
+import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { ResourceCleanupReport } from "@/lib/archive/resource-cleanup";
 import type { MissingResourceReport } from "@/lib/archive/missing-resources";
 import type { SharedPlayerReplacement } from "@/lib/archive/shared-player";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
+
+export type UploadSuggestions = {
+  tags: UploadTaxonomySuggestion[];
+  characters: CharacterSuggestion[];
+  characterIndex: Pick<CharacterIndexData, "categories" | "memberships">;
+  creators: CreatorSuggestion[];
+};
 
 export type UploadFormMetadata = {
   usesUnsupportedManiac: boolean;

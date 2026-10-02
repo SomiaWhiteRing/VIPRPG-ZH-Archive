@@ -1,6 +1,7 @@
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import type { CharacterNameInput } from "@/app/components/characters/character-create-dialog";
 import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
+import { CharacterCreditManager } from "@/app/components/characters/character-credit-manager";
 import { UploadCharacterFaceSheets } from "@/app/components/characters/upload-character-face-sheets";
 import { badgeVariants } from "@/app/components/ui/badge";
 import { Button, buttonVariants } from "@/app/components/ui/button";
@@ -33,6 +34,7 @@ import {
   isCharacterRoleKey,
 } from "@/lib/character-names";
 import { normalizeEntityName } from "@/lib/entity-name";
+import type { CharacterIndexData } from "@/lib/character-index";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 import { Pencil, X } from "lucide-react";
@@ -67,6 +69,7 @@ export function CharacterPicker({
   sourceFaceSheetFiles = EMPTY_FILES,
   sourceFaceSheetWarnings = EMPTY_WARNINGS,
   sourceFaceSheetsLoading = false,
+  characterIndex,
   suggestions,
   values,
 }: {
@@ -83,6 +86,7 @@ export function CharacterPicker({
   sourceFaceSheetFiles?: File[];
   sourceFaceSheetWarnings?: string[];
   sourceFaceSheetsLoading?: boolean;
+  characterIndex: Pick<CharacterIndexData, "categories" | "memberships">;
   suggestions: CharacterSuggestion[];
   values: CharacterCreditSelection[];
 }) {
@@ -96,6 +100,7 @@ export function CharacterPicker({
     roleKey: CharacterRoleKey;
   } | null>(null);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
+  const createRoleRef = useRef<CharacterRoleKey>("main");
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
   const loadedSheets = useRef(new Map<number, CharacterFaceSheet[]>());
   const [sheetResults, setSheetResults] = useState<Record<number, CharacterFaceSheet[]>>({});
@@ -168,7 +173,22 @@ export function CharacterPicker({
   );
   const recommended = suggestions
     .filter((item) => !selectedCharacterIds.has(item.id))
-    .slice(0, 6);
+    .slice(0, 10);
+  const recommendedRow = useRef<HTMLDivElement>(null);
+  const recommendedKey = recommended.map((item) => item.id).join(",");
+  useLayoutEffect(() => {
+    const row = recommendedRow.current;
+    if (!row) return;
+    const buttons = [...row.querySelectorAll<HTMLButtonElement>("[data-recommended-character]")];
+    const update = () => {
+      for (const button of buttons) button.inert = button.offsetTop + button.offsetHeight > row.clientHeight;
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    buttons.forEach((button) => observer.observe(button));
+    update();
+    return () => observer.disconnect();
+  }, [recommendedKey]);
   const activeCredit =
     portraitIndex === null ? null : (values[portraitIndex] ?? null);
   const activeFiles = faceSheetFiles[portraitIndex ?? -1] ?? EMPTY_FILES;
@@ -222,12 +242,13 @@ export function CharacterPicker({
     setAliasEdit(null);
   }
 
-  function startCreate(rawQuery: string) {
+  function startCreate(rawQuery: string, roleKey: CharacterRoleKey = "main") {
     const activeElement = document.activeElement;
     createReturnFocusRef.current =
       activeElement instanceof HTMLElement ? activeElement : null;
     const originalName = normalizeEntityName(rawQuery);
     setCreateQuery(originalName);
+    createRoleRef.current = roleKey;
     setCreateOpen(true);
   }
 
@@ -240,7 +261,7 @@ export function CharacterPicker({
     };
     onChange([
       ...values,
-      { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] },
+      { selection, roleKey: createRoleRef.current, portrait: null, faceSheetBlobSha256s: [] },
     ]);
     setQuery("");
     portraitReturnFocusRef.current = document.getElementById(id);
@@ -518,12 +539,13 @@ export function CharacterPicker({
         </div>
 
         <span className="text-xs text-muted">输入后按 Enter 添加</span>
-        {recommended.length ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-xs text-muted">常用角色</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-1.5 overflow-hidden" ref={recommendedRow}>
+            {recommended.length ? <span className="mr-1 shrink-0 text-xs text-muted">常用角色</span> : null}
             {recommended.map((item) => (
               <Button
-                className="min-h-8 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
+                className="h-8 min-h-8 rounded-full border-dashed px-2.5 text-xs font-normal text-muted hover:border-primary hover:text-primary"
+                data-recommended-character={item.id}
                 disabled={disabled}
                 key={item.id}
                 onClick={() =>
@@ -549,7 +571,32 @@ export function CharacterPicker({
               </Button>
             ))}
           </div>
-        ) : null}
+          <CharacterCreditManager
+            characterIndex={characterIndex}
+            disabled={disabled}
+            faceSheetFiles={faceSheetFiles}
+            id={id}
+            onChange={onChange}
+            onCreate={startCreate}
+            onEditPortrait={(index, trigger) => {
+              portraitReturnFocusRef.current = trigger;
+              setPortraitIndex(index);
+            }}
+            onRestore={(next, restoredFiles) => {
+              onChange(next);
+              const indices = new Set([...Object.keys(faceSheetFiles), ...Object.keys(restoredFiles)]);
+              for (const index of indices) onFaceSheetFilesChange?.(Number(index), restoredFiles[Number(index)] ?? EMPTY_FILES);
+            }}
+            renderPortrait={(index) => {
+              const credit = values[index];
+              const suggestion = credit.selection.kind === "existing"
+                ? suggestionsById.get(credit.selection.characterId) ?? null : null;
+              return <LocalPortraitPreview credit={credit} files={faceSheetFiles[index] ?? EMPTY_FILES} portrait={resolvePortrait(credit, suggestion)} size={28} />;
+            }}
+            suggestions={suggestions}
+            values={values}
+          />
+        </div>
       </div>
 
       <Dialog.Root
@@ -1075,10 +1122,12 @@ function LocalPortraitPreview({
   credit,
   files,
   portrait,
+  size = 24,
 }: {
   credit: CharacterCreditSelection;
   files: File[];
   portrait: CharacterPortraitValue | null;
+  size?: 24 | 28;
 }) {
   const previews = useLocalFaceSheets(files);
   const preview =
@@ -1098,11 +1147,11 @@ function LocalPortraitPreview({
   const selection = credit.selection;
   return (
     <CharacterPortrait
-      className="size-6 shrink-0 rounded-sm text-[11px]"
+      className={cn("shrink-0 rounded-sm text-[11px]", size === 28 ? "size-7" : "size-6")}
       displayName={selection.displayName}
       portrait={localPortrait}
       previewSrc={preview?.src ?? null}
-      size={24}
+      size={size}
       toneKey={
         selection.kind === "existing"
           ? selection.characterId

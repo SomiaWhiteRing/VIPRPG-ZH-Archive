@@ -51,15 +51,12 @@ import type {
   UploadSourceFile,
   UploadSourceKind,
   UploadSourcePrefill,
-  UploadTaxonomySuggestion,
+  UploadSuggestions,
 } from "@/app/upload/upload-types";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import type {
-  CharacterCreditSelection,
-  CharacterSuggestion,
-} from "@/lib/character-names";
+import type { CharacterCreditSelection } from "@/lib/character-names";
 import { characterSelectionKey } from "@/lib/character-names";
-import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
+import type { CreatorSelection } from "@/lib/creator-names";
 import { creatorSelectionKey } from "@/lib/creator-names";
 import { formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
@@ -152,11 +149,7 @@ export function UploadClient({
     externalLinks: GameExternalLink[];
     footer: ReactNode;
   };
-  suggestions: {
-    tags: UploadTaxonomySuggestion[];
-    characters: CharacterSuggestion[];
-    creators: CreatorSuggestion[];
-  };
+  suggestions: UploadSuggestions;
 }) {
   const navigate = useNavigate();
   const upload = useUploadController(currentUser.id);

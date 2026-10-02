@@ -156,6 +156,7 @@
   --animate-character-menu-closed: character-menu-closed 180ms ease-in both;
   --animate-character-menu-backdrop-open: character-menu-backdrop-open 240ms ease-out both;
   --animate-character-menu-backdrop-closed: character-menu-backdrop-closed 180ms ease-in both;
+  --animate-drag-stack-pickup: drag-stack-pickup 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-site-toast-enter: site-toast-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-site-toast-exit: site-toast-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
   --animate-site-toast-countdown: site-toast-countdown linear 1 forwards;
@@ -194,6 +195,11 @@
   @keyframes character-menu-backdrop-closed {
     from { opacity: 1; }
     to { opacity: 0; }
+  }
+  /* Website character manager and emoji library: selected items gather into a stack. */
+  @keyframes drag-stack-pickup {
+    from { transform: translate3d(var(--drag-pickup-x), var(--drag-pickup-y), 0) rotate(0deg) scale(var(--drag-pickup-scale-x, 1), var(--drag-pickup-scale-y, 1)); opacity: 1; }
+    to { transform: translate3d(var(--drag-stack-x), var(--drag-stack-y), 0) rotate(var(--drag-stack-angle)) scale(1.04); opacity: var(--drag-stack-opacity); }
   }
   @keyframes site-toast-slide-in {
     from { opacity: 0; transform: translateX(calc(100% + 1rem)); }
