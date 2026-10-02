@@ -987,6 +987,7 @@ export function UploadClient({
                   </div>
                 ) : (
                   <WorkMetadataFields
+                    showUploadTagGuidance={!adminOptions}
                     originalTitleReadOnly={Boolean(adminOptions)}
                     originalDeclarationLabel={adminOptions ? "本站原创" : undefined}
                     characterFaceSheetFiles={characterFaceSheetFiles}
