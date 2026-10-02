@@ -25,6 +25,10 @@ jobs:
       - name: Use isolated local configuration
         run: node scripts/prepare-verification-config.mjs
       - run: npm run check
+      - name: Verify archive cleanup safety
+        run: |
+          npx tsx scripts/archive-gc-check.ts
+          npx tsx scripts/manual-gc-check.ts
       - run: npm run test:forum
       - run: npx playwright install --with-deps chromium
       - run: npm run test:flow
