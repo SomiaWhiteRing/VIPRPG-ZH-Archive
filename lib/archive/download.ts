@@ -1,5 +1,10 @@
 export const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
 
+// Deployment and cold ZIP generation share one invocation budget. Keep room for
+// manifest/player metadata, cache operations, D1, and failure observability.
+export const downloadSubrequestLimit = 30_000;
+export const downloadSubrequestReserve = 64;
+
 // v2 objects may contain only a ZIP interval; older Workers must not read them.
 export const downloadCachePrefix = "download-cache/v2/slots/";
 export const downloadCacheMaxBytes = 256 * 1024 * 1024;
