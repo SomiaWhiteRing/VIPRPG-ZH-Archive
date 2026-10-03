@@ -735,6 +735,9 @@ async function verifyEditorNavigation(
     for (const { paths, field, values, targets } of cases) {
       await editor.goto(origin + paths[0]);
       await editor.locator(field).waitFor();
+      // The SSR field can appear before root hydration. A premature popstate
+      // switches NavigationProgress to loading while React still expects SSR HTML.
+      await editor.locator("html[data-focus-visible]").waitFor({ state: "attached" });
       assert.equal(await editor.locator(field).inputValue(), values[0]);
       // Add a same-document history entry, then traverse it with native Back/Forward.
       // No router globals or test-only product routes are needed.
