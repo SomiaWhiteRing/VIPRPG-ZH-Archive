@@ -67,6 +67,8 @@ capture 只读当前本地数据库和 R2，通过 SQLite 在线备份纳入 WAL
 
 ## 展示入口
 
+`0031_home_recommendations.sql` 已同步到固定快照与迁移账本，推荐清单初始为空。超级管理员可在 `/admin/home-recommendations` 搜索公开游戏、移除或调整顺序后保存。首页「站长推荐」位于「最近原创」与「随机作品」之间，没有右侧按钮，沿用卡片网格断点显示前 4／3／4 个公开游戏；隐藏或删除的游戏自动停止展示。
+
 主站和论坛开发使用 `npm run dev`（默认 `http://localhost:3000`）；验证生产 Worker 构建产物时使用 `npm run preview`（默认 `http://localhost:4173`）。以下均为相对路径。
 
 | 功能 | 入口与场景 |

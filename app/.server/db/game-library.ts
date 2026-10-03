@@ -256,18 +256,25 @@ export async function listGameWorks(
 export async function listHomeGameWorks(runtime: AppRuntime) {
   const db = getD1(runtime);
   const columns = cardColumnsSql();
-  const [recent, original, random] = await db.batch<CardRow>([
+  const [recent, original, random, recommended] = await db.batch<CardRow>([
     gameWorksListStatement(db, { limit: 12, excludeTag: NON_VIPRPG_TAG }, columns),
     gameWorksListStatement(db, { limit: 4, isOriginal: true, excludeTag: NON_VIPRPG_TAG }, columns),
     randomGameWorksStatement(db, columns),
+    db.prepare(`SELECT ${columns}
+      FROM home_recommendations r JOIN public_works w ON w.id=r.work_id
+      LEFT JOIN archive_versions av
+        ON av.work_id=w.id AND av.status='published' AND av.is_current=1
+      GROUP BY w.id ORDER BY r.sort_order,r.work_id LIMIT 4`),
   ]);
-  const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results]);
+  const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results, ...recommended.results]);
   const originalStart = recent.results.length;
   const randomStart = originalStart + original.results.length;
+  const recommendedStart = randomStart + random.results.length;
   return {
     recentWorks: cards.slice(0, originalStart),
     recentOriginalWorks: cards.slice(originalStart, randomStart),
-    randomWorks: cards.slice(randomStart),
+    randomWorks: cards.slice(randomStart, recommendedStart),
+    recommendedWorks: cards.slice(recommendedStart),
   };
 }
 

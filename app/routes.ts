@@ -61,6 +61,7 @@ export default [
     route("discussions/images", "admin/discussions/images/page.tsx"),
     route("discussions", "admin/discussions/page.tsx"),
     route("emojis", "admin/emojis/page.tsx"),
+    route("home-recommendations", "admin/home-recommendations/page.tsx"),
     route("import-jobs", "admin/import-jobs/page.tsx"),
     route(
       "import-jobs/:importJobId",
