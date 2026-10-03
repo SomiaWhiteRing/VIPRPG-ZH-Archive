@@ -56,6 +56,9 @@ export function validateDeployment(target, environment, directory = ".") {
   const views = target.durable_objects?.bindings?.find((binding) => binding.name === "VIEW_STATS");
   if (views?.class_name !== "ViewStats" || views.script_name)
     throw new Error("VIEW_STATS must belong to this Worker");
+  const sea = target.durable_objects?.bindings?.find((binding) => binding.name === "SEA_ROOM");
+  if (sea?.class_name !== "EternalSeaRoom" || sea.script_name)
+    throw new Error("SEA_ROOM must belong to this Worker");
   if (target.vars.EMAIL_FROM !== "noreply@viprpg.org" ||
       !target.send_email?.find((binding) => binding.name === "EMAIL")?.allowed_sender_addresses?.includes(target.vars.EMAIL_FROM))
     throw new Error("Configure the noreply@viprpg.org EMAIL sender binding");

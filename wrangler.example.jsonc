@@ -134,6 +134,10 @@
           {
             "name": "VIEW_STATS",
             "class_name": "ViewStats"
+          },
+          {
+            "name": "SEA_ROOM",
+            "class_name": "EternalSeaRoom"
           }
         ]
       },
@@ -151,6 +155,10 @@
     "ViewStats": {
       "type": "durable-object",
       "storage": "sqlite"
+    },
+    "EternalSeaRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
     }
   },
   "durable_objects": {
@@ -158,6 +166,10 @@
       {
         "name": "VIEW_STATS",
         "class_name": "ViewStats"
+      },
+      {
+        "name": "SEA_ROOM",
+        "class_name": "EternalSeaRoom"
       }
     ]
   },

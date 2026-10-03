@@ -61,6 +61,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const isSSR = useIsSSR();
+  const inSea = useLocation().pathname === "/sea";
   const { isFocusVisible } = useFocusVisible();
   const root = useRouteLoaderData<typeof loader>("root");
   const [themePreview, setThemePreview] = useState<ColorTheme | null>(null);
@@ -96,7 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ColorThemePreviewContext.Provider value={setThemePreview}>
           <ToastProvider>
             <ConfirmProvider>{children}</ConfirmProvider>
-            <BackToTop />
+            {!inSea ? <BackToTop /> : null}
           </ToastProvider>
         </ColorThemePreviewContext.Provider>
         <ScrollRestoration />
@@ -110,11 +111,12 @@ export default function App() {
   const { session, embedded } = useLoaderData<typeof loader>();
   const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
   const { pathname } = useLocation();
+  const inSea = pathname === "/sea";
   return (
     <>
       {!inFrame ? <GameStorageBoundary /> : null}
       <NavigationProgress />
-      {!inFrame ? <SiteHeaderNav
+      {!inFrame && !inSea ? <SiteHeaderNav
         session={session}
         loginLink={
           !session ? (
@@ -132,7 +134,7 @@ export default function App() {
           <Outlet />
         </div>
       ) : <Outlet />}
-      {!inFrame && pathname !== "/rakuen" ? <SiteFooter /> : null}
+      {!inFrame && !inSea && pathname !== "/rakuen" ? <SiteFooter /> : null}
     </>
   );
 }

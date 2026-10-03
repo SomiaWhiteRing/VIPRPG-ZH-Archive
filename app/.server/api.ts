@@ -105,6 +105,7 @@ import * as endpoint36 from "@/app/.server/endpoints/discussions/sitemap.xml/rou
 import * as endpoint89 from "@/app/.server/endpoints/discussions/sitemaps/[shard]/route";
 
 import { Hono } from "hono";
+import { seaApi } from "./sea/api";
 import type { AppRuntime } from "./runtime";
 import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
@@ -118,6 +119,7 @@ export const api = new Hono<{
 }>();
 api.onError((error) => jsonError("请求失败", error));
 api.route("/", sitemapApi);
+api.route("/", seaApi);
 api.get("/api/users/mentions", (c) => searchMentionUsers(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
   jsonResponse({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, { status: 200, headers: { "Cache-Control": "no-store" } }),

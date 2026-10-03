@@ -10,6 +10,7 @@ import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 import { drainViewMerges } from "./app/.server/views/service";
 
 export { ViewStats } from "./app/.server/views/durable-object";
+export { EternalSeaRoom } from "./app/.server/sea/durable-object";
 
 const developmentRender = createRequestHandler(
   () => import("virtual:react-router/server-build"),

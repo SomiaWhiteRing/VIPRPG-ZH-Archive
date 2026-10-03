@@ -20,6 +20,7 @@ export const PERMISSION_CATEGORIES = {
   catalog: { group: "community", label: "作品目录" },
   comment: { group: "community", label: "评论审核" },
   forum: { group: "community", label: "讨论区" },
+  sea: { group: "community", label: "永恒之海" },
   emoji: { group: "community", label: "默认表情" },
   user: { group: "access", label: "账户管理" },
   role_access: { group: "access", label: "角色分配与审批" },
@@ -34,6 +35,14 @@ export const PERMISSION_CATEGORIES = {
 export type PermissionCategory = keyof typeof PERMISSION_CATEGORIES;
 
 export const PERMISSIONS = {
+  "sea.message.moderate_any": {
+    category: "sea", label: "管理永恒之海发言", scope: "公共聊天室",
+    description: "查看最近对话，隐藏违规发言；操作记录保存在聊天室。",
+  },
+  "sea.user.mute_any": {
+    category: "sea", label: "永恒之海禁言", scope: "公共聊天室内的发言身份",
+    description: "对登录用户或游客身份设置限时禁言，以及解除禁言。",
+  },
   "genre.manage": {
     category: "genre",
     label: "合并作品类型",
@@ -704,6 +713,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "translation_relation.create_any", "translation_relation.delete_any",
     "catalog.manage_any",
     "comment.manage_any",
+    "sea.message.moderate_any", "sea.user.mute_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
     "emoji.defaults.manage",
     "archive_version.read_private",
@@ -747,6 +757,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "translation_relation.create_any", "translation_relation.delete_any",
     "catalog.manage_any",
     "comment.manage_any",
+    "sea.message.moderate_any", "sea.user.mute_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
     "emoji.defaults.manage",
     "archive_version.read_private",

@@ -1,0 +1,23 @@
+{
+  "rtpPack": "2000",
+  "fontEncoding": "CP936",
+  "windowStretch": true,
+  "seaTile": {
+    "id": 0,
+    "size": 16,
+    "sequence": [
+      0,
+      1,
+      2,
+      1
+    ],
+    "framesPerStep": 24
+  },
+  "resources": {
+    "chipset/基本.png": "0ac0f3cc1ce6df8b0e95a877881813772d92f93e52552d3e73c7db2efcc8970e",
+    "system/システム.png": "5c324ce16c66e99d77a76edd13957036caa7de6bd1715f9af38c29d55b5de240",
+    "faceset/主人公1.png": "eb67da5cb54157d1dd5072cd5860caaa590a83a566ec155159142eea41762e4d",
+    "shinonome_gothic.h": "0b3867bd0f98b53599d1ba2e6d0b6da1011ce40a7dfe479e81b4c4cd0de70da6",
+    "bitmapfont_wqy.h": "ee8bfef755b78ba6bac2d89750dce90cafee6eae2cd297b08d122bcccc15a993"
+  }
+}
