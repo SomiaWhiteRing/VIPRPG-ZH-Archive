@@ -92,7 +92,7 @@ export class MissingResourceScan {
     }
     if (!names.length) { this.limited = true; return; }
     if (names.some((name) => !name || name === "(OFF)")) return;
-    if (names.some((name) => /^\s*[@$]/.test(name) || [...name].some((char) => char.charCodeAt(0) < 32))) {
+    if (names.some((name) => [...name].some((char) => char.charCodeAt(0) < 32))) {
       this.limited = true;
       return;
     }

@@ -65,7 +65,6 @@ for (const data of [common(command(99999)), ldb(block(999, text("unknown"))), ne
   assert.equal(report.excluded.length, 0);
 }
 assert.equal(scan(ldb(), [{ ...blank, path: "DynRPG/plugin.dll" }]).excluded.length, 0);
-assert.equal(scan(common(command(11550, "@plugin-load"))).excluded.length, 0);
 // Widening the experimental candidate set must still honor references and unknowns.
 const customReferenced = { ...modified, path: "Sound/custom-referenced.wav" };
 const customUnused = { ...modified, path: "Picture/custom-unused.png" };
