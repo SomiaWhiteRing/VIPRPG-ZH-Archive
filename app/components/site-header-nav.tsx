@@ -72,6 +72,7 @@ const ADMIN_NAVIGATION: Array<
     label: "作品资料",
     links: [
       { href: "/admin/works", label: "作品", permission: "work.read_private" },
+      { href: "/admin/home-recommendations", label: "站长推荐", bootstrapOnly: true },
       {
         href: "/admin/archive-versions",
         label: "版本管理",

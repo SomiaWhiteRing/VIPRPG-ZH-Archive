@@ -3,6 +3,7 @@ import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintai
 import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
+import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
@@ -314,6 +315,18 @@ api.all("/api/admin/discussions", (c) =>
   c.json({ ok: false, error: "Method not allowed" }, 405, {
     Allow: "GET, POST, HEAD, OPTIONS",
   }),
+);
+api.on(["GET", "HEAD"], "/api/admin/home-recommendations", (c) =>
+  homeRecommendationsEndpoint.GET(c.get("runtime"), c.req.raw),
+);
+api.post("/api/admin/home-recommendations", (c) =>
+  homeRecommendationsEndpoint.POST(c.get("runtime"), c.req.raw),
+);
+api.options("/api/admin/home-recommendations", (c) =>
+  c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
+);
+api.all("/api/admin/home-recommendations", (c) =>
+  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
 api.on(["GET", "HEAD"], "/api/admin/emojis", (c) =>
   endpoint13.GET(c.get("runtime"), c.req.raw),

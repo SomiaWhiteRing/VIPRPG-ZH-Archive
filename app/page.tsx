@@ -30,7 +30,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ alternates: { canonical: loaderData?.canonical } }, error);
 
 export default function HomePage() {
-  const { recentWorks, recentOriginalWorks, randomWorks, topics } =
+  const { recentWorks, recentOriginalWorks, randomWorks, recommendedWorks, topics } =
     useLoaderData<typeof loader>();
   const [randomSelection, setRandomSelection] = useState(randomWorks);
   const [randomBusy, setRandomBusy] = useState(false);
@@ -108,6 +108,22 @@ export default function HomePage() {
 
       <section
         className="mt-7 flex flex-col gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-8 scroll-mt-24"
+        id="home-recommendations"
+        aria-labelledby="recommendations-heading"
+      >
+        <h2
+          className="shrink-0 text-2xl font-bold tracking-tight min-[851px]:w-[135px] min-[1101px]:w-[170px]"
+          id="recommendations-heading"
+        >
+          站长推荐
+        </h2>
+        <div className="min-w-0 flex-1">
+          <HomeWorkGrid singleRow works={recommendedWorks} emptyTitle="站长还没有推荐游戏。" />
+        </div>
+      </section>
+
+      <section
+        className="mt-7 flex flex-col gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-8 scroll-mt-24"
         id="random-works"
         aria-labelledby="random-heading"
       >
@@ -148,18 +164,20 @@ function HomeWorkGrid({
   original = false,
   singleRow = false,
   prioritizeImages = false,
+  emptyTitle,
   titleAs = "h3",
 }: {
   works: GameCardSummary[];
   original?: boolean;
   singleRow?: boolean;
   prioritizeImages?: boolean;
+  emptyTitle?: string;
   titleAs?: "h2" | "h3";
 }) {
   if (!works.length) {
     return (
       <EmptyState
-        title={original ? "目前还没有公开的原创作品。" : "目前还没有公开的作品。"}
+        title={emptyTitle ?? (original ? "目前还没有公开的原创作品。" : "目前还没有公开的作品。")}
         variant="plain"
         className="py-6"
       />

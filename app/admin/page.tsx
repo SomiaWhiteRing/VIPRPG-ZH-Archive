@@ -212,6 +212,14 @@ export default function AdminPage() {
           {adminUser.isBootstrapAdmin ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
+              to="/admin/home-recommendations"
+            >
+              站长推荐
+            </Link>
+          ) : null}
+          {adminUser.isBootstrapAdmin ? (
+            <Link
+              className={buttonVariants({ variant: "outline" })}
               to="/admin/permissions"
             >
               角色与权限
