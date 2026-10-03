@@ -234,13 +234,18 @@ async function sweepManualGcPage(runtime: AppRuntime, job: Job, token: string, a
     SUM(CASE WHEN state='failed' OR error IS NOT NULL THEN 1 ELSE 0 END) AS failed
     FROM archive_gc_job_items WHERE job_id=?`).bind(job.id).first<{ pending: number; failed: number }>();
   const status = remaining?.pending ? "running" : remaining?.failed ? "needs_retry" : "completed";
-  const report = await getManualGcReport(db, job.id, job.user_id);
-  await db.batch([
+  const statements = [
     db.prepare("UPDATE archive_gc_jobs SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lock_token=?").bind(status, job.id, token),
-    auditStatement(db, actor, "gc_sweep", { jobId: job.id, status, graceDays: job.grace_days,
+  ];
+  // Pages and retryable failures retain their progress in the job items. Commit
+  // one aggregate audit record atomically with the job's completion.
+  if (status === "completed") {
+    const report = await getManualGcReport(db, job.id, job.user_id);
+    statements.push(auditStatement(db, actor, "gc_sweep", { jobId: job.id, status, graceDays: job.grace_days,
       purgedArchiveVersionCount: report.purgedArchiveCount, purgedObjectCount: report.deletedObjectCount,
-      purgedSizeBytes: report.deletedSizeBytes, skippedCount: report.skippedCount, failedCount: report.failedCount }),
-  ]);
+      purgedSizeBytes: report.deletedSizeBytes, skippedCount: report.skippedCount, failedCount: report.failedCount }));
+  }
+  await db.batch(statements);
 }
 
 async function purgeManualArchive(db: D1Database, job: Job, item: Item, token: string) {
