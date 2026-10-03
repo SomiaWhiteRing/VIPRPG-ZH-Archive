@@ -97,6 +97,20 @@ let context: BrowserContext | null = null;
 let page: Page | null = null;
 let passed = false;
 const browserErrors: string[] = [];
+const browserErrorDetails: Array<{ url: string; phase: string; message: string; stack: string | undefined }> = [];
+let currentPhase = "initializing";
+
+function observeBrowserErrors(target: Page) {
+  target.on("pageerror", (error) => {
+    browserErrors.push(error.message);
+    const detail = { url: target.url(), phase: currentPhase, message: error.message, stack: error.stack };
+    browserErrorDetails.push(detail);
+    console.error("[browser-error]", JSON.stringify(detail));
+  });
+  target.on("console", (message) => {
+    if (message.type() === "error") console.error("[browser-console]", target.url(), message.text());
+  });
+}
 
 const watchdogSeconds = testMode === "contract" ? 90 : gamePath ? 360 : 180;
 const watchdog = setTimeout(() => {
@@ -116,6 +130,7 @@ try {
   console.log(`${testMode} self-check passed`);
 } catch (error) {
   await captureFailure(page);
+  writeFileSync(join(tempDir, "browser-errors.json"), JSON.stringify(browserErrorDetails, null, 2));
   const message = error instanceof Error ? error.message : String(error);
   writeFileSync(join(tempDir, "failure.txt"), error instanceof Error ? error.stack ?? message : message);
   if (reportPath) {
@@ -333,7 +348,7 @@ async function run(): Promise<void> {
     };
   });
   page = await context.newPage();
-  page.on("pageerror", (error) => browserErrors.push(error.message));
+  observeBrowserErrors(page);
   page.setDefaultTimeout(10_000);
   page.setDefaultNavigationTimeout(60_000);
   await page.goto(`${origin}/login`);
@@ -697,7 +712,7 @@ async function verifyEditorNavigation(
     await editorContext.addCookies([
       { name: "viprpg_session", value: adminCookie.split("=")[1], url: origin },
     ]);
-    editor.on("pageerror", (error) => browserErrors.push(error.message));
+    observeBrowserErrors(editor);
     editor.setDefaultTimeout(10_000);
     const cases = [
       {
@@ -720,6 +735,9 @@ async function verifyEditorNavigation(
     for (const { paths, field, values, targets } of cases) {
       await editor.goto(origin + paths[0]);
       await editor.locator(field).waitFor();
+      // The SSR field can appear before root hydration. A premature popstate
+      // switches NavigationProgress to loading while React still expects SSR HTML.
+      await editor.locator("html[data-focus-visible]").waitFor({ state: "attached" });
       assert.equal(await editor.locator(field).inputValue(), values[0]);
       // Add a same-document history entry, then traverse it with native Back/Forward.
       // No router globals or test-only product routes are needed.
@@ -1637,6 +1655,7 @@ function modulePath(path: string): string {
 }
 
 function stage(message: string): void {
+  currentPhase = message;
   console.log(`[system] ${message}`);
 }
 
