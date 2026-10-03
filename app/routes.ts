@@ -42,6 +42,7 @@ export default [
   route("reset-password", "reset-password/page.tsx"),
   route("resources", "resources/page.tsx"),
   route("search", "search/page.tsx"),
+  route("sea", "sea/page.tsx"),
   route("tags", "tags/page.tsx"),
   route("upload", "upload/page.tsx"),
   route("admin", "admin/layout.tsx", [
@@ -62,6 +63,7 @@ export default [
     route("discussions", "admin/discussions/page.tsx"),
     route("emojis", "admin/emojis/page.tsx"),
     route("home-recommendations", "admin/home-recommendations/page.tsx"),
+    route("sea", "admin/sea/page.tsx"),
     route("import-jobs", "admin/import-jobs/page.tsx"),
     route(
       "import-jobs/:importJobId",

@@ -38,20 +38,26 @@ export function SiteFooter() {
   if (hidden) return null;
   return (
     <footer ref={footerRef} className="border-t border-border bg-primary text-primary-foreground">
-      <div className="mx-auto flex w-[min(1180px,calc(100vw-2rem))] flex-wrap items-center justify-between gap-4 py-8 text-sm">
-        <p className="m-0 text-primary-foreground/75">
-          © 2026 VIPRPG.org
-        </p>
-        <nav aria-label="页脚导航" className="flex flex-wrap gap-4">
-          <Link to="/about">关于</Link>
-          <a href="https://status.viprpg.org/">运行状态</a>
-          <a
-            href="https://viprpg.org/discussions/1"
-            rel="noreferrer"
-            target="_blank"
-          >
-            反馈
-          </a>
+      <div className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-8 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="m-0 text-primary-foreground/75">
+            © 2026 VIPRPG.org
+          </p>
+          <nav aria-label="页脚导航" className="flex flex-wrap gap-4">
+            <Link to="/about">关于</Link>
+            <a href="https://status.viprpg.org/">运行状态</a>
+            <a
+              href="https://viprpg.org/discussions/1"
+              rel="noreferrer"
+              target="_blank"
+            >
+              反馈
+            </a>
+          </nav>
+        </div>
+        <nav aria-label="支持与闲谈" className="mt-4 flex justify-end gap-4 text-xs text-primary-foreground/60">
+          <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">爱发电</a>
+          <Link to="/sea">永恒之海</Link>
         </nav>
       </div>
     </footer>

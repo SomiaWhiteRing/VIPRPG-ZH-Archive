@@ -209,6 +209,9 @@ export default function AdminPage() {
 
       <Pane heading="系统治理" compact>
         <div className="flex flex-wrap items-center gap-2">
+          {hasPermission(adminUser, "sea.message.moderate_any") || hasPermission(adminUser, "sea.user.mute_any") ? (
+            <Link className={buttonVariants({ variant: "outline" })} to="/admin/sea">永恒之海</Link>
+          ) : null}
           {adminUser.isBootstrapAdmin ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
