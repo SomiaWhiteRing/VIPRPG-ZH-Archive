@@ -42,7 +42,7 @@ export function CharacterPortrait({
       <span
         aria-hidden="true"
         className={cn(
-          "relative block aspect-square shrink-0 overflow-hidden rounded-lg border border-foreground/15 [image-rendering:pixelated]",
+          "relative block aspect-square shrink-0 overflow-clip rounded-lg border border-foreground/15 [image-rendering:pixelated]",
           fillHeight && "inline-block h-full w-auto",
           className,
         )}
@@ -50,7 +50,7 @@ export function CharacterPortrait({
       >
         <img
           alt=""
-          className="absolute max-w-none select-none"
+          className="pointer-events-none absolute max-w-none select-none"
           draggable={false}
           height={portrait.height}
           src={previewSrc ?? `/api/media/blobs/${portrait.blobSha256}`}
