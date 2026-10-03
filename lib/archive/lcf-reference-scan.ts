@@ -43,6 +43,7 @@ export class LcfReferenceScan {
   private readonly reasons = new Set<string>();
   private readonly seenCore = new Set<string>();
   private readonly mapInfos = new Map<number, MapInfo>();
+  private readonly commentScriptPatches = new Set<string>();
   private steps = 0;
   private totalBytes = 0;
   private currentPath = "";
@@ -59,6 +60,9 @@ export class LcfReferenceScan {
     if (!this.candidates.length && !observe) return;
     for (const file of files) {
       const path = normalize(file.path);
+      if (path === "dynloader.dll") this.commentScriptPatches.add("dynrpg");
+      if (path === "destiny.dll") this.commentScriptPatches.add("destiny");
+      if (path === "easyrpg.ini") this.commentScriptPatches.add("easyrpg");
       // Stock RPG2000/2003 runtime libraries are not arbitrary resource loaders.
       // Only accept their root paths; other plugins may load any path.
       if ((path.endsWith(".dll") && path !== "harmony.dll" && path !== "ultimate_rt_eb.dll") ||
@@ -162,7 +166,7 @@ export class LcfReferenceScan {
     if (this.reasons.size < 20) this.reasons.add(reason);
   }
 
-  private string(bytes: Uint8Array, allowsExFont = false): void {
+  private string(bytes: Uint8Array): void {
     if (!bytes.length) return;
     if (bytes.length > 1024 * 1024) throw new Error("字符串超过分析大小限制");
     const decoded = new Set<string>();
@@ -171,11 +175,6 @@ export class LcfReferenceScan {
       try { value = decoder.decode(bytes); } catch { continue; }
       if (decoded.has(value)) continue;
       decoded.add(value);
-      // Standard message text and skill/item names can start with $A..$Z/$a..$z
-      // (ExFont glyphs). Keep the patch heuristic for other strings, especially
-      // sound names and comments, and for nonstandard prefixes such as $[x,y].
-      const startsWithExFont = allowsExFont && /^\s*\$[A-Za-z]/.test(value);
-      if (!startsWithExFont && /^\s*[@$]/.test(value)) this.protect("*", `${this.currentPath}：存在扩展命令字符串`);
       const base = normalize(value).split("/").at(-1)!;
       for (const name of [base, base.replace(/\.[^.]*$/, "")]) {
         for (const file of this.names.get(name) ?? []) this.referenced.add(file.path);
@@ -215,7 +214,7 @@ export class LcfReferenceScan {
       }
       if (kind === "string") {
         const bytes = block.take(block.remaining);
-        this.string(bytes, id === 1 && (type === "Skill" || type === "Item"));
+        this.string(bytes);
         if (type === "Animation" && id === 2) animationName = bytes;
         else this.observe?.(bytes, this.currentPath, type, id);
       }
@@ -270,7 +269,20 @@ export class LcfReferenceScan {
       }
       reader.integer(); // indentation
       const bytes = reader.take(reader.integer());
-      this.string(bytes, code === 10110 || code === 20110);
+      this.string(bytes);
+      // EasyRPG dispatches these scripts only from Comment/Comment_2, with
+      // the marker at byte zero and the corresponding patch enabled. DLLs
+      // identify DynRPG/Destiny; an unanalysed EasyRPG.ini already preserves
+      // all resources and may enable EasyRPG's built-in comment commands.
+      if (code === 12410 || code === 22410) {
+        const dynRpg = bytes[0] === 64 && this.commentScriptPatches.has("dynrpg");
+        const destiny = bytes[0] === 36 && this.commentScriptPatches.has("destiny");
+        const easyRpg = this.commentScriptPatches.has("easyrpg") &&
+          new TextDecoder().decode(bytes.subarray(0, 9)) === "@easyrpg_";
+        if (dynRpg || destiny || easyRpg) {
+          this.protect("*", `${this.currentPath}：注释包含未分析的扩展命令`);
+        }
+      }
       const count = reader.integer();
       if (count > reader.remaining || count > 100_000) throw new Error("事件参数数量无效");
       const parameters = Array.from({ length: count }, () => reader.integer());
