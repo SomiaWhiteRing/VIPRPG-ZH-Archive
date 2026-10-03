@@ -56,7 +56,7 @@ export function SiteFooter() {
           </nav>
         </div>
         <nav aria-label="支持与闲谈" className="mt-4 flex justify-end gap-4 text-xs text-primary-foreground/60">
-          <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">爱发电</a>
+          <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">赛钱箱</a>
           <Link to="/sea">永恒之海</Link>
         </nav>
       </div>
