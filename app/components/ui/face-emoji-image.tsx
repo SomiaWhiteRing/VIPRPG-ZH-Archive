@@ -11,7 +11,7 @@ export function FaceEmojiImage({
   if (!emoji?.available)
     return (
       <span
-        className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-muted/10 p-1 align-middle text-xs"
+        className="inline-flex shrink-0 items-center justify-center overflow-clip rounded border border-border bg-muted/10 p-1 align-middle text-xs"
         style={{ width: size, height: size }}
         role="img"
         aria-label="表情不可用"
@@ -23,7 +23,7 @@ export function FaceEmojiImage({
     );
   return (
     <span
-      className="relative inline-block shrink-0 overflow-hidden align-middle [image-rendering:pixelated]"
+      className="relative inline-block shrink-0 overflow-clip align-middle [image-rendering:pixelated]"
       style={{ width: size, height: size }}
       role="img"
       aria-label="脸图表情"
@@ -36,7 +36,7 @@ export function FaceEmojiImage({
         src={`/api/media/blobs/${emoji.blobSha256}`}
         width={emoji.width}
         height={emoji.height}
-        className="absolute max-w-none select-none"
+        className="pointer-events-none absolute max-w-none select-none"
         style={{
           width: (emoji.width * size) / 48,
           height: (emoji.height * size) / 48,
