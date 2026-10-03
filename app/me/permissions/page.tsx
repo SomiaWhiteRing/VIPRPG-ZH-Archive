@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { listAccountRoleOptions } from "@/app/.server/db/permissions";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -45,16 +47,13 @@ export default function AccountPermissionsPage() {
     if (!role || !state?.canApply || busy) return;
     setSaving(true);
     try {
-      const response = await fetch("/api/account/role-requests", {
+
+      await requestJson("/api/account/role-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roleId: role.id, reason: reasons[role.id] ?? "" }),
       });
-      const result = await response.json() as { ok?: boolean; detail?: string; error?: string };
-      if (!response.ok || !result.ok) {
-        if (response.status === 409) startTransition(() => revalidator.revalidate());
-        throw new Error(result.detail ?? result.error ?? "申请提交失败，请重试。");
-      }
+
       setReasons((current) => ({ ...current, [role.id]: "" }));
       notifyInboxChanged();
       startTransition(() => revalidator.revalidate());

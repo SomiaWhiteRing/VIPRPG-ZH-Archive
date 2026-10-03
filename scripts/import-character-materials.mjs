@@ -9,8 +9,6 @@ import { seedCharacterFaceAssets } from "./seed-character-face-assets.mjs";
 const { imageSize } = createRequire(import.meta.url)("image-size");
 const nameKey = (name) =>
   name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
-const blobKey = (sha) =>
-  `blobs/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}`;
 
 export async function seedCharacterMaterials({
   dryRun = false,
@@ -301,3 +299,4 @@ if (
     throw new Error("仅支持 --dry-run；此命令只操作本地 D1/R2。");
   await seedCharacterMaterials({ dryRun: process.argv.includes("--dry-run") });
 }
+import { blobKey } from "../lib/archive/object-keys.ts";

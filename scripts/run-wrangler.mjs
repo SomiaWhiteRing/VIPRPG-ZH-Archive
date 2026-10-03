@@ -3,10 +3,10 @@ import { fileURLToPath } from "node:url";
 
 const wranglerCli = fileURLToPath(new URL("../node_modules/wrangler/wrangler-dist/cli.js", import.meta.url));
 
-export function runWrangler(args) {
+export function runWrangler(args, environment = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [wranglerCli, ...args], {
-      env: { ...process.env, CI: "true", WRANGLER_SEND_METRICS: "false" },
+      env: { ...process.env, ...environment, CI: "true", WRANGLER_SEND_METRICS: "false" },
       stdio: ["inherit", "pipe", "pipe"],
       windowsHide: true,
     });

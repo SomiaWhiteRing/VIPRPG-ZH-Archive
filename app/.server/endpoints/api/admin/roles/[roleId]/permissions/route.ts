@@ -1,3 +1,5 @@
+import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
+
 import { requireBootstrapAdmin } from "@/app/.server/auth/authorize";
 import {
   replaceRolePermissions,
@@ -14,14 +16,14 @@ export async function POST(
   const auth = await requireBootstrapAdmin(runtime, request);
   if ("response" in auth) return auth.response;
   try {
-    const roleId = Number((await context.params).roleId);
-    const body = (await request.json()) as {
+    const roleId = parsePositiveId((await context.params).roleId);
+    const body = (await readJsonObject(request, "请求必须为 JSON 对象")) as {
       permissionKeys?: unknown;
       expected?: unknown;
     };
     if (
       typeof body.expected !== "string" ||
-      !Number.isInteger(roleId) ||
+
       !Array.isArray(body.permissionKeys) ||
       body.permissionKeys.some((value) => typeof value !== "string")
     ) {

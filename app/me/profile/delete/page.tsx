@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useState } from "react";
 import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
@@ -39,20 +41,14 @@ export default function DeleteAccountPage() {
     try {
       const body = new FormData();
       body.set("acknowledgement", acknowledgement);
-      const response = await fetch("/api/account/delete/start", {
+
+      await requestJson("/api/account/delete/start", {
         method: "POST",
         body,
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
-      const payload = await response.json() as {
-        ok?: boolean;
-        detail?: string;
-        error?: string;
-      };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.detail || payload.error || "验证码发送失败，请稍后重试。");
-      }
+
       setSent(true);
       toast.success("注销验证码已发送，请检查当前绑定邮箱。");
     } catch (error) {

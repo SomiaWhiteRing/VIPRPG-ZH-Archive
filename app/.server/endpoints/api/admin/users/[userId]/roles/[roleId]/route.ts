@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { removeRoleFromUser } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -13,9 +14,9 @@ export async function DELETE(
   if ("response" in auth) return auth.response;
   try {
     const params = await context.params;
-    const userId = Number(params.userId);
-    const roleId = Number(params.roleId);
-    if (!Number.isInteger(userId) || !Number.isInteger(roleId))
+    const userId = parsePositiveId(params.userId);
+    const roleId = parsePositiveId(params.roleId);
+    if ( !Number.isInteger(roleId))
       return json(
         { ok: false, error: "Invalid role assignment" },
         { status: 400 },

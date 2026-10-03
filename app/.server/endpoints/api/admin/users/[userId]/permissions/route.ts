@@ -1,3 +1,5 @@
+import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
+
 import { requireBootstrapAdmin } from "@/app/.server/auth/authorize";
 import { setUserPermissionBlocked } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -13,8 +15,8 @@ export async function POST(
   const auth = await requireBootstrapAdmin(runtime, request);
   if ("response" in auth) return auth.response;
   try {
-    const userId = Number((await context.params).userId);
-    const body: unknown = await request.json();
+    const userId = parsePositiveId((await context.params).userId);
+    const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象");
     if (!body || typeof body !== "object" || Array.isArray(body))
       throw new HttpError(400, "权限设置无效");
     const { permissionKey, blocked } = body as Record<string, unknown>;

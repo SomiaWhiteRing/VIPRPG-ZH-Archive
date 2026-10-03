@@ -1,6 +1,7 @@
+import { requestJson } from "@/lib/ui/api-response";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
-import type { CharacterNameInput } from "@/app/components/characters/character-create-dialog";
-import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
+import { type CharacterNameInput, CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
+
 import { CharacterCreditManager } from "@/app/components/characters/character-credit-manager";
 import { UploadCharacterFaceSheets } from "@/app/components/characters/upload-character-face-sheets";
 import { badgeVariants } from "@/app/components/ui/badge";
@@ -17,29 +18,15 @@ import {
   tokenDragHandleClassName,
   useTokenReorder,
 } from "@/app/components/ui/use-token-reorder";
-import type {
-  CharacterCreditSelection,
-  CharacterFaceSheet,
-  CharacterNameLanguage,
-  CharacterPortrait as CharacterPortraitValue,
-  CharacterRoleKey,
-  CharacterSelection,
-  CharacterSuggestion,
-} from "@/lib/character-names";
-import {
-  CHARACTER_ROLE_LABELS,
-  characterNameKey,
-  characterSelectionKey,
-  characterSelectionLabel,
-  isCharacterRoleKey,
-} from "@/lib/character-names";
+import { type CharacterCreditSelection, type CharacterFaceSheet, type CharacterNameLanguage, type CharacterPortrait as CharacterPortraitValue, type CharacterRoleKey, type CharacterSelection, type CharacterSuggestion, CHARACTER_ROLE_LABELS, characterNameKey, characterSelectionKey, characterSelectionLabel, isCharacterRoleKey } from "@/lib/character-names";
+
 import { normalizeEntityName } from "@/lib/entity-name";
 import type { CharacterIndexData } from "@/lib/character-index";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 import { Pencil, X } from "lucide-react";
-import type { FormEvent } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
 
 type ExistingOption = {
   kind: "existing";
@@ -113,10 +100,9 @@ export function CharacterPicker({
     const controller = new AbortController();
     for (const id of wantedSheetIds.split(",").filter(Boolean).map(Number)) {
       if (loadedSheets.current.has(id)) continue;
-      void fetch(`/api/characters/${id}/face-sheets`, { signal: controller.signal })
-        .then(async (response) => {
-          const result = await response.json() as { ok: boolean; sheets?: CharacterFaceSheet[] };
-          if (!response.ok || !result.ok || !result.sheets) throw new Error("无法读取角色脸图，请重新打开后重试。");
+      void requestJson<{ sheets?: CharacterFaceSheet[] }>(`/api/characters/${id}/face-sheets`, { signal: controller.signal }, "角色脸图读取失败")
+        .then((result) => {
+          if (!result.sheets) throw new Error("无法读取角色脸图，请重新打开后重试。");
           if (controller.signal.aborted) return;
           loadedSheets.current.set(id, result.sheets);
           setSheetResults((current) => ({ ...current, [id]: result.sheets! }));

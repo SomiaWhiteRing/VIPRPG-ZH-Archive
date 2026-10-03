@@ -1,14 +1,15 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requireUser } from "@/app/.server/auth/guards";
 import { resolveRoleRequest } from "@/app/.server/db/permissions";
 import { getInboxItemForUser } from "@/app/.server/db/inbox";
 import { resolveWorkMaintainerRequest } from "@/app/.server/db/work-maintainers";
-import { HttpError } from "@/lib/http";
+import { HttpError, json, jsonError } from "@/lib/http";
 import {
   readRequiredFormString,
   redirectResponse,
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { json, jsonError } from "@/lib/http";
+
 
 type RouteContext = {
   params: {
@@ -35,7 +36,7 @@ export async function POST(
     if (decision !== "approve" && decision !== "reject" && decision !== "withdraw") {
       throw new HttpError(400, "无效的处理操作。");
     }
-    const itemId = parseItemId(rawItemId);
+    const itemId = parsePositiveId(rawItemId, "id", "Invalid inbox item id");
     const item = await getInboxItemForUser(runtime, itemId, auth.user);
     if (item.maintainerRequest) {
       if (form.get('confirm') !== '1') throw new HttpError(400, '请确认处理申请的后果。');
@@ -53,14 +54,4 @@ export async function POST(
   } catch (error) {
     return jsonError("Inbox request resolution failed", error);
   }
-}
-
-function parseItemId(value: string): number {
-  const itemId = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(itemId) || itemId <= 0) {
-    throw new Error("Invalid inbox item id");
-  }
-
-  return itemId;
 }

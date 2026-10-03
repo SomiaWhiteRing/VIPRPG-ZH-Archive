@@ -1,3 +1,4 @@
+import { sha256Hex } from "@/lib/sha256";
 export type InspectedCharacterFaceSheet = {
   sha256: string;
   width: number;
@@ -40,9 +41,6 @@ export async function inspectCharacterFaceSheetFile(
     );
   }
 
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  const sha256 = [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
+  const sha256 = await sha256Hex(await file.arrayBuffer());
   return { sha256, width, height };
 }

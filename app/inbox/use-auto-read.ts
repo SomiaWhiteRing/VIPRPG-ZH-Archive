@@ -1,7 +1,9 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import type { InboxItem } from "@/lib/dto/db/inbox";
 import { notifyInboxChanged } from "@/lib/inbox-events";
-import type { RefObject } from "react";
-import { useEffect, useState } from "react";
+import { type RefObject, useEffect, useState } from "react";
+
 
 export function useInboxAutoRead(
   item: Pick<InboxItem, "id" | "readAt" | "canApprove" | "canReject">,
@@ -33,12 +35,12 @@ export function useInboxAutoRead(
       if (started || !visible || document.visibilityState !== "visible") return;
       started = true;
       try {
-        const response = await fetch(`/api/inbox/${id}/read`, {
+        await requestJson(`/api/inbox/${id}/read`, {
           method: "POST",
           headers: { Accept: "application/json" },
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("read_failed");
+
         if (!disposed) {
           setResult({ itemId: id, readAt: new Date().toISOString(), error: false });
           onRead?.(id);

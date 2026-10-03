@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@/app/components/ui/popover";
 import { Link } from "react-router";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -103,7 +103,7 @@ export function FaceEmojiView({
           <FaceEmojiImage emoji={emoji} size={48} />
         </Button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal anchorRef={trigger}>
         <Popover.Content
           ref={content}
           side="top"

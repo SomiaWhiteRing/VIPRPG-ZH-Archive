@@ -1,48 +1,22 @@
+import { readJsonObject } from "@/app/.server/http/request";
+import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import { Hono } from "hono";
 import { requireBootstrapAdmin } from "@/app/.server/auth/authorize";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { blobKey } from "@/app/.server/storage/archive-keys";
-import { HttpError, jsonError } from "@/lib/http";
-import {
-  createResource,
-  editResource,
-  integer,
-  registerArtifact,
-  type Actor,
-} from "./mutations";
+import { blobKey } from "@/lib/archive/object-keys";
+
+import { createResource, editResource, integer, registerArtifact, type Actor } from "./mutations";
 import { getArtifact, getEditor, getResource, listResources } from "./data";
-import {
-  cleanupArtifact,
-  confirmArtifact,
-  inspectStorage,
-  readLimited,
-  uploadArtifact,
-  uploadIcon,
-  verifyArtifactObject,
-} from "./objects";
+import { cleanupArtifact, confirmArtifact, inspectStorage, uploadArtifact, uploadIcon, verifyArtifactObject } from "./objects";
 import { downloadArtifact, updateManifest } from "./public";
 
 export const resourceApi = new Hono<{
   Bindings: CloudflareEnv;
   Variables: { runtime: AppRuntime };
 }>();
-const json = (value: unknown, status = 200) =>
-  Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
+
 async function body(request: Request) {
-  if (!request.headers.get("content-type")?.startsWith("application/json"))
-    throw new HttpError(415, "需要 JSON 请求");
-  let value: unknown;
-  try {
-    value = JSON.parse(
-      new TextDecoder().decode(await readLimited(request, 256 * 1024)),
-    );
-  } catch (error) {
-    if (error instanceof HttpError) throw error;
-    throw new HttpError(400, "JSON 格式不正确");
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new HttpError(400, "请求格式不正确");
-  return value as Record<string, unknown>;
+  return readJsonObject(request, "请求格式不正确", { maximumBytes: 256 * 1024, requireJsonContentType: true });
 }
 type Endpoint = (
   runtime: AppRuntime,
@@ -81,18 +55,16 @@ route(
   true,
   async (rt, req, _p, actor) => {
     if (req.method === "GET")
-      return json({ resources: await listResources(rt, true) });
+      return jsonResponse({ resources: await listResources(rt, true) });
     const id = await createResource(rt, root(actor), await body(req));
-    return json(await getEditor(rt, id), 201);
+    return jsonResponse(await getEditor(rt, id), { status: 201 });
   },
 );
 route("/api/admin/resources/storage", ["GET"], true, async (rt, req) =>
-  json(
-    await inspectStorage(
+  jsonResponse(await inspectStorage(
       rt,
       new URL(req.url).searchParams.get("cursor") ?? undefined,
-    ),
-  ),
+    )),
 );
 route(
   "/api/admin/resources/:id",
@@ -101,7 +73,7 @@ route(
   async (rt, req, p, actor) => {
     if (req.method === "POST")
       await editResource(rt, root(actor), p.id, await body(req));
-    return json(await getEditor(rt, p.id));
+    return jsonResponse(await getEditor(rt, p.id));
   },
 );
 route(
@@ -117,7 +89,7 @@ route(
         integer(Number(req.headers.get("x-resource-revision")), 1),
         req,
       );
-      return json(await getEditor(rt, p.id));
+      return jsonResponse(await getEditor(rt, p.id));
     }
     const row = await getResource(rt, p.id);
     if (!row.icon_blob_sha256) throw new HttpError(404, "图标不存在");
@@ -143,7 +115,7 @@ route(
       p.id,
       await body(req),
     );
-    return json({ artifactId, ...(await getEditor(rt, p.id)) }, 201);
+    return jsonResponse({ artifactId, ...(await getEditor(rt, p.id)) }, { status: 201 });
   },
 );
 route(
@@ -170,7 +142,7 @@ route(
       else throw new HttpError(400, "未知操作");
     } else if (row.storage_status === "ready")
       await verifyArtifactObject(rt, row);
-    return json(await getEditor(rt, row.resource_id));
+    return jsonResponse(await getEditor(rt, row.resource_id));
   },
 );
 route(
@@ -198,6 +170,6 @@ route(
             "Cache-Control": "no-store",
           },
         })
-      : json(value);
+      : jsonResponse(value);
   },
 );

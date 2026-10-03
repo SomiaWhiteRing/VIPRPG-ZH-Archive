@@ -7,7 +7,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import type { ResourceRecord, ResourceEditorData } from "@/lib/resources";
-import { postJson, requestJson } from "./client";
+import { postJson, requestJsonValue as requestJson } from "@/lib/ui/api-response";
 export function ResourceManager({
   resources,
 }: {

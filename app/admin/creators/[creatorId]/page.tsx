@@ -1,6 +1,7 @@
+import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { getCreatorForAdminEdit } from "@/app/.server/db/creator-library";
-import { throwNotFound } from "@/app/.server/http/page-response";
+
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -19,8 +20,8 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -28,7 +29,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const { params } = routeInput(args);
 
   const { creatorId: rawCreatorId } = await params;
-  const creatorId = parseCreatorId(rawCreatorId);
+  const creatorId = parsePageId(rawCreatorId);
   const adminUser = await requirePagePermission(
     runtime,
     `/admin/creators/${creatorId}`,
@@ -195,14 +196,4 @@ export default function AdminCreatorEditPage() {
       </section>
     </main>
   );
-}
-
-function parseCreatorId(value: string): number {
-  const creatorId = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(creatorId) || creatorId <= 0) {
-    throwNotFound();
-  }
-
-  return creatorId;
 }

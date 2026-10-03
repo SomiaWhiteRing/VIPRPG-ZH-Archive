@@ -1,5 +1,5 @@
 import { inspectWorkImage } from "@/app/.server/storage/work-images";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { sha256Hex } from "@/lib/sha256";
 import {
   assertObjectUploadAllowed,
   insertBlobRecord,

@@ -1,4 +1,4 @@
-import { normalizeSha256 } from "@/app/.server/crypto/sha256";
+import { normalizeSha256 } from "@/lib/sha256";
 import { findExistingObjects } from "@/app/.server/db/archive-objects";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";

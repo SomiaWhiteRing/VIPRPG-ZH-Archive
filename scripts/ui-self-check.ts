@@ -10,10 +10,21 @@ const sources = files.map((file) => ({ file, source: ts.createSourceFile(file, f
 const violations: string[] = [];
 for (const { file, source } of sources) {
   function visit(node: ts.Node) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)
+      && !file.startsWith(path.join(appRoot, "components", "ui"))
+      && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+      const restricted = node.moduleSpecifier.text === "radix-ui" ? ["Dialog", "Popover"]
+        : node.moduleSpecifier.text === "react-aria-components" ? ["Checkbox"]
+          : node.moduleSpecifier.text === "react-router" ? ["useBlocker", "useBeforeUnload"] : [];
+      for (const imported of node.importClause.namedBindings.elements) {
+        const name = (imported.propertyName ?? imported.name).text;
+        if (restricted.includes(name)) violations.push(`${relative(file)}: use shared UI ${name}`);
+      }
+    }
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
       const tagName = openingElement.tagName.getText(source);
-      if (!file.startsWith(path.join(appRoot, "components", "ui")) && ["button", "textarea", "select", "label"].includes(tagName)) {
+      if (!file.startsWith(path.join(appRoot, "components", "ui")) && ["button", "textarea", "select", "label", "table"].includes(tagName)) {
         violations.push(`${relative(file)}: raw <${tagName}>`);
       }
       if (!file.startsWith(path.join(appRoot, "components", "ui")) && tagName === "input") {

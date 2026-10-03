@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | `npm run check` | 类型、lint、静态架构、安全和 UI 静态规则 | 不证明浏览器交互；按改动需要单独运行 |
 | `npx tsx scripts/ui-self-check.ts` | `app` 下 TSX 控件和样式改动的最小 UI 静态检查 | 仅扫描源码，不启动浏览器；规则独立于 TypeScript 和 ESLint，已包含在 `npm run check` 中 |
+| `npx tsx scripts/shared-boundary-check.ts` | 公共请求、响应、输入解析、对象键、哈希和格式化入口约束 | 仅扫描源码，逐项输出文件、行号和规则；已包含在 `npm run check` 中 |
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
 | `npx tsx scripts/archive-performance-check.ts` | ZIP Range 字节、热门缓存命中/覆盖竞争/失败回退/容量与过期、GC 候选分页及游标推进 | 使用内存 SQLite 和模拟对象存储，不启动浏览器或访问运行中的数据 |
@@ -25,6 +26,15 @@
 | `npm run smoke:staging` / `smoke:production` | 对应环境的只读 HTTP 健康入口 | 固定 origin，不写业务数据；不替代 schema、邮件或 UI 验收 |
 
 `npm run regression` 发现的证据目录是 `output/regression/<timestamp>/`：`report.json` 保存工作树快照、阶段状态、退出码和日志路径；每个阶段的 `.log` 保存原始 stdout/stderr。成功时目录仍被保留但不进入 Git；失败时先看报告和最后一个失败阶段的日志，再决定是否需要修产品代码。
+
+### 公共实现约束
+
+- 浏览器与 Web Worker 的普通 JSON 请求使用 `lib/ui/api-response.ts` 的 `requestJson`；资源链接 API 直接返回业务对象，使用 `requestJsonValue` 或 `postJson`。二进制和 204 响应使用 `requestOk`。这些入口共用网络失败、HTTP 错误、无效响应和取消处理，不自行复制错误解析。
+- 上传提交回查、草稿恢复、只重试网络传输的上传请求，以及同时处理 HTML 跳转与 JSON 的 `RedirectForm`，可以通过 `requestResponse`／`readJsonResponse` 查看原始状态。静态检查按文件和函数限制这些消费者，不能扩大为整个目录的豁免。失败状态的 JSON 仅在恢复决策需要时显式设置 `allowFailure`。
+- 服务端 JSON 响应通过 `lib/http.ts` 创建；缓存用途仍可显式覆盖默认 `no-store`。请求 JSON 通过 `readJsonObject` 读取，论坛、表情和资源管理分别保留 128 KiB、64 KiB、256 KiB 的请求体上限及各自的编码／类型要求。表单内的 JSON 字段和数据库 JSON 属于领域解析，不按 HTTP JSON 对象处理。
+- API 正整数 ID 使用 `parsePositiveId`，页面 ID 使用 `parsePageId` 保留 404 语义。对象键使用 `lib/archive/object-keys.ts`，Web Crypto SHA-256 使用 `lib/sha256.ts`；公共函数可供网站、浏览器 Worker、下载／GC Worker 和 Node 脚本消费。
+- UI 检查限制业务代码直接导入 Dialog、Popover、Checkbox 和路由／文档离开保护钩子，并限制原生 table。使用公共弹层及导航保护入口，保留定位、焦点恢复、虚拟锚点、iframe 判断和移动端布局。DropdownMenu、Slider、ToggleGroup、树及自动完成控件仍可使用对应库。
+- 公共边界检查扫描产品源码与运维脚本，排除契约夹具和分析实验脚本；运维脚本的外部 HTTP 下载、Node 原生哈希和需要捕获 JSON／同步结果的进程调用保留原实现。普通 Wrangler shell 启动使用 `runWrangler`。
 
 ## 失败分类
 

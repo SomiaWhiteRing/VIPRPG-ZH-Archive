@@ -4,7 +4,7 @@ import {
   blobKey,
   corePackKey,
   manifestKey,
-} from "@/app/.server/storage/archive-keys";
+} from "@/lib/archive/object-keys";
 
 export function getArchiveBucket(runtime: AppRuntime): R2Bucket {
   return getCloudflareEnv(runtime).ARCHIVE_BUCKET;

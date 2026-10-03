@@ -3,7 +3,7 @@ import {
   normalizeSha256,
   sha256Hex,
   timingSafeEqualString,
-} from "@/app/.server/crypto/sha256";
+} from "@/lib/sha256";
 import {
   prepareObjectUpload,
   recordUploadedCorePack,

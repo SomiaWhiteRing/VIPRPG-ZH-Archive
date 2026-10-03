@@ -1,9 +1,10 @@
+import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData, Link } from "react-router";
+
 
 import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
 import { readCharacterIndex } from "@/app/.server/db/character-index";
@@ -12,7 +13,7 @@ import {
   getCharacterForAdminEdit,
   listCharactersForAdmin,
 } from "@/app/.server/db/taxonomy-library";
-import { throwNotFound } from "@/app/.server/http/page-response";
+
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import { BackLink } from "@/app/components/ui/back-link";
 import { Button, buttonVariants } from "@/app/components/ui/button";
@@ -28,7 +29,7 @@ import {
   CHARACTER_INDEX_PERMISSIONS,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { Link } from "react-router";
+
 import { CharacterMergeTargetField } from "./character-merge-target-field";
 import { PortraitLibraryEditor } from "./portrait-library-editor";
 
@@ -39,7 +40,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const { params } = routeInput(args);
 
   const { characterId: rawCharacterId } = await params;
-  const characterId = parseId(rawCharacterId);
+  const characterId = parsePageId(rawCharacterId);
   const adminUser = await requireAnyPagePermission(
     runtime,
     `/admin/characters/${characterId}`,
@@ -260,14 +261,4 @@ export default function AdminCharacterEditPage() {
       </ConfirmingForm>
     </main>
   );
-}
-
-function parseId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throwNotFound();
-  }
-
-  return id;
 }

@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useState } from "react";
 import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { X } from "lucide-react";
@@ -5,8 +7,8 @@ import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { SelectField } from "@/app/components/ui/select";
 import { useToast } from "@/app/components/ui/toast";
-import type { PermissionKey } from "@/lib/authz/permissions";
-import { PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
+import { type PermissionKey, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
+
 
 export function PermissionBlockControl({
   userId,
@@ -39,14 +41,13 @@ export function PermissionBlockControl({
     setSaving(true);
     onBusyChange(true);
     try {
-      const response = await fetch(`/api/admin/users/${userId}/permissions`, {
+
+      const payload = await requestJson(`/api/admin/users/${userId}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissionKey, blocked }),
-      });
-      const payload = await response.json() as { ok?: boolean; detail?: string; error?: string; access: AdminUserAccessUpdate };
-      if (!response.ok || !payload.ok)
-        throw new Error(payload.detail ?? payload.error ?? "权限设置失败");
+      }) as { ok?: boolean; detail?: string; error?: string; access: AdminUserAccessUpdate };
+
       await onSaved(payload.access);
       toast.success(blocked ? "已为此用户禁用该权限。" : "已取消单独禁用，按角色授权生效。");
     } catch (error) {

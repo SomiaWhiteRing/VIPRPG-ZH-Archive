@@ -1,3 +1,5 @@
+import { requestOk } from "@/lib/ui/api-response";
+
 const coverCacheName = "viprpg-web-play-covers-v1";
 
 export async function readCachedWebPlayCover(sha256: string): Promise<Blob | null> {
@@ -16,7 +18,7 @@ export async function cacheWebPlayCover(sha256: string): Promise<Blob> {
   const cache = await caches.open(coverCacheName);
   let response = await cache.match(url);
   if (!response) {
-    response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8000) });
+    response = await requestOk(url, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (!response.ok || !response.headers.get("Content-Type")?.startsWith("image/")) {
       throw new Error("Cover unavailable");
     }

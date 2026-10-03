@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { Popover } from "radix-ui";
+import { requestJson } from "@/lib/ui/api-response";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import * as Popover from "@/app/components/ui/popover";
 import { X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -16,6 +17,7 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
 }) {
   const id = useId();
   const search = useRef<HTMLInputElement>(null);
+  const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
   const [query, setQuery] = useState("");
   const [composing, setComposing] = useState(false);
   const [users, setUsers] = useState<MentionSearchUser[]>([]);
@@ -27,10 +29,9 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
     const controller = new AbortController();
     if (!query.trim() || composing) return () => controller.abort();
     const timer = setTimeout(() => {
-      void fetch(`/api/users/mentions?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal, credentials: "same-origin" })
-        .then(async (response) => {
-          const result = await response.json() as { users?: MentionSearchUser[]; detail?: string };
-          if (!response.ok || !result.users) throw new Error(result.detail ?? "用户搜索失败。");
+      void requestJson<{ users?: MentionSearchUser[] }>(`/api/users/mentions?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal, credentials: "same-origin" }, "用户搜索失败")
+        .then((result) => {
+          if (!result.users) throw new Error("服务器未返回用户搜索结果。");
           if (!controller.signal.aborted) setUsers(result.users);
         }).catch((cause) => {
           if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "用户搜索失败。");
@@ -40,7 +41,7 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
   }, [query, composing, retry]);
   return <Popover.Root open modal={false} onOpenChange={(open) => { if (!open) onClose(false); }}>
     <Popover.Anchor virtualRef={{ current: anchor }} />
-    <Popover.Portal container={container}>
+    <Popover.Portal anchorRef={anchorRef} container={container}>
       <Popover.Content aria-label="提及用户" data-mention-picker
         side="bottom" align="start" sideOffset={6} collisionPadding={12}
         onOpenAutoFocus={(event) => { event.preventDefault(); search.current?.focus(); }}

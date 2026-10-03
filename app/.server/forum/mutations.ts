@@ -2,20 +2,10 @@ import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { bodyLength } from "@/lib/face-emojis";
-import type { PermissionKey } from "@/lib/authz/permissions";
-import { hasPermission } from "@/lib/authz/permissions";
-import type { ForumAction, ForumTarget } from "@/lib/forum";
-import {
-  FORUM_BODY_LENGTH,
-  FORUM_COMMENT_LENGTH,
-  FORUM_POST_BODY_LENGTH,
-  FORUM_REPORT_REASONS,
-  FORUM_TITLE_LENGTH,
-  FORUM_WRITES_PER_MINUTE,
-  forumTagError,
-  forumTagKey,
-  normalizeForumTag,
-} from "@/lib/forum";
+import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
+
+import { type ForumAction, type ForumTarget, FORUM_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_REPORT_REASONS, FORUM_TITLE_LENGTH, FORUM_WRITES_PER_MINUTE, forumTagError, forumTagKey, normalizeForumTag } from "@/lib/forum";
+
 import { imageGuard, imageIds, imageOffsets, imageStatements } from "./images";
 import {
   likeNotificationStatement,
@@ -30,8 +20,8 @@ import {
 
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
-import type { ContentRow, TopicRow } from "./queries";
-import { contentIdentity, rawTopic, unavailable } from "./queries";
+import { type ContentRow, type TopicRow, contentIdentity, rawTopic, unavailable } from "./queries";
+
 
 type Bind = string | number | null;
 type Predicate = { sql: string; args: Bind[] };
@@ -95,11 +85,7 @@ async function requestIdentity(input: Record<string, unknown>) {
   )
     throw new HttpError(400, "提交标识无效。");
   const data = new TextEncoder().encode(JSON.stringify(input));
-  const hash = Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", data)),
-  )
-    .map((n) => n.toString(16).padStart(2, "0"))
-    .join("");
+  const hash = await sha256Hex(data);
   return { key: input.requestKey, hash };
 }
 type TagsInput = {
@@ -942,3 +928,4 @@ export async function moderateForum(
   );
   await runGuarded(ctx, statements);
 }
+import { sha256Hex } from "@/lib/sha256";

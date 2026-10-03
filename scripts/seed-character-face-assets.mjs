@@ -215,6 +215,4 @@ function report(completed, pending, total, startedAt) {
   );
 }
 
-function blobKey(sha256) {
-  return `blobs/sha256/${sha256.slice(0, 2)}/${sha256.slice(2, 4)}/${sha256}`;
-}
+import { blobKey } from "../lib/archive/object-keys.ts";

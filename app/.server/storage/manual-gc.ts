@@ -1,7 +1,7 @@
 import type { AppRuntime } from "@/app/.server/runtime";
 import { getD1 } from "@/app/.server/db/d1";
 import { getArchiveBucket } from "./archive-bucket";
-import { blobKey, corePackKey, manifestKey } from "./archive-keys";
+import { blobKey, corePackKey, manifestKey } from "../../../lib/archive/object-keys";
 import { deleteUnreferencedManifest } from "./gc-manifests";
 import type { GcJobAction, GcJobPhase, GcJobReport, GcJobStatus } from "@/lib/archive/gc-job";
 import { HttpError } from "@/lib/http";

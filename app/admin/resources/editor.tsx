@@ -21,7 +21,7 @@ import { PackageUpload } from "./package-upload";
 import { ResourceContentEditor } from "./content-editor";
 import { ResourceLinksEditor } from "./links-editor";
 import { DownloadFilenameTemplate } from "./filename-template";
-import { postJson, requestJson } from "./client";
+import { postJson, requestJsonValue as requestJson } from "@/lib/ui/api-response";
 const statusLabels = {
   pending: "待上传",
   uploading: "上传中",

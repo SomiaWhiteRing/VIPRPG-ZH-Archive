@@ -33,11 +33,7 @@ export type ArchiveDownloadRecord = {
   engineFamily: string;
 };
 export function parseArchiveVersionId(value: string): number {
-  if (!/^\d+$/.test(value)) throw new Error("Invalid archive version id");
-  const id = Number(value);
-  if (!Number.isSafeInteger(id) || id <= 0)
-    throw new Error("Invalid archive version id");
-  return id;
+  return parsePositiveId(value, "archive version id");
 }
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
@@ -86,3 +82,4 @@ export async function getPublishedArchiveDownloadRecord(
     engineFamily: row.engine_family,
   };
 }
+import { parsePositiveId } from "@/app/.server/http/request";

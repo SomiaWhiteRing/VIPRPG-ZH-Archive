@@ -1,5 +1,5 @@
 import { toArrayBuffer, utf8Encode } from "@/app/.server/crypto/encoding";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { sha256Hex } from "@/lib/sha256";
 export const SESSION_COOKIE_NAME = "viprpg_session";
 export async function getSessionHashFromCookieHeader(
   cookieHeader: string | null,

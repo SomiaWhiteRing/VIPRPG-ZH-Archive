@@ -1,26 +1,11 @@
+import { requestOk } from "@/lib/ui/api-response";
+import { formatBytes, formatDuration } from "@/lib/format";
+
 /// <reference lib="webworker" />
 
-import {
-  clearWebPlayFileRecords,
-  getWebPlayInstallation,
-  saveWebPlayFileRecords,
-  saveWebPlayInstallation,
-} from "@/app/play/[workId]/web-play-db";
-import {
-  createGamePackWritable,
-  ensureOpfsSupported,
-  resetGameOpfsDirectory,
-  writeGamePackIndexJson,
-} from "@/app/play/[workId]/web-play-opfs";
-import type {
-  WebPlayFileRecord,
-  WebPlayInstallation,
-  WebPlayInstallWorkerInput,
-  WebPlayInstallWorkerOutput,
-  WebPlayMetadata,
-  WebPlayStorageSnapshot,
-  WebPlayStorageKind,
-} from "@/app/play/[workId]/web-play-types";
+import { clearWebPlayFileRecords, getWebPlayInstallation, saveWebPlayFileRecords, saveWebPlayInstallation } from "@/app/play/[workId]/web-play-db";
+import { createGamePackWritable, ensureOpfsSupported, resetGameOpfsDirectory, writeGamePackIndexJson } from "@/app/play/[workId]/web-play-opfs";
+import type { WebPlayFileRecord, WebPlayInstallation, WebPlayInstallWorkerInput, WebPlayInstallWorkerOutput, WebPlayMetadata, WebPlayStorageSnapshot, WebPlayStorageKind } from "@/app/play/[workId]/web-play-types";
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
 import { withGameResourceWriteLock } from "./web-play-locks";
@@ -154,9 +139,7 @@ async function runInstall(
         postLog(
           metadata.playKey,
           "warning",
-          `安装遇到可重试错误：${message}。${formatDuration(
-            delayMs,
-          )} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
+          `安装遇到可重试错误：${message}。${formatDuration(delayMs, { precision: 2, compact: true })} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
         );
         await observeInstallTask("retry.wait", () => delay(delayMs), { attempt, nextAttempt: attempt + 1, delayMs, restartsFromZero: true });
         assertNotCanceled(metadata.playKey);
@@ -218,13 +201,9 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  const response = await observeInstallTask("network.headers", () => fetch(metadata.downloadUrl, {
+  const response = await observeInstallTask("network.headers", () => requestOk(metadata.downloadUrl, {
     credentials: "same-origin",
   }), { url: metadata.downloadUrl });
-
-  if (!response.ok) {
-    throw new Error(`下载游戏文件失败（状态码 ${response.status}），请重试。`);
-  }
 
   const headerLength = numberHeader(response.headers.get("Content-Length"));
   installation = await persistAndPost(
@@ -401,9 +380,7 @@ async function streamZipToPacks(input: {
     postLog(
       input.metadata.playKey,
       "info",
-      `正在安装游戏文件：已下载 ${formatBytes(downloadedBytes)} / ${formatBytes(
-        installation.downloadBytesTotal || input.metadata.installTotalSizeBytes,
-      )}；已安装 ${installedFiles.toLocaleString(
+      `正在安装游戏文件：已下载 ${formatBytes(downloadedBytes, { precision: 2, maximumUnit: "GB" })} / ${formatBytes(installation.downloadBytesTotal || input.metadata.installTotalSizeBytes, { precision: 2, maximumUnit: "GB" })}；已安装 ${installedFiles.toLocaleString(
         "zh-CN",
       )} / ${input.metadata.installTotalFiles.toLocaleString("zh-CN")} 个文件。`,
     );
@@ -974,36 +951,6 @@ function nowMs(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
     : Date.now();
-}
-
-function formatDuration(valueMs: number): string {
-  if (!Number.isFinite(valueMs) || valueMs <= 0) {
-    return "0ms";
-  }
-
-  if (valueMs < 1000) {
-    return `${Math.round(valueMs)}ms`;
-  }
-
-  return `${(valueMs / 1000).toFixed(2)}s`;
-}
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0 B";
-  }
-
-  let next = value;
-
-  for (const unit of ["B", "KB", "MB", "GB"]) {
-    if (next < 1024 || unit === "GB") {
-      return unit === "B" ? `${Math.round(next)} B` : `${next.toFixed(2)} ${unit}`;
-    }
-
-    next /= 1024;
-  }
-
-  return `${value} B`;
 }
 
 function decodeZipPath(playKey: string, bytes: Uint8Array, flags: number): string {

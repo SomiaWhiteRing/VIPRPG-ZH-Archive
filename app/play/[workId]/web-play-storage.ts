@@ -1,3 +1,4 @@
+import { sha256Hex } from "@/lib/sha256";
 import type { WebPlayInstallation, WebPlayStorageKind } from "./web-play-types";
 
 export const GAME_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -41,8 +42,8 @@ export function validatePlayKey(playKey: string): void {
 
 async function bucketName(playKey: string): Promise<string> {
   validatePlayKey(playKey);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(playKey));
-  return `viprpg-game-${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 48)}`;
+  const digest = await sha256Hex(new TextEncoder().encode(playKey));
+  return `viprpg-game-${digest.slice(0, 48)}`;
 }
 
 export async function openGameBucket(installation: WebPlayInstallation, create: boolean): Promise<GameBucket> {

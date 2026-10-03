@@ -1,5 +1,6 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
-import { normalizeSha256 } from "@/app/.server/crypto/sha256";
+import { normalizeSha256 } from "@/lib/sha256";
 import { findExistingObjects } from "@/app/.server/db/archive-objects";
 import {
   markImportJobFailed,
@@ -167,7 +168,7 @@ async function parsePreflightRequest(
 ): Promise<PreflightRequest> {
   let value: unknown;
   try {
-    value = await request.json();
+    value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
     throw new HttpError(400, "Invalid JSON body");
   }

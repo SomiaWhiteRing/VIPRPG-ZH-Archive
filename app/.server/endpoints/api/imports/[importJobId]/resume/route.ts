@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import {
   parseImportJobId,
@@ -49,7 +50,7 @@ export async function POST(
 }
 
 async function readBody(request: Request) {
-  const value: unknown = await request.json().catch(() => null);
+  const value: unknown = await readJsonObject(request, "请求必须为 JSON 对象").catch(() => null);
   return parseImportObjectReferences(value, {
     invalidList: "上传草稿文件清单格式不合法",
     invalidHash: "上传草稿文件哈希格式不合法",

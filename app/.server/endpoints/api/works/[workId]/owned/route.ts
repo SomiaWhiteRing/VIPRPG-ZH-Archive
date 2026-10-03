@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
@@ -35,7 +36,7 @@ export async function POST(
 
   try {
     const { workId: rawWorkId } = await context.params;
-    const workId = parseWorkId(rawWorkId);
+    const workId = parsePositiveId(rawWorkId, "id", "作品 ID 不合法");
     const current = await getOwnedWorkForEdit(runtime, workId, auth.user);
     if (!current) throw new HttpError(404, "作品不存在或不属于当前上传者");
     const form = await request.formData();
@@ -121,13 +122,6 @@ function parseMetadata(form: FormData) {
     translators: parseTranslatorSelectionsJson(form.get("translators")),
     downloadUrl: readNullableString(form.get("download_url")),
   };
-}
-
-function parseWorkId(value: string): number {
-  const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0)
-    throw new HttpError(400, "作品 ID 不合法");
-  return id;
 }
 
 function readRequiredString(value: unknown, field: string): string {

@@ -1,9 +1,11 @@
+import { readJsonObject } from "@/app/.server/http/request";
+import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import { Hono } from "hono";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { assertSameOrigin, SameOriginError } from "@/app/.server/auth/origin";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { HttpError, jsonError } from "@/lib/http";
+
 import {
   addEmojis,
   characterSheets,
@@ -33,44 +35,12 @@ export const emojiApi = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 export const emojiJson = (body: object) =>
-  Response.json(
+  jsonResponse(
     { ok: true, ...body },
     { headers: { "Cache-Control": "no-store" } },
   );
 export async function emojiRequestBody(request: Request) {
-  const reader = request.body?.getReader();
-  if (!reader) throw new HttpError(400, "请求内容为空。");
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.length;
-      if (length > 64 * 1024) {
-        await reader.cancel();
-        throw new HttpError(413, "请求内容过大。");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new HttpError(400, "JSON 格式无效。");
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new HttpError(400, "请求格式无效。");
-  return value as Record<string, unknown>;
+  return readJsonObject(request, "请求格式无效。", { maximumBytes: 64 * 1024 });
 }
 emojiApi.all("/api/emojis", async (c) => {
   if (c.req.method === "OPTIONS")

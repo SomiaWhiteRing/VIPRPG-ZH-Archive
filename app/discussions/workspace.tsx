@@ -1,3 +1,5 @@
+import { useDocumentNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import { ApiResponseError } from "@/lib/ui/api-response";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
@@ -11,69 +13,22 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type { loader as rootLoader } from "@/app/root";
-import type {
-  ForumContent,
-  ForumDetail,
-  ForumFloor,
-  ForumPage,
-  ForumTag,
-  ForumTarget,
-  ForumTopic,
-  ForumViewer,
-} from "@/lib/forum";
-import { FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
+import { type ForumContent, type ForumDetail, type ForumFloor, type ForumPage, type ForumTag, type ForumTarget, type ForumTopic, type ForumViewer, FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
+
 import type { PublicForumContent } from "@/lib/forum-public";
 import { interactiveContent } from "@/lib/forum-state";
 import { cn } from "@/lib/ui/cn";
 import { MessageSquare, ThumbsUp, UserRound } from "lucide-react";
-import {
-  Fragment,
-  lazy,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import {
-  Link,
-  useBeforeUnload,
-  useLocation,
-  useNavigate,
-  useNavigationType,
-  useRevalidator,
-  useRouteLoaderData,
-} from "react-router";
-import type { ForumDialogAction, ForumMenuItem } from "./actions";
-import { ForumActionDialog, ForumMenu } from "./actions";
-import type { ForumDraft } from "./draft";
-import {
-  deleteForumDraft,
-  forumDraftKey,
-  readForumDraft,
-  restoreForumDraft,
-  saveForumDraft,
-} from "./draft-cache";
-import {
-  draftSnapshot,
-  draftValue,
-  forumReplyLauncherClass,
-} from "./draft";
+import { Fragment, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import { Link, useLocation, useNavigate, useNavigationType, useRevalidator, useRouteLoaderData } from "react-router";
+import { type ForumDialogAction, type ForumMenuItem, ForumActionDialog, ForumMenu } from "./actions";
+
+import { type ForumDraft, draftSnapshot, draftValue, forumReplyLauncherClass } from "./draft";
+import { deleteForumDraft, forumDraftKey, readForumDraft, restoreForumDraft, saveForumDraft } from "./draft-cache";
+
 import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
 import { ForumReplyBar } from "./reply-bar";
-import {
-  DiscussionTagLink,
-  ForumAuthorName,
-  ForumBody,
-  ForumRequestError,
-  PopularTagFilter,
-  TopicStatus,
-  TopicTags,
-  forumRequest,
-  readForumEditVersion,
-  referencedForumEmojis,
-} from "./shared";
+import { DiscussionTagLink, ForumAuthorName, ForumBody, PopularTagFilter, TopicStatus, TopicTags, forumRequest, readForumEditVersion, referencedForumEmojis } from "./shared";
 import { useDiscussionVisit } from "./visit";
 let editorModule: Promise<{ default: typeof import("./editor").ForumEditor }> | undefined;
 function preloadEditor() {
@@ -159,14 +114,10 @@ export function DiscussionWorkspace({
     [draft, setDraft] = useState<ForumDraft | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [requestError, setRequestError] = useState<ForumRequestError | null>(null);
+    [requestError, setRequestError] = useState<ApiResponseError | null>(null);
   const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
   const visiblePosts = detail?.posts.items.filter((post) => !hideDeletedContent || post.state !== "deleted") ?? [];
-  useBeforeUnload(useCallback((event) => {
-    if (!dirty && !busy) return;
-    event.preventDefault();
-    event.returnValue = "";
-  }, [dirty, busy]));
+  useDocumentNavigationGuard(dirty || busy);
   const [action, setAction] = useState<ForumDialogAction | null>(null),
     [unavailable, setUnavailable] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
@@ -415,7 +366,7 @@ export function DiscussionWorkspace({
       setCurrentEmojis(result.emojis);
       setDetail(result.detail);
     } catch (e) {
-      if (e instanceof ForumRequestError && e.status === 404) {
+      if (e instanceof ApiResponseError && e.status === 404) {
         if (removed) removalFocus.current = { targetId: null };
         setUnavailable(true);
       } else toast.error(e instanceof Error ? e.message : "加载失败。");
@@ -565,15 +516,15 @@ export function DiscussionWorkspace({
       }
     } catch (e) {
       const message =
-        e instanceof ForumRequestError && e.status === 0
+        e instanceof ApiResponseError && e.status === 0
           ? "网络连接失败，内容已保留，请重试。"
           : e instanceof Error
             ? e.message
             : "发布失败，请重试。";
       toast.error(message);
-      if (e instanceof ForumRequestError && (e.status === 401 || e.status === 409))
+      if (e instanceof ApiResponseError && (e.status === 401 || e.status === 409))
         setError(message);
-      if (e instanceof ForumRequestError) setRequestError(e);
+      if (e instanceof ApiResponseError) setRequestError(e);
     } finally {
       setBusy(false);
     }

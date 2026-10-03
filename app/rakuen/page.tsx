@@ -11,8 +11,9 @@ import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { TopicTags } from "@/app/discussions/shared";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useBlocker, useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+
+import { useRouterNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 
 const sources = {
   all: "全部",
@@ -65,9 +66,9 @@ export default function RakuenPage() {
   const listRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const confirm = useConfirm();
-  const confirming = useRef(false);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+  useRouterNavigationGuard(({ currentLocation, nextLocation }) =>
     currentLocation.pathname !== nextLocation.pathname && hasPendingContent(frameRef.current),
+    () => confirm("当前页面有未提交的内容或进行中的操作，确定离开？"),
   );
 
   useEffect(() => {
@@ -76,16 +77,6 @@ export default function RakuenPage() {
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
   }, [type, page]);
-  useEffect(() => {
-    if (blocker.state !== "blocked" || confirming.current) return;
-    confirming.current = true;
-    void confirm("当前页面有未提交的内容或进行中的操作，确定离开？")
-      .then((leave) => {
-        if (leave) blocker.proceed();
-        else blocker.reset();
-      })
-      .finally(() => { confirming.current = false; });
-  }, [blocker, confirm]);
 
   return (
     <main className="rakuen-page" aria-labelledby="rakuen-heading">

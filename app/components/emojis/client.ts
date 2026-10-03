@@ -1,5 +1,7 @@
-import type { FaceEmoji, FaceEmojiCell } from "@/lib/face-emojis";
-import { emojiToken } from "@/lib/face-emojis";
+import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
+
+import { type FaceEmoji, type FaceEmojiCell, emojiToken } from "@/lib/face-emojis";
+
 import type { ClipboardEvent } from "react";
 
 export function emojiCells(cells: FaceEmojiCell[]): FaceEmojiCell[] {
@@ -40,24 +42,10 @@ export async function emojiRequest<T>(
   body?: object,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    signal,
-    ...(body
-      ? {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  const result = (await response.json()) as T & {
-    detail?: string;
-    error?: string;
-  };
-  if (!response.ok)
-    throw new Error(result.detail ?? result.error ?? "表情加载失败。");
-  return result;
+  return requestJson<T & ApiResponsePayload>(url, {
+    credentials: "same-origin", signal,
+    ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+  }, "表情加载失败");
 }
 export async function resolveEmojis(
   ids: number[],

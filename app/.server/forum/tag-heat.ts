@@ -1,3 +1,4 @@
+import { json as jsonResponse } from "@/lib/http";
 import type { ForumRequestRuntime } from "./request";
 
 type Candidate = { id: number; count: number };
@@ -26,7 +27,7 @@ export async function forumTagHeat(
       ctx.execution.waitUntil(
         cache.put(
           key,
-          Response.json(saved, {
+          jsonResponse(saved, {
             headers: { "Cache-Control": "public,max-age=86400" },
           }),
         ),

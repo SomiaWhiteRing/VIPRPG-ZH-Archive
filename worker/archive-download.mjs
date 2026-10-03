@@ -1,3 +1,6 @@
+import { blobKey, corePackKey, manifestKey } from "../lib/archive/object-keys.ts";
+import { sha256Hex } from "../lib/sha256.ts";
+import { json as jsonResponse } from "../lib/http.ts";
 import { unzipSync } from "fflate";
 import { downloadCacheMaxBytes, downloadZipBuilderVersion } from "../lib/archive/download.ts";
 import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
@@ -71,7 +74,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     if (!record) {
       return request.method === "HEAD"
         ? new Response(null, { status: 404, headers: importHeaders })
-        : Response.json({ ok: false, error: "Archive version not found" }, { status: 404, headers: importHeaders });
+        : jsonResponse({ ok: false, error: "Archive version not found" }, { status: 404, headers: importHeaders });
     }
 
     if (match[2] === "kai-import") {
@@ -254,7 +257,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 
     return request.method === "HEAD"
       ? new Response(null, { status: error?.status ?? 500, headers: importHeaders })
-      : Response.json(
+      : jsonResponse(
           {
             ok: false,
             error: "Archive download failed",
@@ -320,7 +323,7 @@ async function getDownloadRecord(db, archiveVersionId) {
 async function kaiImportMetadata(request, bucket, record) {
   const headers = { "Cache-Control": "no-store" };
   if (!["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(record.engineFamily)) {
-    return Response.json({ error: "This engine is not supported by Kai" }, { status: 422, headers });
+    return jsonResponse({ error: "This engine is not supported by Kai" }, { status: 422, headers });
   }
   const manifest = await loadManifest(bucket, record.manifestSha256);
   const files = manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path));
@@ -328,7 +331,7 @@ async function kaiImportMetadata(request, bucket, record) {
   const paths = new Set(files.map((file) => file.path.toLowerCase()));
   if (zipSizeBytes > 1024 ** 3 || files.length > 50000 ||
       !paths.has("rpg_rt.ldb") || !paths.has("rpg_rt.lmt")) {
-    return Response.json({ error: "This archive cannot be imported by Kai" }, { status: 422, headers });
+    return jsonResponse({ error: "This archive cannot be imported by Kai" }, { status: 422, headers });
   }
   const downloadUrl = new URL(`/api/archive-versions/${record.id}/download`, request.url);
   downloadUrl.searchParams.set("zip_builder", downloadZipBuilderVersion);
@@ -348,7 +351,7 @@ async function kaiImportMetadata(request, bucket, record) {
     files: files.map(({ path, size, sha256 }) => ({ path, size, sha256 })),
   });
   if (textEncoder.encode(body).byteLength > 8 * 1024 ** 2) {
-    return Response.json({ error: "Import metadata is too large" }, { status: 422, headers });
+    return jsonResponse({ error: "Import metadata is too large" }, { status: 422, headers });
   }
   return new Response(request.method === "HEAD" ? null : body, {
     headers: { ...headers, "Content-Type": "application/json; charset=utf-8" },
@@ -1086,7 +1089,6 @@ async function recordDownloadAccess(db, input) {
     });
 }
 
-
 async function recordDownloadFailure(db, input) {
   await db
     .prepare(
@@ -1208,29 +1210,6 @@ async function sharedPlayerCrc32(request, bucket, player, ctx) {
     headers: { "Cache-Control": "public, max-age=31536000, immutable" },
   })).catch(() => undefined));
   return value;
-}
-
-function blobKey(sha256) {
-  const normalized = sha256.toLowerCase();
-  return `blobs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}`;
-}
-
-function corePackKey(sha256) {
-  const normalized = sha256.toLowerCase();
-  return `core-packs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.zip`;
-}
-
-function manifestKey(sha256) {
-  const normalized = sha256.toLowerCase();
-  return `manifests/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}.json`;
-}
-
-async function sha256Hex(data) {
-  const digest = await crypto.subtle.digest("SHA-256", data);
-
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function assertZip16Value(value, label) {

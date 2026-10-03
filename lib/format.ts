@@ -56,7 +56,7 @@ export function formatRelativeTimestamp(value: string, now: number): string {
   return `${p.month}-${p.day}`;
 }
 
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, options?: { precision?: number; maximumUnit?: "GB" }): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
   }
@@ -64,11 +64,11 @@ export function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const exponent = Math.min(
     Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
+    options?.maximumUnit === "GB" ? 3 : units.length - 1,
   );
   const value = bytes / 1024 ** exponent;
 
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+  return `${value.toFixed(exponent === 0 ? 0 : options?.precision ?? (value >= 10 ? 0 : 1))} ${units[exponent]}`;
 }
 
 export function formatDate(value: string | null, options?: { time?: boolean }): string {
@@ -90,11 +90,15 @@ export function formatUnreadCount(count: number): string {
   return count > 99 ? "99+" : count.toLocaleString("zh-CN");
 }
 
-export function formatDuration(ms: number): string {
+export function formatDuration(ms: number, options?: { precision?: number; compact?: boolean }): string {
+  if (options?.compact) {
+    if (!Number.isFinite(ms) || ms <= 0) return "0ms";
+    return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(options.precision ?? 1)}s`;
+  }
   if (ms < 1000) {
     return `${ms} ms`;
   }
-  return `${(ms / 1000).toFixed(1)} s`;
+  return `${(ms / 1000).toFixed(options?.precision ?? 1)} s`;
 }
 
 export function formatNullableDuration(ms: number | null): string {

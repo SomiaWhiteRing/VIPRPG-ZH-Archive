@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { notifyInboxChanged } from "@/lib/inbox-events";
@@ -83,27 +85,14 @@ export function InboxActions({
       const url = all
         ? "/api/inbox/read-all"
         : `/api/inbox/${item!.id}/${action === "read" ? "read" : "resolve"}`;
-      const response = await fetch(url, {
+
+      await requestJson(url, {
         method: "POST",
         headers: { Accept: "application/json" },
         body: data,
       });
-      const result = (await response.json()) as { detail?: unknown };
-      const detail = typeof result.detail === "string" ? result.detail : null;
-      if (!response.ok) {
-        if (response.status === 409) {
-          notifyInboxChanged();
-          document
-            .getElementById("inbox-controls")
-            ?.focus({ preventScroll: true });
-          startTransition(() => revalidator.revalidate());
-        }
-        throw new Error(
-          response.status === 401
-            ? "登录已失效，请重新登录后重试。"
-            : detail || "操作失败，请重试。",
-        );
-      }
+
+
       notifyInboxChanged();
       toast.success(
         action === "read"

@@ -1,3 +1,5 @@
+import { requestOk } from "@/lib/ui/api-response";
+
 import { useEffect } from "react";
 import { viewDay, type ViewKind } from "@/lib/view-stats";
 
@@ -19,14 +21,12 @@ export function useContentView(kind: ViewKind, id?: number) {
       sent.add(key);
       const sentDay = day;
       const endpoint = kind === "work" ? `/api/works/${id}/view` : "/api/discussions";
-      void fetch(endpoint, {
+      void requestOk(endpoint, {
         method: "POST", credentials: "same-origin", keepalive: true,
         ...(kind === "topic" ? {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ op: "view", topicId: id }),
         } : {}),
-      }).then((response) => {
-        if (!response.ok) throw new Error("View report failed");
       }).catch(() => { if (day === sentDay) sent.delete(key); });
     }
     record();

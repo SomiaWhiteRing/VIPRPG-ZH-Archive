@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useConfirm } from "./confirm-provider";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -70,14 +72,14 @@ export function AvatarCropper({
     setBusy(true);
     try {
       const blob = await cropToPng(source, area);
-      const response = await fetch(endpoint, {
+
+      await requestJson(endpoint, {
         method: "PUT",
         credentials: "same-origin",
         headers: { "content-type": "image/png" },
         body: blob,
       });
-      const result = (await response.json()) as { detail?: string };
-      if (!response.ok) throw new Error(result.detail || "头像上传失败");
+
       setSource(null);
       toast.success("头像已更新。");
       revalidator.revalidate();
@@ -95,9 +97,9 @@ export function AvatarCropper({
       action: async () => {
         setBusy(true);
         try {
-          const response = await fetch(endpoint, { method: "DELETE", credentials: "same-origin" });
-          const result = (await response.json()) as { detail?: string };
-          if (!response.ok) throw new Error(result.detail || "头像删除失败");
+
+          await requestJson(endpoint, { method: "DELETE", credentials: "same-origin" });
+
           toast.success("头像已删除。");
           revalidator.revalidate();
         } finally { setBusy(false); }

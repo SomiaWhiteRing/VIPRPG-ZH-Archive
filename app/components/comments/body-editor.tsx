@@ -1,22 +1,12 @@
+import { requestOk } from "@/lib/ui/api-response";
+
 import { MentionPicker } from "./mention-picker";
 import { mentionToken, readMention, type MentionUser } from "@/lib/mentions";
-import {
-  bodyLength,
-  emojiIds,
-  emojiToken,
-  type FaceEmoji,
-} from "@/lib/face-emojis";
-import {
-  EditorEmojis,
-  FaceEmojiNode,
-} from "@/app/components/emojis/editor-node";
+import { bodyLength, emojiIds, emojiToken, type FaceEmoji } from "@/lib/face-emojis";
+import { EditorEmojis, FaceEmojiNode } from "@/app/components/emojis/editor-node";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { Button } from "@/app/components/ui/button";
-import {
-  FORUM_BODY_LENGTH,
-  FORUM_IMAGE_COUNT,
-  FORUM_POST_BODY_LENGTH,
-} from "@/lib/forum";
+import { FORUM_BODY_LENGTH, FORUM_IMAGE_COUNT, FORUM_POST_BODY_LENGTH } from "@/lib/forum";
 import { Extension, Node as TiptapNode } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -25,28 +15,17 @@ import Text from "@tiptap/extension-text";
 import { Dropcursor, Placeholder, UndoRedo } from "@tiptap/extensions";
 import { closeHistory } from "@tiptap/pm/history";
 import { Fragment, Slice } from "@tiptap/pm/model";
-import type { SelectionBookmark } from "@tiptap/pm/state";
-import { Plugin, TextSelection } from "@tiptap/pm/state";
-import type { NodeViewProps } from "@tiptap/react";
-import {
-  EditorContent,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-  useEditor,
-} from "@tiptap/react";
+import { type SelectionBookmark, Plugin, TextSelection } from "@tiptap/pm/state";
+
+import { type NodeViewProps, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
+
 import { X } from "lucide-react";
-import type { Ref } from "react";
-import { useEffect, useImperativeHandle, useRef, useState } from "react";
-import {
-  editorDocument,
-  imageContent,
-  inlineSlice,
-  readDocument,
-  textContent,
-} from "@/app/discussions/editor-document";
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
+
+import { editorDocument, imageContent, inlineSlice, readDocument, textContent } from "@/app/discussions/editor-document";
 import { createImageProcessor } from "@/app/discussions/image-processor";
-import type { DraftImage } from "@/app/discussions/images";
-import { cloneDraftImage, selectDraftImages } from "@/app/discussions/images";
+import { type DraftImage, cloneDraftImage, selectDraftImages } from "@/app/discussions/images";
+
 
 const UserMentionNode = TiptapNode.create({
   name: "userMention", inline: true, group: "inline", atom: true,
@@ -467,11 +446,11 @@ export function BodyEditor({
         // A second occurrence gets its own upload identity under the existing one-image/one-slot contract.
         let file = source.file;
         if (!file) {
-          const response = await fetch(source.preview, {
+          const response = await requestOk(source.preview, {
             signal: AbortSignal.timeout(15000),
             credentials: "same-origin",
           });
-          if (!response.ok) throw new Error("图片暂时无法复制，请稍后重试。");
+
           file = new File([await response.blob()], "image", {
             type: `image/${source.uploaded!.format}`,
           });

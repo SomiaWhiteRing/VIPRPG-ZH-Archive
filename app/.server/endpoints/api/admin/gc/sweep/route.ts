@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -80,7 +81,7 @@ async function readBody(request: Request): Promise<SweepRequestBody> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    const body: unknown = await request.json();
+    const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象");
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "请求必须为 JSON 对象");
     return body as SweepRequestBody;
   }

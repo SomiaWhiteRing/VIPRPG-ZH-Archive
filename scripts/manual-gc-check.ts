@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { AuthContext } from "../app/.server/auth/current-user";
 import { POST } from "../app/.server/endpoints/api/admin/gc/sweep/route";
 import type { AppRuntime } from "../app/.server/runtime";
-import { blobKey, corePackKey, manifestKey } from "../app/.server/storage/archive-keys";
+import { blobKey, corePackKey, manifestKey } from "../lib/archive/object-keys";
 import { handleManualGc } from "../app/.server/storage/manual-gc";
 import type { GcJobAction, GcJobReport } from "../lib/archive/gc-job";
 

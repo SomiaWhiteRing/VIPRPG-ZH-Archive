@@ -1,5 +1,5 @@
 import { identifyImage, inspectImage, ImageValidationError, IMAGE_HEADER_BYTES, MAX_IMAGE_BYTES } from "@/lib/image-format";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { sha256Hex } from "@/lib/sha256";
 import {
   findObjectStatuses,
   insertBlobRecords,

@@ -1,3 +1,5 @@
+import { requestOk } from "@/lib/ui/api-response";
+
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { localRequest } from "@/lib/browser/android-local";
 import { isAndroidClient } from "@/lib/browser/client-environment";
@@ -9,8 +11,8 @@ import { useToast } from "@/app/components/ui/toast";
 async function coverPreview(hash: string | null): Promise<string | undefined> {
   if (!hash) return;
   try {
-    const response = await fetch(`/api/media/blobs/${hash}`, { signal: AbortSignal.timeout(10000) });
-    if (!response.ok) return;
+    const response = await requestOk(`/api/media/blobs/${hash}`, { signal: AbortSignal.timeout(10000) });
+
     const image = await createImageBitmap(await response.blob());
     try {
       const scale = Math.min(1, 256 / Math.max(image.width, image.height));

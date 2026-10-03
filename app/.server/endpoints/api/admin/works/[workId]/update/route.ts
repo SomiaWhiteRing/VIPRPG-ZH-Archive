@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import { getWorkTranslators } from "@/app/.server/db/creators";
 import {
@@ -40,7 +41,7 @@ export async function POST(
 
   try {
     const { workId: rawWorkId } = await context.params;
-    const workId = parseWorkId(rawWorkId);
+    const workId = parsePositiveId(rawWorkId, "id", "Invalid work id");
     const formData = await request.formData();
     const input = parseWorkEditForm(formData);
 
@@ -94,14 +95,4 @@ export async function POST(
   } catch (error) {
     return jsonError("Work update failed", error);
   }
-}
-
-function parseWorkId(value: string): number {
-  const workId = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(workId) || workId <= 0) {
-    throw new Error("Invalid work id");
-  }
-
-  return workId;
 }

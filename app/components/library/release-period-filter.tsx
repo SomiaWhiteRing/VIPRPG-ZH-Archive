@@ -1,5 +1,5 @@
 import { Button } from "@/app/components/ui/button";
-import { Popover } from "radix-ui";
+import * as Popover from "@/app/components/ui/popover";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -71,12 +71,14 @@ function ReleaseYear({ year, period, href, rolling }: {
   rolling: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const yearText = String(year).padStart(4, "0");
   const selected = period.slice(0, 4) === yearText;
 
   return <Popover.Root open={open && !rolling} onOpenChange={setOpen}>
     <Popover.Trigger asChild>
       <Button
+        ref={trigger}
         type="button"
         variant="ghost"
         disabled={rolling}
@@ -84,7 +86,7 @@ function ReleaseYear({ year, period, href, rolling }: {
         aria-label={`${year}年，选择全年或月份`}
       >{year}年</Button>
     </Popover.Trigger>
-    <Popover.Portal>
+    <Popover.Portal anchorRef={trigger}>
       <Popover.Content
         aria-label={`${year}年发布月份`}
         side="bottom"

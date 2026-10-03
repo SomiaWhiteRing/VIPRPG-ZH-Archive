@@ -1,12 +1,10 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { Button } from "@/app/components/ui/button";
 import { ShowcaseImage } from "@/app/components/profile/showcase-image";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Label } from "@/app/components/ui/label";
-import {
-  SHOWCASE_LABELS,
-  type ShowcaseKind,
-  type ShowcaseTarget,
-} from "@/lib/showcase";
+import { SHOWCASE_LABELS, type ShowcaseKind, type ShowcaseTarget } from "@/lib/showcase";
 import { useEffect, useState } from "react";
 
 export function ShowcaseTargetPicker({
@@ -41,16 +39,15 @@ export function ShowcaseTargetPicker({
     const timer = window.setTimeout(async () => {
       try {
         const params = new URLSearchParams({ kind, q: query });
-        const response = await fetch(`/api/account/showcase?${params}`, {
+
+        const data = (await requestJson(`/api/account/showcase?${params}`, {
           signal: controller.signal,
-        });
-        const data = (await response.json()) as {
+        })) as {
           targets: ShowcaseTarget[];
           detail?: string;
           error?: string;
         };
-        if (!response.ok)
-          throw new Error(data.detail || data.error || "搜索失败，请重试。");
+
         if (!controller.signal.aborted) {
           setResult({ query, targets: data.targets });
         }

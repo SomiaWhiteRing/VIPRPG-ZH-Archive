@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { requireUser } from "@/app/.server/auth/guards";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { sha256Hex } from "@/lib/sha256";
 import { assertPublicCommentTarget } from "@/app/.server/db/work-community";
 import { readForumBody } from "@/app/.server/forum/request";
 import type { AppRuntime } from "@/app/.server/runtime";

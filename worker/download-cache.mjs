@@ -1,3 +1,4 @@
+import { sha256Hex } from "../lib/sha256.ts";
 // A disposable, cross-colo cache of hot ZIP variants. Direct-mapped slots bound
 // storage even with concurrent writers: 16 objects, each at most 256 MiB.
 import { downloadCacheMaxBytes, downloadCacheMaxAgeMs, downloadCacheMinR2Gets, downloadCachePrefix, isDownloadCacheSlotKey } from "../lib/archive/download.ts";
@@ -9,8 +10,7 @@ export async function hotDownloadCache(db, cacheKey, estimatedR2GetCount = 0) {
   // downloads also demonstrate reuse; a completed full download is not required.
   const requests = (row?.full_download_count ?? 0) + (row?.range_download_count ?? 0) + (row?.interrupted_count ?? 0);
   if (requests < 2 && Math.max(estimatedR2GetCount, row?.estimated_r2_get_count ?? 0) < downloadCacheMinR2Gets) return null;
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(cacheKey));
-  const digest = Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await sha256Hex(new TextEncoder().encode(cacheKey));
   return { digest, objectKey: `${downloadCachePrefix}${digest[0]}.zip` };
 }
 

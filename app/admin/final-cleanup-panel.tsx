@@ -1,3 +1,4 @@
+import { requestJson } from "@/lib/ui/api-response";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,21 +19,15 @@ type Activity = "recovering" | "starting" | "scanning" | "confirming" | "running
 type CleanupRequest = { action: GcJobAction; jobId?: string; graceDays?: number; confirm?: "SWEEP" };
 
 async function requestCleanup(request: CleanupRequest): Promise<GcJobReport | null> {
-  const response = await fetch("/api/admin/gc/sweep", {
+  const payload = await requestJson<{
+    ok?: boolean; job?: GcJobReport | null;
+  }>("/api/admin/gc/sweep", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
-  });
-  const payload = (await response.json()) as {
-    ok?: boolean;
-    error?: string;
-    detail?: string;
-    job?: GcJobReport | null;
-  };
-  if (!response.ok || payload.ok !== true || payload.job === undefined) {
-    throw new Error(payload.detail ?? payload.error ?? `请求失败（${response.status}）`);
-  }
+  }, "清理任务请求失败");
+  if (payload.job === undefined) throw new Error("服务器未返回清理任务，请重新读取状态");
   if (request.jobId && payload.job?.id !== request.jobId) {
     throw new Error("任务状态与当前计划不一致，请重新读取状态");
   }
@@ -257,7 +252,7 @@ export function FinalCleanupPanel() {
       ) : null}
       {job ? (
         <div className="space-y-3 rounded-md border border-border p-3 text-sm">
-          <p className="break-all text-muted">任务 {job.id} · 保留 {job.graceDays} 天 · 创建于 {formatTime(job.createdAt)}</p>
+          <p className="break-all text-muted">任务 {job.id} · 保留 {job.graceDays} 天 · 创建于 {formatExactTimestamp(job.createdAt)}</p>
           {scanning ? (
             <p>当前阶段：{phaseLabels[job.phase]}；已核对 {number(job.totalItems)} 个清理候选。扫描完成后显示最终总量，才能执行删除。</p>
           ) : job.status === "cancelled" ? (
@@ -378,11 +373,6 @@ function bytes(value: number): string {
   return `${(value / 1024 ** power).toLocaleString("zh-CN", { maximumFractionDigits: 2 })} ${units[power - 1]}（${number(value)} B）`;
 }
 
-function formatTime(value: string): string {
-  const time = new Date(value);
-  return Number.isNaN(time.valueOf()) ? value : time.toLocaleString("zh-CN");
-}
-
 function restoreFocus(button: HTMLButtonElement | null, fallback: HTMLParagraphElement | null): void {
   if (button && !button.disabled) button.focus();
   else fallback?.focus();
@@ -405,3 +395,4 @@ function statusText(job: GcJobReport | null, activity: Activity | null, stop: "p
   if (job.status === "cancelled") return "扫描计划已取消，未执行删除。";
   return "本次清理已完成。跳过项未删除；新增候选项需要重新扫描。";
 }
+import { formatExactTimestamp } from "@/lib/format";

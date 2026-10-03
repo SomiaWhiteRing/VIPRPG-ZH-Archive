@@ -1,3 +1,4 @@
+import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import {
   adminForumDetail,
   adminForumList,
@@ -6,9 +7,9 @@ import {
 } from "@/app/.server/forum/admin";
 import { forumTarget, moderateForum } from "@/app/.server/forum/mutations";
 import { forumPage } from "@/lib/forum";
-import { HttpError, jsonError } from "@/lib/http";
-import type { ForumRequestRuntime } from "./request";
-import { readForumJson, requireForumUser } from "./request";
+
+import { type ForumRequestRuntime, readForumJson, requireForumUser } from "./request";
+
 const permissions = [
   "forum.content.moderate_any",
   "forum.topic.feature_any",
@@ -47,7 +48,7 @@ export async function GET(ctx: ForumRequestRuntime, request: Request) {
                 page: forumPage(params.get("page")),
               }),
             };
-    return Response.json(
+    return jsonResponse(
       { ok: true, ...data },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -63,7 +64,7 @@ export async function POST(ctx: ForumRequestRuntime, request: Request) {
     else if (input.op === "moderate")
       await moderateForum(ctx, auth.user, input);
     else throw new HttpError(400, "管理动作无效。");
-    return Response.json(
+    return jsonResponse(
       { ok: true },
       { headers: { "Cache-Control": "no-store" } },
     );

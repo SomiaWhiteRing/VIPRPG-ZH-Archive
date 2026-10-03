@@ -1,4 +1,4 @@
-import { normalizeSha256 } from "@/app/.server/crypto/sha256";
+import { normalizeSha256 } from "@/lib/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { getBlob } from "@/app/.server/storage/archive-bucket";

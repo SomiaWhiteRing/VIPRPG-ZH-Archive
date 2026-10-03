@@ -1,3 +1,5 @@
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -11,18 +13,13 @@ import { SelectField } from "@/app/components/ui/select";
 import { Table } from "@/app/components/ui/table";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
-import type { PermissionCategory } from "@/lib/authz/permissions";
-import {
-  PERMISSION_CATEGORIES,
-  PERMISSION_GROUPS,
-  SYSTEM_ROLE_PERMISSIONS,
-  permissionConfigurationWarnings,
-} from "@/lib/authz/permissions";
+import { type PermissionCategory, PERMISSION_CATEGORIES, PERMISSION_GROUPS, SYSTEM_ROLE_PERMISSIONS, permissionConfigurationWarnings } from "@/lib/authz/permissions";
+
 import { ROLE_TEMPLATES, roleEditSnapshot, roleSupportsApplications, roleSupportsGlobalAccess } from "@/lib/authz/roles";
 import type { Permission, RoleSummary } from "@/lib/dto/db/permissions";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { FormEvent } from "react";
-import { Fragment, useState } from "react";
+import { type FormEvent, Fragment, useState } from "react";
+
 
 const categories = Object.entries(PERMISSION_CATEGORIES).map(
   ([key, definition]) => ({
@@ -116,8 +113,9 @@ export function PermissionMatrix({
 
   async function request(url: string, init: RequestInit) {
     setError(null);
-    const response = await fetch(url, init);
-    const payload = (await response.json()) as {
+    try {
+
+    const payload = (await requestJson(url, init)) as {
       ok?: boolean;
       id?: number;
       role?: RoleSummary;
@@ -126,13 +124,15 @@ export function PermissionMatrix({
       code?: string;
       currentRole?: RoleSummary;
     };
-    if (payload.code === "role_conflict" && payload.currentRole) {
-      setConflict(payload.currentRole);
-      setError(payload.detail ?? "角色配置已被修改，当前草稿仍保留。");
-    }
-    if (!response.ok || !payload.ok)
-      throw new Error(payload.detail ?? payload.error ?? "保存失败，请重试。");
     return payload;
+    } catch (error) {
+      if (error instanceof ApiResponseError && error.code === "role_conflict") {
+        const currentRole = (error.payload as { currentRole?: RoleSummary }).currentRole;
+        if (currentRole) setConflict(currentRole);
+        setError(error.message);
+      }
+      throw error;
+    }
   }
 
   async function createRole(event: FormEvent<HTMLFormElement>) {

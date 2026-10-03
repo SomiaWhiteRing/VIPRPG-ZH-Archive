@@ -1,3 +1,5 @@
+import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
+
 import { AUTO_LINK_PATTERN, autoLink } from "@/lib/auto-links";
 import { MentionText } from "@/app/components/comments/mention-text";
 import { resolveEmojis } from "@/app/components/emojis/client";
@@ -9,69 +11,22 @@ import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
-import type {
-  ForumAuthor,
-  ForumEditVersion,
-  ForumTag,
-  ForumTarget,
-  ForumTopic,
-} from "@/lib/forum";
-import {
-  FORUM_TAG_LIMIT,
-  forumHref,
-  forumTagError,
-  normalizeForumTag,
-} from "@/lib/forum";
+import { type ForumAuthor, type ForumEditVersion, type ForumTag, type ForumTarget, type ForumTopic, FORUM_TAG_LIMIT, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
+
 import { forumSearchMatches } from "@/lib/forum-search";
-import type { KeyboardEventHandler, ReactNode } from "react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useRef, useState } from "react";
+
 import { Link } from "react-router";
 
-export class ForumRequestError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public code?: string,
-  ) {
-    super(message);
-  }
-}
 export async function forumRequest<T>(
   url: string,
   input?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: input ? "POST" : "GET",
-      credentials: "same-origin",
-      cache: "no-store",
-      signal,
-      ...(input
-        ? {
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(input),
-          }
-        : {}),
-    });
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    throw new ForumRequestError("网络连接失败，请重试。", 0);
-  }
-  const data = (await response.json()) as {
-    ok?: boolean;
-    detail?: string;
-    error?: string;
-    code?: string;
-  };
-  if (!response.ok || data.ok === false)
-    throw new ForumRequestError(
-      data.detail ?? data.error ?? "请求失败，请重试。",
-      response.status,
-      data.code,
-    );
-  return data as T;
+  return requestJson<T & ApiResponsePayload>(url, {
+    method: input ? "POST" : "GET", credentials: "same-origin", cache: "no-store", signal,
+    ...(input ? { headers: { "content-type": "application/json" }, body: JSON.stringify(input) } : {}),
+  }, "请求失败");
 }
 export function readForumEditVersion(target: ForumTarget) {
   return forumRequest<ForumEditVersion>(

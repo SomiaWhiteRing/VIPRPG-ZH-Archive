@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requireBootstrapAdmin } from "@/app/.server/auth/authorize";
 import { createRole, listRoles } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -8,7 +9,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   const auth = await requireBootstrapAdmin(runtime, request);
   if ("response" in auth) return auth.response;
   try {
-    const body = (await request.json()) as {
+    const body = (await readJsonObject(request, "请求必须为 JSON 对象")) as {
       key?: string;
       name?: string;
       description?: string;
@@ -31,6 +32,9 @@ export async function POST(runtime: AppRuntime, request: Request) {
       if (!role) throw new Error("创建的角色不可读取");
       return json({ ok: true, id, role }, { status: 201 });
     }
+    if (typeof body.key !== "string" || typeof body.name !== "string" ||
+      (body.description !== undefined && typeof body.description !== "string"))
+      return json({ ok: false, error: "Invalid role" }, { status: 400 });
     const key = body.key
       ?.trim()
       .toLowerCase()
