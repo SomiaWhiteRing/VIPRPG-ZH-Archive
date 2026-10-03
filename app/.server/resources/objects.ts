@@ -4,8 +4,8 @@ import {
   assertObjectUploadAllowed,
   insertBlobRecord,
 } from "@/app/.server/db/archive-objects";
-import { blobKey } from "@/app/.server/storage/archive-keys";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { blobKey } from "@/lib/archive/object-keys";
+import { sha256Hex } from "@/lib/sha256";
 import { HttpError } from "@/lib/http";
 import { MAX_RESOURCE_ICON_BYTES, type ToolArtifact } from "@/lib/resources";
 import { getArtifact, getResource } from "./data";

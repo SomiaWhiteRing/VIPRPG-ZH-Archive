@@ -1,3 +1,5 @@
+import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
+
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { assignRoleToUser } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -12,10 +14,10 @@ export async function POST(
   const auth = await requirePermission(runtime, request, "user.role.assign");
   if ("response" in auth) return auth.response;
   try {
-    const userId = Number((await context.params).userId);
-    const body = (await request.json()) as { roleId?: number };
+    const userId = parsePositiveId((await context.params).userId);
+    const body = (await readJsonObject(request, "请求必须为 JSON 对象")) as { roleId?: number };
     if (
-      !Number.isInteger(userId) ||
+
       typeof body.roleId !== "number" ||
       !Number.isInteger(body.roleId)
     ) {
@@ -24,7 +26,7 @@ export async function POST(
         { status: 400 },
       );
     }
-    const roleId = body.roleId;
+    const roleId = parsePositiveId(String(body.roleId), "role id");
     await assignRoleToUser(runtime, {
       actor: auth.user,
       targetUserId: userId,

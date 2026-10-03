@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { readShowcase } from "@/app/.server/db/showcase";
@@ -16,24 +18,12 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { Textarea } from "@/app/components/ui/textarea";
 import { useToast } from "@/app/components/ui/toast";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
-import {
-  SHOWCASE_KINDS,
-  SHOWCASE_LABELS,
-  SHOWCASE_NOTE_LIMIT,
-  type ShowcaseKind,
-  type ShowcaseSnapshot,
-  type ShowcaseTarget,
-} from "@/lib/showcase";
+import { SHOWCASE_KINDS, SHOWCASE_LABELS, SHOWCASE_NOTE_LIMIT, type ShowcaseKind, type ShowcaseSnapshot, type ShowcaseTarget } from "@/lib/showcase";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { cn } from "@/lib/ui/cn";
 import { GripVertical, X } from "lucide-react";
 import { useId, useRef, useState, type FormEvent } from "react";
-import {
-  Link,
-  useLoaderData,
-  type LoaderFunctionArgs,
-  type MetaFunction,
-} from "react-router";
+import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { ShowcaseTargetPicker } from "./target-picker";
 import { ShowcasePortraitPicker } from "./portrait-picker";
 import type { CharacterPortraitChoice } from "@/lib/character-names";
@@ -132,13 +122,12 @@ function ShowcaseEditor({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/account/showcase");
-      const data = (await response.json()) as ShowcaseSnapshot & {
+
+      const data = (await requestJson("/api/account/showcase")) as ShowcaseSnapshot & {
         detail?: string;
         error?: string;
       };
-      if (!response.ok)
-        throw new Error(data.detail || data.error || "展柜读取失败");
+
       setSaved(data);
       setSlots(slotsFor(data));
       setConflict(false);
@@ -157,7 +146,8 @@ function ShowcaseEditor({
     setError("");
     setConflict(false);
     try {
-      const response = await fetch("/api/account/showcase", {
+
+      await requestJson("/api/account/showcase", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -165,17 +155,7 @@ function ShowcaseEditor({
           entries: entriesFor(slots),
         }),
       });
-      const data = (await response.json()) as {
-        code?: string;
-        detail?: string;
-        error?: string;
-      };
-      if (!response.ok) {
-        setConflict(data.code === "showcase_conflict");
-        if (data.code === "showcase_conflict")
-          setError(data.detail || "展柜已被修改，当前草稿仍保留，请重新读取。");
-        throw new Error(data.detail || data.error || "展柜保存失败");
-      }
+
       toast.success("喜爱展柜已保存。");
       await navigateSaved(`/users/${userId}`);
     } catch (error) {

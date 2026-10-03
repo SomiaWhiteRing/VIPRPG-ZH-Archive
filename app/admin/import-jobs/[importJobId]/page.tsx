@@ -1,12 +1,13 @@
+import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData, Link } from "react-router";
+
 
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { getAdminImportJob } from "@/app/.server/db/admin-observability";
-import { throwNotFound } from "@/app/.server/http/page-response";
+
 import { BackLink } from "@/app/components/ui/back-link";
 import { Notice } from "@/app/components/ui/notice";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -16,13 +17,13 @@ import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { formatBytes, formatDate, formatNullableDuration } from "@/lib/format";
 import { importTaskStageLabel } from "@/lib/labels";
-import { Link } from "react-router";
+
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { params } = routeInput(args);
 
-  const id = parseId((await params).importJobId);
+  const id = parsePageId((await params).importJobId);
   await requirePagePermission(
     runtime,
     `/admin/import-jobs/${id}`,
@@ -182,10 +183,4 @@ export default function AdminImportJobPage() {
       ) : null}
     </main>
   );
-}
-
-function parseId(value: string): number {
-  const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0) throwNotFound();
-  return id;
 }

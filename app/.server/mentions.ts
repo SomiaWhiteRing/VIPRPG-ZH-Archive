@@ -1,7 +1,8 @@
+import { json as jsonResponse, HttpError } from "@/lib/http";
 import { getCurrentUser } from "./auth/current-user";
 import { getD1 } from "./db/d1";
 import type { AppRuntime } from "./runtime";
-import { HttpError } from "@/lib/http";
+
 import { MENTION_LIMIT, mentions, type MentionSearchUser } from "@/lib/mentions";
 
 export async function searchMentionUsers(runtime: AppRuntime, request: Request) {
@@ -9,14 +10,14 @@ export async function searchMentionUsers(runtime: AppRuntime, request: Request) 
   if (!actor || actor.status !== "active") throw new HttpError(401, "请先登录。");
   const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (query.length > 80) throw new HttpError(400, "搜索内容过长。");
-  if (!query) return Response.json({ ok: true, users: [] }, { headers: { "Cache-Control": "no-store" } });
+  if (!query) return jsonResponse({ ok: true, users: [] }, { headers: { "Cache-Control": "no-store" } });
   const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
   const rows = await getD1(runtime).prepare(`SELECT id,display_name AS displayName,avatar_blob_sha256 AS avatarBlobSha256 FROM users
     WHERE status='active' AND (display_name LIKE ? ESCAPE '\\' OR id=?)
     ORDER BY CASE WHEN display_name=? THEN 0 ELSE 1 END,display_name COLLATE NOCASE,id LIMIT 20`)
     .bind(pattern, /^[1-9]\d*$/.test(query) && Number.isSafeInteger(Number(query)) ? Number(query) : -1, query)
     .all<MentionSearchUser>();
-  return Response.json({ ok: true, users: rows.results }, { headers: { "Cache-Control": "no-store" } });
+  return jsonResponse({ ok: true, users: rows.results }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function validateMentions(db: D1Database, body: string, previous = "") {

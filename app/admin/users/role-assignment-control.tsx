@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
 import { SelectField } from "@/app/components/ui/select";
@@ -40,15 +42,14 @@ export function RoleAssignmentControl({
     setSaving(true);
     onBusyChange(true);
     try {
-      const response = await fetch(url, init);
-      const payload = (await response.json()) as {
+
+      const payload = (await requestJson(url, init)) as {
         ok?: boolean;
         error?: string;
         detail?: string;
         access: AdminUserAccessUpdate;
       };
-      if (!response.ok || !payload.ok)
-        throw new Error(payload.detail ?? payload.error ?? "操作失败");
+
       await onSaved(payload.access);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "操作失败");

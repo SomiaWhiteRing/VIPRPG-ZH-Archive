@@ -17,9 +17,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Popover } from "radix-ui";
-import type { ChangeEvent, DragEvent, RefObject } from "react";
-import { useId, useRef, useState } from "react";
+import * as Popover from "@/app/components/ui/popover";
+import { type ChangeEvent, type DragEvent, type RefObject, useId, useRef, useState } from "react";
+
 import type {
   BrowserUploadTaskSnapshot,
   UploadSourceFile,
@@ -262,6 +262,7 @@ function ArchiveAdvancedOptions({
   onIncludeSavesChange: (value: boolean) => void;
 }) {
   const cleanupResourcesId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
   const sharedPlayerId = useId();
   const missingResourcesId = useId();
   const includeSavesId = useId();
@@ -270,6 +271,7 @@ function ArchiveAdvancedOptions({
     <Popover.Root>
       <Popover.Trigger asChild>
         <Button
+          ref={trigger}
           className="group gap-1.5 text-muted data-[state=open]:bg-primary/10 data-[state=open]:text-primary"
           size="sm"
           type="button"
@@ -280,7 +282,7 @@ function ArchiveAdvancedOptions({
           <ChevronDown aria-hidden className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
         </Button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal anchorRef={trigger}>
         <Popover.Content
           align="end"
           aria-label="游戏文件高级选项"

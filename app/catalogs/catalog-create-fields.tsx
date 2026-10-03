@@ -1,3 +1,6 @@
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
+
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Notice } from "@/app/components/ui/notice";
@@ -37,44 +40,33 @@ export function CatalogCreateFields({
     let catalog = createdCatalog;
     try {
       if (!catalog) {
-        const response = await fetch("/api/catalogs", {
+        const body = await requestJson<{ ok?: boolean; catalog?: CatalogSummary }>("/api/catalogs", {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title, description: description || null }),
-        });
-        const body = (await response.json()) as {
-          ok?: boolean;
-          catalog?: CatalogSummary;
-          detail?: string;
-        };
-        if (!response.ok || !body.ok || !body.catalog) {
-          toast.error(body.detail ?? "目录创建失败。");
-          return;
-        }
+        }, "目录创建失败");
+        if (!body.catalog) throw new Error("目录已创建，但服务器未返回目录资料，请刷新确认。");
         catalog = body.catalog;
         setCreatedCatalog(catalog);
       }
       if (workId !== undefined) {
-        const response = await fetch(`/api/catalogs/${catalog.id}/items`, {
+
+        await requestJson(`/api/catalogs/${catalog.id}/items`, {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ workId }),
         });
-        const body = (await response.json()) as { ok?: boolean };
-        if (!response.ok || !body.ok) {
-          setMessage("目录已创建，但添加游戏失败。请重试，将继续加入此目录。");
-          return;
-        }
+
       }
       toast.success(workId === undefined ? "目录已创建。" : "目录已创建并加入当前游戏。");
       navigate(`/catalogs/${catalog.id}`);
-    } catch {
+    } catch (error) {
       if (catalog && workId !== undefined) {
         setMessage("目录已创建，但尚未确认游戏加入成功。请重试，将继续加入此目录。");
       } else {
-        toast.error("网络请求失败。");
+        toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
       }
     } finally {
       submitting.current = false;

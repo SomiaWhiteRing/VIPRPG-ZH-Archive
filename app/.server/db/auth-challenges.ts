@@ -1,4 +1,4 @@
-import { timingSafeEqualString } from "@/app/.server/crypto/sha256";
+import { timingSafeEqualString } from "@/lib/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";

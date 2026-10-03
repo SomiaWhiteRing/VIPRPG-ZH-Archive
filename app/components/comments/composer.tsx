@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useBeforeUnload } from "react-router";
+import { useDocumentNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import { requestJson } from "@/lib/ui/api-response";
+import { useEffect, useRef, useState } from "react";
+
 import { AtSign, ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
@@ -59,11 +61,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   const dirty = body !== (editing?.bodySource ?? "") ||
     images.length !== unchangedImages.length ||
     images.some((image, index) => image.uploaded?.id !== unchangedImages[index]?.id);
-  useBeforeUnload(useCallback((event) => {
-    if (!dirty && !busy) return;
-    event.preventDefault();
-    event.returnValue = "";
-  }, [dirty, busy]));
+  useDocumentNavigationGuard(dirty || busy);
 
   useEffect(() => {
     mounted.current = true;
@@ -162,9 +160,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
           form.set("clientId", image.key);
           form.set("targetKind", target.kind);
           form.set("targetId", String(target.id));
-          const response = await fetch("/api/comments/images", { method: "POST", credentials: "same-origin", body: form });
-          const result = await response.json() as { ok?: boolean; image?: CommentImage; detail?: string };
-          if (!response.ok || !result.ok || !result.image) throw new Error(result.detail ?? "图片上传失败。");
+          const result = await requestJson<{ image?: CommentImage }>("/api/comments/images", { method: "POST", credentials: "same-origin", body: form }, "图片上传失败");
+          if (!result.image) throw new Error("图片已上传，但未返回图片资料，请重新读取状态。");
           image.uploaded = result.image;
         } catch (cause) {
           image.error = cause instanceof Error ? cause.message : "网络请求失败，请重试。";
@@ -178,12 +175,11 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       const serialized = JSON.stringify(payload);
       if (requestIdentity.current?.payload !== serialized)
         requestIdentity.current = { payload: serialized, key: crypto.randomUUID() };
-      const response = await fetch(endpoint, {
+      const result = await requestJson<{ comment?: CommentDto }>(endpoint, {
         method: editing ? "PATCH" : "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
         body: JSON.stringify(editing ? { body, imageIds: payload.imageIds } : { ...payload, requestKey: requestIdentity.current.key }),
-      });
-      const result = await response.json() as { ok?: boolean; comment?: CommentDto; detail?: string };
-      if (!response.ok || !result.ok || !result.comment) throw new Error(result.detail ?? (editing ? "评论修改失败。" : "评论发送失败。"));
+      }, editing ? "评论修改失败" : "评论发送失败");
+      if (!result.comment) throw new Error("评论已保存，但未返回评论资料，请重新读取状态。");
       if (!mounted.current) return;
       setBody("");
       setImages([]);

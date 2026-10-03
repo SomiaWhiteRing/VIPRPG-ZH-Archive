@@ -1,3 +1,7 @@
+import { ApiResponseError, requestJson, requestOk } from "@/lib/ui/api-response";
+
+
+
 import { MentionText } from "./mention-text";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Timestamp } from "@/app/components/ui/timestamp";
@@ -15,16 +19,10 @@ import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
-import type {
-  CommentBodySegment,
-  CommentDto,
-  CommentPage,
-  CommentReplyPage,
-} from "@/lib/dto/db/work-community";
+import type { CommentBodySegment, CommentDto, CommentPage, CommentReplyPage } from "@/lib/dto/db/work-community";
 import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouteLoaderData } from "react-router";
-
 
 type Props = {
   target: CommentTarget;
@@ -86,11 +84,11 @@ function CommentPanelContent({
       },
     }));
     try {
-      const response = await fetch(`/api/comments/${comment.id}/like`, {
+      await requestOk(`/api/comments/${comment.id}/like`, {
         method: nextLiked ? "PUT" : "DELETE",
         credentials: "same-origin",
       });
-      if (!response.ok) throw new Error();
+
     } catch {
       setCommentUpdates((current) => ({
         ...current,
@@ -115,14 +113,11 @@ function CommentPanelContent({
     return confirm(`确定删除${comment.rootCommentId ? "这条回复" : "这条评论"}吗？${comment.images.length ? "附带图片也将一并移除。" : ""}`, {
       title: "删除评论", confirmLabel: "删除", destructive: true,
       action: async () => {
-        const response = await fetch(`/api/comments/${comment.id}`, {
+        await requestOk(`/api/comments/${comment.id}`, {
           method: "DELETE",
           credentials: "same-origin",
         });
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({})) as { detail?: string };
-          throw new Error(result.detail ?? "评论删除失败，请重试。");
-        }
+
         setCommentUpdates((current) => ({
           ...current,
           [comment.id]: {
@@ -147,20 +142,19 @@ function CommentPanelContent({
     if (busy) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/comments/${comment.id}`, {
+      await requestJson(`/api/comments/${comment.id}`, {
         method: "PATCH", credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ pinned: !comment.pinned }),
       });
-      if (!response.ok) throw new Error();
-      const refreshed = await fetch(endpoint, { credentials: "same-origin" });
-      const result = await refreshed.json() as CommentPage & { ok?: boolean };
-      if (!refreshed.ok || !result.ok) throw new Error();
+
+      const result = await requestJson(endpoint, { credentials: "same-origin" }) as CommentPage & { ok?: boolean };
+
       setComments(result.items);
       setNextCursor(result.nextCursor);
       toast.success(comment.pinned ? "已取消置顶。" : "评论已置顶。");
-    } catch {
-      toast.error("置顶操作或列表刷新失败，请重试。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "置顶操作或列表刷新失败，请重试。");
     } finally {
       setBusy(false);
     }
@@ -170,16 +164,13 @@ function CommentPanelContent({
     if (!nextCursor || busy) return;
     setBusy(true);
     try {
-      const response = await fetch(
-        `${endpoint}?cursor=${encodeURIComponent(nextCursor)}`,
-        { credentials: "same-origin" },
-      );
-      const result = (await response.json()) as {
+
+      const result = (await requestJson(`${endpoint}?cursor=${encodeURIComponent(nextCursor)}`, { credentials: "same-origin" })) as {
         ok?: boolean;
         items?: CommentDto[];
         nextCursor?: string | null;
       };
-      if (!response.ok || !result.ok) throw new Error();
+
       setComments((current) => {
         const byId = new Map(current.map((comment) => [comment.id, comment]));
         for (const comment of result.items ?? []) byId.set(comment.id, comment);
@@ -189,8 +180,8 @@ function CommentPanelContent({
         });
       });
       setNextCursor(result.nextCursor ?? null);
-    } catch {
-      toast.error("评论加载失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "评论加载失败。");
     } finally {
       setBusy(false);
     }
@@ -337,14 +328,11 @@ function CommentCard({
       try {
         const params = new URLSearchParams({ page: String(page) });
         if (commentId) params.set("comment", String(commentId));
-        const response = await fetch(
-          `/api/comments/${comment.id}/replies?${params}`,
-          { credentials: "same-origin" },
-        );
-        const result = (await response.json()) as CommentReplyPage & {
+
+        const result = (await requestJson(`/api/comments/${comment.id}/replies?${params}`, { credentials: "same-origin" })) as CommentReplyPage & {
           ok?: boolean;
         };
-        if (!response.ok || !result.ok) throw new Error();
+
         if (requestId.current !== id) return;
         setReplies(result);
         setExpanded(true);

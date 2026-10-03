@@ -10,8 +10,8 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ForumModal, forumRequest } from "@/app/discussions/shared";
 import type { AdminForumTag } from "@/lib/dto/forum/admin";
-import type { ForumPage } from "@/lib/forum";
-import { forumHref } from "@/lib/forum";
+import { type ForumPage, forumHref } from "@/lib/forum";
+
 import { useEffect, useState } from "react";
 import { useRevalidator } from "react-router";
 export function AdminDiscussionTags({
@@ -53,7 +53,7 @@ export function AdminDiscussionTags({
         <Button type="submit">查询</Button>
       </form>
       <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-left text-sm">
+        <Table className="text-left">
           <thead>
             <tr>
               <th className="p-3">ID／名称</th>
@@ -105,7 +105,7 @@ export function AdminDiscussionTags({
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
         {!data.items.length ? (
           <EmptyState
             title="没有匹配的 TAG。"
@@ -325,3 +325,4 @@ function ManageTag({
     </ForumModal>
   );
 }
+import { Table } from "@/app/components/ui/table";

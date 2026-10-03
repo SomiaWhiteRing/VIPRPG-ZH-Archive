@@ -1,14 +1,9 @@
+import { apiResponseError, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { rememberPublishedTranslators } from "@/app/upload/translation-preference";
-import type { DraftLock } from "@/app/upload/upload-drafts";
-import {
-  acquireDraftLock,
-  deleteUploadDraft,
-  listUploadDrafts,
-  putUploadDraft,
-  sourceObjectReferences,
-} from "@/app/upload/upload-drafts";
+import { type DraftLock, acquireDraftLock, deleteUploadDraft, listUploadDrafts, putUploadDraft, sourceObjectReferences } from "@/app/upload/upload-drafts";
+
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
@@ -490,13 +485,13 @@ async function inspectDraftServerState(
   importJobId: number,
   accountId?: number,
 ): Promise<DraftServerState> {
-  const response = await fetch(`/api/imports/${importJobId}`, {
+  const response = await requestResponse(`/api/imports/${importJobId}`, {
     credentials: "same-origin",
   }).catch(() => null);
   if (!response) return { kind: "unknown" };
   if ([400, 403, 404].includes(response.status)) return { kind: "invalid" };
   if (!response.ok) return { kind: "unknown" };
-  const payload = (await response.json().catch(() => null)) as {
+  const payload = (await readJsonResponse(response).catch(() => null)) as {
     ok: true;
     importJob: { status: string; result: UploadTaskCommitResult | null };
   } | null;
@@ -521,7 +516,7 @@ async function inspectDraftServerState(
 async function resumeDraftOnServer(
   draft: UploadRecoveryDraft,
 ): Promise<ResumeDraftResult> {
-  const response = await fetch(
+  const response = await requestResponse(
     `/api/imports/${draft.serverImportJobId}/resume`,
     {
       method: "POST",
@@ -536,7 +531,7 @@ async function resumeDraftOnServer(
       message: "无法连接服务器，上传草稿已保留，请稍后重试。",
     };
   }
-  const payload = (await response.json().catch(() => null)) as
+  const payload = (await readJsonResponse(response, "上传草稿无法继续", true).catch(() => null)) as
     | {
         ok: true;
         importJob: { status: string; updatedAt: string };
@@ -553,10 +548,11 @@ async function resumeDraftOnServer(
     };
   }
 
-  const message = responseErrorMessage(
-    payload && !payload.ok ? payload : null,
+  const message = apiResponseError(
+    response.status,
+    payload && !payload.ok ? payload : {},
     "上传草稿无法继续，请重新上传。",
-  );
+  ).message;
   if ([400, 403, 404].includes(response.status))
     return { kind: "invalid", message };
   if (response.status !== 409) return { kind: "unknown", message };
@@ -575,7 +571,7 @@ async function resumeDraftOnServer(
 }
 
 async function cancelOwnedImportJob(importJobId: number): Promise<boolean> {
-  const response = await fetch(`/api/imports/${importJobId}/cancel`, {
+  const response = await requestResponse(`/api/imports/${importJobId}/cancel`, {
     method: "POST",
     credentials: "same-origin",
   }).catch(() => null);
@@ -588,13 +584,6 @@ function isTerminalTaskStatus(
   status: BrowserUploadTaskSnapshot["status"],
 ): boolean {
   return status === "completed" || status === "failed" || status === "canceled";
-}
-
-function responseErrorMessage(
-  payload: { detail?: string; error?: string } | null,
-  fallback: string,
-): string {
-  return payload?.detail || payload?.error || fallback;
 }
 
 function draftLockErrorMessage(error: unknown): string {

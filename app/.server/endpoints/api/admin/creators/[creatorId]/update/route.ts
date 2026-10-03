@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import {
   parseCreatorEditForm,
@@ -30,7 +31,7 @@ export async function POST(
 
   try {
     const { creatorId: rawCreatorId } = await context.params;
-    const creatorId = parseCreatorId(rawCreatorId);
+    const creatorId = parsePositiveId(rawCreatorId, "id", "Invalid creator id");
     const formData = await request.formData();
     const input = parseCreatorEditForm(formData);
 
@@ -59,14 +60,4 @@ export async function POST(
   } catch (error) {
     return jsonError("Creator update failed", error);
   }
-}
-
-function parseCreatorId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new Error("Invalid creator id");
-  }
-
-  return id;
 }

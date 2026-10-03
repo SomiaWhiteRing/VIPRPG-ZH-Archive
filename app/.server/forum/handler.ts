@@ -1,6 +1,7 @@
+import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { forumPage } from "@/lib/forum";
-import { HttpError, jsonError } from "@/lib/http";
+
 import { loadRequestSession } from "../auth/request-auth";
 import { parsePositiveId } from "../http/request";
 import { getForumRequestRuntime } from "./context";
@@ -34,7 +35,7 @@ import { forumTagRecommendations } from "./tag-heat";
 import { recordView, topicViews } from "@/app/.server/views/service";
 
 function result(data: object) {
-  return Response.json(
+  return jsonResponse(
     { ok: true, ...data },
     { headers: { "Cache-Control": "no-store" } },
   );

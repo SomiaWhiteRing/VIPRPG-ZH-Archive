@@ -1,7 +1,7 @@
-import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
+import { normalizeSha256, sha256Hex } from "@/lib/sha256";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { getCorePack } from "@/app/.server/storage/archive-bucket";
-import { corePackKey } from "@/app/.server/storage/archive-keys";
+import { corePackKey } from "@/lib/archive/object-keys";
 import { Crc32 } from "@/lib/archive/crc32";
 import type { ArchiveManifest } from "@/lib/archive/manifest";
 import { HttpError } from "@/lib/http";

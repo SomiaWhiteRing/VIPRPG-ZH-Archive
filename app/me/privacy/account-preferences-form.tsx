@@ -2,7 +2,8 @@ import { useEffect, useId, useLayoutEffect, useState } from "react";
 import { ToggleGroup } from "radix-ui";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Checkbox } from "react-aria-components";
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { Label } from "@/app/components/ui/label";
 import { Button } from "@/app/components/ui/button";
 import { SortableListItem, SortableOverlay } from "@/app/components/ui/sortable-list-item";
 import { Check, GripVertical } from "lucide-react";
@@ -124,14 +125,15 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
                     >
                       <GripVertical aria-hidden size={18} />
                     </Button>
-                    <Checkbox isSelected={selected.has(href)} onChange={(checked) => setSelected((current) => {
+                    <Label className="flex min-h-9 cursor-pointer items-center gap-2">
+                    <Checkbox checked={selected.has(href)} onCheckedChange={(checked) => setSelected((current) => {
                       const next = new Set(current);
-                      if (checked) next.add(href);
+                      if (checked === true) next.add(href);
                       else next.delete(href);
                       return next;
-                    })} aria-label={`显示${item.label}`} className="flex min-h-9 cursor-pointer items-center gap-2">
-                      {({ isSelected }) => <><span className="grid size-4 place-items-center rounded-sm border border-border">{isSelected && <Check aria-hidden size={14} />}</span><span>{item.label}</span></>}
-                    </Checkbox>
+                    })} aria-label={`显示${item.label}`} />
+                    <span>{item.label}</span>
+                    </Label>
                   </>}
                 </SortableListItem>
               );

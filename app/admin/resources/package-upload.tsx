@@ -10,7 +10,7 @@ import { readAndroidFile, type AndroidBuildInfo } from "@/lib/android-package";
 import { readWindyFile, type WindyBuildInfo } from "@/lib/windy-package";
 import { MAX_TOOL_BYTES } from "@/lib/resource-limits";
 import type { ResourceEditorData, ToolArtifact } from "@/lib/resources";
-import { postJson } from "./client";
+import { postJson } from "@/lib/ui/api-response";
 
 export function PackageUpload({
   data,

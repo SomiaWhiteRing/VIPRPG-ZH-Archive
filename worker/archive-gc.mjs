@@ -1,3 +1,4 @@
+import { blobKey, corePackKey } from "../lib/archive/object-keys.ts";
 import { deleteUnreferencedManifest, queueManifestDeletion, retryPendingManifestDeletions } from "../app/.server/storage/gc-manifests.ts";
 import { scanGcCandidates, advanceGcCursor } from "../app/.server/storage/gc-candidates.ts";
 import { sweepToolArtifacts } from "./tool-artifact-gc.mjs";
@@ -7,15 +8,6 @@ const defaultGcGraceDays = 7;
 const processingExpiryHours = 24;
 const scheduledGcLimitPerType = 1000;
 const maxReturnedIssues = 25;
-const canonicalHash = (sha256) => String(sha256).trim().toLowerCase();
-const blobKey = (sha256) => {
-  const hash = canonicalHash(sha256);
-  return `blobs/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}`;
-};
-const corePackKey = (sha256) => {
-  const hash = canonicalHash(sha256);
-  return `core-packs/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.zip`;
-};
 
 export async function runScheduledArchiveGc(env, input = {}) {
   const startedAt = Date.now();

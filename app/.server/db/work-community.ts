@@ -1,6 +1,6 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
-import { sha256Hex } from "@/app/.server/crypto/sha256";
+import { sha256Hex } from "@/lib/sha256";
 import type { CommentImage } from "@/lib/comment-images";
 import { getD1 } from "@/app/.server/db/d1";
 import {

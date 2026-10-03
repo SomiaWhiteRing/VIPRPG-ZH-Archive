@@ -1,3 +1,6 @@
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
+
 import { CatalogCreateFields } from "@/app/catalogs/catalog-create-fields";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Input } from "@/app/components/ui/input";
@@ -56,10 +59,7 @@ export function CatalogAddDialog({
     setLoading(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/catalogs?${new URLSearchParams({owner:"me",q:search,page:String(page)})}`, {credentials:"same-origin"});
-      if (!response.ok) throw new Error("目录加载失败，请重试。");
-      const payload = await response.json() as typeof catalogs & {ok:boolean};
-      if (!payload.ok) throw new Error("目录加载失败，请重试。");
+      const payload = await requestJson<typeof catalogs>(`/api/catalogs?${new URLSearchParams({owner:"me",q:search,page:String(page)})}`, {credentials:"same-origin"}, "目录加载失败");
       setResult(payload);
       setActiveQuery(search);
     } catch (error) { setMessage(error instanceof Error ? error.message : "目录加载失败。"); }
@@ -82,22 +82,19 @@ export function CatalogAddDialog({
     setBusy(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/catalogs/${catalogId}/items`, {
+
+      await requestJson(`/api/catalogs/${catalogId}/items`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ workId }),
       });
-      const payload = await response.json() as { ok?: boolean };
-      if (!response.ok || !payload.ok) {
-        toast.error("添加到目录失败，请稍后重试。");
-        return;
-      }
+
       toast.success("已添加到目录。");
       setOpen(false);
       navigate(`/catalogs/${catalogId}`);
-    } catch {
-      toast.error("网络请求失败，请检查连接后重试。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
     } finally {
       setBusy(false);
       setAddingCatalogId(null);

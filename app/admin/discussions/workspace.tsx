@@ -15,8 +15,8 @@ import {
   forumRequest,
 } from "@/app/discussions/shared";
 import type { ForumAdminDetail, ForumAdminRow } from "@/lib/dto/forum/admin";
-import type { ForumPage, ForumViewer } from "@/lib/forum";
-import { forumHref } from "@/lib/forum";
+import { type ForumPage, type ForumViewer, forumHref } from "@/lib/forum";
+
 import { useState } from "react";
 import { Link, useRevalidator } from "react-router";
 export function AdminDiscussions({
@@ -110,7 +110,7 @@ export function AdminDiscussions({
         <Button type="submit">查询</Button>
       </form>
       <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-left text-sm">
+        <Table className="text-left">
           <thead>
             <tr className="border-b border-border">
               <th className="p-3">目标</th>
@@ -185,7 +185,7 @@ export function AdminDiscussions({
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
         {!data.items.length ? (
           <EmptyState
             title="没有匹配的记录。"
@@ -448,3 +448,4 @@ function AdminDiscussionPanel({
     </ForumModal>
   );
 }
+import { Table } from "@/app/components/ui/table";

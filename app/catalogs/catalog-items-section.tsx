@@ -1,12 +1,7 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
+
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
@@ -86,21 +81,12 @@ export function CatalogItemsSection({
     setSearching(true);
     setAddMessage(null);
     try {
-      const response = await fetch(
-        `/api/works/lookup?title=${encodeURIComponent(query.trim())}`,
-        { credentials: "same-origin" },
-      );
-      const body = (await response.json()) as {
+
+      const body = (await requestJson(`/api/works/lookup?title=${encodeURIComponent(query.trim())}`, { credentials: "same-origin" })) as {
         works?: Candidate[];
         detail?: string;
       };
-      if (!response.ok) {
-        setAddMessage({
-          kind: "feedback",
-          text: body.detail ?? "查找游戏失败。",
-        });
-        return;
-      }
+
       const works = (body.works ?? []).filter(
         (work) => !items.some((item) => item.workId === work.id),
       );
@@ -118,22 +104,19 @@ export function CatalogItemsSection({
     setAdding(true);
     setAddMessage(null);
     try {
-      const response = await fetch(`/api/catalogs/${catalogId}/items`, {
+
+      const body = (await requestJson(`/api/catalogs/${catalogId}/items`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ workId: candidate.id }),
-      });
-      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "游戏添加失败。");
-        return;
-      }
+      })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
+
       setAddOpen(false);
       toast.success("游戏已添加到目录。");
       onSaved(body.catalog);
-    } catch {
-      toast.error("网络请求失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
     } finally {
       setAdding(false);
     }
@@ -161,7 +144,8 @@ export function CatalogItemsSection({
     }
     setSaving(true);
     try {
-      const response = await fetch(`/api/catalogs/${catalogId}/items`, {
+
+      const body = (await requestJson(`/api/catalogs/${catalogId}/items`, {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
@@ -170,17 +154,13 @@ export function CatalogItemsSection({
           sortOrder: parsedSortOrder,
           note: note.trim() || null,
         }),
-      });
-      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "条目保存失败。");
-        return;
-      }
+      })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
+
       setSelectedWorkId(null);
       toast.success("目录条目已保存。");
       onSaved(body.catalog);
-    } catch {
-      toast.error("网络请求失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
     } finally {
       setSaving(false);
     }
@@ -189,21 +169,15 @@ export function CatalogItemsSection({
   async function removeItem(workId: number) {
     setRemovingWorkId(workId);
     try {
-      const response = await fetch(
-        `/api/catalogs/${catalogId}/items?workId=${workId}`,
-        { method: "DELETE", credentials: "same-origin" },
-      );
-      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "条目移除失败。");
-        return;
-      }
+
+      const body = (await requestJson(`/api/catalogs/${catalogId}/items?workId=${workId}`, { method: "DELETE", credentials: "same-origin" })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
+
       removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
       toast.success("游戏已从目录移除。");
       onSaved(body.catalog);
-    } catch {
-      toast.error("网络请求失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
     } finally {
       setRemovingWorkId(null);
     }

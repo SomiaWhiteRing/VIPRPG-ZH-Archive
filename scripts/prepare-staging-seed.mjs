@@ -124,7 +124,7 @@ try {
   const objects = [];
   for (const blob of blobs) {
     const sha = blob.sha256;
-    const key = `blobs/sha256/${sha.slice(0, 2)}/${sha.slice(2, 4)}/${sha}`;
+    const key = blobKey(sha);
     const item = sourceObjects.get(key);
     if (!item || item.sha256 !== sha || item.size !== blob.size_bytes) throw new Error(`Missing blob object: ${sha}`);
     const path = resolve(root, item.file);
@@ -147,3 +147,4 @@ try {
     defaultPortraits: populated.character_default_portraits, defaultEmojis: populated.default_face_emojis, resources: populated.resources,
     objects: objects.length, bytes: objects.reduce((sum, item) => sum + item.size, 0), sqlStatements: statements.length, users: 0, works: 0 }));
 } finally { source.close(); selected.close(); }
+import { blobKey } from "../lib/archive/object-keys.ts";

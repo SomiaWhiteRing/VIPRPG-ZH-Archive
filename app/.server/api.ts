@@ -1,3 +1,4 @@
+import { json as jsonResponse, jsonError } from "@/lib/http";
 import { searchMentionUsers } from "./mentions";
 import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintainers/route';
 import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
@@ -102,7 +103,7 @@ import * as endpoint34 from "@/app/.server/endpoints/api/works/external/route";
 import * as endpoint35 from "@/app/.server/endpoints/api/works/lookup/route";
 import * as endpoint36 from "@/app/.server/endpoints/discussions/sitemap.xml/route";
 import * as endpoint89 from "@/app/.server/endpoints/discussions/sitemaps/[shard]/route";
-import { jsonError } from "@/lib/http";
+
 import { Hono } from "hono";
 import type { AppRuntime } from "./runtime";
 import { emojiApi } from "./emojis/api";
@@ -119,31 +120,28 @@ api.onError((error) => jsonError("请求失败", error));
 api.route("/", sitemapApi);
 api.get("/api/users/mentions", (c) => searchMentionUsers(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
-  c.json({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, 200,
-    { "Cache-Control": "no-store" }),
+  jsonResponse({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, { status: 200, headers: { "Cache-Control": "no-store" } }),
 );
 api.options("/api/works/random", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
-api.all("/api/works/random", (c) => c.json({ ok: false, error: "Method not allowed" }, 405,
-  { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/works/random", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, HEAD, OPTIONS" } }));
 api.get("/api/characters/:characterId/face-sheets", async (c) => {
   const rawId = c.req.param("characterId");
   const id = Number(rawId);
   if (!/^\d+$/.test(rawId) || !Number.isSafeInteger(id) || id <= 0) {
-    return c.json({ ok: false, error: "角色 ID 不合法" }, 400);
+    return jsonResponse({ ok: false, error: "角色 ID 不合法" }, { status: 400 });
   }
-  return c.json({ ok: true, sheets: await listPublicCharacterFaceSheets(c.get("runtime"), id) }, 200,
-    { "Cache-Control": "no-store" });
+  return jsonResponse({ ok: true, sheets: await listPublicCharacterFaceSheets(c.get("runtime"), id) }, { status: 200, headers: { "Cache-Control": "no-store" } });
 });
 api.post("/api/comments/images", (c) => uploadCommentImage(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/comments/images/:id", (c) => readCommentImage(c.get("runtime"), c.req.param("id")));
 api.options("/api/comments/images", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
-api.all("/api/comments/images", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
+api.all("/api/comments/images", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.options("/api/comments/images/:id", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
-api.all("/api/comments/images/:id", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/comments/images/:id", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, HEAD, OPTIONS" } }));
 
 api.on(["GET", "HEAD"], "/api/works/:workId/media/:sha256", (c) =>
   workMediaEndpoint.GET(c.get("runtime"), c.req.raw, { params: {workId: c.req.param("workId"), sha256: c.req.param("sha256")} }));
-api.all("/api/works/:workId/media/:sha256", (c) => c.json({ok:false,error:"Method not allowed"},405,{Allow:"GET, HEAD"}));
+api.all("/api/works/:workId/media/:sha256", (_c) => jsonResponse({ok:false,error:"Method not allowed"}, { status: 405, headers: {Allow:"GET, HEAD"} }));
 api.route("/", resourceApi);
 api.route("/", emojiApi);
 api.on(["GET", "HEAD"], "/api/account/showcase", (c) =>
@@ -155,8 +153,8 @@ api.on("PUT", "/api/account/showcase", (c) =>
 api.options("/api/account/showcase", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, PUT, OPTIONS" }),
 );
-api.all("/api/account/showcase", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, HEAD, PUT, OPTIONS" }),
+api.all("/api/account/showcase", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, HEAD, PUT, OPTIONS" } }),
 );
 api.on("PUT", "/api/account/avatar", (c) =>
   endpoint0.PUT(c.get("runtime"), c.req.raw),
@@ -167,10 +165,10 @@ api.on("DELETE", "/api/account/avatar", (c) =>
 api.options("/api/account/avatar", (c) =>
   c.body(null, 204, { Allow: "PUT, DELETE, OPTIONS" }),
 );
-api.all("/api/account/avatar", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/avatar", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PUT, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/delete", (c) =>
   endpoint1.POST(c.get("runtime"), c.req.raw),
@@ -178,10 +176,10 @@ api.on("POST", "/api/account/delete", (c) =>
 api.options("/api/account/delete", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/delete", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/delete", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.post("/api/account/delete/start", (c) =>
   accountDeleteStartEndpoint.POST(c.get("runtime"), c.req.raw),
@@ -189,8 +187,8 @@ api.post("/api/account/delete/start", (c) =>
 api.options("/api/account/delete/start", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/delete/start", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }),
+api.all("/api/account/delete/start", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }),
 );
 api.on("POST", "/api/account/email/confirm", (c) =>
   endpoint2.POST(c.get("runtime"), c.req.raw),
@@ -198,10 +196,10 @@ api.on("POST", "/api/account/email/confirm", (c) =>
 api.options("/api/account/email/confirm", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/email/confirm", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/email/confirm", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/email/start", (c) =>
   endpoint3.POST(c.get("runtime"), c.req.raw),
@@ -209,10 +207,10 @@ api.on("POST", "/api/account/email/start", (c) =>
 api.options("/api/account/email/start", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/email/start", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/email/start", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/password", (c) =>
   endpoint4.POST(c.get("runtime"), c.req.raw),
@@ -220,10 +218,10 @@ api.on("POST", "/api/account/password", (c) =>
 api.options("/api/account/password", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/password", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/password", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/privacy", (c) =>
   endpoint5.POST(c.get("runtime"), c.req.raw),
@@ -231,10 +229,10 @@ api.on("POST", "/api/account/privacy", (c) =>
 api.options("/api/account/privacy", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/privacy", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/privacy", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/profile", (c) =>
   endpoint6.POST(c.get("runtime"), c.req.raw),
@@ -242,10 +240,10 @@ api.on("POST", "/api/account/profile", (c) =>
 api.options("/api/account/profile", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/profile", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/profile", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/account/role-requests", (c) =>
   endpoint7.POST(c.get("runtime"), c.req.raw),
@@ -253,10 +251,10 @@ api.on("POST", "/api/account/role-requests", (c) =>
 api.options("/api/account/role-requests", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/account/role-requests", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/account/role-requests", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/character-index", (c) =>
   endpoint8.POST(c.get("runtime"), c.req.raw),
@@ -264,10 +262,10 @@ api.on("POST", "/api/admin/character-index", (c) =>
 api.options("/api/admin/character-index", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/character-index", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/character-index", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/characters", (c) =>
   endpoint9.POST(c.get("runtime"), c.req.raw),
@@ -275,10 +273,10 @@ api.on("POST", "/api/admin/characters", (c) =>
 api.options("/api/admin/characters", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/characters", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/characters", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/consistency", (c) =>
   endpoint10.GET(c.get("runtime"), c.req.raw),
@@ -286,10 +284,10 @@ api.on(["GET", "HEAD"], "/api/admin/consistency", (c) =>
 api.options("/api/admin/consistency", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/consistency", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/consistency", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/discussions/images", (c) =>
   endpoint11.POST(c.get("runtime"), c.req.raw),
@@ -297,10 +295,10 @@ api.on("POST", "/api/admin/discussions/images", (c) =>
 api.options("/api/admin/discussions/images", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/discussions/images", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/discussions/images", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/discussions", (c) =>
   endpoint12.GET(c.get("runtime"), c.req.raw),
@@ -311,10 +309,10 @@ api.on("POST", "/api/admin/discussions", (c) =>
 api.options("/api/admin/discussions", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/discussions", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/discussions", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/home-recommendations", (c) =>
   homeRecommendationsEndpoint.GET(c.get("runtime"), c.req.raw),
@@ -325,8 +323,8 @@ api.post("/api/admin/home-recommendations", (c) =>
 api.options("/api/admin/home-recommendations", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/home-recommendations", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, POST, HEAD, OPTIONS" }),
+api.all("/api/admin/home-recommendations", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, POST, HEAD, OPTIONS" } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/emojis", (c) =>
   endpoint13.GET(c.get("runtime"), c.req.raw),
@@ -337,10 +335,10 @@ api.on("POST", "/api/admin/emojis", (c) =>
 api.options("/api/admin/emojis", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/emojis", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/emojis", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/gc/dry-run", (c) =>
   endpoint14.GET(c.get("runtime"), c.req.raw),
@@ -348,10 +346,10 @@ api.on(["GET", "HEAD"], "/api/admin/gc/dry-run", (c) =>
 api.options("/api/admin/gc/dry-run", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/gc/dry-run", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/gc/dry-run", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/gc/sweep", (c) =>
   endpoint15.POST(c.get("runtime"), c.req.raw),
@@ -359,10 +357,10 @@ api.on("POST", "/api/admin/gc/sweep", (c) =>
 api.options("/api/admin/gc/sweep", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/gc/sweep", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/gc/sweep", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/observability", (c) =>
   endpoint16.GET(c.get("runtime"), c.req.raw),
@@ -370,10 +368,10 @@ api.on(["GET", "HEAD"], "/api/admin/observability", (c) =>
 api.options("/api/admin/observability", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/observability", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/observability", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/roles", (c) =>
   endpoint17.POST(c.get("runtime"), c.req.raw),
@@ -381,10 +379,10 @@ api.on("POST", "/api/admin/roles", (c) =>
 api.options("/api/admin/roles", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/roles", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/roles", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/summary", (c) =>
   endpoint18.GET(c.get("runtime"), c.req.raw),
@@ -392,10 +390,10 @@ api.on(["GET", "HEAD"], "/api/admin/summary", (c) =>
 api.options("/api/admin/summary", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/summary", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/summary", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/login", (c) =>
   endpoint19.POST(c.get("runtime"), c.req.raw),
@@ -403,10 +401,10 @@ api.on("POST", "/api/auth/login", (c) =>
 api.options("/api/auth/login", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/login", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/login", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/logout", (c) =>
   endpoint20.POST(c.get("runtime"), c.req.raw),
@@ -414,10 +412,10 @@ api.on("POST", "/api/auth/logout", (c) =>
 api.options("/api/auth/logout", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/logout", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/logout", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/password-reset/confirm", (c) =>
   endpoint21.POST(c.get("runtime"), c.req.raw),
@@ -425,10 +423,10 @@ api.on("POST", "/api/auth/password-reset/confirm", (c) =>
 api.options("/api/auth/password-reset/confirm", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/password-reset/confirm", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/password-reset/confirm", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/password-reset/start", (c) =>
   endpoint22.POST(c.get("runtime"), c.req.raw),
@@ -436,10 +434,10 @@ api.on("POST", "/api/auth/password-reset/start", (c) =>
 api.options("/api/auth/password-reset/start", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/password-reset/start", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/password-reset/start", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/register/start", (c) =>
   endpoint23.POST(c.get("runtime"), c.req.raw),
@@ -447,10 +445,10 @@ api.on("POST", "/api/auth/register/start", (c) =>
 api.options("/api/auth/register/start", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/register/start", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/register/start", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/auth/register/verify", (c) =>
   endpoint24.POST(c.get("runtime"), c.req.raw),
@@ -458,10 +456,10 @@ api.on("POST", "/api/auth/register/verify", (c) =>
 api.options("/api/auth/register/verify", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/auth/register/verify", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/auth/register/verify", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/catalogs", (c) =>
   endpoint25.GET(c.get("runtime"), c.req.raw),
@@ -472,10 +470,10 @@ api.on("POST", "/api/catalogs", (c) =>
 api.options("/api/catalogs", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/catalogs", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/catalogs", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/discussions/images", (c) =>
   endpoint26.POST(c.get("runtime"), c.req.raw),
@@ -483,10 +481,10 @@ api.on("POST", "/api/discussions/images", (c) =>
 api.options("/api/discussions/images", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/discussions/images", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/discussions/images", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/discussions", (c) =>
   endpoint27.GET(c.get("runtime"), c.req.raw),
@@ -497,10 +495,10 @@ api.on("POST", "/api/discussions", (c) =>
 api.options("/api/discussions", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/discussions", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/discussions", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/health/db", (c) =>
   endpoint28.GET(c.get("runtime")),
@@ -508,10 +506,10 @@ api.on(["GET", "HEAD"], "/api/health/db", (c) =>
 api.options("/api/health/db", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/health/db", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/health/db", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/health/r2", (c) =>
   endpoint29.GET(c.get("runtime")),
@@ -519,19 +517,19 @@ api.on(["GET", "HEAD"], "/api/health/r2", (c) =>
 api.options("/api/health/r2", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/health/r2", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/health/r2", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/health", (c) => endpoint30.GET(c.get("runtime")));
 api.options("/api/health", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/health", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/health", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports", (c) =>
   endpoint31.POST(c.get("runtime"), c.req.raw),
@@ -539,10 +537,10 @@ api.on("POST", "/api/imports", (c) =>
 api.options("/api/imports", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/inbox/read-all", (c) =>
   endpoint32.POST(c.get("runtime"), c.req.raw),
@@ -550,10 +548,10 @@ api.on("POST", "/api/inbox/read-all", (c) =>
 api.options("/api/inbox/read-all", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/inbox/read-all", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/inbox/read-all", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/inbox/unread", (c) =>
   endpoint33.GET(c.get("runtime"), c.req.raw),
@@ -561,10 +559,10 @@ api.on(["GET", "HEAD"], "/api/inbox/unread", (c) =>
 api.options("/api/inbox/unread", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/inbox/unread", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/inbox/unread", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/works/external", (c) =>
   endpoint34.POST(c.get("runtime"), c.req.raw),
@@ -572,10 +570,10 @@ api.on("POST", "/api/works/external", (c) =>
 api.options("/api/works/external", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/external", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/external", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/works/lookup", (c) =>
   endpoint35.GET(c.get("runtime"), c.req.raw),
@@ -583,10 +581,10 @@ api.on(["GET", "HEAD"], "/api/works/lookup", (c) =>
 api.options("/api/works/lookup", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/works/lookup", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/lookup", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/discussions/sitemap.xml", (c) =>
   endpoint36.GET(c.get("runtime")),
@@ -594,10 +592,10 @@ api.on(["GET", "HEAD"], "/discussions/sitemap.xml", (c) =>
 api.options("/discussions/sitemap.xml", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/discussions/sitemap.xml", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/discussions/sitemap.xml", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/archive-versions/:archiveVersionId/current", (c) =>
   endpoint37.POST(c.get("runtime"), c.req.raw, {
@@ -607,10 +605,10 @@ api.on("POST", "/api/admin/archive-versions/:archiveVersionId/current", (c) =>
 api.options("/api/admin/archive-versions/:archiveVersionId/current", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/archive-versions/:archiveVersionId/current", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/archive-versions/:archiveVersionId/current", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/archive-versions/:archiveVersionId/delete", (c) =>
   endpoint38.POST(c.get("runtime"), c.req.raw, {
@@ -620,10 +618,10 @@ api.on("POST", "/api/admin/archive-versions/:archiveVersionId/delete", (c) =>
 api.options("/api/admin/archive-versions/:archiveVersionId/delete", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/archive-versions/:archiveVersionId/delete", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/archive-versions/:archiveVersionId/delete", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/archive-versions/:archiveVersionId/restore", (c) =>
   endpoint39.POST(c.get("runtime"), c.req.raw, {
@@ -633,10 +631,10 @@ api.on("POST", "/api/admin/archive-versions/:archiveVersionId/restore", (c) =>
 api.options("/api/admin/archive-versions/:archiveVersionId/restore", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/archive-versions/:archiveVersionId/restore", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/archive-versions/:archiveVersionId/restore", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/archive-versions/:archiveVersionId/update", (c) =>
   endpoint40.POST(c.get("runtime"), c.req.raw, {
@@ -646,10 +644,10 @@ api.on("POST", "/api/admin/archive-versions/:archiveVersionId/update", (c) =>
 api.options("/api/admin/archive-versions/:archiveVersionId/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/archive-versions/:archiveVersionId/update", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/archive-versions/:archiveVersionId/update", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/characters/:characterId/face-sheets", (c) =>
   endpoint41.POST(c.get("runtime"), c.req.raw, {
@@ -659,10 +657,10 @@ api.on("POST", "/api/admin/characters/:characterId/face-sheets", (c) =>
 api.options("/api/admin/characters/:characterId/face-sheets", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/characters/:characterId/face-sheets", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/characters/:characterId/face-sheets", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/admin/characters/:characterId/materials", (c) =>
   endpoint42.GET(c.get("runtime"), c.req.raw, {
@@ -682,10 +680,10 @@ api.on("PUT", "/api/admin/characters/:characterId/materials", (c) =>
 api.options("/api/admin/characters/:characterId/materials", (c) =>
   c.body(null, 204, { Allow: "GET, POST, PUT, HEAD, OPTIONS" }),
 );
-api.all("/api/admin/characters/:characterId/materials", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/characters/:characterId/materials", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, PUT, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/characters/:characterId/update", (c) =>
   endpoint43.POST(c.get("runtime"), c.req.raw, {
@@ -695,10 +693,10 @@ api.on("POST", "/api/admin/characters/:characterId/update", (c) =>
 api.options("/api/admin/characters/:characterId/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/characters/:characterId/update", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/characters/:characterId/update", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("PUT", "/api/admin/creators/:creatorId/avatar", (c) =>
   endpoint44.PUT(c.get("runtime"), c.req.raw, {
@@ -713,10 +711,10 @@ api.on("DELETE", "/api/admin/creators/:creatorId/avatar", (c) =>
 api.options("/api/admin/creators/:creatorId/avatar", (c) =>
   c.body(null, 204, { Allow: "PUT, DELETE, OPTIONS" }),
 );
-api.all("/api/admin/creators/:creatorId/avatar", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/creators/:creatorId/avatar", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PUT, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/creators/:creatorId/merge", (c) =>
   endpoint45.POST(c.get("runtime"), c.req.raw, {
@@ -726,10 +724,10 @@ api.on("POST", "/api/admin/creators/:creatorId/merge", (c) =>
 api.options("/api/admin/creators/:creatorId/merge", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/creators/:creatorId/merge", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/creators/:creatorId/merge", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/creators/:creatorId/update", (c) =>
   endpoint46.POST(c.get("runtime"), c.req.raw, {
@@ -739,10 +737,10 @@ api.on("POST", "/api/admin/creators/:creatorId/update", (c) =>
 api.options("/api/admin/creators/:creatorId/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/creators/:creatorId/update", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/creators/:creatorId/update", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/roles/:roleId/permissions", (c) =>
   endpoint47.POST(c.get("runtime"), c.req.raw, {
@@ -752,10 +750,10 @@ api.on("POST", "/api/admin/roles/:roleId/permissions", (c) =>
 api.options("/api/admin/roles/:roleId/permissions", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/roles/:roleId/permissions", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/roles/:roleId/permissions", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("PATCH", "/api/admin/roles/:roleId", (c) =>
   endpoint48.PATCH(c.get("runtime"), c.req.raw, {
@@ -765,27 +763,27 @@ api.on("PATCH", "/api/admin/roles/:roleId", (c) =>
 api.options("/api/admin/roles/:roleId", (c) =>
   c.body(null, 204, { Allow: "PATCH, OPTIONS" }),
 );
-api.all("/api/admin/roles/:roleId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/roles/:roleId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PATCH, OPTIONS",
-  }),
+  } }),
 );
 api.on("GET", "/api/genres", (c) => genresEndpoint.GET(c.get("runtime"), c.req.raw));
 api.options("/api/genres", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));
-api.all("/api/genres", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" }));
+api.all("/api/genres", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, OPTIONS" } }));
 api.on("POST", "/api/admin/genres/merge", (c) => genreMergeEndpoint.POST(c.get("runtime"), c.req.raw));
 api.options("/api/admin/genres/merge", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
-api.all("/api/admin/genres/merge", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
+api.all("/api/admin/genres/merge", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.on("POST", "/api/admin/tags/update", (c) =>
   endpoint49.POST(c.get("runtime"), c.req.raw),
 );
 api.options("/api/admin/tags/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/tags/update", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/tags/update", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("DELETE", "/api/admin/users/:userId/roles/:roleId", (c) =>
   endpoint50.DELETE(c.get("runtime"), c.req.raw, {
@@ -795,10 +793,10 @@ api.on("DELETE", "/api/admin/users/:userId/roles/:roleId", (c) =>
 api.options("/api/admin/users/:userId/roles/:roleId", (c) =>
   c.body(null, 204, { Allow: "DELETE, OPTIONS" }),
 );
-api.all("/api/admin/users/:userId/roles/:roleId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/users/:userId/roles/:roleId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/users/:userId/roles", (c) =>
   endpoint51.POST(c.get("runtime"), c.req.raw, {
@@ -808,10 +806,10 @@ api.on("POST", "/api/admin/users/:userId/roles", (c) =>
 api.options("/api/admin/users/:userId/roles", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/users/:userId/roles", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/users/:userId/roles", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.post("/api/admin/users/:userId/permissions", (c) =>
   userPermissionsEndpoint.POST(c.get("runtime"), c.req.raw, {
@@ -821,8 +819,8 @@ api.post("/api/admin/users/:userId/permissions", (c) =>
 api.options("/api/admin/users/:userId/permissions", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/users/:userId/permissions", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }),
+api.all("/api/admin/users/:userId/permissions", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }),
 );
 api.on("POST", "/api/admin/users/:userId/status", (c) =>
   endpoint52.POST(c.get("runtime"), c.req.raw, {
@@ -832,10 +830,10 @@ api.on("POST", "/api/admin/users/:userId/status", (c) =>
 api.options("/api/admin/users/:userId/status", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/users/:userId/status", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/users/:userId/status", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/works/:workId/maintainers", (c) =>
   endpoint53.POST(c.get("runtime"), c.req.raw, {
@@ -845,10 +843,10 @@ api.on("POST", "/api/admin/works/:workId/maintainers", (c) =>
 api.options("/api/admin/works/:workId/maintainers", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/works/:workId/maintainers", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/works/:workId/maintainers", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/works/:workId/merge", (c) =>
   endpoint54.POST(c.get("runtime"), c.req.raw, {
@@ -858,10 +856,10 @@ api.on("POST", "/api/admin/works/:workId/merge", (c) =>
 api.options("/api/admin/works/:workId/merge", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/works/:workId/merge", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/works/:workId/merge", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/admin/works/:workId/update", (c) =>
   endpoint55.POST(c.get("runtime"), c.req.raw, {
@@ -871,10 +869,10 @@ api.on("POST", "/api/admin/works/:workId/update", (c) =>
 api.options("/api/admin/works/:workId/update", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/admin/works/:workId/update", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/admin/works/:workId/update", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(
   ["GET", "HEAD"],
@@ -887,10 +885,10 @@ api.on(
 api.options("/api/archive-versions/:archiveVersionId/web-play", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/archive-versions/:archiveVersionId/web-play", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/archive-versions/:archiveVersionId/web-play", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("PUT", "/api/blobs/:sha256", (c) =>
   endpoint57.PUT(c.get("runtime"), c.req.raw, {
@@ -900,10 +898,10 @@ api.on("PUT", "/api/blobs/:sha256", (c) =>
 api.options("/api/blobs/:sha256", (c) =>
   c.body(null, 204, { Allow: "PUT, OPTIONS" }),
 );
-api.all("/api/blobs/:sha256", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/blobs/:sha256", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PUT, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/catalogs/:id/items", (c) =>
   endpoint58.POST(c.get("runtime"), c.req.raw, {
@@ -923,10 +921,10 @@ api.on("DELETE", "/api/catalogs/:id/items", (c) =>
 api.options("/api/catalogs/:id/items", (c) =>
   c.body(null, 204, { Allow: "POST, PATCH, DELETE, OPTIONS" }),
 );
-api.all("/api/catalogs/:id/items", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/catalogs/:id/items", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, PATCH, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("PATCH", "/api/catalogs/:id", (c) =>
   endpoint59.PATCH(c.get("runtime"), c.req.raw, {
@@ -941,10 +939,10 @@ api.on("DELETE", "/api/catalogs/:id", (c) =>
 api.options("/api/catalogs/:id", (c) =>
   c.body(null, 204, { Allow: "PATCH, DELETE, OPTIONS" }),
 );
-api.all("/api/catalogs/:id", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/catalogs/:id", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PATCH, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/characters/:characterId/comments", (c) =>
   endpoint60.GET(c.get("runtime"), c.req.raw, {
@@ -959,10 +957,10 @@ api.on("POST", "/api/characters/:characterId/comments", (c) =>
 api.options("/api/characters/:characterId/comments", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/characters/:characterId/comments", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/characters/:characterId/comments", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("PUT", "/api/comments/:commentId/like", (c) =>
   endpoint61.PUT(c.get("runtime"), c.req.raw, {
@@ -977,10 +975,10 @@ api.on("DELETE", "/api/comments/:commentId/like", (c) =>
 api.options("/api/comments/:commentId/like", (c) =>
   c.body(null, 204, { Allow: "PUT, DELETE, OPTIONS" }),
 );
-api.all("/api/comments/:commentId/like", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/comments/:commentId/like", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PUT, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("PATCH", "/api/comments/:commentId/moderation", (c) =>
   endpoint62.PATCH(c.get("runtime"), c.req.raw, {
@@ -990,10 +988,10 @@ api.on("PATCH", "/api/comments/:commentId/moderation", (c) =>
 api.options("/api/comments/:commentId/moderation", (c) =>
   c.body(null, 204, { Allow: "PATCH, OPTIONS" }),
 );
-api.all("/api/comments/:commentId/moderation", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/comments/:commentId/moderation", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PATCH, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/comments/:commentId/replies", (c) =>
   endpoint63.GET(c.get("runtime"), c.req.raw, {
@@ -1003,10 +1001,10 @@ api.on(["GET", "HEAD"], "/api/comments/:commentId/replies", (c) =>
 api.options("/api/comments/:commentId/replies", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/comments/:commentId/replies", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/comments/:commentId/replies", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("PATCH", "/api/comments/:commentId", (c) =>
   endpoint64.PATCH(c.get("runtime"), c.req.raw, {
@@ -1021,10 +1019,10 @@ api.on("DELETE", "/api/comments/:commentId", (c) =>
 api.options("/api/comments/:commentId", (c) =>
   c.body(null, 204, { Allow: "PATCH, DELETE, OPTIONS" }),
 );
-api.all("/api/comments/:commentId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/comments/:commentId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PATCH, DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("PUT", "/api/core-packs/:sha256", (c) =>
   endpoint65.PUT(c.get("runtime"), c.req.raw, {
@@ -1034,10 +1032,10 @@ api.on("PUT", "/api/core-packs/:sha256", (c) =>
 api.options("/api/core-packs/:sha256", (c) =>
   c.body(null, 204, { Allow: "PUT, OPTIONS" }),
 );
-api.all("/api/core-packs/:sha256", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/core-packs/:sha256", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "PUT, OPTIONS",
-  }),
+  } }),
 );
 api.on("PUT", "/api/creators/:creatorId/avatar", (c) =>
   creatorAvatarEndpoint.PUT(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
@@ -1046,12 +1044,12 @@ api.on("DELETE", "/api/creators/:creatorId/avatar", (c) =>
   creatorAvatarEndpoint.DELETE(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
 );
 api.options("/api/creators/:creatorId/avatar", (c) => c.body(null, 204, { Allow: "PUT, DELETE, OPTIONS" }));
-api.all("/api/creators/:creatorId/avatar", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "PUT, DELETE, OPTIONS" }));
+api.all("/api/creators/:creatorId/avatar", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "PUT, DELETE, OPTIONS" } }));
 api.on("POST", "/api/creators/:creatorId/update", (c) =>
   creatorUpdateEndpoint.POST(c.get("runtime"), c.req.raw, { params: { creatorId: c.req.param("creatorId") } }),
 );
 api.options("/api/creators/:creatorId/update", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
-api.all("/api/creators/:creatorId/update", (c) => c.json({ ok: false, error: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" }));
+api.all("/api/creators/:creatorId/update", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.on(["GET", "HEAD"], "/api/creators/:creatorId/comments", (c) =>
   endpoint66.GET(c.get("runtime"), c.req.raw, {
     params: { creatorId: c.req.param("creatorId") },
@@ -1065,10 +1063,10 @@ api.on("POST", "/api/creators/:creatorId/comments", (c) =>
 api.options("/api/creators/:creatorId/comments", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/creators/:creatorId/comments", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/creators/:creatorId/comments", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/discussions/images/:id", (c) =>
   endpoint67.GET(c.get("runtime"), c.req.raw, {
@@ -1078,10 +1076,10 @@ api.on(["GET", "HEAD"], "/api/discussions/images/:id", (c) =>
 api.options("/api/discussions/images/:id", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/discussions/images/:id", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/discussions/images/:id", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/cancel", (c) =>
   endpoint68.POST(c.get("runtime"), c.req.raw, {
@@ -1091,10 +1089,10 @@ api.on("POST", "/api/imports/:importJobId/cancel", (c) =>
 api.options("/api/imports/:importJobId/cancel", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/cancel", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/cancel", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/commit", (c) =>
   endpoint69.POST(c.get("runtime"), c.req.raw, {
@@ -1104,10 +1102,10 @@ api.on("POST", "/api/imports/:importJobId/commit", (c) =>
 api.options("/api/imports/:importJobId/commit", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/commit", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/commit", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/fail", (c) =>
   endpoint70.POST(c.get("runtime"), c.req.raw, {
@@ -1117,10 +1115,10 @@ api.on("POST", "/api/imports/:importJobId/fail", (c) =>
 api.options("/api/imports/:importJobId/fail", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/fail", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/fail", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/metadata-ready", (c) =>
   endpoint71.POST(c.get("runtime"), c.req.raw, {
@@ -1130,10 +1128,10 @@ api.on("POST", "/api/imports/:importJobId/metadata-ready", (c) =>
 api.options("/api/imports/:importJobId/metadata-ready", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/metadata-ready", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/metadata-ready", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/preflight", (c) =>
   endpoint72.POST(c.get("runtime"), c.req.raw, {
@@ -1143,10 +1141,10 @@ api.on("POST", "/api/imports/:importJobId/preflight", (c) =>
 api.options("/api/imports/:importJobId/preflight", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/preflight", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/preflight", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/resume", (c) =>
   endpoint73.POST(c.get("runtime"), c.req.raw, {
@@ -1156,10 +1154,10 @@ api.on("POST", "/api/imports/:importJobId/resume", (c) =>
 api.options("/api/imports/:importJobId/resume", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/resume", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/resume", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/imports/:importJobId", (c) =>
   endpoint74.GET(c.get("runtime"), c.req.raw, {
@@ -1169,10 +1167,10 @@ api.on(["GET", "HEAD"], "/api/imports/:importJobId", (c) =>
 api.options("/api/imports/:importJobId", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/imports/:importJobId/source-ready", (c) =>
   endpoint75.POST(c.get("runtime"), c.req.raw, {
@@ -1182,10 +1180,10 @@ api.on("POST", "/api/imports/:importJobId/source-ready", (c) =>
 api.options("/api/imports/:importJobId/source-ready", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/imports/:importJobId/source-ready", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/imports/:importJobId/source-ready", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/inbox/:itemId/read", (c) =>
   endpoint76.POST(c.get("runtime"), c.req.raw, {
@@ -1195,10 +1193,10 @@ api.on("POST", "/api/inbox/:itemId/read", (c) =>
 api.options("/api/inbox/:itemId/read", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/inbox/:itemId/read", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/inbox/:itemId/read", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/inbox/:itemId/resolve", (c) =>
   endpoint77.POST(c.get("runtime"), c.req.raw, {
@@ -1208,10 +1206,10 @@ api.on("POST", "/api/inbox/:itemId/resolve", (c) =>
 api.options("/api/inbox/:itemId/resolve", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/inbox/:itemId/resolve", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/inbox/:itemId/resolve", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/media/blobs/:sha256", (c) =>
   endpoint78.GET(c.get("runtime"), c.req.raw, {
@@ -1221,10 +1219,10 @@ api.on(["GET", "HEAD"], "/api/media/blobs/:sha256", (c) =>
 api.options("/api/media/blobs/:sha256", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/api/media/blobs/:sha256", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/media/blobs/:sha256", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on("DELETE", "/api/translation-relations/:relationId", (c) =>
   endpoint79.DELETE(c.get("runtime"), c.req.raw, {
@@ -1234,10 +1232,10 @@ api.on("DELETE", "/api/translation-relations/:relationId", (c) =>
 api.options("/api/translation-relations/:relationId", (c) =>
   c.body(null, 204, { Allow: "DELETE, OPTIONS" }),
 );
-api.all("/api/translation-relations/:relationId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/translation-relations/:relationId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "DELETE, OPTIONS",
-  }),
+  } }),
 );
 api.on("DELETE", "/api/work-relations/:relationId", (c) =>
   endpoint80.DELETE(c.get("runtime"), c.req.raw, {
@@ -1252,10 +1250,10 @@ api.on("PATCH", "/api/work-relations/:relationId", (c) =>
 api.options("/api/work-relations/:relationId", (c) =>
   c.body(null, 204, { Allow: "DELETE, PATCH, OPTIONS" }),
 );
-api.all("/api/work-relations/:relationId", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/work-relations/:relationId", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "DELETE, PATCH, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/works/:workId/comments", (c) =>
   endpoint81.GET(c.get("runtime"), c.req.raw, {
@@ -1270,23 +1268,23 @@ api.on("POST", "/api/works/:workId/comments", (c) =>
 api.options("/api/works/:workId/comments", (c) =>
   c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
 );
-api.all("/api/works/:workId/comments", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/comments", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, POST, HEAD, OPTIONS",
-  }),
+  } }),
 );
 api.on(['GET', 'HEAD'], '/api/works/:workId/maintainers', (c) =>
   workMaintainersEndpoint.GET(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
 api.post('/api/works/:workId/maintainers', (c) =>
   workMaintainersEndpoint.POST(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
 api.options('/api/works/:workId/maintainers', (c) => c.body(null, 204, { Allow: 'GET, HEAD, POST, OPTIONS' }));
-api.all('/api/works/:workId/maintainers', (c) => c.json({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST, OPTIONS' }));
+api.all('/api/works/:workId/maintainers', (_c) => jsonResponse({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { Allow: 'GET, HEAD, POST, OPTIONS' } }));
 api.on(['GET', 'HEAD'], '/api/works/:workId/maintainer-requests', (c) =>
   workMaintainerRequestsEndpoint.GET(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
 api.post('/api/works/:workId/maintainer-requests', (c) =>
   workMaintainerRequestsEndpoint.POST(c.get('runtime'), c.req.raw, { params: { workId: c.req.param('workId') } }));
 api.options('/api/works/:workId/maintainer-requests', (c) => c.body(null, 204, { Allow: 'GET, HEAD, POST, OPTIONS' }));
-api.all('/api/works/:workId/maintainer-requests', (c) => c.json({ ok: false, error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST, OPTIONS' }));
+api.all('/api/works/:workId/maintainer-requests', (_c) => jsonResponse({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { Allow: 'GET, HEAD, POST, OPTIONS' } }));
 api.on("POST", "/api/works/:workId/delete", (c) =>
   endpoint82.POST(c.get("runtime"), c.req.raw, {
     params: { workId: c.req.param("workId") },
@@ -1295,10 +1293,10 @@ api.on("POST", "/api/works/:workId/delete", (c) =>
 api.options("/api/works/:workId/delete", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/delete", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/delete", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/works/:workId/me", (c) =>
   endpoint83.GET(c.get("runtime"), c.req.raw, {
@@ -1313,10 +1311,10 @@ api.on("PATCH", "/api/works/:workId/me", (c) =>
 api.options("/api/works/:workId/me", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, PATCH, OPTIONS" }),
 );
-api.all("/api/works/:workId/me", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/me", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, PATCH, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/works/:workId/owned", (c) =>
   endpoint84.POST(c.get("runtime"), c.req.raw, {
@@ -1326,10 +1324,10 @@ api.on("POST", "/api/works/:workId/owned", (c) =>
 api.options("/api/works/:workId/owned", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/owned", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/owned", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/works/:workId/played", (c) =>
   endpoint85.POST(c.get("runtime"), c.req.raw, {
@@ -1339,10 +1337,10 @@ api.on("POST", "/api/works/:workId/played", (c) =>
 api.options("/api/works/:workId/played", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/played", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/played", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/api/works/:workId/relations", (c) =>
   endpoint86.GET(c.get("runtime"), c.req.raw, { params: { workId: c.req.param("workId") } }),
@@ -1351,8 +1349,7 @@ api.on(["GET", "HEAD"], "/api/works/:workId/collections", (c) =>
   workCollectionsEndpoint.GET(c.get("runtime"), c.req.raw, { params: { workId: c.req.param("workId") } }),
 );
 api.options("/api/works/:workId/collections", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
-api.all("/api/works/:workId/collections", (c) => c.json({ ok: false, error: "Method not allowed" }, 405,
-  { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/works/:workId/collections", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "GET, HEAD, OPTIONS" } }));
 api.on("POST", "/api/works/:workId/relations", (c) =>
   endpoint86.POST(c.get("runtime"), c.req.raw, {
     params: { workId: c.req.param("workId") },
@@ -1361,10 +1358,10 @@ api.on("POST", "/api/works/:workId/relations", (c) =>
 api.options("/api/works/:workId/relations", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/relations", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/relations", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/works/:workId/translation-relations", (c) =>
   endpoint87.POST(c.get("runtime"), c.req.raw, {
@@ -1374,10 +1371,10 @@ api.on("POST", "/api/works/:workId/translation-relations", (c) =>
 api.options("/api/works/:workId/translation-relations", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/translation-relations", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/translation-relations", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on("POST", "/api/works/:workId/view", (c) =>
   endpoint88.POST(c.get("runtime"), c.req.raw, {
@@ -1387,10 +1384,10 @@ api.on("POST", "/api/works/:workId/view", (c) =>
 api.options("/api/works/:workId/view", (c) =>
   c.body(null, 204, { Allow: "POST, OPTIONS" }),
 );
-api.all("/api/works/:workId/view", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/api/works/:workId/view", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "POST, OPTIONS",
-  }),
+  } }),
 );
 api.on(["GET", "HEAD"], "/discussions/sitemaps/:shard", (c) =>
   endpoint89.GET(c.get("runtime"), c.req.raw, {
@@ -1400,10 +1397,10 @@ api.on(["GET", "HEAD"], "/discussions/sitemaps/:shard", (c) =>
 api.options("/discussions/sitemaps/:shard", (c) =>
   c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
 );
-api.all("/discussions/sitemaps/:shard", (c) =>
-  c.json({ ok: false, error: "Method not allowed" }, 405, {
+api.all("/discussions/sitemaps/:shard", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
     Allow: "GET, HEAD, OPTIONS",
-  }),
+  } }),
 );
 
-api.all("/api/*", (c) => c.json({ ok: false, error: "Not found" }, 404));
+api.all("/api/*", (_c) => jsonResponse({ ok: false, error: "Not found" }, { status: 404 }));

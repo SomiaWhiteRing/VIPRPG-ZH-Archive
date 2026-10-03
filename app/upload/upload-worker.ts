@@ -1,47 +1,19 @@
+import { apiResponseError, requestJson, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
+import { sha256Hex } from "@/lib/sha256";
+
 /// <reference lib="webworker" />
 
 import { zip } from "fflate";
-import {
-  classifyArchivePath,
-  contentTypeForArchivePath,
-  FILE_POLICY_VERSION,
-  PACKER_VERSION,
-} from "@/lib/archive/file-policy";
-import {
-  enumerateUploadSourceFiles,
-  inspectUploadSource,
-  type UploadSourceEntry as SourceFile,
-} from "@/app/upload/archive-source";
+import { classifyArchivePath, contentTypeForArchivePath, FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
+import { enumerateUploadSourceFiles, inspectUploadSource, type UploadSourceEntry as SourceFile } from "@/app/upload/archive-source";
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
 import { createRtpResolver } from "@/lib/archive/rtp-restore";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
-import type {
-  ArchiveCommitMetadata,
-  ArchiveManifest,
-  ArchiveManifestFile,
-  ArchiveSourceManifest,
-  ExcludedFileTypeSummary,
-} from "@/lib/archive/manifest";
-import type {
-  BrowserUploadTaskSnapshot,
-  MetadataBlobUpload,
-  PreparedArchiveSource,
-  UploadRecoveryDraft,
-  UploadFormDraft,
-  UploadSourceKind,
-  UploadTaskCommitResult,
-  UploadTaskPhase,
-  UploadTaskStats,
-  UploadWorkerInput,
-  UploadWorkerOutput,
-} from "@/app/upload/upload-types";
-import {
-  deleteUploadDraft,
-  draftKey,
-  putUploadDraft,
-} from "@/app/upload/upload-drafts";
+import type { ArchiveCommitMetadata, ArchiveManifest, ArchiveManifestFile, ArchiveSourceManifest, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
+import type { BrowserUploadTaskSnapshot, MetadataBlobUpload, PreparedArchiveSource, UploadRecoveryDraft, UploadFormDraft, UploadSourceKind, UploadTaskCommitResult, UploadTaskPhase, UploadTaskStats, UploadWorkerInput, UploadWorkerOutput } from "@/app/upload/upload-types";
+import { deleteUploadDraft, draftKey, putUploadDraft } from "@/app/upload/upload-drafts";
 
 type IncludedFile = {
   path: string;
@@ -1167,7 +1139,7 @@ async function commitTask(
 
   let response: Response;
   try {
-    response = await fetch(`/api/imports/${importJobId}/commit`, {
+    response = await requestResponse(`/api/imports/${importJobId}/commit`, {
       method: "POST",
       body,
       credentials: "same-origin",
@@ -1178,18 +1150,14 @@ async function commitTask(
     if (completed) return completed;
     throw error;
   }
-  const payload = (await response.json().catch(() => null)) as
+  const payload = (await readJsonResponse(response, "提交入库失败", true).catch(() => null)) as
     | { ok: true; result: UploadTaskCommitResult }
     | { ok: false; detail?: string; error?: string }
     | null;
   if (response.ok && payload?.ok) return payload.result;
   const completed = await waitForCompletedImportResult(importJobId);
   if (completed) return completed;
-  throw new Error(
-    payload && "detail" in payload
-      ? payload.detail || payload.error || "提交入库失败"
-      : "提交入库失败",
-  );
+  throw apiResponseError(response.status, payload && !payload.ok ? payload : {}, "提交入库失败");
 }
 
 async function waitForCompletedImportResult(
@@ -1207,11 +1175,11 @@ async function waitForCompletedImportResult(
 async function readOwnedImportJobState(
   importJobId: number,
 ): Promise<OwnedImportJobState | null> {
-  const response = await fetch(`/api/imports/${importJobId}`, {
+  const response = await requestResponse(`/api/imports/${importJobId}`, {
     credentials: "same-origin",
   });
   if (!response.ok) return null;
-  const payload = (await response.json().catch(() => null)) as {
+  const payload = (await readJsonResponse(response).catch(() => null)) as {
     ok: true;
     importJob: {
       status: string;
@@ -1227,7 +1195,7 @@ async function requestTerminalTransition(
   body: { message: string; stage: string } | undefined,
   expectedStatus: "canceled" | "failed",
 ): Promise<OwnedImportJobState | null> {
-  const response = await fetch(`/api/imports/${importJobId}/${action}`, {
+  const response = await requestResponse(`/api/imports/${importJobId}/${action}`, {
     method: "POST",
     credentials: "same-origin",
     headers: body ? { "content-type": "application/json" } : undefined,
@@ -1338,7 +1306,7 @@ async function uploadCorePack(
   importJobId: number,
 ): Promise<void> {
   await retry(async () => {
-    const response = await fetch(
+    await requestJson(
       uploadObjectUrl(`/api/core-packs/${corePack.sha256}`, importJobId),
       {
         method: "PUT",
@@ -1352,9 +1320,6 @@ async function uploadCorePack(
       },
     );
 
-    if (!response.ok) {
-      throw new Error(`Core pack upload failed: ${response.status}`);
-    }
   });
 }
 
@@ -1364,7 +1329,7 @@ async function uploadBlob(
 ): Promise<void> {
   await retry(async () => {
     const bytes = await blob.source.bytes();
-    const response = await fetch(
+    await requestJson(
       uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId),
       {
         method: "PUT",
@@ -1376,11 +1341,6 @@ async function uploadBlob(
       },
     );
 
-    if (!response.ok) {
-      throw new Error(
-        `Blob upload failed: ${response.status} ${blob.source.path}`,
-      );
-    }
   });
 }
 
@@ -1395,7 +1355,7 @@ async function uploadMetadataBlobs(
     const isFaceSheet = faceSheetHashes.has(blob.sha256);
     if (sourceBlobSha256s.has(blob.sha256) && !isFaceSheet) continue;
     await retry(async () => {
-      const response = await fetch(
+      await requestJson(
         uploadObjectUrl(`/api/blobs/${blob.sha256}`, importJobId),
         {
           method: "PUT",
@@ -1407,7 +1367,7 @@ async function uploadMetadataBlobs(
           body: await blob.file.arrayBuffer(),
         },
       );
-      if (!response.ok) throw new Error(`图片上传失败：${blob.file.name}`);
+
     });
   }
 }
@@ -1581,7 +1541,7 @@ function emitTask(
 
 async function jsonFetch<T>(url: string, init: RequestInit): Promise<T> {
   const response = await retry(() =>
-    fetch(url, {
+    requestResponse(url, {
       ...init,
       credentials: "same-origin",
       headers: {
@@ -1590,17 +1550,11 @@ async function jsonFetch<T>(url: string, init: RequestInit): Promise<T> {
       },
     }),
   );
-  const payload = (await response.json()) as T & {
+  const payload = (await readJsonResponse(response)) as T & {
     ok?: boolean;
     error?: string;
     detail?: string;
   };
-
-  if (!response.ok || payload.ok === false) {
-    throw new Error(
-      payload.detail ?? payload.error ?? `Request failed: ${response.status}`,
-    );
-  }
 
   return payload;
 }
@@ -1779,13 +1733,7 @@ async function zipEntriesAsync(
 }
 
 async function sha256Bytes(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    asArrayBufferView(bytes),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256Hex(asArrayBufferView(bytes));
 }
 
 function asArrayBufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {

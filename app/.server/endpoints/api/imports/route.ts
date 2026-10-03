@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { createImportJob } from "@/app/.server/db/import-jobs";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -104,7 +105,7 @@ async function parseCreateImportRequest(
 ): Promise<CreateImportRequest> {
   let value: unknown;
   try {
-    value = await request.json();
+    value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
     throw new HttpError(400, "Invalid JSON body");
   }

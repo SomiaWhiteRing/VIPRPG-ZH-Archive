@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { registerAdminFaceSheetForCharacter } from "@/app/.server/db/character-portrait-library";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -27,7 +28,7 @@ export async function POST(
 
   try {
     const { characterId: rawCharacterId } = await context.params;
-    const characterId = parseId(rawCharacterId);
+    const characterId = parsePositiveId(rawCharacterId, "id", "角色 ID 不合法，请返回角色维护页重新进入。");
     const formData = await request.formData();
     const file = readCharacterFaceSheet(formData.get("face_sheet"));
     const [stored] = await storeCharacterFaceSheets(runtime, [file]);
@@ -45,12 +46,4 @@ export async function POST(
   } catch (error) {
     return jsonError("角色脸图素材表上传失败", error);
   }
-}
-
-function parseId(value: string): number {
-  const id = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new HttpError(400, "角色 ID 不合法，请返回角色维护页重新进入。");
-  }
-  return id;
 }

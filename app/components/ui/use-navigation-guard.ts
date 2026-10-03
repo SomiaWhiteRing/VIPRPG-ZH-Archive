@@ -1,51 +1,51 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { NavigateOptions, To } from "react-router";
-import { useBlocker, useNavigate } from "react-router";
+import { type BlockerFunction, type NavigateOptions, type To, useBlocker, useNavigate } from "react-router";
+
 
 /** Guards router transitions; document unloads retain the browser's native confirmation. */
 export function useNavigationGuard(
   enabled: boolean,
   confirm: () => boolean | Promise<boolean>,
 ) {
-  const current = useRef({ enabled, confirm });
-  current.current = { enabled, confirm };
+  const navigate = useRouterNavigationGuard(
+    ({ currentLocation, nextLocation }) => enabled &&
+      (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search),
+    confirm,
+  );
+  useDocumentNavigationGuard(enabled);
+  return navigate;
+}
+
+// Embedded pages can own their document guard while the parent guards router transitions.
+export function useRouterNavigationGuard(shouldBlock: BlockerFunction, confirm: () => boolean | Promise<boolean>) {
+  const current = useRef({ shouldBlock, confirm });
+  current.current = { shouldBlock, confirm };
   const handling = useRef(false);
   const accepted = useRef(false);
   const navigate = useNavigate();
   const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      !accepted.current &&
-      current.current.enabled &&
-      (currentLocation.pathname !== nextLocation.pathname ||
-        currentLocation.search !== nextLocation.search),
+    (transition) => !accepted.current && current.current.shouldBlock(transition),
   );
 
   useEffect(() => {
     if (blocker.state !== "blocked" || handling.current) return;
     handling.current = true;
+    let active = true;
     void Promise.resolve()
       .then(() => current.current.confirm())
       .then(
         (leave) => {
+          if (!active) return;
           if (leave) blocker.proceed();
           else blocker.reset();
         },
-        () => blocker.reset(),
+        () => { if (active) blocker.reset(); },
       )
       .finally(() => {
-        handling.current = false;
+        if (active) handling.current = false;
       });
+    return () => { active = false; handling.current = false; };
   }, [blocker]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [enabled]);
 
   // Use only after the caller has saved or explicitly confirmed its local change.
   return useCallback(
@@ -59,4 +59,16 @@ export function useNavigationGuard(
     },
     [navigate],
   );
+}
+
+export function useDocumentNavigationGuard(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [enabled]);
 }

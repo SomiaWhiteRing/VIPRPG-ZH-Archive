@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { setUserStatusForAdmin } from "@/app/.server/db/users";
 import { redirectResponse } from "@/app/.server/http/form";
@@ -24,7 +25,7 @@ export async function POST(
 
   try {
     const { userId: rawUserId } = await context.params;
-    const userId = parseUserId(rawUserId);
+    const userId = parsePositiveId(rawUserId, "id", "Invalid user id");
     const formData = await request.formData();
     const status = parseStatus(String(formData.get("status") ?? ""));
     const user = await setUserStatusForAdmin(runtime, {
@@ -49,16 +50,6 @@ export async function POST(
   } catch (error) {
     return jsonError("User status update failed", error);
   }
-}
-
-function parseUserId(value: string): number {
-  const userId = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(userId) || userId <= 0) {
-    throw new Error("Invalid user id");
-  }
-
-  return userId;
 }
 
 function parseStatus(value: string): UserStatus {

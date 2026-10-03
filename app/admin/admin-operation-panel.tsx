@@ -1,12 +1,11 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { FinalCleanupPanel } from "@/app/admin/final-cleanup-panel";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 
 import { SectionHeading } from "@/app/components/ui/section-heading";
-import {
-  gcDefaultGraceDays,
-  gcDefaultSweepLimitPerType,
-} from "@/lib/archive/gc-policy";
+import { gcDefaultGraceDays, gcDefaultSweepLimitPerType } from "@/lib/archive/gc-policy";
 import { useRef, useState } from "react";
 
 type OperationKind = "consistency" | "gc";
@@ -48,18 +47,10 @@ export function AdminOperationPanel({
     });
 
     try {
-      const response = await fetch(url, {
-        credentials: "same-origin",
-      });
-      const payload = (await response.json()) as ApiPayload;
 
-      if (!response.ok || payload.ok === false) {
-        throw new Error(
-          payload.detail ??
-            payload.error ??
-            `Request failed: ${response.status}`,
-        );
-      }
+      const payload = (await requestJson(url, {
+        credentials: "same-origin",
+      })) as ApiPayload;
 
       setState({
         kind,

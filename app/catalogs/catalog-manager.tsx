@@ -1,15 +1,9 @@
-import type { CoverPickerCandidate } from "@/app/components/media/media-picker";
-import { CoverPicker } from "@/app/components/media/media-picker";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/app/components/ui/alert-dialog";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
+
+import { type CoverPickerCandidate, CoverPicker } from "@/app/components/media/media-picker";
+
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle, AlertDialogTrigger } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -124,21 +118,18 @@ export function CatalogSummaryEditor({
       form.set("title", title);
       form.set("description", description);
       if (cover) form.set("cover", cover);
-      const response = await fetch(`/api/catalogs/${catalog.id}`, {
+
+      const body = (await requestJson(`/api/catalogs/${catalog.id}`, {
         method: "PATCH",
         credentials: "same-origin",
         body: form,
-      });
-      const body = (await response.json()) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "目录保存失败。");
-        return;
-      }
+      })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
+
       setOpen(false);
       toast.success("目录资料已保存。");
       onSaved(body.catalog);
-    } catch {
-      toast.error("网络请求失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
     } finally {
       setBusy(false);
     }
@@ -146,19 +137,16 @@ export function CatalogSummaryEditor({
   async function remove() {
     setBusy(true);
     try {
-      const response = await fetch(`/api/catalogs/${catalog.id}`, {
+
+      await requestJson(`/api/catalogs/${catalog.id}`, {
         method: "DELETE",
         credentials: "same-origin",
       });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "目录删除失败。");
-        return;
-      }
+
       toast.success("目录已删除。");
       navigate("/catalogs");
-    } catch {
-      toast.error("网络请求失败。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
     } finally {
       setBusy(false);
     }

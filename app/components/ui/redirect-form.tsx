@@ -1,3 +1,4 @@
+import { apiResponseError, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
 import { useToast } from "@/app/components/ui/toast";
 import {
   forwardRef,
@@ -46,7 +47,7 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
     for (const { control } of controls) control.disabled = true;
 
     try {
-      const response = await fetch(form.action, {
+      const response = await requestResponse(form.action, {
         method: form.method,
         body,
         credentials: "same-origin",
@@ -63,7 +64,7 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
       }
 
       const payload = response.headers.get("content-type")?.includes("application/json")
-        ? await response.json() as {
+        ? await readJsonResponse(response) as {
             ok?: boolean;
             detail?: string;
             error?: string;
@@ -71,7 +72,7 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
           }
         : null;
       if (!response.ok || payload?.ok === false) {
-        throw new Error(payload?.detail || payload?.error || "提交失败，请稍后重试。");
+        throw apiResponseError(response.status, payload ?? {}, "提交失败");
       }
       if (!payload?.redirectTo) {
         throw new Error("服务器没有返回跳转地址，请刷新页面确认操作结果。");

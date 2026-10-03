@@ -1,20 +1,18 @@
-import { sha256Hex } from "@/app/.server/crypto/sha256";
-import type { StoredForumImage } from "@/app/.server/forum/image-storage";
-import {
-  storedImageColumns,
-  writeForumImage,
-} from "@/app/.server/forum/image-storage";
+import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
+import { sha256Hex } from "@/lib/sha256";
+import { type StoredForumImage, storedImageColumns, writeForumImage } from "@/app/.server/forum/image-storage";
+
 import { forumActorSql, forumTarget } from "@/app/.server/forum/mutations";
 import { contentIdentity, rawTopic } from "@/app/.server/forum/queries";
-import type { ForumImage } from "@/lib/forum";
-import { FORUM_IMAGE_BYTES } from "@/lib/forum";
+import { type ForumImage, FORUM_IMAGE_BYTES } from "@/lib/forum";
+
 import {
   ForumImageValidationError,
   inspectForumImage,
 } from "@/lib/forum-image-format";
-import { HttpError, jsonError } from "@/lib/http";
-import type { ForumRequestRuntime } from "./request";
-import { readForumBody, requireForumUser } from "./request";
+
+import { type ForumRequestRuntime, readForumBody, requireForumUser } from "./request";
+
 
 async function boundedForm(request: Request) {
   if (!request.headers.get("content-type")?.startsWith("multipart/form-data;"))
@@ -101,7 +99,7 @@ export async function POST(ctx: ForumRequestRuntime, request: Request) {
       .bind(auth.user.id, clientId)
       .first<StoredForumImage>();
     const respond = (image: ForumImage) =>
-      Response.json(
+      jsonResponse(
         {
           ok: true,
           image: {

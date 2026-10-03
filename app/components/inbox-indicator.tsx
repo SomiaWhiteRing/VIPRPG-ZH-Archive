@@ -1,6 +1,7 @@
+import { requestJson } from "@/lib/ui/api-response";
 import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
-import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+
 import { useLocation, useSearchParams } from "react-router";
 
 export function InboxIndicator({
@@ -38,12 +39,10 @@ export function InboxIndicator({
       if (!force && Date.now() - lastSuccess.current < 1000) return;
       inFlight = true;
       try {
-        const response = await fetch("/api/inbox/unread", {
+        const result = await requestJson<{ unread?: unknown }>("/api/inbox/unread", {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (!response.ok) return;
-        const result = (await response.json()) as { unread?: unknown };
         const unread = result.unread;
         if (
           !disposed &&

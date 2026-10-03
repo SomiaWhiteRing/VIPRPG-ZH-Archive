@@ -1,6 +1,6 @@
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
-import { normalizeSha256, sha256Hex } from "@/app/.server/crypto/sha256";
+import { normalizeSha256, sha256Hex } from "@/lib/sha256";
 import {
   parseCharacterCreditSelection,
   prepareWorkCharacterStatements,

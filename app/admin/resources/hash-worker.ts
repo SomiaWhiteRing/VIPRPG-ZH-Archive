@@ -1,13 +1,10 @@
+import { sha256Hex } from "@/lib/sha256";
+
 self.onmessage = async (event: MessageEvent<File>) => {
   try {
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      await event.data.arrayBuffer(),
-    );
+    const sha256 = await sha256Hex(await event.data.arrayBuffer());
     self.postMessage({
-      sha256: Array.from(new Uint8Array(digest), (b) =>
-        b.toString(16).padStart(2, "0"),
-      ).join(""),
+      sha256,
     });
   } catch {
     self.postMessage({ error: "无法计算文件校验值，请重新选择文件" });

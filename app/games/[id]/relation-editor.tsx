@@ -1,11 +1,7 @@
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+
+
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -13,21 +9,14 @@ import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { WorkRelationGuide, WorkRelationHint } from "@/app/components/work/work-relation-guide";
 import { SelectField } from "@/app/components/ui/select";
-import type { WorkListItemData } from "@/app/components/work/work-list-item";
-import { WorkListItem } from "@/app/components/work/work-list-item";
-import type {
-  GameTranslationRelation,
-  GameWorkRelation,
-} from "@/lib/dto/db/game-library";
-import {
-  TRANSLATION_ROLE_LABELS,
-  WORK_RELATION_TYPES,
-  relationLabel,
-} from "@/lib/labels";
+import { type WorkListItemData, WorkListItem } from "@/app/components/work/work-list-item";
+
+import type { GameTranslationRelation, GameWorkRelation } from "@/lib/dto/db/game-library";
+import { TRANSLATION_ROLE_LABELS, WORK_RELATION_TYPES, relationLabel } from "@/lib/labels";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
-import { requestJson } from "@/lib/ui/api-response";
+
 import type { getGameWorkRelations } from "@/app/.server/db/game-library";
 import type { RelationEditorCapabilities } from "@/lib/authz/permissions";
 
@@ -148,17 +137,13 @@ export function RelationCreateForm({
           title: query.trim(),
           excludeWorkIds: exclusions,
         });
-        const response = await fetch(
-          `/api/works/lookup?${params}`,
-          { credentials: "same-origin", signal: controller.signal },
-        );
-        const body = (await response.json()) as {
+
+        const body = (await requestJson(`/api/works/lookup?${params}`, { credentials: "same-origin", signal: controller.signal })) as {
           ok?: boolean;
           works?: Array<Omit<Candidate, "workId" | "title">>;
           detail?: string;
         };
-        if (!response.ok || !body.ok)
-          throw new Error(body.detail ?? "查找游戏失败。");
+
         if (!controller.signal.aborted) {
           setResult({
             query,
@@ -224,17 +209,14 @@ export function RelationCreateForm({
 
     setBusy(true);
     try {
-      const response = await fetch(path, {
+
+      await requestJson(path, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? "保存关联失败。");
-        return;
-      }
+
       setSelected(null);
       setQuery("");
       setResult(null);
@@ -242,8 +224,8 @@ export function RelationCreateForm({
       setSearchError("");
       toast.success("关联已建立。");
       await onSaved();
-    } catch {
-      toast.error("网络请求失败，请检查连接后重试。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
     } finally {
       setBusy(false);
     }
@@ -456,7 +438,8 @@ export function RelationManager({
   ): Promise<boolean> {
     setBusy(true);
     try {
-      const response = await fetch(path, {
+
+      await requestJson(path, {
         method,
         credentials: "same-origin",
         ...(payload
@@ -465,17 +448,13 @@ export function RelationManager({
               body: JSON.stringify(payload),
             }
           : {}),
-      });
-      const body = (await response.json()) as { ok?: boolean; detail?: string };
-      if (!response.ok || !body.ok) {
-        toast.error(body.detail ?? failureMessage);
-        return false;
-      }
+      }, failureMessage);
+
       toast.success(successMessage);
       await onSaved();
       return true;
-    } catch {
-      toast.error("网络请求失败，请检查连接后重试。");
+    } catch (error) {
+      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
       return false;
     } finally {
       setBusy(false);

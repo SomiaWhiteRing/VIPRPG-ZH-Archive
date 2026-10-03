@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { commitArchiveImport } from "@/app/.server/db/archive-commit";
 import {
@@ -88,7 +89,7 @@ export async function POST(
 async function parseCommitRequest(request: Request): Promise<CommitRequest> {
   let value: unknown;
   try {
-    value = await request.json();
+    value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
     throw new HttpError(400, "Invalid commit payload");
   }

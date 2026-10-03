@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { listHomeGameWorks } from "@/app/.server/db/game-library";
 import { getForumRuntime } from "@/app/.server/forum/context";
@@ -12,8 +14,8 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { useToast } from "@/app/components/ui/toast";
 import { useEffect, useState } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -41,9 +43,9 @@ export default function HomePage() {
     if (randomBusy) return;
     setRandomBusy(true);
     try {
-      const response = await fetch("/api/works/random");
-      const result = await response.json() as { ok: boolean; works: GameCardSummary[]; detail?: string };
-      if (!response.ok || !result.ok) throw new Error(result.detail ?? "随机作品加载失败，请稍后重试。");
+
+      const result = await requestJson("/api/works/random") as { ok: boolean; works: GameCardSummary[]; detail?: string };
+
       setRandomSelection(result.works);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "随机作品加载失败，请稍后重试。");

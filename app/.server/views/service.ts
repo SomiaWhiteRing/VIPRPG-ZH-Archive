@@ -1,5 +1,6 @@
+import { json as jsonResponse, HttpError } from "@/lib/http";
 import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
-import { HttpError } from "@/lib/http";
+
 import type { StatKind, ViewKind } from "@/lib/view-stats";
 
 const FRESH_MS = 15 * 60 * 1000;
@@ -101,7 +102,7 @@ async function loadViewCounts(runtime: AppRuntime, kind: StatKind, ids: number[]
       for (const id of batch) remember(id, { count: counts[id], at });
       if (cache) runtime.execution.waitUntil(Promise.all(batch.map((id) => cache.put(
         cacheKey(runtime.origin, kind, id),
-        Response.json({ count: counts[id], at }, { headers: { "Cache-Control": "public, max-age=86400" } }),
+        jsonResponse({ count: counts[id], at }, { headers: { "Cache-Control": "public, max-age=86400" } }),
       ))).catch(() => undefined));
     } catch {
       // Keep a stale value when available; never write outage fallbacks into storage/cache.

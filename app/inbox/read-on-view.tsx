@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { Button } from "@/app/components/ui/button";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import { useEffect, useState } from "react";
@@ -28,7 +30,7 @@ export function InboxReadOnView({
       if (!target) return;
       started = true;
       try {
-        const response = await fetch(`/api/inbox/${itemId}/read`, {
+        await requestJson(`/api/inbox/${itemId}/read`, {
           method: "POST",
           headers: {
             Accept: "application/json",
@@ -37,7 +39,7 @@ export function InboxReadOnView({
           body: JSON.stringify({ topicId, postNumber, commentId }),
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("read_failed");
+
         if (!disposed) {
           setError(false);
           notifyInboxChanged();

@@ -15,7 +15,7 @@ import {
   Smile,
   X,
 } from "lucide-react";
-import { Popover } from "radix-ui";
+import * as Popover from "@/app/components/ui/popover";
 import { createPortal } from "react-dom";
 import { HeightBox } from "@/app/components/ui/height-box";
 import { Button } from "@/app/components/ui/button";
@@ -338,7 +338,7 @@ export function EmojiPicker({
           ),
         )}
         {desktop ? (
-          <Popover.Portal>
+          <Popover.Portal anchorRef={trigger}>
             <Popover.Content
               ref={panel}
               id={panelId}

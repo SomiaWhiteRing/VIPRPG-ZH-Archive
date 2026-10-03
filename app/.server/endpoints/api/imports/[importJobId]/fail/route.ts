@@ -1,3 +1,4 @@
+import { readJsonObject } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import {
   markImportJobFailed,
@@ -18,7 +19,7 @@ export async function POST(
     const { importJobId } = await context.params;
     const id = parseImportJobId(importJobId);
     await requiredOwnedImportJob(runtime, id, auth.user);
-    const body: unknown = await request.json().catch(() => null);
+    const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象").catch(() => null);
     if (!isRecord(body) || typeof body.message !== "string") {
       throw new HttpError(400, "失败信息格式不合法");
     }

@@ -1,4 +1,4 @@
-import { manifestKey } from "./archive-keys";
+import { manifestKey } from "../../../lib/archive/object-keys";
 
 export type ManifestDeletionResult = "deleted" | "retained" | "busy";
 

@@ -70,7 +70,7 @@ Manifest 自身按规范 JSON 字节计算 SHA-256。`archive_versions.manifest_
 
 ## 3. 对象键与身份
 
-R2 key 只由 `app/.server/storage/archive-keys.ts` 生成：
+R2 key 只由 `lib/archive/object-keys.ts` 生成：
 
 - `blobKey(sha256)`
 - `corePackKey(sha256)`

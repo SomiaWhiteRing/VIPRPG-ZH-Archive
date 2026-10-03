@@ -1,3 +1,5 @@
+import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
+
 import { requireBootstrapAdmin } from "@/app/.server/auth/authorize";
 import { RoleConflictError, updateRole } from "@/app/.server/db/permissions";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -11,8 +13,8 @@ export async function PATCH(
   const auth = await requireBootstrapAdmin(runtime, request);
   if ("response" in auth) return auth.response;
   try {
-    const roleId = Number((await context.params).roleId);
-    const body = (await request.json()) as {
+    const roleId = parsePositiveId((await context.params).roleId);
+    const body = (await readJsonObject(request, "请求必须为 JSON 对象")) as {
       name?: unknown;
       description?: unknown;
       priority?: unknown;
@@ -23,7 +25,7 @@ export async function PATCH(
     };
     if (
       typeof body.expected !== "string" ||
-      !Number.isInteger(roleId) ||
+
       typeof body.name !== "string" ||
       typeof body.description !== "string" ||
       typeof body.applicationEnabled !== "boolean" ||

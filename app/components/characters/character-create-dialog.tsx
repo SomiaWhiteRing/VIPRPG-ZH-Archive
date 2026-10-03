@@ -3,9 +3,9 @@ import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { normalizeEntityName } from "@/lib/entity-name";
-import { Dialog } from "radix-ui";
-import type { FormEvent, ReactNode } from "react";
-import { useId, useState } from "react";
+import * as Dialog from "@/app/components/ui/dialog";
+import { type FormEvent, type ReactNode, useId, useState } from "react";
+
 
 export type CharacterNameInput = {
   originalName: string;
@@ -37,9 +37,9 @@ export function CharacterCreateDialog({
     <Dialog.Root onOpenChange={onOpenChange} open={open}>
       {open ? (
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100vh-2rem)] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-surface"
+            className="left-1/2 top-1/2 grid max-h-[calc(100vh-2rem)] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
             onCloseAutoFocus={
               returnFocus
                 ? (event) => {
@@ -49,7 +49,7 @@ export function CharacterCreateDialog({
                 : undefined
             }
           >
-            <Dialog.Title className="m-0 text-lg font-bold">
+            <Dialog.Title>
               {title}
             </Dialog.Title>
             <Dialog.Description className="m-0 text-sm leading-6 text-muted">

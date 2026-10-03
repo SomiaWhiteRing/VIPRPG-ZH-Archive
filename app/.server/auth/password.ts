@@ -3,7 +3,7 @@ import {
   base64UrlDecodeBytes,
   base64UrlEncodeBytes,
 } from "@/app/.server/crypto/encoding";
-import { timingSafeEqualString } from "@/app/.server/crypto/sha256";
+import { timingSafeEqualString } from "@/lib/sha256";
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,

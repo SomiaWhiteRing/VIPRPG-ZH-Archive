@@ -1,3 +1,5 @@
+import { sha256Hex } from "@/lib/sha256";
+import { requestJson } from "@/lib/ui/api-response";
 import { normalizeWorkGenre } from "@/lib/work-genre";
 import { WorkMetadataFields } from "@/app/components/work/work-metadata-fields";
 import { Notice } from "@/app/components/ui/notice";
@@ -9,7 +11,7 @@ import type { GameExternalLink } from "@/lib/dto/db/game-library";
 
 import { ARCHIVE_UPLOAD_PERMISSIONS } from "@/lib/authz/permissions";
 
-import type { ConfirmedCreatorSelection } from "@/lib/creator-names";
+import { type ConfirmedCreatorSelection, type CreatorSelection, creatorSelectionKey } from "@/lib/creator-names";
 
 import {
   CoverPicker,
@@ -54,10 +56,10 @@ import type {
   UploadSuggestions,
 } from "@/app/upload/upload-types";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import type { CharacterCreditSelection } from "@/lib/character-names";
-import { characterSelectionKey } from "@/lib/character-names";
-import type { CreatorSelection } from "@/lib/creator-names";
-import { creatorSelectionKey } from "@/lib/creator-names";
+import { type CharacterCreditSelection, characterSelectionKey } from "@/lib/character-names";
+
+
+
 import { formatDate } from "@/lib/format";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import {
@@ -65,11 +67,11 @@ import {
   parseOriginalReleaseDate,
 } from "@/lib/original-release-date";
 import { cn } from "@/lib/ui/cn";
-import type { WorkMoreInfo } from "@/lib/work-more-info";
-import { moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
+import { type WorkMoreInfo, moreInfoItemError, normalizeWorkMoreInfo } from "@/lib/work-more-info";
+
 import { Check, Link as LinkIcon } from "lucide-react";
-import type { DragEvent, FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+
 import { Link, useNavigate } from "react-router";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
@@ -1593,13 +1595,7 @@ async function prepareMetadataImage(
 ): Promise<string> {
   if (!file.type.startsWith("image/"))
     throw new Error(`${file.name} 不是图片文件。`);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    await file.arrayBuffer(),
-  );
-  const sha256 = [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
+  const sha256 = await sha256Hex(await file.arrayBuffer());
   blobs.push({ sha256, file, contentType: file.type });
   return sha256;
 }
@@ -1647,20 +1643,12 @@ async function submitExternalWork(
   for (const faceSheet of faceSheets.blobs) {
     body.append("character_face_sheets[]", faceSheet.file);
   }
-  const response = await fetch("/api/works/external", {
+  const payload = await requestJson<{ ok?: boolean; workId?: number; translators: ConfirmedCreatorSelection[] }>("/api/works/external", {
     method: "POST",
     body,
     credentials: "same-origin",
-  });
-  const payload = (await response.json().catch(() => null)) as {
-    ok?: boolean;
-    workId?: number;
-    translators: ConfirmedCreatorSelection[];
-    detail?: string;
-    error?: string;
-  } | null;
-  if (!response.ok || !payload?.ok || !payload.workId)
-    throw new Error(payload?.detail || payload?.error || "发布外链作品失败。");
+  }, "发布外链作品失败");
+  if (!payload.workId) throw new Error("作品已发布，但服务器未返回作品 ID，请刷新确认。");
   return { workId: payload.workId, translators: payload.translators };
 }
 
@@ -1733,21 +1721,12 @@ async function submitEditedWork(
   for (const faceSheet of faceSheets.blobs) {
     body.append("character_face_sheets[]", faceSheet.file);
   }
-  const response = await fetch(admin ? `/api/admin/works/${workId}/update` : `/api/works/${workId}/owned`, {
+  const payload = await requestJson<{ ok?: boolean; translators: ConfirmedCreatorSelection[] }>(admin ? `/api/admin/works/${workId}/update` : `/api/works/${workId}/owned`, {
     method: "POST",
     body,
     credentials: "same-origin",
     headers: { Accept: "application/json" },
-  });
-  const payload = (await response.json().catch(() => null)) as {
-    ok?: boolean;
-    translators: ConfirmedCreatorSelection[];
-    detail?: string;
-    error?: string;
-  } | null;
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.detail || payload?.error || "作品资料保存失败。");
-  }
+  }, "作品资料保存失败");
   return payload.translators;
 }
 

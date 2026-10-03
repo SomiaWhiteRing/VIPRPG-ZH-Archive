@@ -441,15 +441,10 @@ export async function markImportJobCanceled(
 }
 
 export function parseImportJobId(value: string): number {
-  if (!/^[1-9]\d*$/.test(value)) {
-    throw new HttpError(400, "Invalid import job id");
-  }
-  const id = Number(value);
-  if (!Number.isSafeInteger(id))
-    throw new HttpError(400, "Invalid import job id");
-  return id;
+  return parsePositiveId(value, "import job id");
 }
 
 function assertChanged(result: D1Result, message: string): void {
   if ((result.meta.changes ?? 0) === 0) throw new HttpError(409, message);
 }
+import { parsePositiveId } from "@/app/.server/http/request";

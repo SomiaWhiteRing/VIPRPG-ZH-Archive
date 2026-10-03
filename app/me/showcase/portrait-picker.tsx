@@ -1,13 +1,12 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
-import type {
-  CharacterPortrait as Portrait,
-  CharacterPortraitChoice,
-} from "@/lib/character-names";
+import type { CharacterPortrait as Portrait, CharacterPortraitChoice } from "@/lib/character-names";
 import type { ShowcasePortraitPage, ShowcaseTarget } from "@/lib/showcase";
 
 type PickerProps = {
@@ -87,16 +86,12 @@ function PortraitChoices({
     setError("");
     void (async () => {
       try {
-        const response = await fetch(
-          `/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}`,
-          { signal: controller.signal },
-        );
-        const data = (await response.json()) as ShowcasePortraitPage & {
+
+        const data = (await requestJson(`/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}`, { signal: controller.signal })) as ShowcasePortraitPage & {
           detail?: string;
           error?: string;
         };
-        if (!response.ok)
-          throw new Error(data.detail ?? data.error ?? "头像加载失败。");
+
         if (!controller.signal.aborted) setResult(data);
       } catch (error) {
         if (!controller.signal.aborted)

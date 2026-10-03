@@ -1,5 +1,6 @@
-import type { PermissionKey } from "@/lib/authz/permissions";
-import { hasPermission } from "@/lib/authz/permissions";
+import { readJsonObject, readRequestBody } from "@/app/.server/http/request";
+import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
+
 import { HttpError } from "@/lib/http";
 import { loadRequestSession } from "../auth/request-auth";
 import { assertRequestOrigin, SameOriginError } from "../auth/request-origin";
@@ -37,44 +38,11 @@ export async function readForumBody(
   request: Request,
   maximum = 128 * 1024,
 ): Promise<ArrayBuffer> {
-  const declared = request.headers.get("content-length");
-  if (declared && (!/^\d+$/.test(declared) || Number(declared) > maximum))
-    throw new HttpError(413, "请求过大。");
-  const reader = request.body?.getReader();
-  if (!reader) throw new HttpError(400, "请求为空。");
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    length += value.byteLength;
-    if (length > maximum) {
-      await reader.cancel();
-      throw new HttpError(413, "请求过大。");
-    }
-    chunks.push(value);
-  }
-  const body = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return body.buffer;
+  return readRequestBody(request, maximum);
 }
 
 export async function readForumJson(
   request: Request,
 ): Promise<Record<string, unknown>> {
-  const bytes = await readForumBody(request);
-  try {
-    const input: unknown = JSON.parse(
-      new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-    );
-    if (input && typeof input === "object" && !Array.isArray(input))
-      return input as Record<string, unknown>;
-  } catch {
-    /* Return the same public error for all invalid JSON. */
-  }
-  throw new HttpError(400, "请求无效。");
+  return readJsonObject(request, "请求无效。", { maximumBytes: 128 * 1024, fatalUtf8: true });
 }

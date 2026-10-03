@@ -1,3 +1,4 @@
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { deleteWebPlayInstallation, getWebPlayInstallation, listWebPlayInstallations } from "./web-play-db";
 import { gameResourceLockName, withGameResourceWriteLock } from "./web-play-locks";
 import { hasGameResources, resetGameOpfsDirectory } from "./web-play-opfs";
@@ -80,12 +81,14 @@ export async function busyGameResourceKeys(): Promise<Set<string>> {
 export async function cleanupObsoleteGameResources(metadata: WebPlayMetadata): Promise<{ removed: string[]; deferred: boolean }> {
   if (!(await canManageGameResources())) return { removed: [], deferred: true };
   // A stale tab must not treat its own version as the current one and delete newer data.
-  const response = await fetch(`/api/archive-versions/${metadata.archiveVersionId}/web-play`, {
+  const current = await requestJson<WebPlayMetadata>(`/api/archive-versions/${metadata.archiveVersionId}/web-play`, {
     cache: "no-store",
     signal: AbortSignal.timeout(10_000),
+  }).catch((error: unknown) => {
+    if (error instanceof ApiResponseError && (error.status >= 400 || error.payload.ok === false)) return null;
+    throw error;
   });
-  if (!response.ok) return { removed: [], deferred: false };
-  const current = await response.json() as WebPlayMetadata;
+  if (!current) return { removed: [], deferred: false };
   if (!current.ok || current.workId !== metadata.workId || current.archiveVersionId !== metadata.archiveVersionId) return { removed: [], deferred: false };
 
   return navigator.locks.request(

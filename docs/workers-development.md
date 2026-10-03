@@ -56,7 +56,7 @@ DB 提供 D1，ARCHIVE_BUCKET 保存 canonical 对象，ASSETS 提供构建后�
 
 修改配置后运行 npm run cf-typegen。cloudflare-env.d.ts 为生成文件。CI 使用 scripts/prepare-wrangler-config.mjs 从 WRANGLER_CONFIG_JSONC 提取环境资源配置，Worker 入口与资源路由由仓库模板决定。
 
-D1 schema 来自 migrations 中的首发基线及有序增量迁移，正式初始化后不改写已应用文件。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `app/.server/storage/archive-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。
+D1 schema 来自 migrations 中的首发基线及有序增量迁移，正式初始化后不改写已应用文件。`ARCHIVE_BUCKET` 中的 blobs、core-packs、manifests 通过 `lib/archive/object-keys.ts` 生成 key；完整 ZIP 只用作流式响应及可丢弃的下载缓存。scheduled 事件调用 `worker/archive-gc.mjs`。论坛图片也使用该桶，但由[论坛图片清理规则](./forum-discussion-design.md#图片存储与清理)独立管理。
 
 ## 发布和回滚
 

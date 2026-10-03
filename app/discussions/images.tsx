@@ -1,11 +1,13 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { Button } from "@/app/components/ui/button";
 import { ClientOnly } from "@/app/components/ui/client-only";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
-import type { ForumImage } from "@/lib/forum";
-import { FORUM_IMAGE_BYTES } from "@/lib/forum";
+import { type ForumImage, FORUM_IMAGE_BYTES } from "@/lib/forum";
+
 import { inspectForumImage } from "@/lib/forum-image-format";
 import { lazy, useState } from "react";
-import { ForumBody, ForumRequestError } from "./shared";
+import { ForumBody } from "./shared";
 const ForumLightbox = lazy(() =>
   import("./lightbox").then((m) => ({ default: m.ForumLightbox })),
 );
@@ -69,23 +71,18 @@ export async function uploadDraftImages(
       form.set("mode", context.mode);
       if (context.topicId) form.set("topicId", String(context.topicId));
       if (context.targetId) form.set("targetId", String(context.targetId));
-      const response = await fetch("/api/discussions/images", {
+
+      const result = (await requestJson("/api/discussions/images", {
         method: "POST",
         body: form,
-      });
-      const result = (await response.json()) as {
+      })) as {
         ok?: boolean;
         image: ForumImage;
         detail?: string;
         error?: string;
         code?: string;
       };
-      if (!response.ok || !result.ok)
-        throw new ForumRequestError(
-          result.detail ?? result.error ?? "图片上传失败。",
-          response.status,
-          result.code,
-        );
+
       image.uploaded = result.image;
       update([...next], `上传图片 ${i + 1}/${next.length}`);
     } catch (error) {

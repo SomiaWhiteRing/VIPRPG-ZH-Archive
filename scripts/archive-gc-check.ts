@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { blobKey, corePackKey, manifestKey } from "../app/.server/storage/archive-keys";
+import { blobKey, corePackKey, manifestKey } from "../lib/archive/object-keys";
 import { runScheduledArchiveGc } from "../worker/archive-gc.mjs";
 
 const hash = (value: number) => value.toString(16).padStart(64, "0");

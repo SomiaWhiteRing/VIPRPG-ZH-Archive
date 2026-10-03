@@ -1,3 +1,4 @@
+import { parsePositiveId } from "@/app/.server/http/request";
 import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import {
   getCharacterPortraitConfigurationForAdmin,
@@ -45,7 +46,7 @@ export async function POST(
     ? `/admin/characters/${rawCharacterId}`
     : "/admin/characters";
   try {
-    const characterId = parseId(rawCharacterId);
+    const characterId = parsePositiveId(rawCharacterId);
     const formData = await request.formData();
     const metadataRequested = [
       "primary_name",
@@ -205,18 +206,4 @@ export async function POST(
       error,
     );
   }
-}
-
-function parseId(value: string): number {
-  const id = Number.parseInt(value, 10);
-
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new HttpError(
-      400,
-      "角色 ID 不合法，请返回角色维护页重新进入。",
-      "character_id_invalid",
-    );
-  }
-
-  return id;
 }

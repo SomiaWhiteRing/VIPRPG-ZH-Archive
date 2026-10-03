@@ -1,3 +1,5 @@
+import { requestJson } from "@/lib/ui/api-response";
+
 import { Button } from "@/app/components/ui/button";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -7,12 +9,12 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { useToast } from "@/app/components/ui/toast";
 import { normalizeEntityName } from "@/lib/entity-name";
-import { MAX_FAVORITE_NOTE_LENGTH, MAX_USER_TAGS, parseFavoriteNote, parseUserTags, tagNameKey, validateUserTag, type WorkFavorite } from "@/lib/user-tags";
+import { MAX_FAVORITE_NOTE_LENGTH, MAX_USER_TAGS, parseFavoriteNote, parseUserTags, tagNameKey, validateUserTag, type WorkFavorite, type WorkFavoriteUpdate } from "@/lib/user-tags";
 import { EllipsisVertical, Heart } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-import type { WorkFavoriteUpdate } from "@/lib/user-tags";
+
 
 type Props = {
   currentUserId: number | null;
@@ -68,9 +70,9 @@ function WorkFavoriteButtonContent({
     setFavorite(null);
     setError(null);
     try {
-      const response = await fetch(`/api/works/${workId}/me`, { credentials: "same-origin" });
-      const result = await response.json() as WorkFavorite & { error?: string; detail?: string };
-      if (!response.ok) throw new Error(result.detail || result.error || "收藏信息加载失败。");
+
+      const result = await requestJson(`/api/works/${workId}/me`, { credentials: "same-origin" }) as WorkFavorite & { error?: string; detail?: string };
+
       setFavorite(result);
       setFavorited(result.favorited);
       setTags(result.tags);
@@ -92,17 +94,12 @@ function WorkFavoriteButtonContent({
   async function persistFavorite(next: boolean) {
     const pending = normalizeEntityName(tagQuery);
     const savedTags = next ? parseUserTags(pending && !tags.some((tag) => tagNameKey(tag) === tagNameKey(pending)) ? [...tags, pending] : tags) : [];
-    const response = await fetch(`/api/works/${workId}/me${summary ? `?summary=${summary}` : ""}`, {
+    const result = await requestJson<Partial<WorkFavoriteUpdate>>(`/api/works/${workId}/me${summary ? `?summary=${summary}` : ""}`, {
       method: "PATCH",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ favorited: next, tags: savedTags, note: next ? parseFavoriteNote(note) : "" }),
-    });
-    if (!response.ok) {
-      const result = await response.json() as { detail?: string; error?: string };
-      throw new Error(result.detail || result.error || "收藏状态保存失败，请稍后重试。");
-    }
-    const result = await response.json() as Partial<WorkFavoriteUpdate>;
+    }, "收藏状态保存失败");
     setFavorited(result.favorited ?? next);
     setOpen(false);
     toast.success(next ? "收藏已保存。" : "已取消收藏。");

@@ -1,22 +1,25 @@
 import { Popover as Primitive } from "radix-ui";
-import type { ComponentPropsWithoutRef, ComponentRef, RefObject } from "react";
-import { createContext, forwardRef, useContext, useLayoutEffect, useState } from "react";
+import { type ComponentPropsWithoutRef, type ComponentRef, type RefObject, createContext, forwardRef, useContext, useLayoutEffect, useState } from "react";
+
 
 export const Root = Primitive.Root;
 export const Trigger = Primitive.Trigger;
 export const Anchor = Primitive.Anchor;
+export const Arrow = Primitive.Arrow;
+export const Close = Primitive.Close;
 
 const BoundaryContext = createContext<HTMLElement | null>(null);
 
-export function Portal({ anchorRef, ...props }: Omit<ComponentPropsWithoutRef<typeof Primitive.Portal>, "container"> & {
+export function Portal({ anchorRef, container: providedContainer, ...props }: Omit<ComponentPropsWithoutRef<typeof Primitive.Portal>, "container"> & {
   anchorRef: RefObject<HTMLElement | null>;
+  container?: HTMLElement | null;
 }) {
   const [container, setContainer] = useState<HTMLElement | null | undefined>(undefined);
   useLayoutEffect(() => {
     // Modal scroll locks allow only descendants of their content. A body portal
     // would sit outside that boundary even though React considers it a child.
-    setContainer(anchorRef.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ?? null);
-  }, [anchorRef]);
+    setContainer(providedContainer ?? anchorRef.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ?? null);
+  }, [anchorRef, providedContainer]);
   // Resolve the anchor before mounting content, including initially-open popovers.
   if (container === undefined) return null;
   return <BoundaryContext.Provider value={container}>

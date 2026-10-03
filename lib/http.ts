@@ -1,29 +1,24 @@
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
 export class HttpError extends Error {
+  readonly status: number;
+  readonly code: string;
   constructor(
-    public readonly status: number,
+    status: number,
     message: string,
-    public readonly code = "request_error",
+    code = "request_error",
   ) {
     super(message);
     this.name = "HttpError";
+    this.status = status;
+    this.code = code;
   }
 }
 
-export function json(body: JsonValue, init?: ResponseInit): Response {
+export function json(body: unknown, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Cache-Control")) headers.set("Cache-Control", "no-store");
   return Response.json(body, {
-    headers: {
-      "Cache-Control": "no-store",
-      ...init?.headers,
-    },
     ...init,
+    headers,
   });
 }
 
