@@ -31,4 +31,15 @@ jobs:
           npx tsx scripts/manual-gc-check.ts
       - run: npm run test:forum
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:flow
+      - run: npm run test:flow -- --report output/system-self-check/flow.json
+      - name: Preserve failed browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-self-check-failure
+          path: |
+            output/system-self-check/
+            /tmp/viprpg-system-test-*/failure.*
+            /tmp/viprpg-system-test-*/browser-errors.json
+            /tmp/viprpg-system-test-*/*.log
+          retention-days: 7
