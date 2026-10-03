@@ -41,7 +41,18 @@ jobs:
         run: node scripts/prepare-verification-config.mjs
       - run: npm run check
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:flow
+      - run: npm run test:flow -- --report output/system-self-check/flow.json
+      - name: Preserve failed browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-self-check-failure
+          path: |
+            output/system-self-check/
+            /tmp/viprpg-system-test-*/failure.*
+            /tmp/viprpg-system-test-*/browser-errors.json
+            /tmp/viprpg-system-test-*/*.log
+          retention-days: 7
       - name: Production candidate summary
         if: inputs.target == 'production'
         run: node scripts/release-summary.mjs
