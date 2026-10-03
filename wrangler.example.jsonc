@@ -12,6 +12,9 @@
     "not_found_handling": "none",
     "html_handling": "none"
   },
+  "limits": {
+    "subrequests": 30000
+  },
   "triggers": {
     "crons": [
       "17 19 * * *"
@@ -69,6 +72,9 @@
   "env": {
     "staging": {
       "name": "<staging-worker-name>",
+      "limits": {
+        "subrequests": 30000
+      },
       "triggers": {
         "crons": [
           "17 19 * * *"

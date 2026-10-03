@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parse } from "jsonc-parser";
+import { downloadSubrequestLimit } from "../lib/archive/download.ts";
 
 export const deploymentOrigins = {
   production: "https://viprpg.org",
@@ -30,6 +31,8 @@ export function validateDeployment(target, environment, directory = ".") {
   if (!origin) throw new Error("Unknown deployment environment");
   const concrete = (value) => typeof value === "string" && value.length > 0 && !/[<>]/.test(value);
   if (!concrete(target.name)) throw new Error("Configure the target Worker name");
+  if (target.limits?.subrequests !== downloadSubrequestLimit)
+    throw new Error(`Configure limits.subrequests=${downloadSubrequestLimit} to match the archive download budget`);
   if (target.vars?.APP_ORIGIN !== origin || target.vars?.SITE_NOINDEX !== String(environment === "staging"))
     throw new Error(`${environment} requires APP_ORIGIN=${origin} and the matching SITE_NOINDEX`);
   if (target.workers_dev !== false || target.preview_urls !== false ||

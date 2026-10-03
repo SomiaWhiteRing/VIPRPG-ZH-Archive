@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { parse } from "jsonc-parser";
+import { downloadSubrequestLimit } from "../lib/archive/download.ts";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
 const { values } = parseArgs({ options: { env: { type: "string" } } });
@@ -19,6 +20,9 @@ const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_dat
   "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement"];
 const target = structuredClone(base);
 for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
+// Resource secrets can carry older limits; retain CPU settings while enforcing
+// the same subrequest budget used by the download handler.
+target.limits = { ...target.limits, subrequests: downloadSubrequestLimit };
 for (const required of base.ratelimits) {
   const actual = target.ratelimits?.find((binding) => binding.name === required.name);
   if (actual) actual.simple = required.simple;

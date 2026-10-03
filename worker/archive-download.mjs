@@ -1,8 +1,8 @@
 import { blobKey, corePackKey, manifestKey } from "../lib/archive/object-keys.ts";
 import { sha256Hex } from "../lib/sha256.ts";
-import { json as jsonResponse } from "../lib/http.ts";
+import { HttpError, json as jsonResponse } from "../lib/http.ts";
 import { unzipSync } from "fflate";
-import { downloadCacheMaxBytes, downloadZipBuilderVersion } from "../lib/archive/download.ts";
+import { downloadCacheMaxBytes, downloadZipBuilderVersion, downloadSubrequestLimit, downloadSubrequestReserve } from "../lib/archive/download.ts";
 import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
 import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
@@ -261,6 +261,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
           {
             ok: false,
             error: "Archive download failed",
+            ...(error instanceof HttpError ? { code: error.code } : {}),
             ...(match[2] === "download" ? { detail: error?.message ?? "Unknown error" } : {}),
           },
           { status: error?.status ?? 500, headers: importHeaders },
@@ -611,16 +612,27 @@ function createFixedLengthZipStream(layout, bucket, player, range) {
   let lastLocal = firstLocal;
   const storage = { bucket, player, corePacks: layout.corePacks,
     corePackCache: new Map(), corePackEntries: new Map(), blobReadCache: new BlobReadCache(bucket) };
+  let sourceReadUpperBound = 0;
   while (lastLocal < entries.length && (!range || entries[lastLocal].localHeaderOffset <= range.end)) {
     const entry = entries[lastLocal++];
-    if (entry.storage.kind !== "core_pack" || (range &&
-        (entry.size === 0 || entry.dataStart > range.end || entry.dataStart + entry.size <= range.start))) continue;
+    if (range && (entry.size === 0 || entry.dataStart > range.end || entry.dataStart + entry.size <= range.start)) continue;
+    // Count each blob/player opening. Repeated blobs may exceed the byte cache
+    // budget, and Range opens never reuse it. Core packs are fetched once each.
+    if (entry.storage.kind !== "core_pack") {
+      sourceReadUpperBound += 1;
+      continue;
+    }
     const pack = storage.corePacks.get(entry.storage.packId);
     if (!pack) throw new Error(`Missing core pack declaration: ${entry.storage.packId}`);
     let names = storage.corePackEntries.get(pack.sha256);
     if (!names) storage.corePackEntries.set(pack.sha256, names = new Set());
     names.add(entry.storage.entry);
   }
+  sourceReadUpperBound += storage.corePackEntries.size;
+  if (sourceReadUpperBound + downloadSubrequestReserve > downloadSubrequestLimit) {
+    throw new HttpError(503, "此归档需要分段下载，当前下载范围过大。请缩小下载范围后重试。", "download_requires_range");
+  }
+  // Reject before opening any source body or emitting the first ZIP header.
   const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : layout.size);
   const writer = writable.getWriter();
   const completion = writeZip(writer, layout, storage, range, firstLocal, lastLocal)

@@ -108,7 +108,13 @@ export function cacheDownloadResponse(bucket, cache, response, estimatedR2GetCou
       await Promise.allSettled([reader.cancel(reason), writer.abort(reason)]);
     },
   });
-  return new Response(body, { status: response.status, headers: response.headers });
+  // An ordinary ReadableStream makes workerd use chunked encoding even when
+  // Content-Length was supplied. Preserve the length at the public response.
+  const delivered = new FixedLengthStream(size);
+  ctx.waitUntil(body.pipeTo(delivered.writable).catch((error) => {
+    console.warn("Shared download response stream failed", error?.message ?? error);
+  }));
+  return new Response(delivered.readable, { status: response.status, headers: response.headers });
 }
 
 export async function sweepDownloadCache(env) {
