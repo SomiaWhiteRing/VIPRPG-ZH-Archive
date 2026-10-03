@@ -214,7 +214,7 @@ export function FinalCleanupPanel() {
     <section aria-labelledby="final-cleanup-heading" className="mt-4 space-y-4 border-t border-border pt-4">
       <h4 className="font-semibold" id="final-cleanup-heading">最终清理</h4>
       <p className="text-sm text-muted">
-        先完整扫描，再核对本次快照并确认永久删除。自动清理仍保留 {gcDefaultGraceDays} 天；手动可填 0 立即清理。
+        先查找并核对清理候选，再确认永久删除。自动清理仍保留 {gcDefaultGraceDays} 天；手动可填 0 立即清理。
         批次推进需要保持本页打开；刷新或离开后可恢复任务，但不会自动继续删除。
       </p>
       <div className="max-w-sm space-y-2">
@@ -259,7 +259,7 @@ export function FinalCleanupPanel() {
         <div className="space-y-3 rounded-md border border-border p-3 text-sm">
           <p className="break-all text-muted">任务 {job.id} · 保留 {job.graceDays} 天 · 创建于 {formatTime(job.createdAt)}</p>
           {scanning ? (
-            <p>当前阶段：{phaseLabels[job.phase]}；已扫描 {number(job.scannedCount)} 条记录。扫描完成前不提供最终总量，不能执行删除。</p>
+            <p>当前阶段：{phaseLabels[job.phase]}；已核对 {number(job.totalItems)} 个清理候选。扫描完成后显示最终总量，才能执行删除。</p>
           ) : job.status === "cancelled" ? (
             <p>此计划已取消，不提供可执行的范围汇总。如需清理，请重新完整扫描。</p>
           ) : (
@@ -393,7 +393,7 @@ const phaseLabels = { archives: "归档版本", blobs: "文件对象", core_pack
 function statusText(job: GcJobReport | null, activity: Activity | null, stop: "pause" | "cancel" | null): string {
   if (stop) return stop === "cancel" ? "等待当前扫描批次完成后取消计划；尚未执行删除。" : "等待当前批次完成后暂停；已经开始的批次不会被撤销。";
   if (activity === "recovering" || activity === "refreshing") return "正在读取已保存的任务状态…";
-  if (activity === "starting" || activity === "scanning") return `正在扫描清理范围，尚未删除数据。已扫描 ${number(job?.scannedCount ?? 0)} 条记录。`;
+  if (activity === "starting" || activity === "scanning") return `正在查找并核对清理候选，尚未删除数据。已核对 ${number(job?.totalItems ?? 0)} 项。`;
   if (activity === "confirming") return "正在保存本次永久清理确认…";
   if (activity === "running" || activity === "retrying") return `正在按已确认快照分批清理：已处理 ${number(job?.processedItems ?? 0)} / ${number(job?.totalItems ?? 0)} 项。`;
   if (activity === "cancelling" || activity === "discarding") return "正在放弃扫描计划…";

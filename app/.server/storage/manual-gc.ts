@@ -20,7 +20,7 @@ type Item = {
   snapshot_json: string; size_bytes: number; file_count: number; object_exists: number;
   state: "pending" | "deleting" | "deleted" | "skipped" | "failed"; error: string | null;
 };
-type Candidate = Snapshot & { object_id: string };
+type Candidate = Snapshot & { object_id: string; cursor_key?: string };
 const phases: GcJobPhase[] = ["archives", "blobs", "core_packs", "manifests"];
 const scanPageSize = 15;
 const sweepPageSize = 3;
@@ -139,17 +139,15 @@ export async function handleManualGc(
 async function scanManualGcPage(runtime: AppRuntime, job: Job, token: string) {
   const db = getD1(runtime);
   let base: string;
-  let filtered: string;
+  let filtered: string | undefined;
   let baseBinds: (string | number)[];
   let filterBinds: string[] = [];
   if (job.phase === "archives") {
-    base = `SELECT id,CAST(id AS TEXT) AS cursor_key,deleted_at,manifest_sha256,total_files,total_size_bytes
+    base = `SELECT CAST(id AS TEXT) AS object_id,CAST(id AS TEXT) AS cursor_key,deleted_at,manifest_sha256,total_files,total_size_bytes
       FROM archive_versions WHERE id>? AND status='deleted' AND purged_at IS NULL
+      AND datetime(deleted_at)<=datetime(?,?)
       ORDER BY id LIMIT ?`;
-    baseBinds = [Number(job.cursor || 0), scanPageSize];
-    filtered = `SELECT CAST(id AS TEXT) AS object_id,deleted_at,manifest_sha256,total_files,total_size_bytes
-      FROM page WHERE deleted_at IS NOT NULL AND datetime(deleted_at)<=datetime(?,?) ORDER BY id`;
-    filterBinds = [job.created_at, `-${job.grace_days} days`];
+    baseBinds = [Number(job.cursor || 0), job.created_at, `-${job.grace_days} days`, scanPageSize];
   } else if (job.phase === "manifests") {
     // Page the frozen archive IDs, not GROUP BY over every manifest on each
     // request. The item primary key deduplicates shared manifest objects.
@@ -167,24 +165,32 @@ async function scanManualGcPage(runtime: AppRuntime, job: Job, token: string) {
     filterBinds = [job.id, job.id];
   } else {
     const type = job.phase === "blobs" ? "blob" : "core_pack";
-    base = `SELECT *,sha256 AS cursor_key FROM ${job.phase}
-      WHERE sha256>? AND status IN ('active','purging') ORDER BY sha256 LIMIT ?`;
-    baseBinds = [job.cursor, scanPageSize];
-    filtered = `SELECT b.sha256 AS object_id,b.created_at,b.verified_at,b.size_bytes FROM page b
-      WHERE datetime(b.created_at)<=datetime(?,?) AND ${objectReferences(type, "b", true)} ORDER BY b.sha256`;
-    filterBinds = [job.created_at, `-${job.grace_days} days`, job.id];
+    // Filter before LIMIT: retained objects stay inside D1 instead of consuming
+    // a browser request for every 15 records in the global object registry.
+    base = `SELECT b.sha256 AS object_id,b.sha256 AS cursor_key,b.created_at,b.verified_at,b.size_bytes
+      FROM ${job.phase} b WHERE b.sha256>? AND b.status IN ('active','purging')
+      AND datetime(b.created_at)<=datetime(?,?) AND ${objectReferences(type, "b", true)}
+      ORDER BY b.sha256 LIMIT ?`;
+    baseBinds = [job.cursor, job.created_at, `-${job.grace_days} days`, job.id, scanPageSize];
   }
-  const [candidateResult, boundsResult] = await db.batch([
-    db.prepare(`WITH page AS MATERIALIZED (${base}) ${filtered}`).bind(...baseBinds, ...filterBinds),
-    db.prepare(`WITH page AS MATERIALIZED (${base}) SELECT COUNT(*) AS count,
-      ${job.phase === "archives" ? "CAST(MAX(id) AS TEXT)" : "MAX(cursor_key)"} AS cursor FROM page`).bind(...baseBinds),
-  ]);
-  const rows = candidateResult.results as Candidate[];
-  const bounds = boundsResult.results[0] as { count: number; cursor: string | null };
+  let rows: Candidate[];
+  let bounds: { count: number; cursor: string | null };
+  if (filtered) {
+    const [candidateResult, boundsResult] = await db.batch([
+      db.prepare(`WITH page AS MATERIALIZED (${base}) ${filtered}`).bind(...baseBinds, ...filterBinds),
+      db.prepare(`WITH page AS MATERIALIZED (${base}) SELECT COUNT(*) AS count,MAX(cursor_key) AS cursor FROM page`).bind(...baseBinds),
+    ]);
+    rows = candidateResult.results as Candidate[];
+    bounds = boundsResult.results[0] as typeof bounds;
+  } else {
+    const page = await db.prepare(base).bind(...baseBinds).all<Candidate>();
+    rows = page.results;
+    bounds = { count: rows.length, cursor: rows.at(-1)?.cursor_key ?? null };
+  }
   const type: Item["type"] = job.phase === "archives" ? "archive" : job.phase === "blobs" ? "blob" : job.phase === "core_packs" ? "core_pack" : "manifest";
   const items: D1PreparedStatement[] = [];
   for (const row of rows) {
-    const { object_id: id, ...snapshot } = row;
+    const { object_id: id, cursor_key: _cursor, ...snapshot } = row;
     const object = type === "archive" ? null : await getArchiveBucket(runtime).head(objectKey(type, id));
     if (type !== "archive") snapshot.version = object?.version ?? null;
     items.push(db.prepare(`INSERT INTO archive_gc_job_items(job_id,type,object_id,snapshot_json,size_bytes,file_count,object_exists)

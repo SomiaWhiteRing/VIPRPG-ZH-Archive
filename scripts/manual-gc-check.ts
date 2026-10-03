@@ -304,7 +304,7 @@ await check("long retained prefixes do not truncate later eligible candidates", 
   assert.equal(ready.objectCount, 3);
   assert.equal(ready.objectSizeBytes, 21 + 31 + 2100);
   assert.equal(ready.totalItems, 4);
-  assert.equal(ready.scannedCount, (retained + 1) * 3 + 1);
+  assert.equal(ready.scannedCount, 4);
   const complete = await run(f, await confirm(f, ready));
   assert.equal(complete.status, "completed");
   assert.equal(complete.purgedArchiveCount, 1);
