@@ -22,7 +22,6 @@ export type UserRow = {
   account_shortcuts: string | null;
   profile_show_bio: number;
   profile_show_showcase: number;
-  profile_show_timeline: number;
   profile_show_friends: number;
   profile_show_favorites: number;
   profile_show_history: number;
@@ -49,7 +48,6 @@ export type ProfileVisibilityRow = Pick<
   UserRow,
   | "profile_show_bio"
   | "profile_show_showcase"
-  | "profile_show_timeline"
   | "profile_show_friends"
   | "profile_show_favorites"
   | "profile_show_history"
@@ -75,7 +73,6 @@ export const USER_PROFILE_COLUMNS = `
   u.account_shortcuts,
   u.profile_show_bio,
   u.profile_show_showcase,
-  u.profile_show_timeline,
   u.profile_show_friends,
   u.profile_show_favorites,
   u.profile_show_history,
@@ -205,7 +202,6 @@ export function mapProfileVisibility(
   return {
     bio: row.profile_show_bio === 1,
     showcase: row.profile_show_showcase === 1,
-    timeline: row.profile_show_timeline === 1,
     friends: row.profile_show_friends === 1,
     favorites: row.profile_show_favorites === 1,
     history: row.profile_show_history === 1,

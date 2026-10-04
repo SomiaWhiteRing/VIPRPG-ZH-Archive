@@ -13,9 +13,7 @@ export function PublicProfileNavigation({
   const base = `/users/${userId}`;
   const links: Array<{ href: string; label: string; exact?: boolean }> = [
     { href: base, label: "概览", exact: true },
-    ...(visibility.timeline
-      ? [{ href: `${base}/timeline`, label: "时间线" }]
-      : []),
+    { href: `${base}/timeline`, label: "时间线" },
     ...(visibility.favorites
       ? [{ href: `${base}/favorites`, label: "收藏" }]
       : []),

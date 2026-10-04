@@ -26,7 +26,9 @@ timelineApi.on(["GET", "HEAD"], "/api/timeline", async (c) => {
 });
 timelineApi.on(["GET", "HEAD"], "/api/users/:userId/follow", async (c) => {
   const runtime = c.get("runtime");
-  return jsonResponse({ ok: true, ...await readFollowSummary(runtime, parsePositiveId(c.req.param("userId")), await getCurrentUser(runtime)) });
+  const summary = await readFollowSummary(runtime, parsePositiveId(c.req.param("userId")), await getCurrentUser(runtime));
+  if (!summary) throw new HttpError(404, "用户不存在");
+  return jsonResponse({ ok: true, ...summary });
 });
 timelineApi.put("/api/users/:userId/follow", async (c) => {
   const runtime = c.get("runtime"), auth = await requirePermission(runtime, c.req.raw, "timeline.follow.create");

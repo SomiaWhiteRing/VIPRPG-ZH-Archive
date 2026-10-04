@@ -30,17 +30,17 @@ const descriptions: Record<TimelineRecordKind, string> = {
 export async function loader({ context }: LoaderFunctionArgs) {
   const runtime = context.get(runtimeContext);
   const user = await requireAccountUser(runtime, "/me/timeline");
-  return data({ userId: user.id, showTimeline: user.profileVisibility.timeline, canRecord: hasPermission(user, "timeline.use"), settings: await readTimelineSettings(runtime, user.id) }, { headers: { "Cache-Control": "private, no-store" } });
+  return data({ userId: user.id, canRecord: hasPermission(user, "timeline.use"), settings: await readTimelineSettings(runtime, user.id) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 export function headers() { return { "Cache-Control": "private, no-store" }; }
 export const meta: MetaFunction = ({ error }) => pageMetaDescriptors({ title: ["时间线", "设置"] }, error);
 
 export default function TimelineSettingsPage() {
-  const { userId, showTimeline, settings, canRecord } = useLoaderData<typeof loader>();
-  return <TimelineSettingsForm key={userId} userId={userId} showTimeline={showTimeline} initial={settings} canRecord={canRecord} />;
+  const { userId, settings, canRecord } = useLoaderData<typeof loader>();
+  return <TimelineSettingsForm key={userId} userId={userId} initial={settings} canRecord={canRecord} />;
 }
 
-function TimelineSettingsForm({ userId, showTimeline, initial, canRecord }: { userId: number; showTimeline: boolean; initial: TimelineSettings; canRecord: boolean }) {
+function TimelineSettingsForm({ userId, initial, canRecord }: { userId: number; initial: TimelineSettings; canRecord: boolean }) {
   const [saved, setSaved] = useState(initial);
   const [enabled, setEnabled] = useState(initial.enabled);
   const [timelineAsHomepage, setTimelineAsHomepage] = useState(initial.timelineAsHomepage);
@@ -84,7 +84,7 @@ function TimelineSettingsForm({ userId, showTimeline, initial, canRecord }: { us
   }
 
   return <div>
-    <AccountPageHeader title="时间线" actions={enabled && showTimeline && <Button asChild size="sm" variant="outline"><Link to={`/users/${userId}/timeline`}>查看我的时间线</Link></Button>} />
+    <AccountPageHeader title="时间线" actions={<Button asChild size="sm" variant="outline"><Link to={`/users/${userId}/timeline`}>查看我的时间线</Link></Button>} />
     <form onSubmit={(event) => void submit(event)} aria-busy={busy} className="mt-5 grid gap-6">
       {!canRecord && <Notice tone="warning">当前账号没有开启与记录时间线的权限，新的操作不会记录。已有历史保持原来的可见性；你仍可关闭时间线。</Notice>}
       <section aria-labelledby="timeline-switch-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
@@ -92,7 +92,7 @@ function TimelineSettingsForm({ userId, showTimeline, initial, canRecord }: { us
           <Checkbox id="timeline-enabled" checked={enabled} onCheckedChange={(value) => setEnabled(value === true)} disabled={busy || (!canRecord && !enabled)} aria-describedby="timeline-enabled-help" />
           <Label id="timeline-switch-heading" htmlFor="timeline-enabled" className="cursor-pointer text-base font-semibold">开启时间线</Label>
         </div>
-        <p id="timeline-enabled-help" className="mb-0 mt-2 text-sm leading-relaxed text-muted">关闭后，将不会再记录新动态。</p>
+        <p id="timeline-enabled-help" className="mb-0 mt-2 text-sm leading-relaxed text-muted">关闭后停止记录业务动态；加入和改名记录会永久保留。</p>
         {enabled && <div className="mt-4 border-t border-border pt-3">
           <div className="flex min-h-10 items-center gap-3">
             <Checkbox id="timeline-as-homepage" checked={timelineAsHomepage} onCheckedChange={(value) => setTimelineAsHomepage(value === true)} disabled={busy} aria-describedby="timeline-as-homepage-help" />

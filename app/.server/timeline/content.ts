@@ -5,7 +5,7 @@ import { mentions } from "@/lib/mentions";
 import { HttpError } from "@/lib/http";
 
 export const PUBLIC_STATUS = `SELECT e.id FROM timeline_events e JOIN users u ON u.id=e.user_id
-  WHERE e.id=? AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active' AND u.profile_show_timeline=1`;
+  WHERE e.id=? AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active'`;
 
 export function statusBody(input: Record<string, unknown>): string {
   const value = input.body;

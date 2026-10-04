@@ -175,11 +175,11 @@ export async function readCommentImage(runtime: AppRuntime, id: string) {
     const row = await runtime.db.prepare(`SELECT ${storedColumns},
       (EXISTS(SELECT 1 FROM public_comments c WHERE c.id=comment_images.comment_id)
        OR EXISTS(SELECT 1 FROM timeline_events e JOIN users u ON u.id=e.user_id
-         WHERE e.id=comment_images.timeline_event_id AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active' AND u.profile_show_timeline=1)
+         WHERE e.id=comment_images.timeline_event_id AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active')
        OR EXISTS(SELECT 1 FROM timeline_status_replies r JOIN users ru ON ru.id=r.user_id
          JOIN timeline_events e ON e.id=r.event_id JOIN users u ON u.id=e.user_id
          WHERE r.id=comment_images.timeline_reply_id AND r.hidden_at IS NULL AND ru.status='active'
-           AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active' AND u.profile_show_timeline=1)) AS public
+           AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active')) AS public
       FROM comment_images WHERE id=? AND status='ready'`).bind(id).first<StoredImage & { public: number }>();
     if (!row) throw new HttpError(404, "图片不可用。");
     if (!row.public) {

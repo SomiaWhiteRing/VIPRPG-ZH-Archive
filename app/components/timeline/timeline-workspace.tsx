@@ -177,7 +177,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
   return (
     <div className="grid w-full min-w-0 gap-3">
       {!profile && <div className="rounded-xl border border-border bg-card">
-        {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">时间线已停止记录新动态。<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">开启时间线</Link>，记录操作和发布吐槽。</p>}
+        {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">时间线已停止记录业务动态。<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">开启时间线</Link>，记录操作和发布吐槽。</p>}
         {canCompose && settings?.enabled && !canPublish && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">当前账号暂时不能发布新吐槽，仍可查看动态。</p>}
         {allowCreate && <section aria-label="发布吐槽" className="p-3 sm:p-4">{editor()}</section>}
         <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-x-2 px-2 py-2 sm:px-3", viewerId && "sm:grid-cols-[auto_minmax(0,1fr)_auto]", canCompose && "border-t border-border")}>
@@ -201,9 +201,17 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
               <h2 className="m-0 border-b border-border bg-muted/5 px-3 py-2 text-xs font-medium text-muted sm:px-4"><time dateTime={group.date}>{group.label}</time></h2>
               <ol className="m-0 list-none divide-y divide-border/60 p-0">
                 {group.items.map((item, index) => {
+                  if (item.kind === "join" || item.kind === "rename") return <li key={item.id} className="px-3 py-3 sm:px-4">
+                    <article className="grid min-w-0 gap-2">
+                      <p className="m-0 text-sm leading-relaxed wrap-anywhere">
+                        {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
+                      </p>
+                      <Timestamp value={item.createdAt} className="text-xs text-muted" />
+                    </article>
+                  </li>;
                   const compact = !item.text && !item.images.length && item.kind !== "upload";
                   const previous = group.items[index - 1];
-                  const continued = compact && previous && previous.actor.id === item.actor.id && !previous.text && !previous.images.length && previous.kind !== "upload";
+                  const continued = compact && previous && previous.actor.id === item.actor.id && !previous.text && !previous.images.length && previous.kind !== "upload" && previous.kind !== "join" && previous.kind !== "rename";
                   const targetLink = item.target && <Link to={item.target.href} prefetch="none" className="font-medium text-secondary hover:underline">{item.target.title}</Link>;
                   const footer = <>
                     <Timestamp value={item.createdAt} className="text-muted" />

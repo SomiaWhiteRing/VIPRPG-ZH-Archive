@@ -3,7 +3,16 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AppRuntime } from "../app/.server/runtime";
 import type { ArchiveUser } from "../lib/dto/db/user-access";
-import { findUserById } from "../app/.server/db/users";
+import { createOrActivateVerifiedUser, findPublicUserById, findUserById, updateOwnProfile } from "../app/.server/db/users";
+import { hasProfileOverviewSections } from "../lib/user-profile";
+import { listUserFollows, readFollowSummary, setUserFollow } from "../app/.server/db/user-follows";
+import { createTimelineReply, deleteTimelineReply, listTimelineReplies, setTimelineLike } from "../app/.server/db/timeline-interactions";
+import { readCommentImage } from "../app/.server/comments/images";
+import { cleanupCommentImages } from "../app/.server/comments/image-cleanup";
+import { POST as savePrivacy } from "../app/.server/endpoints/api/account/privacy/route";
+import { timelineApi } from "../app/.server/timeline/api";
+import { jsonError } from "../lib/http";
+import { Hono } from "hono";
 import { PERMISSIONS, PERMISSION_CATEGORIES, SYSTEM_ROLE_PERMISSIONS } from "../lib/authz/permissions";
 import { TIMELINE_RECORD_KINDS } from "../lib/dto/db/timeline";
 import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, recordFirstWorkPlay, timelineStatement, updateTimelineSettings } from "../app/.server/db/timeline";
@@ -20,7 +29,7 @@ import type { ForumRuntime } from "../app/.server/forum/runtime";
 const png = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=", "base64"));
 const coverHash = "a".repeat(64);
 type Bind = string | number | null;
-function fixture() {
+function fixture(preserveDefaults = false, beforeAccountHistory?: (db: DatabaseSync) => void) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys=ON");
   for (const name of readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort()) {
@@ -28,7 +37,13 @@ function fixture() {
       sqlite.exec(`INSERT INTO users(id,external_auth_id,email,display_name,email_verified_at) VALUES
         (1,'timeline-a','a@example.test','Timeline A',CURRENT_TIMESTAMP),
         (2,'timeline-b','b@example.test','Timeline B',CURRENT_TIMESTAMP),
-        (3,'timeline-moderator','moderator@example.test','Moderator',CURRENT_TIMESTAMP);
+        (3,'timeline-moderator','moderator@example.test','Moderator',CURRENT_TIMESTAMP),
+        (4,'timeline-private','private@example.test','Private legacy user',CURRENT_TIMESTAMP),
+        (5,'timeline-deleted','deleted@example.test','Deleted legacy user',CURRENT_TIMESTAMP);
+        UPDATE users SET profile_show_bio=0,profile_show_showcase=0,profile_show_favorites=0,
+          profile_show_history=0,profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0 WHERE id IN (4,5);
+        UPDATE users SET status='deleted' WHERE id=5;
+        UPDATE users SET created_at='2019-01-01 00:00:00';
         INSERT INTO user_roles(user_id,role_id) SELECT 3,id FROM roles WHERE key='admin';
         INSERT INTO works(id,original_title,status,engine_family,language) VALUES
           (1,'Legacy','published','other','zh-CN'),(2,'Work two','published','other','zh-CN'),
@@ -36,10 +51,11 @@ function fixture() {
           (5,'Work five','published','other','zh-CN');
         INSERT INTO user_work_entries(work_id,user_id,last_played_at) VALUES(1,1,'2020-01-01 00:00:00');`);
     }
+    if (name === "0036_timeline_account_history.sql") beforeAccountHistory?.(sqlite);
     sqlite.exec(readFileSync(`migrations/${name}`, "utf8"));
   }
-  sqlite.exec(`UPDATE users SET timeline_enabled=0,profile_show_timeline=1;
-    INSERT INTO creators(id,name,name_key,public_at) VALUES(1,'Creator','creator',CURRENT_TIMESTAMP);
+  if (!preserveDefaults) sqlite.exec("UPDATE users SET timeline_enabled=0");
+  sqlite.exec(`INSERT INTO creators(id,name,name_key,public_at) VALUES(1,'Creator','creator',CURRENT_TIMESTAMP);
     INSERT INTO characters(id,primary_name,primary_name_key,original_name,original_name_key) VALUES(1,'Character','character','Character','character');
     INSERT INTO blobs(sha256,size_bytes,content_type_hint) VALUES('${coverHash}',${png.length},'image/png');
     INSERT INTO media_assets(id,blob_sha256) VALUES(1,'${coverHash}');
@@ -65,7 +81,11 @@ function fixture() {
     },
   } as unknown as D1Database;
   const pending: Promise<unknown>[] = [];
-  const bucket = { async get() { return { size: png.length, arrayBuffer: async () => png.slice().buffer }; } } as unknown as R2Bucket;
+  const deletedObjects: string[] = [];
+  const bucket = {
+    async get() { return { size: png.length, body: new Response(png.slice()).body!, arrayBuffer: async () => png.slice().buffer }; },
+    async delete(key: string) { deletedObjects.push(key); },
+  } as unknown as R2Bucket;
   const counter = { async counts() { return {}; }, async initializePlayUsers() {}, async mergeWorks() {} };
   const env = { DB: db, ARCHIVE_BUCKET: bucket, VIEW_STATS: { getByName: () => counter } } as unknown as CloudflareEnv;
   const runtime = { db, bucket, env, memo: new Map(), origin: "https://timeline.example.test",
@@ -77,19 +97,28 @@ function fixture() {
       ...(id === 3 ? ["forum.content.moderate_any", "work.merge_any", "relation.delete_any", "translation_relation.delete_any"] : [])],
   } as unknown as ArchiveUser);
   const number = (sql: string, ...values: Bind[]) => Number(Object.values(sqlite.prepare(sql).get(...values)!)[0]);
-  const count = (kind?: string) => number(`SELECT COUNT(*) FROM timeline_events${kind ? " WHERE kind=?" : ""}`, ...(kind ? [kind] : []));
+  // Existing activity contracts exclude the independent account-history baseline.
+  const count = (kind?: string) => number(`SELECT COUNT(*) FROM timeline_events WHERE ${kind ? "kind=?" : "kind NOT IN ('join','rename')"}`, ...(kind ? [kind] : []));
   const enable = (id = 1, enabled = true, recordKinds: readonly string[] = TIMELINE_RECORD_KINDS) => updateTimelineSettings(runtime, id, { enabled, recordKinds });
-  const page = (userId?: number) => listTimeline(runtime, { actorUserId: userId, limit: 50 });
-  const pageAs = async (viewerId: number) => {
+  const activities = (page: Awaited<ReturnType<typeof listTimeline>>) => ({ ...page, items: page.items.filter((item) => item.kind !== "join" && item.kind !== "rename") });
+  const page = async (userId?: number) => activities(await listTimeline(runtime, { actorUserId: userId, limit: 50 }));
+  const asUser = async (viewerId: number) => {
     const user = await findUserById(runtime, viewerId);
-    const authenticated = { ...runtime, memo: new Map([["auth", Promise.resolve({ user })]]) };
-    return listTimeline(authenticated, { viewerId, limit: 50 });
+    assert.ok(user);
+    return { ...runtime, memo: new Map([["auth", Promise.resolve({ user })]]) };
   };
-  return { sqlite, db, runtime, actor, number, count, enable, page, pageAs, pending };
+  const pageAs = async (viewerId: number) => activities(await listTimeline(await asUser(viewerId), { viewerId, limit: 50 }));
+  const image = (userId = 1) => {
+    const id = crypto.randomUUID();
+    sqlite.prepare(`INSERT INTO comment_images(id,user_id,client_id,fingerprint,status,object_key,format,size,width,height)
+      VALUES(?,?,?,?,'ready',?,'png',?,1,1)`).run(id, userId, crypto.randomUUID(), coverHash, `comment-images/${id}`, png.length);
+    return id;
+  };
+  return { sqlite, db, runtime, actor, number, count, enable, page, pageAs, asUser, image, deletedObjects, pending };
 }
 type Fixture = ReturnType<typeof fixture>;
-async function check(name: string, test: (f: Fixture) => Promise<void>) {
-  const f = fixture();
+async function check(name: string, test: (f: Fixture) => Promise<void>, preserveDefaults = false, beforeAccountHistory?: (db: DatabaseSync) => void) {
+  const f = fixture(preserveDefaults, beforeAccountHistory);
   try {
     await test(f);
     await Promise.all(f.pending);
@@ -486,10 +515,379 @@ await check("stable cursors, deletion, current account privacy and source edits"
   assert.ok(second.items.every((item) => item.id < boundary));
   assert.equal(new Set([...first.items, ...second.items].map((item) => item.id)).size, 20);
   await assert.rejects(listTimeline(f.runtime, { actorUserId: 2, cursor: first.nextCursor }), { status: 400 });
-  f.sqlite.exec("UPDATE users SET profile_show_timeline=0 WHERE id=1");
+  f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=1");
   assert.equal((await f.page()).items.length, 0);
-  f.sqlite.exec("UPDATE users SET profile_show_timeline=1 WHERE id=1");
+  f.sqlite.exec("UPDATE users SET status='active' WHERE id=1");
   assert.equal((await f.page()).items.length, 35);
+});
+
+await check("migration and registration defaults preserve deliberate legacy privacy", async (f) => {
+  for (const id of [1, 2, 3]) {
+    const settings = await readTimelineSettings(f.runtime, id);
+    assert.equal(settings.enabled, true);
+    assert.deepEqual(settings.recordKinds, [...TIMELINE_RECORD_KINDS]);
+    assert.equal(settings.timelineAsHomepage, false);
+    assert.equal(settings.defaultView, "following");
+  }
+  for (const id of [4, 5]) {
+    assert.equal(f.number("SELECT timeline_enabled FROM users WHERE id=?", id), 0);
+  }
+  await assert.rejects(readTimelineSettings(f.runtime, 5), { status: 404 });
+  const registered = await createOrActivateVerifiedUser(f.runtime, {
+    email: "registered@example.test", passwordHash: "contract-password-hash", displayName: "Registered user",
+  });
+  assert.equal((await readTimelineSettings(f.runtime, registered.id)).enabled, true);
+  assert.deepEqual((await readTimelineSettings(f.runtime, registered.id)).recordKinds, [...TIMELINE_RECORD_KINDS]);
+  assert.equal((await listTimeline(f.runtime, { actorUserId: registered.id })).items[0].kind, "join");
+  assert.equal(f.count(), 0, "migration and signup do not manufacture activities");
+}, true);
+
+await check("privacy submissions preserve unseen friend settings and cannot hide the timeline", async (f) => {
+  const submit = async (entries: [string, string][]) => {
+    const form = new FormData();
+    for (const [key, value] of entries) form.append(key, value);
+    const response = await savePrivacy(await f.asUser(1), new Request(`${f.runtime.origin}/api/account/privacy`, {
+      method: "POST", headers: { Origin: f.runtime.origin }, body: form,
+    }));
+    assert.equal(response.status, 303);
+    assert.equal(new URL(response.headers.get("Location")!, f.runtime.origin).searchParams.get("privacyUpdated"), "1");
+    return (await findUserById(f.runtime, 1))!;
+  };
+  let user = await submit([["showBio", "1"]]);
+  assert.equal(user.profileVisibility.friends, true);
+  assert.equal(f.number("SELECT notify_friend_additions FROM users WHERE id=1"), 1);
+  user = await submit([["showTimeline", "0"], ["showFriends", "0"], ["notifyFriendAdditions", "0"]]);
+  assert.equal(user.profileVisibility.friends, false);
+  user = await submit([["showBio", "1"]]);
+  assert.equal(user.profileVisibility.friends, false);
+  user = await submit([["showTimeline", "0"], ["showTimeline", "1"], ["showFriends", "0"], ["showFriends", "1"],
+    ["notifyFriendAdditions", "0"], ["notifyFriendAdditions", "1"]]);
+  assert.equal(user.profileVisibility.friends, true);
+  user = await submit([["notifyFriendAdditions", "0"]]);
+  assert.equal(user.profileVisibility.friends, false);
+  assert.deepEqual((await listTimeline(f.runtime, { actorUserId: 1 })).items.map((item) => item.kind), ["join"], "stale showTimeline fields cannot hide public history");
+  assert.equal(hasProfileOverviewSections(user.profileVisibility), false);
+});
+
+await check("deleted public profiles remain readable while follow endpoints reject them", async (f) => {
+  assert.ok(await findPublicUserById(f.runtime, 5));
+  assert.equal(await readFollowSummary(f.runtime, 5, await findUserById(f.runtime, 1)), null);
+  assert.ok(await readFollowSummary(f.runtime, 2, await findUserById(f.runtime, 1)));
+  await assert.rejects(readFollowSummary(f.runtime, 999, null), { status: 404 });
+  await assert.rejects(setUserFollow(f.runtime, 1, 5, true), { status: 404 });
+  await assert.rejects(listUserFollows(f.runtime, 5, "following"), { status: 404 });
+  f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=2");
+  assert.equal(await findPublicUserById(f.runtime, 2), null);
+  await assert.rejects(readFollowSummary(f.runtime, 2, null), { status: 404 });
+  const api = new Hono<{ Bindings: CloudflareEnv; Variables: { runtime: AppRuntime } }>();
+  api.use("*", async (c, next) => { c.set("runtime", f.runtime); await next(); });
+  api.onError((error) => jsonError("Contract request failed", error));
+  api.route("/", timelineApi);
+  assert.equal((await api.request(`${f.runtime.origin}/api/users/5/follow`)).status, 404);
+  const active = await api.request(`${f.runtime.origin}/api/users/1/follow`);
+  assert.equal(active.status, 200);
+  assert.equal(active.headers.get("Cache-Control"), "private, no-store");
+});
+
+await check("friend relations, reciprocal notices, preferences and permissions are idempotent", async (f) => {
+  await Promise.all(Array.from({ length: 4 }, () => setUserFollow(f.runtime, 1, 2, true)));
+  assert.equal(f.number("SELECT COUNT(*) FROM user_follows"), 1);
+  assert.equal(f.number("SELECT following_revision FROM users WHERE id=1"), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items"), 1);
+  assert.equal(f.sqlite.prepare("SELECT metadata_json FROM inbox_items").get()!.metadata_json, '{"friend":"added"}');
+  await setUserFollow(f.runtime, 2, 1, true);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items WHERE json_extract(metadata_json,'$.friend')='returned'"), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_item_reads WHERE user_id=2"), 1);
+  const summary = await readFollowSummary(f.runtime, 2, await findUserById(f.runtime, 1));
+  assert.equal(summary!.isFollowing, true);
+  assert.equal(summary!.isFollowedBy, true);
+  await setUserFollow(f.runtime, 1, 2, false);
+  await setUserFollow(f.runtime, 1, 2, false);
+  assert.equal(f.number("SELECT following_revision FROM users WHERE id=1"), 2);
+  assert.equal(f.number("SELECT COUNT(*) FROM user_follows WHERE follower_user_id=2 AND followed_user_id=1"), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items"), 2, "unfollowing does not erase notices");
+  f.sqlite.exec("UPDATE users SET notify_friend_additions=0 WHERE id=3");
+  await setUserFollow(f.runtime, 1, 3, true);
+  f.sqlite.exec("UPDATE users SET notify_friend_additions=1 WHERE id=3");
+  await setUserFollow(f.runtime, 1, 3, true);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items WHERE recipient_user_id=3"), 0, "reenabling notifications does not backfill an existing edge");
+  f.sqlite.exec("INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(1,'timeline.follow.create')");
+  await assert.rejects(setUserFollow(f.runtime, 1, 2, true), { status: 403 });
+  await setUserFollow(f.runtime, 1, 3, false);
+  f.sqlite.exec("DELETE FROM user_permission_blocks WHERE user_id=1; INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(1,'timeline.follow.delete_own')");
+  await setUserFollow(f.runtime, 1, 2, true);
+  await assert.rejects(setUserFollow(f.runtime, 1, 2, false), { status: 403 });
+  await assert.rejects(setUserFollow(f.runtime, 1, 1, true), { status: 400 });
+  assert.equal(f.count(), 0, "friend operations never create timeline events");
+});
+
+await check("friend notification failure rolls back the relation and revision", async (f) => {
+  f.sqlite.exec("CREATE TRIGGER contract_notice_failure BEFORE INSERT ON inbox_items BEGIN SELECT RAISE(ABORT,'notice failed'); END");
+  await assert.rejects(setUserFollow(f.runtime, 1, 2, true), /notice failed/);
+  assert.equal(f.number("SELECT COUNT(*) FROM user_follows"), 0);
+  assert.equal(f.number("SELECT following_revision FROM users WHERE id=1"), 0);
+});
+
+await check("following feed verifies its viewer, privacy and relation revision across pages", async (f) => {
+  for (const id of [1, 2, 3]) {
+    await f.enable(id);
+    await createTimelineStatus(f.runtime, id, { body: `Actor ${id}`, requestKey: `following-contract-status-${id}` });
+  }
+  await setUserFollow(f.runtime, 1, 2, true);
+  const runtime = await f.asUser(1), input = { viewerId: 1, following: true, kind: "status" as const, limit: 1 };
+  const first = await listTimeline(runtime, input);
+  assert.equal(first.items[0].actor.id, 2);
+  assert.ok(first.nextCursor);
+  await setUserFollow(f.runtime, 1, 2, true);
+  assert.equal((await listTimeline(runtime, { ...input, cursor: first.nextCursor })).items[0].actor.id, 1);
+  f.sqlite.exec("UPDATE users SET status='disabled',profile_show_friends=0 WHERE id=2");
+  assert.deepEqual((await listTimeline(runtime, input)).items.map((item) => item.actor.id), [1]);
+  await assert.rejects(listUserFollows(f.runtime, 2, "following"), { status: 404 });
+  await assert.rejects(listUserFollows(f.runtime, 2, "followers"), { status: 404 });
+  await assert.rejects(listTimeline(f.runtime, input), { status: 401 });
+  await assert.rejects(listTimeline(await f.asUser(2), input), { status: 401 });
+  await assert.rejects(listTimeline(runtime, { ...input, actorUserId: 2 }), { status: 400 });
+  await setUserFollow(f.runtime, 1, 3, true);
+  await assert.rejects(listTimeline(runtime, { ...input, cursor: first.nextCursor }), { status: 409, code: "timeline_cursor_changed" });
+  f.sqlite.exec("UPDATE users SET status='active' WHERE id=2");
+  const list = await listUserFollows(f.runtime, 1, "following", null, 1);
+  assert.equal(list.items[0].id, 3);
+  assert.ok(list.nextCursor);
+  assert.equal((await listUserFollows(f.runtime, 1, "following", list.nextCursor, 1)).items[0].id, 2);
+  await assert.rejects(listUserFollows(f.runtime, 1, "followers", list.nextCursor), { status: 400 });
+  await assert.rejects(listUserFollows(f.runtime, 2, "following", list.nextCursor), { status: 404 });
+});
+
+await check("likes and replies deduplicate and enforce current permissions and authors", async (f) => {
+  await f.enable();
+  const event = await createTimelineStatus(f.runtime, 1, { body: "Public status", requestKey: "interaction-status-contract-001" });
+  await Promise.all(Array.from({ length: 4 }, () => setTimelineLike(f.runtime, event, 2, true)));
+  const item = (await f.pageAs(2)).items[0];
+  assert.equal(item.likeCount, 1);
+  assert.equal(item.likedByMe, true);
+  assert.equal(item.canReply, true, "a recording opt-out still allows interaction");
+  const input = { body: "Reply", requestKey: "interaction-reply-contract-001" };
+  const replies = await Promise.all(Array.from({ length: 4 }, () => createTimelineReply(f.runtime, event, 2, input)));
+  assert.equal(new Set(replies).size, 1);
+  await assert.rejects(createTimelineReply(f.runtime, event, 2, { ...input, body: "Changed" }), { status: 409 });
+  assert.notEqual(await createTimelineReply(f.runtime, event, 1, input), replies[0], "request keys are isolated by author");
+  assert.equal((await f.page()).items[0].replyCount, 2);
+  await assert.rejects(deleteTimelineReply(f.runtime, replies[0], 1), { status: 404 });
+  f.sqlite.exec("INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(2,'timeline.status.like'),(2,'timeline.reply.create'),(2,'timeline.reply.delete_own')");
+  await assert.rejects(setTimelineLike(f.runtime, event, 2, false), { status: 403 });
+  await assert.rejects(createTimelineReply(f.runtime, event, 2, input), { status: 403 }, "retries honor revoked permissions");
+  await assert.rejects(deleteTimelineReply(f.runtime, replies[0], 2), { status: 404 });
+  await deleteTimelineReply(f.runtime, replies[0], 3);
+  await deleteTimelineReply(f.runtime, replies[0], 3);
+  assert.equal(f.number("SELECT COUNT(*) FROM auth_audit_logs WHERE event_type='timeline_reply_moderation'"), 1);
+  assert.equal(f.sqlite.prepare("SELECT body FROM timeline_status_replies WHERE id=?").get(replies[0])!.body, null);
+  f.sqlite.exec("DELETE FROM user_permission_blocks WHERE user_id=2");
+  await setTimelineLike(f.runtime, event, 2, false);
+  await setTimelineLike(f.runtime, event, 2, false);
+  assert.equal((await f.page()).items[0].likeCount, 0);
+  f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=1");
+  await assert.rejects(listTimelineReplies(f.runtime, event), { status: 404 });
+  await assert.rejects(setTimelineLike(f.runtime, event, 2, true), { status: 404 });
+  assert.equal(f.count(), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items"), 0);
+});
+
+await check("status and reply rate limits include deleted content and exempt identical retries", async (f) => {
+  await f.enable();
+  let deleted = 0;
+  for (let i = 0; i < 5; i++) {
+    const input = { body: "Limited status", requestKey: `rate-limit-status-contract-${i}` };
+    deleted = await createTimelineStatus(f.runtime, 1, input);
+    await deleteTimelineEvent(f.runtime, deleted, 1);
+    assert.equal(await createTimelineStatus(f.runtime, 1, input), deleted);
+  }
+  await assert.rejects(createTimelineStatus(f.runtime, 1, { body: "Sixth", requestKey: "rate-limit-status-contract-6" }), { status: 429 });
+  f.sqlite.exec("UPDATE timeline_events SET created_at=datetime('now','-2 minutes') WHERE kind='status'");
+  const event = await createTimelineStatus(f.runtime, 1, { body: "New window", requestKey: "rate-limit-new-window-001" });
+  for (let i = 0; i < 10; i++) {
+    const input = { body: "Limited reply", requestKey: `rate-limit-reply-contract-${i}` };
+    const reply = await createTimelineReply(f.runtime, event, 2, input);
+    await deleteTimelineReply(f.runtime, reply, 2);
+    assert.equal(await createTimelineReply(f.runtime, event, 2, input), reply);
+  }
+  await assert.rejects(createTimelineReply(f.runtime, event, 2, { body: "Eleventh", requestKey: "rate-limit-reply-contract-11" }), { status: 429 });
+  f.sqlite.exec("UPDATE timeline_status_replies SET created_at=datetime('now','-2 minutes')");
+  await createTimelineReply(f.runtime, event, 2, { body: "New reply window", requestKey: "rate-limit-new-reply-window-001" });
+  assert.equal((await listTimelineReplies(f.runtime, event)).items.length, 1);
+});
+
+await check("reply pages filter hidden and inactive authors before limiting and retain deleted cursors", async (f) => {
+  await f.enable();
+  const event = await createTimelineStatus(f.runtime, 1, { body: "Paged replies", requestKey: "reply-pages-parent-contract-001" });
+  const insert = f.sqlite.prepare("INSERT INTO timeline_status_replies(event_id,user_id,body,request_key,request_hash) VALUES(?,?,?,?,?)");
+  for (let i = 1; i <= 33; i++) insert.run(event, i === 2 ? 4 : 2, `Reply ${i}`, `reply-pages-contract-${i}`, coverHash);
+  await deleteTimelineReply(f.runtime, 1, 2);
+  f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=4");
+  const first = await listTimelineReplies(await f.asUser(2), event);
+  assert.equal(first.items.length, 30);
+  assert.equal(first.items[0].id, 3);
+  assert.ok(first.items.every((reply) => reply.canDelete));
+  assert.equal(first.nextCursor, 32);
+  await deleteTimelineReply(f.runtime, first.nextCursor!, 2);
+  const second = await listTimelineReplies(f.runtime, event, String(first.nextCursor));
+  assert.deepEqual(second.items.map((reply) => reply.id), [33]);
+  assert.equal(second.nextCursor, null);
+  for (const cursor of ["0", "-1", "1.5", "bad"]) await assert.rejects(listTimelineReplies(f.runtime, event, cursor), { status: 400 });
+});
+
+await check("ordered images bind once to the owning status, reply or comment", async (f) => {
+  await f.enable();
+  const imageIds = [f.image(), f.image()];
+  const input = { body: "Images", requestKey: "image-binding-status-contract-001", imageIds };
+  const event = await createTimelineStatus(f.runtime, 1, input);
+  assert.equal(await createTimelineStatus(f.runtime, 1, input), event);
+  assert.deepEqual((await f.page()).items[0].images.map((image) => image.id), imageIds);
+  await assert.rejects(createTimelineStatus(f.runtime, 1, { ...input, imageIds: [...imageIds].reverse() }), { status: 409 });
+  const unavailable = [imageIds, [f.image(2)], [f.image(), f.image()]];
+  f.sqlite.prepare("UPDATE comment_images SET status='uncertain' WHERE id=?").run(unavailable[2][0]);
+  for (const [i, ids] of unavailable.entries()) await assert.rejects(createTimelineStatus(f.runtime, 1, {
+    body: "Unavailable", requestKey: `image-unavailable-contract-${i}`, imageIds: ids,
+  }), { status: 400 });
+  await assert.rejects(createTimelineStatus(f.runtime, 1, { body: "Duplicate", requestKey: "image-duplicate-contract-001", imageIds: [imageIds[0], imageIds[0]] }), { status: 400 });
+  await assert.rejects(createComment(f.runtime, { kind: "work", id: 2 }, 1, "Cannot steal", undefined, imageIds, "image-comment-steal-001"), { status: 409 });
+  const commentImage = f.image();
+  await createComment(f.runtime, { kind: "work", id: 2 }, 1, "Comment image", undefined, [commentImage], "image-comment-owner-001");
+  await assert.rejects(createTimelineStatus(f.runtime, 1, { body: "Cannot steal comment", requestKey: "image-status-steal-001", imageIds: [commentImage] }), { status: 400 });
+  const replyImage = f.image(2);
+  const reply = await createTimelineReply(f.runtime, event, 2, { body: "Reply image", requestKey: "image-reply-owner-001", imageIds: [replyImage] });
+  assert.deepEqual((await listTimelineReplies(f.runtime, event)).items[0].images.map((image) => image.id), [replyImage]);
+  assert.equal(f.number("SELECT timeline_reply_id FROM comment_images WHERE id=?", replyImage), reply);
+  await assert.rejects(createTimelineReply(f.runtime, event, 2, { body: "Cannot reuse", requestKey: "image-reply-steal-001", imageIds: [replyImage] }), { status: 400 });
+});
+
+await check("image binding failure rolls back publication and preserves drafts", async (f) => {
+  await f.enable();
+  const image = f.image();
+  f.sqlite.exec("CREATE TRIGGER contract_image_failure BEFORE UPDATE OF timeline_event_id ON comment_images BEGIN SELECT RAISE(ABORT,'binding failed'); END");
+  await assert.rejects(createTimelineStatus(f.runtime, 1, { body: "Atomic publication", requestKey: "atomic-image-contract-001", imageIds: [image] }), /binding failed/);
+  assert.equal(f.count(), 0);
+  assert.equal(f.sqlite.prepare("SELECT timeline_event_id FROM comment_images WHERE id=?").get(image)!.timeline_event_id, null);
+  f.sqlite.exec("DROP TRIGGER contract_image_failure");
+  await createTimelineStatus(f.runtime, 1, { body: "Atomic publication", requestKey: "atomic-image-contract-001", imageIds: [image] });
+  assert.equal(f.count(), 1);
+});
+
+await check("image reads and cleanup respect current parent status and the deletion grace period", async (f) => {
+  await f.enable();
+  const statusImage = f.image(), replyImage = f.image(2);
+  const event = await createTimelineStatus(f.runtime, 1, { body: "Visible images", requestKey: "image-visibility-status-001", imageIds: [statusImage] });
+  await createTimelineReply(f.runtime, event, 2, { body: "Visible reply", requestKey: "image-visibility-reply-001", imageIds: [replyImage] });
+  for (const id of [statusImage, replyImage]) {
+    const response = await readCommentImage(f.runtime, id);
+    assert.equal(response.status, 200);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), png);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+  }
+  f.sqlite.exec("UPDATE comment_images SET updated_at=datetime('now','-8 days'); UPDATE users SET status='disabled' WHERE id=1");
+  for (const id of [statusImage, replyImage]) assert.equal((await readCommentImage(await f.asUser(1), id)).status, 404);
+  await assert.rejects(listTimelineReplies(f.runtime, event), { status: 404 });
+  await assert.rejects(setTimelineLike(f.runtime, event, 2, true), { status: 404 });
+  await assert.rejects(createTimelineReply(f.runtime, event, 2, { body: "Hidden parent", requestKey: "image-hidden-parent-reply-001" }), { status: 404 });
+  assert.deepEqual(await cleanupCommentImages(f.db, f.runtime.bucket), { cleaned: 0, failed: [] });
+  f.sqlite.exec("UPDATE users SET status='active' WHERE id=1; UPDATE users SET status='disabled' WHERE id=2");
+  assert.equal((await readCommentImage(f.runtime, replyImage)).status, 404);
+  assert.equal((await f.page()).items[0].replyCount, 0);
+  f.sqlite.exec("UPDATE users SET status='active' WHERE id=2");
+  await deleteTimelineEvent(f.runtime, event, 1);
+  for (const id of [statusImage, replyImage]) assert.equal((await readCommentImage(f.runtime, id)).status, 404);
+  assert.deepEqual(await cleanupCommentImages(f.db, f.runtime.bucket), { cleaned: 0, failed: [] });
+  f.sqlite.exec("UPDATE timeline_events SET hidden_at=datetime('now','-8 days') WHERE kind='status'");
+  assert.deepEqual(await cleanupCommentImages(f.db, f.runtime.bucket), { cleaned: 2, failed: [] });
+  assert.deepEqual(f.deletedObjects.sort(), [statusImage, replyImage].map((id) => `comment-images/${id}`).sort());
+  const draft = f.image();
+  assert.equal((await readCommentImage(await f.asUser(2), draft)).status, 404);
+  assert.equal((await readCommentImage(f.runtime, draft)).status, 404);
+  assert.equal((await readCommentImage(await f.asUser(1), draft)).status, 200);
+});
+
+await check("every account has one permanent join record at its registration time", async (f) => {
+  assert.equal(f.count("join"), 5, "private and deleted legacy accounts are included");
+  assert.equal(f.number("SELECT COUNT(*) FROM timeline_events e JOIN users u ON u.id=e.user_id WHERE e.kind='join' AND e.created_at=u.created_at"), 5);
+  assert.equal((await listTimeline(f.runtime, { actorUserId: 5 })).items[0].kind, "join");
+  const join = (await listTimeline(await f.asUser(1), { actorUserId: 1, viewerId: 1 })).items[0];
+  assert.equal(join.canDelete, false);
+  assert.equal(join.canLike, false);
+  assert.equal(join.canReply, false);
+  assert.equal(join.target, null);
+  assert.equal(join.work, null);
+  assert.deepEqual(join.images, []);
+  for (const id of [1, 3]) await assert.rejects(deleteTimelineEvent(f.runtime, join.id, id), { status: 404 });
+  await assert.rejects(setTimelineLike(f.runtime, join.id, 2, true), { status: 404 });
+  await assert.rejects(createTimelineReply(f.runtime, join.id, 2, { body: "Not interactive", requestKey: "permanent-join-reply-contract" }), { status: 404 });
+  assert.throws(() => f.sqlite.prepare("UPDATE timeline_events SET hidden_at=CURRENT_TIMESTAMP WHERE id=?").run(join.id), /permanent/);
+  assert.throws(() => f.sqlite.prepare("DELETE FROM timeline_events WHERE id=?").run(join.id), /permanent/);
+  assert.equal(f.number("SELECT COUNT(*) FROM auth_audit_logs WHERE event_type='timeline_moderation'"), 0);
+  const input = { email: "join-new@example.test", passwordHash: "contract-hash", displayName: "New join account" };
+  const created = await createOrActivateVerifiedUser(f.runtime, input);
+  await createOrActivateVerifiedUser(f.runtime, input);
+  assert.equal(f.number("SELECT COUNT(*) FROM timeline_events WHERE user_id=? AND kind='join'", created.id), 1);
+  const item = (await listTimeline(f.runtime, { actorUserId: created.id })).items[0];
+  assert.equal(item.createdAt, created.createdAt);
+  assert.equal(f.count(), 0);
+});
+
+await check("renames preserve their original names atomically regardless of activity recording", async (f) => {
+  f.sqlite.exec("INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(1,'timeline.use')");
+  const original = (await findUserById(f.runtime, 1))!;
+  const rename = async (displayName: string) => updateOwnProfile(f.runtime, { user: (await findUserById(f.runtime, 1))!, displayName, bio: "" });
+  await rename("Renamed A");
+  await rename("Renamed A");
+  assert.equal(f.count("rename"), 1, "same-name saves are not renames");
+  await rename("Renamed B");
+  const items = (await listTimeline(await f.asUser(3), { actorUserId: 1, viewerId: 3, kind: "rename" })).items;
+  assert.deepEqual(items.map((item) => item.nameChange), [
+    { previousName: "Renamed A", newName: "Renamed B" },
+    { previousName: original.displayName, newName: "Renamed A" },
+  ]);
+  assert.ok(items.every((item) => !item.canDelete && !item.canLike && !item.canReply && !item.images.length));
+  assert.equal((await readTimelineSettings(f.runtime, 1)).enabled, false);
+  const beforeAudit = f.number("SELECT COUNT(*) FROM auth_audit_logs");
+  f.sqlite.exec("CREATE TRIGGER contract_rename_failure BEFORE INSERT ON timeline_events WHEN NEW.kind='rename' BEGIN SELECT RAISE(ABORT,'history write failed'); END");
+  await assert.rejects(rename("Must roll back"), /history write failed/);
+  assert.equal((await findUserById(f.runtime, 1))!.displayName, "Renamed B");
+  assert.equal(f.count("rename"), 2);
+  assert.equal(f.number("SELECT COUNT(*) FROM auth_audit_logs"), beforeAudit);
+  f.sqlite.exec("DROP TRIGGER contract_rename_failure; INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(1,'user.rename_own')");
+  await assert.rejects(rename("Denied rename"), { status: 403 });
+  f.sqlite.exec("UPDATE users SET status='deleted',display_name='账户已注销' WHERE id=1");
+  assert.equal(f.count("rename"), 2, "account deletion must not publish a fake rename");
+  assert.equal((await listTimeline(f.runtime, { actorUserId: 1, kind: "rename" })).items.length, 2);
+  assert.throws(() => f.sqlite.prepare("DELETE FROM users WHERE id=1").run(), /permanent/);
+});
+
+await check("account-history migration preserves interactions, unavailable emoji references and image ownership", async (f) => {
+  assert.equal(f.number("SELECT id FROM timeline_events WHERE event_key='preserved-status'"), 900);
+  assert.equal(f.number("SELECT hidden_at IS NOT NULL FROM timeline_events WHERE id=901"), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM timeline_status_likes WHERE event_id=900 AND user_id=2"), 1);
+  assert.equal(f.number("SELECT event_id FROM timeline_status_replies WHERE id=900"), 900);
+  assert.equal(f.number("SELECT COUNT(*) FROM timeline_event_face_emojis WHERE content_id=900"), 1);
+  assert.equal(f.number("SELECT COUNT(*) FROM timeline_reply_face_emojis WHERE content_id=900"), 1);
+  assert.equal(f.number("SELECT timeline_event_id FROM comment_images WHERE id='preserved-event-image'"), 900);
+  assert.equal(f.number("SELECT timeline_reply_id FROM comment_images WHERE id='preserved-reply-image'"), 900);
+  assert.equal(f.number("SELECT position FROM comment_images WHERE id='preserved-reply-image'"), 1);
+  assert.ok(f.number("SELECT MIN(id) FROM timeline_events WHERE kind='join'") > 1000, "previously allocated IDs are not reused");
+}, false, (sqlite) => {
+  sqlite.exec(`INSERT INTO timeline_events(id,user_id,kind,action,event_key,body) VALUES(900,1,'status','发表了吐槽','preserved-status','Historical status');
+    INSERT INTO timeline_events(id,user_id,kind,action,event_key,body,hidden_at) VALUES(901,1,'status','发表了吐槽','preserved-hidden',NULL,CURRENT_TIMESTAMP);
+    INSERT INTO timeline_events(id,user_id,kind,action,event_key,body) VALUES(1000,1,'status','发表了吐槽','removed-highest','Removed');
+    DELETE FROM timeline_events WHERE id=1000;
+    INSERT INTO timeline_status_likes(event_id,user_id) VALUES(900,2);
+    INSERT INTO timeline_status_replies(id,event_id,user_id,body,request_key,request_hash) VALUES(900,900,2,'Historical reply','preserved-reply','hash');
+    INSERT INTO blobs(sha256,size_bytes,content_type_hint) VALUES('${"b".repeat(64)}',${png.length},'image/png');
+    INSERT INTO face_sheets(blob_sha256,width_px,height_px,source_kind,library_status) VALUES('${"b".repeat(64)}',48,48,'user_upload','approved');
+    INSERT INTO face_emoji_refs(id,blob_sha256,cell_row,cell_column,width_px,height_px) VALUES(900,'${"b".repeat(64)}',0,0,48,48);
+    INSERT INTO timeline_event_face_emojis(content_id,emoji_id) VALUES(900,900);
+    INSERT INTO timeline_reply_face_emojis(content_id,emoji_id) VALUES(900,900);
+    UPDATE face_sheets SET library_status='pending' WHERE blob_sha256='${"b".repeat(64)}';
+    INSERT INTO comment_images(id,user_id,client_id,fingerprint,status,object_key,format,size,width,height,timeline_event_id,position)
+      VALUES('preserved-event-image',1,'preserved-event-client','hash','ready','comment-images/preserved-event-image','png',${png.length},1,1,900,0);
+    INSERT INTO comment_images(id,user_id,client_id,fingerprint,status,object_key,format,size,width,height,timeline_reply_id,position)
+      VALUES('preserved-reply-image',2,'preserved-reply-client','hash','ready','comment-images/preserved-reply-image','png',${png.length},1,1,900,1);`);
 });
 
 console.log("Timeline persistent contracts passed");

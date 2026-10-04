@@ -2,7 +2,7 @@ import type { FaceEmoji } from "@/lib/face-emojis";
 import type { CommentImage } from "@/lib/comment-images";
 export const TIMELINE_RECORD_KINDS = ["favorite", "catalog", "comment", "discussion", "upload", "play"] as const;
 export type TimelineRecordKind = (typeof TIMELINE_RECORD_KINDS)[number];
-export const TIMELINE_KINDS = [...TIMELINE_RECORD_KINDS, "status"] as const;
+export const TIMELINE_KINDS = [...TIMELINE_RECORD_KINDS, "status", "join", "rename"] as const;
 export type TimelineKind = (typeof TIMELINE_KINDS)[number];
 export type TimelineView = "all" | "mine" | "following";
 export type TimelineDefaultView = "all" | "following";
@@ -14,7 +14,7 @@ export function isTimelineView(value: unknown): value is TimelineView {
 }
 export const TIMELINE_KIND_LABELS: Record<TimelineKind, string> = {
   favorite: "收藏", catalog: "目录", comment: "评论",
-  discussion: "发帖", upload: "上传", play: "游玩", status: "吐槽",
+  discussion: "发帖", upload: "上传", play: "游玩", status: "吐槽", join: "加入", rename: "改名",
 };
 export type TimelineSettings = { enabled: boolean; recordKinds: TimelineRecordKind[]; timelineAsHomepage: boolean; defaultView: TimelineDefaultView };
 export function isTimelineRecordKind(value: unknown): value is TimelineRecordKind {
@@ -41,6 +41,7 @@ export type TimelineItem = {
   sourceReplyCount: number | null;
   canDelete: boolean;
   body: TimelineBodySegment[];
+  nameChange: { previousName: string; newName: string } | null;
   images: CommentImage[];
   likeCount: number;
   replyCount: number;

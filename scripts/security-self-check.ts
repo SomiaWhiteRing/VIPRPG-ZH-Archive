@@ -130,7 +130,6 @@ function fakeUser(
     profileVisibility: {
       bio: true,
       showcase: true,
-      timeline: true,
       friends: true,
       favorites: true,
       history: true,

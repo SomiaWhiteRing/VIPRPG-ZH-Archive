@@ -16,14 +16,16 @@ export async function POST(runtime: AppRuntime, request: Request) {
       await updateAccountPreferences(runtime, auth.user.id, form);
       return redirectWithParams(request, "/me/privacy", { preferencesUpdated: "1" });
     }
+    // Released friend forms include this hidden field; older forms preserve
+    // the friend setting that their user never saw.
+    const friendForm = form.has("notifyFriendAdditions");
     await updateOwnProfileVisibility(runtime, {
       user: auth.user,
       notifyFriendAdditions: form.has("notifyFriendAdditions") ? form.getAll("notifyFriendAdditions").includes("1") : undefined,
       visibility: {
         bio: form.get("showBio") === "1",
         showcase: form.get("showShowcase") === "1",
-        timeline: form.get("showTimeline") === "1",
-        friends: form.get("showFriends") === "1",
+        friends: form.has("showFriends") || friendForm ? form.getAll("showFriends").includes("1") : auth.user.profileVisibility.friends,
         favorites: form.get("showFavorites") === "1",
         history: form.get("showHistory") === "1",
         catalogs: form.get("showCatalogs") === "1",
