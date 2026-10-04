@@ -1,10 +1,15 @@
 // Hidden comments and temporarily non-public targets remain recoverable.
 // Parent deletion preserves published replies and their images.
-const disposable = `(i.comment_id IS NULL OR EXISTS(
+const disposable = `((i.comment_id IS NULL AND i.timeline_event_id IS NULL AND i.timeline_reply_id IS NULL) OR EXISTS(
   SELECT 1 FROM comments c
   WHERE c.id=i.comment_id AND c.status='deleted'
     AND datetime(c.deleted_at)<=datetime('now','-7 days')
-))`;
+) OR EXISTS(SELECT 1 FROM timeline_events e WHERE e.id=i.timeline_event_id
+  AND e.hidden_at IS NOT NULL AND datetime(e.hidden_at)<=datetime('now','-7 days'))
+  OR EXISTS(SELECT 1 FROM timeline_status_replies r JOIN timeline_events e ON e.id=r.event_id
+    WHERE r.id=i.timeline_reply_id AND
+      ((r.hidden_at IS NOT NULL AND datetime(r.hidden_at)<=datetime('now','-7 days'))
+       OR (e.hidden_at IS NOT NULL AND datetime(e.hidden_at)<=datetime('now','-7 days')))))`;
 
 export async function cleanupCommentImages(db: D1Database, bucket: R2Bucket) {
   const candidates = await db.prepare(`SELECT i.id FROM comment_images i WHERE

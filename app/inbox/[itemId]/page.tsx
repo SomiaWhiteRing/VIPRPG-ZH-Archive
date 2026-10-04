@@ -7,6 +7,7 @@ import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { HttpError } from "@/lib/http";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { useRef } from "react";
@@ -59,7 +60,13 @@ export default function InboxTargetPage() {
       </div>
       <PageHeader compact title="提醒" />
       <div ref={contentRef} className="min-w-0 wrap-anywhere py-6">
-        <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
+        {item.friendNotification ? <div className="flex min-w-0 items-center gap-3">
+          <UserAvatar displayName={item.friendNotification.actorName} avatarBlobSha256={item.friendNotification.actorAvatar} size={40} className="size-10 shrink-0" />
+          <p className="min-w-0 wrap-anywhere">
+            {item.friendNotification.actorHref ? <Link to={item.friendNotification.actorHref} className="text-primary hover:underline">{item.friendNotification.actorName}</Link> : item.friendNotification.actorName}
+            {item.friendNotification.action}
+          </p>
+        </div> : <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>}
         {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
         {item.commentNotification ? <>
           <Link to={item.commentNotification.href} className="mt-2 block text-primary hover:underline">{item.commentNotification.targetTitle}</Link>
@@ -76,6 +83,7 @@ export default function InboxTargetPage() {
           canApprove: item.canApprove,
           canReject: item.canReject,
           maintainerRequest: item.maintainerRequest,
+          friendNotification: item.friendNotification,
           title: item.title,
           targetDisplayName: item.targetDisplayName,
         }}

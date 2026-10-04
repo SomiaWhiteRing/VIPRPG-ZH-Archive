@@ -206,7 +206,7 @@ export async function mergeWorks(
         .bind(target, source),
     );
   }
-  for (const table of ["import_jobs", "download_builds"]) {
+  for (const table of ["import_jobs", "download_builds", "timeline_events"]) {
     statements.push(
       db
         .prepare(
@@ -250,6 +250,28 @@ export async function mergeWorks(
     );
   }
   statements.push(
+    // Resolve activities against the original launch markers BEFORE combining
+    // identities. An unknown legacy first time, or an earliest launch consumed
+    // while recording was off, cannot inherit a later duplicate's public event.
+    // Equal timestamps with a missing event are conservatively suppressed too.
+    db.prepare(`DELETE FROM timeline_events WHERE kind='play' AND work_id IN (?,?) AND id NOT IN (
+      SELECT MIN(e.id) FROM timeline_events e JOIN user_work_first_plays marker
+        ON marker.user_id=e.user_id AND marker.work_id=e.work_id
+      WHERE e.kind='play' AND e.work_id IN (?,?) AND marker.first_observed_at=(
+        SELECT MIN(m.first_observed_at) FROM user_work_first_plays m WHERE m.user_id=e.user_id AND m.work_id IN (?,?))
+      AND NOT EXISTS(SELECT 1 FROM user_work_first_plays prior WHERE prior.user_id=e.user_id AND prior.work_id IN (?,?) AND (
+        prior.first_observed_at IS NULL OR (prior.first_observed_at=(
+          SELECT MIN(m.first_observed_at) FROM user_work_first_plays m WHERE m.user_id=e.user_id AND m.work_id IN (?,?))
+          AND NOT EXISTS(SELECT 1 FROM timeline_events recorded WHERE recorded.user_id=prior.user_id
+            AND recorded.work_id=prior.work_id AND recorded.kind='play')))) GROUP BY e.user_id
+    )`).bind(source, target, source, target, source, target, source, target, source, target),
+    db.prepare(`INSERT INTO user_work_first_plays(user_id,work_id,first_observed_at)
+      SELECT user_id,?,first_observed_at FROM user_work_first_plays WHERE work_id=?
+      ON CONFLICT(user_id,work_id) DO UPDATE SET first_observed_at=CASE
+        WHEN first_observed_at IS NULL OR excluded.first_observed_at IS NULL THEN NULL
+        ELSE MIN(first_observed_at,excluded.first_observed_at) END`).bind(target, source),
+    db.prepare("DELETE FROM user_work_first_plays WHERE work_id=?").bind(source),
+    db.prepare("UPDATE timeline_events SET work_id=? WHERE work_id=?").bind(target, source),
     db
       .prepare(
         `INSERT INTO user_work_entries(work_id,user_id,last_played_at,favorited_at,favorite_note,updated_at)

@@ -25,6 +25,7 @@ export function InboxControls({
     ["replies", "回复"],
     ["forum", "讨论版"],
     ["likes", "赞"],
+    ["friends", "好友"],
     ["system", "系统"],
     ...(canResolve
       ? [["pending", `待处理 ${pendingCount}`] as [InboxCategory, string]]

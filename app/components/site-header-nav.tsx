@@ -47,6 +47,7 @@ const PUBLIC_LINKS: HeaderNavigationLink[] = [
   { href: "/games", label: "作品库" },
   { href: "/characters", label: "角色" },
   { href: "/discussions", label: "讨论版" },
+  { href: "/timeline", label: "时间线" },
   { href: "/rakuen", label: "超展开" },
   { href: "/catalogs", label: "目录" },
   { href: "/resources", label: "链接" },
@@ -176,6 +177,9 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const mobileMenuOpen = openPanel === "menu";
   const mobileSearchOpen = openPanel === "search";
   const visibleAdminEntries = getAdminNavigation(session);
+  const publicLinks = session?.preferences.timelineAsHomepage
+    ? PUBLIC_LINKS.map((link) => link.href === "/timeline" ? { href: "/explore", label: "探索" } : link)
+    : PUBLIC_LINKS;
 
   useEffect(() => {
     const header = headerRef.current;
@@ -272,7 +276,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
         <HeaderNavigation
           ariaLabel={inAdmin ? "管理导航" : "站点导航"}
-          entries={inAdmin ? visibleAdminEntries : PUBLIC_LINKS}
+          entries={inAdmin ? visibleAdminEntries : publicLinks}
           mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
           mobileOpen={mobileMenuOpen}
           onMobileNavigate={() => setOpenPanel(null)}

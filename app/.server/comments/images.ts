@@ -9,14 +9,16 @@ import { hasPermission } from "@/lib/authz/permissions";
 import { COMMENT_IMAGE_BYTES, COMMENT_IMAGE_COUNT, type CommentImage } from "@/lib/comment-images";
 import { inspectImage, ImageValidationError } from "@/lib/image-format";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { userPermissionSql } from "@/app/.server/auth/permission-sql";
+import { PUBLIC_STATUS } from "@/app/.server/timeline/content";
 
 const columns = "id,('/api/comments/images/' || id) AS url,width,height,size,format";
 type StoredImage = CommentImage & {
   user_id: number; object_key: string; fingerprint: string;
   status: "uploading" | "ready" | "uncertain" | "cleanup" | "cleaned";
-  updated_at: string; comment_id: number | null;
+  updated_at: string; comment_id: number | null; timeline_event_id: number | null; timeline_reply_id: number | null;
 };
-const storedColumns = `${columns},user_id,object_key,fingerprint,status,updated_at,comment_id`;
+const storedColumns = `${columns},user_id,object_key,fingerprint,status,updated_at,comment_id,timeline_event_id,timeline_reply_id`;
 const pending = () => new HttpError(409, "图片上传尚待确认，请一分钟后重试，已上传图片会被保留。");
 
 export function parseCommentImageIds(value: unknown): string[] {
@@ -30,7 +32,7 @@ export function parseCommentImageIds(value: unknown): string[] {
 
 export function commentImageGuard(ids: string[], userId: number, commentId = 0) {
   return {
-    sql: `(SELECT COUNT(*) FROM comment_images WHERE id IN(SELECT value FROM json_each(?)) AND user_id=? AND status='ready' AND (comment_id IS NULL OR comment_id=?))=?`,
+    sql: `(SELECT COUNT(*) FROM comment_images WHERE id IN(SELECT value FROM json_each(?)) AND user_id=? AND status='ready' AND timeline_event_id IS NULL AND timeline_reply_id IS NULL AND (comment_id IS NULL OR comment_id=?))=?`,
     args: [JSON.stringify(ids), userId, commentId, ids.length],
   };
 }
@@ -42,7 +44,7 @@ export function commentImageStatements(db: D1Database, ids: string[], userId: nu
     db.prepare(`UPDATE comment_images SET comment_id=(${source}),
       position=(SELECT CAST(key AS INTEGER) FROM json_each(?) WHERE value=comment_images.id),updated_at=CURRENT_TIMESTAMP
       WHERE id IN(SELECT value FROM json_each(?)) AND user_id=? AND status='ready'
-        AND comment_id IS NULL AND EXISTS(${source})`)
+        AND comment_id IS NULL AND timeline_event_id IS NULL AND timeline_reply_id IS NULL AND EXISTS(${source})`)
       .bind(...args, JSON.stringify(ids), JSON.stringify(ids), userId, ...args),
   ];
 }
@@ -61,6 +63,35 @@ export async function commentImagesById(db: D1Database, ids: number[]) {
   return map;
 }
 
+export function timelineImageGuard(ids: string[], userId: number) {
+  return {
+    sql: `(SELECT COUNT(*) FROM comment_images WHERE id IN(SELECT value FROM json_each(?)) AND user_id=? AND status='ready' AND comment_id IS NULL AND timeline_event_id IS NULL AND timeline_reply_id IS NULL)=?`,
+    args: [JSON.stringify(ids), userId, ids.length],
+  };
+}
+
+export function timelineImageStatement(db: D1Database, field: "timeline_event_id" | "timeline_reply_id", ids: string[], userId: number, source: string, args: (number | string)[]) {
+  return db.prepare(`UPDATE comment_images SET ${field}=(${source}),
+    position=(SELECT CAST(key AS INTEGER) FROM json_each(?) WHERE value=comment_images.id),updated_at=CURRENT_TIMESTAMP
+    WHERE id IN(SELECT value FROM json_each(?)) AND user_id=? AND status='ready'
+      AND comment_id IS NULL AND timeline_event_id IS NULL AND timeline_reply_id IS NULL AND EXISTS(${source})`)
+    .bind(...args, JSON.stringify(ids), JSON.stringify(ids), userId, ...args);
+}
+
+export async function timelineImagesById(db: D1Database, field: "timeline_event_id" | "timeline_reply_id", ids: number[]) {
+  const map = new Map<number, CommentImage[]>();
+  if (!ids.length) return map;
+  const rows = await db.prepare(`SELECT ${columns},${field} AS content_id FROM comment_images
+    WHERE ${field} IN(SELECT value FROM json_each(?)) AND status='ready' ORDER BY ${field},position`)
+    .bind(JSON.stringify(ids)).all<CommentImage & { content_id: number }>();
+  for (const { content_id, ...image } of rows.results) {
+    const images = map.get(content_id) ?? [];
+    images.push(image);
+    map.set(content_id, images);
+  }
+  return map;
+}
+
 export async function uploadCommentImage(runtime: AppRuntime, request: Request) {
   try {
     const auth = await requireUser(runtime, request);
@@ -73,9 +104,21 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
     catch { throw new HttpError(400, "图片请求无效。"); }
     const file = form.get("image"), clientId = form.get("clientId");
     const kind = form.get("targetKind"), id = Number(form.get("targetId"));
-    if ((kind !== "work" && kind !== "creator" && kind !== "character") || !Number.isSafeInteger(id) || id <= 0)
-      throw new HttpError(400, "评论目标无效。");
-    await assertPublicCommentTarget(runtime, { kind, id });
+    let permissionGate = "1";
+    if (kind === "timelineStatus" || kind === "timelineReply") {
+      permissionGate = kind === "timelineStatus"
+        ? `timeline_enabled=1 AND ${userPermissionSql("users.id", "timeline.use")} AND ${userPermissionSql("users.id", "timeline.status.create")}`
+        : userPermissionSql("users.id", "timeline.reply.create");
+      if (!await runtime.db.prepare(`SELECT id FROM users WHERE id=? AND status='active' AND ${permissionGate}`).bind(auth.user.id).first())
+        throw new HttpError(403, "当前账号不能上传时间线图片。");
+      if (kind === "timelineReply" && (!Number.isSafeInteger(id) || id <= 0 || !await runtime.db.prepare(PUBLIC_STATUS).bind(id).first()))
+        throw new HttpError(404, "吐槽不存在或已隐藏。");
+      if (kind === "timelineReply") permissionGate += ` AND EXISTS(${PUBLIC_STATUS.replace("e.id=?", `e.id=${id}`)})`;
+    } else {
+      if ((kind !== "work" && kind !== "creator" && kind !== "character") || !Number.isSafeInteger(id) || id <= 0)
+        throw new HttpError(400, "评论目标无效。");
+      await assertPublicCommentTarget(runtime, { kind, id });
+    }
     if (!(file instanceof File) || typeof clientId !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(clientId))
       throw new HttpError(400, "图片或上传标识无效。");
     const buffer = await file.arrayBuffer();
@@ -94,7 +137,7 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
       if (existing.status === "cleanup" || existing.status === "cleaned") throw new HttpError(409, "图片已过期，请移除后重新选择。");
     }
     const imageId = existing?.id ?? crypto.randomUUID(), stamp = new Date().toISOString();
-    const gate = `EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') AND
+    const gate = `EXISTS(SELECT 1 FROM users WHERE id=? AND status='active' AND ${permissionGate}) AND
       (SELECT COUNT(*) FROM comment_images WHERE user_id=? AND datetime(updated_at)>=datetime('now','-1 minute'))<12`;
     const row = existing
       ? await db.prepare(`UPDATE comment_images SET status='uploading',updated_at=? WHERE id=?
@@ -130,12 +173,20 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
 export async function readCommentImage(runtime: AppRuntime, id: string) {
   try {
     const row = await runtime.db.prepare(`SELECT ${storedColumns},
-      EXISTS(SELECT 1 FROM public_comments c WHERE c.id=comment_images.comment_id) AS public
+      (EXISTS(SELECT 1 FROM public_comments c WHERE c.id=comment_images.comment_id)
+       OR EXISTS(SELECT 1 FROM timeline_events e JOIN users u ON u.id=e.user_id
+         WHERE e.id=comment_images.timeline_event_id AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active' AND u.profile_show_timeline=1)
+       OR EXISTS(SELECT 1 FROM timeline_status_replies r JOIN users ru ON ru.id=r.user_id
+         JOIN timeline_events e ON e.id=r.event_id JOIN users u ON u.id=e.user_id
+         WHERE r.id=comment_images.timeline_reply_id AND r.hidden_at IS NULL AND ru.status='active'
+           AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active' AND u.profile_show_timeline=1)) AS public
       FROM comment_images WHERE id=? AND status='ready'`).bind(id).first<StoredImage & { public: number }>();
     if (!row) throw new HttpError(404, "图片不可用。");
     if (!row.public) {
       const user = await getCurrentUser(runtime);
-      if (!user || !(hasPermission(user, "comment.manage_any") || (row.comment_id === null && row.user_id === user.id)))
+      const draft = row.comment_id === null && row.timeline_event_id === null && row.timeline_reply_id === null;
+      const canManage = row.timeline_event_id === null && row.timeline_reply_id === null && hasPermission(user, "comment.manage_any");
+      if (!user || !(canManage || (draft && row.user_id === user.id)))
         throw new HttpError(404, "图片不可用。");
     }
     const object = await runtime.bucket.get(row.object_key);

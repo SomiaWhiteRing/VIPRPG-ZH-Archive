@@ -6,11 +6,12 @@ import { type RefObject, useEffect, useState } from "react";
 
 
 export function useInboxAutoRead(
-  item: Pick<InboxItem, "id" | "readAt" | "canApprove" | "canReject">,
+  item: Pick<InboxItem, "id" | "readAt" | "canApprove" | "canReject"> & { friendNotification?: InboxItem["friendNotification"] },
   targetRef: RefObject<HTMLElement | null>,
   onRead?: (itemId: number) => void,
 ) {
   const { id, canApprove, canReject } = item;
+  const friendRequest = item.friendNotification?.kind === "added";
   const [result, setResult] = useState<{
     itemId: number;
     readAt: string | null;
@@ -20,7 +21,7 @@ export function useInboxAutoRead(
 
   useEffect(() => {
     const target = targetRef.current;
-    if (readAt || canApprove || canReject || !target) return;
+    if (readAt || canApprove || canReject || friendRequest || !target) return;
 
     let disposed = false;
     let visible = false;
@@ -73,7 +74,7 @@ export function useInboxAutoRead(
       observer.disconnect();
       document.removeEventListener("visibilitychange", schedule);
     };
-  }, [id, readAt, canApprove, canReject, targetRef, onRead]);
+  }, [id, readAt, canApprove, canReject, friendRequest, targetRef, onRead]);
 
   return {
     readAt,

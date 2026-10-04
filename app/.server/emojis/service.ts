@@ -493,7 +493,7 @@ export async function hotEmojis(db: D1Database, offset: number) {
 /** Run in the content mutation's batch; source is gated by its write revision/owner. */
 export function contentEmojiStatements(
   db: D1Database,
-  kind: "comment" | "post" | "forumComment",
+  kind: "comment" | "post" | "forumComment" | "timelineStatus" | "timelineReply",
   source: string,
   args: (string | number)[],
   body: string,
@@ -504,6 +504,8 @@ export function contentEmojiStatements(
     comment: "comment_face_emojis",
     post: "forum_post_face_emojis",
     forumComment: "forum_comment_face_emojis",
+    timelineStatus: "timeline_event_face_emojis",
+    timelineReply: "timeline_reply_face_emojis",
   }[kind];
   const ids = JSON.stringify(emojiIds(body));
   const statements = [

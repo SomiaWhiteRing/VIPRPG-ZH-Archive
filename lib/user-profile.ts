@@ -3,6 +3,8 @@ export const DEFAULT_USER_AVATAR_SRC = "/icon/alex.png";
 export type ProfileVisibility = {
   bio: boolean;
   showcase: boolean;
+  timeline: boolean;
+  friends: boolean;
   favorites: boolean;
   history: boolean;
   catalogs: boolean;

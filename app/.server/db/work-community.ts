@@ -1,4 +1,5 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
+import { timelineStatement } from "@/app/.server/db/timeline";
 import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
 import { sha256Hex } from "@/lib/sha256";
 import type { CommentImage } from "@/lib/comment-images";
@@ -118,6 +119,8 @@ export async function setWorkFavorite(
   const note = noteInput === undefined ? undefined : parseFavoriteNote(noteInput);
   const database = getD1(runtime);
   const results = await database.batch([
+    timelineStatement(database, { userId, kind: "favorite", action: "收藏了作品", workId,
+      predicate: "EXISTS(SELECT 1 FROM public_works WHERE id=?) AND NOT EXISTS(SELECT 1 FROM user_work_entries WHERE work_id=? AND user_id=? AND favorited_at IS NOT NULL)", args: [workId, workId, userId] }),
     database
       .prepare(
         `INSERT INTO user_work_entries(work_id, user_id, favorited_at, favorite_note, updated_at)
@@ -152,7 +155,7 @@ export async function setWorkFavorite(
       )
       .bind(workId, userId, workId),
   ]);
-  if ((results[0].meta.changes ?? 0) < 1)
+  if ((results[1].meta.changes ?? 0) < 1)
     throw new HttpError(404, "作品不存在");
 }
 

@@ -12,7 +12,7 @@ export function normalizeRejectionReason(value: unknown): string {
 }
 
 export const INBOX_PAGE_SIZE = 30;
-export const INBOX_CATEGORIES = ["all", "comments", "replies", "forum", "likes", "system", "pending"] as const;
+export const INBOX_CATEGORIES = ["all", "comments", "replies", "forum", "likes", "friends", "system", "pending"] as const;
 export type InboxCategory = typeof INBOX_CATEGORIES[number];
 export type InboxCursor = { itemId: number; direction: "older" | "newer" };
 

@@ -131,17 +131,21 @@ export function BodyEditor({
   onCompositionChange,
   ref,
   textOnly = false,
+  allowMentions = true,
   maxLength,
   enforceMaxLength = true,
   inputId = "forum-body",
+  inputLabel = "正文",
   placeholder = "写下正文……",
   autoFocus = false,
   emojis = EMPTY_EMOJIS,
 }: {
   textOnly?: boolean;
+  allowMentions?: boolean;
   maxLength?: number;
   enforceMaxLength?: boolean;
   inputId?: string;
+  inputLabel?: string;
   placeholder?: string;
   autoFocus?: boolean;
   emojis?: FaceEmoji[];
@@ -205,7 +209,7 @@ export function BodyEditor({
       HardBreak,
       ...(textOnly ? [] : [ForumImageNode]),
       FaceEmojiNode,
-      UserMentionNode,
+      ...(allowMentions ? [UserMentionNode] : []),
       UndoRedo,
       Dropcursor.configure({ color: "var(--color-primary)", width: 2 }),
       Placeholder.configure({ placeholder }),
@@ -229,17 +233,17 @@ export function BodyEditor({
         },
       }),
     ],
-    content: editorDocument(body, images),
+    content: editorDocument(body, images, allowMentions),
     editorProps: {
       attributes: {
         id: inputId,
         role: "textbox",
-        "aria-label": "正文",
+        "aria-label": inputLabel,
         "aria-multiline": "true",
         class: "min-h-16 p-3 outline-none text-[15px] leading-[1.7] [overflow-wrap:anywhere] whitespace-pre-wrap group-data-[topic=true]/body-editor:min-h-48 group-data-[topic=false]/body-editor:max-h-[min(32dvh,20rem)] group-data-[topic=false]/body-editor:overflow-y-auto [&_p]:m-0 [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_.is-editor-empty:first-child]:before:text-muted [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:h-0 [&_[data-node-view-wrapper]]:whitespace-normal [&_.node-faceEmoji]:inline-flex [&_.node-faceEmoji]:align-bottom [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:max-h-none [[data-forum-fullscreen=true]_&]:overflow-y-visible",
       },
       handleTextInput: (view, from, to, text) => {
-        if (text !== "@" || view.composing || busy || pending.current) return false;
+        if (!allowMentions || text !== "@" || view.composing || busy || pending.current) return false;
         const preceding = view.state.doc.textBetween(Math.max(0, from - 1), from, "\n", "\ufffc");
         if (/[A-Za-z0-9._%+/@:-]/.test(preceding)) return false;
         view.dispatch(view.state.tr.insertText(text, from, to));
@@ -256,7 +260,7 @@ export function BodyEditor({
           onCompositionChange(false);
           // The IME transaction may land after compositionend.
           requestAnimationFrame(() => {
-            if (!editor || editor.isDestroyed || busy || pending.current) return;
+            if (!allowMentions || !editor || editor.isDestroyed || busy || pending.current) return;
             const { from, empty } = editor.state.selection;
             const text = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\n", "\ufffc");
             if (empty && text.endsWith("@") && !/[A-Za-z0-9._%+/@:-]/.test(text.slice(0, -1))) {
@@ -330,7 +334,7 @@ export function BodyEditor({
         current.images.map((image) => [image.key, image.offset]),
       ) !== JSON.stringify(images.map((image) => [image.key, image.offset]))
     ) {
-      editor.commands.setContent(editorDocument(body, images), {
+      editor.commands.setContent(editorDocument(body, images, allowMentions), {
         emitUpdate: false,
       });
     } else {
@@ -352,7 +356,7 @@ export function BodyEditor({
             .setMeta("preventUpdate", true),
         );
     }
-  }, [editor, body, images, assets]);
+  }, [editor, body, images, assets, allowMentions]);
   useEffect(() => {
     editor?.setEditable(!busy, false);
   }, [editor, busy]);
@@ -486,7 +490,7 @@ export function BodyEditor({
   }
   useImperativeHandle(ref, () => ({
     mention: () => {
-      if (!editor || busy || pending.current) return;
+      if (!allowMentions || !editor || busy || pending.current) return;
       if (mentionOpen) { closeMention(); return; }
       mentionBookmark.current = editor.state.selection.getBookmark();
       setMentionOpen(true);
@@ -509,7 +513,7 @@ export function BodyEditor({
     },
     insertText: (text) => {
       if (!busy && !pending.current)
-        editor?.chain().focus().insertContent(textContent(text)).run();
+        editor?.chain().focus().insertContent(textContent(text, allowMentions)).run();
     },
     focus: () => {
       editor?.commands.focus();
@@ -544,7 +548,7 @@ export function BodyEditor({
         </div>
       ) : null}
       <div ref={mentionHost} className="contents">
-        {mentionOpen && !busy ? <MentionPicker container={mentionHost.current?.closest<HTMLElement>("[data-forum-fullscreen=true]") ?? null} anchor={editor?.view.dom ?? null} inputId={inputId} onSelect={closeMention} onClose={(restoreFocus) => closeMention(undefined, restoreFocus)} /> : null}
+        {mentionOpen && allowMentions && !busy ? <MentionPicker container={mentionHost.current?.closest<HTMLElement>("[data-forum-fullscreen=true]") ?? null} anchor={editor?.view.dom ?? null} inputId={inputId} onSelect={closeMention} onClose={(restoreFocus) => closeMention(undefined, restoreFocus)} /> : null}
       </div>
       <EditorContent
         editor={editor}
