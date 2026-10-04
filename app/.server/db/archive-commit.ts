@@ -1,5 +1,6 @@
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
+import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { normalizeSha256, sha256Hex } from "@/lib/sha256";
 import {
@@ -1030,6 +1031,7 @@ function normalizeMetadata(
       genre: parseWorkGenre(game.genre),
       extra: {
         ...game.extra,
+        ...(game.extra.referenceDuration !== undefined ? { referenceDuration: parseWorkReferenceDuration(game.extra.referenceDuration) } : {}),
         moreInfo: parseWorkMoreInfo(game.extra.moreInfo),
         usesUnsupportedManiac:
           game.engineFamily === "rpg_maker_2003_maniac" &&

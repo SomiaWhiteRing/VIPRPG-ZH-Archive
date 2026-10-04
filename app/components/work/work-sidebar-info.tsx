@@ -24,6 +24,7 @@ export function WorkSidebarInfo({
     | "engineFamily"
     | "language"
     | "genre"
+    | "referenceDuration"
     | "moreInfo"
     | "maintainers"
     | "originalReleaseDate"
@@ -96,6 +97,7 @@ export function WorkSidebarInfo({
           <InfoRow label="别名">{work.aliases.join(" · ")}</InfoRow>
         ) : null}
         {work.genre ? <InfoRow label="类型"><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
+        {work.referenceDuration ? <InfoRow label="参考时长">{work.referenceDuration}</InfoRow> : null}
         <InfoRow label="引擎">{engineLabel(work.engineFamily)}</InfoRow>
         <InfoRow label="语言">{languageLabel(work.language)}</InfoRow>
         {work.originalReleaseDate && work.originalReleasePrecision !== "unknown" ? (
