@@ -7,13 +7,13 @@ import { useToast } from "@/app/components/ui/toast";
 import type { FollowSummary } from "@/lib/dto/db/user-follows";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 
-export function UserFollowControls({ userId, viewerId, summary }: { userId: number; viewerId: number | null; summary: FollowSummary }) {
+export function UserFollowControls({ userId, viewerId, summary }: { userId: number; viewerId: number | null; summary: FollowSummary | null }) {
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const revalidator = useRevalidator();
   const toast = useToast();
   async function toggle() {
-    if (submitting.current) return;
+    if (!summary || submitting.current) return;
     submitting.current = true;
     setBusy(true);
     try {
@@ -25,7 +25,7 @@ export function UserFollowControls({ userId, viewerId, summary }: { userId: numb
       toast.error(error instanceof Error ? error.message : "好友操作未完成，请重试。");
     } finally { submitting.current = false; setBusy(false); }
   }
-  if (viewerId === userId) return null;
+  if (!summary || viewerId === userId) return null;
   return <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
     {viewerId && (summary.isFollowing || summary.isFollowedBy) ? <span className="text-xs text-muted">
       {summary.isFollowing ? summary.isFollowedBy ? "互为好友" : "已加为好友" : "已把你加为好友"}

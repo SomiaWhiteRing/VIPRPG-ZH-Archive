@@ -3,7 +3,6 @@ export const DEFAULT_USER_AVATAR_SRC = "/icon/alex.png";
 export type ProfileVisibility = {
   bio: boolean;
   showcase: boolean;
-  timeline: boolean;
   friends: boolean;
   favorites: boolean;
   history: boolean;
@@ -13,6 +12,10 @@ export type ProfileVisibility = {
 };
 
 export type PublicProfileSection = Exclude<keyof ProfileVisibility, "bio">;
+
+export function hasProfileOverviewSections(visibility: ProfileVisibility): boolean {
+  return visibility.showcase || visibility.favorites || visibility.history || visibility.catalogs || visibility.comments || visibility.discussions;
+}
 
 export function getUserAvatarSrc(avatarBlobSha256: string | null | undefined): string {
   return avatarBlobSha256

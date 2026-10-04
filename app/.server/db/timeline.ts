@@ -52,7 +52,7 @@ export async function updateTimelineSettings(runtime: AppRuntime, userId: number
 }
 
 // Public source projections are checked on every read, not copied into events.
-// Recording switches only affect future writes; profile privacy gates reads.
+// Recording switches only affect future activity writes; source privacy gates reads.
 const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
   LEFT JOIN public_works w ON w.id=e.work_id
   LEFT JOIN catalogs cat ON cat.id=e.catalog_id AND cat.status='published'
@@ -64,15 +64,15 @@ const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
   LEFT JOIN forum_public_posts fp ON fp.id=e.forum_post_id
   LEFT JOIN forum_public_topics ft ON ft.id=fp.topic_id
   LEFT JOIN archive_versions av ON av.id=e.archive_version_id
-  WHERE u.status='active' AND u.profile_show_timeline=1 AND e.hidden_at IS NULL AND CASE e.kind
+  WHERE (u.status='active' OR (u.status='deleted' AND e.kind IN ('join','rename'))) AND e.hidden_at IS NULL AND CASE e.kind
     WHEN 'favorite' THEN e.action='收藏了作品' AND u.profile_show_favorites=1 AND w.id IS NOT NULL
     WHEN 'play' THEN u.profile_show_history=1 AND w.id IS NOT NULL
     WHEN 'upload' THEN w.id IS NOT NULL AND (e.archive_version_id IS NULL OR (av.status='published' AND av.purged_at IS NULL AND av.work_id=w.id))
     WHEN 'catalog' THEN e.action='创建了目录' AND u.profile_show_catalogs=1 AND cat.id IS NOT NULL AND cat_owner.status='active' AND cat_owner.profile_show_catalogs=1
     WHEN 'comment' THEN u.profile_show_comments=1 AND c.id IS NOT NULL AND c.root_comment_id IS NULL
     WHEN 'discussion' THEN u.profile_show_discussions=1 AND ft.id IS NOT NULL AND fp.post_number=1
-    WHEN 'status' THEN 1 ELSE 0 END`;
-const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body,e.work_id,e.catalog_id,e.comment_id,e.forum_post_id,
+    WHEN 'status' THEN 1 WHEN 'join' THEN 1 WHEN 'rename' THEN 1 ELSE 0 END`;
+const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body,e.previous_name,e.new_name,e.work_id,e.catalog_id,e.comment_id,e.forum_post_id,
   u.display_name,u.avatar_blob_sha256,
   CASE WHEN e.kind='catalog' THEN cat.title WHEN e.kind='discussion' THEN ft.title
     ELSE COALESCE(NULLIF(w.chinese_title,''),w.original_title,NULLIF(cw.chinese_title,''),cw.original_title,cr.name,ch.primary_name) END AS target_title,
@@ -91,6 +91,7 @@ const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body
   (SELECT favorite_note FROM user_work_entries f WHERE f.user_id=e.user_id AND f.work_id=e.work_id AND f.favorited_at IS NOT NULL) AS favorite_note`;
 type TimelineRow = {
   id: number; user_id: number; kind: TimelineKind; action: string; created_at: string; updated_at: string; body: string | null;
+  previous_name: string | null; new_name: string | null;
   work_id: number | null; catalog_id: number | null; comment_id: number | null; forum_post_id: number | null;
   display_name: string; avatar_blob_sha256: string | null; target_title: string | null;
   preview_work_id: number | null; preview_work_title: string | null; preview_work_original_title: string | null;
@@ -126,7 +127,7 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
   const text = row.kind === "status" ? row.body ?? "" : body.map((segment) => segment.type === "text" ? segment.text : "[表情]").join("");
   return { id: row.id, kind: row.kind, action: row.action, createdAt: row.created_at, updatedAt: row.updated_at,
     actor: { id: row.user_id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256 }, text,
-    body, images: [],
+    body, images: [], nameChange: row.kind === "rename" ? { previousName: row.previous_name!, newName: row.new_name! } : null,
     likeCount: row.like_count, replyCount: row.reply_count, likedByMe: row.liked_by_me === 1,
     canLike: row.kind === "status" && hasPermission(viewer, "timeline.status.like"),
     canReply: row.kind === "status" && hasPermission(viewer, "timeline.reply.create"),
@@ -136,8 +137,8 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
       coverBlobSha256: row.preview_work_cover, genre: row.preview_work_genre, engineFamily: row.preview_work_engine ?? "other",
     } : null,
     sourceReplyCount: row.source_reply_count,
-    canDelete: (viewer?.id === row.user_id && hasPermission(viewer, row.kind === "status" ? "timeline.status.delete_own" : "timeline.event.delete_own")) ||
-      hasPermission(viewer, row.kind === "status" ? "timeline.status.moderate_any" : "timeline.event.moderate_any") };
+    canDelete: row.kind !== "join" && row.kind !== "rename" && ((viewer?.id === row.user_id && hasPermission(viewer, row.kind === "status" ? "timeline.status.delete_own" : "timeline.event.delete_own")) ||
+      hasPermission(viewer, row.kind === "status" ? "timeline.status.moderate_any" : "timeline.event.moderate_any")) };
 }
 export async function listTimeline(runtime: AppRuntime, input: {
   viewerId?: number | null; actorUserId?: number; following?: boolean; cursor?: string | null; kind?: TimelineKind; limit?: number;
@@ -230,11 +231,11 @@ export async function deleteTimelineEvent(runtime: AppRuntime, eventId: number, 
     db.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
       SELECT actor.id,actor.email,'timeline_moderation',json_object('eventId',e.id,'targetUserId',e.user_id,'action','remove')
       FROM users actor JOIN timeline_events e ON e.id=? WHERE actor.id=? AND actor.status='active'
-        AND e.user_id<>actor.id AND e.hidden_at IS NULL AND ${moderatePermissionSql("actor.id", "e.kind")}`)
+        AND e.user_id<>actor.id AND e.hidden_at IS NULL AND e.kind NOT IN ('join','rename') AND ${moderatePermissionSql("actor.id", "e.kind")}`)
       .bind(eventId, userId),
     db.prepare(`UPDATE timeline_events SET hidden_at=COALESCE(hidden_at,CURRENT_TIMESTAMP),
       body=CASE WHEN kind='status' THEN NULL ELSE body END,updated_at=CURRENT_TIMESTAMP
-      WHERE id=? AND EXISTS(SELECT 1 FROM users actor WHERE actor.id=? AND actor.status='active'
+      WHERE id=? AND kind NOT IN ('join','rename') AND EXISTS(SELECT 1 FROM users actor WHERE actor.id=? AND actor.status='active'
         AND ((timeline_events.user_id=actor.id AND CASE WHEN kind='status' THEN ${userPermissionSql("actor.id", "timeline.status.delete_own")}
           ELSE ${userPermissionSql("actor.id", "timeline.event.delete_own")} END)
           OR ${moderatePermissionSql("actor.id", "timeline_events.kind")}))`).bind(eventId, userId),

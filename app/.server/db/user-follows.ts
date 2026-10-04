@@ -6,15 +6,17 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { FollowDirection, FollowPage, FollowSummary } from "@/lib/dto/db/user-follows";
 import { HttpError } from "@/lib/http";
 
-export async function readFollowSummary(runtime: AppRuntime, userId: number, viewer: ArchiveUser | null): Promise<FollowSummary> {
+export async function readFollowSummary(runtime: AppRuntime, userId: number, viewer: ArchiveUser | null): Promise<FollowSummary | null> {
   const row = await getD1(runtime).prepare(`SELECT
+    u.status,
     (SELECT COUNT(*) FROM user_follows f JOIN users target ON target.id=f.followed_user_id AND target.status='active' WHERE f.follower_user_id=u.id) AS following_count,
     (SELECT COUNT(*) FROM user_follows f JOIN users actor ON actor.id=f.follower_user_id AND actor.status='active' WHERE f.followed_user_id=u.id) AS follower_count,
     EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=? AND f.followed_user_id=u.id) AS is_following,
     EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=u.id AND f.followed_user_id=?) AS is_followed_by
-    FROM users u WHERE u.id=? AND u.status='active'`).bind(viewer?.id ?? 0, viewer?.id ?? 0, userId)
-    .first<{ following_count: number; follower_count: number; is_following: number; is_followed_by: number }>();
+    FROM users u WHERE u.id=? AND u.status IN ('active','deleted')`).bind(viewer?.id ?? 0, viewer?.id ?? 0, userId)
+    .first<{ status: "active" | "deleted"; following_count: number; follower_count: number; is_following: number; is_followed_by: number }>();
   if (!row) throw new HttpError(404, "用户不存在");
+  if (row.status === "deleted") return null;
   const other = !!viewer && viewer.id !== userId;
   return { followingCount: row.following_count, followerCount: row.follower_count, isFollowing: row.is_following === 1, isFollowedBy: row.is_followed_by === 1,
     canFollow: other && hasPermission(viewer, "timeline.follow.create"),

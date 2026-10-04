@@ -17,6 +17,7 @@
 | `npx tsx scripts/shared-boundary-check.ts` | 公共请求、响应、输入解析、对象键、哈希和格式化入口约束 | 仅扫描源码，逐项输出文件、行号和规则；已包含在 `npm run check` 中 |
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
+| `npm run test:timeline` | 时间线迁移保留、加入／改名永久记录、注册默认值、隐私表单、好友、互动、配图及首玩持久契约 | 使用完整迁移链的独立内存 SQLite，不启动浏览器或访问远端；Deploy 候选串行执行 |
 | `npx tsx scripts/archive-performance-check.ts` | ZIP Range 字节、热门缓存命中/覆盖竞争/失败回退/容量与过期、GC 候选分页及游标推进 | 使用内存 SQLite 和模拟对象存储，不启动浏览器或访问运行中的数据 |
 | `node scripts/download-cache-runtime-check.mjs` | workerd 中的定长 ZIP 流写入 R2、完整命中、条件 Range、If-Range 与 HEAD | 使用临时本地 R2 和固定元数据夹具，不启动浏览器或访问远端；与其他 Worker 检查串行 |
 | `npx tsx scripts/manual-gc-check.ts` | 手动两段清理的完整分页、范围绑定、权限、取消及失败重试安全契约 | 完整迁移链的内存 SQLite 与模拟 R2，不访问远端；与其他有状态检查串行 |
