@@ -47,6 +47,7 @@ export type InboxItem = {
     canWithdraw: boolean;
   } | null;
   interaction: InboxInteraction | null;
+  friendNotification: InboxFriendNotification | null;
   commentNotification: {
     kind: "comment" | "reply" | "like" | "mention";
     targetTitle: string;
@@ -56,6 +57,17 @@ export type InboxItem = {
     actorHref: string | null;
     action: string;
   } | null;
+};
+
+export type InboxFriendNotification = {
+  userId: number | null;
+  kind: "added" | "returned";
+  actorName: string;
+  actorHref: string | null;
+  actorAvatar: string | null;
+  action: string;
+  isFollowing: boolean;
+  canFollow: boolean;
 };
 
 export type InboxInteraction = {

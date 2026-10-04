@@ -174,9 +174,9 @@ function authContext(id = actor.id, permitted = true): AuthContext {
       id, email: id === actor.id ? actor.email : otherActor.email,
       externalAuthId: `fixture:${id}`, displayName: `Fixture ${id}`,
       avatarBlobSha256: null, bio: "",
-      profileVisibility: { bio: true, showcase: true, favorites: true, history: true, catalogs: true, comments: true, discussions: true },
+      profileVisibility: { bio: true, showcase: true, timeline: true, friends: true, favorites: true, history: true, catalogs: true, comments: true, discussions: true },
       preferences: {
-        colorTheme: "system", notifyUploadedWorkComments: true, includePlayerInZip: true,
+        colorTheme: "system", timelineAsHomepage: false, notifyUploadedWorkComments: true, notifyFriendAdditions: true, includePlayerInZip: true,
         showGameCardInteractionData: true, hideDeletedContent: false, shortcuts: [],
       },
       roleIds: [], roleKeys: [], roleNames: [], permissionKeys,

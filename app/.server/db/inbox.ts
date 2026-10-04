@@ -26,6 +26,10 @@ type InboxItemRow = {
   status: InboxItemStatus;
   sender_user_id: number | null;
   sender_display_name: string | null;
+  sender_status: string | null;
+  sender_avatar: string | null;
+  friend_action: string | null;
+  friend_is_following: number;
   recipient_user_id: number | null;
   required_permission_key: string | null;
   target_user_id: number | null;
@@ -78,6 +82,9 @@ const INBOX_SELECT = `SELECT
   i.status,
   i.sender_user_id,
   sender.display_name AS sender_display_name,
+  sender.status AS sender_status,
+  sender.avatar_blob_sha256 AS sender_avatar,
+  CASE WHEN i.type='system_notice' THEN json_extract(i.metadata_json,'$.friend') END AS friend_action,
   i.recipient_user_id,
   i.required_permission_key,
   i.target_user_id,
@@ -135,6 +142,7 @@ function inboxQuery(user: ArchiveUser) {
   return {
     sql: `WITH visible AS (${INBOX_SELECT} WHERE (${visibility.sql})), actionable AS (
       SELECT *, recipient_user_id=${user.id} AS is_recipient,
+        EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=${user.id} AND f.followed_user_id=sender_user_id) AS friend_is_following,
         CASE WHEN work_maintainer_request_id IS NOT NULL AND
           (recipient_user_id=${user.id} OR NOT ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))})
           THEN COALESCE(recorded_read_at,created_at) ELSE recorded_read_at END AS read_at,
@@ -186,8 +194,9 @@ export async function listInboxItemsForUser(
     replies: "reply_comment_id IS NOT NULL",
     forum: "type='forum_reply'",
     likes: "(type='forum_like' OR like_comment_id IS NOT NULL)",
+    friends: "friend_action IN ('added','returned')",
     system:
-      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL",
+      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
     pending: "can_reject=1",
   }[input.category];
   const filter = `${categorySql} AND ${input.unread ? "read_at IS NULL" : "1"}`;
@@ -239,7 +248,7 @@ export async function listInboxItemsForUser(
       (page - 1) * INBOX_PAGE_SIZE,
     )
     .all<InboxItemRow>();
-  const items = (rows.results ?? []).map(mapInboxItemRow);
+  const items = (rows.results ?? []).map((row) => mapInboxItemRow(row, user));
   if (newer) items.reverse();
   await attachInteractions(runtime, items);
   await attachCommentNotifications(runtime, items, rows.results ?? []);
@@ -366,14 +375,25 @@ export async function getInboxItemForUser(
     throw new HttpError(404, "提醒不存在或不可访问。");
   }
 
-  const item = mapInboxItemRow(row);
+  const item = mapInboxItemRow(row, viewer);
 
   await attachInteractions(runtime, [item]);
   await attachCommentNotifications(runtime, [item], [row]);
   return item;
 }
 
-function mapInboxItemRow(row: InboxItemRow): InboxItem {
+function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
+  const friendNotification: InboxItem["friendNotification"] = row.friend_action === "added" || row.friend_action === "returned" ? {
+    userId: row.sender_status === "active" ? row.sender_user_id : null,
+    kind: row.friend_action,
+    actorName: row.sender_status === "active" ? row.sender_display_name ?? "用户" : row.sender_status === "disabled" ? "该用户已停用" : "账户已注销",
+    actorHref: row.sender_status === "active" && row.sender_user_id !== null ? `/users/${row.sender_user_id}` : null,
+    actorAvatar: row.sender_status === "active" ? row.sender_avatar : null,
+    action: row.friend_action === "added" ? "把你加为了好友" : "也把你加为了好友",
+    isFollowing: !!row.friend_is_following,
+    canFollow: row.sender_status === "active" && row.sender_user_id !== null && row.sender_user_id !== viewer.id
+      && !row.friend_is_following && hasPermission(viewer, "timeline.follow.create"),
+  } : null;
   return {
     canApprove: !!row.can_reject && (row.work_maintainer_request_id !== null
       ? !!row.can_approve_maintainer : row.role_status === "active" && !row.already_assigned),
@@ -385,12 +405,13 @@ function mapInboxItemRow(row: InboxItemRow): InboxItem {
       canWithdraw: !!row.is_recipient && row.maintainer_request_status === 'pending',
     } : null,
     interaction: null,
+    friendNotification,
     commentNotification: null,
     id: row.id,
     type: row.type,
     status: row.status,
     senderUserId: row.sender_user_id,
-    senderDisplayName: row.sender_display_name,
+    senderDisplayName: friendNotification?.actorName ?? row.sender_display_name,
     recipientUserId: row.recipient_user_id,
     requiredPermissionKey: parseOptionalPermissionKey(
       row.required_permission_key,

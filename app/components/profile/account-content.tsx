@@ -41,7 +41,8 @@ export function AccountSection({
 
 export function AccountWorkGrid({ items, showPlayedAt = false }: { items: UserWorkListItem[]; showPlayedAt?: boolean }) {
   return (
-    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="@container">
+    <ul className="grid grid-cols-2 gap-3 @min-[720px]:grid-cols-4">
       {items.map((item, index) => (
         <li
           className={index >= 2 ? "hidden sm:block" : undefined}
@@ -57,6 +58,7 @@ export function AccountWorkGrid({ items, showPlayedAt = false }: { items: UserWo
         </li>
       ))}
     </ul>
+    </div>
   );
 }
 

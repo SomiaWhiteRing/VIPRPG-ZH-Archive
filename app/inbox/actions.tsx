@@ -12,7 +12,7 @@ import { FormField } from '@/app/components/ui/form-field';
 import { Textarea } from '@/app/components/ui/textarea';
 import { MAX_REJECTION_REASON_LENGTH, normalizeRejectionReason } from '@/lib/inbox';
 
-type InboxAction = 'read' | 'approve' | 'reject' | 'withdraw';
+type InboxAction = 'read' | 'approve' | 'reject' | 'withdraw' | 'friend';
 
 export function InboxActions({
   item,
@@ -24,6 +24,7 @@ export function InboxActions({
     canApprove: boolean;
     canReject: boolean;
     maintainerRequest?: InboxItem['maintainerRequest'];
+    friendNotification?: InboxItem['friendNotification'];
     title?: string;
     targetDisplayName?: string | null;
   };
@@ -78,6 +79,11 @@ export function InboxActions({
   }
 
   async function perform(action: InboxAction, rejectionReason?: string) {
+    if (action === 'friend') {
+      const friend = item?.friendNotification;
+      if (!friend?.canFollow || friend.userId === null) throw new Error('这位用户暂时无法加为好友。');
+      await requestJson(`/api/users/${friend.userId}/follow`, { method: 'PUT' });
+    } else {
       const data = new FormData();
       if (action !== "read") data.set("decision", action);
       if (action === 'reject') data.set('rejection_reason', rejectionReason ?? '');
@@ -91,14 +97,13 @@ export function InboxActions({
         headers: { Accept: "application/json" },
         body: data,
       });
-
-
+    }
       notifyInboxChanged();
       toast.success(
-        action === "read"
+        action === 'friend' ? '已加为好友。' : action === "read"
           ? all
             ? "已将全部提醒标记为已读。"
-            : "已标记为已读。"
+            : item?.friendNotification?.kind === 'added' ? '已忽略这条好友提醒。' : "已标记为已读。"
           : action === "approve"
             ? "申请已通过。"
             : action === 'withdraw' ? '申请已撤回。' : "申请已驳回。",
@@ -109,6 +114,10 @@ export function InboxActions({
   return (
     <div className="min-w-0" aria-busy={disabled}>
       <div className="flex flex-wrap items-center gap-2">
+        {item?.friendNotification?.kind === 'added' ? (
+          item.friendNotification.isFollowing ? <span className="text-sm text-muted">已加为好友</span> :
+          item.friendNotification.canFollow ? <Button size="sm" disabled={disabled} onClick={() => void act('friend')}>加为好友</Button> : null
+        ) : null}
         {item?.canApprove ? (
           <Button
             size="sm"
@@ -136,7 +145,7 @@ export function InboxActions({
             disabled={disabled}
             onClick={() => void act("read")}
           >
-            {all ? "全部标记已读" : "标记已读"}
+            {all ? "全部标记已读" : item?.friendNotification?.kind === 'added' ? "忽略" : "标记已读"}
           </Button>
         ) : null}
       </div>

@@ -11,25 +11,28 @@ export function DetailPageShell({ children }: { children: ReactNode }) {
 
 export function DetailPageLayout({
   compactSidebar = false,
+  stretchSidebar = false,
   sidebarPosition = "right",
   main,
   sidebar,
   sidebarLabel,
 }: {
   compactSidebar?: boolean;
+  stretchSidebar?: boolean;
   sidebarPosition?: "left" | "right";
   main: ReactNode;
   sidebar: ReactNode;
   sidebarLabel: string;
 }) {
   return (
-    <div className="flex items-start gap-[clamp(24px,3vw,40px)] pt-1 max-[980px]:flex-col">
+    <div className={cn("flex items-start gap-[clamp(24px,3vw,40px)] pt-1 max-[980px]:flex-col", stretchSidebar && "min-[981px]:items-stretch")}>
       <div className="min-w-0 flex-1 max-[980px]:order-1 max-[980px]:w-full">{main}</div>
       <aside
         aria-label={sidebarLabel}
         className={cn(
           "grid shrink-0 content-start gap-3.5 max-[980px]:contents",
           compactSidebar ? "w-[300px]" : "w-[380px]",
+          stretchSidebar && "min-[981px]:content-stretch",
           sidebarPosition === "left" && "order-first sticky top-18.5 max-h-[calc(100dvh-5.5rem)] overflow-y-auto pr-1 max-[980px]:max-h-none max-[980px]:overflow-visible",
         )}
       >

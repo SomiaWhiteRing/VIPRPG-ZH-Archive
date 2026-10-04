@@ -5,7 +5,7 @@ import { Fragment, Slice, type Node, type Schema } from "@tiptap/pm/model";
 import type { DraftImage } from "./images";
 
 // The editor owns a continuous document. Offsets are only the persistence format.
-export function textContent(text: string): JSONContent[] {
+export function textContent(text: string, allowMentions = true): JSONContent[] {
   const content: JSONContent[] = [];
   const plain = (value: string) =>
     value.split("\n").forEach((line, index) => {
@@ -16,7 +16,7 @@ export function textContent(text: string): JSONContent[] {
   for (const match of text.matchAll(new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}`, "g"))) {
     plain(text.slice(cursor, match.index));
     const user = readMention(match[0]);
-    if (user) content.push({ type: "userMention", attrs: user });
+    if (user && allowMentions) content.push({ type: "userMention", attrs: user });
     else if (match[0].startsWith(":face_")) content.push({ type: "faceEmoji", attrs: { id: Number(match[3]) } });
     else plain(match[0]);
     cursor = match.index + match[0].length;
@@ -28,17 +28,18 @@ export function textContent(text: string): JSONContent[] {
 export function editorDocument(
   body: string,
   images: DraftImage[],
+  allowMentions = true,
 ): JSONContent {
   let offset = 0;
   const content: JSONContent[] = [];
   for (const image of images) {
     content.push(
-      ...textContent(body.slice(offset, image.offset)),
+      ...textContent(body.slice(offset, image.offset), allowMentions),
       imageContent(image),
     );
     offset = image.offset;
   }
-  content.push(...textContent(body.slice(offset)));
+  content.push(...textContent(body.slice(offset), allowMentions));
   return { type: "doc", content: [{ type: "paragraph", content }] };
 }
 
@@ -79,17 +80,17 @@ export function inlineSlice(
       nodes.push(schema.nodes.hardBreak.create());
     if (node.isText)
       nodes.push(
-        ...textContent(node.text!).map((item) => schema.nodeFromJSON(item)),
+        ...textContent(node.text!, !!schema.nodes.userMention).map((item) => schema.nodeFromJSON(item)),
       );
     else if (node.type.name === "userMention")
-      nodes.push(schema.nodes.userMention.create(node.attrs));
+      nodes.push(schema.nodes.userMention ? schema.nodes.userMention.create(node.attrs) : schema.text(mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName })));
     else if (node.type.name === "faceEmoji")
       nodes.push(schema.nodes.faceEmoji.create({ id: node.attrs.id }));
     else if (node.type.name === "hardBreak")
       nodes.push(schema.nodes.hardBreak.create());
     else if (node.type.name === "forumImage") {
       const image = assets.get(node.attrs.key);
-      if (image) nodes.push(schema.nodeFromJSON(imageContent(image)));
+      if (image && schema.nodes.forumImage) nodes.push(schema.nodeFromJSON(imageContent(image)));
     }
   });
   return new Slice(Fragment.from(nodes), 0, 0);

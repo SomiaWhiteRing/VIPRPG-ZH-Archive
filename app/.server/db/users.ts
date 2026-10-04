@@ -3,6 +3,7 @@ import { memoizeRequest } from "@/app/.server/runtime";
 import type { ArchiveUser, UserStatus } from "@/lib/dto/db/user-access";
 import type { PublicUserProfile } from "@/lib/dto/db/users";
 import type { ProfileVisibility } from "@/lib/user-profile";
+import { TIMELINE_RECORD_KINDS } from "@/lib/dto/db/timeline";
 import { findActiveSessionByHash } from "../auth/request-auth";
 import { userSearchVisibilityStatement } from "../forum/search-index";
 import type {
@@ -62,12 +63,15 @@ const USER_SELECT = `SELECT
   bio,
   include_player_in_zip,
   notify_uploaded_work_comments,
+  notify_friend_additions,
   show_game_card_interaction_data,
   hide_deleted_content,
   color_theme,
   account_shortcuts,
   profile_show_bio,
   profile_show_showcase,
+  profile_show_timeline,
+  profile_show_friends,
   profile_show_favorites,
   profile_show_history,
   profile_show_catalogs,
@@ -89,6 +93,8 @@ const USER_AUTH_SELECT = `SELECT
   bio,
   profile_show_bio,
   profile_show_showcase,
+  profile_show_timeline,
+  profile_show_friends,
   profile_show_favorites,
   profile_show_history,
   profile_show_catalogs,
@@ -200,7 +206,7 @@ export const findPublicUserById = async (
     const row = await getD1(runtime)
       .prepare(
         `SELECT id,display_name,avatar_blob_sha256,bio,
-              profile_show_bio,profile_show_showcase,profile_show_favorites,profile_show_history,
+              profile_show_bio,profile_show_showcase,profile_show_timeline,profile_show_friends,profile_show_favorites,profile_show_history,
               profile_show_catalogs,profile_show_comments,profile_show_discussions,created_at
        FROM users
        WHERE id=? AND status IN ('active','deleted')
@@ -273,10 +279,11 @@ export async function createOrActivateVerifiedUser(
         password_hash,
         password_updated_at,
         email_verified_at,
-        last_login_at
-      ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        last_login_at,
+        timeline_record_kinds
+      ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)`,
     )
-    .bind(externalAuthId, email, displayName, input.passwordHash)
+    .bind(externalAuthId, email, displayName, input.passwordHash, JSON.stringify(TIMELINE_RECORD_KINDS))
     .run()
     .catch(rethrowDisplayNameConflict);
 
@@ -427,24 +434,28 @@ export async function updateOwnProfileVisibility(
   input: {
     user: ArchiveUser;
     visibility: ProfileVisibility;
+    notifyFriendAdditions?: boolean;
   },
 ): Promise<void> {
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(
         `UPDATE users
-         SET profile_show_bio=?,profile_show_showcase=?,profile_show_favorites=?,profile_show_history=?,
-             profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,updated_at=CURRENT_TIMESTAMP
+         SET profile_show_bio=?,profile_show_showcase=?,profile_show_timeline=?,profile_show_friends=?,profile_show_favorites=?,profile_show_history=?,
+             profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,notify_friend_additions=COALESCE(?,notify_friend_additions),updated_at=CURRENT_TIMESTAMP
          WHERE id=?`,
       )
       .bind(
         input.visibility.bio ? 1 : 0,
         input.visibility.showcase ? 1 : 0,
+        input.visibility.timeline ? 1 : 0,
+        input.visibility.friends ? 1 : 0,
         input.visibility.favorites ? 1 : 0,
         input.visibility.history ? 1 : 0,
         input.visibility.catalogs ? 1 : 0,
         input.visibility.comments ? 1 : 0,
         input.visibility.discussions ? 1 : 0,
+        input.notifyFriendAdditions === undefined ? null : input.notifyFriendAdditions ? 1 : 0,
         input.user.id,
       ),
     getD1(runtime)
@@ -916,7 +927,7 @@ export async function deleteOwnAccount(
     db
       .prepare(
         `UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
-      bio='',password_hash=NULL,include_player_in_zip=1,notify_uploaded_work_comments=1,show_game_card_interaction_data=1,hide_deleted_content=0,color_theme='system',account_shortcuts=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_favorites=0,profile_show_history=0,
+      bio='',password_hash=NULL,timeline_enabled=0,timeline_as_homepage=0,timeline_default_view='following',include_player_in_zip=1,notify_uploaded_work_comments=1,notify_friend_additions=1,show_game_card_interaction_data=1,hide_deleted_content=0,color_theme='system',account_shortcuts=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_timeline=0,profile_show_friends=0,profile_show_favorites=0,profile_show_history=0,
       profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`,
       )
       .bind(user.id),

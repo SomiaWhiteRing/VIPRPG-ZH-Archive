@@ -21,6 +21,7 @@ export const PERMISSION_CATEGORIES = {
   comment: { group: "community", label: "评论审核" },
   forum: { group: "community", label: "讨论区" },
   sea: { group: "community", label: "永恒之海" },
+  timeline: { group: "community", label: "时间线" },
   emoji: { group: "community", label: "默认表情" },
   user: { group: "access", label: "账户管理" },
   role_access: { group: "access", label: "角色分配与审批" },
@@ -305,6 +306,54 @@ export const PERMISSIONS = {
     scope: "全部未删除评论",
     description: "隐藏评论或恢复被隐藏的评论；已删除评论不能恢复。",
   },
+  "timeline.use": {
+    category: "timeline", label: "开启与记录时间线", scope: "本人的时间线设置与操作记录",
+    description: "开启时间线并记录已选择的公开操作；公开浏览无需此权限。撤销权限停止新记录，不改动已有历史，用户仍可关闭时间线。",
+  },
+  "timeline.status.create": {
+    category: "timeline", label: "发布吐槽", scope: "本人新建的独立吐槽",
+    description: "在已开启的时间线发布独立吐槽；还需开启与记录时间线权限。",
+  },
+  "timeline.status.delete_own": {
+    category: "timeline", label: "删除自己的吐槽", scope: "本人发布的吐槽",
+    description: "移除本人吐槽并清除正文；不依赖时间线总开关。",
+  },
+  "timeline.event.delete_own": {
+    category: "timeline", label: "移除自己的活动动态", scope: "本人除吐槽外的活动动态",
+    description: "从时间线移除本人的活动记录，不修改来源收藏、评论、讨论或其他业务内容。",
+  },
+  "timeline.status.moderate_any": {
+    category: "timeline", label: "审核吐槽", scope: "全部用户的吐槽",
+    description: "移除违规吐槽并清除正文，记录审核日志；不授予编辑或恢复内容的能力。",
+  },
+  "timeline.event.moderate_any": {
+    category: "timeline", label: "审核活动动态", scope: "全部用户除吐槽外的活动动态",
+    description: "移除违规活动动态并记录审核日志，不修改来源内容，不授予恢复能力。",
+  },
+  "timeline.follow.create": {
+    category: "timeline", label: "添加好友", scope: "本人发起的单向好友关系",
+    description: "把其他活跃用户加为好友，不要求对方回加，也不依赖本人时间线开关。添加好友不会突破对方的内容隐私。",
+  },
+  "timeline.status.like": {
+    category: "timeline", label: "点赞吐槽", scope: "公开吐槽及本人点赞",
+    description: "点赞公开吐槽或取消本人的点赞，不依赖本人时间线开关。",
+  },
+  "timeline.reply.create": {
+    category: "timeline", label: "回复吐槽", scope: "公开吐槽下的本人回复",
+    description: "回复公开吐槽，可使用表情与配图，不支持提及；不依赖本人时间线开关。",
+  },
+  "timeline.reply.delete_own": {
+    category: "timeline", label: "删除自己的吐槽回复", scope: "本人发布的吐槽回复",
+    description: "删除本人的吐槽回复并清除正文，不修改原吐槽。",
+  },
+  "timeline.reply.moderate_any": {
+    category: "timeline", label: "审核吐槽回复", scope: "全部用户的吐槽回复",
+    description: "移除违规吐槽回复并清除正文，记录私有审核日志。",
+  },
+  "timeline.follow.delete_own": {
+    category: "timeline", label: "取消本人好友", scope: "本人发起的单向好友关系",
+    description: "取消本人添加的好友，不删除对方发起的关系，也不授予替他人添加或删除好友关系的能力。",
+  },
   "forum.use": {
     category: "forum",
     label: "使用讨论版",
@@ -576,6 +625,7 @@ export function permissionConfigurationWarnings(
       );
   }
   const dependencies: Partial<Record<PermissionKey, PermissionKey>> = {
+    "timeline.status.create": "timeline.use",
     "work.metadata.update_any": "work.read_private",
     "work.distribution.update_any": "work.read_private",
     "work.status.update_any": "work.metadata.update_any",
@@ -659,6 +709,10 @@ export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
     "user.rename_own",
     "forum.use",
+    "timeline.use", "timeline.status.create",
+    "timeline.status.delete_own", "timeline.event.delete_own",
+    "timeline.follow.create", "timeline.follow.delete_own",
+    "timeline.status.like", "timeline.reply.create", "timeline.reply.delete_own",
     "work.lookup_non_deleted",
     "relation.create",
     "translation_relation.create",
@@ -715,6 +769,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "comment.manage_any",
     "sea.message.moderate_any", "sea.user.mute_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
+    "timeline.status.moderate_any", "timeline.event.moderate_any", "timeline.reply.moderate_any",
     "emoji.defaults.manage",
     "archive_version.read_private",
     "archive_version.update",
@@ -759,6 +814,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "comment.manage_any",
     "sea.message.moderate_any", "sea.user.mute_any",
     "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
+    "timeline.status.moderate_any", "timeline.event.moderate_any", "timeline.reply.moderate_any",
     "emoji.defaults.manage",
     "archive_version.read_private",
     "archive_version.update",

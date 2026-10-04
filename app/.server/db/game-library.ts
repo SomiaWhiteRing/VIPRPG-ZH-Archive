@@ -1,3 +1,4 @@
+import { timelineStatement } from "@/app/.server/db/timeline";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
@@ -1320,6 +1321,8 @@ export async function createExternalWork(
         )
         .bind(workId, downloadUrl),
       ...workMediaStatements(database, workId, media.coverBlobSha256, media.previewBlobSha256s),
+      timelineStatement(database, { userId: input.user.id, kind: "upload", action: "上传了作品", eventKey: `external-upload:${workId}`, workId,
+        predicate: "EXISTS(SELECT 1 FROM public_works WHERE id=?)", args: [workId] }),
     ];
     await database.batch(statements);
   } catch (error) {

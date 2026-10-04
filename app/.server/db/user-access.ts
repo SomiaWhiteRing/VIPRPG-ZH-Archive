@@ -14,12 +14,16 @@ export type UserRow = {
   bio: string;
   include_player_in_zip: number;
   notify_uploaded_work_comments: number;
+  notify_friend_additions: number;
   show_game_card_interaction_data: number;
   hide_deleted_content: number;
   color_theme: string;
+  timeline_as_homepage: number;
   account_shortcuts: string | null;
   profile_show_bio: number;
   profile_show_showcase: number;
+  profile_show_timeline: number;
+  profile_show_friends: number;
   profile_show_favorites: number;
   profile_show_history: number;
   profile_show_catalogs: number;
@@ -45,6 +49,8 @@ export type ProfileVisibilityRow = Pick<
   UserRow,
   | "profile_show_bio"
   | "profile_show_showcase"
+  | "profile_show_timeline"
+  | "profile_show_friends"
   | "profile_show_favorites"
   | "profile_show_history"
   | "profile_show_catalogs"
@@ -61,12 +67,16 @@ export const USER_PROFILE_COLUMNS = `
   u.bio,
   u.include_player_in_zip,
   u.notify_uploaded_work_comments,
+  u.notify_friend_additions,
   u.show_game_card_interaction_data,
   u.hide_deleted_content,
   u.color_theme,
+  u.timeline_as_homepage,
   u.account_shortcuts,
   u.profile_show_bio,
   u.profile_show_showcase,
+  u.profile_show_timeline,
+  u.profile_show_friends,
   u.profile_show_favorites,
   u.profile_show_history,
   u.profile_show_catalogs,
@@ -168,7 +178,7 @@ export function mapArchiveUser(
     avatarBlobSha256: row.avatar_blob_sha256,
     bio: row.bio,
     profileVisibility: mapProfileVisibility(row),
-    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts, row.notify_uploaded_work_comments, row.show_game_card_interaction_data, row.hide_deleted_content, row.color_theme),
+    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts, row.notify_uploaded_work_comments, row.show_game_card_interaction_data, row.hide_deleted_content, row.color_theme, row.timeline_as_homepage, row.notify_friend_additions),
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),
@@ -195,6 +205,8 @@ export function mapProfileVisibility(
   return {
     bio: row.profile_show_bio === 1,
     showcase: row.profile_show_showcase === 1,
+    timeline: row.profile_show_timeline === 1,
+    friends: row.profile_show_friends === 1,
     favorites: row.profile_show_favorites === 1,
     history: row.profile_show_history === 1,
     catalogs: row.profile_show_catalogs === 1,

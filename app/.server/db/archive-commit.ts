@@ -1,3 +1,4 @@
+import { timelineStatement } from "@/app/.server/db/timeline";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { normalizeSha256, sha256Hex } from "@/lib/sha256";
@@ -13,8 +14,8 @@ import {
 } from "@/app/.server/db/creators";
 import { getD1 } from "@/app/.server/db/d1";
 import { auditedEntityBatch, workEditAuditSnapshot } from "@/app/.server/db/entity-audit";
-import type { ImportJobRow } from "@/app/.server/db/import-jobs";
-import { assertWorkCanReceiveArchive } from "@/app/.server/db/import-jobs";
+import { type ImportJobRow, assertWorkCanReceiveArchive } from "@/app/.server/db/import-jobs";
+
 import { getWorkForAdminEdit, normalizeExternalLinks } from "@/app/.server/db/game-library";
 import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relations";
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
@@ -22,11 +23,8 @@ import { parseWorkMoreInfo } from "@/app/.server/http/work-more-info";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { putManifest } from "@/app/.server/storage/archive-bucket";
 import { ensureCharacterFaceSheets } from "@/app/.server/storage/character-portraits";
-import type { CorePackMetadata } from "@/app/.server/storage/core-pack-validation";
-import {
-  validateCorePackMetadata,
-  validateCorePackReferences,
-} from "@/app/.server/storage/core-pack-validation";
+import { type CorePackMetadata, validateCorePackMetadata, validateCorePackReferences } from "@/app/.server/storage/core-pack-validation";
+
 import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { ResourceReferenceScan, validateResourceCleanupReport } from "@/lib/archive/resource-cleanup";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
@@ -1449,6 +1447,11 @@ async function finalizeArchiveCommit(
     );
   }
 
+  statements.push(timelineStatement(database, { userId: input.user.id, kind: "upload",
+    action: input.metadata.target.mode === "create" ? "上传了作品" : "上传了新版本",
+    eventKey: `archive-upload:${input.archiveVersionId}`, workId: input.workId, archiveVersionId: input.archiveVersionId,
+    predicate: "EXISTS(SELECT 1 FROM archive_versions WHERE id=? AND work_id=? AND status='published' AND purged_at IS NULL) AND EXISTS(SELECT 1 FROM import_jobs WHERE id=? AND status='completed')",
+    args: [input.archiveVersionId, input.workId, input.importJobId] }));
   await auditedEntityBatch(database, statements, {
     actor: input.user, eventType: "archive_work_commit", targets: [{ type: "work", id: input.workId }],
     snapshot: workEditAuditSnapshot(input.workId, characters, []), source: input.metadata.admin ? "admin" : "owned",

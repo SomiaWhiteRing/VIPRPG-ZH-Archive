@@ -18,9 +18,12 @@ export async function POST(runtime: AppRuntime, request: Request) {
     }
     await updateOwnProfileVisibility(runtime, {
       user: auth.user,
+      notifyFriendAdditions: form.has("notifyFriendAdditions") ? form.getAll("notifyFriendAdditions").includes("1") : undefined,
       visibility: {
         bio: form.get("showBio") === "1",
         showcase: form.get("showShowcase") === "1",
+        timeline: form.get("showTimeline") === "1",
+        friends: form.get("showFriends") === "1",
         favorites: form.get("showFavorites") === "1",
         history: form.get("showHistory") === "1",
         catalogs: form.get("showCatalogs") === "1",

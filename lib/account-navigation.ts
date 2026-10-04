@@ -19,6 +19,7 @@ export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me/uploads", label: "我的上传", group: "活动与创作", requiresUpload: true },
   { href: "/me/profile", label: "个人资料", group: "账户设置", separatorBefore: true },
   { href: "/me/privacy", label: "隐私与偏好", group: "账户设置" },
+  { href: "/me/timeline", label: "时间线", group: "账户设置" },
   { href: "/me/permissions", label: "权限申请", group: "账户设置" },
 ] as const;
 

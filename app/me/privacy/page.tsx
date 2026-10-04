@@ -30,6 +30,21 @@ export async function loader(args: LoaderFunctionArgs) {
       checked: user.profileVisibility.showcase,
     },
     {
+      name: "showTimeline",
+      label: "在个人主页展示时间线",
+      checked: user.profileVisibility.timeline,
+    },
+    {
+      name: "showFriends",
+      label: "在个人主页展示好友",
+      checked: user.profileVisibility.friends,
+    },
+    {
+      name: "notifyFriendAdditions",
+      label: "接收他人的好友提醒",
+      checked: user.preferences.notifyFriendAdditions,
+    },
+    {
       name: "showFavorites",
       label: "在个人主页展示收藏",
       checked: user.profileVisibility.favorites,
@@ -71,6 +86,7 @@ export default function PrivacyPage() {
 
       <RedirectForm action="/api/account/privacy" method="post">
         <h2 className="mb-3 text-lg font-semibold">隐私</h2>
+        <input name="notifyFriendAdditions" type="hidden" value="0" />
         <div className="divide-y divide-border border-b border-border">
           {settings.map((setting) => (
             <div className="py-2" key={setting.name}>

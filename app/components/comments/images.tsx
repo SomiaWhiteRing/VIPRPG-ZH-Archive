@@ -3,7 +3,7 @@ import { Button } from "@/app/components/ui/button";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import type { CommentImage } from "@/lib/comment-images";
 
-export function CommentImages({ images }: { images: CommentImage[] }) {
+export function CommentImages({ images, imageLabel = "评论图片" }: { images: CommentImage[]; imageLabel?: string }) {
   const [active, setActive] = useState(-1);
   if (!images.length) return null;
   return (
@@ -22,7 +22,7 @@ export function CommentImages({ images }: { images: CommentImage[] }) {
               aria-label={`查看图片 ${index + 1}，共 ${images.length} 张${remaining > 0 ? `，另有 ${remaining} 张图片` : ""}`}
               onClick={() => setActive(index)}
             >
-              <img src={image.url} alt={`评论图片 ${index + 1}`} width={image.width} height={image.height} loading="lazy"
+              <img src={image.url} alt={`${imageLabel} ${index + 1}`} width={image.width} height={image.height} loading="lazy"
                 className={images.length === 1 ? "h-auto max-h-64 w-auto max-w-full object-contain" : "size-full object-cover"} />
               {remaining > 0 ? <span aria-hidden className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">+{remaining}</span> : null}
             </Button>
@@ -30,7 +30,7 @@ export function CommentImages({ images }: { images: CommentImage[] }) {
         })}
       </div>
       {active >= 0 ? <ImageLightbox open close={() => setActive(-1)} index={active}
-        slides={images.map((image, index) => ({ src: image.url, width: image.width, height: image.height, alt: `评论图片 ${index + 1}` }))} /> : null}
+        slides={images.map((image, index) => ({ src: image.url, width: image.width, height: image.height, alt: `${imageLabel} ${index + 1}` }))} /> : null}
     </div>
   );
 }

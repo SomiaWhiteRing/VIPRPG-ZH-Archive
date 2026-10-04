@@ -23,7 +23,9 @@ export function parseColorTheme(value: unknown): ColorTheme {
 
 export type AccountPreferences = {
   colorTheme: ColorTheme;
+  timelineAsHomepage: boolean;
   notifyUploadedWorkComments: boolean;
+  notifyFriendAdditions: boolean;
   includePlayerInZip: boolean;
   showGameCardInteractionData: boolean;
   hideDeletedContent: boolean;
@@ -39,10 +41,12 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number, colorTheme: string): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number, colorTheme: string, timelineAsHomepage: number, notifyFriendAdditions: number): AccountPreferences {
   return {
     colorTheme: parseColorTheme(colorTheme),
+    timelineAsHomepage: timelineAsHomepage === 1,
     notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
+    notifyFriendAdditions: notifyFriendAdditions === 1,
     includePlayerInZip: includePlayer !== 0,
     showGameCardInteractionData: showGameCardInteractionData !== 0,
     hideDeletedContent: hideDeletedContent === 1,

@@ -2,6 +2,7 @@ import { json as jsonResponse, jsonError } from "@/lib/http";
 import { searchMentionUsers } from "./mentions";
 import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintainers/route';
 import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
+import { timelineApi } from "./timeline/api";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
@@ -1404,5 +1405,7 @@ api.all("/discussions/sitemaps/:shard", (_c) =>
     Allow: "GET, HEAD, OPTIONS",
   } }),
 );
+
+api.route("/", timelineApi);
 
 api.all("/api/*", (_c) => jsonResponse({ ok: false, error: "Not found" }, { status: 404 }));

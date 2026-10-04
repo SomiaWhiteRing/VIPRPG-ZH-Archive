@@ -174,7 +174,8 @@ function InboxRow({
   const rowRef = useRef<HTMLLIElement>(null);
   const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
-  const actor = interaction ?? item.commentNotification;
+  const actor = interaction ?? item.friendNotification ?? item.commentNotification;
+  const avatar = interaction ?? item.friendNotification;
   const Icon =
     item.type === "forum_like" || item.commentNotification?.kind === "like"
       ? ThumbsUp
@@ -196,10 +197,10 @@ function InboxRow({
       className={`grid min-w-0 grid-cols-[36px_minmax(0,1fr)] gap-x-3 gap-y-2 px-2 py-4 hover:bg-primary/5 focus-within:bg-primary/5 sm:grid-cols-[36px_minmax(0,1fr)_auto] sm:px-3 ${readAt ? "" : "bg-primary/[0.03]"}`}
     >
       <div className="relative row-span-2 self-start">
-        {interaction ? (
+        {avatar ? (
           <UserAvatar
-            displayName={interaction.actorName}
-            avatarBlobSha256={interaction.actorAvatar}
+            displayName={avatar.actorName}
+            avatarBlobSha256={avatar.actorAvatar}
             size={36}
             className="size-9"
           />
@@ -290,6 +291,7 @@ function InboxRow({
             canApprove: item.canApprove,
             canReject: item.canReject,
             maintainerRequest: item.maintainerRequest,
+            friendNotification: item.friendNotification,
             title: item.title,
             targetDisplayName: item.targetDisplayName,
           }}
@@ -312,6 +314,7 @@ function emptyLabel(category: InboxCategory, unread: boolean) {
     replies: "还没有收到回复",
     forum: "还没有收到讨论版回复",
     likes: "还没有收到赞",
+    friends: "还没有收到好友提醒",
     system: "暂无系统通知",
     pending: "暂无待处理申请",
   }[category];

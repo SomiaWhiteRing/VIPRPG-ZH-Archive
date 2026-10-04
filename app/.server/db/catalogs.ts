@@ -138,12 +138,14 @@ export async function createCatalog(
 ): Promise<CatalogDetail> {
   assertPermission(actor, "catalog.create");
   const title = requiredTitle(input.title ?? "");
-  const result = await getD1(runtime)
-    .prepare(
-      `INSERT INTO catalogs(owner_user_id,title,description) VALUES(?,?,?)`,
-    )
-    .bind(actor.id, title, clean(input.description))
-    .run();
+  const db = getD1(runtime);
+  const [result] = await db.batch([
+    db.prepare(`INSERT INTO catalogs(owner_user_id,title,description) VALUES(?,?,?)`).bind(actor.id, title, clean(input.description)),
+    db.prepare(`INSERT INTO timeline_events(user_id,kind,action,event_key,catalog_id)
+      SELECT u.id,'catalog','创建了目录','catalog-create:'||c.id,c.id FROM catalogs c JOIN users u ON u.id=c.owner_user_id
+      WHERE c.id=last_insert_rowid() AND u.id=? AND u.status='active' AND u.timeline_enabled=1
+      AND EXISTS(SELECT 1 FROM json_each(u.timeline_record_kinds) WHERE value='catalog')`).bind(actor.id),
+  ]);
   if (!Number.isSafeInteger(result.meta.last_row_id))
     throw new Error("目录未创建");
   const detail = await getCatalogById(runtime, Number(result.meta.last_row_id));
@@ -163,21 +165,10 @@ export async function updateCatalog(
     input.coverBlobSha256 === undefined
       ? row.cover_blob_sha256
       : await requiredCatalogCover(runtime, input.coverBlobSha256);
-  await getD1(runtime)
-    .prepare(
-      `UPDATE catalogs
-       SET title=?,description=?,cover_blob_sha256=?,updated_at=CURRENT_TIMESTAMP
-       WHERE id=?`,
-    )
-    .bind(
-      title,
-      input.description === undefined
-        ? row.description
-        : clean(input.description),
-      coverBlobSha256,
-      id,
-    )
-    .run();
+  const description = input.description === undefined ? row.description : clean(input.description);
+  const db = getD1(runtime);
+  await db.prepare(`UPDATE catalogs SET title=?,description=?,cover_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+    .bind(title, description, coverBlobSha256, id).run();
   return requiredCatalog(runtime, id);
 }
 
@@ -195,12 +186,8 @@ export async function deleteCatalog(
   actor: ArchiveUser,
 ): Promise<void> {
   await ownedCatalog(runtime, id, actor, "catalog.delete_own");
-  await getD1(runtime)
-    .prepare(
-      `UPDATE catalogs SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    )
-    .bind(id)
-    .run();
+  const db = getD1(runtime);
+  await db.prepare(`UPDATE catalogs SET status='deleted',updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
 }
 
 export async function updateCatalogItem(
