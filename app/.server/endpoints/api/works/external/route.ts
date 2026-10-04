@@ -1,4 +1,5 @@
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
+import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
 import {
@@ -83,6 +84,7 @@ function parseMetadata(form: FormData): {
   chineseTitle: string | null;
   description: string | null;
   genre?: string | null;
+  referenceDuration?: string | null;
   moreInfo: ReturnType<typeof parseWorkMoreInfoJson>;
   originalReleaseDate: string | null;
   engineFamily: string;
@@ -105,6 +107,7 @@ function parseMetadata(form: FormData): {
     chineseTitle: readNullableString(form.get("chinese_title")),
     description: readNullableString(form.get("description")),
     genre: parseWorkGenre(form.has("genre") ? form.get("genre") : undefined),
+    referenceDuration: parseWorkReferenceDuration(form.has("reference_duration") ? form.get("reference_duration") : undefined),
     moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: readNullableString(form.get("original_release_date")),
     engineFamily: readRequiredString(

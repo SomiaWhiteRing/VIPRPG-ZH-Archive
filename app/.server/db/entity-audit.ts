@@ -105,7 +105,7 @@ export function combinedAuditSnapshot(snapshots: Record<string, AuditSnapshot>):
 
 export function workAuditSnapshot(id: number, includeRelations = false): AuditSnapshot {
   return { sql: `SELECT json_object('id',id,'originalTitle',original_title,'chineseTitle',chinese_title,'description',description,
-    'genre',genre,'moreInfo',json_extract(extra_json,'$.moreInfo'),'usesUnsupportedManiac',json_extract(extra_json,'$.usesUnsupportedManiac'),
+    'genre',genre,'referenceDuration',json_extract(extra_json,'$.referenceDuration'),'moreInfo',json_extract(extra_json,'$.moreInfo'),'usesUnsupportedManiac',json_extract(extra_json,'$.usesUnsupportedManiac'),
     'originalReleaseDate',original_release_date,'releasePrecision',original_release_precision,'engineFamily',engine_family,
     'isOriginal',is_original,'isTranslation',is_translation,'language',language,'status',status,
     'aliases',json((SELECT json_group_array(title) FROM (SELECT title FROM work_titles WHERE work_id=w.id ORDER BY title))),

@@ -27,6 +27,8 @@ export type UploadFormMetadata = {
   engineFamily: ArchiveCommitMetadata["game"]["engineFamily"];
   description: string;
   genre: string;
+  referenceDuration: string;
+  referenceDurationCustom: boolean;
   tags: string[];
   characters: CharacterCreditSelection[];
   authors: (CreatorSelection | null)[];

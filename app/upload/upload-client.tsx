@@ -1,6 +1,7 @@
 import { sha256Hex } from "@/lib/sha256";
 import { requestJson } from "@/lib/ui/api-response";
 import { normalizeWorkGenre } from "@/lib/work-genre";
+import { normalizeWorkReferenceDuration, WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { WorkMetadataFields } from "@/app/components/work/work-metadata-fields";
 import { Notice } from "@/app/components/ui/notice";
 import { useToast } from "@/app/components/ui/toast";
@@ -109,6 +110,7 @@ export type UploadInitialWork = {
   chineseTitle: string | null;
   description: string | null;
   genre: string | null;
+  referenceDuration: string | null;
   originalReleaseDate: string | null;
   engineFamily: EngineFamily;
   isOriginal: boolean;
@@ -724,6 +726,8 @@ export function UploadClient({
     setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
       setForm({ ...draft.formDraft.form, genre: draft.formDraft.form.genre ?? "",
+        referenceDuration: draft.formDraft.form.referenceDuration ?? "",
+        referenceDurationCustom: draft.formDraft.form.referenceDurationCustom ?? referenceDurationForm(draft.formDraft.form.referenceDuration).referenceDurationCustom,
         ...(adminOptions && initialWork ? { originalTitle: initialWork.originalTitle } : {}),
       });
       setAssociationDefaults(draft.formDraft.associationDefaults);
@@ -1361,6 +1365,14 @@ function translatorStaff(
   });
 }
 
+function referenceDurationForm(value: string | null | undefined) {
+  const referenceDuration = normalizeWorkReferenceDuration(value) ?? "";
+  return {
+    referenceDuration,
+    referenceDurationCustom: Boolean(referenceDuration) && !WORK_REFERENCE_DURATIONS.some((preset) => preset === referenceDuration),
+  };
+}
+
 function initialForm(
   canArchiveUpload: boolean,
   user: CurrentUser,
@@ -1374,6 +1386,7 @@ function initialForm(
       engineFamily: initialWork.engineFamily,
       description: initialWork.description ?? "",
       genre: initialWork.genre ?? "",
+      ...referenceDurationForm(initialWork.referenceDuration),
       tags: initialWork.tags,
       characters: initialWork.characters,
       authors: initialWork.authors.length
@@ -1399,6 +1412,7 @@ function initialForm(
     engineFamily: canArchiveUpload ? "rpg_maker_2000" : "other",
     description: "",
     genre: "",
+    ...referenceDurationForm(null),
     tags: [],
     characters: [],
     authors: [null],
@@ -1439,6 +1453,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     engineFamily: metadata.game.engineFamily,
     description: metadata.game.description ?? "",
     genre: metadata.game.genre ?? "",
+    ...referenceDurationForm(metadata.game.extra.referenceDuration),
     tags: metadata.tags,
     characters: (metadata.characters ?? []).map(
       ({ selection, roleKey, portrait, faceSheetBlobSha256s }) => ({
@@ -1534,6 +1549,7 @@ function buildMetadata(
       ...imageHashes,
       status: form.status,
       extra: {
+        referenceDuration: normalizeWorkReferenceDuration(form.referenceDuration) ?? null,
         moreInfo: normalizeWorkMoreInfo(form.moreInfo),
         usesUnsupportedManiac:
           form.engineFamily === "rpg_maker_2003_maniac" && form.usesUnsupportedManiac,
@@ -1612,6 +1628,7 @@ async function submitExternalWork(
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
   body.set("genre", normalizeWorkGenre(form.genre) ?? "");
+  body.set("reference_duration", normalizeWorkReferenceDuration(form.referenceDuration) ?? "");
   body.set("original_release_date", form.originalReleaseDate.trim());
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");
@@ -1667,6 +1684,7 @@ async function submitEditedWork(
   body.set("chinese_title", form.chineseTitle.trim());
   body.set("description", form.description.trim());
   body.set("genre", normalizeWorkGenre(form.genre) ?? "");
+  body.set("reference_duration", normalizeWorkReferenceDuration(form.referenceDuration) ?? "");
   body.set("original_release_date", form.originalReleaseDate.trim());
   body.set("engine_family", form.engineFamily);
   if (form.isOriginal) body.set("is_original", "1");

@@ -115,6 +115,7 @@ export type ArchiveCommitMetadata = {
     previewBlobSha256s: string[];
     status: "processing" | "published" | "hidden";
     extra: Record<string, unknown> & {
+      referenceDuration?: string | null;
       moreInfo?: WorkMoreInfo[];
       usesUnsupportedManiac?: boolean;
     };

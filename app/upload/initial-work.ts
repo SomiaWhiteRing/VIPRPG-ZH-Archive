@@ -21,6 +21,7 @@ export function uploadInitialWork(work: AdminWorkEdit): UploadInitialWork {
     chineseTitle: work.chineseTitle,
     description: work.description,
     genre: work.genre,
+    referenceDuration: work.referenceDuration,
     moreInfo: work.moreInfo,
     usesUnsupportedManiac: work.usesUnsupportedManiac,
     originalReleaseDate: work.originalReleaseDate,

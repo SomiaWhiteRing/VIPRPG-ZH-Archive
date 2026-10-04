@@ -4,6 +4,7 @@ import { PreviewPicker } from "@/app/components/media/preview-picker";
 import { CreatorTokenPicker } from "@/app/components/pickers/creator-token-picker";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { CustomSelect } from "@/app/components/ui/custom-select";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { PrecisionDatePicker } from "@/app/components/ui/precision-date-picker";
@@ -17,8 +18,15 @@ import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import { MAX_PUBLIC_TAGS } from "@/lib/user-tags";
+import { WORK_REFERENCE_DURATIONS, WORK_REFERENCE_DURATION_MAX_LENGTH } from "@/lib/work-reference-duration";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
+
+const referenceDurationOptions = [
+  { value: "none", label: "不填写" },
+  ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: value })),
+  { value: "custom", label: "自定义" },
+];
 
 export function WorkMetadataFields({
   originalTitleReadOnly = false,
@@ -126,14 +134,34 @@ export function WorkMetadataFields({
             value={form.originalTitle}
           />
         </WorkbenchField>
-        <WorkbenchField className="md:col-span-2" controlId="upload-genre" label="类型">
-          <WorkGenreInput
-            disabled={disabled}
-            id="upload-genre"
-            onChange={(genre) => setForm((current) => ({ ...current, genre }))}
-            value={form.genre}
-          />
-        </WorkbenchField>
+        <div className="grid min-w-0 grid-cols-2 gap-4 md:col-span-2">
+          <WorkbenchField controlId="upload-genre" label="类型">
+            <WorkGenreInput
+              disabled={disabled}
+              id="upload-genre"
+              onChange={(genre) => setForm((current) => ({ ...current, genre }))}
+              value={form.genre}
+            />
+          </WorkbenchField>
+          <WorkbenchField controlId="upload-reference-duration" label="参考时长">
+            <CustomSelect
+              id="upload-reference-duration"
+              label="参考时长"
+              options={referenceDurationOptions}
+              value={form.referenceDurationCustom ? "custom" : form.referenceDuration}
+              customValue={form.referenceDuration}
+              customOption="custom"
+              placeholder="选择参考时长"
+              disabled={disabled}
+              maxLength={WORK_REFERENCE_DURATION_MAX_LENGTH}
+              onChange={(value, customValue) => setForm((current) => ({
+                ...current,
+                referenceDuration: value === "custom" ? customValue : value === "none" ? "" : value,
+                referenceDurationCustom: value === "custom",
+              }))}
+            />
+          </WorkbenchField>
+        </div>
         <WorkbenchField controlId="upload-author" label="作者">
           <CreatorTokenPicker
             disabled={disabled}

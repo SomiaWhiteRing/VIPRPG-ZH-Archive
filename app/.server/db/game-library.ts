@@ -1,5 +1,7 @@
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
+import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
+import { normalizeWorkReferenceDuration } from "@/lib/work-reference-duration";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
@@ -177,6 +179,7 @@ type ArchiveEditRow = {
   source_url: string | null;
 };
 type WorkEditInput = {
+  referenceDuration?: string | null;
   usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   workId: number;
@@ -542,6 +545,7 @@ export async function getGameWorkDetail(
     ...summary,
     maintainers,
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
+    referenceDuration: normalizeWorkReferenceDuration(JSON.parse(row.extra_json).referenceDuration) ?? null,
     usesUnsupportedManiac:
       row.engine_family === "rpg_maker_2003_maniac" &&
       JSON.parse(row.extra_json).usesUnsupportedManiac === true,
@@ -706,6 +710,7 @@ export async function getWorkForAdminEdit(
     status: row.status as AdminWorkEdit["status"],
     hasUsableDistribution: await hasUsableDistribution(runtime, workId),
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
+    referenceDuration: normalizeWorkReferenceDuration(JSON.parse(row.extra_json).referenceDuration) ?? null,
     usesUnsupportedManiac:
       row.engine_family === "rpg_maker_2003_maniac" &&
       JSON.parse(row.extra_json).usesUnsupportedManiac === true,
@@ -789,6 +794,7 @@ export async function updateOwnedWork(
   if (before.id !== input.workId)
     throw new Error("Owned work snapshot does not match update target");
   const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
+  const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   const originalTitle = input.originalTitle.trim();
   if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
@@ -893,7 +899,7 @@ export async function updateOwnedWork(
     database
       .prepare(
         `UPDATE works
-         SET original_title=?,chinese_title=?,description=?,genre=CASE WHEN ? THEN genre ELSE ? END,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.usesUnsupportedManiac',json(?)),original_release_date=?,
+         SET original_title=?,chinese_title=?,description=?,genre=CASE WHEN ? THEN genre ELSE ? END,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.referenceDuration',CASE WHEN ? THEN json_extract(extra_json,'$.referenceDuration') ELSE ? END,'$.usesUnsupportedManiac',json(?)),original_release_date=?,
            original_release_precision=?,engine_family=?,
            is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
@@ -906,6 +912,8 @@ export async function updateOwnedWork(
         input.genre === undefined ? 1 : 0,
         parseWorkGenre(input.genre) ?? null,
         moreInfo,
+        input.referenceDuration === undefined ? 1 : 0,
+        referenceDuration,
         JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
         releaseDate.value,
         releaseDate.precision,
@@ -1009,7 +1017,7 @@ export async function updateWorkForAdmin(
   // Ignore fields outside the actor's grant and never rewrite their tables.
   if (!canUpdateMetadata) {
     input = { ...input, chineseTitle: current.chineseTitle, description: current.description,
-      genre: current.genre, moreInfo: current.moreInfo, originalReleaseDate: current.originalReleaseDate,
+      genre: current.genre, referenceDuration: current.referenceDuration, moreInfo: current.moreInfo, originalReleaseDate: current.originalReleaseDate,
       engineFamily: current.engineFamily, isOriginal: current.isOriginal, isTranslation: current.isTranslation,
       usesUnsupportedManiac: current.usesUnsupportedManiac, language: current.language,
       workStaff: [], aliases: current.aliases, tags: current.tags, characters: current.characters,
@@ -1106,6 +1114,7 @@ export async function updateWorkForAdmin(
     };
   });
   const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
+  const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   const database = getD1(runtime);
   const statements: D1PreparedStatement[] = [];
   if (canUpdateMetadata) statements.push(
@@ -1115,7 +1124,7 @@ export async function updateWorkForAdmin(
        SET chinese_title = ?,
          description = ?,
          genre = CASE WHEN ? THEN genre ELSE ? END,
-         extra_json = json_set(extra_json, '$.moreInfo', json(?), '$.usesUnsupportedManiac', json(?)),
+         extra_json = json_set(extra_json, '$.moreInfo', json(?), '$.referenceDuration', CASE WHEN ? THEN json_extract(extra_json,'$.referenceDuration') ELSE ? END, '$.usesUnsupportedManiac', json(?)),
          original_release_date = ?,
          original_release_precision = ?,
          engine_family = ?,
@@ -1132,6 +1141,8 @@ export async function updateWorkForAdmin(
         input.genre === undefined ? 1 : 0,
         parseWorkGenre(input.genre) ?? null,
         moreInfo,
+        input.referenceDuration === undefined ? 1 : 0,
+        referenceDuration,
         JSON.stringify(input.engineFamily === "rpg_maker_2003_maniac" && input.usesUnsupportedManiac === true),
         releaseDate.value,
         releaseDate.precision,
@@ -1209,6 +1220,7 @@ export async function createExternalWork(
   input: ExternalWorkInput,
 ): Promise<{ workId: number }> {
   const moreInfo = parseWorkMoreInfo(input.moreInfo);
+  const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   if (!isEngineFamily(input.engineFamily)) {
     throw new HttpError(400, "引擎不合法");
   }
@@ -1273,6 +1285,7 @@ export async function createExternalWork(
       input.engineFamily,
       JSON.stringify({
         moreInfo,
+        referenceDuration,
         ...(input.engineFamily === "rpg_maker_2003_maniac"
           ? { usesUnsupportedManiac: input.usesUnsupportedManiac === true }
           : {}),
@@ -1446,6 +1459,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     chineseTitle: clean(form.get("chinese_title")),
     description: clean(form.get("description")),
     genre: parseWorkGenre(form.has("genre") ? form.get("genre") : undefined),
+    referenceDuration: parseWorkReferenceDuration(form.has("reference_duration") ? form.get("reference_duration") : undefined),
     moreInfo: parseWorkMoreInfoJson(form.get("more_info")),
     originalReleaseDate: clean(form.get("original_release_date")),
     engineFamily: String(form.get("engine_family") ?? "other"),

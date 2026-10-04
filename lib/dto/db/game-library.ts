@@ -131,6 +131,7 @@ export type GameWorkSummary = {
 };
 
 export type GameWorkDetail = GameWorkSummary & {
+  referenceDuration: string | null;
   usesUnsupportedManiac: boolean;
   maintainers: { id: number; displayName: string; avatarBlobSha256: string | null }[];
   moreInfo: WorkMoreInfo[];
@@ -145,6 +146,7 @@ export type GameWorkDetail = GameWorkSummary & {
 };
 
 export type AdminWorkEdit = {
+  referenceDuration: string | null;
   hasUsableDistribution: boolean;
   usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
@@ -220,6 +222,7 @@ export type AdminArchiveVersionEdit = {
 };
 
 export type ExternalWorkInput = {
+  referenceDuration?: string | null;
   usesUnsupportedManiac?: boolean;
   moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
@@ -256,6 +259,7 @@ export type UploaderWorkEdit = AdminWorkEdit & {
 };
 
 export type UploaderWorkUpdateInput = {
+  referenceDuration?: string | null;
   usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
   user: ArchiveUser;
