@@ -8,6 +8,7 @@ import { normalizeEntityName } from "@/lib/entity-name";
 import { getTagSource } from "@/lib/user-tags";
 import { listCombinedTags, listUserTags } from "@/app/.server/db/user-work-tags";
 import { normalizeReleasePeriod } from "@/lib/release-period";
+import { WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 
 const PAGE_SIZE = 20;
 
@@ -29,6 +30,9 @@ export async function loadGameLibrary(
       })
     : null;
   const engine = stringParam(params.engine) || "all";
+  const requestedDuration = stringParam(params.duration);
+  const referenceDuration: (typeof WORK_REFERENCE_DURATIONS)[number] | "custom" | "" = WORK_REFERENCE_DURATIONS.find((value) => value === requestedDuration)
+    ?? (requestedDuration === "custom" ? "custom" : "");
   const character = parseOptionalId(stringParam(params.character));
   const uploader = parseOptionalId(stringParam(params.uploader));
   const language = stringParam(params.language);
@@ -49,6 +53,7 @@ export async function loadGameLibrary(
     genre: genre || undefined,
     release: release || undefined,
     engine,
+    referenceDuration: referenceDuration || undefined,
     tag: tag || undefined,
     tagSource,
     character: character ?? undefined,
@@ -83,6 +88,7 @@ export async function loadGameLibrary(
     genre: genre || undefined,
     release: release || undefined,
     engine: engine !== "all" ? engine : undefined,
+    duration: referenceDuration || undefined,
     tag: tag || undefined,
     tag_source: !userList && tagSource !== "all" ? tagSource : undefined,
     character: character ? String(character) : undefined,
@@ -92,7 +98,7 @@ export async function loadGameLibrary(
     sort: sort !== "id" ? sort : undefined,
   };
   const hasFilters =
-    engine !== "all" || Boolean(genre || tag || character || uploader || language || original || release);
+    engine !== "all" || Boolean(genre || tag || character || uploader || language || original || release || referenceDuration);
 
   return {
     genre,
@@ -106,6 +112,7 @@ export async function loadGameLibrary(
       ? Object.fromEntries(userWorks.items.map(({ work, favorite }) => [work.id, favorite]))
       : null,
     engine,
+    referenceDuration,
     tag,
     tagSource,
     character,

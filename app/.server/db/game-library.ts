@@ -1,7 +1,7 @@
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
-import { normalizeWorkReferenceDuration } from "@/lib/work-reference-duration";
+import { normalizeWorkReferenceDuration, WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
 import { ensureCurrentArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
@@ -92,6 +92,7 @@ type Filters = {
   query?: string;
   status?: string;
   engine?: string;
+  referenceDuration?: (typeof WORK_REFERENCE_DURATIONS)[number] | "custom";
   tag?: string;
   tagSource?: TagSource;
   excludeTag?: string;
@@ -1695,6 +1696,16 @@ function buildWhere(input: Filters): {
   if (input.engine && input.engine !== "all") {
     clauses.push("w.engine_family=?");
     binds.push(input.engine);
+  }
+  if (input.referenceDuration) {
+    const duration = "json_extract(w.extra_json, '$.referenceDuration')";
+    if (input.referenceDuration === "custom") {
+      clauses.push(`(${duration} <> '' AND ${duration} NOT IN (${WORK_REFERENCE_DURATIONS.map(() => "?").join(",")}))`);
+      binds.push(...WORK_REFERENCE_DURATIONS);
+    } else {
+      clauses.push(`${duration}=?`);
+      binds.push(input.referenceDuration);
+    }
   }
   if (input.isOriginal !== undefined) {
     clauses.push("w.is_original=?");
