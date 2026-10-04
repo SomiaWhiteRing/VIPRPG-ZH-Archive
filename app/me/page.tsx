@@ -107,6 +107,7 @@ export default function MePage() {
           ) : undefined
         }
         title="资料摘要"
+        linkText="编辑个人资料 →"
       >
         <div className="flex items-center gap-4">
           <UserAvatar

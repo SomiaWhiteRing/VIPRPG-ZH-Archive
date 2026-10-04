@@ -11,12 +11,14 @@ export function AccountSection({
   status,
   children,
   divided = true,
+  linkText = "更多 →",
 }: {
   title: string;
   href: string;
   status?: ReactNode;
   children: ReactNode;
   divided?: boolean;
+  linkText?: string;
 }) {
   return (
     <section className={divided ? "min-w-0 border-t border-border pt-5 first:border-t-0 first:pt-0" : "min-w-0"}>
@@ -29,7 +31,7 @@ export function AccountSection({
           className="shrink-0 text-sm font-semibold text-primary hover:underline"
           to={href}
         >
-          更多 →
+          {linkText}
         </Link>
       </header>
       {children}

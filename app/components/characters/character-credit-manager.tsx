@@ -445,7 +445,7 @@ export function CharacterCreditManager({
                 </div>
                 {category || searchTerm || multi === "library" ? <div className="flex min-h-5 items-center gap-2 text-xs text-muted" aria-live="polite">
                   <span>{searchTerm ? `全库搜索 · ${catalog.length} 个角色` : category ? `${catalog.length} 个角色` : null}</span>
-                  {multi === "library" ? <Button className="ml-auto min-h-5 px-1 text-xs" disabled={disabled || !catalog.length} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set(catalog.map((item) => item.character.id)))}>选择全部结果</Button> : null}
+                  {multi === "library" ? <Button className="ml-auto min-h-5 px-1 text-xs" disabled={disabled || !catalog.length} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set(catalog.map((item) => item.character.id)))}>选择全部</Button> : null}
                 </div> : null}
               </div>
               <div data-library-viewport data-drag-viewport className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 [scrollbar-gutter:stable]" ref={(node) => { catalogViewport.current = node; if (node) node.scrollTop = catalogScroll.current; }} onScroll={(event) => { catalogScroll.current = event.currentTarget.scrollTop; }}>
