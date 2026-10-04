@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AtSign, ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "./body-editor";
+import { CommentComposerToolbar } from "./composer-layout";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
@@ -243,15 +244,12 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       <input ref={picker} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden disabled={busy || unavailable}
         onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void addImages(files); }} />
       <EmojiPicker disabled={busy || unavailable} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)} onClose={() => editor.current?.focus()}>
-        {(trigger) => <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1">{trigger}<Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger={inputId} disabled={busy || unavailable} onClick={() => editor.current?.mention()}><AtSign aria-hidden /></Button><Button type="button" variant="ghost" size="icon" aria-label="上传图片" title="上传图片" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
-            onClick={() => picker.current?.click()}><ImagePlus aria-hidden /></Button></div>
-          <div className="flex items-center gap-2">
+        {(trigger) => <CommentComposerToolbar tools={<>{trigger}<Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger={inputId} disabled={busy || unavailable} onClick={() => editor.current?.mention()}><AtSign aria-hidden /></Button><Button type="button" variant="ghost" size="icon" aria-label="上传图片" title="上传图片" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
+            onClick={() => picker.current?.click()}><ImagePlus aria-hidden /></Button></>} actions={<>
             {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>取消</Button> : null}
             <Button ref={submitButton} type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}
               title="Ctrl+Enter 提交" aria-keyshortcuts="Control+Enter">{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? "保存修改" : replyToCommentId ? "发布回复" : "发布评论"}</Button>
-          </div>
-        </div>}
+        </>} />}
       </EmojiPicker>
       {progress ? <p role="status" className="sr-only">{progress}</p> : null}
       {error ? <Notice>{error}</Notice> : null}
