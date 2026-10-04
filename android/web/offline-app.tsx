@@ -154,9 +154,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       engineFamily: installation.engineFamily!,
       playKey: installation.playKey,
       runtimeBasePath: easyRpgRuntimeBasePath,
-    }, (level, text) => {
-      if (level === "error") setError(text);
-    }, () => {}, () => { playerRef.current = null; onClose(); });
+    }, () => {}, () => {}, () => { playerRef.current = null; onClose(); });
     playerRef.current = session;
     void session.ready.then(async () => {
       setStarting(false);
