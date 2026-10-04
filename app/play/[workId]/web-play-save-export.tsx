@@ -167,7 +167,6 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }
           void prepareImport(files);
         }} />
       {playerBusy ? <span className="w-full text-xs text-muted">导入或导出前请先停止游戏，等待存档写入完成。</span> : null}
-      <span className="w-full text-xs text-muted">导入每批最多 100 个存档、解压后共 40 MiB，单个最多 16 MiB。较大的备份 ZIP 请先解压，再分批选择 LSD。</span>
       {readError ? <span className="w-full text-sm text-destructive" role="alert">{readError}</span> : null}
       <AlertDialog open={preview !== null} onOpenChange={open => { if (!open && operation !== "import") finish(); }}>
         <AlertDialogContent id={dialogId} onEscapeKeyDown={event => { if (operation === "import") event.preventDefault(); }}
