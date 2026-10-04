@@ -274,7 +274,7 @@ function InboxRow({
               <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
             ) : null}
             {item.closedReason ? <p className="mt-2 text-sm text-muted">{item.closedReason}</p> : null}
-            {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
+            {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
           </>
         )}
       </div>

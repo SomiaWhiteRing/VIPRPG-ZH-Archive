@@ -26,7 +26,7 @@ export function PageHeader({
       }
       data-slot="page-header"
     >
-      <div className="min-w-0">
+      <div className="min-w-0 wrap-anywhere">
         {eyebrow ? (
           <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.14em] text-accent">
             {eyebrow}

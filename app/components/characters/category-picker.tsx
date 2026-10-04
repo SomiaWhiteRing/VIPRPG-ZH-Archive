@@ -147,7 +147,7 @@ export function CategoryPicker({
               onClick={() => choose(node.id)}
             >
               <Folder aria-hidden />
-              <span className="min-w-0 flex-1 break-words">{node.label}</span>
+              <span className="min-w-0 flex-1 wrap-anywhere">{node.label}</span>
               {counts?.has(node.id) ? <span className="text-xs text-muted tabular-nums">{counts.get(node.id)}</span> : null}
               {selected ? <Check aria-hidden /> : null}
             </Button>
@@ -173,7 +173,7 @@ export function CategoryPicker({
           disabled={disabled}
           className={cn("w-full min-w-0 justify-between whitespace-normal text-left font-normal", triggerClassName)}
         >
-          <span className="min-w-0 break-words" title={selectedPath}>{selectedPath}</span>
+          <span className="min-w-0 wrap-anywhere" title={selectedPath}>{selectedPath}</span>
           <ChevronDown aria-hidden />
         </Button>
       </Popover.Trigger>
@@ -200,7 +200,7 @@ export function CategoryPicker({
                 event.preventDefault(); event.stopPropagation();
               }}
             />
-            <p className="break-words text-xs text-muted">
+            <p className="wrap-anywhere text-xs text-muted">
               当前选择：{selectedPath}
             </p>
           </div> : null}

@@ -32,7 +32,7 @@ export const Content = forwardRef<
     <Primitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 border border-border bg-card text-card-foreground shadow-surface",
+        "fixed z-50 min-w-0 wrap-anywhere border border-border bg-card text-card-foreground shadow-surface",
         className,
       )}
       {...props}
@@ -47,7 +47,7 @@ export const Title = forwardRef<
   return (
     <Primitive.Title
       ref={ref}
-      className={cn("m-0 text-lg font-bold", className)}
+      className={cn("m-0 min-w-0 wrap-anywhere text-lg font-bold", className)}
       {...props}
     />
   );

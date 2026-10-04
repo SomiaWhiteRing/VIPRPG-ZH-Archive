@@ -107,7 +107,7 @@ export default function PublicUserPage() {
     hasVisibleSections,
   } = useLoaderData<typeof loader>();
   return (
-    <div className="grid gap-7">
+    <div className="grid min-w-0 grid-cols-1 gap-7">
       <Showcase
         key={base}
         entries={showcaseEntries}

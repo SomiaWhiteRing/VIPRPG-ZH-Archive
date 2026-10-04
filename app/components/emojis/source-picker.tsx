@@ -180,7 +180,7 @@ export function EmojiSourcePicker({
             size={36}
             toneKey={item.id}
           />
-          <span className="min-w-0 flex-1 break-words">
+          <span className="min-w-0 flex-1 wrap-anywhere">
             {item.name}
             {item.originalName !== item.name ? (
               <span className="block text-xs text-muted">
@@ -220,7 +220,7 @@ export function EmojiSourcePicker({
           >
             <ChevronRight aria-hidden className={cn(isOpen && "rotate-90")} />
             <Folder aria-hidden className="text-muted" />
-            <span className="min-w-0 flex-1 break-words">{category.label}</span>
+            <span className="min-w-0 flex-1 wrap-anywhere">{category.label}</span>
           </Button>
         </TreeIndent>
         {isOpen ? (

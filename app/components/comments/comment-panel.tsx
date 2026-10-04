@@ -601,7 +601,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         {comment.author ? (
           <Link
-            className="text-sm font-bold hover:underline"
+            className="min-w-0 wrap-anywhere text-sm font-bold hover:underline"
             to={`/users/${comment.author.id}`}
           >
             {comment.author.displayName}

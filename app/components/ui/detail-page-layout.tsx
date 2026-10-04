@@ -3,7 +3,7 @@ import { cn } from "@/lib/ui/cn";
 
 export function DetailPageShell({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] pb-11 text-foreground max-[560px]:w-[calc(100%-1.5rem)]">
+    <main className="mx-auto min-w-0 w-[min(1180px,calc(100vw-2rem))] wrap-anywhere pb-11 text-foreground max-[560px]:w-[calc(100%-1.5rem)]">
       {children}
     </main>
   );

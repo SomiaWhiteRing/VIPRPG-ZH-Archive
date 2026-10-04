@@ -469,7 +469,7 @@ export function CharacterIndexBrowser({
                       <h2
                         aria-level={Math.min(row.depth + 1, 6)}
                         className={cn(
-                          "min-w-0 break-words",
+                          "min-w-0 wrap-anywhere",
                           row.depth === 1
                             ? "font-display text-2xl font-semibold"
                             : row.depth === 2

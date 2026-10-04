@@ -127,7 +127,7 @@ export function AdminDiscussions({
                 key={`${row.reportId ?? row.kind}-${row.id}`}
               >
                 <td className="max-w-96 p-3">
-                  <strong className="break-words">
+                  <strong className="wrap-anywhere">
                     {row.title || "已删除主题"}
                   </strong>
                   <p className="text-xs text-muted">
@@ -143,7 +143,7 @@ export function AdminDiscussions({
                       {row.featured ? " · 精品" : ""}
                     </p>
                   ) : null}
-                  <p className="line-clamp-2 whitespace-pre-wrap break-words text-xs text-muted">
+                  <p className="line-clamp-2 whitespace-pre-wrap wrap-anywhere text-xs text-muted">
                     {row.body}
                   </p>
                   <p className="mt-2 text-xs md:hidden">
@@ -163,7 +163,7 @@ export function AdminDiscussions({
                     ] ??
                     row.state}
                   {row.explanation ? (
-                    <p className="line-clamp-2 max-w-52 whitespace-pre-wrap break-words text-xs">
+                    <p className="line-clamp-2 max-w-52 whitespace-pre-wrap wrap-anywhere text-xs">
                       {row.explanation}
                     </p>
                   ) : null}
@@ -310,12 +310,12 @@ function AdminDiscussionPanel({
           className="my-3 border-b border-border pb-3 text-sm"
         >
           <h3 className="mb-2 font-bold">举报信息</h3>
-          <p className="break-words">举报人：{row.reporter}</p>
+          <p className="wrap-anywhere">举报人：{row.reporter}</p>
           <p className="text-xs text-muted">
             <Timestamp value={row.createdAt} />
           </p>
           <p className="mt-2">原因：{row.reason}</p>
-          <p className="mt-1 whitespace-pre-wrap break-words">
+          <p className="mt-1 whitespace-pre-wrap wrap-anywhere">
             {row.explanation || "未填写补充说明。"}
           </p>
         </section>
@@ -329,20 +329,20 @@ function AdminDiscussionPanel({
         }{" "}
         · {detail.target.id} · {contentStateLabel(detail.state)}
       </p>
-      <p className="mt-1 break-words text-sm">作者：{row.author}</p>
+      <p className="mt-1 wrap-anywhere text-sm">作者：{row.author}</p>
       {!row.reportId ? (
         <p className="mt-1 text-xs text-muted">
           {row.kind === "topic" ? "更新时间：" : "发布时间："}
           <Timestamp value={row.createdAt} />
         </p>
       ) : null}
-      <div className="my-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words">
+      <div className="my-3 max-h-64 overflow-y-auto whitespace-pre-wrap wrap-anywhere">
         <ForumImages
           body={detail.body || (detail.images.length ? "" : "正文已删除")}
           images={detail.images}
         />
       </div>
-      <p className="my-3 max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted">
+      <p className="my-3 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-anywhere text-sm text-muted">
         {detail.context}
       </p>
       {detail.publicHref ? (
@@ -438,7 +438,7 @@ function AdminDiscussionPanel({
               <p>
                 <Timestamp value={entry.createdAt} />
               </p>
-              <pre className="whitespace-pre-wrap break-words">
+              <pre className="whitespace-pre-wrap wrap-anywhere">
                 {entry.detail}
               </pre>
             </li>

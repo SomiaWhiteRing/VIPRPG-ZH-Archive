@@ -15,7 +15,7 @@ export function TagCloud({
         {tags.map((tag) => (
           <li className="min-w-0 max-w-full" key={tag.name}>
             <Link
-              className="break-words text-primary hover:underline"
+              className="wrap-anywhere text-primary hover:underline"
               to={tagHref(tag.name)}
             >
               {tag.name}

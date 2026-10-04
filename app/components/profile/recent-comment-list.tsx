@@ -16,7 +16,7 @@ export function RecentCommentList({
           key={comment.id}
         >
           <CommentTargetImage comment={comment} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 wrap-anywhere">
             <Link
               className="font-semibold"
               to={`${commentTargetHref(comment.target)}#comment-${comment.id}`}

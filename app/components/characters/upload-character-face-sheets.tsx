@@ -185,7 +185,7 @@ export function UploadCharacterFaceSheets({
           {warnings.length ? (
             <details className="mt-3 text-xs text-muted">
               <summary className="cursor-pointer">有 {warnings.length} 张脸图无法读取</summary>
-              <ul className="mt-2 grid gap-1 break-words">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+              <ul className="mt-2 grid min-w-0 grid-cols-1 gap-1 wrap-anywhere">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
             </details>
           ) : null}
         </div>
@@ -255,8 +255,8 @@ export function UploadCharacterFaceSheets({
               </div>
             ))}
           </div>
-          {error ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700 dark:text-red-300">{error}</p> : null}
-          {assignedPreviews.errors.length ? <p role="alert" className="whitespace-pre-wrap break-words text-xs text-red-700 dark:text-red-300">{assignedPreviews.errors.join("\n")}</p> : null}
+          {error ? <p role="alert" className="whitespace-pre-wrap wrap-anywhere text-xs text-red-700 dark:text-red-300">{error}</p> : null}
+          {assignedPreviews.errors.length ? <p role="alert" className="whitespace-pre-wrap wrap-anywhere text-xs text-red-700 dark:text-red-300">{assignedPreviews.errors.join("\n")}</p> : null}
         </div>
         <footer className="flex flex-wrap items-center gap-3 border-t border-border p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
           <CharacterPortrait className="size-12 shrink-0 rounded" displayName={credit.selection.displayName} portrait={portrait} previewSrc={portraitSheet?.src} size={48} toneKey={credit.selection.originalName} />

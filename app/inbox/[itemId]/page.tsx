@@ -58,7 +58,7 @@ export default function InboxTargetPage() {
         </Link>
       </div>
       <PageHeader compact title="提醒" />
-      <div ref={contentRef} className="py-6">
+      <div ref={contentRef} className="min-w-0 wrap-anywhere py-6">
         <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>
         {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
         {item.commentNotification ? <>
@@ -67,7 +67,7 @@ export default function InboxTargetPage() {
         </> : null}
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}
         {item.closedReason ? <p className="mt-2 text-muted">{item.closedReason}</p> : null}
-        {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap break-words"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
+        {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
       </div>
       <InboxActions
         item={{

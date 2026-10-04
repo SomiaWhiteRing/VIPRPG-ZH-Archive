@@ -21,13 +21,13 @@ export function DiscussionList({
           key={`${item.kind}-${item.id}`}
         >
           <Link
-            className="break-words font-semibold"
+            className="wrap-anywhere font-semibold"
             to={item.href}
             prefetch="none"
           >
             {item.title}
           </Link>
-          <p className="mt-1 line-clamp-2 break-words text-[15px] text-muted">
+          <p className="mt-1 line-clamp-2 wrap-anywhere text-[15px] text-muted">
             {item.snippet}
           </p>
           <p className="mb-0 mt-2 text-xs text-muted">

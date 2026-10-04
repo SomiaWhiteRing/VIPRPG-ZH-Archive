@@ -434,7 +434,7 @@ export function CharacterIndexEditor({
               ) : (
                 <UserRound aria-hidden size={14} className="shrink-0" />
               )}
-              <span className="min-w-0 break-words">{node.label}</span>
+              <span className="min-w-0 wrap-anywhere">{node.label}</span>
             </Button>
           </div>
           {node.kind === "category" && expanded ? (

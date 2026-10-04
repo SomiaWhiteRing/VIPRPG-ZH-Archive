@@ -8,7 +8,7 @@ export const meta: MetaFunction = ({ error }) =>
 export default function AdminLayout() {
   const children = <Outlet />;
   return (
-    <div className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-7 [&_main]:grid [&_main]:gap-5">
+    <div className="mx-auto min-w-0 w-[min(1280px,calc(100vw-2rem))] wrap-anywhere py-5 sm:py-7 [&_main]:grid [&_main]:min-w-0 [&_main]:gap-5">
       {children}
     </div>
   );
