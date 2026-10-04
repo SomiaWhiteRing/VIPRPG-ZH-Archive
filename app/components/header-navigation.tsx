@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
+const desktopNavigationClassName =
+  "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium";
+
 export type HeaderNavigationLink = {
   href: string;
   label: string;
@@ -20,7 +23,6 @@ export type HeaderNavigationEntry = HeaderNavigationLink | HeaderNavigationGroup
 
 type HeaderNavigationProps = {
   ariaLabel: string;
-  inAdmin: boolean;
   mobileAriaLabel: string;
   entries: HeaderNavigationEntry[];
   pathname: string;
@@ -31,7 +33,6 @@ type HeaderNavigationProps = {
 
 export function HeaderNavigation({
   ariaLabel,
-  inAdmin,
   mobileAriaLabel,
   entries,
   pathname,
@@ -93,12 +94,11 @@ export function HeaderNavigation({
             >
               <DropdownMenu.Trigger asChild>
                 <Button
-                  className={`gap-1 px-3 ${
+                  className={`${desktopNavigationClassName} gap-1 ${
                     entry.links.some((link) => link.href === activeHref)
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
                       : "data-[state=open]:bg-muted/15"
                   }`}
-                  size="sm"
                   type="button"
                   variant="ghost"
                 >
@@ -139,7 +139,6 @@ export function HeaderNavigation({
               key={entry.href}
               active={entry.href === activeHref}
               link={entry}
-              siteNavigation={!inAdmin}
             />
           ),
         )}
@@ -196,28 +195,21 @@ function HeaderNavigationItem({
   link,
   layout = "desktop",
   onNavigate,
-  siteNavigation = false,
 }: {
   active: boolean;
   link: HeaderNavigationLink;
   layout?: "desktop" | "mobile" | "dropdown";
   onNavigate?: () => void;
-  siteNavigation?: boolean;
 }) {
-  const siteDesktop = siteNavigation && layout === "desktop";
   const layoutClass = {
-    desktop: siteDesktop
-      ? "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5"
-      : "inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-md px-3",
-    mobile: "block border-t border-border/50 px-3 py-2.5 first:border-t-0",
+    desktop: desktopNavigationClassName,
+    mobile: "block border-t border-border/50 px-3 py-2.5 text-sm font-semibold first:border-t-0",
     dropdown:
-      "flex min-h-9 cursor-pointer items-center rounded-sm px-2.5 py-2 outline-none",
+      "flex min-h-9 cursor-pointer items-center rounded-sm px-2.5 py-2 text-sm font-semibold outline-none",
   }[layout];
-  const className = `${layoutClass} text-sm ${siteDesktop ? "font-medium" : "font-semibold"} ${
+  const className = `${layoutClass} ${
     active
-      ? siteDesktop
-        ? "bg-[#237b70] text-primary-foreground hover:bg-[#1f6f67] dark:bg-primary dark:hover:bg-primary/90"
-        : "bg-primary text-primary-foreground"
+      ? "bg-primary text-primary-foreground"
       : "hover:bg-muted/15 focus-visible:bg-muted/15 data-[highlighted]:bg-muted/15"
   }`;
 

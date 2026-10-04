@@ -272,7 +272,6 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
         <HeaderNavigation
           ariaLabel={inAdmin ? "管理导航" : "站点导航"}
-          inAdmin={inAdmin}
           entries={inAdmin ? visibleAdminEntries : PUBLIC_LINKS}
           mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
           mobileOpen={mobileMenuOpen}
