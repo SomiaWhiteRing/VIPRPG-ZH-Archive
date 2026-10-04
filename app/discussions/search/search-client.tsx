@@ -35,7 +35,7 @@ export function DiscussionSearch({
               className="border-b border-border py-4"
             >
               <Link
-                className="mt-1 block break-words font-bold text-primary"
+                className="mt-1 block wrap-anywhere font-bold text-primary"
                 to={hit.href}
               >
                 <Highlight text={hit.title} query={query} />

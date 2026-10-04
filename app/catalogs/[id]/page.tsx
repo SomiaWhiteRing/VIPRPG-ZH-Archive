@@ -84,7 +84,7 @@ export default function CatalogPage() {
   return (
     <main
       key={`${catalog.id}:${currentUser?.id ?? "anonymous"}`}
-      className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-5 sm:py-8"
+      className="mx-auto min-w-0 w-[min(1280px,calc(100vw-2rem))] wrap-anywhere py-5 sm:py-8"
     >
       <div className="mt-5 flex flex-col gap-8 min-[981px]:flex-row">
         <div className="min-w-0 flex-1">
@@ -173,7 +173,7 @@ export default function CatalogPage() {
               </strong>
               <span className="text-sm text-muted">部作品</span>
             </div>
-            <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
+            <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
               <dt className="text-muted">创建者</dt>
               <dd className="m-0 min-w-0">
                 <Link

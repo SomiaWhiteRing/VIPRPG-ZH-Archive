@@ -26,7 +26,7 @@ export function TableWrap({
             : "min-w-205";
 
   return (
-    <div className={`w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>
+    <div className={`min-w-0 w-full max-w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>
       <Table
         className={`${minWidthClass} ${compact ? "[&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3" : "[&_th]:h-11 [&_th]:px-4 [&_td]:p-4"} [&_th]:text-left [&_th]:align-middle [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted [&_td]:align-middle [&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0`}
         aria-label={label}

@@ -174,7 +174,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
     <div className="offline-game" id="web-player-frame">
       <WebPlaySurface
         captureDisabled={starting || capturing}
-        feedback={error || feedback ? <p className="pointer-events-none absolute bottom-4 left-1/2 z-30 m-0 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 rounded bg-black/85 p-3 text-center text-sm text-white" role={error ? "alert" : "status"}>{error ?? feedback?.message}</p> : null}
+        feedback={error || feedback ? <p className="pointer-events-none absolute bottom-4 left-1/2 z-30 m-0 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 wrap-anywhere rounded bg-black/85 p-3 text-center text-sm text-white" role={error ? "alert" : "status"}>{error ?? feedback?.message}</p> : null}
         immersive
         layout={preferences.layouts[orientation]}
         mobile

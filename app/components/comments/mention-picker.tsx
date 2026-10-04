@@ -84,7 +84,7 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
               const next = buttons.indexOf(event.currentTarget) + (event.key === "ArrowDown" ? 1 : -1);
               (buttons[next] ?? search.current)?.focus();
             }}
-            onClick={() => onSelect(user)}><span className="min-w-0 break-words">@{user.displayName}</span><UserAvatar displayName={user.displayName} avatarBlobSha256={user.avatarBlobSha256} size={28} className="size-7 shrink-0" /></Button></li>)}
+            onClick={() => onSelect(user)}><span className="min-w-0 wrap-anywhere">@{user.displayName}</span><UserAvatar displayName={user.displayName} avatarBlobSha256={user.avatarBlobSha256} size={28} className="size-7 shrink-0" /></Button></li>)}
         </ul>
       </Popover.Content>
     </Popover.Portal>

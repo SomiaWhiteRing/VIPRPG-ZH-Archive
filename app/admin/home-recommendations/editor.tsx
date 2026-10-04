@@ -100,10 +100,10 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
             <li key={work.id} className="flex flex-wrap items-center gap-3 border-b border-border py-3">
               <span className="text-sm text-muted">{index + 1}</span>
               <div className="min-w-0 flex-1 basis-40">
-                <Link className="break-words font-semibold hover:underline" to={`/admin/works/${work.id}`}>
+                <Link className="wrap-anywhere font-semibold hover:underline" to={`/admin/works/${work.id}`}>
                   {work.chineseTitle || work.originalTitle}
                 </Link>
-                {work.chineseTitle ? <p className="mt-0.5 break-words text-xs text-muted">{work.originalTitle}</p> : null}
+                {work.chineseTitle ? <p className="mt-0.5 wrap-anywhere text-xs text-muted">{work.originalTitle}</p> : null}
                 {!work.isPublic ? <span className="text-xs text-muted">未公开</span> : null}
               </div>
               <div className="flex shrink-0 gap-1">

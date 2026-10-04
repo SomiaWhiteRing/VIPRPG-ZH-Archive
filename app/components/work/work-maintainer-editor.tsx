@@ -60,11 +60,11 @@ export function WorkMaintainerEditor({ workId, initialMaintainers, canRemove = f
     finally { running.current = false; setBusy(false); }
   }
   return <div className="my-8"><Pane heading="作品维护者">
-    <ul className="grid gap-3">
+    <ul className="grid min-w-0 grid-cols-1 gap-3">
       {maintainers.map((person) => <li key={person.id} className="flex min-w-0 items-center justify-between gap-3">
         <Link className="flex min-w-0 items-center gap-2 text-sm hover:underline" to={`/users/${person.id}`}>
           <UserAvatar displayName={person.displayName} avatarBlobSha256={person.avatarBlobSha256} size={32} className="size-8 shrink-0" />
-          <span className="break-words">{person.displayName}</span>
+          <span className="min-w-0 wrap-anywhere">{person.displayName}</span>
         </Link>
         {canRemove ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void change(person, 'remove')}>移除</Button> : null}
       </li>)}
@@ -73,9 +73,9 @@ export function WorkMaintainerEditor({ workId, initialMaintainers, canRemove = f
       <SearchComboBox id={inputId} label="添加作品维护者" placeholder="搜索昵称或用户 UID" maxLength={80}
         query={query} items={users} loading={loading} disabled={busy} selectedKey={selected?.id ?? null}
         getKey={(person) => person.id} getText={(person) => person.displayName}
-        renderItem={(person) => <span className="flex items-center gap-2">
+        renderItem={(person) => <span className="flex min-w-0 items-center gap-2">
           <UserAvatar displayName={person.displayName} avatarBlobSha256={person.avatarBlobSha256} size={28} className="size-7 shrink-0" />
-          <span className="break-words">{person.displayName}</span>
+          <span className="min-w-0 wrap-anywhere">{person.displayName}</span>
         </span>}
         onQueryChange={(value) => { setQuery(value); setSelected(null); setUsers([]); setSearchError(''); setLoading(!!value.trim()); }}
         onChoose={(person) => { setSelected(person); setQuery(person.displayName); setLoading(false); }}

@@ -72,7 +72,7 @@ export default function CharacterDetailPage() {
       <header className="pb-4 pt-4">
         <BackLink href="/characters" label="角色索引" variant="text" />
         <div className="mt-2 flex items-start gap-2">
-          <h1 className="min-w-0 break-words font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
+            <h1 className="min-w-0 wrap-anywhere font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
             {character.primaryName}
           </h1>
           {canEdit ? (

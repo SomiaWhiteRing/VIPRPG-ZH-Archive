@@ -25,11 +25,11 @@ export function MaintainerApplicationButton({ workId, initialApplication }: { wo
       if (!preview.application.canApply) throw new Error(preview.application.unavailableReason ?? '暂时无法申请。');
       await confirm(`将向以下作品维护者申请加入，任一维护者通过即可生效。\n\n${MAINTAINER_APPLICATION_DESCRIPTION}`, {
         title: '申请成为作品维护者？', confirmLabel: '确认申请',
-        content: <ul aria-label="接收申请的维护者" className="grid max-h-60 gap-3 overflow-y-auto">
+        content: <ul aria-label="接收申请的维护者" className="grid min-w-0 grid-cols-1 max-h-60 gap-3 overflow-y-auto">
           {preview.application.recipients.map((person) => <li key={person.id} className="flex min-w-0 items-center gap-2">
             <Link to={`/users/${person.id}`} className="flex min-w-0 items-center gap-2 rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-primary">
               <UserAvatar displayName={person.displayName} avatarBlobSha256={person.avatarBlobSha256} size={32} className="size-8 shrink-0" />
-              <span className="break-words">{person.displayName}</span>
+              <span className="min-w-0 wrap-anywhere">{person.displayName}</span>
             </Link>
           </li>)}
         </ul>,

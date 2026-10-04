@@ -842,7 +842,7 @@ export function DiscussionWorkspace({
             <TopicTags tags={detail.topic.tags} />
           </div>
           <header
-            className="border-b border-border pb-4"
+            className="min-w-0 wrap-anywhere border-b border-border pb-4"
             data-slot="page-header"
           >
             <h1 className="m-0 font-display text-[clamp(24px,3vw,30px)] font-bold leading-[1.2]">
@@ -1013,7 +1013,7 @@ export function DiscussionWorkspace({
                 </div>
                 {topics.items.map((item) => (
                   <article
-                    className="grid min-w-0 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] dark:hover:bg-primary/15 dark:focus-within:bg-primary/15 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
+                    className="grid min-w-0 grid-cols-1 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] dark:hover:bg-primary/15 dark:focus-within:bg-primary/15 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
                     key={item.id}
                   >
                     <div className="min-w-0 flex-1">
@@ -1028,7 +1028,7 @@ export function DiscussionWorkspace({
                         </div>
                       ) : null}
                       <Link
-                        className="line-clamp-2 break-words text-base font-bold leading-6 text-foreground hover:text-primary"
+                        className="line-clamp-2 wrap-anywhere text-base font-bold leading-6 text-foreground hover:text-primary"
                         to={forumHref(`/discussions/${item.id}`, {
                           from: listHref === "/discussions" ? null : listHref,
                         })}

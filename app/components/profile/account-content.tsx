@@ -19,7 +19,7 @@ export function AccountSection({
   divided?: boolean;
 }) {
   return (
-    <section className={divided ? "border-t border-border pt-5 first:border-t-0 first:pt-0" : undefined}>
+    <section className={divided ? "min-w-0 border-t border-border pt-5 first:border-t-0 first:pt-0" : "min-w-0"}>
       <header className="mb-3 flex items-center justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h2 className="m-0 text-lg font-bold">{title}</h2>

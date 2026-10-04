@@ -27,7 +27,7 @@ export function EmptyState({
   return (
     <Container
       className={cn(
-        "grid gap-3",
+        "grid min-w-0 grid-cols-1 gap-3 wrap-anywhere",
         variant === "card" ? "p-5" : "text-sm",
         className,
       )}

@@ -74,7 +74,7 @@ export function DiscussionTagLink({
   return (
     <Link
       prefetch="none"
-      className="break-words text-primary hover:bg-primary/5 hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+      className="wrap-anywhere text-primary hover:bg-primary/5 hover:underline focus-visible:ring-2 focus-visible:ring-primary"
       to={forumHref("/discussions", { tag: tag.id })}
     >
       [<Highlight text={tag.name} query={query} />]

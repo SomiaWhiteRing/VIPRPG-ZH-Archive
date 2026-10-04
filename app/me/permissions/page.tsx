@@ -90,21 +90,21 @@ export default function AccountPermissionsPage() {
                     return current;
                   }, { replace: true, preventScrollReset: true })}
                 >
-                  <span className="max-w-full break-words">{item.name}</span>
+                  <span className="max-w-full wrap-anywhere">{item.name}</span>
                   <Badge variant={itemState.variant}>{itemState.label}</Badge>
                 </Button>
               );
             })}
           </nav>
-          <Card id="permission-detail" className="grid w-full min-w-0 flex-1 gap-4 p-4 sm:p-6" aria-labelledby="permission-heading">
+          <Card id="permission-detail" className="grid w-full min-w-0 flex-1 grid-cols-1 gap-4 p-4 sm:p-6" aria-labelledby="permission-heading">
             <div>
-              <h2 id="permission-heading" className="break-words text-lg font-semibold">{role.name}</h2>
+              <h2 id="permission-heading" className="wrap-anywhere text-lg font-semibold">{role.name}</h2>
               {role.description ? (
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted">{role.description}</p>
+                <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm text-muted">{role.description}</p>
               ) : null}
             </div>
             {state.message ? <p className="text-sm text-muted" role="status">{state.message}</p> : null}
-            {role.request?.rejectionReason ? <p className="whitespace-pre-wrap break-words text-sm"><span className="font-semibold">上次申请驳回理由：</span>{role.request.rejectionReason}</p> : null}
+            {role.request?.rejectionReason ? <p className="whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">上次申请驳回理由：</span>{role.request.rejectionReason}</p> : null}
             {role.request ? (
               <Link className="w-fit text-sm text-primary hover:underline" to={`/inbox/${role.request.id}`}>
                 查看最近一次申请

@@ -15,7 +15,7 @@ export function Notice({
 }: ComponentProps<"p"> & { tone?: keyof typeof tones }) {
   return (
     <p
-      className={cn("rounded-md border p-3 text-sm", tones[tone], className)}
+      className={cn("min-w-0 wrap-anywhere rounded-md border p-3 text-sm", tones[tone], className)}
       role={role ?? (tone === "error" ? "alert" : "status")}
       {...props}
     />

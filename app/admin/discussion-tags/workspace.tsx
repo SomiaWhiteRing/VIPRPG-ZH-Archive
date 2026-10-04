@@ -67,7 +67,7 @@ export function AdminDiscussionTags({
           <tbody>
             {data.items.map((tag) => (
               <tr className="border-t border-border" key={tag.id}>
-                <td className="break-words p-3">
+                <td className="wrap-anywhere p-3">
                   {tag.id} · {tag.name}
                   <p className="mt-1 text-xs text-muted md:hidden">
                     {
@@ -215,7 +215,7 @@ function ManageTag({
         <p className="text-sm">
           ID {tag.id} · {tag.count} 个公开主题
         </p>
-        <p className="break-words text-sm">创建者：{tag.creator}</p>
+        <p className="wrap-anywhere text-sm">创建者：{tag.creator}</p>
         <p className="text-xs text-muted">
           更新时间：
           <Timestamp value={tag.updatedAt} />

@@ -50,7 +50,7 @@ export function CharacterCard({
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-1.5">
-            <Heading className="min-w-0 flex-1 break-words font-semibold leading-snug">
+            <Heading className="min-w-0 flex-1 wrap-anywhere font-semibold leading-snug">
               <Link
                 className="after:absolute after:inset-0 after:rounded-sm hover:text-primary hover:underline focus-visible:after:ring-2 focus-visible:after:ring-primary/30 md:after:hidden"
                 to={`/characters/${character.id}`}
@@ -86,7 +86,7 @@ export function CharacterCard({
             ) : null}
           </div>
           <p
-            className="mt-1 break-words text-xs leading-relaxed text-muted"
+            className="mt-1 wrap-anywhere text-xs leading-relaxed text-muted"
             lang="ja"
           >
             {originalName}

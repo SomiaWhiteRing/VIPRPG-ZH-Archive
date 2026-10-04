@@ -322,7 +322,7 @@ export function PermissionMatrix({
                         item.id === selectedRoleId ? "neutral" : "ghost"
                       }
                     >
-                      <span className="min-w-0 break-words">
+                      <span className="min-w-0 wrap-anywhere">
                         {item.name}
                         <span className="block text-xs font-normal text-muted">
                           {item.status === "disabled" ? "已停用 · " : ""}
@@ -350,13 +350,13 @@ export function PermissionMatrix({
 
         {role && saved ? (
           <section
-            className="grid w-full min-w-0 flex-1 gap-3"
+            className="grid w-full min-w-0 flex-1 grid-cols-1 gap-3 wrap-anywhere"
             aria-labelledby="selected-role-heading"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
               <div className="min-w-0">
                 <h2
-                  className="break-words text-lg font-bold"
+                  className="wrap-anywhere text-lg font-bold"
                   id="selected-role-heading"
                 >
                   {role.name}

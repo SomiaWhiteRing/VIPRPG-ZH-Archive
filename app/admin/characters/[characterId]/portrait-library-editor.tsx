@@ -1276,7 +1276,7 @@ export function PortraitLibraryEditor({
 
       {error ? (
         <div
-          className="whitespace-pre-line break-words rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300"
+          className="whitespace-pre-line wrap-anywhere rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300"
           role="alert"
         >
           {error}
@@ -1284,7 +1284,7 @@ export function PortraitLibraryEditor({
       ) : null}
       <div className="sticky bottom-3 z-20 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3 shadow-surface">
         <div
-          className="min-w-0 flex-1 break-words text-sm"
+          className="min-w-0 flex-1 wrap-anywhere text-sm"
           role="status"
           aria-live="polite"
         >

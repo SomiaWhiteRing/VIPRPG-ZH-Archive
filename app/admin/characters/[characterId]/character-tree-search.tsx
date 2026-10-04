@@ -133,7 +133,7 @@ export function CharacterTreeSearch({
                 ) : (
                   <span className="w-5 shrink-0" />
                 )}
-                <span className="min-w-0 flex-1 break-words">
+                <span className="min-w-0 flex-1 wrap-anywhere">
                   {node.label}
                   {node.originalName && node.originalName !== node.label ? (
                     <span className="block text-xs text-muted">

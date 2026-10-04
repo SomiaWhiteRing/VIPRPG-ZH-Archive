@@ -19,10 +19,10 @@ export function CommentSummaryList({
       {items.map((comment) => (
         <li className="flex items-start gap-3 py-4" key={comment.id}>
           <CommentTargetImage comment={comment} />
-          <div className="grid min-w-0 flex-1 gap-2">
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 wrap-anywhere">
             <div className="flex items-center justify-between gap-3">
               <Link
-                className="font-semibold"
+                className="min-w-0 font-semibold"
                 to={`${commentTargetHref(comment.target)}#comment-${comment.id}`}
               >
                 {comment.targetTitle}
