@@ -280,8 +280,9 @@ export async function createOrActivateVerifiedUser(
         password_updated_at,
         email_verified_at,
         last_login_at,
+        timeline_enabled,
         timeline_record_kinds
-      ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)`,
+      ) VALUES (?, ?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, ?)`,
     )
     .bind(externalAuthId, email, displayName, input.passwordHash, JSON.stringify(TIMELINE_RECORD_KINDS))
     .run()

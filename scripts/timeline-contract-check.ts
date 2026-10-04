@@ -38,7 +38,7 @@ function fixture() {
     }
     sqlite.exec(readFileSync(`migrations/${name}`, "utf8"));
   }
-  sqlite.exec(`UPDATE users SET profile_show_timeline=1;
+  sqlite.exec(`UPDATE users SET timeline_enabled=0,profile_show_timeline=1;
     INSERT INTO creators(id,name,name_key,public_at) VALUES(1,'Creator','creator',CURRENT_TIMESTAMP);
     INSERT INTO characters(id,primary_name,primary_name_key,original_name,original_name_key) VALUES(1,'Character','character','Character','character');
     INSERT INTO blobs(sha256,size_bytes,content_type_hint) VALUES('${coverHash}',${png.length},'image/png');
@@ -98,7 +98,7 @@ async function check(name: string, test: (f: Fixture) => Promise<void>) {
   } finally { await Promise.allSettled(f.pending); f.sqlite.close(); }
 }
 
-await check("opt-in, legacy first-play markers and settings validation", async (f) => {
+await check("recording switch, legacy first-play markers and settings validation", async (f) => {
   assert.equal((await readTimelineSettings(f.runtime, 1)).enabled, false);
   assert.equal(f.count(), 0);
   assert.equal(f.sqlite.prepare("SELECT first_observed_at FROM user_work_first_plays WHERE user_id=1 AND work_id=1").get()!.first_observed_at, null);
