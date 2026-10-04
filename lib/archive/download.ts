@@ -1,4 +1,4 @@
-export const downloadZipBuilderVersion = "zip-store-v7-local-crc-no-descriptor";
+export const downloadZipBuilderVersion = "zip-store-v8-local-crc-no-descriptor";
 
 // Deployment and cold ZIP generation share one invocation budget. Keep room for
 // manifest/player metadata, cache operations, D1, and failure observability.

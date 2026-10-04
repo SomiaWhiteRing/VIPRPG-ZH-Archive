@@ -203,6 +203,7 @@ async function runInstallAttempt(input: {
 
   const response = await observeInstallTask("network.headers", () => requestOk(metadata.downloadUrl, {
     credentials: "same-origin",
+    cache: "no-store",
   }), { url: metadata.downloadUrl });
 
   const headerLength = numberHeader(response.headers.get("Content-Length"));
