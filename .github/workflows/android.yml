@@ -44,6 +44,7 @@ on:
       - 'lib/browser/client-environment.ts'
       - 'lib/browser/android-screenshots.ts'
       - 'lib/browser/android-local.ts'
+      - 'lib/browser/work-play.ts'
       - 'lib/format.ts'
       - 'lib/ui/cn.ts'
       - 'lib/android-package.ts'
