@@ -13,15 +13,17 @@ import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
 import { formatNumber, formatDate } from "@/lib/format";
 import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
+import { WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 export type GameLibraryData = Awaited<ReturnType<typeof loadGameLibrary>>;
 
-const ENGINES = [
-  { value: "all", label: "全部" },
-  ...ENGINE_OPTIONS.map(({ value, label }) => ({ value, label })),
+const REFERENCE_DURATIONS = [
+  { value: "", label: "全部" },
+  ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: value })),
+  { value: "custom", label: "自定义" },
 ];
 
 export function GameLibrary({
@@ -43,6 +45,7 @@ export function GameLibrary({
 }) {
   const {
     engine,
+    referenceDuration,
     tag,
     character,
     uploader,
@@ -185,9 +188,13 @@ export function GameLibrary({
               {engine !== "all" ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, engine: undefined })}
-                  label={`引擎：${ENGINES.find((option) => option.value === engine)?.label ?? engine}`}
+                  label={`引擎：${ENGINE_OPTIONS.find((option) => option.value === engine)?.label ?? engine}`}
                 />
               ) : null}
+              {referenceDuration ? <FilterChip
+                href={gamesHref({ ...activeParams, duration: undefined })}
+                label={`参考时长：${referenceDuration === "custom" ? "自定义" : referenceDuration}`}
+              /> : null}
               {data.release ? <FilterChip
                 href={gamesHref({ ...activeParams, release: undefined })}
                 label={`发布日期：${releasePeriodLabel(data.release)}`}
@@ -311,13 +318,13 @@ export function GameLibrary({
                 label="社区收录"
               /> */}
             </FilterSection>
-            <FilterSection label="引擎">
+            <FilterSection label="参考时长">
               <CollapsibleFilterLinks
-                options={ENGINES.map(({ value, label }) => ({
-                  active: engine === value,
+                options={REFERENCE_DURATIONS.map(({ value, label }) => ({
+                  active: referenceDuration === value,
                   href: gamesHref({
                     ...activeParams,
-                    engine: value === "all" ? undefined : value,
+                    duration: value || undefined,
                     page: undefined,
                   }),
                   label,
