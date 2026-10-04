@@ -26,7 +26,7 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from "@/lib/auth/password-rules";
-import { hasPermission } from "@/lib/authz/permissions";
+import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { inspectDisplayName } from "@/lib/display-name";
 
@@ -570,7 +570,10 @@ export async function searchUsersForAdmin(
     actor: ArchiveUser;
     query?: string;
     status?: string;
-    sort?: "default" | "name";
+    roleId?: number;
+    permission?: PermissionKey;
+    blocks?: "all" | "blocked" | "unblocked";
+    sort?: "default" | "oldest" | "name";
     page?: number;
     pageSize?: number;
   },
@@ -599,6 +602,19 @@ export async function searchUsersForAdmin(
     clauses.push("u.status=?");
     binds.push(input.status);
   }
+  if (input.roleId) {
+    // Match the same individually assigned or globally available roles shown in the list.
+    clauses.push(`EXISTS (SELECT 1 FROM roles filtered_role WHERE filtered_role.id=? AND (
+      EXISTS (SELECT 1 FROM user_roles assigned_role
+        WHERE assigned_role.user_id=u.id AND assigned_role.role_id=filtered_role.id)
+      OR (u.status='active' AND filtered_role.status='active' AND filtered_role.available_to_all=1)))`);
+    binds.push(input.roleId);
+  }
+  if (input.permission) clauses.push(userPermissionSql("u.id", input.permission));
+  if (input.blocks && input.blocks !== "all") {
+    const hasBlocks = "EXISTS (SELECT 1 FROM user_permission_blocks user_block WHERE user_block.user_id=u.id)";
+    clauses.push(input.blocks === "blocked" ? hasBlocks : `NOT ${hasBlocks}`);
+  }
   if (query) {
     clauses.push(
       `(u.display_name LIKE ? COLLATE NOCASE
@@ -618,7 +634,9 @@ export async function searchUsersForAdmin(
   const order =
     input.sort === "name"
       ? "u.display_name COLLATE NOCASE ASC,u.id DESC"
-      : "datetime(u.created_at) DESC,u.id DESC";
+      : input.sort === "oldest"
+        ? "datetime(u.created_at) ASC,u.id ASC"
+        : "datetime(u.created_at) DESC,u.id DESC";
   const database = getD1(runtime);
   const [countResult, usersResult] = await database.batch([
     database

@@ -10,6 +10,7 @@ import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 export function RoleAssignmentControl({
   userId,
   initialRoleIds,
+  currentRoles,
   roles,
   onSaved,
   disabled = false,
@@ -17,6 +18,7 @@ export function RoleAssignmentControl({
 }: {
   userId: number;
   initialRoleIds: number[];
+  currentRoles: RoleSummary[];
   roles: RoleSummary[];
   onSaved: (access: AdminUserAccessUpdate) => Promise<void>;
   disabled?: boolean;
@@ -89,27 +91,28 @@ export function RoleAssignmentControl({
   }
 
   return (
-    <div className="grid min-w-56 gap-2">
-      {assigned.map((role) => (
-        <div className="flex items-center justify-between gap-2" key={role.id}>
-          <span className="text-sm">
+    <div className="grid min-w-0 gap-2">
+      {currentRoles.map((role) => (
+        <div className="flex items-center justify-between gap-3 border-b border-border py-1.5" key={role.id}>
+          <span className="min-w-0 text-sm">
             {role.name}
             {role.status === "disabled" ? "（已停用）" : ""}
-            {role.status === "active" && role.availableToAll ? "（移除单独授权后仍全员可用）" : ""}
+            <span className="mt-0.5 block text-xs text-muted">{roleSourceLabel(role, roleIds.includes(role.id), true)}</span>
           </span>
-          <Button
+          {assigned.some((item) => item.id === role.id) ? <Button
+            className="shrink-0"
             disabled={busy}
             onClick={() => remove(role.id)}
             size="sm"
             type="button"
-            variant="outline"
+            variant="ghost"
           >
             移除
-          </Button>
+          </Button> : null}
         </div>
       ))}
       {available.length > 0 ? (
-        <div className="flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-2">
           <SelectField
             aria-label="要分配的角色"
             className="min-w-0 flex-1"
@@ -132,4 +135,10 @@ export function RoleAssignmentControl({
       ) : null}
     </div>
   );
+}
+
+export function roleSourceLabel(role: RoleSummary, individuallyAssigned: boolean, accountActive: boolean): string {
+  return accountActive && role.status === "active" && role.availableToAll
+    ? (individuallyAssigned ? "单独授权及全员开放" : "全员开放")
+    : "单独授权";
 }

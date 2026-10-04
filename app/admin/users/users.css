@@ -1,0 +1,114 @@
+/* Website-only administrative users list and its expanded access controls. */
+.admin-users-page [data-slot="page-header"] {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.admin-users-page [data-slot="page-header"] h1 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.035em;
+}
+
+.admin-users-page [data-slot="page-header"] > div > p {
+  color: var(--color-secondary);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.admin-users-filters { display: grid; gap: 0.875rem; }
+
+.admin-users-filter-main {
+  display: grid;
+  grid-template-columns: minmax(16rem, 2fr) repeat(2, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-users-filter-access {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.admin-users-field { display: grid; min-width: 0; gap: 0.375rem; }
+.admin-users-field > label { color: var(--color-muted); font-size: 0.75rem; font-weight: 500; }
+.admin-users-filter-actions { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+
+.admin-users-list-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.admin-users-table-surface {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.875rem;
+  background: var(--color-card);
+  box-shadow: var(--shadow-surface);
+}
+
+.admin-users-table { min-width: 760px; table-layout: fixed; border-collapse: collapse; }
+.admin-users-table th {
+  padding: 0.875rem 1rem;
+  background: color-mix(in srgb, var(--color-background) 75%, var(--color-card));
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.admin-users-table th:nth-child(1) { width: 23%; }
+.admin-users-table th:nth-child(2) { width: 34%; }
+.admin-users-table th:nth-child(3) { width: 12%; }
+.admin-users-table th:nth-child(4) { width: 18%; }
+.admin-users-table th:nth-child(5) { width: 13%; }
+.admin-users-table td {
+  border-top: 1px solid var(--color-border);
+  padding: 1rem;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.admin-users-table th:last-child,
+.admin-users-table td:last-child { text-align: right; }
+
+.admin-users-name { font-weight: 600; text-decoration: none; }
+.admin-users-name:hover { color: var(--color-secondary); text-decoration: underline; text-underline-offset: 3px; }
+.admin-users-role-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: color-mix(in srgb, var(--color-muted) 7%, var(--color-card));
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+.admin-users-role-special {
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-card));
+  color: var(--color-secondary);
+}
+.admin-users-selected-row > td { background: color-mix(in srgb, var(--color-primary) 9%, var(--color-card)); }
+.admin-users-table .admin-users-detail-row > td {
+  padding: 0;
+  background: color-mix(in srgb, var(--color-background) 65%, var(--color-card));
+  text-align: left;
+}
+.admin-users-detail { display: grid; gap: 1rem; padding: 1.25rem; }
+.admin-users-detail-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; }
+.admin-users-section-title { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.875rem; font-size: 0.875rem; font-weight: 600; }
+.admin-users-effective { border-top: 1px solid var(--color-border); padding-top: 0.875rem; }
+
+@media (max-width: 760px) {
+  .admin-users-filter-main,
+  .admin-users-filter-access { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-users-filter-main > :first-child { grid-column: 1 / -1; }
+  .admin-users-detail-columns { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+}
+@media (max-width: 440px) {
+  .admin-users-filter-access { grid-template-columns: minmax(0, 1fr); }
+}

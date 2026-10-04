@@ -1,18 +1,13 @@
 import { requestJson } from "@/lib/ui/api-response";
-
 import { useState } from "react";
 import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
-import { X } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import * as Dialog from "@/app/components/ui/dialog";
 import { SelectField } from "@/app/components/ui/select";
 import { useToast } from "@/app/components/ui/toast";
 import { type PermissionKey, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
 
-
 export function PermissionBlockControl({
   userId,
-  displayName,
   blockedKeys,
   grantedKeys,
   onSaved,
@@ -20,7 +15,6 @@ export function PermissionBlockControl({
   onBusyChange,
 }: {
   userId: number;
-  displayName: string;
   blockedKeys: PermissionKey[];
   grantedKeys: PermissionKey[];
   onSaved: (access: AdminUserAccessUpdate) => Promise<void>;
@@ -41,13 +35,11 @@ export function PermissionBlockControl({
     setSaving(true);
     onBusyChange(true);
     try {
-
-      const payload = await requestJson(`/api/admin/users/${userId}/permissions`, {
+      const payload = await requestJson("/api/admin/users/" + userId + "/permissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissionKey, blocked }),
       }) as { ok?: boolean; detail?: string; error?: string; access: AdminUserAccessUpdate };
-
       await onSaved(payload.access);
       toast.success(blocked ? "已为此用户禁用该权限。" : "已取消单独禁用，按角色授权生效。");
     } catch (error) {
@@ -59,47 +51,31 @@ export function PermissionBlockControl({
   }
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger asChild>
-        <Button type="button" size="sm" variant="outline" disabled={busy}>单独禁用权限</Button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content className="left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-6">
-          <div className="flex items-center justify-between gap-3">
-            <Dialog.Title>{displayName}的单独权限设置</Dialog.Title>
-            <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="关闭单独权限设置"><X aria-hidden="true" /></Button>
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="text-sm text-muted">
-            单独禁用优先于所有角色授权。取消禁用后恢复按角色授权判断。
-          </Dialog.Description>
-          {blockedKeys.length ? (
-            <ul className="grid gap-2">
-              {blockedKeys.map((key) => (
-                <li key={key} className="flex items-center justify-between gap-3 text-sm">
-                  <span>{PERMISSIONS[key].label}</span>
-                  <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => update(key, false)}>恢复</Button>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="text-sm text-muted">没有单独禁用的权限。</p>}
-          {selectedKey ? (
-            <div className="flex items-center gap-2">
-              <SelectField
-                aria-label="要单独禁用的权限"
-                className="min-w-0 flex-1"
-                value={selectedKey}
-                onValueChange={setSelected}
-                disabled={busy}
-                options={available.map((permission) => ({ value: permission.key, label: permission.label }))}
-              />
-              <Button type="button" variant="destructive" disabled={busy} onClick={() => update(selectedKey, true)}>禁用</Button>
-            </div>
-          ) : null}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <div className="grid min-w-0 gap-3">
+      {blockedKeys.length ? (
+        <ul className="grid gap-2">
+          {blockedKeys.map((key) => (
+            <li key={key} className="flex items-center justify-between gap-3 rounded-lg bg-destructive/5 px-3 py-2 text-sm">
+              <span className="min-w-0 text-destructive">{PERMISSIONS[key].label}</span>
+              <Button className="shrink-0" type="button" size="sm" variant="outline" disabled={busy} onClick={() => void update(key, false)}>恢复</Button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted">没有单独禁用的权限。</p>}
+      {selectedKey ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <SelectField
+            aria-label="要单独禁用的权限"
+            className="min-w-0 flex-1"
+            value={selectedKey}
+            onValueChange={setSelected}
+            disabled={busy}
+            options={available.map((permission) => ({ value: permission.key, label: permission.label }))}
+          />
+          <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={() => void update(selectedKey, true)}>禁用</Button>
+        </div>
+      ) : null}
+      <p className="text-xs text-muted">单独禁用优先于所有角色授权；取消禁用后按角色授权判断。</p>
+    </div>
   );
 }
