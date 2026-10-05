@@ -7,12 +7,13 @@ body:has(.eternal-sea-page) {
 }
 
 .eternal-sea-page {
+  --sea-background: url("/assets/eternal-sea/ocean.gif");
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #336ca1 url("/assets/eternal-sea/ocean.gif") 0 0 / 32px 32px repeat;
+  background: #336ca1 var(--sea-background) 0 0 / 32px 32px repeat;
   image-rendering: pixelated;
   color: #fff;
 }
@@ -127,6 +128,8 @@ body:has(.eternal-sea-page) {
   text-shadow: 1px 1px #06130b;
 }
 
+.sea-composer-dock { display: flow-root; flex-shrink: 0; }
+
 .sea-compose-fields {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
@@ -194,5 +197,62 @@ body:has(.eternal-sea-page) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .eternal-sea-page { background-image: url("/assets/eternal-sea/ocean.png"); }
+  .eternal-sea-page { --sea-background: url("/assets/eternal-sea/ocean.png"); }
+}
+
+/* Native SwipeRefreshLayout reads WebView document scroll, not the inner log. */
+:root:has(.eternal-sea-page[data-scroll="document"]),
+body:has(.eternal-sea-page[data-scroll="document"]) {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  scroll-behavior: auto;
+  scrollbar-width: none;
+}
+
+:root:has(.eternal-sea-page[data-scroll="document"])::-webkit-scrollbar { display: none; }
+
+.eternal-sea-page[data-scroll="document"] {
+  --sea-top-gap: max(32px, calc((100dvh - 800px) / 2));
+  --sea-bottom-gap: var(--sea-top-gap);
+  position: relative;
+  inset: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  background-attachment: fixed;
+}
+
+.eternal-sea-page[data-scroll="document"] .sea-room {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: auto;
+  min-height: 100dvh;
+  padding: 0 0 var(--sea-bottom-gap);
+}
+
+.eternal-sea-page[data-scroll="document"] .sea-composer-dock {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: var(--sea-top-gap);
+  background: #336ca1 var(--sea-background) 0 0 / 32px 32px repeat fixed;
+}
+
+.eternal-sea-page[data-scroll="document"] .sea-log {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.eternal-sea-page[data-scroll="document"] .sea-messages {
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+@media (max-width: 703px) {
+  .eternal-sea-page[data-scroll="document"] {
+    --sea-top-gap: max(16px, env(safe-area-inset-top));
+    --sea-bottom-gap: max(12px, env(safe-area-inset-bottom));
+  }
 }
