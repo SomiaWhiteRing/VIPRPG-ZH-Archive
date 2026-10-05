@@ -6,7 +6,6 @@ import { useToast } from "@/app/components/ui/toast";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import { CharacterAvatarPicker } from "./character-avatar-picker";
 import * as Dialog from "@/app/components/ui/dialog";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { cn } from "@/lib/ui/cn";
 import type { CharacterPortrait } from "@/lib/character-names";
@@ -237,20 +236,21 @@ export function AvatarCropper({
               </Slider.Root>
             </div>
             <div className="flex justify-end gap-2">
-              <Rm2kButton
+              <Button
                 disabled={busy}
                 onClick={() => setSource(null)}
                 type="button"
+                variant="outline"
               >
                 取消
-              </Rm2kButton>
-              <Rm2kButton
+              </Button>
+              <Button
                 disabled={busy || !area}
                 onClick={() => void upload()}
                 type="button"
               >
                 {busy ? "正在上传…" : "保存头像"}
-              </Rm2kButton>
+              </Button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
