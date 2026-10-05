@@ -967,7 +967,10 @@ export function DiscussionWorkspace({
             </div>
             <div className="my-3 min-w-0 lg:hidden">
               <PopularTagFilter
-                popular={popular}
+                popular={[
+                  ...selected.filter((tag) => !popular.some((item) => item.id === tag.id)),
+                  ...popular,
+                ]}
                 selected={selected}
                 hrefForTags={(tags) =>
                   forumHref("/discussions", {
@@ -979,7 +982,7 @@ export function DiscussionWorkspace({
                 disabled={pending}
               />
             </div>
-            <div className="mt-3 flex flex-wrap gap-1">
+            <div className="mt-3 hidden flex-wrap gap-1 lg:flex">
               {selected.map((tag) => (
                 <Button
                   type="button"
