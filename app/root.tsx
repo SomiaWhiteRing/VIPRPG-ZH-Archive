@@ -12,7 +12,6 @@ import {
   Meta,
   Outlet,
   Scripts,
-  ScrollRestoration,
   useLoaderData,
   useLocation,
   useRouteError,
@@ -26,6 +25,7 @@ import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
 import { GameStorageBoundary } from "./components/game-storage-boundary";
 import { NavigationProgress } from "./components/ui/navigation-progress";
+import { PageScrollRestoration } from "./components/ui/anchor-navigation";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
 import { ColorThemePreviewContext } from "./components/color-theme-preview";
@@ -72,9 +72,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="zh-Hans"
-      className="scroll-smooth motion-reduce:scroll-auto"
       data-focus-visible={isSSR ? undefined : isFocusVisible}
-      data-scroll-behavior="smooth"
       data-theme={themePreview ?? root?.session?.preferences.colorTheme ?? DEFAULT_COLOR_THEME}
       suppressHydrationWarning
     >
@@ -100,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {!inSea ? <BackToTop /> : null}
           </ToastProvider>
         </ColorThemePreviewContext.Provider>
-        <ScrollRestoration />
+        <PageScrollRestoration />
         <Scripts />
       </body>
     </html>

@@ -269,7 +269,7 @@ export function CharacterIndexBrowser({
   );
   const navigate = (key: string) => {
     setSelected(key);
-    listRef.current?.scrollToKey(key);
+    listRef.current?.scrollToKey(key, "smooth");
   };
   const navigateFromDrawer = (key: string) => {
     pendingNavigationRef.current = key;
@@ -305,7 +305,7 @@ export function CharacterIndexBrowser({
       if (!listRef.current) return;
       returnRestoredRef.current = true;
       setSelected(key);
-      listRef.current.scrollToKey(key);
+      listRef.current.scrollToKey(key, "instant");
     });
     return () => cancelAnimationFrame(frame);
   }, [measuredColumns, rowKeys]);
@@ -371,7 +371,7 @@ export function CharacterIndexBrowser({
               menuTriggerRef.current?.focus({ preventScroll: true });
               const key = pendingNavigationRef.current;
               pendingNavigationRef.current = null;
-              if (key) listRef.current?.scrollToKey(key);
+              if (key) listRef.current?.scrollToKey(key, "smooth");
             }}
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">

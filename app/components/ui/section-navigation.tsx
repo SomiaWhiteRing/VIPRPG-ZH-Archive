@@ -1,5 +1,5 @@
 import { cn } from "@/lib/ui/cn";
-import { Link } from "react-router";
+import { SmoothAnchorLink } from "./anchor-navigation";
 
 export type SectionLink = {
   href: string;
@@ -24,7 +24,7 @@ export function SectionNavigation({
       <ul className="m-0 flex min-w-max list-none gap-0.5 p-0">
         {items.map((item) => (
           <li key={`${item.href}-${item.label}`}>
-            <Link
+            <SmoothAnchorLink
               aria-current={
                 item.active
                   ? item.href.startsWith("#")
@@ -45,7 +45,7 @@ export function SectionNavigation({
                   {item.count}
                 </span>
               ) : null}
-            </Link>
+            </SmoothAnchorLink>
           </li>
         ))}
       </ul>

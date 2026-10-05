@@ -11,6 +11,7 @@ import { readWindyFile, type WindyBuildInfo } from "@/lib/windy-package";
 import { MAX_TOOL_BYTES } from "@/lib/resource-limits";
 import type { ResourceEditorData, ToolArtifact } from "@/lib/resources";
 import { postJson } from "@/lib/ui/api-response";
+import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
 export function PackageUpload({
   data,
@@ -119,7 +120,7 @@ export function PackageUpload({
       if (artifact) requestAnimationFrame(() => {
         const element = document.getElementById(`release-${artifact.release_id}`);
         element?.setAttribute("open", "");
-        element?.scrollIntoView({ block: "center" });
+        if (element) scrollElementIntoView(element, { block: "nearest", inline: "nearest" });
       });
       if (artifact?.storage_status === "ready" || savedRelease?.status !== "draft") {
         setProgress("此安装包已上传，已定位原版本");
