@@ -265,7 +265,7 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前构建、基线提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。工作树构建明确记录 `sourceState: working-tree`、源码快照摘要与 liblcf 提交，不能将其误称为基线提交的原始产物。源码快照与 Web ZIP 保存在 Player 的 `build/artifacts/`。
+当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包来自 Player 仓库的 GitHub Actions，按固定提交构建，记录 `sourceState: commit`；`build` 记录构建任务编号。下载 Web 产物后核对 GitHub artifact 摘要、包内宿主源码、音色库与许可证，再固定 Web ZIP 摘要并导入；运行目录内的 `SOURCE.json` 记录源码链接和各文件摘要。
 
 导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player 与解码器随包许可证的摘要，保留构建字节，只将入口文件重命名为 `index.js`；不在压缩后的生成代码中做字符串补丁，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
 

@@ -56,14 +56,14 @@ const output = {
 const source =
   JSON.stringify(
     {
-      repository: "https://github.com/SomiaWhiteRing/Player",
+      repository: "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
       revision,
       version,
       build,
       artifact: basename(zipPath),
       archiveSha256,
-      source: `https://github.com/SomiaWhiteRing/Player/tree/${revision}`,
-      license: `https://github.com/SomiaWhiteRing/Player/blob/${revision}/COPYING`,
+      source: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/${revision}`,
+      license: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/${revision}/COPYING`,
       sourceState: runtime.sourceState ?? "commit",
       sourceSnapshot: runtime.sourceSnapshot ?? null,
       sourceSnapshotSha256: runtime.sourceSnapshotSha256 ?? null,
