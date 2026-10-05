@@ -148,10 +148,12 @@ export function ForumBody({
   body,
   emojis,
   inline = false,
+  interactiveElements = true,
 }: {
   body: string;
   emojis: FaceEmoji[];
   inline?: boolean;
+  interactiveElements?: boolean;
 }) {
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
   const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g"));
@@ -162,7 +164,7 @@ export function ForumBody({
     >
       {segments.map((part, index) => {
         const source = !inline ? readForumElement(part) : null;
-        if (source !== null) return <BrowserElement key={index} source={source} />;
+        if (source !== null) return <BrowserElement key={index} source={source} interactive={interactiveElements} />;
         if (/^:face_[1-9]\d{0,15}:$/.test(part))
           return (
             <FaceEmojiView

@@ -101,10 +101,12 @@ export function ForumImages({
   images,
   body = "",
   emojis = [],
+  interactiveElements = true,
 }: {
   images: ForumImage[];
   body?: string;
   emojis?: FaceEmoji[];
+  interactiveElements?: boolean;
 }) {
   const [active, setActive] = useState(-1);
   const lastOffset = images.at(-1)?.offset ?? 0;
@@ -121,7 +123,7 @@ export function ForumImages({
               key={image.id}
               className="grid min-w-0 justify-items-start gap-3"
             >
-              {text ? <ForumBody body={text} emojis={emojis} /> : null}
+              {text ? <ForumBody body={text} emojis={emojis} interactiveElements={interactiveElements} /> : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -142,7 +144,7 @@ export function ForumImages({
           );
         })}
         {body.slice(lastOffset) ? (
-          <ForumBody body={body.slice(lastOffset)} emojis={emojis} />
+          <ForumBody body={body.slice(lastOffset)} emojis={emojis} interactiveElements={interactiveElements} />
         ) : null}
       </div>
       {active >= 0 ? (

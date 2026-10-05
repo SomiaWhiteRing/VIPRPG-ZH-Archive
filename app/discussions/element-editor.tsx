@@ -14,7 +14,7 @@ export function ForumElementEditor({ source = "", onSave, onClose }: {
   return (
     <ForumModal open title={source ? "编辑浏览器元素" : "插入浏览器元素"} onKeyDown={(event) => event.stopPropagation()} onOpenChange={(open) => { if (!open) onClose(); }}>
       <div className="grid gap-3">
-        <p className="text-sm text-muted">HTML、CSS 和 JavaScript 在隔离区域内运行。可调用 window.viprpg.copyText(text) 复制文本，或 window.viprpg.copyBrowserInfo() 复制浏览器信息；均需用户点击。</p>
+        <p className="text-sm text-muted">HTML、CSS 和 JavaScript 直接在帖子页面运行。可调用 window.viprpg.copyText(text) 复制文本，或 window.viprpg.copyBrowserInfo() 复制浏览器信息。</p>
         <Button type="button" variant="outline" className="w-fit" onClick={() => setValue(BROWSER_INFO_ELEMENT)}>填入“复制浏览器信息”示例</Button>
         <div>
           <Label htmlFor="forum-element-source">HTML / JavaScript</Label>

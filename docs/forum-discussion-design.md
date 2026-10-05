@@ -282,11 +282,11 @@
 
 插入入口只向活跃超级管理员展示；发布和编辑接口同时校验当前根角色，并在实际写入的守卫中重新核对角色，普通用户不能通过构造请求保存可执行元素。已发布内容不依赖作者当前角色而失去显示；失去超级管理员资格后，作者须移除元素才能保存其他修改。
 
-阅读区域使用 `sandbox="allow-scripts"` 的独立 iframe，不授予同源、表单、弹窗或顶层导航权限。CSP 只允许内联脚本／样式和 data／HTTPS 图片，禁止 fetch／XHR／WebSocket 请求、外部脚本和嵌套 frame。脚本不能访问父页面 DOM 或本站存储。编辑冲突核对中的正文预览同样使用隔离区域，编辑器中的占位块不运行脚本。
+阅读区域将超级管理员保存的 HTML、CSS 和 JavaScript 作为可信的本站代码，直接插入主页面并执行脚本，不使用 iframe、sandbox 或 postMessage。源码可以访问主页面 DOM、浏览器 API 和站点主题变量。HTML 插入后，内联脚本通过新的 script 节点执行；未指定 async 的外部脚本和模块按源码顺序等待加载。每个元素的容器带有 `data-forum-browser-element` 属性，普通内联脚本可以用 `document.currentScript.closest('[data-forum-browser-element]')` 定位自身容器，避免多个元素共用 ID 或全局选择器。CSS 建议限定在容器内；页面离开或源码变化时移除元素，并在容器上发出 `dispose` 事件，脚本可据此释放自行创建的全局监听器和定时器。编辑器和编辑冲突核对区域均只显示源码，不运行未提交的 HTML 或脚本。
 
-源码可以在真实点击中调用 `window.viprpg.copyText(text)` 或 `window.viprpg.copyBrowserInfo()`，返回 `Promise<{ copied: boolean }>`。父页面只接受该 iframe 发来的既定消息，复制文本上限 32,000 个字符；没有用户激活时拒绝自动复制，浏览器未提供激活 API 时仅在 iframe 获得焦点后展示手动复制文本。iframe 的真实输入事件会激活祖先窗口，依据 [HTML 用户激活处理模型](https://html.spec.whatwg.org/multipage/interaction.html#tracking-user-activation)。剪贴板不可用或被拒绝时，在互动区域下显示只读文本和“选择全部文本”。
+保留已发布源码使用的 `window.viprpg.copyText(text)` 和 `window.viprpg.copyBrowserInfo()`，返回 `Promise<{ copied: boolean }>`，直接调用主页面的剪贴板 API，文本上限 32,000 个字符。浏览器自行执行剪贴板权限和用户激活要求；不可用或被拒绝时，通过网站共享 Dialog／Textarea／Button 显示手动复制弹窗。内置示例没有按钮下方说明文字，状态直接显示在按钮中；配色引用站点的 primary、primary-foreground 和 accent 变量，随网站主题更新。
 
-浏览器信息在父页面读取，包含原始 User-Agent、浏览器提供的 Client Hints（含完整版本、平台版本和设备型号，若可用）、语言、屏幕／视口、触控、时区、硬件并发和 Worker／WASM／OPFS／音频等能力标志。Client Hints 超时或拒绝时仍生成基础报告。报告不含网址、Cookie、登录身份、存档或其他存储内容，不自动上传；用户自行粘贴到回复并描述症状。UA 和 Client Hints 可被缩减或伪装，能力存在也不证明运行正常，不能保证识别 WebView 宿主或真实品牌版本。
+浏览器报告使用紧凑中文文本，保留浏览器标识与版本、平台与可用的平台版本、可用的设备型号、Android WebView 的 UA 标记、屏幕／视口／像素比、Worker／WASM／OffscreenCanvas／OPFS／AudioWorklet 接口是否存在，以及完整原始 UA。Client Hints 超时或拒绝时仍生成基础报告。内置报告不读取网址、Cookie、登录身份、存档或其他存储内容，不自动上传；用户自行粘贴到回复并描述症状。UA 和 Client Hints 可被缩减或伪装，接口存在也不证明运行正常，不能保证识别 WebView 宿主或真实品牌版本。已保存的元素源码保持原样，需要新示例时由超级管理员编辑替换。
 
 #### 浏览器图片处理
 

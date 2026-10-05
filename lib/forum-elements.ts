@@ -28,25 +28,28 @@ export function canInsertForumElements(user: { status: string; isBootstrapAdmin:
 }
 
 export const BROWSER_INFO_ELEMENT = `<style>
-  body { margin: 0; font: 15px/1.7 system-ui, sans-serif; color: #444; }
-  button { font: inherit; padding: 8px 16px; border: 1px solid #47886b; border-radius: 6px; background: #47886b; color: white; cursor: pointer; }
-  button:disabled { opacity: .6; cursor: wait; }
-  button:focus-visible { outline: 2px solid #47886b; outline-offset: 3px; }
-  p { margin: 8px 0 0; }
+  [data-forum-browser-element] [data-copy-browser-info] {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 40px; padding: 8px 12px; border: 0; border-radius: 6px;
+    background: var(--color-primary); color: var(--color-primary-foreground);
+    font: inherit; font-size: 14px; font-weight: 600; line-height: 20px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%); cursor: pointer;
+  }
+  [data-forum-browser-element] [data-copy-browser-info]:hover { opacity: .9; }
+  [data-forum-browser-element] [data-copy-browser-info]:disabled { opacity: .5; cursor: wait; }
+  [data-forum-browser-element] [data-copy-browser-info]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 </style>
-<button type="button" id="copy">复制浏览器信息</button>
-<p>点击后复制浏览器与兼容性信息，请将它粘贴到回复中，并描述遇到的问题。</p>
-<p id="status" role="status"></p>
+<button type="button" data-copy-browser-info aria-live="polite">复制浏览器信息</button>
 <script>
-  document.getElementById('copy').addEventListener('click', async function () {
+  document.currentScript.closest('[data-forum-browser-element]').querySelector('[data-copy-browser-info]').addEventListener('click', async function () {
     this.disabled = true;
-    const status = document.getElementById('status');
-    status.textContent = '正在读取浏览器信息…';
+    this.textContent = '正在读取…';
     try {
       const result = await window.viprpg.copyBrowserInfo();
-      status.textContent = result.copied ? '已复制，请粘贴到回复中。' : '浏览器未允许自动复制，请使用下方的文本框手动复制。';
+      this.textContent = result.copied ? '已复制浏览器信息' : '请在弹窗中手动复制';
     } catch (error) {
-      status.textContent = '读取失败：' + error.message;
+      this.textContent = '复制失败，点击重试';
+      this.title = error.message;
     } finally {
       this.disabled = false;
     }

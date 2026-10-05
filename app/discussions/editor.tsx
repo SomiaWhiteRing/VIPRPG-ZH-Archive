@@ -612,12 +612,13 @@ function ForumConflictResolver({
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div className="max-h-64 overflow-auto">
               <p className="text-sm font-bold">当前正文</p>
-              <ForumImages body={current.body} images={current.images} />
+              <ForumImages body={current.body} images={current.images} interactiveElements={false} />
             </div>
             <div className="max-h-64 overflow-auto">
               <p className="text-sm font-bold">我的正文</p>
               <ForumImages
                 body={draft.body}
+                interactiveElements={false}
                 images={draft.images.map((image) => ({
                   id: image.key,
                   offset: image.offset,
