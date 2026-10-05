@@ -58,11 +58,11 @@ export function WorkCard({
           ) : null}
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-1 wrap-anywhere p-2 min-[641px]:px-3 min-[641px]:pt-2.5 min-[641px]:pb-3">
-          <div className="h-[calc(1.45em*2)] text-[12.5px] font-normal leading-[1.45] min-[641px]:text-[14.5px] min-[641px]:font-semibold">
-            <Title className="m-0 line-clamp-2">
+          <div className="h-[calc(1.45em*2)] overflow-hidden text-[12.5px] font-normal leading-[1.45] min-[641px]:text-[14.5px] min-[641px]:font-semibold">
+            <Title className="relative m-0 line-clamp-2 overflow-visible">
               {title}
               {originalTitle && originalTitle !== title ? (
-                <span className="hidden text-xs font-normal text-muted min-[641px]:block">
+                <span className="absolute inset-x-0 top-full hidden truncate text-xs font-normal text-muted min-[641px]:block">
                   {originalTitle}
                 </span>
               ) : null}
