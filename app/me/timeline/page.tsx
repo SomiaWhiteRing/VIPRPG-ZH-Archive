@@ -92,7 +92,7 @@ function TimelineSettingsForm({ userId, initial, canRecord }: { userId: number; 
           <Checkbox id="timeline-enabled" checked={enabled} onCheckedChange={(value) => setEnabled(value === true)} disabled={busy || (!canRecord && !enabled)} aria-describedby="timeline-enabled-help" />
           <Label id="timeline-switch-heading" htmlFor="timeline-enabled" className="cursor-pointer text-base font-semibold">开启时间线</Label>
         </div>
-        <p id="timeline-enabled-help" className="mb-0 mt-2 text-sm leading-relaxed text-muted">关闭后停止记录业务动态；加入和改名记录会永久保留。</p>
+        <p id="timeline-enabled-help" className="mb-0 mt-2 text-sm leading-relaxed text-muted">关闭后停止记录所有动态。</p>
         {enabled && <div className="mt-4 border-t border-border pt-3">
           <div className="flex min-h-10 items-center gap-3">
             <Checkbox id="timeline-as-homepage" checked={timelineAsHomepage} onCheckedChange={(value) => setTimelineAsHomepage(value === true)} disabled={busy} aria-describedby="timeline-as-homepage-help" />

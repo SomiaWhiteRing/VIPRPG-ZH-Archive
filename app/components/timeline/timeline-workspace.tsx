@@ -19,7 +19,7 @@ import { Timestamp } from "@/app/components/ui/timestamp";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
-import { TIMELINE_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
+import { TIMELINE_FILTER_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
 import { cn } from "@/lib/ui/cn";
 
 type Props = {
@@ -186,7 +186,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
           </nav>}
           <nav aria-label="动态类型" className="flex min-w-0 items-center gap-0.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {!!viewerId && !allowCreate && <span className="mr-1 shrink-0 sm:hidden">{rangeToggle(true)}</span>}
-            {[undefined, ...TIMELINE_KINDS].map((value) => <Link key={value ?? "all"} to={timelineHref(basePath, view, value)} aria-current={kind === value ? "page" : undefined} className={cn("inline-flex h-8 shrink-0 items-center rounded-full px-2 text-xs transition-colors hover:bg-muted/10", kind === value ? "bg-primary/10 font-medium text-secondary" : "text-muted")}>{value ? TIMELINE_KIND_LABELS[value] : "全部"}</Link>)}
+            {[undefined, ...TIMELINE_FILTER_KINDS].map((value) => <Link key={value ?? "all"} to={timelineHref(basePath, view, value)} aria-current={kind === value ? "page" : undefined} className={cn("inline-flex h-8 shrink-0 items-center rounded-full px-2 text-xs transition-colors hover:bg-muted/10", kind === value ? "bg-primary/10 font-medium text-secondary" : "text-muted")}>{value ? TIMELINE_KIND_LABELS[value] : "全部"}</Link>)}
           </nav>
           {!!viewerId && <div className="hidden shrink-0 items-center justify-end gap-1 sm:flex">
             <Button asChild variant="ghost" size="icon" className="size-8 text-muted"><Link to="/me/timeline" aria-label="时间线设置"><Settings aria-hidden /></Link></Button>
