@@ -295,6 +295,10 @@ export async function mergeWorks(
         `INSERT INTO view_stat_merges(source_id,target_id) VALUES(?,?)`,
       )
       .bind(source, target),
+    // Preserve the target's pin when both games have one; otherwise transfer the source's.
+    db.prepare(`UPDATE comments SET pinned_at=NULL WHERE work_id=? AND pinned_at IS NOT NULL
+      AND EXISTS(SELECT 1 FROM comments WHERE work_id=? AND pinned_at IS NOT NULL)`)
+      .bind(source, target),
     db
       .prepare(`UPDATE comments SET work_id=? WHERE work_id=?`)
       .bind(target, source),

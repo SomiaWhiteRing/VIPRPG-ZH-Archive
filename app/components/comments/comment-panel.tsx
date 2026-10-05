@@ -195,6 +195,10 @@ function CommentPanelContent({
     ));
     setNewReplies((current) => ({ ...current, [rootId]: reply }));
   }
+  const hasPinnedComment = comments.some((comment) => {
+    const current = { ...comment, ...commentUpdates[comment.id] };
+    return current.status === "published" && current.pinned;
+  });
   const visibleComments = comments.filter((comment) =>
     !hideDeletedContent || (commentUpdates[comment.id]?.status ?? comment.status) !== "deleted",
   );
@@ -214,7 +218,7 @@ function CommentPanelContent({
           visibleComments.map((comment) => (
             <CommentCard
               comment={comment}
-              pinControl={canPin ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
+              pinControl={canPin && (comment.pinned || !hasPinnedComment) ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
               commentUpdates={commentUpdates}
               currentUserId={currentUserId}
               hideDeletedContent={hideDeletedContent}
