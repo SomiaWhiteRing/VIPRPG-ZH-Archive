@@ -4,10 +4,12 @@ import { useConfirm } from "./confirm-provider";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
+import { CharacterAvatarPicker } from "./character-avatar-picker";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { cn } from "@/lib/ui/cn";
+import type { CharacterPortrait } from "@/lib/character-names";
 import { Slider } from "radix-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Area } from "react-easy-crop";
@@ -67,11 +69,15 @@ export function AvatarCropper({
     setArea(null);
   }
 
-  async function upload() {
-    if (!source || !area) return;
+  async function upload(portrait?: CharacterPortrait): Promise<boolean> {
+    const imageSource = portrait ? `/api/media/blobs/${portrait.blobSha256}` : source;
+    const imageArea = portrait
+      ? { x: portrait.column * 48, y: portrait.row * 48, width: 48, height: 48 }
+      : area;
+    if (!imageSource || !imageArea || busy) return false;
     setBusy(true);
     try {
-      const blob = await cropToPng(source, area);
+      const blob = await cropToPng(imageSource, imageArea, Boolean(portrait));
 
       await requestJson(endpoint, {
         method: "PUT",
@@ -83,8 +89,10 @@ export function AvatarCropper({
       setSource(null);
       toast.success("头像已更新。");
       revalidator.revalidate();
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "头像上传失败");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -154,8 +162,9 @@ export function AvatarCropper({
             type="button"
             variant="outline"
           >
-            修改头像
+            上传图片
           </Button>
+          <CharacterAvatarPicker disabled={busy} shape={shape} onSave={upload} />
           {allowDelete && avatarBlobSha256 ? (
             <Button
               disabled={busy}
@@ -250,7 +259,7 @@ export function AvatarCropper({
   );
 }
 
-async function cropToPng(source: string, area: Area): Promise<Blob> {
+async function cropToPng(source: string, area: Area, pixelated = false): Promise<Blob> {
   const image = new Image();
   image.src = source;
   await image.decode();
@@ -259,6 +268,8 @@ async function cropToPng(source: string, area: Area): Promise<Blob> {
   canvas.height = 192;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("当前浏览器无法处理头像");
+  // Role face cells are enlarged exactly 4x without blending adjacent pixels.
+  context.imageSmoothingEnabled = !pixelated;
   context.drawImage(
     image,
     area.x,

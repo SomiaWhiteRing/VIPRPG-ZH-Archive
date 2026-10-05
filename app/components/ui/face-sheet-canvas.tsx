@@ -27,6 +27,7 @@ export function FaceSheetCanvas({
   renderCell,
   disabled = false,
   fit = false,
+  fillWidth = false,
   onDragCell,
   onDragEnd,
   src,
@@ -50,6 +51,7 @@ export function FaceSheetCanvas({
   disabled?: boolean;
   renderCell?: (row: number, column: number, button: ReactElement) => ReactElement;
   fit?: boolean;
+  fillWidth?: boolean;
   onDragCell?: (
     row: number,
     column: number,
@@ -65,11 +67,11 @@ export function FaceSheetCanvas({
   return (
     <div
       aria-label={label}
-      className={cn("relative shrink-0 overflow-hidden border border-foreground/30 bg-card [image-rendering:pixelated]", fit && "max-w-full")}
+      className={cn("relative shrink-0 overflow-hidden border border-foreground/30 bg-card [image-rendering:pixelated]", (fit || fillWidth) && "max-w-full")}
       role="group"
       style={{
-        width: width * scale,
-        ...(fit
+        width: fillWidth ? "100%" : width * scale,
+        ...(fit || fillWidth
           ? { aspectRatio: `${width} / ${height}` }
           : { height: height * scale }),
       }}
