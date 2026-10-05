@@ -1,6 +1,5 @@
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
-import { reportFirstWorkPlay } from "@/lib/browser/work-play";
 import type { WebPlayMetadata } from "./web-play-types";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { interceptPlayerSaveDownloads } from "./web-play-save-download";
@@ -248,10 +247,6 @@ export function createPlayerSession(
     await touchResources();
     lifetime.signal.throwIfAborted();
     played = true;
-    // Both the website and APK arrive here only after the engine reports ready.
-    // Resource installation, opening the player, and failed/cancelled starts do
-    // not emit this signal; it is independent of the legacy acquisition count.
-    reportFirstWorkPlay(metadata.workId);
     renewalTimer = setInterval(refreshResources, 60_000);
     document.addEventListener("visibilitychange", refreshResources);
     notifyGameResourcesChanged();

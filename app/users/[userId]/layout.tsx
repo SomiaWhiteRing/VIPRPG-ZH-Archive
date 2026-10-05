@@ -34,7 +34,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const [followSummary, friends, timeline] = await Promise.all([
     readFollowSummary(runtime, user.id, viewer),
     isOverview && user.profileVisibility.friends ? listUserFollows(runtime, user.id, "following", null, 15) : null,
-    isOverview ? listTimeline(runtime, { actorUserId: user.id, viewerId: viewer?.id, limit: 10 }) : null,
+    isOverview ? listTimeline(runtime, { actorUserId: user.id, viewerId: viewer?.id, limit: hasProfileOverviewSections(user.profileVisibility) ? 5 : 10 }) : null,
   ]);
   return data({ user, viewerId: viewer?.id ?? null, followSummary, friends, timelineItems: timeline?.items ?? null, isOverview }, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -71,13 +71,14 @@ export default function PublicUserLayout() {
               <span className="shrink-0 whitespace-nowrap text-xs text-muted">
                 UID：{user.id}
               </span>
+              {viewerId !== null && viewerId !== user.id && followSummary?.isFollowing ? <span className="shrink-0 whitespace-nowrap text-sm text-accent">/是我的好友</span> : null}
             </div>
             {user.profileVisibility.bio ? (
               <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm text-muted">
                 {user.bio || "这位用户还没有填写简介。"}
               </p>
             ) : null}
-            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} viewerId={viewerId} summary={followSummary} />
+            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} />
           </div>
         </header>
         <PublicProfileNavigation userId={user.id} visibility={user.profileVisibility} />

@@ -221,13 +221,13 @@ function InboxRow({
             <>
               {actor.actorHref ? (
                 <Link
-                  className="hover:underline focus-visible:outline-2 focus-visible:outline-primary"
+                  className="text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary"
                   to={actor.actorHref}
                 >
                   {actor.actorName}
                 </Link>
               ) : (
-                actor.actorName
+                <span className="text-primary">{actor.actorName}</span>
               )}
               <span>{actor.action}</span>
             </>
@@ -265,7 +265,7 @@ function InboxRow({
             {item.type === "role_change_request" ? (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
                 <span>
-                  {item.targetDisplayName} · {item.requestedRole?.name}
+                  <span className="text-primary">{item.targetDisplayName}</span> · {item.requestedRole?.name}
                 </span>
                 <Badge variant="outline">{approvalLabels[item.status]}</Badge>
               </div>

@@ -15,8 +15,8 @@ import { jsonError } from "../lib/http";
 import { Hono } from "hono";
 import { PERMISSIONS, PERMISSION_CATEGORIES, SYSTEM_ROLE_PERMISSIONS } from "../lib/authz/permissions";
 import { TIMELINE_RECORD_KINDS } from "../lib/dto/db/timeline";
-import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, recordFirstWorkPlay, timelineStatement, updateTimelineSettings } from "../app/.server/db/timeline";
-import { createComment, deleteComment, setWorkFavorite, updateComment } from "../app/.server/db/work-community";
+import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, timelineStatement, updateTimelineSettings } from "../app/.server/db/timeline";
+import { createComment, deleteComment, recordWorkPlayed, setWorkFavorite, updateComment } from "../app/.server/db/work-community";
 import { addCatalogItem, createCatalog, deleteCatalog, removeCatalogItem, updateCatalog, updateCatalogItem } from "../app/.server/db/catalogs";
 import { readShowcase, saveShowcase } from "../app/.server/db/showcase";
 import { mergeWorks } from "../app/.server/db/catalog-maintenance";
@@ -132,7 +132,7 @@ await check("recording switch, legacy first-play markers and settings validation
   assert.equal(f.count(), 0);
   assert.equal(f.sqlite.prepare("SELECT first_observed_at FROM user_work_first_plays WHERE user_id=1 AND work_id=1").get()!.first_observed_at, null);
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 1, 1);
+  await recordWorkPlayed(f.runtime, 1, 1);
   assert.equal(f.count(), 0, "a legacy last-play timestamp must not become a first-play event");
   await assert.rejects(updateTimelineSettings(f.runtime, 1, { enabled: true, recordKinds: ["favorite", "favorite"] }), { status: 400 });
   await assert.rejects(updateTimelineSettings(f.runtime, 1, { enabled: true, recordKinds: ["unknown"] }), { status: 400 });
@@ -192,7 +192,7 @@ await check("recording denial preserves business mutations, history and lifetime
   await updateComment(f.runtime, comment.id, 1, "Updated while recording denied");
   const forum = { app: f.runtime, env: f.runtime.env, db: f.db, bucket: f.runtime.bucket } as ForumRuntime;
   await publishForum(forum, f.actor(1), { kind: "topic", title: "Discussion still succeeds", body: "Body", tags: [], requestKey: "timeline-blocked-forum-01" });
-  await recordFirstWorkPlay(f.runtime, 3, 1);
+  await recordWorkPlayed(f.runtime, 3, 1);
   assert.equal(f.count(), 1, "all SQL and trigger-derived events are suppressed without failing business operations");
   assert.equal(f.number("SELECT COUNT(*) FROM comments WHERE id=?", comment.id), 1);
   assert.equal(f.number("SELECT COUNT(*) FROM user_work_entries WHERE user_id=1 AND work_id=2 AND favorited_at IS NOT NULL"), 1);
@@ -202,7 +202,7 @@ await check("recording denial preserves business mutations, history and lifetime
   await assert.rejects(f.enable(), { status: 403 });
   f.sqlite.exec("DELETE FROM user_permission_blocks WHERE user_id=1 AND permission_key='timeline.use'");
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 3, 1);
+  await recordWorkPlayed(f.runtime, 3, 1);
   assert.equal(f.count(), 1, "reenabling permission does not backfill or reset first play");
 });
 
@@ -423,38 +423,39 @@ await check("successful external upload and archive visibility/atomic publicatio
 });
 
 await check("first-play off-period consumption, retry races and rollback", async (f) => {
-  await recordFirstWorkPlay(f.runtime, 2, 1);
+  await recordWorkPlayed(f.runtime, 2, 1);
   assert.equal(f.count("play"), 0);
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 2, 1);
+  await recordWorkPlayed(f.runtime, 2, 1);
   assert.equal(f.count("play"), 0, "reenabling does not regenerate consumed first plays");
   await f.enable(1, false);
   f.sqlite.exec("UPDATE works SET status='hidden' WHERE id=5");
-  await recordFirstWorkPlay(f.runtime, 5, 1);
-  assert.equal(f.number("SELECT COUNT(*) FROM user_work_first_plays WHERE user_id=1 AND work_id=5"), 1,
-    "an installed hidden work still consumes the private launch identity");
+  await assert.rejects(recordWorkPlayed(f.runtime, 5, 1), { status: 404 });
+  assert.equal(f.number("SELECT COUNT(*) FROM user_work_first_plays WHERE user_id=1 AND work_id=5"), 0,
+    "unavailable works follow the same public boundary as recent-play reports");
   f.sqlite.exec("UPDATE works SET status='published' WHERE id=5");
+  await recordWorkPlayed(f.runtime, 5, 1);
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 5, 1);
+  await recordWorkPlayed(f.runtime, 5, 1);
   assert.equal(f.count("play"), 0, "restoring a hidden work cannot create a false first-play replay");
-  await Promise.all(Array.from({ length: 8 }, () => recordFirstWorkPlay(f.runtime, 3, 1)));
+  await Promise.all(Array.from({ length: 8 }, () => recordWorkPlayed(f.runtime, 3, 1)));
   assert.equal(f.count("play"), 1);
   assert.equal(f.number("SELECT COUNT(*) FROM user_work_first_plays WHERE user_id=1 AND work_id=3"), 1);
   const id = f.number("SELECT id FROM timeline_events WHERE kind='play'");
   await deleteTimelineEvent(f.runtime, id, 1);
-  await recordFirstWorkPlay(f.runtime, 3, 1);
+  await recordWorkPlayed(f.runtime, 3, 1);
   assert.equal(f.count("play"), 1, "removing an event does not reset launch identity");
   f.sqlite.exec("CREATE TRIGGER reject_play BEFORE INSERT ON timeline_events WHEN NEW.kind='play' BEGIN SELECT RAISE(ABORT,'fixture rejection'); END");
-  await assert.rejects(recordFirstWorkPlay(f.runtime, 4, 1));
+  await assert.rejects(recordWorkPlayed(f.runtime, 4, 1));
   assert.equal(f.number("SELECT COUNT(*) FROM user_work_first_plays WHERE user_id=1 AND work_id=4"), 0);
   f.sqlite.exec("DROP TRIGGER reject_play");
-  await recordFirstWorkPlay(f.runtime, 4, 1);
+  await recordWorkPlayed(f.runtime, 4, 1);
   assert.equal(f.count("play"), 2);
   f.sqlite.exec("INSERT INTO works(id,original_title,status,engine_family) VALUES(6,'Category-off launch','published','other')");
   await f.enable(1, true, TIMELINE_RECORD_KINDS.filter((kind) => kind !== "play"));
-  await recordFirstWorkPlay(f.runtime, 6, 1);
+  await recordWorkPlayed(f.runtime, 6, 1);
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 6, 1);
+  await recordWorkPlayed(f.runtime, 6, 1);
   assert.equal(f.count("play"), 2, "per-kind recording-off consumes the same lifetime marker");
   f.sqlite.exec("UPDATE users SET profile_show_history=0 WHERE id=1");
   assert.equal((await f.page()).items.length, 0);
@@ -462,8 +463,8 @@ await check("first-play off-period consumption, retry races and rollback", async
 
 await check("work merge preserves launch identity without synthetic user activity", async (f) => {
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 3, 1);
-  await recordFirstWorkPlay(f.runtime, 4, 1);
+  await recordWorkPlayed(f.runtime, 3, 1);
+  await recordWorkPlayed(f.runtime, 4, 1);
   const earliestPlayId = f.number("SELECT id FROM timeline_events WHERE kind='play' AND work_id=4");
   f.sqlite.exec("UPDATE user_work_first_plays SET first_observed_at='2022-01-01 00:00:00' WHERE work_id=3; UPDATE user_work_first_plays SET first_observed_at='2021-01-01 00:00:00' WHERE work_id=4");
   await setWorkFavorite(f.runtime, 3, 1, true);
@@ -476,9 +477,9 @@ await check("work merge preserves launch identity without synthetic user activit
   assert.equal(f.number("SELECT COUNT(*) FROM timeline_events WHERE work_id=3"), 0);
   assert.equal(f.number("SELECT id FROM timeline_events WHERE kind='play'"), earliestPlayId,
     "earliest trustworthy marker wins even when its event ID is larger");
-  await recordFirstWorkPlay(f.runtime, 4, 1);
+  await recordWorkPlayed(f.runtime, 4, 1);
   assert.equal(f.count(), before - 1);
-  await recordFirstWorkPlay(f.runtime, 2, 1);
+  await recordWorkPlayed(f.runtime, 2, 1);
   await mergeWorks(f.runtime, f.actor(3), 1, 2);
   await Promise.all(f.pending);
   assert.equal(f.sqlite.prepare("SELECT first_observed_at FROM user_work_first_plays WHERE user_id=1 AND work_id=2").get()!.first_observed_at, null,
@@ -488,17 +489,17 @@ await check("work merge preserves launch identity without synthetic user activit
 });
 
 for (const sameSecond of [false, true]) await check(`merging an ${sameSecond ? "equal-second" : "earlier"} off-period launch suppresses false first-play activity`, async (f) => {
-  await recordFirstWorkPlay(f.runtime, 3, 1);
+  await recordWorkPlayed(f.runtime, 3, 1);
   f.sqlite.exec("UPDATE user_work_first_plays SET first_observed_at='2021-01-01 00:00:00' WHERE work_id=3");
   await f.enable();
-  await recordFirstWorkPlay(f.runtime, 4, 1);
+  await recordWorkPlayed(f.runtime, 4, 1);
   f.sqlite.prepare("UPDATE user_work_first_plays SET first_observed_at=? WHERE work_id=4")
     .run(sameSecond ? "2021-01-01 00:00:00" : "2022-01-01 00:00:00");
   assert.equal(f.count("play"), 1);
   await mergeWorks(f.runtime, f.actor(3), 3, 4);
   await Promise.all(f.pending);
   assert.equal(f.count("play"), 0, "the earliest known launch was intentionally unrecorded");
-  await recordFirstWorkPlay(f.runtime, 4, 1);
+  await recordWorkPlayed(f.runtime, 4, 1);
   assert.equal(f.count("play"), 0);
 });
 

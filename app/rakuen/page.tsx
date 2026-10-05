@@ -149,7 +149,7 @@ export default function RakuenPage() {
                         </>
                       )}
                     </span>
-                      <Timestamp value={item.activeAt} className="shrink-0 mr-2" />
+                      <Timestamp value={item.activeAt} format="duration" className="shrink-0 mr-2" />
                   </div>
                 </div>
               </li>

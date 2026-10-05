@@ -5,7 +5,8 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { requireUser } from "@/app/.server/auth/guards";
 import { listUserFollows, readFollowSummary, setUserFollow } from "@/app/.server/db/user-follows";
 import { createTimelineReply, deleteTimelineReply, listTimelineReplies, setTimelineLike } from "@/app/.server/db/timeline-interactions";
-import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, recordFirstWorkPlay, updateTimelineSettings } from "@/app/.server/db/timeline";
+import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, updateTimelineSettings } from "@/app/.server/db/timeline";
+import { recordWorkPlayed } from "@/app/.server/db/work-community";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { isTimelineKind, isTimelineView } from "@/lib/dto/db/timeline";
@@ -93,10 +94,11 @@ timelineApi.delete("/api/timeline/replies/:replyId", async (c) => {
   await deleteTimelineReply(runtime, parsePositiveId(c.req.param("replyId")), auth.user.id);
   return jsonResponse({ ok: true });
 });
+// Existing clients keep this URL; both endpoints now use the same play path.
 timelineApi.post("/api/works/:workId/first-play", async (c) => {
   const runtime = c.get("runtime"), auth = await requireUser(runtime, c.req.raw);
   if ("response" in auth) return auth.response;
-  await recordFirstWorkPlay(runtime, parsePositiveId(c.req.param("workId")), auth.user.id);
+  await recordWorkPlayed(runtime, parsePositiveId(c.req.param("workId")), auth.user.id);
   return c.body(null, 204);
 });
 for (const [path, allow] of [

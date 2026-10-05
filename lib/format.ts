@@ -1,3 +1,8 @@
+import { TZDateMini } from "@date-fns/tz/date/mini";
+import { formatDuration as formatCalendarDuration } from "date-fns/formatDuration";
+import { intervalToDuration } from "date-fns/intervalToDuration";
+import { zhCN } from "date-fns/locale/zh-CN";
+
 export function formatNumber(value: number): string {
   return value.toLocaleString("zh-CN");
 }
@@ -40,7 +45,24 @@ export function formatExactTimestamp(value: string): string {
   const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) return value;
   const p = timestampParts(date);
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} (UTC+08:00)`;
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+}
+
+const durationUnits = ["years", "months", "days", "hours", "minutes", "seconds"] as const;
+
+export function formatElapsedTimestamp(value: string, now: number): string {
+  const date = parseTimestamp(value);
+  if (Number.isNaN(date.getTime())) return value;
+  // Calendar months use the same site timezone on the server and in the browser.
+  const duration = intervalToDuration({
+    start: new TZDateMini(date.getTime(), DISPLAY_TIME_ZONE),
+    end: Math.max(date.getTime(), now),
+  });
+  const firstUnit = durationUnits.indexOf(durationUnits.find((unit) => duration[unit]) ?? "seconds");
+  const format = durationUnits.slice(firstUnit, firstUnit + 2);
+  for (const unit of format) duration[unit] ??= 0;
+  const text = formatCalendarDuration(duration, { locale: zhCN, format, zero: true, delimiter: "" });
+  return `${text.replace(/\s+/g, "").replace("个月", "月")}前`;
 }
 
 export function formatRelativeTimestamp(value: string, now: number): string {

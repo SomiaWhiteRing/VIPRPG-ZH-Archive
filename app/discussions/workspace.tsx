@@ -1040,7 +1040,7 @@ export function DiscussionWorkspace({
                         <span className="md:hidden">
                           {" "}
                           · {item.replies} 回复 ·{" "}
-                          <Timestamp value={item.activeAt} />
+                          <Timestamp value={item.activeAt} format="duration" />
                         </span>
                         {item.lastAuthor &&
                         item.lastAuthor.id !== item.author.id ? (
@@ -1059,7 +1059,7 @@ export function DiscussionWorkspace({
                       {item.views}
                     </span>
                     <span className="hidden w-[96px] shrink-0 text-right text-muted md:flex md:items-center md:justify-end">
-                      <Timestamp value={item.activeAt} className="leading-5" />
+                      <Timestamp value={item.activeAt} format="duration" className="leading-5" />
                     </span>
                   </article>
                 ))}

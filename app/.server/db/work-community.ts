@@ -79,8 +79,16 @@ export async function recordWorkPlayed(
   const [counter] = await Promise.allSettled([recordWorkPlay(runtime, workId, work.count)]);
   // Personal history must still update when the public counter is unavailable.
   if (userId !== null) {
-    const result = await database
-      .prepare(
+    // Existing recent history may predate the shared first-play path.
+    const [, , result] = await database.batch([
+      database.prepare(`INSERT INTO user_work_first_plays(user_id,work_id,first_observed_at)
+        SELECT ?,w.id,CASE WHEN EXISTS(SELECT 1 FROM user_work_entries
+          WHERE work_id=w.id AND user_id=? AND last_played_at IS NOT NULL) THEN NULL ELSE CURRENT_TIMESTAMP END
+        FROM public_works w WHERE w.id=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')
+        ON CONFLICT(user_id,work_id) DO NOTHING`).bind(userId, userId, workId, userId),
+      timelineStatement(database, { userId, kind: "play", action: "初次游玩", eventKey: `first-play:${userId}:${workId}`, workId,
+        predicate: "changes()=1 AND EXISTS(SELECT 1 FROM user_work_first_plays WHERE user_id=? AND work_id=? AND first_observed_at IS NOT NULL)", args: [userId, workId] }),
+      database.prepare(
         `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
          SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
          FROM public_works WHERE id=?
@@ -88,8 +96,8 @@ export async function recordWorkPlayed(
            last_played_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(userId, workId)
-      .run();
+      .bind(userId, workId),
+    ]);
     if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
   }
   if (counter.status === "rejected") throw counter.reason;
