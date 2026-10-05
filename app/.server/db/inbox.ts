@@ -389,7 +389,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
     actorName: row.sender_status === "active" ? row.sender_display_name ?? "用户" : row.sender_status === "disabled" ? "该用户已停用" : "账户已注销",
     actorHref: row.sender_status === "active" && row.sender_user_id !== null ? `/users/${row.sender_user_id}` : null,
     actorAvatar: row.sender_status === "active" ? row.sender_avatar : null,
-    action: row.friend_action === "added" ? "把你加为了好友" : "也把你加为了好友",
+    action: row.friend_action === "added" ? "请求与你成为好友" : "通过了你的好友请求",
     isFollowing: !!row.friend_is_following,
     canFollow: row.sender_status === "active" && row.sender_user_id !== null && row.sender_user_id !== viewer.id
       && !row.friend_is_following && hasPermission(viewer, "timeline.follow.create"),

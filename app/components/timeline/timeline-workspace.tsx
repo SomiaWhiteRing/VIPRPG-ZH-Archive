@@ -139,9 +139,9 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
 
   async function remove(item: TimelineItem) {
     if (busy) return;
-    await confirm(item.kind === "status" ? "删除后，这条吐槽将不再展示。确定删除？" : "这条动态将从时间线移除，不会修改原来的收藏、评论或其他内容。确定移除？", {
-      title: item.kind === "status" ? "删除吐槽" : "移除动态",
-      confirmLabel: item.kind === "status" ? "删除" : "移除",
+    await confirm("确认删除这条时间线？", {
+      title: "删除时间线",
+      confirmLabel: "删除",
       destructive: true,
       action: async () => {
         await mutateTimeline(`/api/timeline/${item.id}`, "DELETE");
@@ -206,7 +206,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                       <p className="m-0 text-sm leading-relaxed wrap-anywhere">
                         {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
                       </p>
-                      <Timestamp value={item.createdAt} className="text-xs text-muted" />
+                      <Timestamp value={item.createdAt} format="duration" className="text-xs text-muted" />
                     </article>
                   </li>;
                   const compact = !item.text && !item.images.length && item.kind !== "upload";
@@ -214,8 +214,8 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                   const continued = compact && previous && previous.actor.id === item.actor.id && !previous.text && !previous.images.length && previous.kind !== "upload" && previous.kind !== "join" && previous.kind !== "rename";
                   const targetLink = item.target && <Link to={item.target.href} prefetch="none" className="font-medium text-secondary hover:underline">{item.target.title}</Link>;
                   const footer = <>
-                    <Timestamp value={item.createdAt} className="text-muted" />
-                    {!profile && item.canDelete && <Button variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-muted" type="button" disabled={busy} onClick={() => void remove(item)} aria-label={item.kind === "status" ? "删除吐槽" : "移除动态"}><Trash2 aria-hidden />{item.kind === "status" ? "删除" : "移除"}</Button>}
+                    <Timestamp value={item.createdAt} format="duration" className="text-muted" />
+                    {item.canDelete && (!profile || item.actor.id === viewerId) && <Button variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-muted" type="button" disabled={busy} onClick={() => void remove(item)} aria-label={item.kind === "status" ? "删除吐槽" : "移除动态"}><Trash2 aria-hidden />{item.kind === "status" ? "删除" : "移除"}</Button>}
                   </>;
                   return <li key={item.id} className={cn("px-3 sm:px-4", compact ? "py-3" : "py-4")}>
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">

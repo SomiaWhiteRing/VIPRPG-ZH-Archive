@@ -81,7 +81,7 @@ export function InboxActions({
   async function perform(action: InboxAction, rejectionReason?: string) {
     if (action === 'friend') {
       const friend = item?.friendNotification;
-      if (!friend?.canFollow || friend.userId === null) throw new Error('这位用户暂时无法加为好友。');
+      if (!friend?.canFollow || friend.userId === null) throw new Error('暂时无法同意这位用户的好友请求。');
       await requestJson(`/api/users/${friend.userId}/follow`, { method: 'PUT' });
     } else {
       const data = new FormData();
@@ -100,10 +100,10 @@ export function InboxActions({
     }
       notifyInboxChanged();
       toast.success(
-        action === 'friend' ? '已加为好友。' : action === "read"
+        action === 'friend' ? '已同意好友请求。' : action === "read"
           ? all
             ? "已将全部提醒标记为已读。"
-            : item?.friendNotification?.kind === 'added' ? '已忽略这条好友提醒。' : "已标记为已读。"
+            : item?.friendNotification?.kind === 'added' ? '已忽略这条好友请求。' : "已标记为已读。"
           : action === "approve"
             ? "申请已通过。"
             : action === 'withdraw' ? '申请已撤回。' : "申请已驳回。",
@@ -115,8 +115,8 @@ export function InboxActions({
     <div className="min-w-0" aria-busy={disabled}>
       <div className="flex flex-wrap items-center gap-2">
         {item?.friendNotification?.kind === 'added' ? (
-          item.friendNotification.isFollowing ? <span className="text-sm text-muted">已加为好友</span> :
-          item.friendNotification.canFollow ? <Button size="sm" disabled={disabled} onClick={() => void act('friend')}>加为好友</Button> : null
+          item.friendNotification.isFollowing ? <span className="text-sm text-accent">已同意</span> :
+          item.friendNotification.canFollow ? <Button size="sm" disabled={disabled} onClick={() => void act('friend')}>同意</Button> : null
         ) : null}
         {item?.canApprove ? (
           <Button

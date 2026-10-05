@@ -102,7 +102,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
       {error && <Notice role="alert" className="mb-3">{error}<Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load())}>重新加载回复</Button></Notice>}
       {!page && busy && <p className="m-0 text-sm text-muted">加载回复中……</p>}
       {page?.items.map((reply) => <NestedReply key={reply.id} id={`timeline-reply-item-${reply.id}`}
-        metadata={<><Link className="font-medium text-primary" to={`/users/${reply.actor.id}`}>{reply.actor.displayName}</Link><Timestamp value={reply.createdAt} /></>}
+        metadata={<><Link className="font-medium text-primary" to={`/users/${reply.actor.id}`}>{reply.actor.displayName}</Link><Timestamp value={reply.createdAt} format="duration" /></>}
         actions={!readOnly && reply.canDelete && <Button variant="ghost" size="sm" type="button" disabled={busy} aria-label="删除回复" onClick={() => void remove(reply.id)}><Trash2 aria-hidden />删除</Button>}>
         <StatusBody segments={reply.body} />
         <CommentImages images={reply.images} imageLabel="回复图片" />

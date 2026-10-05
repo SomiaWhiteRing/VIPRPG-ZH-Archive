@@ -243,12 +243,3 @@ export async function deleteTimelineEvent(runtime: AppRuntime, eventId: number, 
   ]);
   if (!result.meta.changes) throw new HttpError(404, "动态不存在或无权移除");
 }
-export async function recordFirstWorkPlay(runtime: AppRuntime, workId: number, userId: number) {
-  const db = getD1(runtime);
-  await db.batch([
-    db.prepare(`INSERT INTO user_work_first_plays(user_id,work_id) SELECT ?,id FROM works WHERE id=?
-      AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ON CONFLICT(user_id,work_id) DO NOTHING`).bind(userId, workId, userId),
-    timelineStatement(db, { userId, kind: "play", action: "初次游玩", eventKey: `first-play:${userId}:${workId}`, workId,
-      predicate: "changes()=1 AND EXISTS(SELECT 1 FROM public_works WHERE id=?)", args: [workId] }),
-  ]);
-}

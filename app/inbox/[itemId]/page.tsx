@@ -63,7 +63,7 @@ export default function InboxTargetPage() {
         {item.friendNotification ? <div className="flex min-w-0 items-center gap-3">
           <UserAvatar displayName={item.friendNotification.actorName} avatarBlobSha256={item.friendNotification.actorAvatar} size={40} className="size-10 shrink-0" />
           <p className="min-w-0 wrap-anywhere">
-            {item.friendNotification.actorHref ? <Link to={item.friendNotification.actorHref} className="text-primary hover:underline">{item.friendNotification.actorName}</Link> : item.friendNotification.actorName}
+            {item.friendNotification.actorHref ? <Link to={item.friendNotification.actorHref} className="text-primary hover:underline">{item.friendNotification.actorName}</Link> : <span className="text-primary">{item.friendNotification.actorName}</span>}
             {item.friendNotification.action}
           </p>
         </div> : <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>}
