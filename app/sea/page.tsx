@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LoaderFunctionArgs } from "react-router";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
@@ -16,6 +16,7 @@ import { useToast } from "@/app/components/ui/toast";
 import { HttpError } from "@/lib/http";
 import type { SeaSubmission } from "@/lib/dto/sea";
 import { requestJson } from "@/lib/ui/api-response";
+import { useClientEnvironment } from "@/app/components/use-client-environment";
 import "./sea.css";
 
 export const meta = () => pageMetaDescriptors({ title: "永恒之海", description: "海边的几句话。" });
@@ -33,6 +34,8 @@ export const headers: HeadersFunction = ({ loaderHeaders }) => {
   return headers;
 };
 export default function EternalSeaPage() {
+  const environment = useClientEnvironment();
+  const native = environment === "android";
   const session = useRouteLoaderData<typeof rootLoader>("root")?.session;
   const accountAvatar = session ? getUserAvatarSrc(session.avatarBlobSha256) : undefined;
   const [useOwnAvatar, setUseOwnAvatar] = useState(true);
@@ -45,15 +48,38 @@ export default function EternalSeaPage() {
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const followingRef = useRef(true);
+  const scrollInitializedRef = useRef(false);
   const composingRef = useRef(false);
   const sendingRef = useRef(false);
   const submissionRef = useRef<SeaSubmission | null>(null);
   const layout = layoutSeaDialogue(name, draft);
   const canSend = draft.trim().length > 0 && layout.fits;
 
+  useLayoutEffect(() => {
+    if (environment === null) return;
+    const scroller = environment === "android" ? document.scrollingElement : logRef.current;
+    if (!scroller || (scrollInitializedRef.current && !followingRef.current)) return;
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: "instant" });
+    if (scrollInitializedRef.current) return;
+    // Finish initial positioning after the router restores document scroll.
+    const frame = requestAnimationFrame(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "instant" });
+      followingRef.current = true;
+      scrollInitializedRef.current = true;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, environment]);
+
   useEffect(() => {
-    if (followingRef.current && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [messages]);
+    if (!native) return;
+    function trackDocumentScroll() {
+      if (!scrollInitializedRef.current) return;
+      const scroller = document.scrollingElement;
+      if (scroller) followingRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 32;
+    }
+    window.addEventListener("scroll", trackDocumentScroll, { passive: true });
+    return () => window.removeEventListener("scroll", trackDocumentScroll);
+  }, [native]);
 
   useEffect(() => {
     function copyDialogue(event: ClipboardEvent) {
@@ -100,39 +126,41 @@ export default function EternalSeaPage() {
   }
 
   return (
-    <main className="eternal-sea-page" aria-label="永恒之海">
+    <main className="eternal-sea-page" data-scroll={native ? "document" : "log"} aria-label="永恒之海">
       <h1 className="sr-only">永恒之海</h1>
       <div className="sea-room">
-        <form className="sea-composer" onSubmit={send}>
-          <div className="sea-compose-fields">
-            {accountAvatar ? (
-              <Button type="button" variant="ghost" className="sea-face-button"
-                aria-label={useOwnAvatar ? "使用亚历克斯头像" : "使用自己的头像"}
-                onClick={() => setUseOwnAvatar((current) => !current)}>
-                <RpgFace index={0} avatarUrl={avatarUrl} />
-              </Button>
-            ) : (
-              <span className="sea-face-button"><RpgFace index={0} /></span>
-            )}
-            <div className="sea-input-area">
-              <Label htmlFor="sea-input" className="sr-only">发言内容</Label>
-              <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder="把握"
-                onChange={(event) => setDraft(composingRef.current ? event.target.value : limitSeaBodyInput(event.target.value))}
-                onCompositionStart={() => { composingRef.current = true; }}
-                onCompositionEnd={(event) => {
-                  composingRef.current = false;
-                  setDraft(limitSeaBodyInput(event.currentTarget.value));
-                }} />
-              <div className="sea-submit-row">
-                <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>发言</Button>
+        <div className="sea-composer-dock">
+          <form className="sea-composer" onSubmit={send}>
+            <div className="sea-compose-fields">
+              {accountAvatar ? (
+                <Button type="button" variant="ghost" className="sea-face-button"
+                  aria-label={useOwnAvatar ? "使用亚历克斯头像" : "使用自己的头像"}
+                  onClick={() => setUseOwnAvatar((current) => !current)}>
+                  <RpgFace index={0} avatarUrl={avatarUrl} />
+                </Button>
+              ) : (
+                <span className="sea-face-button"><RpgFace index={0} /></span>
+              )}
+              <div className="sea-input-area">
+                <Label htmlFor="sea-input" className="sr-only">发言内容</Label>
+                <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder="把握"
+                  onChange={(event) => setDraft(composingRef.current ? event.target.value : limitSeaBodyInput(event.target.value))}
+                  onCompositionStart={() => { composingRef.current = true; }}
+                  onCompositionEnd={(event) => {
+                    composingRef.current = false;
+                    setDraft(limitSeaBodyInput(event.currentTarget.value));
+                  }} />
+                <div className="sea-submit-row">
+                  <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>发言</Button>
+                </div>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
         <div className="sea-log" role="log" aria-label="海边的对话" aria-live="polite" aria-relevant="additions" ref={logRef}
           onScroll={() => {
             const log = logRef.current;
-            if (log) followingRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 32;
+            if (!native && scrollInitializedRef.current && log) followingRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 32;
           }}>
           <div className="sea-messages">
             {messages.map(message => <RpgDialogue key={message.id} {...message} />)}
