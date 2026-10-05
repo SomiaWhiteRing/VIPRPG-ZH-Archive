@@ -260,9 +260,11 @@ export async function pinComment(
     throw new HttpError(403, "只有游戏上传者和管理员可以置顶评论");
   const result = await getD1(runtime).prepare(`UPDATE comments SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END
     WHERE id=? AND id IN (SELECT id FROM public_comments)
-      AND (?=1 OR EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=comments.work_id AND user_id=?))`)
-    .bind(pinned ? 1 : 0, id, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id).run();
-  if (result.meta.changes !== 1) throw new HttpError(404, "评论不可用");
+      AND (?=1 OR EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=comments.work_id AND user_id=?))
+      AND (?=0 OR NOT EXISTS(SELECT 1 FROM comments other
+        WHERE other.work_id=comments.work_id AND other.pinned_at IS NOT NULL AND other.id<>comments.id))`)
+    .bind(pinned ? 1 : 0, id, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id, pinned ? 1 : 0).run();
+  if (result.meta.changes !== 1) throw new HttpError(pinned ? 409 : 404, "评论不可用");
   return requiredComment(runtime, id, user.id);
 }
 
@@ -761,9 +763,9 @@ export async function moderateComment(
   await database.batch([
     database
       .prepare(
-        `UPDATE comments SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden')`,
+        `UPDATE comments SET status=?,pinned_at=CASE WHEN ?='hidden' THEN NULL ELSE pinned_at END,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden')`,
       )
-      .bind(status, id),
+      .bind(status, status, id),
     database
       .prepare(
         `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
