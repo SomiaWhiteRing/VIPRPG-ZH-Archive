@@ -38,7 +38,7 @@ export function parsePositiveId(value: string, label = "id", message = `Invalid 
 export async function readJsonObject(
   request: Request,
   errorMessage: string,
-  options: { maximumBytes?: number; requireJsonContentType?: boolean; fatalUtf8?: boolean } = {},
+  options: { maximumBytes?: number; requireJsonContentType?: boolean; fatalUtf8?: boolean; invalidJsonMessage?: string } = {},
 ): Promise<Record<string, unknown>> {
   if (options.requireJsonContentType && !request.headers.get("content-type")?.startsWith("application/json"))
     throw new HttpError(415, "需要 JSON 请求");
@@ -48,7 +48,7 @@ export async function readJsonObject(
       : JSON.parse(new TextDecoder("utf-8", { fatal: options.fatalUtf8 }).decode(await readRequestBody(request, options.maximumBytes)));
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    throw new HttpError(400, "Invalid JSON body");
+    throw new HttpError(400, options.invalidJsonMessage ?? "Invalid JSON body");
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HttpError(400, errorMessage);

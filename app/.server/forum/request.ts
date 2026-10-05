@@ -44,5 +44,9 @@ export async function readForumBody(
 export async function readForumJson(
   request: Request,
 ): Promise<Record<string, unknown>> {
-  return readJsonObject(request, "请求无效。", { maximumBytes: 128 * 1024, fatalUtf8: true });
+  return readJsonObject(request, "请求无效。", {
+    maximumBytes: 128 * 1024,
+    fatalUtf8: true,
+    invalidJsonMessage: "请求无效。",
+  });
 }

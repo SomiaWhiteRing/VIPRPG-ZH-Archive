@@ -16,7 +16,11 @@ export const resourceApi = new Hono<{
 }>();
 
 async function body(request: Request) {
-  return readJsonObject(request, "请求格式不正确", { maximumBytes: 256 * 1024, requireJsonContentType: true });
+  return readJsonObject(request, "请求格式不正确", {
+    maximumBytes: 256 * 1024,
+    requireJsonContentType: true,
+    invalidJsonMessage: "JSON 格式不正确",
+  });
 }
 type Endpoint = (
   runtime: AppRuntime,
