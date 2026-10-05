@@ -1,6 +1,7 @@
 import { EmojiPicker } from "@/app/components/emojis/picker";
-import { bodyLength } from "@/lib/face-emojis";
-import { AtSign, ChevronDown, ImagePlus, Maximize2, Minimize2 } from "lucide-react";
+import { bodyLength, forumBodyLength } from "@/lib/face-emojis";
+import { AtSign, ChevronDown, Code2, ImagePlus, Maximize2, Minimize2 } from "lucide-react";
+import { ForumElementEditor } from "./element-editor";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
 import { draftSnapshot, forumReplyLauncherClass } from "./draft";
@@ -41,6 +42,7 @@ export function ForumEditor({
   loginExpired,
   conflict,
   emojis,
+  canInsertElements = false,
 }: {
   draft: ForumDraft;
   onChange: (draft: ForumDraft) => void;
@@ -54,6 +56,7 @@ export function ForumEditor({
   loginExpired: boolean;
   conflict: boolean;
   emojis: FaceEmoji[];
+  canInsertElements?: boolean;
 }) {
   // Local image preparation locks editor actions without marking a publish
   // request in flight or enabling the page's unload guard on an empty draft.
@@ -61,6 +64,7 @@ export function ForumEditor({
   const busy = submitting || processingImages;
   const [collapsed, setCollapsed] = useState(draft.collapsed ?? false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [elementOpen, setElementOpen] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const mixed = useRef<BodyEditorHandle>(null);
   const submitButton = useRef<HTMLButtonElement>(null);
@@ -80,7 +84,7 @@ export function ForumEditor({
     : topic
       ? FORUM_BODY_LENGTH
       : FORUM_POST_BODY_LENGTH;
-  const remaining = limit - bodyLength(draft.body);
+  const remaining = limit - (inline ? bodyLength : forumBodyLength)(draft.body);
   const showRemaining = remaining <= Math.ceil(limit * 0.1);
   const canSubmit = (!!draft.body.trim() || draft.images.length > 0) && remaining >= 0;
   const label = draft.target
@@ -166,7 +170,7 @@ export function ForumEditor({
   useEffect(() => () => setFullscreen?.(false), [setFullscreen]);
 
   useEffect(() => {
-    if (topic || inline || isCollapsed || busy || emojiOpen || fullscreen) return;
+    if (topic || inline || isCollapsed || busy || emojiOpen || elementOpen || fullscreen) return;
     function outside(event: PointerEvent) {
       const target = event.target;
       if (
@@ -182,7 +186,7 @@ export function ForumEditor({
     }
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
-  }, [topic, inline, isCollapsed, busy, emojiOpen, fullscreen]);
+  }, [topic, inline, isCollapsed, busy, emojiOpen, elementOpen, fullscreen]);
 
   const form = (
     <HeightBox
@@ -197,7 +201,7 @@ export function ForumEditor({
       aria-modal={fullscreen || undefined}
       aria-label={context}
       onKeyDown={(event) => {
-        if (fullscreen && event.key === "Escape" && !emojiOpen) {
+        if (fullscreen && event.key === "Escape" && !emojiOpen && !elementOpen) {
           event.preventDefault();
           event.stopPropagation();
           setFullscreen?.(false);
@@ -357,6 +361,8 @@ export function ForumEditor({
               busy={busy}
               topic={topic}
               textOnly={inline}
+              forumElements={!inline}
+              canEditElements={canInsertElements}
               maxLength={limit}
               enforceMaxLength={false}
               autoFocus={!topic && !isCollapsed}
@@ -445,6 +451,9 @@ export function ForumEditor({
                   >
                     <ImagePlus />
                   </Button>
+                  {canInsertElements ? (
+                    <Button type="button" variant="ghost" size="icon" aria-label="插入浏览器元素" title="插入浏览器元素" disabled={busy} onClick={() => setElementOpen(true)}><Code2 aria-hidden /></Button>
+                  ) : null}
                 </>
               ) : null}
               <div className="ml-auto flex items-center gap-1">
@@ -528,6 +537,7 @@ export function ForumEditor({
           )}
         </EmojiPicker>
       </form>
+      {elementOpen && canInsertElements && !busy ? <ForumElementEditor onClose={() => setElementOpen(false)} onSave={(source) => { mixed.current?.insertElement(source); setElementOpen(false); }} /> : null}
     </section>
     </HeightBox>
   );

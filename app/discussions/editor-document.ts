@@ -1,11 +1,12 @@
 import { MENTION_PATTERN, mentionToken, readMention } from "@/lib/mentions";
 import { FACE_EMOJI_PATTERN, emojiToken } from "@/lib/face-emojis";
+import { FORUM_ELEMENT_PATTERN, forumElementToken, readForumElement } from "@/lib/forum-elements";
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Slice, type Node, type Schema } from "@tiptap/pm/model";
 import type { DraftImage } from "./images";
 
 // The editor owns a continuous document. Offsets are only the persistence format.
-export function textContent(text: string, allowMentions = true): JSONContent[] {
+export function textContent(text: string, allowMentions = true, allowElements = false): JSONContent[] {
   const content: JSONContent[] = [];
   const plain = (value: string) =>
     value.split("\n").forEach((line, index) => {
@@ -13,11 +14,13 @@ export function textContent(text: string, allowMentions = true): JSONContent[] {
       if (line) content.push({ type: "text", text: line });
     });
   let cursor = 0;
-  for (const match of text.matchAll(new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}`, "g"))) {
+  for (const match of text.matchAll(new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}`, "g"))) {
     plain(text.slice(cursor, match.index));
     const user = readMention(match[0]);
+    const source = readForumElement(match[0]);
     if (user && allowMentions) content.push({ type: "userMention", attrs: user });
     else if (match[0].startsWith(":face_")) content.push({ type: "faceEmoji", attrs: { id: Number(match[3]) } });
+    else if (source !== null && allowElements) content.push({ type: "forumElement", attrs: { source } });
     else plain(match[0]);
     cursor = match.index + match[0].length;
   }
@@ -29,17 +32,18 @@ export function editorDocument(
   body: string,
   images: DraftImage[],
   allowMentions = true,
+  allowElements = false,
 ): JSONContent {
   let offset = 0;
   const content: JSONContent[] = [];
   for (const image of images) {
     content.push(
-      ...textContent(body.slice(offset, image.offset), allowMentions),
+      ...textContent(body.slice(offset, image.offset), allowMentions, allowElements),
       imageContent(image),
     );
     offset = image.offset;
   }
-  content.push(...textContent(body.slice(offset), allowMentions));
+  content.push(...textContent(body.slice(offset), allowMentions, allowElements));
   return { type: "doc", content: [{ type: "paragraph", content }] };
 }
 
@@ -57,6 +61,7 @@ export function readDocument(doc: Node, assets: Map<string, DraftImage>) {
     if (node.isText) body += node.text;
     else if (node.type.name === "userMention") body += mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName });
     else if (node.type.name === "faceEmoji") body += emojiToken(node.attrs.id);
+    else if (node.type.name === "forumElement") body += forumElementToken(node.attrs.source);
     else if (node.type.name === "hardBreak") body += "\n";
     else if (node.type.name === "forumImage") {
       const image = assets.get(node.attrs.key);
@@ -68,6 +73,8 @@ export function readDocument(doc: Node, assets: Map<string, DraftImage>) {
 
 // Flatten pasted paragraphs into line breaks; retain only known local image nodes.
 // Pasted HTML cannot supply remote URLs, upload IDs, or arbitrary rich text.
+// Explicit element tokens remain atomic only in the forum schema; the server
+// separately checks their size and super-admin authorization on every save.
 export function inlineSlice(
   slice: Slice,
   schema: Schema,
@@ -80,12 +87,14 @@ export function inlineSlice(
       nodes.push(schema.nodes.hardBreak.create());
     if (node.isText)
       nodes.push(
-        ...textContent(node.text!, !!schema.nodes.userMention).map((item) => schema.nodeFromJSON(item)),
+        ...textContent(node.text!, !!schema.nodes.userMention, !!schema.nodes.forumElement).map((item) => schema.nodeFromJSON(item)),
       );
     else if (node.type.name === "userMention")
       nodes.push(schema.nodes.userMention ? schema.nodes.userMention.create(node.attrs) : schema.text(mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName })));
     else if (node.type.name === "faceEmoji")
       nodes.push(schema.nodes.faceEmoji.create({ id: node.attrs.id }));
+    else if (node.type.name === "forumElement" && schema.nodes.forumElement)
+      nodes.push(schema.nodes.forumElement.create(node.attrs));
     else if (node.type.name === "hardBreak")
       nodes.push(schema.nodes.hardBreak.create());
     else if (node.type.name === "forumImage") {
