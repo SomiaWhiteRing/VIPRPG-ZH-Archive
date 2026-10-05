@@ -49,7 +49,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     return rows.map(row => {
       const user = row.user_id === null ? undefined : users.get(row.user_id);
       return {
-        id: row.id, name: row.user_id !== null && user?.status === "deleted" ? "账户已注销" : row.name,
+        id: row.id, name: row.avatar_mode === "alex" ? "无名的VIPPER" : user?.status === "deleted" ? "账户已注销" : row.name,
         body: row.body, faceIndex: 0,
         avatarUrl: row.avatar_mode === "own" && user && user.status !== "deleted" ? getUserAvatarSrc(user.avatar_blob_sha256) : undefined,
         side: row.id % 2 ? "left" : "right", createdAt: new Date(row.created_at).toISOString(),

@@ -34,9 +34,9 @@ export const headers: HeadersFunction = ({ loaderHeaders }) => {
 };
 export default function EternalSeaPage() {
   const session = useRouteLoaderData<typeof rootLoader>("root")?.session;
-  const name = session?.displayName ?? "无名的VIPPER";
   const accountAvatar = session ? getUserAvatarSrc(session.avatarBlobSha256) : undefined;
   const [useOwnAvatar, setUseOwnAvatar] = useState(true);
+  const name = useOwnAvatar && session ? session.displayName : "无名的VIPPER";
   const avatarUrl = useOwnAvatar ? accountAvatar : undefined;
   const { messages, refresh } = useSeaRoom(useLoaderData<typeof loader>());
   const toast = useToast();
