@@ -3,7 +3,7 @@ import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { updateOwnProfileVisibility } from "@/app/.server/db/users";
 import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { updateAccountPreferences } from "@/app/.server/db/account-preferences";
+import { accountPreferencesUpdateStatement } from "@/app/.server/db/account-preferences";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
@@ -13,14 +13,16 @@ export async function POST(runtime: AppRuntime, request: Request) {
       return redirectWithParams(request, "/login", { next: "/me/privacy" });
     const form = await request.formData();
     if (form.get("section") === "preferences") {
-      await updateAccountPreferences(runtime, auth.user.id, form);
+      await accountPreferencesUpdateStatement(runtime, auth.user.id, form).run();
       return redirectWithParams(request, "/me/privacy", { preferencesUpdated: "1" });
     }
     // Released friend forms include this hidden field; older forms preserve
     // the friend setting that their user never saw.
     const friendForm = form.has("notifyFriendAdditions");
+    const combined = form.get("section") === "all";
     await updateOwnProfileVisibility(runtime, {
       user: auth.user,
+      preferencesForm: combined ? form : undefined,
       notifyFriendAdditions: form.has("notifyFriendAdditions") ? form.getAll("notifyFriendAdditions").includes("1") : undefined,
       visibility: {
         bio: form.get("showBio") === "1",
@@ -33,10 +35,10 @@ export async function POST(runtime: AppRuntime, request: Request) {
         discussions: form.get("showDiscussions") === "1",
       },
     });
-    return redirectWithParams(request, "/me/privacy", { privacyUpdated: "1" });
+    return redirectWithParams(request, "/me/privacy", combined ? { settingsUpdated: "1" } : { privacyUpdated: "1" });
   } catch (error) {
     return redirectWithParams(request, "/me/privacy", {
-      error: error instanceof Error ? error.message : "隐私设置更新失败",
+      error: error instanceof Error ? error.message : "隐私与偏好更新失败",
     });
   }
 }

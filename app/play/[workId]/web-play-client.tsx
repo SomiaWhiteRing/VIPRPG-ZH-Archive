@@ -225,6 +225,11 @@ export function WebPlayClient({
   const confirm = useConfirm();
   useNavigationGuard(installSessionActive || running || playerStarting, async () => {
     if (installSessionActive) return confirm("游戏安装尚未完成，确定离开并中断安装吗？");
+    await exitImmersive();
+    if (!(await confirm("在线游玩尚未结束，确定离开并停止游戏吗？"))) {
+      focusPlayerCanvas();
+      return false;
+    }
     try {
       await playerRef.current?.dispose();
       playerRef.current = null;

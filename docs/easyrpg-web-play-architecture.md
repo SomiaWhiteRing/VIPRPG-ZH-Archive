@@ -21,7 +21,7 @@
 - 引擎在 Worker 内同步读取本地文件，不发逐资源 HTTP 请求，不使用 Service Worker 资源桥，也不把整部作品复制进 WASM 内存。
 - EasyRPG Web Player 自托管并内嵌到本站，不跨域 iframe 引用官方播放器。
 - 仓库和每次部署只包含当前一个 EasyRPG runtime；升级成功后清理旧版本目录，不提供多版本选择或旧版回退。
-- 同源 `/play/player.html` iframe 持有播放器 Worker、画布与音频设备；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中的站内导航使用 Router blocker；运行中的站内导航先等待存档写入，刷新或关页保留浏览器确认。
+- 同源 `/play/player.html` iframe 持有播放器 Worker、画布与音频设备；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中、游戏启动中及运行中的站内导航使用 Router blocker，确认离开后才中断安装或停止游戏；游玩时先恢复窗口以显示确认弹窗，取消后继续运行。停止游戏先等待存档写入，写入失败留在当前页。刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
