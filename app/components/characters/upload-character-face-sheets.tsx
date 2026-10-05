@@ -46,6 +46,8 @@ export function UploadCharacterFaceSheets({
     faceSheetBlobSha256s: credit.faceSheetBlobSha256s,
   }));
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const composing = useRef(false);
   const [activeHash, setActiveHash] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -60,7 +62,7 @@ export function UploadCharacterFaceSheets({
     sourcePreviews.previews.map((sheet) => [sheet.sha256, sheet]),
   ).values()];
   const visibleSheets = sourceSheets.filter((sheet) =>
-    sheet.file.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+    sheet.file.name.toLocaleLowerCase().includes(submittedQuery.toLocaleLowerCase()),
   );
   const assignedHashes = new Set(draft.faceSheetBlobSha256s);
   const assignedSheets = draft.faceSheetBlobSha256s.flatMap((hash) => {
@@ -143,7 +145,13 @@ export function UploadCharacterFaceSheets({
             <strong className="text-sm">角色脸图</strong>
             <span className="text-xs tabular-nums text-muted">{sourceSheets.length} 张</span>
           </div>
-          <Input aria-label="按文件名查找脸图" disabled={disabled} placeholder="按文件名查找" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Input aria-label="按文件名查找脸图" disabled={disabled} placeholder="回车查找文件名" enterKeyHint="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing.current) return;
+              event.preventDefault(); event.stopPropagation();
+              if (!event.repeat) setSubmittedQuery(query.trim());
+            }} />
         </header>
         <div className="min-h-0 overflow-y-auto p-3">
           <div className="grid grid-cols-2 content-start items-start gap-3">

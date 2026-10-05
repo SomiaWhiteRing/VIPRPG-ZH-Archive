@@ -1,10 +1,8 @@
 import { EmojiDragSource } from "@/app/components/ui/emoji-drag";
 import {
-  useEffect,
   useLayoutEffect,
   memo,
   useRef,
-  useState,
 } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -16,7 +14,7 @@ import {
   type EmojiCharacter,
   type EmojiSheet,
 } from "@/lib/face-emojis";
-import { emojiRequest } from "./client";
+import { useSourceFacePages } from "./source-pages";
 import { FaceEmojiImage } from "@/app/components/ui/face-emoji-image";
 
 export type EmojiSource =
@@ -29,12 +27,6 @@ export const sourceKey = (source: EmojiSource) =>
     : source.kind === "character"
       ? `character:${source.character.id}:${source.focus ?? ""}`
       : source.sheet.blobSha256;
-
-type FacePage = {
-  items: (FaceEmoji | EmojiSheet)[];
-  more: boolean;
-  offset?: number;
-};
 
 export const SourceFaces = memo(function SourceFaces({
   source,
@@ -61,17 +53,7 @@ export const SourceFaces = memo(function SourceFaces({
   lifted: Set<string>;
   settling: Set<string>;
 }) {
-  const [items, setItems] = useState<(FaceEmoji | EmojiSheet)[]>(
-    source.kind === "sheet" ? [source.sheet] : [],
-  );
-  const [more, setMore] = useState(false);
-  const [start, setStart] = useState(0);
-  const [loading, setLoading] = useState(source.kind !== "sheet");
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const controller = useRef<AbortController | null>(null);
-  const pending = useRef(false);
-  const failedDirection = useRef<"previous" | "next" | null>(null);
+  const { items, more, start, loading, error, loadPage, retryPage } = useSourceFacePages(source);
   const scrollAnchor = useRef<{ element: HTMLElement; top: number } | null>(
     null,
   );
@@ -81,42 +63,6 @@ export const SourceFaces = memo(function SourceFaces({
   const activeBlob =
     active?.blobSha256 ??
     (source.kind === "character" ? source.focus : undefined);
-  const requestUrl =
-    source.kind === "hot"
-      ? "/api/emojis?op=hot"
-      : source.kind === "character"
-        ? `/api/emojis?op=sheets&characterId=${source.character.id}`
-        : "";
-  const initialUrl =
-    requestUrl +
-    (source.kind === "character" && source.focus
-      ? `&focus=${source.focus}`
-      : "");
-  useEffect(() => {
-    if (!initialUrl) return;
-    const request = new AbortController();
-    controller.current = request;
-    pending.current = true;
-    failedDirection.current = null;
-    void emojiRequest<FacePage>(initialUrl, undefined, request.signal)
-      .then((page) => {
-        if (request.signal.aborted) return;
-        setItems(page.items);
-        setStart(page.offset ?? 0);
-        setMore(page.more);
-        setError("");
-      })
-      .catch((error) => {
-        if (!request.signal.aborted) setError(String(error));
-      })
-      .finally(() => {
-        if (!request.signal.aborted) {
-          pending.current = false;
-          setLoading(false);
-        }
-      });
-    return () => request.abort();
-  }, [initialUrl, retry]);
   useLayoutEffect(() => {
     const container = viewport.current;
     if (!container) return;
@@ -143,51 +89,9 @@ export const SourceFaces = memo(function SourceFaces({
       );
     scrolledTo.current = targetKey;
   }, [activeKey, activeBlob, items, locateVersion]);
-  async function loadPage(direction: "previous" | "next") {
-    if (pending.current) return;
-    const request = controller.current;
-    if (!request || request.signal.aborted) return;
-    pending.current = true;
-    setLoading(true);
-    setError("");
-    try {
-      const offset =
-        direction === "previous"
-          ? Math.max(0, start - 24)
-          : start + items.length;
-      const page = await emojiRequest<FacePage>(
-        `${requestUrl}&offset=${offset}`,
-        undefined,
-        request.signal,
-      );
-      if (request.signal.aborted) return;
-      if (direction === "previous") {
-        const element =
-          viewport.current?.querySelector<HTMLElement>("[data-face-sheet]");
-        if (element)
-          scrollAnchor.current = {
-            element,
-            top: element.getBoundingClientRect().top,
-          };
-        setItems((current) => [...page.items, ...current]);
-        setStart(page.offset ?? offset);
-      } else {
-        setItems((current) => [...current, ...page.items]);
-        setMore(page.more);
-      }
-      failedDirection.current = null;
-      setError("");
-    } catch (error) {
-      if (!request.signal.aborted) {
-        failedDirection.current = direction;
-        setError(String(error));
-      }
-    } finally {
-      if (!request.signal.aborted) {
-        pending.current = false;
-        setLoading(false);
-      }
-    }
+  function anchorScroll() {
+    const element = viewport.current?.querySelector<HTMLElement>("[data-face-sheet]");
+    if (element) scrollAnchor.current = { element, top: element.getBoundingClientRect().top };
   }
   const discovery = (emojis: FaceEmoji[]) => (
     <div className="flex flex-wrap gap-2">
@@ -253,7 +157,7 @@ export const SourceFaces = memo(function SourceFaces({
           variant="outline"
           className="mb-4"
           disabled={loading}
-          onClick={() => void loadPage("previous")}
+          onClick={() => void loadPage("previous", anchorScroll)}
         >
           加载前面的脸图
         </Button>
@@ -312,14 +216,7 @@ export const SourceFaces = memo(function SourceFaces({
             size="sm"
             variant="ghost"
             disabled={loading}
-            onClick={() => {
-              if (failedDirection.current) {
-                void loadPage(failedDirection.current);
-                return;
-              }
-              setLoading(true);
-              setRetry((current) => current + 1);
-            }}
+            onClick={() => retryPage(anchorScroll)}
           >
             重试
           </Button>
