@@ -1,4 +1,4 @@
-import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
+import { requestJsonValue } from "@/lib/ui/api-response";
 
 import { type FaceEmoji, type FaceEmojiCell, emojiToken } from "@/lib/face-emojis";
 
@@ -42,7 +42,8 @@ export async function emojiRequest<T>(
   body?: object,
   signal?: AbortSignal,
 ): Promise<T> {
-  return requestJson<T & ApiResponsePayload>(url, {
+  // The shared character picker also reads showcase pages without an ok envelope.
+  return requestJsonValue<T>(url, {
     credentials: "same-origin", signal,
     ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
   }, "表情加载失败");

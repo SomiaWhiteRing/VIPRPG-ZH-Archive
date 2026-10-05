@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
@@ -159,6 +159,10 @@ function ShowcaseEditor({
       toast.success("喜爱展柜已保存。");
       await navigateSaved(`/users/${userId}`);
     } catch (error) {
+      if (error instanceof ApiResponseError && error.code === "showcase_conflict") {
+        setConflict(true);
+        setError(error.message);
+      }
       toast.error(
         error instanceof Error ? error.message : "展柜保存失败，请重试。",
       );

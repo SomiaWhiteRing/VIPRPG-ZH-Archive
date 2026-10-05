@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { listAccountRoleOptions } from "@/app/.server/db/permissions";
@@ -59,6 +59,8 @@ export default function AccountPermissionsPage() {
       startTransition(() => revalidator.revalidate());
       toast.success("申请已提交，请在提醒中查看处理结果。");
     } catch (error) {
+      if (error instanceof ApiResponseError && error.status === 409)
+        startTransition(() => revalidator.revalidate());
       toast.error(error instanceof Error ? error.message : "申请提交失败，请重试。");
     } finally {
       setSaving(false);

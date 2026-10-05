@@ -30,7 +30,7 @@
 
 ### 公共实现约束
 
-- 浏览器与 Web Worker 的普通 JSON 请求使用 `lib/ui/api-response.ts` 的 `requestJson`；资源链接 API 直接返回业务对象，使用 `requestJsonValue` 或 `postJson`。二进制和 204 响应使用 `requestOk`。这些入口共用网络失败、HTTP 错误、无效响应和取消处理，不自行复制错误解析。
+- 浏览器与 Web Worker 的 JSON 请求按实际响应协议选择 `lib/ui/api-response.ts` 的入口：成功响应明确包含 `ok: true` 时使用 `requestJson`；直接返回业务对象时使用 `requestJsonValue` 或 `postJson`，包括资源链接、展柜角色／头像查询、类型候补和提醒未读数。二进制和 204 响应使用 `requestOk`。迁移调用前逐项核对成功响应字段、HTTP 状态及冲突恢复分支，保留已有错误码和恢复操作。这些入口共用网络失败、HTTP 错误、无效响应和取消处理，不自行复制错误解析。
 - 上传提交回查、草稿恢复、只重试网络传输的上传请求，以及同时处理 HTML 跳转与 JSON 的 `RedirectForm`，可以通过 `requestResponse`／`readJsonResponse` 查看原始状态。静态检查按文件和函数限制这些消费者，不能扩大为整个目录的豁免。失败状态的 JSON 仅在恢复决策需要时显式设置 `allowFailure`。
 - 服务端 JSON 响应通过 `lib/http.ts` 创建；缓存用途仍可显式覆盖默认 `no-store`。请求 JSON 通过 `readJsonObject` 读取，论坛、表情和资源管理分别保留 128 KiB、64 KiB、256 KiB 的请求体上限及各自的编码／类型要求。表单内的 JSON 字段和数据库 JSON 属于领域解析，不按 HTTP JSON 对象处理。
 - API 正整数 ID 使用 `parsePositiveId`，页面 ID 使用 `parsePageId` 保留 404 语义。对象键使用 `lib/archive/object-keys.ts`，Web Crypto SHA-256 使用 `lib/sha256.ts`；公共函数可供网站、浏览器 Worker、下载／GC Worker 和 Node 脚本消费。
