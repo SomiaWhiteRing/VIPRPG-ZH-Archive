@@ -489,7 +489,7 @@ export function ForumEditor({
                     <ChevronDown />
                   </Button>
                 ) : null}
-                {!topic ? (
+                {!topic && inline ? (
                   <Button
                     type="button"
                     variant="ghost"
