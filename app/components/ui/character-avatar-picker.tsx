@@ -9,7 +9,6 @@ import { Button } from "./button";
 import { CharacterPortrait } from "./character-portrait";
 import * as Dialog from "./dialog";
 import { FaceSheetGrid } from "./face-sheet-grid";
-import { Rm2kButton } from "./rm2k-button";
 
 export function CharacterAvatarPicker({
   disabled,
@@ -142,8 +141,8 @@ export function CharacterAvatarPicker({
               ) : <span className="text-sm text-muted">请选择一个头像</span>}
             </div>
             <div className="ml-auto flex gap-2">
-              <Rm2kButton type="button" disabled={disabled} onClick={() => changeOpen(false)}>取消</Rm2kButton>
-              <Rm2kButton type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? "正在保存…" : "保存头像"}</Rm2kButton>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => changeOpen(false)}>取消</Button>
+              <Button type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? "正在保存…" : "保存头像"}</Button>
             </div>
           </footer>
         </Dialog.Content>
