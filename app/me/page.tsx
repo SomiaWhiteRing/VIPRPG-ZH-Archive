@@ -5,6 +5,7 @@ import {
   searchUserWorks,
 } from "@/app/.server/db/game-library";
 import { searchUserComments } from "@/app/.server/db/work-community";
+import { listOwnUserFollows } from "@/app/.server/db/user-follows";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { ownUserDiscussions } from "@/app/.server/forum/user-discussions";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -15,6 +16,7 @@ import {
   AccountWorkGrid,
 } from "@/app/components/profile/account-content";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
+import { FriendSection } from "@/app/components/profile/friend-section";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { AccountPageHeader } from "@/app/me/account-page-header";
@@ -36,7 +38,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const user = await requireAccountUser(runtime, "/me");
   const showUploads = canAccessOwnWorks(user);
-  const [played, favorites, catalogs, comments, uploads, discussions] =
+  const [played, favorites, catalogs, comments, uploads, discussions, friends] =
     await Promise.all([
       searchUserWorks(runtime, {
         userId: user.id,
@@ -54,6 +56,7 @@ export async function loader(args: LoaderFunctionArgs) {
         ? searchUploadedWorks(runtime, { userId: user.id, pageSize: 3 })
         : Promise.resolve(null),
       ownUserDiscussions(getForumRuntime(runtime), user, { pageSize: 3 }),
+      listOwnUserFollows(runtime, user, "following", null, 15),
     ]);
 
   return {
@@ -72,6 +75,7 @@ export async function loader(args: LoaderFunctionArgs) {
     comments,
     uploads,
     discussions,
+    friends,
   };
 }
 
@@ -87,6 +91,7 @@ export default function MePage() {
     comments,
     uploads,
     discussions,
+    friends,
   } = useLoaderData<typeof loader>();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-7">
@@ -244,6 +249,11 @@ export default function MePage() {
           )}
         </AccountSection>
       ) : null}
+      <FriendSection
+        href="/me/connections?view=following"
+        users={friends.items}
+        status={!user.profileVisibility.friends ? <Badge variant="outline">未在个人主页展示</Badge> : undefined}
+      />
     </div>
   );
 }
