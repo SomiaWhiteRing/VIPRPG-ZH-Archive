@@ -53,16 +53,17 @@ export async function updateTimelineSettings(runtime: AppRuntime, userId: number
 
 // Public source projections are checked on every read, not copied into events.
 // Recording switches only affect future activity writes; source privacy gates reads.
+// Resolve complex public views by source ID to avoid materializing them site-wide.
 const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
   LEFT JOIN public_works w ON w.id=e.work_id
   LEFT JOIN catalogs cat ON cat.id=e.catalog_id AND cat.status='published'
   LEFT JOIN users cat_owner ON cat_owner.id=cat.owner_user_id
-  LEFT JOIN public_comments c ON c.id=e.comment_id
+  LEFT JOIN comments c ON c.id=(SELECT pc.id FROM public_comments pc WHERE pc.id=e.comment_id)
   LEFT JOIN public_works cw ON cw.id=c.work_id
   LEFT JOIN creators cr ON cr.id=c.creator_id AND cr.public_at IS NOT NULL
   LEFT JOIN characters ch ON ch.id=c.character_id
-  LEFT JOIN forum_public_posts fp ON fp.id=e.forum_post_id
-  LEFT JOIN forum_public_topics ft ON ft.id=fp.topic_id
+  LEFT JOIN forum_posts fp ON fp.id=(SELECT pp.id FROM forum_public_posts pp WHERE pp.id=e.forum_post_id)
+  LEFT JOIN forum_topics ft ON ft.id=fp.topic_id
   LEFT JOIN archive_versions av ON av.id=e.archive_version_id
   WHERE (u.status='active' OR (u.status='deleted' AND e.kind IN ('join','rename'))) AND e.hidden_at IS NULL AND CASE e.kind
     WHEN 'favorite' THEN e.action='收藏了作品' AND u.profile_show_favorites=1 AND w.id IS NOT NULL
