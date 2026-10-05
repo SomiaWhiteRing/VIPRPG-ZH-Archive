@@ -46,9 +46,11 @@ export function CharacterTreeSearch({
   const anchor = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const composing = useRef(false);
   const [expanded, setExpanded] = useState<Set<Key>>(new Set());
-  const searching = Boolean(query.trim());
-  const roots = useMemo(() => buildTree(data, query), [data, query]);
+  const searching = Boolean(submittedQuery);
+  const roots = useMemo(() => buildTree(data, submittedQuery), [data, submittedQuery]);
   const searchExpanded = new Set<Key>();
   function collect(nodes: Node[]) {
     for (const node of nodes) {
@@ -164,7 +166,7 @@ export function CharacterTreeSearch({
           ref={anchor}
           className="relative w-full sm:w-80"
           onKeyDownCapture={(event) => {
-            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.nativeEvent.isComposing || event.keyCode === 229 || composing.current) return;
             if (event.key === "Escape") {
               event.preventDefault();
               setOpen(false);
@@ -178,7 +180,7 @@ export function CharacterTreeSearch({
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter") event.preventDefault();
+            if (event.key === "Enter" && !event.nativeEvent.isComposing && event.keyCode !== 229 && !composing.current) event.preventDefault();
           }}
         >
           <Search
@@ -191,7 +193,8 @@ export function CharacterTreeSearch({
             type="search"
             disabled={disabled}
             aria-controls={open ? treeId : undefined}
-            placeholder="角色、别名、#ID 或分类"
+            placeholder="回车搜索角色、别名、#ID 或分类"
+            enterKeyHint="search"
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -199,12 +202,19 @@ export function CharacterTreeSearch({
             }}
             onFocus={() => changeOpen(true)}
             onClick={() => changeOpen(true)}
+            onCompositionStart={() => { composing.current = true; }}
+            onCompositionEnd={() => { composing.current = false; }}
             onKeyDown={(event) => {
-              if (
-                event.nativeEvent.isComposing ||
-                !["ArrowDown", "ArrowUp"].includes(event.key)
-              )
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing.current) return;
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.repeat) return;
+                setSubmittedQuery(query.trim());
+                changeOpen(true);
                 return;
+              }
+              if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
               event.preventDefault();
               const rows =
                 tree.current?.querySelectorAll<HTMLElement>('[role="row"]');
@@ -214,7 +224,7 @@ export function CharacterTreeSearch({
             }}
             className="pl-9 pr-18"
           />
-          {query ? (
+          {query || submittedQuery ? (
             <Button
               aria-label="清空角色搜索"
               className="absolute right-9 top-1 size-8 min-h-0"
@@ -224,6 +234,7 @@ export function CharacterTreeSearch({
               disabled={disabled}
               onClick={() => {
                 setQuery("");
+                setSubmittedQuery("");
                 input.current?.focus();
               }}
             >

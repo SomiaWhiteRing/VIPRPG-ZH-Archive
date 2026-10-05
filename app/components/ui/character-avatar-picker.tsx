@@ -1,18 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
-import { emojiRequest } from "@/app/components/emojis/client";
+import { useSourceFacePages } from "@/app/components/emojis/source-pages";
 import { EmojiSourcePicker } from "@/app/components/emojis/source-picker";
 import type { CharacterPortrait as Portrait } from "@/lib/character-names";
-import type { EmojiCharacter, EmojiSheet } from "@/lib/face-emojis";
+import type { EmojiCharacter } from "@/lib/face-emojis";
 import { cn } from "@/lib/ui/cn";
 import { Button } from "./button";
 import { CharacterPortrait } from "./character-portrait";
 import * as Dialog from "./dialog";
 import { FaceSheetGrid } from "./face-sheet-grid";
 import { Rm2kButton } from "./rm2k-button";
-
-type SheetPage = { items: EmojiSheet[]; more: boolean };
-const PAGE_SIZE = 24;
 
 export function CharacterAvatarPicker({
   disabled,
@@ -26,37 +23,12 @@ export function CharacterAvatarPicker({
   const [open, setOpen] = useState(false);
   const [character, setCharacter] = useState<EmojiCharacter>();
   const [selected, setSelected] = useState<Portrait | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [page, setPage] = useState<SheetPage | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
   const scrollTop = useRef(0);
   const viewport = useRef<HTMLDivElement>(null);
-  const characterId = character?.id;
-
-  useEffect(() => {
-    if (!open || !characterId) return;
-    const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    void emojiRequest<SheetPage>(
-      `/api/emojis?op=sheets&characterId=${characterId}&offset=${offset}`,
-      undefined,
-      controller.signal,
-    )
-      .then((result) => {
-        if (!controller.signal.aborted) setPage(result);
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted)
-          setError(error instanceof Error ? error.message : "角色脸图加载失败。");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [open, characterId, offset, retry]);
+  const { items, more, loading, error, loadPage, retryPage } = useSourceFacePages(
+    character ? { kind: "character", character } : null,
+    open,
+  );
 
   function resetScroll() {
     scrollTop.current = 0;
@@ -64,21 +36,9 @@ export function CharacterAvatarPicker({
   }
 
   function chooseCharacter(next: EmojiCharacter) {
-    if (next.id === characterId) return;
+    if (next.id === character?.id) return;
     setCharacter(next);
     setSelected(null);
-    setPage(null);
-    setOffset(0);
-    setLoading(true);
-    setError("");
-    resetScroll();
-  }
-
-  function changePage(nextOffset: number) {
-    setPage(null);
-    setOffset(nextOffset);
-    setLoading(true);
-    setError("");
     resetScroll();
   }
 
@@ -147,29 +107,28 @@ export function CharacterAvatarPicker({
             aria-busy={loading}
           >
             {!character ? <p className="m-0 text-sm text-muted">搜索角色名称，或从分类中选择角色。</p> : null}
-            {page ? (
+            {items.length ? (
               <FaceSheetGrid
-                sheets={page.items}
+                sheets={items}
                 className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
                 fillWidth
-                disabled={disabled || loading || !!error}
+                disabled={disabled}
                 onSelectCell={(sheet, row, column) => setSelected({ faceSheetId: sheet.id, blobSha256: sheet.blobSha256, width: sheet.width, height: sheet.height, row, column })}
                 cellState={(sheet, row, column) => ({ selected: selected?.blobSha256 === sheet.blobSha256 && selected.row === row && selected.column === column })}
               />
             ) : null}
-            {character && page && !loading && !error && !page.items.length ? <p className="text-sm text-muted">该角色暂无可用脸图。</p> : null}
-            {loading ? <p role="status" className="text-sm text-muted">正在加载角色脸图…</p> : null}
+            {character && !loading && !error && !items.length ? <p className="text-sm text-muted">该角色暂无可用脸图。</p> : null}
+            {loading && !items.length ? <p role="status" className="text-sm text-muted">正在加载角色脸图…</p> : null}
             {error ? (
               <div role="alert" className="flex items-center gap-3 text-sm">
                 {error}
-                <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => setRetry((value) => value + 1)}>重试</Button>
+                <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => retryPage()}>重试</Button>
               </div>
             ) : null}
-            {character && (offset > 0 || page?.more) ? (
-              <div className="mt-4 flex justify-between gap-3">
-                <Button type="button" variant="outline" disabled={disabled || loading || offset === 0} onClick={() => changePage(Math.max(0, offset - PAGE_SIZE))}>上一页</Button>
-                <Button type="button" variant="outline" disabled={disabled || loading || !page?.more} onClick={() => changePage(offset + PAGE_SIZE)}>下一页</Button>
-              </div>
+            {more && !error ? (
+              <Button type="button" size="sm" variant="outline" className="mt-4" disabled={disabled || loading} onClick={() => void loadPage()}>
+                {loading ? "正在加载…" : "加载更多"}
+              </Button>
             ) : null}
           </div>
           <footer className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-t border-border bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">

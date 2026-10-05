@@ -109,6 +109,8 @@ export function PortraitLibraryEditor({
   const [kind, setKind] = useState<CharacterMaterialKind>("faceset");
   const [boundOnly, setBoundOnly] = useState(true);
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const searchComposing = useRef(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [libraryOffset, setLibraryOffset] = useState(0);
   const [library, setLibrary] = useState<{
@@ -148,7 +150,7 @@ export function PortraitLibraryEditor({
     null,
   );
   const inputRef = useRef<HTMLInputElement>(null);
-  const normalizedQuery = normalize(query);
+  const normalizedQuery = normalize(submittedQuery);
   const libraryKey = JSON.stringify([kind, normalizedQuery, libraryRevision]);
   const libraryError =
     libraryFailure?.key === libraryKey &&
@@ -259,63 +261,58 @@ export function PortraitLibraryEditor({
   useEffect(() => {
     if (boundOnly) return;
     const controller = new AbortController();
-    const timer = setTimeout(
-      async () => {
-        try {
-          const params = new URLSearchParams({
-            kind,
-            q: normalizedQuery,
-            offset: String(libraryOffset),
-          });
-          const result = await requestJson<
-            ApiResponsePayload & AdminCharacterMaterialPage
-          >(
-            `${endpoint}?${params}`,
-            {
-              credentials: "same-origin",
-              signal: controller.signal,
-            },
-            "素材库读取失败",
-          );
-          if (controller.signal.aborted) return;
-          const items = [
-            ...result.sheets.map(fromSheet),
-            ...result.materials.map(fromMaterial),
-          ];
-          setLibrary((previous) => ({
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          kind,
+          q: normalizedQuery,
+          offset: String(libraryOffset),
+        });
+        const result = await requestJson<
+          ApiResponsePayload & AdminCharacterMaterialPage
+        >(
+          `${endpoint}?${params}`,
+          {
+            credentials: "same-origin",
+            signal: controller.signal,
+          },
+          "素材库读取失败",
+        );
+        if (controller.signal.aborted) return;
+        const items = [
+          ...result.sheets.map(fromSheet),
+          ...result.materials.map(fromMaterial),
+        ];
+        setLibrary((previous) => ({
+          key: libraryKey,
+          offset: libraryOffset,
+          nextOffset: result.nextOffset,
+          items: mergeMaterials(
+            libraryOffset > 0 && previous?.key === libraryKey
+              ? previous.items
+              : [],
+            items,
+          ),
+        }));
+        // Keep metadata for every selected material even when a search page is replaced.
+        setMaterials((previous) => mergeMaterials(previous, items));
+        setLibraryFailure(null);
+      } catch (reason) {
+        if (!controller.signal.aborted)
+          setLibraryFailure({
             key: libraryKey,
             offset: libraryOffset,
-            nextOffset: result.nextOffset,
-            items: mergeMaterials(
-              libraryOffset > 0 && previous?.key === libraryKey
-                ? previous.items
-                : [],
-              items,
-            ),
-          }));
-          // Keep metadata for every selected material even when a search page is replaced.
-          setMaterials((previous) => mergeMaterials(previous, items));
-          setLibraryFailure(null);
-        } catch (reason) {
-          if (!controller.signal.aborted)
-            setLibraryFailure({
-              key: libraryKey,
-              offset: libraryOffset,
-              message:
-                reason instanceof Error ? reason.message : "素材库读取失败",
-            });
-        }
-      },
-      normalizedQuery ? 250 : 0,
-    );
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
+            message:
+              reason instanceof Error ? reason.message : "素材库读取失败",
+          });
+      }
+    })();
+    return () => controller.abort();
   }, [boundOnly, endpoint, kind, normalizedQuery, libraryOffset, libraryKey]);
 
   function changeQuery(value: string) {
     setQuery(value);
+    setSubmittedQuery(value.trim());
     setLimit(PAGE_SIZE);
     setLibraryOffset(0);
   }
@@ -723,15 +720,28 @@ export function PortraitLibraryEditor({
                     className="pl-9 pr-9"
                     placeholder={
                       kind === "faceset"
-                        ? "搜索来源、文件名或 #ID"
-                        : "搜索关联角色、#ID 或文件哈希"
+                        ? "回车搜索来源、文件名或 #ID"
+                        : "回车搜索关联角色、#ID 或文件哈希"
                     }
                     type="search"
+                    enterKeyHint="search"
                     maxLength={160}
                     value={query}
-                    onChange={(event) => changeQuery(event.target.value)}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onCompositionStart={() => { searchComposing.current = true; }}
+                    onCompositionEnd={() => { searchComposing.current = false; }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || searchComposing.current) return;
+                      event.preventDefault(); event.stopPropagation();
+                      if (event.repeat) return;
+                      if (!boundOnly && normalizedQuery === normalize(query) && libraryOffset === 0) {
+                        if (libraryLoading) return;
+                        setLibraryRevision((revision) => revision + 1);
+                      }
+                      changeQuery(query);
+                    }}
                   />
-                  {query ? (
+                  {query || submittedQuery ? (
                     <Button
                       aria-label="清空素材搜索"
                       className="absolute right-1 top-1 h-8 w-8"
@@ -749,7 +759,7 @@ export function PortraitLibraryEditor({
                     ? "加载中…"
                     : !boundOnly
                       ? `已加载 ${matching.length} 张${label}`
-                      : query
+                      : submittedQuery
                         ? `找到 ${matching.length} 张`
                         : `${matching.length} 张${label}`}
                 </span>
@@ -944,13 +954,13 @@ export function PortraitLibraryEditor({
                       className="text-muted"
                     />
                     <p className="text-sm text-muted">
-                      {query
+                      {submittedQuery
                         ? "没有匹配的素材"
                         : boundOnly
                           ? `还没有绑定${label}`
                           : `素材库暂无${label}`}
                     </p>
-                    {query ? (
+                    {submittedQuery ? (
                       <Button
                         onClick={() => changeQuery("")}
                         size="sm"
