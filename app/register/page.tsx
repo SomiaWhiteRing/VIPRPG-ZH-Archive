@@ -149,7 +149,7 @@ function VerificationForm({
       className="grid gap-4"
     >
       <Notice tone="success" className="mb-4 rounded-md border p-3">
-        若 {email} 可用于注册且未超过发送限额，你将收到验证码。未收到时请检查垃圾邮件；已有账号请直接登录或找回密码。
+        请查收 {email} 的验证码，10 分钟内有效。未收到请检查垃圾邮件或稍后重试。
       </Notice>
       <input type="hidden" name="next" value={nextPath} />
       <input type="hidden" name="email" value={email} />
