@@ -137,6 +137,8 @@ export function WebPlayClient({
     capturing,
     capture,
   } = useWebPlayScreenshots(metadata.workId, metadata.title);
+  const captureRef = useRef(capture);
+  useEffect(() => { captureRef.current = capture; }, [capture]);
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
@@ -159,7 +161,7 @@ export function WebPlayClient({
     const player = playerRef.current;
     if (!player || captureDisabled) return;
     focusPlayerCanvas();
-    await capture(player);
+    await capture(() => player.captureScreenshot());
     if (playerRef.current === player) focusPlayerCanvas();
   }, [capture, captureDisabled]);
 
@@ -474,7 +476,7 @@ export function WebPlayClient({
         setRunning(false);
         setPageFullscreen(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-      });
+      }, image => { void captureRef.current(async () => image); });
       playerRef.current = player;
       await player.ready;
       signal.throwIfAborted();

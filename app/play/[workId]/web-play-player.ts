@@ -2,7 +2,7 @@ import { isAndroidClient } from "@/lib/browser/client-environment";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
-import { interceptPlayerSaveDownloads } from "./web-play-save-download";
+import { interceptPlayerDownloads } from "./web-play-player-download";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
 import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
@@ -74,6 +74,7 @@ export function createPlayerSession(
   onLog: PlayerLogHandler,
   onFullscreen: () => void,
   onExit: () => void,
+  onScreenshot: (image: PlayerScreenshot) => void,
 ): PlayerSession {
   const native = isAndroidClient();
   let nativeResources: NativePlayerResources | undefined;
@@ -221,10 +222,11 @@ export function createPlayerSession(
     if (!playerWindow.createEasyRpgPlayer)
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
-    restoreWorker = interceptPlayerSaveDownloads(playerWindow, {
+    restoreWorker = interceptPlayerDownloads(playerWindow, {
       workId: metadata.workId, title: metadata.title, runtimeBasePath: metadata.runtimeBasePath,
       nativeUrl: nativeResources?.url, signal: lifetime.signal,
-      onError: error => onLog("error", `导出存档失败：${formatLogValue(error)}`),
+      onScreenshot,
+      onError: error => onLog("error", `处理播放器文件失败：${formatLogValue(error)}`),
     });
     const args: string[] = [];
     if (metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");

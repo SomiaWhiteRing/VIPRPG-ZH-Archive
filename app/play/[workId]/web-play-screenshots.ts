@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlayerSession } from "./web-play-player";
+import type { PlayerScreenshot } from "./web-play-player";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { saveAndroidScreenshot } from "@/lib/browser/android-screenshots";
 import {
@@ -47,16 +47,16 @@ export function useWebPlayScreenshots(workId: number, title: string) {
     };
   }, [workId]);
 
-  const capture = useCallback(async (player: PlayerSession | null) => {
+  const capture = useCallback(async (readScreenshot: () => Promise<PlayerScreenshot>) => {
     const signal = lifetimeRef.current?.signal;
-    if (!player || !signal || signal.aborted || loading || capturingRef.current) return;
+    if (!signal || signal.aborted || loading || capturingRef.current) return;
     capturingRef.current = true;
     setCapturing(true);
     try {
       const android = isAndroidClient();
       signal.throwIfAborted();
       const capturedAt = Date.now();
-      const image = await player.captureScreenshot();
+      const image = await readScreenshot();
       signal.throwIfAborted();
       if (android) {
         await saveAndroidScreenshot(image.blob, workId, title, capturedAt);
