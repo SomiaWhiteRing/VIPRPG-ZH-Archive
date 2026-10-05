@@ -1,4 +1,4 @@
-import { requestOk } from "@/lib/ui/api-response";
+import { ApiResponseError, requestOk } from "@/lib/ui/api-response";
 import { formatBytes, formatDuration } from "@/lib/format";
 
 /// <reference lib="webworker" />
@@ -858,6 +858,11 @@ function assertNotCanceled(playKey: string): void {
 }
 
 function isRetryableInstallError(error: unknown): boolean {
+  if (error instanceof ApiResponseError) {
+    return (error.status === 0 && error.code === "network_error") ||
+      error.status === 408 || error.status === 429 ||
+      (error.status >= 500 && error.status < 600);
+  }
   const message = error instanceof Error ? error.message : String(error);
 
   if (message === "安装已取消。") {

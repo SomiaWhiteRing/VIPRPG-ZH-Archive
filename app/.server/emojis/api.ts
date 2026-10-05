@@ -40,7 +40,10 @@ export const emojiJson = (body: object) =>
     { headers: { "Cache-Control": "no-store" } },
   );
 export async function emojiRequestBody(request: Request) {
-  return readJsonObject(request, "请求格式无效。", { maximumBytes: 64 * 1024 });
+  return readJsonObject(request, "请求格式无效。", {
+    maximumBytes: 64 * 1024,
+    invalidJsonMessage: "JSON 格式无效。",
+  });
 }
 emojiApi.all("/api/emojis", async (c) => {
   if (c.req.method === "OPTIONS")

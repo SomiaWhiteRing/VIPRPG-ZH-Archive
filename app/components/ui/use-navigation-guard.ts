@@ -26,6 +26,8 @@ export function useRouterNavigationGuard(shouldBlock: BlockerFunction, confirm: 
   const blocker = useBlocker(
     (transition) => !accepted.current && current.current.shouldBlock(transition),
   );
+  const pendingBlocker = useRef(blocker);
+  pendingBlocker.current = blocker;
 
   useEffect(() => {
     if (blocker.state !== "blocked" || handling.current) return;
@@ -35,17 +37,23 @@ export function useRouterNavigationGuard(shouldBlock: BlockerFunction, confirm: 
       .then(() => current.current.confirm())
       .then(
         (leave) => {
-          if (!active) return;
-          if (leave) blocker.proceed();
-          else blocker.reset();
+          const latest = pendingBlocker.current;
+          if (!active || latest.state !== "blocked") return;
+          if (leave) latest.proceed();
+          else latest.reset();
         },
-        () => { if (active) blocker.reset(); },
+        () => {
+          const latest = pendingBlocker.current;
+          if (active && latest.state === "blocked") latest.reset();
+        },
       )
       .finally(() => {
         if (active) handling.current = false;
       });
     return () => { active = false; handling.current = false; };
-  }, [blocker]);
+    // Repeated navigation changes the target while the same confirmation or
+    // asynchronous cleanup is pending. Resolve it once against the latest target.
+  }, [blocker.state]);
 
   // Use only after the caller has saved or explicitly confirmed its local change.
   return useCallback(
