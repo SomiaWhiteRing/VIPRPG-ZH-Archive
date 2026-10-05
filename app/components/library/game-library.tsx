@@ -23,7 +23,6 @@ export type GameLibraryData = Awaited<ReturnType<typeof loadGameLibrary>>;
 const REFERENCE_DURATIONS = [
   { value: "", label: "全部" },
   ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: value })),
-  { value: "custom", label: "自定义" },
 ];
 
 export function GameLibrary({
@@ -319,19 +318,18 @@ export function GameLibrary({
               /> */}
             </FilterSection>
             <FilterSection label="参考时长">
-              <CollapsibleFilterLinks
-                options={REFERENCE_DURATIONS.map(({ value, label }) => ({
-                  active: referenceDuration === value,
-                  href: gamesHref({
+              {REFERENCE_DURATIONS.map(({ value, label }) => (
+                <FilterLink
+                  key={value}
+                  active={referenceDuration === value}
+                  href={gamesHref({
                     ...activeParams,
                     duration: value || undefined,
                     page: undefined,
-                  }),
-                  label,
-                  value,
-                }))}
-                visibleCount={4}
-              />
+                  })}
+                  label={label}
+                />
+              ))}
             </FilterSection>
             <FilterSection label="语言">
               <CollapsibleFilterLinks

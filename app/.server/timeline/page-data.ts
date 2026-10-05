@@ -6,7 +6,7 @@ import { getForumRuntime } from "@/app/.server/forum/context";
 import { homeTopics } from "@/app/.server/forum/public-queries";
 import { pickPageFields } from "@/app/.server/page-data";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { TIMELINE_KINDS, isTimelineView } from "@/lib/dto/db/timeline";
+import { TIMELINE_FILTER_KINDS, isTimelineView } from "@/lib/dto/db/timeline";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
 
@@ -17,8 +17,8 @@ export async function readTimelinePage(runtime: AppRuntime, url: URL) {
   const view = query.get("view") ?? settings?.defaultView ?? "all";
   if (!isTimelineView(view)) throw new Response("时间线范围无效", { status: 400 });
   if (view !== "all" && !viewer) await requireAccountUser(runtime, url.pathname + url.search);
-  const kind = TIMELINE_KINDS.find((value) => value === query.get("kind"));
-  const cursor = query.get("cursor");
+  const kind = TIMELINE_FILTER_KINDS.find((value) => value === query.get("kind"));
+  const cursor = query.has("kind") && !kind ? null : query.get("cursor");
   let page;
   try {
     page = await listTimeline(runtime, { viewerId: viewer?.id, actorUserId: view === "mine" ? viewer?.id : undefined, following: view === "following", kind, cursor });
