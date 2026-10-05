@@ -2,7 +2,9 @@ import { requestOk } from "@/lib/ui/api-response";
 
 import { MentionPicker } from "./mention-picker";
 import { mentionToken, readMention, type MentionUser } from "@/lib/mentions";
-import { bodyLength, emojiIds, emojiToken, type FaceEmoji } from "@/lib/face-emojis";
+import { bodyLength, forumBodyLength, emojiIds, emojiToken, type FaceEmoji } from "@/lib/face-emojis";
+import { FORUM_ELEMENT_COUNT, forumElementToken } from "@/lib/forum-elements";
+import { ForumElementNode } from "@/app/discussions/element-node";
 import { EditorEmojis, FaceEmojiNode } from "@/app/components/emojis/editor-node";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { Button } from "@/app/components/ui/button";
@@ -41,6 +43,7 @@ export type BodyEditorHandle = {
   insertFiles: (files: File[]) => void;
   insertText: (text: string) => void;
   insertEmoji: (emoji: FaceEmoji, options?: { focus?: boolean }) => void;
+  insertElement: (source: string) => void;
   focus: () => void;
 };
 
@@ -132,6 +135,8 @@ export function BodyEditor({
   ref,
   textOnly = false,
   allowMentions = true,
+  forumElements = false,
+  canEditElements = false,
   maxLength,
   enforceMaxLength = true,
   inputId = "forum-body",
@@ -142,6 +147,8 @@ export function BodyEditor({
 }: {
   textOnly?: boolean;
   allowMentions?: boolean;
+  forumElements?: boolean;
+  canEditElements?: boolean;
   maxLength?: number;
   enforceMaxLength?: boolean;
   inputId?: string;
@@ -161,6 +168,7 @@ export function BodyEditor({
 }) {
   const limit =
     maxLength ?? (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH);
+  const contentLength = forumElements ? forumBodyLength : bodyLength;
   const [mentionOpen, setMentionOpen] = useState(false);
   const mentionBookmark = useRef<SelectionBookmark | null>(null);
   const mentionHost = useRef<HTMLDivElement>(null);
@@ -208,6 +216,7 @@ export function BodyEditor({
       Text,
       HardBreak,
       ...(textOnly ? [] : [ForumImageNode]),
+      ...(forumElements ? [ForumElementNode.configure({ canEdit: canEditElements })] : []),
       FaceEmojiNode,
       ...(allowMentions ? [UserMentionNode] : []),
       UndoRedo,
@@ -222,7 +231,8 @@ export function BodyEditor({
                 if (!transaction.docChanged) return true;
                 const value = readDocument(transaction.doc, assets);
                 return (
-                  (!enforceMaxLength || bodyLength(value.body) <= limit) &&
+                  (!enforceMaxLength || contentLength(value.body) <= limit) &&
+                  (!forumElements || (value.body.match(/:html_/g)?.length ?? 0) <= FORUM_ELEMENT_COUNT) &&
                   value.images.length <= FORUM_IMAGE_COUNT &&
                   new Set(value.images.map((image) => image.key)).size ===
                     value.images.length
@@ -233,7 +243,7 @@ export function BodyEditor({
         },
       }),
     ],
-    content: editorDocument(body, images, allowMentions),
+    content: editorDocument(body, images, allowMentions, forumElements),
     editorProps: {
       attributes: {
         id: inputId,
@@ -281,6 +291,8 @@ export function BodyEditor({
               ? mentionToken({ id: node.attrs.id, displayName: node.attrs.displayName })
             : node.type.name === "faceEmoji"
               ? emojiToken(node.attrs.id)
+              : node.type.name === "forumElement"
+                ? forumElementToken(node.attrs.source)
               : "",
         ),
       handlePaste: (_view, event, slice) => {
@@ -334,7 +346,7 @@ export function BodyEditor({
         current.images.map((image) => [image.key, image.offset]),
       ) !== JSON.stringify(images.map((image) => [image.key, image.offset]))
     ) {
-      editor.commands.setContent(editorDocument(body, images, allowMentions), {
+      editor.commands.setContent(editorDocument(body, images, allowMentions, forumElements), {
         emitUpdate: false,
       });
     } else {
@@ -356,7 +368,7 @@ export function BodyEditor({
             .setMeta("preventUpdate", true),
         );
     }
-  }, [editor, body, images, assets, allowMentions]);
+  }, [editor, body, images, assets, allowMentions, forumElements]);
   useEffect(() => {
     editor?.setEditable(!busy, false);
   }, [editor, busy]);
@@ -387,7 +399,7 @@ export function BodyEditor({
       );
       transaction.replaceSelection(slice).scrollIntoView();
       const result = readDocument(transaction.doc, assets);
-      if (enforceMaxLength && bodyLength(result.body) > limit)
+      if (enforceMaxLength && contentLength(result.body) > limit)
         throw new Error("正文超过单帖限制，请减少后再插入。");
       editor.view.dispatch(transaction);
       editor.view.dispatch(closeHistory(editor.state.tr));
@@ -478,7 +490,7 @@ export function BodyEditor({
         const transaction = editor.state.tr.setSelection(selection).replaceSelectionWith(editor.schema.nodes.userMention.create(user));
         transaction.insertText(" ");
         const value = readDocument(transaction.doc, assets);
-        if (enforceMaxLength && bodyLength(value.body) > limit) { onError("正文超过字数限制，请减少后再提及。"); return; }
+        if (enforceMaxLength && contentLength(value.body) > limit) { onError("正文超过字数限制，请减少后再提及。"); return; }
         editor.view.dispatch(transaction);
       } else if (selection && restoreFocus) {
         editor.commands.setTextSelection(selection.to);
@@ -513,7 +525,16 @@ export function BodyEditor({
     },
     insertText: (text) => {
       if (!busy && !pending.current)
-        editor?.chain().focus().insertContent(textContent(text, allowMentions)).run();
+        editor?.chain().focus().insertContent(textContent(text, allowMentions, forumElements)).run();
+    },
+    insertElement: (source) => {
+      if (!forumElements || !canEditElements || !editor || busy || pending.current) return;
+      const value = readDocument(editor.state.doc, assets);
+      if ((value.body.match(/:html_/g)?.length ?? 0) >= FORUM_ELEMENT_COUNT) {
+        onError("每帖最多 5 个浏览器元素。");
+        return;
+      }
+      editor.chain().focus().insertContent({ type: "forumElement", attrs: { source } }).run();
     },
     focus: () => {
       editor?.commands.focus();

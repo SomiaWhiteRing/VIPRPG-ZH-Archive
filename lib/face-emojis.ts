@@ -1,4 +1,5 @@
 import { mentionText } from "./mentions";
+import { forumElementText } from "./forum-elements";
 import type { CharacterPortrait } from "@/lib/character-names";
 
 export type FaceEmojiCell = { blobSha256: string; row: number; column: number };
@@ -53,10 +54,13 @@ export function emojiIds(body: string): number[] {
   ];
 }
 export function emojiText(body: string): string {
-  return mentionText(body.replace(FACE_EMOJI_PATTERN, "[表情]"));
+  return mentionText(forumElementText(body).replace(FACE_EMOJI_PATTERN, "[表情]"));
 }
 export function bodyLength(body: string): number {
   return [...mentionText(body.replace(FACE_EMOJI_PATTERN, "\ufffc"))].length;
+}
+export function forumBodyLength(body: string): number {
+  return bodyLength(forumElementText(body));
 }
 export function emojiCellKey(cell: FaceEmojiCell): string {
   return `${cell.blobSha256}:${cell.row}:${cell.column}`;

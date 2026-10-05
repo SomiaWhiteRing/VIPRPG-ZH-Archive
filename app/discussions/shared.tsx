@@ -5,6 +5,8 @@ import { MentionText } from "@/app/components/comments/mention-text";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
 import { emojiIds } from "@/lib/face-emojis";
+import { FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
+import { BrowserElement } from "./browser-element";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -152,12 +154,15 @@ export function ForumBody({
   inline?: boolean;
 }) {
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
-  const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:)`, "g"));
+  const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g"));
+  const Wrapper = inline ? "span" : "div";
   return (
-    <span
+    <Wrapper
       className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
     >
       {segments.map((part, index) => {
+        const source = !inline ? readForumElement(part) : null;
+        if (source !== null) return <BrowserElement key={index} source={source} />;
         if (/^:face_[1-9]\d{0,15}:$/.test(part))
           return (
             <FaceEmojiView
@@ -176,7 +181,7 @@ export function ForumBody({
         );
         return <MentionText key={index} text={part} />;
       })}
-    </span>
+    </Wrapper>
   );
 }
 export function ForumModal({

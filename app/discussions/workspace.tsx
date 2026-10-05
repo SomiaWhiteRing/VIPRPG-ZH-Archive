@@ -694,6 +694,7 @@ export function DiscussionWorkspace({
       <ForumEditor
         key={draft.editorId}
         draft={draft}
+        canInsertElements={viewer?.elements}
         onChange={(next) => {
           if (draftValue(next) !== draftValue(draft))
             next.requestKey = crypto.randomUUID();

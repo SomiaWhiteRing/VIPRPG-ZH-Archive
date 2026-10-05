@@ -98,6 +98,7 @@ export function forumViewer(user: ArchiveUser | null): ForumViewer {
         moderate: hasPermission(user, "forum.content.moderate_any"),
         feature: hasPermission(user, "forum.topic.feature_any"),
         tags: hasPermission(user, "forum.tag.manage"),
+        elements: user.status === "active" && user.isBootstrapAdmin,
       }
     : null;
 }

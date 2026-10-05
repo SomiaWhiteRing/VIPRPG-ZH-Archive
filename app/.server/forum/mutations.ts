@@ -1,7 +1,8 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
-import { bodyLength } from "@/lib/face-emojis";
+import { forumBodyLength } from "@/lib/face-emojis";
+import { canInsertForumElements, FORUM_ELEMENT_COUNT, FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
 import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
 
 import { type ForumAction, type ForumTarget, FORUM_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_REPORT_REASONS, FORUM_TITLE_LENGTH, FORUM_WRITES_PER_MINUTE, forumTagError, forumTagKey, normalizeForumTag } from "@/lib/forum";
@@ -34,7 +35,7 @@ const rateSql = `((SELECT COUNT(*) FROM forum_posts WHERE user_id=? AND created_
   (SELECT COUNT(*) FROM forum_post_comments WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_content_reports WHERE user_id=? AND created_at>=datetime('now','-1 minute'))) < ${FORUM_WRITES_PER_MINUTE}`;
 export function forumText(value: unknown, max: number, label: string): string {
-  if (typeof value !== "string" || !value.trim() || (label === "正文" ? bodyLength(value.trim()) : value.trim().length) > max)
+  if (typeof value !== "string" || !value.trim() || (label === "正文" ? forumBodyLength(value.trim()) : value.trim().length) > max)
     throw new HttpError(400, `${label}需要 1–${max} 个字符。`);
   return value.trim().replace(/\r\n?/g, "\n");
 }
@@ -50,9 +51,29 @@ function mixedBody(
         ? FORUM_POST_BODY_LENGTH
         : FORUM_COMMENT_LENGTH;
   if (!images.length) return forumText(value, limit, "正文");
-  if (typeof value !== "string" || bodyLength(value) > limit || value.includes("\r"))
+  if (typeof value !== "string" || forumBodyLength(value) > limit || value.includes("\r"))
     throw new HttpError(400, "正文长度或换行格式无效。");
   return value;
+}
+function elementGuard(body: string, kind: ForumTarget["kind"], actor: ArchiveUser) {
+  const elements = [...body.matchAll(FORUM_ELEMENT_PATTERN)];
+  if (body.replace(FORUM_ELEMENT_PATTERN, "").includes(":html_") ||
+    elements.length > FORUM_ELEMENT_COUNT || elements.some((match) => readForumElement(match[0]) === null))
+    throw new HttpError(400, "浏览器元素格式无效，每帖最多 5 个，每个源码最多 12000 个字符。");
+  if (!elements.length) return { sql: "1", args: [] as Bind[] };
+  if (kind === "comment") throw new HttpError(400, "楼内回复不支持浏览器元素。");
+  if (!canInsertForumElements(actor)) throw new HttpError(403, "只有超级管理员可以保存浏览器元素。");
+  // Recheck the root role in the guarded write, so a stale auth snapshot cannot
+  // add executable content after role revocation.
+  return {
+    sql: "EXISTS(SELECT 1 FROM user_roles element_member JOIN roles element_role ON element_role.id=element_member.role_id WHERE element_member.user_id=? AND element_role.kind='bootstrap_admin' AND element_role.status='active')",
+    args: [actor.id] as Bind[],
+  };
+}
+function contentGuard(images: string[], actor: ArchiveUser, body: string, kind: ForumTarget["kind"], postId = 0) {
+  const attachments = imageGuard(images, actor.id, postId);
+  const elements = elementGuard(body, kind, actor);
+  return { sql: `(${attachments.sql}) AND (${elements.sql})`, args: [...attachments.args, ...elements.args] };
 }
 function id(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
@@ -288,8 +309,8 @@ export async function publishForum(
     .first<{ allowed: number }>();
   if (!count?.allowed) throw new HttpError(429, "操作过于频繁，请稍后再试。");
   const images = imageIds(input.images, kind === "comment");
-  const attachments = imageGuard(images, actor.id);
   const body = mixedBody(input.body, images, kind);
+  const attachments = contentGuard(images, actor, body, kind);
   await validateBodyEmojis(ctx.db, body);
   await validateMentions(ctx.db, body);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
@@ -507,8 +528,8 @@ export async function editForum(
   if (topic.locked) throw new HttpError(409, "主题已锁定，不能编辑。");
   if (row.revision !== input.revision) conflict();
   const images = imageIds(input.images, target.kind === "comment");
-  const attachments = imageGuard(images, actor.id, row.id);
   const body = mixedBody(input.body, images, target.kind);
+  const attachments = contentGuard(images, actor, body, target.kind, row.id);
   await validateBodyEmojis(ctx.db, body, row.body ?? "");
   await validateMentions(ctx.db, body, row.body ?? "");
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);

@@ -144,6 +144,7 @@ export type ForumViewer = {
   moderate: boolean;
   feature: boolean;
   tags: boolean;
+  elements: boolean;
 } | null;
 
 export function forumPage(value: unknown): number {
