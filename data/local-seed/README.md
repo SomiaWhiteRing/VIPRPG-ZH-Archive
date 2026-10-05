@@ -220,3 +220,6 @@ The genre grouping refresh applies `0009_work_genre_groups.sql` and records it
 in the migration ledger. The three existing spellings remain unchanged and
 initially belong to separate groups. Public suggestion counts are backfilled;
 the two built-in administrator roles receive `genre.manage`.
+
+The single game-comment pin refresh applies `0037_single_pinned_work_comment.sql`
+and records it in the migration ledger. All captured business rows are preserved.
