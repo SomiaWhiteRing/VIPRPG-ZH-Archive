@@ -84,6 +84,7 @@ export default [
     route("works/:workId", "admin/works/[workId]/page.tsx"),
   ]),
   route("me", "me/layout.tsx", [
+    route("connections", "me/connections/page.tsx"),
     route("catalogs", "me/catalogs/page.tsx"),
     route("comments", "me/comments/page.tsx"),
     route("discussions", "me/discussions/page.tsx"),

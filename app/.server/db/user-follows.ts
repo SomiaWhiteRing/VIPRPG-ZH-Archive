@@ -75,9 +75,17 @@ export async function setUserFollow(runtime: AppRuntime, actorId: number, target
 }
 
 export async function listUserFollows(runtime: AppRuntime, userId: number, direction: FollowDirection, cursor?: string | null, limit = 30): Promise<FollowPage> {
+  return listFollows(runtime, userId, direction, true, cursor, limit);
+}
+
+export async function listOwnUserFollows(runtime: AppRuntime, user: ArchiveUser, direction: FollowDirection, cursor?: string | null, limit = 30): Promise<FollowPage> {
+  return listFollows(runtime, user.id, direction, false, cursor, limit);
+}
+
+async function listFollows(runtime: AppRuntime, userId: number, direction: FollowDirection, publicOnly: boolean, cursor?: string | null, limit = 30): Promise<FollowPage> {
   if (direction !== "following" && direction !== "followers") throw new HttpError(400, "好友列表类型无效");
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 30) throw new HttpError(400, "好友列表数量无效");
-  if (!await getD1(runtime).prepare("SELECT 1 FROM users WHERE id=? AND status='active' AND profile_show_friends=1").bind(userId).first()) throw new HttpError(404, "好友列表不存在");
+  if (!await getD1(runtime).prepare(`SELECT 1 FROM users WHERE id=? AND status='active'${publicOnly ? " AND profile_show_friends=1" : ""}`).bind(userId).first()) throw new HttpError(404, "好友列表不存在");
   const owner = direction === "following" ? "follower_user_id" : "followed_user_id";
   const other = direction === "following" ? "followed_user_id" : "follower_user_id";
   let position: { at: string; id: number; userId: number; direction: FollowDirection } | null = null;
@@ -91,7 +99,7 @@ export async function listUserFollows(runtime: AppRuntime, userId: number, direc
   const args: (number | string)[] = [userId];
   if (position) args.push(position.at, position.id);
   const result = await getD1(runtime).prepare(`SELECT u.id,u.display_name,u.avatar_blob_sha256,f.created_at
-    FROM user_follows f JOIN users list_owner ON list_owner.id=f.${owner} AND list_owner.status='active' AND list_owner.profile_show_friends=1
+    FROM user_follows f JOIN users list_owner ON list_owner.id=f.${owner} AND list_owner.status='active'${publicOnly ? " AND list_owner.profile_show_friends=1" : ""}
     JOIN users u ON u.id=f.${other} AND u.status='active'
     WHERE f.${owner}=? ${position ? `AND (f.created_at,f.${other})<(?,?)` : ""}
     ORDER BY f.created_at DESC,f.${other} DESC LIMIT ?`).bind(...args, limit + 1)

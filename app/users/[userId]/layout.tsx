@@ -8,7 +8,7 @@ import { listUserFollows, readFollowSummary } from "@/app/.server/db/user-follow
 import { listTimeline } from "@/app/.server/db/timeline";
 import { UserFollowControls } from "@/app/components/timeline/user-follow-controls";
 import { AccountSection } from "@/app/components/profile/account-content";
-import { FriendList } from "@/app/components/profile/friend-list";
+import { FriendSection } from "@/app/components/profile/friend-section";
 import { TimelineWorkspace } from "@/app/components/timeline/timeline-workspace";
 import { hasProfileOverviewSections } from "@/lib/user-profile";
 import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
@@ -50,9 +50,13 @@ export default function PublicUserLayout() {
     <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} expandReplies={false} />
   </AccountSection> : null;
   const children = isOverview && !hasSidebar ? timelineSection : <Outlet />;
-  const friendSection = friends ? <AccountSection href={`/users/${user.id}/connections?view=following`} title="好友" divided={!hasSidebar}>
-    {friends.items.length > 0 ? <FriendList users={friends.items} /> : null}
-  </AccountSection> : null;
+  const friendsHref = `/users/${user.id}/connections?view=following`;
+  const overviewContent = <div className="grid min-w-0 grid-cols-1 gap-7">
+    {children}
+    {friends ? <div className={hasSidebar ? "min-[981px]:hidden" : undefined}>
+      <FriendSection href={friendsHref} users={friends.items} />
+    </div> : null}
+  </div>;
   return (
     <PageContainer className={hasSidebar ? undefined : "w-full max-w-5xl px-4 sm:px-6"}>
       <div className="grid min-w-0 grid-cols-1 gap-6">
@@ -86,12 +90,12 @@ export default function PublicUserLayout() {
           compactSidebar
           stretchSidebar
           sidebarLabel="个人时间线与好友概览"
-          main={children}
+          main={overviewContent}
           sidebar={<div className="hidden min-w-0 gap-7 min-[981px]:grid min-[981px]:h-full min-[981px]:content-start">
             {timelineSection}
-            {friendSection}
+            {friends ? <FriendSection href={friendsHref} users={friends.items} divided={false} /> : null}
           </div>}
-        /> : <div className="grid min-w-0 grid-cols-1 gap-7">{children}{friendSection && <div className="hidden min-[981px]:block">{friendSection}</div>}</div>}
+        /> : overviewContent}
       </div>
     </PageContainer>
   );
