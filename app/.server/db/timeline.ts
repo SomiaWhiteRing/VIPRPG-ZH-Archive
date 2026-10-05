@@ -87,7 +87,7 @@ const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body
     WHEN e.kind='discussion' THEN (SELECT COUNT(*) FROM forum_public_posts p WHERE p.topic_id=ft.id AND p.post_number>1)
     ELSE NULL END AS source_reply_count,
   c.work_id AS comment_work_id,c.creator_id AS comment_creator_id,c.character_id AS comment_character_id,
-  c.body AS source_body,
+  cat.description AS catalog_description,c.body AS source_body,
   ft.id AS topic_id,fp.post_number,
   (SELECT favorite_note FROM user_work_entries f WHERE f.user_id=e.user_id AND f.work_id=e.work_id AND f.favorited_at IS NOT NULL) AS favorite_note`;
 type TimelineRow = {
@@ -99,7 +99,7 @@ type TimelineRow = {
   preview_work_genre: string | null; preview_work_engine: string | null; preview_work_cover: string | null;
   source_reply_count: number | null;
   comment_work_id: number | null; comment_creator_id: number | null; comment_character_id: number | null;
-  source_body: string | null; topic_id: number | null; post_number: number | null; favorite_note: string | null;
+  catalog_description: string | null; source_body: string | null; topic_id: number | null; post_number: number | null; favorite_note: string | null;
   like_count: number; reply_count: number; liked_by_me: number;
 };
 type Cursor = { at: string; id: number; actor: number | null; kind: TimelineKind | null; followingUserId: number | null; followingRevision: number | null };
@@ -124,6 +124,7 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
   const sourceText = row.kind === "favorite" ? emojiText(row.favorite_note ?? "") : "";
   const body = row.kind === "status" ? timelineBody(row.body ?? "", emojis)
     : row.kind === "comment" ? timelineBody(mentionText(row.source_body ?? ""), emojis, 180)
+    : row.kind === "catalog" && row.catalog_description ? [{ type: "text" as const, text: row.catalog_description }]
     : sourceText ? [{ type: "text" as const, text: sourceText.slice(0, 180) + (sourceText.length > 180 ? "…" : "") }] : [];
   const text = row.kind === "status" ? row.body ?? "" : body.map((segment) => segment.type === "text" ? segment.text : "[表情]").join("");
   return { id: row.id, kind: row.kind, action: row.action, createdAt: row.created_at, updatedAt: row.updated_at,

@@ -22,7 +22,7 @@ export function headers() { return { "Cache-Control": "private, no-store" }; }
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) => pageMetaDescriptors({ title: [loaderData?.displayName || "用户", "时间线"] }, error);
 export default function UserTimelinePage() {
   const values = useLoaderData<typeof loader>();
-  return <section aria-label="个人时间线"><TimelineWorkspace {...values} profile /></section>;
+  return <section aria-label="个人时间线"><TimelineWorkspace {...values} profile showAuthor={false} /></section>;
 }
 
 export { TimelineError as ErrorBoundary } from "@/app/components/timeline/timeline-error";
