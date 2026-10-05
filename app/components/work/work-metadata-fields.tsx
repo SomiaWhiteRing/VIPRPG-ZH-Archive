@@ -151,7 +151,7 @@ export function WorkMetadataFields({
               value={form.referenceDurationCustom ? "custom" : form.referenceDuration}
               customValue={form.referenceDuration}
               customOption="custom"
-              placeholder="选择参考时长"
+              placeholder=""
               disabled={disabled}
               maxLength={WORK_REFERENCE_DURATION_MAX_LENGTH}
               onChange={(value, customValue) => setForm((current) => ({
