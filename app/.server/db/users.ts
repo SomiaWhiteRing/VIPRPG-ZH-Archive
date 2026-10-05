@@ -40,6 +40,7 @@ import { HttpError } from "@/lib/http";
 import { assertAccountDeletionRequest } from "@/app/.server/auth/account-deletion";
 import { hashVerificationCode } from "@/app/.server/auth/tokens";
 import { consumeLatestEmailChallenge } from "@/app/.server/db/auth-challenges";
+import { accountPreferencesUpdateStatement } from "@/app/.server/db/account-preferences";
 import { assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
 
 type UserAuthRow = UserRow & {
@@ -434,6 +435,7 @@ export async function updateOwnProfileVisibility(
     user: ArchiveUser;
     visibility: ProfileVisibility;
     notifyFriendAdditions?: boolean;
+    preferencesForm?: FormData;
   },
 ): Promise<void> {
   await getD1(runtime).batch([
@@ -461,6 +463,7 @@ export async function updateOwnProfileVisibility(
         `INSERT INTO auth_audit_logs(user_id,email,event_type) VALUES(?,?,'profile_visibility_updated')`,
       )
       .bind(input.user.id, input.user.email),
+    ...(input.preferencesForm ? [accountPreferencesUpdateStatement(runtime, input.user.id, input.preferencesForm)] : []),
   ]);
 }
 

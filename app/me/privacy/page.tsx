@@ -10,7 +10,7 @@ import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
-import { AccountPreferencesForm } from "./account-preferences-form";
+import { AccountPreferencesFields } from "./account-preferences-fields";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -77,9 +77,10 @@ export default function PrivacyPage() {
   return (
     <div>
       <AccountPageHeader title="隐私与偏好" />
-      <RedirectFeedback success={{ privacyUpdated: "隐私设置已更新。", preferencesUpdated: "偏好设置已更新。" }} />
+      <RedirectFeedback success={{ settingsUpdated: "隐私与偏好已更新。", privacyUpdated: "隐私设置已更新。", preferencesUpdated: "偏好设置已更新。" }} />
 
       <RedirectForm action="/api/account/privacy" method="post">
+        <input name="section" type="hidden" value="all" />
         <h2 className="mb-3 text-lg font-semibold">隐私</h2>
         <input name="showFriends" type="hidden" value="0" />
         <input name="notifyFriendAdditions" type="hidden" value="0" />
@@ -94,11 +95,9 @@ export default function PrivacyPage() {
             </div>
           ))}
         </div>
-        <div className="mt-5">
-          <Rm2kButton type="submit">保存隐私设置</Rm2kButton>
-        </div>
+        <AccountPreferencesFields preferences={preferences} />
+        <div className="mt-5"><Rm2kButton type="submit">保存设置</Rm2kButton></div>
       </RedirectForm>
-      <AccountPreferencesForm preferences={preferences} />
     </div>
   );
 }

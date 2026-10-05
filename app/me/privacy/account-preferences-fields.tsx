@@ -9,11 +9,9 @@ import { SortableListItem, SortableOverlay } from "@/app/components/ui/sortable-
 import { Check, GripVertical } from "lucide-react";
 import { ACCOUNT_SHORTCUTS, COLOR_THEME_OPTIONS, parseColorTheme, type AccountPreferences } from "@/lib/account-preferences";
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
-import { RedirectForm } from "@/app/components/ui/redirect-form";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { useColorThemePreview } from "@/app/components/color-theme-preview";
 
-export function AccountPreferencesForm({ preferences }: { preferences: AccountPreferences }) {
+export function AccountPreferencesFields({ preferences }: { preferences: AccountPreferences }) {
   const [colorTheme, setColorTheme] = useState(preferences.colorTheme);
   const setThemePreview = useColorThemePreview();
   useLayoutEffect(() => {
@@ -43,8 +41,7 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
   const rowClassName = (checked: boolean) => `flex min-h-11 items-center gap-3 rounded px-2 py-1 ${checked ? "bg-primary/10" : ""}`;
 
   return (
-    <RedirectForm action="/api/account/privacy" method="post" className="mt-6">
-      <input name="section" type="hidden" value="preferences" />
+    <div className="mt-6">
       <input name="shortcuts" type="hidden" value={JSON.stringify(order.filter((href) => selected.has(href)))} />
       <h2 className="mb-3 text-lg font-semibold">偏好</h2>
       <input name="colorTheme" type="hidden" value={colorTheme} />
@@ -152,7 +149,6 @@ export function AccountPreferencesForm({ preferences }: { preferences: AccountPr
           </div>}
         </SortableOverlay>
       </DndContext>
-      <div className="mt-5"><Rm2kButton type="submit">保存偏好设置</Rm2kButton></div>
-    </RedirectForm>
+    </div>
   );
 }
