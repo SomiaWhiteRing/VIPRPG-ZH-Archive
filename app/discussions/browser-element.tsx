@@ -1,120 +1,117 @@
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { browserInfo } from "@/lib/ui/browser-info";
 import { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 
-const MESSAGE = "viprpg-forum-element-v1";
-const TEXT_LIMIT = 32_000;
+let closeManualCopy: (() => void) | undefined;
 
-// No same-origin sandbox privilege: custom scripts cannot read the parent DOM,
-// session cookies, IndexedDB, OPFS or invoke authenticated site APIs.
-function elementDocument(source: string): string {
-  const bridge = `<script>
-    (() => {
-      let sequence = 0;
-      const pending = new Map();
-      const request = (action, text) => new Promise((resolve, reject) => {
-        const id = ++sequence;
-        const timer = setTimeout(() => { pending.delete(id); reject(new Error('操作超时，请重试。')); }, 10000);
-        pending.set(id, { resolve, reject, timer });
-        parent.postMessage({ type: '${MESSAGE}', action, id, text }, '*');
-      });
-      window.viprpg = {
-        copyText: (text) => request('copyText', text),
-        copyBrowserInfo: () => request('copyBrowserInfo')
-      };
-      addEventListener('message', (event) => {
-        if (event.source !== parent || event.data?.type !== '${MESSAGE}') return;
-        const item = pending.get(event.data.id);
-        if (!item) return;
-        clearTimeout(item.timer);
-        pending.delete(event.data.id);
-        if (event.data.error) item.reject(new Error(event.data.error));
-        else item.resolve({ copied: event.data.copied });
-      });
-      const measure = () => parent.postMessage({ type: '${MESSAGE}', action: 'resize', height: document.documentElement.scrollHeight }, '*');
-      addEventListener('load', () => {
-        measure();
-        if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(document.body);
-        if (typeof MutationObserver !== 'undefined') new MutationObserver(measure).observe(document.body, { childList: true, subtree: true, characterData: true });
-      });
-    })();
-  </script>`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"><style>html,body{margin:0;overflow-wrap:anywhere}body{display:flow-root}*{box-sizing:border-box}</style>${bridge}</head><body>${source}</body></html>`;
+function ManualCopy({ text, onClose }: { text: string; onClose: () => void }) {
+  const input = useRef<HTMLTextAreaElement>(null);
+  return (
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content className="top-1/2 left-1/2 grid w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 gap-3 rounded-md p-4">
+          <Dialog.Title>手动复制</Dialog.Title>
+          <Dialog.Description className="text-sm text-muted">浏览器未允许自动复制，请选择下面的文本并手动复制。</Dialog.Description>
+          <Label htmlFor="forum-copy-text" className="sr-only">待复制文本</Label>
+          <Textarea ref={input} id="forum-copy-text" readOnly value={text} className="h-64 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => { input.current?.focus(); input.current?.select(); }}>选择全部文本</Button>
+            <Button type="button" onClick={onClose}>关闭</Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
 }
 
-export function BrowserElement({ source }: { source: string }) {
-  const frame = useRef<HTMLIFrameElement>(null);
-  const manual = useRef<HTMLTextAreaElement>(null);
-  const copying = useRef(false);
-  const [height, setHeight] = useState(100);
-  const [text, setText] = useState("");
+async function copyText(text: string): Promise<{ copied: boolean }> {
+  if (typeof text !== "string" || !text || text.length > 32_000)
+    throw new Error("复制文本必须非空且不超过 32000 个字符。");
+  try {
+    await navigator.clipboard.writeText(text);
+    closeManualCopy?.();
+    return { copied: true };
+  } catch {
+    closeManualCopy?.();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const close = () => {
+      root.unmount();
+      container.remove();
+      closeManualCopy = undefined;
+    };
+    closeManualCopy = close;
+    root.render(<ManualCopy text={text} onClose={close} />);
+    return { copied: false };
+  }
+}
+
+const elementApi = {
+  copyText,
+  copyBrowserInfo: async () => copyText(await browserInfo()),
+};
+
+export function BrowserElement({ source, interactive = true }: { source: string; interactive?: boolean }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    async function receive(event: MessageEvent) {
-      if (!frame.current || event.source !== frame.current.contentWindow || event.data?.type !== MESSAGE) return;
-      const data = event.data;
-      if (data.action === "resize") {
-        if (typeof data.height === "number" && Number.isFinite(data.height))
-          setHeight(Math.max(48, Math.min(1200, Math.ceil(data.height))));
-        return;
-      }
-      if (!Number.isSafeInteger(data.id) || data.id < 1 || copying.current ||
-        (data.action !== "copyText" && data.action !== "copyBrowserInfo")) return;
-      const target = frame.current.contentWindow;
-      const reply = (result: { copied: boolean } | { error: string }) =>
-        target?.postMessage({ type: MESSAGE, id: data.id, ...result }, "*");
-      // Clicks in a child frame activate its ancestor. Do not grant clipboard
-      // writes to scripts running on load or via synthetic events.
-      const activated = navigator.userActivation?.isActive === true;
-      if (navigator.userActivation ? !activated : document.activeElement !== frame.current) {
-        reply({ error: "请直接点击互动内容中的按钮后重试。" });
-        return;
-      }
-      copying.current = true;
-      try {
-        const value = data.action === "copyBrowserInfo" ? await browserInfo() : data.text;
-        if (typeof value !== "string" || !value || value.length > TEXT_LIMIT)
-          throw new Error("复制文本必须非空且不超过 32000 个字符。");
-        let copied = false;
-        try {
-          if (!activated) throw new Error("浏览器未提供用户激活状态，请手动复制。");
-          await navigator.clipboard.writeText(value);
-          copied = true;
-          setText("");
-        } catch {
-          setText(value);
-        }
-        reply({ copied });
-      } catch (error) {
-        reply({ error: error instanceof Error ? error.message : "操作失败。" });
-      } finally {
-        copying.current = false;
+    const element = host.current;
+    if (!element || !interactive) return;
+    // Only server-authorized, persisted forum elements reach this path. Their
+    // code is trusted site code and intentionally runs in the main document.
+    Object.assign(window, { viprpg: elementApi });
+    const template = document.createElement("template");
+    template.innerHTML = source;
+    element.replaceChildren(template.content.cloneNode(true));
+    let disposed = false;
+
+    async function runScripts() {
+      // innerHTML leaves scripts inert. Fresh script nodes execute natively,
+      // with document.currentScript and the site's real DOM/browser context.
+      for (const original of element!.querySelectorAll("script")) {
+        if (disposed) return;
+        if (!original.isConnected) continue;
+        const script = document.createElement("script");
+        for (const attribute of original.attributes) script.setAttribute(attribute.name, attribute.value);
+        script.textContent = original.textContent;
+        script.async = original.hasAttribute("async");
+        const type = script.type.trim().toLowerCase();
+        const classic = !type || /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)$/.test(type);
+        const skipped = script.noModule && "noModule" in HTMLScriptElement.prototype;
+        const loaded = !skipped && !script.async && (type === "module" || (script.src && classic))
+          ? new Promise<void>((resolve, reject) => {
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error("浏览器元素的脚本加载失败。"));
+            })
+          : null;
+        original.replaceWith(script);
+        if (loaded) await loaded;
       }
     }
-    window.addEventListener("message", receive);
-    return () => window.removeEventListener("message", receive);
-  }, [source]);
+    void runScripts().then(
+      () => { if (!disposed) setError(""); },
+      (reason) => { if (!disposed) setError(reason instanceof Error ? reason.message : "浏览器元素加载失败。"); },
+    );
+    return () => {
+      disposed = true;
+      element.dispatchEvent(new Event("dispose"));
+      element.replaceChildren();
+    };
+  }, [source, interactive]);
 
+  if (!interactive)
+    return <pre className="my-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border p-3 font-mono text-xs">{source}</pre>;
   return (
-    <div className="my-2 grid w-full min-w-0 gap-2 whitespace-normal">
-      <iframe
-        ref={frame}
-        title="帖子互动内容"
-        sandbox="allow-scripts"
-        referrerPolicy="no-referrer"
-        srcDoc={elementDocument(source)}
-        height={height}
-        className="block w-full border-0"
-      />
-      {text ? (
-        <div className="grid min-w-0 gap-2 rounded-md border border-border p-3">
-          <Label>浏览器未允许自动复制，请选择下面的文本并手动复制。</Label>
-          <Textarea ref={manual} aria-label="待复制文本" readOnly value={text} className="h-48 font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
-          <Button type="button" variant="outline" className="w-fit" onClick={() => { manual.current?.focus(); manual.current?.select(); }}>选择全部文本</Button>
-        </div>
-      ) : null}
+    <div className="my-2 grid min-w-0 gap-2 whitespace-normal">
+      <div ref={host} data-forum-browser-element />
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }
