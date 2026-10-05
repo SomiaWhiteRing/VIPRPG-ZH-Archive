@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import type { AppRuntime } from "../app/.server/runtime";
 import type { ArchiveUser } from "../lib/dto/db/user-access";
-import { createOrActivateVerifiedUser, findPublicUserById, findUserById, updateOwnProfile } from "../app/.server/db/users";
+import { createOrActivateVerifiedUser, findPublicUserById, findUserById, setUserStatusForAdmin, updateOwnProfile } from "../app/.server/db/users";
 import { hasProfileOverviewSections } from "../lib/user-profile";
 import { listUserFollows, readFollowSummary, setUserFollow } from "../app/.server/db/user-follows";
 import { createTimelineReply, deleteTimelineReply, listTimelineReplies, setTimelineLike } from "../app/.server/db/timeline-interactions";
@@ -896,7 +896,7 @@ await check("game comment pins survive migration and enforce a single atomic slo
   const pins = (workId: number) => f.number("SELECT COUNT(*) FROM comments WHERE work_id=? AND pinned_at IS NOT NULL", workId);
   assert.equal(pins(1), 1);
   assert.equal(f.number("SELECT id FROM comments WHERE work_id=1 AND pinned_at IS NOT NULL"), 103);
-  assert.equal(f.number("SELECT COUNT(*) FROM comments WHERE id BETWEEN 101 AND 105"), 5, "migration retains comment rows");
+  assert.equal(f.number("SELECT COUNT(*) FROM comments WHERE id BETWEEN 101 AND 106"), 6, "migration retains comment rows");
   const actor = { ...f.actor(1), permissionKeys: ["comment.manage_any"] } as ArchiveUser;
   await pinComment(f.runtime, 103, actor, false);
   const competing = await Promise.allSettled([101, 102].map((id) => pinComment(f.runtime, id, actor, true)));
@@ -922,6 +922,15 @@ await check("game comment pins survive migration and enforce a single atomic slo
   await pinComment(f.runtime, 103, actor, true);
   await moderateComment(f.runtime, winner, actor, "published");
   assert.equal(pins(1), 1, "restoring a comment does not restore its old pin");
+  const accountAdmin = await findUserById(f.runtime, 3);
+  assert.ok(accountAdmin);
+  await setUserStatusForAdmin(f.runtime, { actor: accountAdmin, targetUserId: 1, status: "disabled" });
+  assert.equal(pins(1), 0, "disabling the pin author atomically releases the invisible slot");
+  const replacement = await createComment(f.runtime, { kind: "work", id: 1 }, 2, "Replacement pin");
+  await pinComment(f.runtime, replacement.id, f.actor(2), true);
+  await setUserStatusForAdmin(f.runtime, { actor: accountAdmin, targetUserId: 1, status: "active" });
+  assert.equal(pins(1), 1, "reenabling the old author cannot restore a second pin");
+  assert.equal(f.number("SELECT id FROM comments WHERE work_id=1 AND pinned_at IS NOT NULL"), replacement.id);
   const other = await createComment(f.runtime, { kind: "work", id: 2 }, 1, "Other game");
   await pinComment(f.runtime, other.id, actor, true);
   assert.equal(pins(2), 1, "different games have independent slots");
@@ -933,12 +942,15 @@ await check("game comment pins survive migration and enforce a single atomic slo
   await mergeWorks(f.runtime, f.actor(3), 2, 3);
   assert.equal(pins(3), 1, "merge transfers source pin when target is empty");
 }, false, (sqlite) => {
-  sqlite.exec(`INSERT INTO comments(id,work_id,user_id,body,status,pinned_at) VALUES
+  sqlite.exec(`INSERT INTO users(id,external_auth_id,email,display_name,status)
+    VALUES(6,'disabled-pin-author','disabled-pin@example.test','Disabled pin author','disabled');
+    INSERT INTO comments(id,work_id,user_id,body,status,pinned_at) VALUES
     (101,1,1,'Old pin','published','2020-01-01'),
     (102,1,1,'New pin','published','2021-01-01'),
     (103,1,1,'Same time higher id','published','2021-01-01'),
     (104,1,1,'Hidden','hidden','2022-01-01'),
-    (105,1,1,NULL,'deleted','2023-01-01');`);
+    (105,1,1,NULL,'deleted','2023-01-01'),
+    (106,1,6,'Disabled author','published','2024-01-01');`);
 });
 
 console.log("Timeline persistent contracts passed");
