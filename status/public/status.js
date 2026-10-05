@@ -1,3 +1,19 @@
+import { scrollElementIntoView } from "./scroll.js";
+
+for (const link of document.querySelectorAll('.site-nav a[href^="#"]')) {
+  link.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const hash = link.getAttribute("href");
+    if (!hash) return;
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
+    event.preventDefault();
+    if (window.location.hash !== hash) window.history.pushState(window.history.state, "", hash);
+    target.focus({ preventScroll: true });
+    scrollElementIntoView(target, { behavior: "smooth" });
+  });
+}
+
 const zone = "Asia/Shanghai";
 const stamp = new Intl.DateTimeFormat("zh-CN", {
   timeZone: zone,

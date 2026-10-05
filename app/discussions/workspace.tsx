@@ -305,9 +305,7 @@ export function DiscussionWorkspace({
       )
         element.scrollIntoView({
           block: "center",
-          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "instant"
-            : "smooth",
+          behavior: "instant",
         });
     }
   }, [detail, initialReply, location, navigateAccepted, navigationType]);

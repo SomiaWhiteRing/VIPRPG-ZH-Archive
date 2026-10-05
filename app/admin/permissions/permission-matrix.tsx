@@ -12,6 +12,7 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Table } from "@/app/components/ui/table";
 import { Textarea } from "@/app/components/ui/textarea";
+import { SmoothAnchorLink } from "@/app/components/ui/anchor-navigation";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { type PermissionCategory, PERMISSION_CATEGORIES, PERMISSION_GROUPS, SYSTEM_ROLE_PERMISSIONS, permissionConfigurationWarnings } from "@/lib/authz/permissions";
 
@@ -589,9 +590,9 @@ export function PermissionMatrix({
               className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border pb-2 text-sm"
             >
               {visibleGroups.map((group) => (
-                <a
+                <SmoothAnchorLink
                   className="rounded-sm py-1 text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  href={`#permissions-${group.key}`}
+                  to={`#permissions-${group.key}`}
                   key={group.key}
                   onClick={() =>
                     setCollapsedGroups((current) =>
@@ -600,7 +601,7 @@ export function PermissionMatrix({
                   }
                 >
                   {group.label}
-                </a>
+                </SmoothAnchorLink>
               ))}
             </nav>
             <p className="text-xs text-muted">

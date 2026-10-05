@@ -1,4 +1,5 @@
 import { cn } from "@/lib/ui/cn";
+import { resolveScrollBehavior } from "@/lib/ui/scroll.js";
 import type { ReactNode, Ref } from "react";
 import {
   useCallback,
@@ -11,7 +12,7 @@ import {
 } from "react";
 
 export type VirtualListHandle = {
-  scrollToKey: (key: string) => void;
+  scrollToKey: (key: string, behavior?: ScrollBehavior) => void;
 };
 
 export type VirtualListStickyItem = {
@@ -229,7 +230,7 @@ export function VirtualList({
   useImperativeHandle(
     ref,
     () => ({
-      scrollToKey(key) {
+      scrollToKey(key, behavior = "instant") {
         const index = anchorPositions.get(key) ?? keyPositions.get(key);
         if (index === undefined) return;
         cancelNavigation();
@@ -238,10 +239,7 @@ export function VirtualList({
             ? key
             : (anchorKeys?.[index]?.[0] ?? key),
           startedAt: performance.now(),
-          duration: window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches
-            ? 0
-            : NAVIGATION_DURATION_MS,
+          duration: resolveScrollBehavior(behavior) === "smooth" ? NAVIGATION_DURATION_MS : 0,
           progress: 0,
         };
         navigationFrameRef.current = requestAnimationFrame((time) =>

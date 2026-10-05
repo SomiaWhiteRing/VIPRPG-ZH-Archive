@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Smile } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import type { EmojiGroup } from "@/lib/face-emojis";
 import { cn } from "@/lib/ui/cn";
+import { scrollByOffset } from "@/lib/ui/scroll.js";
 
 export function EmojiPickerTabs({ groups, value, onSelect, disabled = false }: {
   groups: EmojiGroup[];
@@ -49,9 +50,9 @@ export function EmojiPickerTabs({ groups, value, onSelect, disabled = false }: {
   function scroll(direction: number) {
     const node = viewport.current;
     if (!node) return;
-    node.scrollBy({
+    scrollByOffset(node, {
       left: direction * Math.max(96, node.clientWidth * 0.75),
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      behavior: "smooth",
     });
   }
   return <div className="relative min-w-0 flex-1">

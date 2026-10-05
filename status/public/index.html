@@ -8,7 +8,7 @@
     <title>服务状态 · VIPRPG.org</title>
     <link rel="icon" href="/icon/windI.png">
     <link rel="stylesheet" href="/status.css">
-    <script src="/status.js" defer></script>
+    <script src="/status.js" type="module"></script>
   </head>
   <body>
     <div class="page">
@@ -43,7 +43,7 @@
           <div class="overall-meta"><span>最近一次检查</span><strong id="last-check">—</strong></div>
         </section>
 
-        <section id="services" class="service-section" aria-labelledby="services-title">
+        <section id="services" class="service-section" aria-labelledby="services-title" tabindex="-1">
           <div class="section-heading">
             <div><p class="eyebrow">MONITORED SERVICES</p><h2 id="services-title">服务概览</h2></div>
             <div class="history-key"><span class="key-swatch"></span> 近 30 天检查记录</div>
@@ -52,7 +52,7 @@
           <div class="history-axis"><span>30 天前</span><span>今天</span></div>
         </section>
 
-        <section id="incidents" class="incident-section" aria-labelledby="incidents-title">
+        <section id="incidents" class="incident-section" aria-labelledby="incidents-title" tabindex="-1">
           <div class="section-heading">
             <div><p class="eyebrow">INCIDENT HISTORY</p><h2 id="incidents-title">近期事件</h2></div>
             <span class="incident-period">最近 30 天</span>

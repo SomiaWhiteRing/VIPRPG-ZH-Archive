@@ -1,4 +1,5 @@
 import { ApiResponseError, requestJson, requestOk } from "@/lib/ui/api-response";
+import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
 
 
@@ -358,8 +359,10 @@ function CommentCard({
   }, [newReply, loadReplies]);
 
   useEffect(() => {
-    if (focusedReplyId)
-      document.getElementById(`comment-${focusedReplyId}`)?.focus();
+    if (!focusedReplyId) return;
+    const reply = document.getElementById(`comment-${focusedReplyId}`);
+    reply?.focus({ preventScroll: true });
+    if (reply) scrollElementIntoView(reply, { block: "nearest", inline: "nearest" });
   }, [focusedReplyId, replies]);
 
   const preview = replies?.preview ?? comment.replyPreview ?? [];

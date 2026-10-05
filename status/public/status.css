@@ -21,7 +21,6 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
 body { margin: 0; }
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--primary); }
@@ -135,8 +134,4 @@ main { width: min(100% - 32px, 1180px); margin: 0 auto; padding: 34px 0 72px; fl
   .history-day { height: 19px; }
   .service-meta { flex-wrap: wrap; }
   .site-footer { padding: 22px 16px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
 }
