@@ -1,4 +1,5 @@
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
+import { cn } from "@/lib/ui/cn";
 import type { ComponentProps, DragEvent, ReactNode, ReactElement } from "react";
 
 type GridSheet = {
@@ -11,6 +12,8 @@ type GridSheet = {
 
 export function FaceSheetGrid<T extends GridSheet>({
   sheets,
+  className,
+  fillWidth = false,
   highlightedBlob,
   disabled = false,
   onSelectCell,
@@ -21,6 +24,8 @@ export function FaceSheetGrid<T extends GridSheet>({
   renderCell,
 }: {
   sheets: T[];
+  className?: string;
+  fillWidth?: boolean;
   highlightedBlob?: string | null;
   disabled?: boolean;
   onSelectCell: (sheet: T, row: number, column: number) => void;
@@ -40,7 +45,7 @@ export function FaceSheetGrid<T extends GridSheet>({
   renderFooter?: (sheet: T) => ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-2 content-start items-start gap-2 sm:grid-cols-3 sm:gap-3">
+    <div className={cn("grid grid-cols-2 content-start items-start gap-2 sm:grid-cols-3 sm:gap-3", className)}>
       {sheets.map((sheet) => (
         <div
           key={sheet.blobSha256}
@@ -55,6 +60,7 @@ export function FaceSheetGrid<T extends GridSheet>({
             height={sheet.height}
             scale={1}
             fit
+            fillWidth={fillWidth}
             label={sheet.label ?? "角色脸图选格"}
             disabled={disabled}
             onSelectCell={(row, column) => onSelectCell(sheet, row, column)}
