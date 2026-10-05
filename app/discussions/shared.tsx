@@ -11,7 +11,7 @@ import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
-import { type ForumAuthor, type ForumEditVersion, type ForumTag, type ForumTarget, type ForumTopic, FORUM_TAG_LIMIT, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
+import { type ForumAuthor, type ForumEditVersion, type ForumTag, type ForumTarget, type ForumTopic, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
 
 import { forumSearchMatches } from "@/lib/forum-search";
 import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useRef, useState } from "react";
@@ -377,21 +377,17 @@ export function PopularTagFilter({
     >
       {popular.map((tag) => {
         const active = selected.some((item) => item.id === tag.id);
-        const nextTags = active
-          ? selected.filter((item) => item.id !== tag.id)
-          : [...selected, tag];
-        const unavailable =
-          disabled || (!active && selected.length >= FORUM_TAG_LIMIT);
+        const nextTags = active ? [] : [tag];
         return (
           <Fragment key={tag.id}>
             <Link
               className="hidden text-sm text-primary hover:underline lg:block"
-              to={hrefForTags(unavailable ? selected : nextTags)}
+              to={hrefForTags(disabled ? selected : nextTags)}
               aria-current={active ? "true" : undefined}
-              aria-disabled={unavailable || undefined}
+              aria-disabled={disabled || undefined}
               onClick={(event) => {
                 event.preventDefault();
-                if (!unavailable) onChange(nextTags);
+                if (!disabled) onChange(nextTags);
               }}
             >
               {tag.name}
@@ -402,10 +398,9 @@ export function PopularTagFilter({
               variant={active ? "default" : "outline"}
               className="shrink-0 lg:hidden"
               aria-pressed={active}
-              disabled={unavailable}
+              disabled={disabled}
               onClick={() => onChange(nextTags)}
             >
-              {active ? <span aria-hidden="true">✓</span> : null}
               {tag.name}
             </Button>
           </Fragment>

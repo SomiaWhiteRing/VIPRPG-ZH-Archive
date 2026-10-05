@@ -21,18 +21,14 @@ export async function loader(args: LoaderFunctionArgs) {
   const params = await searchParams;
   const ctx = getForumRequestRuntime(runtime);
   const viewer = forumViewer(await getCurrentUser(runtime));
-  const rawTags = params.tag
-    ? Array.isArray(params.tag)
-      ? params.tag
-      : [params.tag]
-    : [];
+  const rawTag = Array.isArray(params.tag) ? params.tag[0] : params.tag;
   const featured = params.view === "featured";
   const page = forumPage(params.page);
   let selected: Awaited<ReturnType<typeof resolveTags>> = [];
   let topics;
   let filterError;
   try {
-    selected = await resolveTags(ctx, rawTags);
+    selected = await resolveTags(ctx, rawTag ? [rawTag] : []);
     const result = await publicTopicList(ctx, {
       tags: selected.map((tag) => tag.id),
       featured,
