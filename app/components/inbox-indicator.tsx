@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { requestJsonValue } from "@/lib/ui/api-response";
 import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
@@ -39,7 +39,7 @@ export function InboxIndicator({
       if (!force && Date.now() - lastSuccess.current < 1000) return;
       inFlight = true;
       try {
-        const result = await requestJson<{ unread?: unknown }>("/api/inbox/unread", {
+        const result = await requestJsonValue<{ unread?: unknown }>("/api/inbox/unread", {
           cache: "no-store",
           signal: controller.signal,
         });

@@ -46,7 +46,12 @@ export async function POST(
     ? `/admin/characters/${rawCharacterId}`
     : "/admin/characters";
   try {
-    const characterId = parsePositiveId(rawCharacterId);
+    const characterId = parsePositiveId(
+      rawCharacterId,
+      "character id",
+      "角色 ID 不合法，请返回角色维护页重新进入。",
+      "character_id_invalid",
+    );
     const formData = await request.formData();
     const metadataRequested = [
       "primary_name",

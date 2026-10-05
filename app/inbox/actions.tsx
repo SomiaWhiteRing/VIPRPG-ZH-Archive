@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -92,11 +92,20 @@ export function InboxActions({
         ? "/api/inbox/read-all"
         : `/api/inbox/${item!.id}/${action === "read" ? "read" : "resolve"}`;
 
-      await requestJson(url, {
-        method: "POST",
-        headers: { Accept: "application/json" },
-        body: data,
-      });
+      try {
+        await requestJson(url, {
+          method: "POST",
+          headers: { Accept: "application/json" },
+          body: data,
+        });
+      } catch (error) {
+        if (error instanceof ApiResponseError && error.status === 409) {
+          notifyInboxChanged();
+          document.getElementById("inbox-controls")?.focus({ preventScroll: true });
+          startTransition(() => revalidator.revalidate());
+        }
+        throw error;
+      }
     }
       notifyInboxChanged();
       toast.success(

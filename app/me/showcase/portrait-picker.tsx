@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { requestJsonValue } from "@/lib/ui/api-response";
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
@@ -87,10 +87,11 @@ function PortraitChoices({
     void (async () => {
       try {
 
-        const data = (await requestJson(`/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}`, { signal: controller.signal })) as ShowcasePortraitPage & {
-          detail?: string;
-          error?: string;
-        };
+        const data = await requestJsonValue<ShowcasePortraitPage>(
+          `/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}`,
+          { signal: controller.signal },
+          "头像加载失败",
+        );
 
         if (!controller.signal.aborted) setResult(data);
       } catch (error) {

@@ -1,4 +1,4 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { requestJsonValue } from "@/lib/ui/api-response";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { WORK_GENRE_MAX_LENGTH } from "@/lib/work-genre";
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const result = await requestJson<{ names: string[] }>(`/api/genres?${new URLSearchParams({ q: value })}`, { signal: controller.signal }, "类型候补加载失败");
+        const result = await requestJsonValue<{ names: string[] }>(`/api/genres?${new URLSearchParams({ q: value })}`, { signal: controller.signal }, "类型候补加载失败");
         if (!controller.signal.aborted) setSuggestions({ query: value, names: result.names });
       } catch {
         // Suggestions are optional; a failed request never blocks free text.

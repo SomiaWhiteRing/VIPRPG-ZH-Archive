@@ -28,10 +28,10 @@ export function readContentType(request: Request): string {
   return request.headers.get("content-type") ?? "application/octet-stream";
 }
 
-export function parsePositiveId(value: string, label = "id", message = `Invalid ${label}`): number {
-  if (!/^[1-9]\d*$/.test(value)) throw new HttpError(400, message);
+export function parsePositiveId(value: string, label = "id", message = `Invalid ${label}`, code = "request_error"): number {
+  if (!/^[1-9]\d*$/.test(value)) throw new HttpError(400, message, code);
   const id = Number(value);
-  if (!Number.isSafeInteger(id)) throw new HttpError(400, message);
+  if (!Number.isSafeInteger(id)) throw new HttpError(400, message, code);
   return id;
 }
 
