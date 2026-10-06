@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only restoration plan, or restore when the approved trial expires
+        type: choice
+        options: [plan, restore]
+        default: restore
 
 permissions:
   contents: read
@@ -32,8 +38,15 @@ jobs:
       - name: Restore expired trial
         env:
           MAIN_INGRESS_CONFIG_JSON: ${{ secrets.PRODUCTION_INGRESS_CONFIG_JSON }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
-        run: node scripts/restore-main-ingress.mjs --restore --confirm viprpg.org
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_INGRESS_API_TOKEN }}
+          TRIAL_MODE: ${{ inputs.mode || 'restore' }}
+        shell: bash
+        run: |
+          if [ "$TRIAL_MODE" = 'plan' ]; then
+            node scripts/restore-main-ingress.mjs --plan
+          else
+            node scripts/restore-main-ingress.mjs --restore --confirm viprpg.org
+          fi
       - name: Preserve restoration receipts
         if: always()
         uses: actions/upload-artifact@v4

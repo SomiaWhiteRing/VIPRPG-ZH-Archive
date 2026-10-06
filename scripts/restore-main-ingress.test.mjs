@@ -164,6 +164,48 @@ test("scoped transport refuses unrelated writes and undocumented PUT fields befo
   assert.equal(fetch.mock.callCount(), 0);
 });
 
+test("real empty 200/204 responses are accepted only for scoped DELETE and PUT mutations", async t => {
+  for (const status of [200, 204]) await t.test(String(status), async t => {
+    const fetch = t.mock.method(globalThis, "fetch", async () => new Response(null, { status }));
+    const api = createRestorationApi(config, "fake-restoration-token");
+    assert.equal(await api(recordPath, "DELETE"), null);
+    assert.equal(await api(routePath, "DELETE"), null);
+    assert.equal(await api(domainPath, "PUT", { hostname: config.hostname, service: config.worker, zone_id: config.zoneId }), null);
+    // Reads must still contain the successful JSON envelope; an empty body is not state evidence.
+    await assert.rejects(api(`/zones/${config.zoneId}`), SyntaxError);
+    assert.equal(fetch.mock.callCount(), 4);
+    for (const [resource, method, body] of [
+      [`/zones/${config.zoneId}/dns_records/unregistered`, "DELETE"],
+      [`/zones/${config.zoneId}/workers/routes/unregistered`, "DELETE"],
+      [domainPath, "PUT", { hostname: "elsewhere.example", service: config.worker, zone_id: config.zoneId }],
+      [recordPath, "PATCH", { content: "8.35.211.227" }],
+    ]) await assert.rejects(api(resource, method, body), /permits only scoped/);
+    assert.equal(fetch.mock.callCount(), 4, "unscoped writes are rejected before the mocked transport");
+  });
+});
+
+test("empty mutation acknowledgements complete restoration only after successful state readbacks", async t => {
+  for (const status of [200, 204]) await t.test(String(status), async t => {
+    const state = fixture();
+    const simulated = fakeApi(state);
+    t.mock.method(globalThis, "fetch", async (url, init) => {
+      const endpoint = new URL(url);
+      const resource = endpoint.pathname.replace(/^\/client\/v4/, "") + endpoint.search;
+      const result = await simulated.api(resource, init.method, init.body ? JSON.parse(init.body) : undefined);
+      return init.method === "GET"
+        ? new Response(JSON.stringify({ success: true, result }), { status: 200 })
+        : new Response(null, { status });
+    });
+    const result = await invoke(createRestorationApi(config, "fake-restoration-token"));
+    assert.equal(result.mode, "restored");
+    assert.equal(result.routeRemoved, true);
+    assert.deepEqual(simulated.writes.map(write => `${write.method} ${write.resource}`),
+      [`DELETE ${recordPath}`, `PUT ${domainPath}`, `DELETE ${routePath}`]);
+    assert.ok(simulated.calls.filter(call => call.method === "GET").length >= 16);
+    assert.equal(state.domains[0].service, config.worker);
+  });
+});
+
 test("health requires both ok:true and the correct service", async t => {
   t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ ok: true, service: "wrong-worker" }), { status: 200 }));
   await assert.rejects(checkRestoredHealth(config, 5), /approved service/);

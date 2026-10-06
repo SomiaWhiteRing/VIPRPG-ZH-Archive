@@ -143,7 +143,9 @@ export function createRestorationApi(config, token) {
       method, redirect: "error", signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    const data = await response.json();
+    const bodyText = await response.text();
+    if (!bodyText && response.ok && ["DELETE", "PUT"].includes(method)) return null;
+    const data = JSON.parse(bodyText);
     if (!response.ok || data.success !== true) throw Error(`Cloudflare ${method} ${resource}: HTTP ${response.status}`);
     return data.result;
   };

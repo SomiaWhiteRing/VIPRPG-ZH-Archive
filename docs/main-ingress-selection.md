@@ -1,14 +1,16 @@
 # 主站大陆入口自动优选
 
-目标为 `https://viprpg.org` 的页面、API 和公开下载。候选取消下载按 ASN 转往旧域名的分流与跨域换源，全部通过主站，保留同源超时、取消及强 ETag/Range 续传；界面、进度、登录 origin、存档和 ZIP 协议不变。
+目标为 `https://viprpg.org` 的页面、API 和公开下载。已部署版本取消下载按 ASN 转往旧域名的分流与跨域换源，全部通过主站，保留同源超时、取消及强 ETag/Range 续传；界面、进度、登录 origin、存档和 ZIP 协议不变。
 
-2026-10-06 负责人已批准将全主站切至候选入口试用24小时，并撤销两个额外下载入口。取消分流补丁已应用于本地候选，废弃 relay Worker源码、部署脚本及命令已删除；这不代表正式配置或部署已改变。实施顺序为先发布并验证主站同源下载，再撤销归属本项目的旧下载 DNS、Routes和独立 Worker，并保存恢复材料。试用到期仅恢复主站 managed Custom Domain接入，继续运行新的同源下载产品，不恢复这两个废旧入口。
+2026-10-06 已按负责人授权发布同源产品并实施24小时入口试用：香港时间23:20:48将主站切为灰云 A `8.35.211.227`，试用到期为2026-10-07 23:20:48（香港时间）。正式Worker版本为 `ff38e592-869a-48f1-b7f3-634e303c2ccc`，原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 的Custom Domain基线未改。12项DNS及指定入口HTTPS核验通过，覆盖首页、robots、健康接口、DB/R2与8 KiB ZIP Range，下载内容摘要一致；实际大陆三网表现及大包持续吞吐仍待观测。
 
-撤销完成后不保留历史 relay。`download.viprpg.org`、`download-asia.viprpg.org` 的已保存链接会在 DNS缓存过期后失效；已打开或缓存旧安装器的页面可能仍尝试旧域名，下载中断后的重试也可能失败。需要刷新主站页面或重新生成主站下载链接。已经安装的游戏及用户存档不因入口撤销而删除。
+主站同源产品核验后，两个额外下载域名的DNS、Routes及独立 `viprpg-download` Worker已删除并回读确认，没有删除业务数据。恢复材料已保存。六小时选点与15分钟到期巡检工作流已推送，两个repository开关已启用。三网六点的新IP分段下载均返回有效206，HTTP到HTTPS跳转正常；大包持续速度仍待一天观测。试用到期仅恢复主站managed Custom Domain接入，继续运行新的同源下载产品，不恢复这两个废旧入口。
+
+两个旧入口已撤销，不保留历史 relay。`download.viprpg.org`、`download-asia.viprpg.org` 的已保存链接会在DNS缓存过期后失效；已打开或缓存旧安装器的页面可能仍尝试旧域名，下载中断后的重试也可能失败。需要刷新主站页面或重新生成主站下载链接。已经安装的游戏及用户存档不因入口撤销而删除。
 
 ## 启用边界
 
-代码候选不等于已启用。试用批次将主站临时迁移为原 Worker的精确 `https://viprpg.org/*` Route及 TTL 60的owned灰云 IPv4 A。配置的 `trial` 记录唯一 `id`、`startsAt`、`expiresAt`，并记录原 Custom Domain身份 `originalDomainId`；开始、结束时刻必须明确，不能靠是否存在灰云记录无限延长试用。未设置 repository variable `MAIN_INGRESS_AUTO_ENABLED=true` 时六小时自动选点不运行，手动 report不写 DNS。
+主站现已临时迁移为原 Worker的精确 `https://viprpg.org/*` Route及 TTL 60的owned灰云 IPv4 A。配置的 `trial` 记录唯一 `id`、`startsAt`、`expiresAt`，并在配置中记录原 Custom Domain身份 `originalDomainId`；不能靠是否存在灰云记录无限延长试用。六小时自动选点受 `MAIN_INGRESS_AUTO_ENABLED=true` 控制，到期巡检受 `MAIN_INGRESS_TRIAL_ENABLED=true` 控制；工作流文件存在不代表开关已启用。手动 report不写 DNS。
 
 `PRODUCTION_WRANGLER_CONFIG_JSONC` 始终保留原 managed Custom Domain基线。本次不把该 secret永久改成Route。构建准备阶段仅在 `MAIN_INGRESS_CONFIG_JSON` 中的试用有效时覆盖生成配置的routes；到期不再覆盖，prepare自然选择原Custom Domain。使用试用Route构建及发布前分别检查至少10分钟余额，不足时停止该次试用发布。staging接入不变。
 
@@ -34,15 +36,15 @@ Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对
 
 ## 配置
 
-填写 [main-ingress.example.json](../scripts/main-ingress.example.json)，真实配置/资源 ID留在忽略目录及 production Environment secret。仍为 Custom Domain的 report可省略recordId/routeId；apply必须登记迁移后的唯一 A和精确 Route，以及trial的id/startsAt/expiresAt和原originalDomainId。archivePath选择已发布归档版本；样本撤回或协议改变时停止写入，重新核实后更换样本。
+填写 [main-ingress.example.json](../scripts/main-ingress.example.json)，真实配置/资源 ID留在忽略目录及 production Environment secret。在Custom Domain基线下执行report可省略recordId/routeId；试用期间apply必须登记当前唯一 A和精确 Route，以及trial的id/startsAt/expiresAt和原originalDomainId。archivePath选择已发布归档版本；样本撤回或协议改变时停止写入，重新核实后更换样本。
 
-本次候选的production配置来源：
+本次试用的production配置来源：
 
 - `PRODUCTION_WRANGLER_CONFIG_JSONC`：保持原Custom Domain的正式资源基线，试用到期后仍能生成正常接入配置。
 - `PRODUCTION_INGRESS_CONFIG_JSON`：试用资源与时间配置，工作流映射为 `MAIN_INGRESS_CONFIG_JSON`，用于有限期routes覆盖、六小时选点及到期恢复。
-- `PRODUCTION_CLOUDFLARE_API_TOKEN`：本次暂复用现有正式部署token，工作流映射为 `INGRESS_CF_READ_TOKEN` 和需要写入时的 `INGRESS_CF_DNS_TOKEN`。
+- `PRODUCTION_INGRESS_API_TOKEN`：本次复用已验证入口读写权限的运维凭据，单独保存于production Environment；原正式发布凭据不改。工作流映射为 `INGRESS_CF_READ_TOKEN` 和需要写入时的 `INGRESS_CF_DNS_TOKEN`。
 
-两个INGRESS环境变量当前映射同一个部署凭据，不能解释为已经创建专用只读或DNS Edit token，也不能声称该凭据没有Worker或其他正式权限。候选程序通过严限定的account/zone/资源身份及HTTP方法、路径allowlist约束自身操作；未来再拆分最小权限token。配置不能输出凭据或把它写入公开artifact。
+选点工作流的两个INGRESS环境变量映射同一个已验证运维凭据，到期巡检则显式映射为 `CLOUDFLARE_API_TOKEN`；不能解释为已经创建专用只读或DNS Edit token，也不能声称该凭据没有Worker或其他正式权限。程序通过严限定的account/zone/资源身份及HTTP方法、路径allowlist约束自身操作；未来再拆分最小权限token。配置不能输出凭据或把它写入公开artifact。
 
 本次批次已取得明确试用与入口撤销授权；完成验收后才设置repository variable `MAIN_INGRESS_AUTO_ENABLED=true`。本地report显式提供 `INGRESS_CF_READ_TOKEN` 与 `node scripts/select-main-ingress.mjs --config output/main-ingress/config.json`；脚本不自行回落部署token。apply另需显式的 `INGRESS_CF_DNS_TOKEN`、启用变量和已批准范围下的 `--apply --confirm viprpg.org`；开关不能代替人的确认。
 
@@ -50,7 +52,7 @@ Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对
 
 ## 24小时迁移与到期恢复
 
-先备份实时 Custom Domain/关联 DNS、Routes、证书、Worker版本与绑定、production配置及HTTP/IPv6状态，完成候选实测。迁移批次包含解除主站Custom Domain、同 Worker建立精确HTTPS Route及owned灰 A、IPv6入口变化、发布取消旧分流的候选，并登记有限期试用配置及定时任务政策。原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 不改，由active trial临时覆盖生成配置。2026-10-06 授权还覆盖撤销两个下载域名的owned DNS/Routes及 `viprpg-download` Worker；先验证主站同源产品，再执行资源撤销，不保留永久兼容入口。
+本次迁移已备份Custom Domain/关联DNS、Routes、证书、Worker版本与绑定、production配置及HTTP/IPv6状态，并完成同源产品和入口核验。已解除主站Custom Domain、在同Worker建立精确HTTPS Route及owned灰 A，发布同源下载产品并撤销两个额外下载入口。原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 未改，由active trial临时覆盖生成配置；有限期试用配置决定到期恢复，自动任务是否启用仍须核对对应开关。
 
 [main-ingress-trial.yml](../.github/workflows/main-ingress-trial.yml) 每15分钟在云端巡检到期状态，不依赖本机或Codex会话。到期恢复核实trial与目标资源归属后，先删除试用owned A，再通过Cloudflare公开的Custom Domain PUT API将原主站hostname绑定回同一个Worker；核实正常DNS及HTTPS健康后，才删除该次trial Route。身份、DNS或健康检查不一致时停止并保存证据，不删除不属于本次试用的记录。
 

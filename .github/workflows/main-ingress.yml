@@ -40,8 +40,8 @@ jobs:
         env:
           MAIN_INGRESS_AUTO_ENABLED: ${{ vars.MAIN_INGRESS_AUTO_ENABLED }}
           MAIN_INGRESS_CONFIG_JSON: ${{ secrets.PRODUCTION_INGRESS_CONFIG_JSON }}
-          INGRESS_CF_READ_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
-          INGRESS_CF_DNS_TOKEN: ${{ (github.event_name == 'schedule' || inputs.mode == 'apply') && vars.MAIN_INGRESS_AUTO_ENABLED == 'true' && secrets.PRODUCTION_CLOUDFLARE_API_TOKEN || '' }}
+          INGRESS_CF_READ_TOKEN: ${{ secrets.PRODUCTION_INGRESS_API_TOKEN }}
+          INGRESS_CF_DNS_TOKEN: ${{ (github.event_name == 'schedule' || inputs.mode == 'apply') && vars.MAIN_INGRESS_AUTO_ENABLED == 'true' && secrets.PRODUCTION_INGRESS_API_TOKEN || '' }}
           APPLY_SELECTION: ${{ github.event_name == 'schedule' || inputs.mode == 'apply' }}
         shell: bash
         run: |
