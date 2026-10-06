@@ -17,7 +17,7 @@ import { HttpError } from "@/lib/http";
 import type { InboxCategory, InboxCursor } from "@/lib/inbox";
 import { INBOX_PAGE_SIZE } from "@/lib/inbox";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
-import { workMaintainerManagerSql, workMaintainerRecipientSql } from "./work-maintainers";
+import { workMaintainerRecipientSql } from "./work-maintainers";
 import type { MaintainerRequestStatus } from "@/lib/work-maintainers";
 
 type InboxItemRow = {
@@ -132,7 +132,7 @@ export function buildInboxVisibilityClause(
         ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})
       OR EXISTS(SELECT 1 FROM work_maintainer_requests mr JOIN works mw ON mw.id=mr.work_id
         WHERE mr.id=i.work_maintainer_request_id AND mw.status<>'deleted'
-          AND ${workMaintainerManagerSql('mr.work_id', String(user.id))})`,
+          AND ${workMaintainerRecipientSql('mr.work_id', String(user.id))})`,
     audienceBinds: [user.id, ...user.permissionKeys],
   };
 }
@@ -155,7 +155,7 @@ function inboxQuery(user: ArchiveUser) {
         AND ?>target_priority AND ?>role_priority)
         OR (work_maintainer_request_id IS NOT NULL AND maintainer_request_status='pending'
           AND target_user_id<>${user.id} AND maintainer_work_status<>'deleted'
-          AND ${workMaintainerManagerSql('maintainer_work_id', String(user.id))})) AS can_reject
+          AND ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))})) AS can_reject
       FROM visible)`,
     binds: [
       user.id,
