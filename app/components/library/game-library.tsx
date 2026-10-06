@@ -17,6 +17,7 @@ import { WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { isFilteredGameList } from "@/lib/crawl-policy";
 
 export type GameLibraryData = Awaited<ReturnType<typeof loadGameLibrary>>;
 
@@ -74,6 +75,7 @@ export function GameLibrary({
     params={activeParams}
   />;
   const clearTimeFilter = <Link
+    rel="nofollow"
     to={gamesHref({ ...activeParams, release: undefined, page: undefined })}
     aria-current={!data.release ? "true" : undefined}
     className="shrink-0 text-xs font-semibold text-primary hover:text-accent"
@@ -117,6 +119,7 @@ export function GameLibrary({
                 { value: "favorites", label: "收藏数" },
               ] as const).map(({ value, label }) => (
                 <Link
+                  rel={value === "id" && !hasFilters ? undefined : "nofollow"}
                   className={
                     sort === value
                       ? "min-h-8 py-1.5 text-primary"
@@ -468,6 +471,7 @@ export function FilterLink({
 }) {
   return (
     <Link
+      rel={href.startsWith("/games?") && isFilteredGameList(new URLSearchParams(href.split("?")[1])) ? "nofollow" : undefined}
       aria-current={active ? "true" : undefined}
       className={
         active

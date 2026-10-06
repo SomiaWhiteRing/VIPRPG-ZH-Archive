@@ -7,7 +7,7 @@ import { crc32 } from "../lib/archive/crc32";
 import { maybeHandleArchiveDownload } from "../worker/archive-download.mjs";
 import { advanceGcCursor, scanGcCandidates } from "../app/.server/storage/gc-candidates";
 import { hotDownloadCache, sweepDownloadCache, cacheDownloadResponse, readDownloadCache } from "../worker/download-cache.mjs";
-import { downloadCacheMaxAgeMs, downloadCacheMaxBytes, downloadCacheMinR2Gets } from "../lib/archive/download";
+import { downloadCacheMaxAgeMs, downloadCacheMaxBytes, downloadCacheSmallMaxBytes, downloadCacheMinR2Gets } from "../lib/archive/download";
 
 // Emulate only platform transports; exercise the public download handler itself.
 Object.defineProperty(globalThis, "FixedLengthStream", { value: class extends TransformStream<Uint8Array, Uint8Array> {
@@ -98,7 +98,8 @@ async function checkDownload(sharedPlayer: boolean, hot = false) {
       const bytes = new Uint8Array(await new Response(body).arrayBuffer());
       assert.ok(bytes.length <= downloadCacheMaxBytes);
       objects.set(objectKey, bytes);
-      cacheMetadata.set(objectKey, { customMetadata: options.customMetadata, uploaded: new Date() });
+      // These sequential fixtures are outside the real R2 write-rate window.
+      cacheMetadata.set(objectKey, { customMetadata: options.customMetadata, uploaded: new Date(Date.now() - 61_000) });
     },
   };
   const database = { prepare(sql: string) {
@@ -248,8 +249,11 @@ async function checkSharedCacheBounds() {
   const variant = await hotDownloadCache(db, "/variant");
   assert.ok(variant);
   const slots = new Set<string>();
-  for (let i = 0; i < 100; i++) slots.add((await hotDownloadCache(db, `/variant/${i}`))!.objectKey);
-  assert.equal(slots.size, 16);
+  for (let i = 0; i < 1000; i++) {
+    for (const slot of (await hotDownloadCache(db, `/variant/${i}`))!.slots) slots.add(slot.objectKey);
+  }
+  assert.equal(slots.size, 40);
+  assert.equal(32 * downloadCacheSmallMaxBytes + 8 * downloadCacheMaxBytes, 4 * 1024 ** 3);
   assert.notEqual((await hotDownloadCache(db, "/variant/web-play-v2"))!.digest, variant.digest);
   assert.notEqual((await hotDownloadCache(db, "/variant/player/sha"))!.digest, variant.digest);
   row.full_download_count = 0;
@@ -265,7 +269,7 @@ async function checkSharedCacheBounds() {
   for (const size of [downloadCacheMaxBytes, downloadCacheMaxBytes + 1]) {
     const result = await readDownloadCache({ async head() { return { size, uploaded: new Date(),
       customMetadata: { cacheDigest: variant.digest, zipSize: String(size), zipOffset: "0" } }; } },
-    variant, "HEAD", null, () => null);
+    { ...variant, slots: [variant.slots[1]] }, "HEAD", null, () => null);
     assert.equal(Boolean(result), size <= downloadCacheMaxBytes);
   }
   const old = new Date(Date.now() - downloadCacheMaxAgeMs - 1000);
@@ -276,15 +280,19 @@ async function checkSharedCacheBounds() {
       { key: "download-cache/v1/slots/0.zip", size: 10, uploaded: old },
       { key: "download-cache/v1/slots/1.zip", size: 20, uploaded: new Date() },
       { key: "download-cache/v2/slots/2.zip", size: 40, uploaded: old },
+      { key: "download-cache/v3/slots/small/1f.zip", size: 50, uploaded: old },
+      { key: "download-cache/v3/slots/large/7.zip", size: 60, uploaded: old },
+      { key: "download-cache/v3/slots/small/20.zip", size: 70, uploaded: old },
       { key: "download-cache/v1/slots/source.zip", size: 30, uploaded: old },
     ] }; },
     async delete(key: string) { if (fail) throw new Error("Injected cache delete failure"); deleted.push(key); },
   } };
-  assert.equal((await sweepDownloadCache(env)).failedCount, 2);
+  assert.equal((await sweepDownloadCache(env)).failedCount, 4);
   fail = false;
   const swept = await sweepDownloadCache(env);
-  assert.deepEqual(deleted, ["download-cache/v1/slots/0.zip", "download-cache/v2/slots/2.zip"]);
-  assert.equal(swept.purgedSizeBytes, 50);
+  assert.deepEqual(deleted, ["download-cache/v1/slots/0.zip", "download-cache/v2/slots/2.zip",
+    "download-cache/v3/slots/small/1f.zip", "download-cache/v3/slots/large/7.zip"]);
+  assert.equal(swept.purgedSizeBytes, 160);
 }
 
 async function checkCacheBackpressure() {
@@ -296,11 +304,11 @@ async function checkCacheBackpressure() {
     pull(controller) { produced++; controller.enqueue(new Uint8Array(65536)); },
     cancel() { cancelled = true; },
   });
-  const response = cacheDownloadResponse({ async put(_key: string, body: ReadableStream) {
+  const response = await cacheDownloadResponse({ async head() { return null; }, async put(_key: string, body: ReadableStream) {
     const reader = body.getReader();
     while (!(await reader.read()).done) { /* fast storage consumer */ }
     published = true;
-  } }, { objectKey: "fixture", digest: "fixture" },
+  } }, { slots: [{ objectKey: "fixture", maxBytes: downloadCacheSmallMaxBytes }], digest: "fixture" },
   new Response(source, { headers: { "Content-Length": String(100 * 65536) } }), 1, 100 * 65536, null,
   { waitUntil(promise: Promise<unknown>) { pending.push(promise); } });
   const reader = response.body!.getReader();
@@ -311,6 +319,45 @@ async function checkCacheBackpressure() {
   await Promise.all(pending);
   assert.equal(cancelled, true);
   assert.equal(published, false, "cancelled response must not publish partial cache data");
+}
+
+async function checkCacheWriteContention() {
+  const cache = { digest: "fixture", slots: [{ objectKey: "fixture", maxBytes: downloadCacheSmallMaxBytes }] };
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil(promise: Promise<unknown>) { pending.push(promise); } };
+  const response = () => new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Length": "3" } });
+  let puts = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const bucket = { async head() { return null; }, async put(_key: string, body: ReadableStream) {
+    puts++;
+    await gate;
+    await new Response(body).arrayBuffer();
+  } };
+  const first = await cacheDownloadResponse(bucket, cache, response(), 128, 3, null, ctx);
+  const other = response();
+  assert.equal(await cacheDownloadResponse(bucket, cache, other, 128, 3, null, ctx), other,
+    "concurrent request keeps its own response and skips a duplicate PUT");
+  assert.deepEqual(new Uint8Array(await other.arrayBuffer()), new Uint8Array([1, 2, 3]));
+  release();
+  await first.arrayBuffer();
+  await Promise.all(pending);
+  assert.equal(puts, 1);
+  for (const [digest, age, start, size, expectedPut] of [
+    ["other", 500, 0, 3, false], ["other", 30_000, 0, 3, false],
+    ["fixture", 2000, 0, 3, false], ["other", 61_000, 0, 3, true],
+    ["fixture", 2000, 1, 2, true],
+  ] as const) {
+    const before: number = puts;
+    const candidate = await cacheDownloadResponse({
+      async head() { return { size, uploaded: new Date(Date.now() - age),
+        customMetadata: { cacheDigest: digest, zipSize: "3", zipOffset: String(start) } }; },
+      async put(_key: string, body: ReadableStream) { puts++; await new Response(body).arrayBuffer(); },
+    }, cache, response(), 128, 3, null, ctx);
+    assert.deepEqual(new Uint8Array(await candidate.arrayBuffer()), new Uint8Array([1, 2, 3]));
+    await Promise.all(pending);
+    assert.equal(puts - before, Number(expectedPut), "protect recent collisions and complete intervals, allow wider replacement");
+  }
 }
 
 async function checkGc() {
@@ -388,5 +435,6 @@ await checkDownload(false, true);
 await checkDownload(true, true);
 await checkSharedCacheBounds();
 await checkCacheBackpressure();
+await checkCacheWriteContention();
 await checkGc();
 console.log("Archive performance contracts passed: ZIP bytes/ranges, hot-cache hits/collisions/failures/publication/size/expiry/GC, shared player, GC pagination/replay/wraparound/concurrent progress.");
