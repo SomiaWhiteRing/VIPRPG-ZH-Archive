@@ -20,6 +20,7 @@ permissions:
 
 concurrency:
   group: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' && 'production-maintenance' || 'deploy-staging' }}
+  queue: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' && 'max' || 'single' }}
   cancel-in-progress: false
 
 jobs:

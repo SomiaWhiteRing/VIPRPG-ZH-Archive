@@ -14,7 +14,7 @@
 
 `PRODUCTION_WRANGLER_CONFIG_JSONC` 始终保留原 managed Custom Domain基线。本次不把该 secret永久改成Route。构建准备阶段仅在 `MAIN_INGRESS_CONFIG_JSON` 中的试用有效时覆盖生成配置的routes；到期不再覆盖，prepare自然选择原Custom Domain。使用试用Route构建及发布前分别检查至少10分钟余额，不足时停止该次试用发布。staging接入不变。
 
-六小时选点程序只在试用有效期内更新owned A的content，到期不再PATCH；它不迁移接入、不部署 Worker、不改证书或数据。独立的15分钟到期巡检负责恢复主站Custom Domain，职责和写入范围见后文。
+六小时选点程序只在试用有效期内更新owned A的content，到期不再PATCH；apply缺少trial时在任何网络请求前拒绝执行。它不迁移接入、不部署 Worker、不改证书或数据。独立的15分钟到期巡检负责恢复主站Custom Domain，职责和写入范围见后文。
 
 灰云 A 指向 CF 入口是社区实践。官方 [Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/) 要求 proxied DNS，故实测可用不代表长期支持，也不保证固定机房、全省可用或 Chinaz全绿。单一地址不能给三网各自分配不同入口。
 
@@ -55,6 +55,10 @@ Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对
 本次迁移已备份Custom Domain/关联DNS、Routes、证书、Worker版本与绑定、production配置及HTTP/IPv6状态，并完成同源产品和入口核验。已解除主站Custom Domain、在同Worker建立精确HTTPS Route及owned灰 A，发布同源下载产品并撤销两个额外下载入口。原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 未改，由active trial临时覆盖生成配置；有限期试用配置决定到期恢复，自动任务是否启用仍须核对对应开关。
 
 [main-ingress-trial.yml](../.github/workflows/main-ingress-trial.yml) 每15分钟在云端巡检到期状态，不依赖本机或Codex会话。到期恢复核实trial与目标资源归属后，先删除试用owned A，再通过Cloudflare公开的Custom Domain PUT API将原主站hostname绑定回同一个Worker；核实正常DNS及HTTPS健康后，才删除该次trial Route。身份、DNS或健康检查不一致时停止并保存证据，不删除不属于本次试用的记录。
+
+若Custom Domain PUT返回明确的4xx JSON拒绝（不含408），且重新读取确认没有Custom Domain、没有其他主站地址、原Route仍在，则重建刚删除的A记录并检查HTTPS健康。补偿记录只使用刚读取的IP、TTL 60和灰云属性，comment包含本次trial UUID；下一轮巡检可识别其新记录ID并继续恢复，不需要修改secret。超时、连接中断、5xx或无法确认当前状态时不猜测写入结果，不盲目创建记录。补偿失败仍可能需要人工恢复，所有收据保存在工作流artifact。
+
+共享`production-maintenance`的正式发布、选点、到期巡检、状态服务与Android正式任务使用`queue: max`，互斥执行并保留多个排队任务；`cancel-in-progress: false`本身不保护默认的单个pending槽位。
 
 正常到期恢复不回滚产品代码，不重新部署旧版本，也不恢复两个下载域名或relay Worker。页面、API和下载继续使用新同源产品，只有主站入口回到CF正常managed DNS与IPv6。若另行决定回到包含旧分流的旧代码，则须先恢复对应下载DNS/Routes和relay资源，不能把这种完整旧版本回滚混同于试用到期。
 

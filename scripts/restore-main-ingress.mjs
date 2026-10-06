@@ -14,8 +14,18 @@ function validateConfig(config) {
 }
 
 function ownedRecord(record, config) {
-  return record?.id === config.recordId && record.name === hostname && record.type === "A"
-    && isIP(record.content) === 4 && record.proxied === false && record.ttl === 60 && record.comment === ownerComment;
+  return record?.name === hostname && record.type === "A"
+    && isIP(record.content) === 4 && record.proxied === false && record.ttl === 60
+    && (record.id === config.recordId && record.comment === ownerComment
+      || Boolean(config.trial?.id) && record.comment === recoveryComment(config));
+}
+
+function recoveryComment(config) {
+  return `${ownerComment} recovery ${config.trial.id}`;
+}
+
+function recoveryBody(record, config) {
+  return { type: "A", name: hostname, content: record.content, ttl: 60, proxied: false, comment: recoveryComment(config) };
 }
 
 function inspect(state, config) {
@@ -25,11 +35,14 @@ function inspect(state, config) {
   if (domains.length > 1 || domains.some(domain => domain.service !== config.worker || domain.zone_id !== config.zoneId || domain.enabled === false))
     throw Error("Main Custom Domain has an unexpected Worker, zone or disabled binding");
   const domain = domains[0];
-  const record = state.dns.find(record => record.id === config.recordId);
-  if (record && !ownedRecord(record, config)) throw Error("Registered trial DNS record no longer has the approved ownership attributes");
+  const registered = state.dns.find(record => record.id === config.recordId);
+  if (registered && !ownedRecord(registered, config)) throw Error("Registered trial DNS record no longer has the approved ownership attributes");
   const addresses = state.dns.filter(record => record.name === hostname && ["A", "AAAA", "CNAME"].includes(record.type));
+  const owned = addresses.filter(record => ownedRecord(record, config));
+  if (owned.length > 1) throw Error("Multiple trial-owned addresses block restoration");
+  const record = owned[0];
   const managed = addresses.filter(record => domain && record.proxied === true && record.meta?.read_only === true && record.meta?.origin_worker_id === domain.id);
-  if (addresses.some(record => record.id !== config.recordId && !managed.includes(record)))
+  if (addresses.some(address => address !== record && !managed.includes(address)))
     throw Error("Unrelated main-host A/AAAA/CNAME records block restoration; no DNS records will be overwritten");
   const routes = coveringRoutes(state.routes);
   if (routes.some(route => route.id !== config.routeId || route.pattern !== routePattern || route.script !== config.worker))
@@ -88,26 +101,49 @@ export async function restoreMainIngress({ config, restore = false, confirm, api
     let error;
     try { await api(resource, method, body); } catch (failure) { error = failure; }
     // A lost response is not evidence that a mutation failed. Never blindly retry.
-    const deadline = Date.now() + (method === "PUT" ? domainWaitMs : 0);
+    const waitMs = method === "PUT" && !error?.definitelyRejected ? domainWaitMs : 0;
+    const deadline = Date.now() + waitMs;
     do {
-      state = await read(method === "PUT" && domainWaitMs > 0 ? deadline : undefined);
+      state = await read(waitMs > 0 ? deadline : undefined);
       current = inspect(state, config);
       if (verified(current) || Date.now() >= deadline) break;
       await delay(Math.max(0, Math.min(1000, deadline - Date.now())));
     } while (Date.now() < deadline);
-    await save(label, { at: new Date().toISOString(), state, outcomeUncertain: Boolean(error) });
-    if (!verified(current)) throw Error(`${label} did not confirm the intended state; keep the trial Route and inspect Cloudflare`);
+    await save(label, { at: new Date().toISOString(), state, outcomeUncertain: Boolean(error) && !error.definitelyRejected });
+    if (!verified(current)) throw new Error(`${label} did not confirm the intended state; keep the trial Route and inspect Cloudflare`, { cause: error });
   }
 
   if (!current.restored) {
+    let deletedRecord;
     if (current.record) {
       state = await read();
       current = inspect(state, config);
-      if (current.record) await observedWrite(`/zones/${config.zoneId}/dns_records/${config.recordId}`, "DELETE", undefined,
-        value => !value.record, "after-trial-dns-delete");
+      if (current.record) {
+        deletedRecord = current.record;
+        await observedWrite(`/zones/${config.zoneId}/dns_records/${deletedRecord.id}`, "DELETE", undefined,
+          value => !value.record, "after-trial-dns-delete");
+      }
     }
-    if (!current.restored) await observedWrite(`/accounts/${config.accountId}/workers/domains`, "PUT",
-      { hostname, service: config.worker, zone_id: config.zoneId }, value => value.restored, "after-domain-restore");
+    if (!current.restored) {
+      try {
+        await observedWrite(`/accounts/${config.accountId}/workers/domains`, "PUT",
+          { hostname, service: config.worker, zone_id: config.zoneId }, value => value.restored, "after-domain-restore");
+      } catch (error) {
+        // Compensate only an explicit API rejection, never a lost/ambiguous PUT.
+        // Read again so a later domain or unrelated DNS change cannot be overwritten.
+        if (!error.cause?.definitelyRejected || !deletedRecord) throw error;
+        state = await read();
+        current = inspect(state, config);
+        if (!current.restored) {
+          if (current.domain || current.record || !current.route) throw error;
+          await observedWrite(`/zones/${config.zoneId}/dns_records`, "POST", recoveryBody(deletedRecord, config),
+            value => !value.domain && value.record?.content === deletedRecord.content
+              && value.record.comment === recoveryComment(config), "after-dns-recovery");
+          await health(config);
+          throw new Error("Custom Domain restore was rejected; previous trial DNS restored and verified; retry restoration on the next run", { cause: error });
+        }
+      }
+    }
   }
   state = await read();
   current = inspect(state, config);
@@ -129,16 +165,26 @@ export function createRestorationApi(config, token) {
   validateConfig(config);
   if (!token) throw Error("A Cloudflare credential must be explicitly supplied in the environment");
   const domainPath = `/accounts/${config.accountId}/workers/domains`;
+  const dnsPath = `/zones/${config.zoneId}/dns_records`;
+  const dnsRead = `${dnsPath}?name=${hostname}&per_page=100`;
   const reads = new Set([`/zones/${config.zoneId}`, domainPath,
-    `/zones/${config.zoneId}/dns_records?name=${hostname}&per_page=100`, `/zones/${config.zoneId}/workers/routes`]);
+    dnsRead, `/zones/${config.zoneId}/workers/routes`]);
   const deletes = new Set([`/zones/${config.zoneId}/dns_records/${config.recordId}`, `/zones/${config.zoneId}/workers/routes/${config.routeId}`]);
+  let recoveryRecords = new Set();
+  let recovery;
+  let addressMissing = false;
+  let domainRejected = false;
   return async (resource, method = "GET", body, { timeoutMs = 15000 } = {}) => {
     const allowed = method === "GET" && reads.has(resource) && body === undefined
-      || method === "DELETE" && deletes.has(resource) && body === undefined
+      || method === "DELETE" && (deletes.has(resource) || recoveryRecords.has(resource)) && body === undefined
+      || method === "POST" && resource === dnsPath && domainRejected && addressMissing && recovery && body
+        && Object.keys(body).length === Object.keys(recovery).length
+        && Object.entries(recovery).every(([key, value]) => body[key] === value)
       || method === "PUT" && resource === domainPath && body && Object.keys(body).length === 3
         && body.hostname === hostname && body.service === config.worker && body.zone_id === config.zoneId;
-    if (!allowed) throw Error("Restoration API permits only scoped reads, the owned trial deletes and the exact main Custom Domain PUT");
+    if (!allowed) throw Error("Restoration API permits only scoped reads, owned trial deletes, exact DNS recovery and the main Custom Domain PUT");
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 15000) throw Error("Invalid restoration API timeout");
+    if (method === "PUT" || method === "POST") domainRejected = false;
     const response = await fetch(`https://api.cloudflare.com/client/v4${resource}`, {
       method, redirect: "error", signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -146,7 +192,18 @@ export function createRestorationApi(config, token) {
     const bodyText = await response.text();
     if (!bodyText && response.ok && ["DELETE", "PUT"].includes(method)) return null;
     const data = JSON.parse(bodyText);
-    if (!response.ok || data.success !== true) throw Error(`Cloudflare ${method} ${resource}: HTTP ${response.status}`);
+    if (!response.ok || data.success !== true) {
+      const error = new Error(`Cloudflare ${method} ${resource}: HTTP ${response.status}`);
+      error.definitelyRejected = data.success === false && response.status >= 400 && response.status < 500 && response.status !== 408;
+      if (method === "PUT" && resource === domainPath) domainRejected = error.definitelyRejected;
+      throw error;
+    }
+    if (method === "GET" && resource === dnsRead && Array.isArray(data.result)) {
+      const owned = data.result.filter(record => ownedRecord(record, config));
+      recoveryRecords = new Set(owned.map(record => `${dnsPath}/${record.id}`));
+      addressMissing = !data.result.some(record => record.name === hostname && ["A", "AAAA", "CNAME"].includes(record.type));
+      if (owned.length === 1 && trialState(config)) recovery = recoveryBody(owned[0], config);
+    }
     return data.result;
   };
 }
