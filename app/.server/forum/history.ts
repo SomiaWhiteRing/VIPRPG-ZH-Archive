@@ -11,9 +11,11 @@ export async function forumHistory(ctx: ForumRuntime, actor: ArchiveUser, target
   const content = await rawContent(ctx, target);
   if (content.kind === "post" && content.post_number === 1) target = { kind: "topic", id: content.topic_id };
   const type = `forum_${target.kind}`;
-  const where = `a.event_type IN ('forum_edit','forum_delete') AND EXISTS (
-    SELECT 1 FROM json_each(a.detail_json,'$.targets') t
-    WHERE json_extract(t.value,'$.type')=? AND CAST(json_extract(t.value,'$.id') AS TEXT)=?)`;
+  // Each forum edit/delete records one normalized target. Match the indexed
+  // scalar expressions instead of expanding every audit log's target array.
+  const where = `a.event_type IN ('forum_edit','forum_delete') AND json_valid(a.detail_json)
+    AND json_extract(a.detail_json,'$.targets[0].type')=?
+    AND CAST(json_extract(a.detail_json,'$.targets[0].id') AS TEXT)=?`;
   const binds = [type, String(target.id)];
   const total = (await ctx.db.prepare(`SELECT COUNT(*) AS n FROM auth_audit_logs a WHERE ${where}`)
     .bind(...binds).first<{ n: number }>())!.n;
