@@ -67,6 +67,7 @@ permissions:
 # Relevant pushes all build; reruns of the same run cannot publish concurrently.
 concurrency:
   group: ${{ inputs.target == 'production' && 'production-maintenance' || format('android-{0}', github.run_id) }}
+  queue: max
   cancel-in-progress: false
 
 jobs:

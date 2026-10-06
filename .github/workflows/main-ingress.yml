@@ -17,6 +17,7 @@ permissions:
 # Also excludes a main release while measuring and applying. Local maintenance must respect this lock.
 concurrency:
   group: production-maintenance
+  queue: max
   cancel-in-progress: false
 
 jobs:

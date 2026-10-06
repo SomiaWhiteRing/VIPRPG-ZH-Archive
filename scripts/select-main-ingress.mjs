@@ -84,6 +84,7 @@ async function archiveReference(archivePath, directIp) {
 export async function runSelection({ config, apply = false, out, environment = process.env }) {
   const startedAt = Date.now();
   const trial = trialState(config);
+  if (apply && !trial) throw Error("DNS apply requires an approved bounded trial");
   if (trial && !trial.active) return { outcome: "trial-inactive", hostname, expiresAt: new Date(trial.expiresAt).toISOString() };
   validateIngressConfig(config, apply);
   fs.mkdirSync(out, { recursive: true });
@@ -162,11 +163,11 @@ export async function runSelection({ config, apply = false, out, environment = p
   if (await measurements.remaining() < 36) throw Error("Insufficient free quota for post-check and rollback; keep DNS");
   if (measurements.used() + 24 > 120) throw Error("Insufficient local probe budget for post-check and rollback; keep DNS");
   if (Date.now() - startedAt > 10 * 60000) throw Error("Insufficient maintenance window for apply and rollback; keep DNS");
-  if (config.trial && trialState(config).expiresAt - Date.now() < 10 * 60000)
+  if (!trialState(config)?.active || trialState(config).expiresAt - Date.now() < 10 * 60000)
     throw Error("Trial has insufficient time for DNS verification and rollback; keep DNS");
   const read = async () => assertOwnedState(await cf.readState(), config);
   const patch = content => {
-    if (config.trial && !trialState(config).active) throw Error("Trial expired before DNS write; keep DNS");
+    if (!trialState(config)?.active) throw Error("Trial expired before DNS write; keep DNS");
     return cf.api(`/zones/${config.zoneId}/dns_records/${config.recordId}`, "PATCH", { content });
   };
   const verify = async expected => {

@@ -3,8 +3,6 @@ import { ApiResponseError, requestOk } from "@/lib/ui/api-response";
 type ByteChunk = Uint8Array<ArrayBufferLike>;
 
 const networkWaitLimitMs = 15_000;
-const slowWindowMs = 30_000;
-const minimumBytesPerSecond = 16 * 1024;
 const maxReconnects = 2;
 
 class DownloadNetworkError extends Error {}
@@ -18,9 +16,6 @@ export class WebPlayDownload {
   private resumable = false;
   private downloadedBytes = 0;
   private reconnects = 0;
-  private networkReadMs = 0;
-  private networkReadBytes = 0;
-  private reconnectBeforeRead = false;
   private finished = false;
   private readonly abort = () => this.controller?.abort(new Error("安装已取消。"));
   totalBytes: number | null = null;
@@ -45,15 +40,9 @@ export class WebPlayDownload {
 
     while (true) {
       this.assertNotCanceled();
-      if (this.reconnectBeforeRead) {
-        this.reconnectBeforeRead = false;
-        await this.reconnect(new DownloadNetworkError("ZIP 文件不完整。"));
-      }
       try {
         if (!this.reader) await this.connect();
-        const startedAt = performance.now();
         const result = await this.waitForNetwork(this.reader!.read());
-        const elapsedMs = performance.now() - startedAt;
 
         if (result.done) {
           if (this.totalBytes !== null && this.downloadedBytes !== this.totalBytes) {
@@ -67,15 +56,7 @@ export class WebPlayDownload {
           throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
         }
         this.downloadedBytes += result.value.byteLength;
-        // Only awaited network reads count: ZIP parsing, IDB and OPFS cannot trigger a reconnect.
-        this.networkReadMs += elapsedMs;
-        this.networkReadBytes += result.value.byteLength;
-        if (this.networkReadMs >= slowWindowMs) {
-          this.reconnectBeforeRead = this.networkReadBytes * 1000 / this.networkReadMs < minimumBytesPerSecond &&
-            (this.totalBytes === null || this.downloadedBytes < this.totalBytes);
-          this.networkReadMs = 0;
-          this.networkReadBytes = 0;
-        }
+        // A slow transfer that keeps producing bytes must not consume reconnects.
         return result;
       } catch (error) {
         await this.reconnect(error);
@@ -141,8 +122,6 @@ export class WebPlayDownload {
       throw new Error("请求失败：无法连接服务器，请检查网络后重试。");
     }
     this.reconnects += 1;
-    this.networkReadMs = 0;
-    this.networkReadBytes = 0;
     await this.waitForNetwork(new Promise<void>((resolve) => setTimeout(resolve, 500 * this.reconnects)));
   }
 
