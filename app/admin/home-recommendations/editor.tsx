@@ -10,6 +10,7 @@ import { HOME_RECOMMENDATION_LIMIT, type HomeRecommendation } from "@/lib/home-r
 import { requestJson } from "@/lib/ui/api-response";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 type Candidate = Pick<HomeRecommendation, "id" | "originalTitle" | "chineseTitle">;
 
@@ -95,9 +96,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
       </FormField>
       {works.some((work) => !work.isPublic) ? <Notice tone="warning">未公开的游戏不会在首页展示，请移除后保存。</Notice> : null}
       {works.length ? (
-        <ol className="m-0 grid list-none gap-2 p-0" aria-label="推荐展示顺序">
+        <ol className="admin-panel m-0 grid list-none divide-y divide-border" aria-label="推荐展示顺序">
           {works.map((work, index) => (
-            <li key={work.id} className="flex flex-wrap items-center gap-3 border-b border-border py-3">
+            <li key={work.id} className="flex flex-wrap items-center gap-3 py-3">
               <span className="text-sm text-muted">{index + 1}</span>
               <div className="min-w-0 flex-1 basis-40">
                 <Link className="wrap-anywhere font-semibold hover:underline" to={`/admin/works/${work.id}`}>
@@ -119,7 +120,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
           ))}
         </ol>
       ) : <EmptyState title="尚未配置站长推荐。" />}
-      <div><Button type="submit" disabled={busy || !dirty}>{busy ? "保存中…" : "保存推荐"}</Button></div>
+      <StickySaveBar><Button type="submit" disabled={busy || !dirty}>{busy ? "保存中…" : "保存推荐"}</Button>
+        <span className="text-xs text-muted" role="status">{dirty ? "有未保存修改" : "推荐顺序已保存"}</span>
+      </StickySaveBar>
     </form>
   );
 }

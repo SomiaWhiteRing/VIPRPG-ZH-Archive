@@ -6,6 +6,10 @@ import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
+import { AdminListMeta } from "@/app/admin/admin-list-controls";
+import { Badge } from "@/app/components/ui/badge";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import type { ResourceRecord, ResourceEditorData } from "@/lib/resources";
 import { postJson, requestJsonValue as requestJson } from "@/lib/ui/api-response";
 export function ResourceManager({
@@ -54,33 +58,32 @@ export function ResourceManager({
   return (
     <main>
       <PageHeader compact title="链接管理" />
-      <div className="grid gap-2">
-        {resources.map((r) => (
-          <Link
-            key={r.id}
-            to={`/admin/resources/${r.id}`}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card p-4"
-          >
-            <span className="font-bold">{r.name}</span>
-            <span className="text-sm text-muted">
-              {r.kind === "tool" ? "软件" : "网站"} · 顺序 {r.sort_order} ·{" "}
-              {
-                { draft: "草稿", published: "公开", hidden: "隐藏" }[
-                  r.visibility
-                ]
-              }
-            </span>
-          </Link>
-        ))}
-      </div>
+      <AdminListMeta total={resources.length} noun="链接" />
+      {resources.length ? <TableWrap compact label="链接列表" minWidth={760}>
+        <thead><tr><th>名称</th><th>类型</th><th>状态</th><th>顺序</th><th className="admin-action-column">操作</th></tr></thead>
+        <tbody>{resources.map((resource) => <tr key={resource.id}>
+          <td><Link className="admin-cell-title" to={`/admin/resources/${resource.id}`}>{resource.name}</Link>
+            <span className="admin-cell-meta font-mono">{resource.slug}</span></td>
+          <td>{resource.kind === "tool" ? "软件" : "网站"}</td>
+          <td><Badge variant={resource.visibility === "published" ? "positive" : resource.visibility === "hidden" ? "negative" : "pending"}>
+            {{ draft: "草稿", published: "公开", hidden: "隐藏" }[resource.visibility]}
+          </Badge></td>
+          <td className="tabular-nums">{resource.sort_order}</td>
+          <td className="admin-action-column"><Button asChild variant="ghost" size="sm"><Link to={`/admin/resources/${resource.id}`}>编辑</Link></Button></td>
+        </tr>)}</tbody>
+      </TableWrap> : <EmptyState title="暂无链接。" />}
+      <details className="admin-panel admin-details">
+      <summary>新增链接</summary>
       <form
         onSubmit={create}
         aria-busy={busy}
-        className="grid gap-3 rounded-md border border-border bg-card p-4"
+        className="mt-4 grid gap-4 sm:grid-cols-2"
       >
-        <h2 className="text-lg font-bold">新增链接</h2>
+        <div className="admin-field">
         <Label htmlFor="resource-name">名称</Label>
         <Input id="resource-name" name="name" maxLength={100} required />
+        </div>
+        <div className="admin-field">
         <Label htmlFor="resource-slug">固定名称（创建后不可修改）</Label>
         <Input
           id="resource-slug"
@@ -90,6 +93,8 @@ export function ResourceManager({
           placeholder="例如 windy-translator"
           required
         />
+        </div>
+        <div className="admin-field">
         <Label htmlFor="resource-kind">类型</Label>
         <SelectField
           id="resource-kind"
@@ -100,12 +105,15 @@ export function ResourceManager({
             { value: "tool", label: "软件" },
           ]}
         />
-        <Button disabled={busy} className="justify-self-start">
+        </div>
+        <div className="flex items-end"><Button disabled={busy}>
           创建草稿
-        </Button>
+        </Button></div>
       </form>
-      <section className="grid gap-3 rounded-md border border-border p-4">
-        <h2 className="text-lg font-bold">安装包存储检查</h2>
+      </details>
+      <details className="admin-panel admin-details">
+        <summary>安装包存储检查</summary>
+        <div className="mt-4 grid gap-3">
         <Button
           variant="outline"
           className="justify-self-start"
@@ -138,7 +146,8 @@ export function ResourceManager({
             ) : null}
           </>
         ) : null}
-      </section>
+        </div>
+      </details>
     </main>
   );
 }

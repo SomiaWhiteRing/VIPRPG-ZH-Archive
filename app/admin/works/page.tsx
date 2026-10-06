@@ -94,6 +94,7 @@ export default function AdminWorksPage() {
           { value: "hidden", label: "隐藏" },
           { value: "deleted", label: "已删除" },
         ]}
+        pageSize={PAGE_SIZE}
         total={result.total}
       />
 
@@ -105,16 +106,16 @@ export default function AdminWorksPage() {
               <th>状态</th>
               <th>规模</th>
               <th>标签</th>
-              <th>操作</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
             {result.items.map((work) => (
               <tr key={work.id}>
                 <td>
-                  <strong>{work.chineseTitle || work.originalTitle}</strong>
+                  <strong className="admin-cell-title">{work.chineseTitle || work.originalTitle}</strong>
                   {work.chineseTitle ? (
-                    <span className="text-sm text-muted">
+                    <span className="admin-cell-meta">
                       {work.originalTitle}
                     </span>
                   ) : null}
@@ -128,7 +129,7 @@ export default function AdminWorksPage() {
                   ) : (
                     <>
                       {formatNumber(work.archiveVersionCount)} 个归档快照
-                      <span className="text-sm text-muted">
+                      <span className="admin-cell-meta">
                         {formatBytes(work.totalSizeBytes)}
                       </span>
                     </>
@@ -143,21 +144,21 @@ export default function AdminWorksPage() {
                         .map((tag) => ({ label: tag.name }))}
                     />
                   ) : (
-                    <span className="text-sm text-muted">未填写</span>
+                    <span className="admin-cell-meta">未填写</span>
                   )}
                 </td>
-                <td>
+                <td className="admin-action-column">
                   {(hasPermission(adminUser, "work.metadata.update_any") || hasPermission(adminUser, "work.distribution.update_any")) &&
                   (work.status !== "deleted" ||
                     hasPermission(adminUser, "work.status.update_any")) ? (
                     <Link
-                      className={buttonVariants()}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/works/${work.id}`}
                     >
                       编辑
                     </Link>
                   ) : (
-                    <span className="text-sm text-muted">只读</span>
+                    <span className="admin-cell-meta">只读</span>
                   )}
                 </td>
               </tr>

@@ -3,16 +3,15 @@ import { listRoles, listUserRoleMemberships, listUserPermissionBlocks } from "@/
 import { searchUsersForAdmin } from "@/app/.server/db/users";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
+import { AdminListControls, parseAdminPage, searchParam } from "@/app/admin/admin-list-controls";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { Button, buttonVariants } from "@/app/components/ui/button";
+import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
-import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { SelectField } from "@/app/components/ui/select";
 import { StatusBadge } from "@/app/components/ui/status-badge";
-import { Table } from "@/app/components/ui/table";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { useToast } from "@/app/components/ui/toast";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useRouteRefresh } from "@/app/components/use-route-refresh";
@@ -21,7 +20,7 @@ import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { formatDate } from "@/lib/format";
 import { requestJson } from "@/lib/ui/api-response";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { BadgeCheck, ChevronDown, ChevronUp, Search, ShieldCheck, ShieldMinus } from "lucide-react";
+import { BadgeCheck, ChevronDown, ChevronUp, ShieldCheck, ShieldMinus } from "lucide-react";
 import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useRevalidator } from "react-router";
@@ -133,38 +132,30 @@ export default function AdminUsersPage() {
         subtitle="管理账户状态以及当前管理员有权分配的角色。"
         actions={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><ShieldCheck className="size-4" aria-hidden />当前可管理范围</span>}
       />
-      <form
+      <AdminListControls
         key={JSON.stringify([query, status, sort, roleId, permission, blocks])}
         action="/admin/users"
-        method="get"
-        className="admin-users-filters"
-        aria-label="用户筛选"
+        query={query}
+        searchLabel="搜索用户"
+        searchPlaceholder="名称、邮箱、外部认证 ID 或用户 ID"
+        status={status}
+        statusLabel="账户状态"
+        statusOptions={[
+          { value: "all", label: "全部状态" }, { value: "active", label: "正常" },
+          { value: "disabled", label: "已禁用" }, { value: "deleted", label: "已注销" },
+        ]}
+        sort={sort}
+        sortOptions={[
+          { value: "default", label: "最近注册" }, { value: "oldest", label: "最早注册" },
+          { value: "name", label: "显示名称" },
+        ]}
+        filtered={filtered}
+        total={result.total}
+        noun="用户"
+        pageSize={PAGE_SIZE}
       >
-        <div className="admin-users-filter-main">
-          <div className="admin-users-field">
-            <Label htmlFor="admin-users-query">搜索用户</Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-              <Input className="pl-9" id="admin-users-query" name="q" type="search" defaultValue={query} placeholder="名称、邮箱、外部认证 ID 或用户 ID" />
-            </div>
-          </div>
-          <div className="admin-users-field">
-            <Label htmlFor="admin-users-status">账户状态</Label>
-            <SelectField id="admin-users-status" name="status" defaultValue={status} options={[
-              { value: "all", label: "全部状态" }, { value: "active", label: "正常" },
-              { value: "disabled", label: "已禁用" }, { value: "deleted", label: "已注销" },
-            ]} />
-          </div>
-          <div className="admin-users-field">
-            <Label htmlFor="admin-users-sort">排序</Label>
-            <SelectField id="admin-users-sort" name="sort" defaultValue={sort} options={[
-              { value: "default", label: "最近注册" }, { value: "oldest", label: "最早注册" },
-              { value: "name", label: "显示名称" },
-            ]} />
-          </div>
-        </div>
-        <div className="admin-users-filter-access">
-          <div className="admin-users-field">
+        <div className="admin-filter-row">
+          <div className="admin-field">
             <Label htmlFor="admin-users-role">角色</Label>
             <SelectField id="admin-users-role" name="role" defaultValue={String(roleId ?? "all")} options={[
               { value: "all", label: "全部角色" },
@@ -173,33 +164,24 @@ export default function AdminUsersPage() {
               })),
             ]} />
           </div>
-          <div className="admin-users-field">
+          <div className="admin-field">
             <Label htmlFor="admin-users-permission">生效权限</Label>
             <SelectField id="admin-users-permission" name="permission" defaultValue={permission ?? "all"} options={[
               { value: "all", label: "全部权限" },
               ...PERMISSION_LIST.map((item) => ({ value: item.key, label: item.label })),
             ]} />
           </div>
-          <div className="admin-users-field">
+          <div className="admin-field">
             <Label htmlFor="admin-users-blocks">单独禁用权限</Label>
             <SelectField id="admin-users-blocks" name="blocks" defaultValue={blocks} options={[
               { value: "all", label: "全部用户" }, { value: "blocked", label: "有单独禁用项" },
               { value: "unblocked", label: "无单独禁用项" },
             ]} />
           </div>
-          <div className="admin-users-filter-actions">
-            <Button type="submit">应用筛选</Button>
-            {filtered ? <Link className={buttonVariants({ variant: "ghost" })} to="/admin/users">清除</Link> : null}
-          </div>
         </div>
-      </form>
-      <div className="admin-users-list-meta" aria-live="polite">
-        <span>共 <strong className="font-semibold text-foreground tabular-nums">{result.total.toLocaleString("zh-CN")}</strong> 个用户</span>
-        <span>每页 {PAGE_SIZE} 个</span>
-      </div>
+      </AdminListControls>
       {result.items.length > 0 ? (
-        <div className="admin-users-table-surface">
-          <Table className="admin-users-table" aria-label="用户列表">
+          <TableWrap compact minWidth={760} className="admin-users-table" label="用户列表">
             <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
             <tbody>
               {result.items.map((user) => {
@@ -217,7 +199,7 @@ export default function AdminUsersPage() {
                         <div className="flex items-center gap-3">
                           <UserAvatar avatarBlobSha256={user.avatarBlobSha256} displayName={user.displayName} size={36} className="rounded-lg" />
                           <div className="min-w-0">
-                            <Link className="admin-users-name" to={"/users/" + user.id}>{user.displayName}</Link>
+                            <Link className="admin-cell-title" to={"/users/" + user.id}>{user.displayName}</Link>
                             <span className="mt-0.5 block font-mono text-xs text-muted">#{user.id}</span>
                           </div>
                         </div>
@@ -305,8 +287,7 @@ export default function AdminUsersPage() {
                 );
               })}
             </tbody>
-          </Table>
-        </div>
+          </TableWrap>
       ) : <EmptyState title="没有找到匹配的用户。" />}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
         <span>仅显示权限层级低于自己的账户</span>

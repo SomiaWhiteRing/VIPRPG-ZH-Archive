@@ -1,3 +1,5 @@
+import { AdminListMeta } from "@/app/admin/admin-list-controls";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { useToast } from "@/app/components/ui/toast";
@@ -30,13 +32,13 @@ export function AdminDiscussionTags({
       <PageHeader compact title="讨论 TAG" />
       <form
         action="/admin/discussion-tags"
-        className="flex flex-wrap items-end gap-3"
+        className="admin-filter-row"
       >
-        <div className="flex-1">
+        <div className="admin-field admin-field-search">
           <Label htmlFor="tag-admin-query">名称或 ID</Label>
           <Input id="tag-admin-query" name="q" defaultValue={query} />
         </div>
-        <div>
+        <div className="admin-field">
           <Label htmlFor="tag-admin-state">状态</Label>
           <SelectField
             id="tag-admin-state"
@@ -52,23 +54,24 @@ export function AdminDiscussionTags({
         </div>
         <Button type="submit">查询</Button>
       </form>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table className="text-left">
+      <AdminListMeta total={data.total} noun="TAG" pageSize={data.pageSize} />
+      {data.items.length ? <TableWrap compact label="讨论 TAG" minWidth={0}>
           <thead>
             <tr>
-              <th className="p-3">ID／名称</th>
-              <th className="hidden p-3 md:table-cell">公开主题数</th>
-              <th className="hidden p-3 md:table-cell">状态</th>
-              <th className="hidden p-3 md:table-cell">创建者</th>
-              <th className="hidden p-3 md:table-cell">更新时间</th>
-              <th className="w-20 whitespace-nowrap p-3">操作</th>
+              <th>ID／名称</th>
+              <th className="hidden md:table-cell">公开主题数</th>
+              <th className="hidden md:table-cell">状态</th>
+              <th className="hidden md:table-cell">创建者</th>
+              <th className="hidden md:table-cell">更新时间</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
             {data.items.map((tag) => (
               <tr className="border-t border-border" key={tag.id}>
-                <td className="wrap-anywhere p-3">
-                  {tag.id} · {tag.name}
+                <td className="wrap-anywhere">
+                  <strong className="admin-cell-title">{tag.name}</strong>
+                  <span className="admin-cell-meta font-mono">#{tag.id}</span>
                   <p className="mt-1 text-xs text-muted md:hidden">
                     {
                       { active: "启用", disabled: "停用", hidden: "隐藏" }[
@@ -78,24 +81,24 @@ export function AdminDiscussionTags({
                     · {tag.count} 个公开主题
                   </p>
                 </td>
-                <td className="hidden p-3 font-mono md:table-cell">
+                <td className="hidden font-mono md:table-cell">
                   {tag.count}
                 </td>
-                <td className="hidden p-3 md:table-cell">
+                <td className="hidden md:table-cell">
                   {
                     { active: "启用", disabled: "停用", hidden: "隐藏" }[
                       tag.state
                     ]
                   }
                 </td>
-                <td className="hidden p-3 md:table-cell">{tag.creator}</td>
-                <td className="hidden p-3 md:table-cell">
+                <td className="hidden md:table-cell">{tag.creator}</td>
+                <td className="hidden md:table-cell">
                   <Timestamp value={tag.updatedAt} />
                 </td>
-                <td className="p-3">
+                <td className="admin-action-column">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => setSelected(tag)}
                   >
@@ -105,15 +108,7 @@ export function AdminDiscussionTags({
               </tr>
             ))}
           </tbody>
-        </Table>
-        {!data.items.length ? (
-          <EmptyState
-            title="没有匹配的 TAG。"
-            variant="plain"
-            className="p-4"
-          />
-        ) : null}
-      </div>
+        </TableWrap> : <EmptyState title="没有匹配的 TAG。" />}
       <PaginationLinks
         basePath="/admin/discussion-tags"
         page={data.page}
@@ -325,4 +320,3 @@ function ManageTag({
     </ForumModal>
   );
 }
-import { Table } from "@/app/components/ui/table";

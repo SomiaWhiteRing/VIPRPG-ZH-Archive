@@ -77,10 +77,10 @@ export default function AdminAuditPage() {
       <form
         key={JSON.stringify([query, eventType, targetType, targetId])}
         action="/admin/audit"
-        className="flex flex-wrap items-end gap-2 border-b border-border pb-3"
+        className="admin-filter-row"
         method="get"
       >
-        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">
+        <Label className="admin-field admin-field-search">
           操作者
           <Input
             defaultValue={query}
@@ -88,7 +88,7 @@ export default function AdminAuditPage() {
             placeholder="当前或操作时名称、邮箱、用户 ID"
           />
         </Label>
-        <Label className="grid min-w-52 flex-1 gap-1 text-xs font-semibold text-muted">
+        <Label className="admin-field">
           动作
           <Input
             defaultValue={eventType}
@@ -96,12 +96,12 @@ export default function AdminAuditPage() {
             placeholder="事件类型"
           />
         </Label>
-        <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
+        <Label className="admin-field">
           条目类型
           <SelectField aria-label="条目类型" name="targetType" defaultValue={targetType}
             options={[{ value: "", label: "全部类型" }, ...Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => ({ value, label }))]} />
         </Label>
-        <Label className="grid min-w-36 gap-1 text-xs font-semibold text-muted">
+        <Label className="admin-field">
           条目 ID／标签名
           <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
         </Label>
@@ -114,13 +114,17 @@ export default function AdminAuditPage() {
             清除
           </Link>
         ) : null}
-        <span className="pb-2 font-mono text-xs text-muted">
+      </form>
+      <div className="admin-list-meta">
+        <span>
           {logId ? `日志 #${logId} · ` : ""}
           共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
         </span>
-      </form>
+        <span>每页 {PAGE_SIZE} 条</span>
+      </div>
 
-      <Pane heading="用户角色事件">
+      <details className="admin-panel admin-details">
+        <summary>用户角色事件 · {roleEvents.length} 条</summary>
         {roleEvents.length > 0 ? (
           <TableWrap compact label="用户角色事件" minWidth={980}>
             <thead>
@@ -139,14 +143,14 @@ export default function AdminAuditPage() {
                   <td>
                     {event.actorName ?? "系统"}
                     {event.actorUserId ? (
-                      <span className="font-mono text-sm text-muted">
+                      <span className="admin-cell-meta font-mono">
                         #{event.actorUserId}
                       </span>
                     ) : null}
                   </td>
                   <td>
                     {event.targetName ?? "未知用户"}
-                    <span className="font-mono text-sm text-muted">
+                    <span className="admin-cell-meta font-mono">
                       #{event.targetUserId}
                     </span>
                   </td>
@@ -173,7 +177,7 @@ export default function AdminAuditPage() {
         ) : (
           <EmptyState title="暂无用户角色事件。" />
         )}
-      </Pane>
+      </details>
 
       <Pane heading="系统审计日志">
         {auditResult.items.length > 0 ? (
@@ -194,19 +198,19 @@ export default function AdminAuditPage() {
                     <span className="font-mono text-sm text-primary">
                       {log.eventType}
                     </span>
-                    <span className="font-mono text-sm text-muted">
+                    <span className="admin-cell-meta font-mono">
                       #{log.id}
                     </span>
                   </td>
                   <td>
                     {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? "系统")}
                     {log.userId ? (
-                      <span className="font-mono text-sm text-muted">
+                      <span className="admin-cell-meta font-mono">
                         #{log.userId}
                       </span>
                     ) : null}
                     {log.email ? (
-                      <span className="text-sm text-muted">{log.email}</span>
+                      <span className="admin-cell-meta">{log.email}</span>
                     ) : null}
                   </td>
                   <td>
@@ -255,16 +259,18 @@ function AuditDetail({ detail }: { detail: unknown }) {
       授权依据：{authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}
       {data?.source ? `；入口：${data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}` : ""}
     </p> : null}
-    {hasSnapshots ? (changes.length ? <TableWrap compact label="字段修改前后" minWidth={760}>
+    {hasSnapshots ? (changes.length ? <details className="admin-details">
+      <summary>字段变化 · {changes.length} 项</summary>
+      <TableWrap compact label="字段修改前后" minWidth={760}>
       <thead><tr><th>修改字段</th><th>修改前</th><th>修改后</th></tr></thead>
       <tbody>{changes.map((change, index) => <tr key={`${change.field}:${index}`}>
         <td className="wrap-anywhere text-xs">{change.field}</td>
         <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.before)}</pre></td>
         <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.after)}</pre></td>
       </tr>)}</tbody>
-    </TableWrap> : <p className="text-sm text-muted">未检测到字段变化。</p>) : targets.length ?
+    </TableWrap></details> : <p className="text-sm text-muted">未检测到字段变化。</p>) : targets.length ?
       <p className="text-sm text-muted">此记录没有完整前后快照，无法还原全部字段修改。</p> : null}
-    <details><summary className="cursor-pointer text-xs text-muted">原始审计记录</summary>
+    <details className="admin-details"><summary>原始审计记录</summary>
       <pre className="mt-2 max-w-3xl overflow-x-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs">{formatDetail(detail)}</pre>
     </details>
   </div>;

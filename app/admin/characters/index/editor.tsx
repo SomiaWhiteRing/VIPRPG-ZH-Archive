@@ -456,7 +456,7 @@ export function CharacterIndexEditor({
   }
   return (
     <div className="flex flex-col items-start gap-5 lg:flex-row">
-      <aside className="w-full shrink-0 rounded-md border border-border bg-card lg:sticky lg:top-20 lg:w-76">
+      <aside className="admin-workspace-panel w-full shrink-0 border border-border bg-card lg:sticky lg:top-20 lg:w-76">
         <div className="grid gap-3 border-b border-border p-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">分类与角色</h2>
@@ -525,7 +525,7 @@ export function CharacterIndexEditor({
       </aside>
       <section
         aria-label="编辑分类或角色"
-        className="w-full min-w-0 flex-1 rounded-md border border-border bg-card"
+        className="admin-workspace-panel w-full min-w-0 flex-1 border border-border bg-card"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div>
@@ -750,7 +750,7 @@ export function CharacterIndexEditor({
                 {error}
               </p>
             ) : null}
-            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+            <div className="admin-save-bar">
               <Button
                 type="submit"
                 disabled={

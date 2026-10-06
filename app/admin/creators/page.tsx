@@ -15,7 +15,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -85,6 +85,7 @@ export default function AdminCreatorsPage() {
           { value: "name", label: "名称" },
           { value: "works", label: "关联作品数" },
         ]}
+        pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
@@ -94,20 +95,20 @@ export default function AdminCreatorsPage() {
               <th>作者</th>
               <th>关联</th>
               <th>链接</th>
-              <th>操作</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
             {result.items.map((creator) => (
               <tr key={creator.id}>
                 <td>
-                  <strong>{creator.name}</strong>
+                  <strong className="admin-cell-title">{creator.name}</strong>
                 </td>
                 <td>
                   {formatNumber(creator.workCreditCount)} 部作品
                   {creator.latestWorkCreditAt ? (
-                    <span className="text-sm text-muted">
-                      最近关联：{creator.latestWorkCreditAt}
+                    <span className="admin-cell-meta">
+                      最近关联：{formatDate(creator.latestWorkCreditAt)}
                     </span>
                   ) : null}
                 </td>
@@ -123,19 +124,19 @@ export default function AdminCreatorsPage() {
                       {link.label}
                     </a>
                   )) : (
-                    <span className="text-sm text-muted">未填写</span>
+                    <span className="admin-cell-meta">未填写</span>
                   )}
                 </td>
-                <td>
+                <td className="admin-action-column">
                   {hasPermission(adminUser, "creator.metadata.update_any") ? (
                     <Link
-                      className={buttonVariants()}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/creators/${creator.id}`}
                     >
                       编辑
                     </Link>
                   ) : (
-                    <span className="text-sm text-muted">只读</span>
+                    <span className="admin-cell-meta">只读</span>
                   )}
                 </td>
               </tr>

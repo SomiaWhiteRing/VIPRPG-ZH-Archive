@@ -10,7 +10,7 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
-import { Table } from "@/app/components/ui/table";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { Textarea } from "@/app/components/ui/textarea";
 import { SmoothAnchorLink } from "@/app/components/ui/anchor-navigation";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
@@ -287,7 +287,7 @@ export function PermissionMatrix({
   return (
     <div className="grid gap-6">
       <div className="flex flex-col items-start gap-4 lg:flex-row">
-        <aside className="grid w-full shrink-0 gap-3 lg:sticky lg:top-20 lg:w-52" aria-label="账户角色">
+        <aside className="admin-panel grid w-full shrink-0 gap-3 lg:sticky lg:top-20 lg:w-60" aria-label="账户角色">
           <div className="lg:hidden">
             <Label className="grid gap-2">
               账户角色
@@ -351,7 +351,7 @@ export function PermissionMatrix({
 
         {role && saved ? (
           <section
-            className="grid w-full min-w-0 flex-1 grid-cols-1 gap-3 wrap-anywhere"
+            className="admin-panel admin-workspace-panel grid w-full min-w-0 flex-1 grid-cols-1 gap-3 wrap-anywhere"
             aria-labelledby="selected-role-heading"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
@@ -608,10 +608,9 @@ export function PermissionMatrix({
               {editable ? "勾选需要授予的功能，保存后生效。" : "下方勾选状态为系统预设。"}
             </p>
 
-            <div className="overflow-x-auto border-y border-border">
-              <Table
-                aria-label={`${role.name}的业务权限`}
-                className="min-w-190 table-fixed [&_td]:px-3 [&_td]:py-2 [&_td]:align-middle"
+              <TableWrap compact minWidth={760}
+                label={`${role.name}的业务权限`}
+                className="table-fixed [&_td]:px-3 [&_td]:py-2"
               >
                 <colgroup>
                   <col className="w-[16%]" />
@@ -836,8 +835,7 @@ export function PermissionMatrix({
                     </tbody>
                   );
                 })}
-              </Table>
-            </div>
+              </TableWrap>
             {visiblePermissions.length === 0 ? (
               <EmptyState
                 title="没有匹配的权限，请尝试其他关键词。"
@@ -847,7 +845,7 @@ export function PermissionMatrix({
             ) : null}
 
             {editable ? (
-              <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-3">
+              <div className="admin-save-bar justify-between">
                 <span className="text-sm text-muted" role="status">
                   {changedPermissions.length
                     ? `${changedPermissions.length} 项权限修改未保存（含其他分类）`
@@ -887,7 +885,7 @@ export function PermissionMatrix({
         )}
       </div>
 
-      <details className="border-b border-border pb-3">
+      <details className="admin-panel admin-details">
         <summary className="w-fit cursor-pointer text-sm font-semibold">
           新建自定义角色
         </summary>

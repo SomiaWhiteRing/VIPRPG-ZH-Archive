@@ -165,14 +165,14 @@ export default function AdminPage() {
                   <td>
                     <StatusBadge kind="import-task" value={job.status} />
                     {job.failedStage ? (
-                      <span className="text-sm text-muted">
+                      <span className="admin-cell-meta">
                         {importTaskStageLabel(job.failedStage)}
                       </span>
                     ) : null}
                   </td>
                   <td>
                     {formatNumber(job.uploadedBlobCount)} 个文件对象
-                    <span className="text-sm text-muted">
+                    <span className="admin-cell-meta">
                       {formatBytes(
                         job.uploadedBlobSizeBytes +
                           job.uploadedCorePackSizeBytes,
@@ -181,7 +181,7 @@ export default function AdminPage() {
                   </td>
                   <td>
                     检查 {formatNullableDuration(job.preflightDurationMs)}
-                    <span className="text-sm text-muted">
+                    <span className="admin-cell-meta">
                       入库 {formatNullableDuration(job.commitDurationMs)}
                     </span>
                   </td>

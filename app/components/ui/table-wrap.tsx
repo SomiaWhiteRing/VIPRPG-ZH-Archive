@@ -1,10 +1,12 @@
 import { Table } from "@/app/components/ui/table";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/ui/cn";
 
 type TableWrapProps = {
   minWidth?: number;
   compact?: boolean;
   label?: string;
+  className?: string;
   children: ReactNode;
 };
 
@@ -12,23 +14,14 @@ export function TableWrap({
   minWidth = 820,
   compact = false,
   label,
+  className,
   children,
 }: TableWrapProps) {
-  const minWidthClass =
-    minWidth === 760
-      ? "min-w-190"
-      : minWidth === 900
-        ? "min-w-225"
-        : minWidth === 980
-          ? "min-w-245"
-          : minWidth === 1040
-            ? "min-w-260"
-            : "min-w-205";
-
   return (
-    <div className={`min-w-0 w-full max-w-full overflow-x-auto ${compact ? "mt-4" : "mt-5"}`}>
+    <div data-slot="table-surface" className={`min-w-0 w-full max-w-full overflow-x-auto rounded-[0.875rem] border border-border bg-card shadow-surface ${compact ? "mt-4" : "mt-5"}`}>
       <Table
-        className={`${minWidthClass} ${compact ? "[&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-3" : "[&_th]:h-11 [&_th]:px-4 [&_td]:p-4"} [&_th]:text-left [&_th]:align-middle [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted [&_td]:align-middle [&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0`}
+        style={{ minWidth }}
+        className={cn("border-collapse [&_th]:bg-background/75 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-left [&_th]:align-middle [&_th]:text-xs [&_th]:font-medium [&_th]:text-muted [&_td]:p-4 [&_td]:align-middle [&_td]:wrap-anywhere [&_tbody>tr]:border-t [&_tbody>tr]:border-border", className)}
         aria-label={label}
       >
         {children}

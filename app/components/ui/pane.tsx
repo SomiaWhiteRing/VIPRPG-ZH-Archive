@@ -22,6 +22,7 @@ export function Pane({
 
   return (
     <Card
+      data-slot="pane"
       className={`${tone === "danger" ? "border-red-300 bg-red-50 text-red-950 dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-200" : tone === "deep" ? "bg-muted/10" : ""} ${compact ? "p-4" : "p-5"}`}
     >
       {heading ? (
