@@ -74,54 +74,95 @@ export default function AdminAuditPage() {
 
       <DailyAuditReportPane {...dailyReports} />
 
-      <form
-        key={JSON.stringify([query, eventType, targetType, targetId])}
-        action="/admin/audit"
-        className="admin-filter-row"
-        method="get"
-      >
-        <Label className="admin-field admin-field-search">
-          操作者
-          <Input
-            defaultValue={query}
-            name="q"
-            placeholder="当前或操作时名称、邮箱、用户 ID"
-          />
-        </Label>
-        <Label className="admin-field">
-          动作
-          <Input
-            defaultValue={eventType}
-            name="action"
-            placeholder="事件类型"
-          />
-        </Label>
-        <Label className="admin-field">
-          条目类型
-          <SelectField aria-label="条目类型" name="targetType" defaultValue={targetType}
-            options={[{ value: "", label: "全部类型" }, ...Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => ({ value, label }))]} />
-        </Label>
-        <Label className="admin-field">
-          条目 ID／标签名
-          <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
-        </Label>
-        <Button type="submit">应用</Button>
-        {query || eventType || targetType || targetId || logId ? (
-          <Link
-            className={buttonVariants({ variant: "ghost" })}
-            to="/admin/audit"
+      <Pane heading="系统审计日志">
+        <div className="grid min-w-0 gap-5">
+          <form
+            key={JSON.stringify([query, eventType, targetType, targetId])}
+            action="/admin/audit"
+            className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr]"
+            aria-label="系统审计日志筛选"
+            method="get"
           >
-            清除
-          </Link>
-        ) : null}
-      </form>
-      <div className="admin-list-meta">
-        <span>
-          {logId ? `日志 #${logId} · ` : ""}
-          共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
-        </span>
-        <span>每页 {PAGE_SIZE} 条</span>
-      </div>
+            <Label className="admin-field">
+              操作者
+              <Input
+                defaultValue={query}
+                name="q"
+                placeholder="当前或操作时名称、邮箱、用户 ID"
+              />
+            </Label>
+            <Label className="admin-field">
+              动作
+              <Input
+                defaultValue={eventType}
+                name="action"
+                placeholder="事件类型"
+              />
+            </Label>
+            <Label className="admin-field">
+              条目类型
+              <SelectField aria-label="条目类型" name="targetType" defaultValue={targetType}
+                options={[{ value: "", label: "全部类型" }, ...Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => ({ value, label }))]} />
+            </Label>
+            <Label className="admin-field">
+              条目 ID／标签名
+              <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
+            </Label>
+            <div className="admin-filter-actions sm:col-span-2 xl:col-span-4">
+              <Button type="submit">应用筛选</Button>
+              {query || eventType || targetType || targetId || logId ? (
+                <Link className={buttonVariants({ variant: "ghost" })} to="/admin/audit">
+                  清除
+                </Link>
+              ) : null}
+            </div>
+          </form>
+          <div className="admin-list-meta">
+            <span>
+              {logId ? `日志 #${logId} · ` : ""}
+              共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
+            </span>
+            <span>每页 {PAGE_SIZE} 条</span>
+          </div>
+
+          {auditResult.items.length > 0 ? (
+            <ol className="min-w-0 divide-y divide-border border-t border-border">
+              {auditResult.items.map((log) => (
+                <li key={log.id} id={`audit-log-${log.id}`} className="grid min-w-0 scroll-mt-6 gap-4 py-5 last:pb-0 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-6">
+                  <div className="grid min-w-0 content-start gap-3">
+                    <div className="grid min-w-0 gap-1">
+                      <h3 className="m-0 wrap-anywhere font-mono text-sm font-semibold text-primary">{log.eventType}</h3>
+                      <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                        <span className="font-mono">#{log.id}</span>
+                        <span>{formatDate(log.createdAt)}</span>
+                      </p>
+                    </div>
+                    <div className="min-w-0 wrap-anywhere text-sm">
+                      <p className="mb-1 text-xs text-muted">操作者</p>
+                      <p className="font-medium">
+                        {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? "系统")}
+                        {log.userId ? <span className="ml-2 font-mono text-xs text-muted">#{log.userId}</span> : null}
+                      </p>
+                      {log.email ? <p className="mt-1 text-xs text-muted">{log.email}</p> : null}
+                    </div>
+                  </div>
+                  <AuditDetail detail={log.detail} />
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <EmptyState title="暂无系统审计日志。" />
+          )}
+          <PaginationLinks
+            className="my-0"
+            basePath="/admin/audit"
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={auditResult.total}
+            params={{ q: query || undefined, action: eventType || undefined, targetType: targetType || undefined, targetId: targetId || undefined, logId: logId ? String(logId) : undefined }}
+          />
+        </div>
+      </Pane>
 
       <details className="admin-panel admin-details">
         <summary>用户角色事件 · {roleEvents.length} 条</summary>
@@ -158,7 +199,7 @@ export default function AdminAuditPage() {
                     {event.action === "assigned" ? "分配" : "移除"}{" "}
                     {event.role.name}
                     {event.reason ? (
-                      <span className="whitespace-pre-wrap wrap-anywhere text-sm text-muted">{event.reason}</span>
+                      <span className="admin-cell-meta whitespace-pre-wrap wrap-anywhere">{event.reason}</span>
                     ) : null}
                   </td>
                   <td>
@@ -178,59 +219,6 @@ export default function AdminAuditPage() {
           <EmptyState title="暂无用户角色事件。" />
         )}
       </details>
-
-      <Pane heading="系统审计日志">
-        {auditResult.items.length > 0 ? (
-          <TableWrap compact label="系统审计日志" minWidth={980}>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>事件</th>
-                <th>操作者</th>
-                <th>条目与修改</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditResult.items.map((log) => (
-                <tr key={log.id} id={`audit-log-${log.id}`}>
-                  <td>{formatDate(log.createdAt)}</td>
-                  <td>
-                    <span className="font-mono text-sm text-primary">
-                      {log.eventType}
-                    </span>
-                    <span className="admin-cell-meta font-mono">
-                      #{log.id}
-                    </span>
-                  </td>
-                  <td>
-                    {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? "系统")}
-                    {log.userId ? (
-                      <span className="admin-cell-meta font-mono">
-                        #{log.userId}
-                      </span>
-                    ) : null}
-                    {log.email ? (
-                      <span className="admin-cell-meta">{log.email}</span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <AuditDetail detail={log.detail} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
-        ) : (
-          <EmptyState title="暂无系统审计日志。" />
-        )}
-      </Pane>
-      <PaginationLinks
-        basePath="/admin/audit"
-        page={page}
-        pageSize={PAGE_SIZE}
-        total={auditResult.total}
-        params={{ q: query || undefined, action: eventType || undefined, targetType: targetType || undefined, targetId: targetId || undefined, logId: logId ? String(logId) : undefined }}
-      />
     </main>
   );
 }
@@ -245,33 +233,38 @@ function AuditDetail({ detail }: { detail: unknown }) {
   const permission = typeof authorization?.permission === "string" ? authorization.permission : null;
   const permissionLabel = permission && Object.hasOwn(PERMISSIONS, permission)
     ? PERMISSIONS[permission as keyof typeof PERMISSIONS].label : permission;
-  return <div className="grid min-w-80 gap-3">
-    {targets.length ? <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-      {targets.map((target) => <li key={`${target.type}:${target.id}`}>
-        <Link className="text-primary hover:underline" to={entityAuditTargetHref(target)}>
+  return <div className="grid min-w-0 content-start gap-3">
+    {targets.length ? <ul className="grid gap-2 text-sm">
+      {targets.map((target) => <li className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1" key={`${target.type}:${target.id}`}>
+        <Link className="min-w-0 wrap-anywhere text-primary hover:underline" to={entityAuditTargetHref(target)}>
           {AUDIT_TARGET_LABELS[target.type]} {target.name ?? ""} <span className="font-mono">#{target.id}</span>
-        </Link>{" "}
-        <Link className="text-xs text-muted hover:underline" to={`/admin/audit?targetType=${target.type}&targetId=${encodeURIComponent(String(target.id))}`}>编辑历史</Link>
+        </Link>
+        <Link className="shrink-0 text-xs text-muted hover:underline" to={`/admin/audit?targetType=${target.type}&targetId=${encodeURIComponent(String(target.id))}`}>编辑历史</Link>
       </li>)}
     </ul> : null}
-    {authorization ? <p className="text-sm text-muted">
-      操作时角色：{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || "无角色" : "未记录"}；
-      授权依据：{authorization.basis === "content_author" ? "本人内容编辑" : authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}
-      {data?.source ? `；入口：${data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}` : ""}
-    </p> : null}
-    {hasSnapshots ? (changes.length ? <details className="admin-details">
-      <summary>字段变化 · {changes.length} 项</summary>
-      <TableWrap compact label="字段修改前后" minWidth={760}>
-      <thead><tr><th>修改字段</th><th>修改前</th><th>修改后</th></tr></thead>
-      <tbody>{changes.map((change, index) => <tr key={`${change.field}:${index}`}>
-        <td className="wrap-anywhere text-xs">{change.field}</td>
-        <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.before)}</pre></td>
-        <td><pre className="max-w-lg whitespace-pre-wrap wrap-anywhere text-xs">{formatDetail(change.after)}</pre></td>
-      </tr>)}</tbody>
-    </TableWrap></details> : <p className="text-sm text-muted">未检测到字段变化。</p>) : targets.length ?
+    {!hasSnapshots && targets.length ?
       <p className="text-sm text-muted">此记录没有完整前后快照，无法还原全部字段修改。</p> : null}
-    <details className="admin-details"><summary>原始审计记录</summary>
-      <pre className="mt-2 max-w-3xl overflow-x-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs">{formatDetail(detail)}</pre>
+    <details className="admin-details">
+      <summary>{hasSnapshots ? `修改详情 · ${changes.length} 个字段` : "审计详情"}</summary>
+      <div className="mt-4 grid min-w-0 gap-4">
+        {authorization ? <dl className="grid gap-3 rounded-md bg-muted/10 p-3 text-sm sm:grid-cols-2">
+          <div className="min-w-0"><dt className="text-xs text-muted">操作时角色</dt><dd className="mt-1 wrap-anywhere">{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || "无角色" : "未记录"}</dd></div>
+          <div className="min-w-0"><dt className="text-xs text-muted">授权依据</dt><dd className="mt-1 wrap-anywhere">{authorization.basis === "content_author" ? "本人内容编辑" : authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}</dd></div>
+          {data?.source ? <div className="min-w-0"><dt className="text-xs text-muted">操作入口</dt><dd className="mt-1">{data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}</dd></div> : null}
+        </dl> : null}
+        {hasSnapshots ? (changes.length ? <ul className="grid min-w-0 gap-4">
+          {changes.map((change, index) => <li className="min-w-0 rounded-md border border-border p-3" key={`${change.field}:${index}`}>
+            <h4 className="mb-3 wrap-anywhere text-sm font-semibold">{change.field}</h4>
+            <dl className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">修改前</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.before)}</pre></dd></div>
+              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">修改后</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-primary/5 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.after)}</pre></dd></div>
+            </dl>
+          </li>)}
+        </ul> : <p className="text-sm text-muted">未检测到字段变化。</p>) : null}
+        <details className="admin-details"><summary>原始审计记录</summary>
+          <pre className="mt-3 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(detail)}</pre>
+        </details>
+      </div>
     </details>
   </div>;
 }
