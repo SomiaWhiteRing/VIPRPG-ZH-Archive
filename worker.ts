@@ -10,6 +10,7 @@ import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 import { drainViewMerges } from "./app/.server/views/service";
 import { runScheduledAuditReports } from "./app/.server/db/audit-reports";
 import { DAILY_AUDIT_CRON } from "./lib/audit-report-config.mjs";
+import { crawlerResponse, publicRobots, isFilteredGameList } from "./lib/crawl-policy";
 
 export { ViewStats } from "./app/.server/views/durable-object";
 export { EternalSeaRoom } from "./app/.server/sea/durable-object";
@@ -34,6 +35,11 @@ const app = new Hono<{
 }>();
 
 app.use("*", async (c, next) => {
+  const crawlResponse = crawlerResponse(c.req.raw);
+  if (crawlResponse) {
+    if (c.env.SITE_NOINDEX === "true") crawlResponse.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return crawlResponse;
+  }
   c.set(
     "runtime",
     createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV),
@@ -41,11 +47,14 @@ app.use("*", async (c, next) => {
   await next();
   if (c.env.SITE_NOINDEX === "true") {
     c.header("X-Robots-Tag", "noindex, nofollow");
+  } else if (/^\/games(?:\.data)?\/?$/.test(c.req.path) &&
+      isFilteredGameList(new URL(c.req.url).searchParams)) {
+    c.header("X-Robots-Tag", "noindex, follow");
   }
 });
 app.get("/robots.txt", (c) => c.text(c.env.SITE_NOINDEX === "true"
   ? "User-agent: *\nDisallow: /\n"
-  : `User-agent: *\nAllow: /\n\nSitemap: ${c.get("runtime").origin}/sitemap.xml\n`));
+  : publicRobots(c.get("runtime").origin)));
 app.all(
   "/api/archive-versions/:id/kai-import",
   async (c) =>

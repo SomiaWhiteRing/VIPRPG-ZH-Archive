@@ -508,11 +508,11 @@ export async function searchUserComments(
 }> {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
-  const visibility = input.publicOnly
-    ? "c.id IN (SELECT id FROM public_comments)"
-    : publicCommentTargetSql("c");
-  const base = `FROM comments c JOIN users u ON u.id=c.user_id`;
-  const where = `WHERE c.user_id=? AND c.status<>'deleted' AND ${visibility}`;
+  // Push the author predicate into the public view instead of enumerating every
+  // visible comment. The view retains author, root and target visibility rules.
+  const base = input.publicOnly ? "FROM public_comments c" : "FROM comments c JOIN users u ON u.id=c.user_id";
+  const where = input.publicOnly ? "WHERE c.user_id=?"
+    : `WHERE c.user_id=? AND c.status<>'deleted' AND ${publicCommentTargetSql("c")}`;
   const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
     ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);

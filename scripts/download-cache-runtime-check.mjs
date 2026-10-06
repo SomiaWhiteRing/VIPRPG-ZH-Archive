@@ -125,6 +125,7 @@ try {
   const path = "/api/archive-versions/1/download";
   const generated = await request(path);
   const zip = new Uint8Array(await generated.arrayBuffer());
+  assert.equal(generated.headers.get("Content-Length"), String(zip.length));
   assert.equal(generated.status, 200, new TextDecoder().decode(zip.subarray(0, 2000)));
   assert.deepEqual(unzipSync(zip)["Picture/cache.bin"], bytes);
   await until(async () => (await (await request("/__cache")).json()).length === 1, "atomic R2 cache PUT");
@@ -151,6 +152,7 @@ try {
   const big = await request(bigPath);
   assert.equal(big.status, 200);
   const bigZip = await digestResponse(big, tailStart, true);
+  assert.equal(big.headers.get("Content-Length"), String(bigZip.size));
   assert.ok(bigZip.size > 128 * 1024 * 1024);
   await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size), "large R2 PUT");
   const bigHit = await request(bigPath);
@@ -158,6 +160,7 @@ try {
   assert.deepEqual(await digestResponse(bigHit, tailStart), bigZip);
   await request("/__clear-cache", { method: "POST" });
   const coldTail = await request(bigPath, { headers: { Range: `bytes=${tailStart}-` } });
+  assert.equal(coldTail.headers.get("Content-Length"), String(bigZip.size - tailStart));
   assert.equal(coldTail.status, 206);
   assert.equal((await digestResponse(coldTail)).hash, bigZip.tail);
   await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size-tailStart), "Range-only R2 PUT");

@@ -225,7 +225,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
     if (sharedCache && Number(headers.get("Content-Length")) <= downloadCacheMaxBytes) {
       // Store exactly the bytes already being served, including resumable tails.
       // Never construct an extra full ZIP just to warm a Range request's cache.
-      response = cacheDownloadResponse(env.ARCHIVE_BUCKET, sharedCache, response,
+      response = await cacheDownloadResponse(env.ARCHIVE_BUCKET, sharedCache, response,
         record.estimatedR2GetCount, zipSizeBytes, range, ctx);
     } else if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(

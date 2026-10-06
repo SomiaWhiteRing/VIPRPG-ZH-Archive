@@ -16,7 +16,7 @@ import { Hono } from "hono";
 import { PERMISSIONS, PERMISSION_CATEGORIES, SYSTEM_ROLE_PERMISSIONS } from "../lib/authz/permissions";
 import { TIMELINE_RECORD_KINDS } from "../lib/dto/db/timeline";
 import { createTimelineStatus, deleteTimelineEvent, listTimeline, readTimelineSettings, timelineStatement, updateTimelineSettings } from "../app/.server/db/timeline";
-import { createComment, deleteComment, listRootComments, moderateComment, pinComment, recordWorkPlayed, setWorkFavorite, updateComment } from "../app/.server/db/work-community";
+import { createComment, deleteComment, listRootComments, moderateComment, pinComment, recordWorkPlayed, searchUserComments, setWorkFavorite, updateComment } from "../app/.server/db/work-community";
 import { addCatalogItem, createCatalog, deleteCatalog, removeCatalogItem, updateCatalog, updateCatalogItem } from "../app/.server/db/catalogs";
 import { readShowcase, saveShowcase } from "../app/.server/db/showcase";
 import { mergeWorks } from "../app/.server/db/catalog-maintenance";
@@ -1129,6 +1129,37 @@ await check("discussion histories preserve deletion snapshots and enforce live r
   assert.equal(second.items.at(-1)?.before?.body, "Unedited floor");
   assert.ok(first.items.every((row) => !second.items.some((other) => row.id === other.id)));
   assert.equal((await forumHistory(ctx, moderator, comment.target)).total, 1, "deleting a parent retains nested history");
+});
+
+await check("profile comment pagination retains public visibility and private hidden comments", async (f) => {
+  f.sqlite.exec(`INSERT INTO comments(id,work_id,user_id,body,status,updated_at) VALUES
+    (201,1,1,'Public one','published','2026-01-01'),
+    (202,1,1,'Public two','published','2026-01-01'),
+    (203,1,1,'Hidden','published','2026-01-01'),
+    (204,1,1,'Deleted later','published','2026-01-01'),
+    (205,2,1,'Hidden target','published','2026-01-01'),
+    (206,1,2,'Other author','published','2026-01-01');
+    UPDATE works SET status='hidden' WHERE id=2;
+    INSERT INTO comments(id,work_id,user_id,body,status,root_comment_id,updated_at) VALUES
+    (207,1,1,'Reply to hidden root','published',203,'2026-01-01'),
+    (208,1,1,'Reply to deleted root','published',204,'2026-01-01'),
+    (209,1,1,'Reply to disabled author','published',206,'2026-01-01');
+    UPDATE comments SET status='hidden' WHERE id=203;
+    UPDATE comments SET status='deleted',body=NULL WHERE id=204;
+    UPDATE users SET status='disabled' WHERE id=2;`);
+  const first = await searchUserComments(f.runtime, { userId: 1, publicOnly: true, pageSize: 2 });
+  const second = await searchUserComments(f.runtime, { userId: 1, publicOnly: true, pageSize: 2, page: 2 });
+  assert.equal(first.total, 3);
+  assert.deepEqual(first.items.map((row) => row.id), [208, 202]);
+  assert.deepEqual(second.items.map((row) => row.id), [201]);
+  assert.equal(first.items[0].targetTitle, "Legacy");
+  assert.deepEqual(first.items[0].target, { kind: "work", id: 1 });
+  assert.equal(first.items[0].portrait, null);
+  const own = await searchUserComments(f.runtime, { userId: 1 });
+  assert.ok(own.items.some((row) => row.id === 203));
+  assert.ok(own.items.every((row) => ![204, 205, 206].includes(row.id)));
+  f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=1");
+  assert.equal((await searchUserComments(f.runtime, { userId: 1, publicOnly: true })).total, 0);
 });
 
 console.log("Timeline persistent contracts passed");

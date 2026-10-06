@@ -4,6 +4,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { GameLibrary } from "@/app/components/library/game-library";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { gameListCanonicalPath, isFilteredGameList } from "@/lib/crawl-policy";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 
@@ -17,8 +18,14 @@ export async function loader(args: LoaderFunctionArgs) {
   return loadGameLibrary(runtime, searchParams);
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "作品库", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location }) => {
+  const params = new URLSearchParams(location.search);
+  return [
+    ...pageMetaDescriptors({ title: "作品库", page: loaderData?.page,
+      alternates: { canonical: isFilteredGameList(params) ? "/games" : gameListCanonicalPath(params) } }, error),
+    ...(isFilteredGameList(params) ? [{ name: "robots", content: "noindex, follow" }] : []),
+  ];
+};
 
 export default function GamesPage() {
   const data = useLoaderData<typeof loader>();

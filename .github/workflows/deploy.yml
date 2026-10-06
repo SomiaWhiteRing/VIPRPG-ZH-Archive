@@ -40,6 +40,8 @@ jobs:
       - name: Isolated verification configuration
         run: node scripts/prepare-verification-config.mjs
       - run: npm run check
+      - run: npx tsx scripts/crawl-policy-check.ts
+      - run: npx tsx scripts/archive-performance-check.ts
       - run: npm run test:timeline
       - run: npx playwright install --with-deps chromium
       - run: npm run test:flow -- --report output/system-self-check/flow.json
