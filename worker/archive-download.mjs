@@ -31,21 +31,7 @@ const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 const zipLayoutCaches = new WeakMap();
 const zipLayoutCacheMaxBytes = 8 * 1024 * 1024;
 const productionOrigin = "https://viprpg.org";
-const downloadMirrorOrigin = "https://download.viprpg.org";
-const downloadAsiaMirrorOrigin = "https://download-asia.viprpg.org";
-const downloadOriginHeader = "X-Viprpg-Download-Origin";
-// Mainland cohorts with slow or interrupted transfers in the 2026-09-30–10-06 logs.
-// Regional ASNs were selected from logs, not individually verified by public probes.
-const nativeDownloadMirrorOrigins = new Map([
-  [4134, downloadAsiaMirrorOrigin],
-  [4837, downloadMirrorOrigin],
-  [9808, downloadAsiaMirrorOrigin],
-  [17816, downloadMirrorOrigin],
-  [24445, downloadAsiaMirrorOrigin],
-  [56041, downloadAsiaMirrorOrigin],
-  [56044, downloadAsiaMirrorOrigin],
-]);
-const downloadExposedHeaders = "Accept-Ranges, Content-Disposition, Content-Length, Content-Range, ETag, X-Archive-Version-Id, X-Manifest-SHA256, X-Estimated-R2-Get-Count, X-Download-Cache, X-Download-Cache-Tier, X-Download-Zip-Builder, X-Player-SHA256, X-Archive-Download-Alternate";
+const downloadExposedHeaders = "Accept-Ranges, Content-Disposition, Content-Length, Content-Range, ETag, X-Archive-Version-Id, X-Manifest-SHA256, X-Estimated-R2-Get-Count, X-Download-Cache, X-Download-Cache-Tier, X-Download-Zip-Builder, X-Player-SHA256";
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
   const response = await handleArchiveDownload(request, env, ctx);
@@ -57,13 +43,6 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
       // Cross-origin delivery never relies on cookies or exposes private data.
       response.headers.set("Access-Control-Allow-Origin", "*");
       response.headers.set("Access-Control-Expose-Headers", downloadExposedHeaders);
-      // This is transport metadata for an already-authorized public response.
-      // Never include the explicit direct-source fallback in an alternate URL.
-      if (request.cf?.country === "CN" || request.headers.get(downloadOriginHeader) === "1") {
-        url.searchParams.delete("download_source");
-        const mirrorOrigin = nativeDownloadMirrorOrigins.get(request.cf?.asn) ?? downloadMirrorOrigin;
-        response.headers.set("X-Archive-Download-Alternate", `${mirrorOrigin}${url.pathname}${url.search}`);
-      }
     }
   }
   return response;
@@ -138,23 +117,6 @@ async function handleArchiveDownload(request, env, ctx) {
         return new Response(null, { status: 307, headers: { Location: url.href, "Cache-Control": "no-store" } });
       }
       record = { ...record, playerSha256: player.sha256 };
-    }
-
-    const nativeMirrorOrigin = nativeDownloadMirrorOrigins.get(request.cf?.asn);
-    if (env.APP_ORIGIN === productionOrigin && url.origin === productionOrigin &&
-        request.cf?.country === "CN" && nativeMirrorOrigin && request.method === "GET" &&
-        request.headers.get("Sec-Fetch-Mode") === "navigate" && !request.headers.has("Range") &&
-        request.headers.get(downloadOriginHeader) !== "1" &&
-        url.searchParams.get("download_source") !== "origin") {
-      // Publication and fixed player selection are checked before redirecting.
-      // Only the final source invocation records a completed download.
-      return new Response(null, {
-        status: 307,
-        headers: {
-          Location: `${nativeMirrorOrigin}${url.pathname}${url.search}`,
-          "Cache-Control": "no-store",
-        },
-      });
     }
 
     const cacheRequest = downloadCacheRequest(request, record, profile);

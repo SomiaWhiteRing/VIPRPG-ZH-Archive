@@ -35,10 +35,14 @@ export function validateDeployment(target, environment, directory = ".") {
     throw new Error(`Configure limits.subrequests=${downloadSubrequestLimit} to match the archive download budget`);
   if (target.vars?.APP_ORIGIN !== origin || target.vars?.SITE_NOINDEX !== String(environment === "staging"))
     throw new Error(`${environment} requires APP_ORIGIN=${origin} and the matching SITE_NOINDEX`);
-  if (target.workers_dev !== false || target.preview_urls !== false ||
-      target.routes?.length !== 1 || target.routes[0].pattern !== new URL(origin).hostname ||
-      target.routes[0].custom_domain !== true)
-    throw new Error(`Configure only the ${origin} custom domain; disable workers_dev and preview_urls`);
+  const route = Array.isArray(target.routes) && target.routes.length === 1 ? target.routes[0] : null;
+  const customDomain = route?.pattern === new URL(origin).hostname && route.custom_domain === true;
+  const productionRoute = environment === "production" && route?.pattern === `${origin}/*` &&
+    /^[a-f0-9]{32}$/i.test(route.zone_id ?? "") &&
+    (route.custom_domain === undefined || route.custom_domain === false) &&
+    Object.keys(route).every((key) => ["pattern", "zone_id", "custom_domain"].includes(key));
+  if (target.workers_dev !== false || target.preview_urls !== false || (!customDomain && !productionRoute))
+    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? " or its exact HTTPS Route with zone_id" : ""}; disable workers_dev and preview_urls`);
   const database = target.d1_databases?.find((binding) => binding.binding === "DB");
   const bucket = target.r2_buckets?.find((binding) => binding.binding === "ARCHIVE_BUCKET");
   if (target.d1_databases?.length !== 1 || target.r2_buckets?.length !== 1 ||
@@ -92,6 +96,7 @@ export function migrationManifest() {
 export function deploymentSummary(target, environment) {
   return {
     environment, origin: target.vars.APP_ORIGIN, worker: target.name,
+    routes: target.routes,
     database: target.d1_databases.map(({ binding, database_name, database_id }) => ({ binding, database_name, database_id })),
     buckets: target.r2_buckets.map(({ binding, bucket_name }) => ({ binding, bucket_name })),
     migrations: migrationManifest(),
