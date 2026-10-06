@@ -2,11 +2,10 @@ import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { searchAdminImportJobs } from "@/app/.server/db/admin-observability";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
+import { AdminListControls } from "@/app/admin/admin-list-controls";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { SelectField } from "@/app/components/ui/select";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { formatBytes, formatDate } from "@/lib/format";
@@ -57,20 +56,11 @@ export default function AdminImportJobsPage() {
     <main>
       <PageHeader
         compact
-        subtitle={`共 ${result.total.toLocaleString("zh-CN")} 个任务`}
+        subtitle="查看上传处理状态、关联作品与任务详情。"
         title="上传任务"
       />
-      <form className="flex items-end gap-3" method="get">
-        <SelectField
-          aria-label="任务状态"
-          defaultValue={status}
-          name="status"
-          options={[...STATUS_OPTIONS]}
-        />
-        <Button type="submit" variant="outline">
-          筛选
-        </Button>
-      </form>
+      <AdminListControls action="/admin/import-jobs" noun="任务" status={status}
+        statusLabel="任务状态" statusOptions={STATUS_OPTIONS} total={result.total} pageSize={result.pageSize} />
       {result.items.length ? (
         <TableWrap compact label="上传任务" minWidth={900}>
           <thead>
@@ -87,7 +77,7 @@ export default function AdminImportJobsPage() {
             {result.items.map((job) => (
               <tr key={job.id}>
                 <td>
-                  <Link to={`/admin/import-jobs/${job.id}`}>
+                  <Link className="admin-cell-title" to={`/admin/import-jobs/${job.id}`}>
                     #{job.id} {job.sourceName || "未知来源"}
                   </Link>
                 </td>
@@ -108,7 +98,7 @@ export default function AdminImportJobsPage() {
                   {job.fileCount.toLocaleString("zh-CN")} ·{" "}
                   {formatBytes(job.sourceSizeBytes || 0)}
                 </td>
-                <td>{formatDate(job.updatedAt)}</td>
+                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(job.updatedAt)}</td>
               </tr>
             ))}
           </tbody>

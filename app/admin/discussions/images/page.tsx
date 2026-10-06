@@ -7,6 +7,8 @@ import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
+import { BackLink } from "@/app/components/ui/back-link";
+import { formatDate } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -46,15 +48,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function ForumImageCleanup() {
   const { page, rows } = useLoaderData<typeof loader>();
   return (
-    <main className="mx-auto grid w-[min(1180px,calc(100%-2rem))] gap-4 py-6">
-      <PageHeader title="讨论图片清理" />
-      <Link to="/admin/discussions" className="text-sm text-primary">
-        返回讨论管理
-      </Link>
+    <main>
+      <PageHeader compact title="讨论图片清理" actions={<BackLink href="/admin/discussions" label="返回讨论管理" />} />
       <p className="text-sm text-muted">
         仅清理未关联图片，或所属帖子、主题已隐藏或删除的图片。仅账户停用不满足清理条件。
       </p>
-      <ul className="divide-y divide-border">
+      <ul className="admin-panel divide-y divide-border">
         {rows.results.slice(0, 50).map((row) => (
           <li
             key={row.id}
@@ -62,7 +61,8 @@ export default function ForumImageCleanup() {
           >
             <div className="min-w-0 text-sm">
               <p>
-                {row.author} · {row.created_at}
+                <strong className="admin-cell-title">{row.author}</strong>
+                <span className="admin-cell-meta">{formatDate(row.created_at)}</span>
               </p>
               <p className="break-all font-mono text-xs text-muted">{row.id}</p>
               {row.topic_id ? (

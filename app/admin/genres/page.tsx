@@ -7,7 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { Pane } from "@/app/components/ui/pane";
+import { AdminListMeta } from "@/app/admin/admin-list-controls";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { formatNumber } from "@/lib/format";
@@ -41,6 +41,7 @@ export default function AdminGenresPage() {
   const [targetValue, setTargetValue] = useState(target);
   const sourceInput = useRef<HTMLInputElement>(null);
   const targetInput = useRef<HTMLInputElement>(null);
+  const mergePanel = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     setSourceValue(source);
     setTargetValue(target);
@@ -50,6 +51,7 @@ export default function AdminGenresPage() {
   const canMerge = sourceMembers.length > 0 && targetMembers.length > 0
     && sourceMembers[0].group_id !== targetMembers[0].group_id;
   function fillMergeSlot(name: string) {
+    if (mergePanel.current) mergePanel.current.open = true;
     if (emptySlot === "A") {
       setSourceValue(name);
       sourceInput.current?.focus();
@@ -61,8 +63,9 @@ export default function AdminGenresPage() {
   return <main className="grid gap-6">
     <PageHeader compact title="类型整理" />
     <RedirectFeedback />
-    <Pane heading="合并筛选归属">
-      <form action="/admin/genres" method="get" className="grid gap-4 md:grid-cols-2">
+    <details ref={mergePanel} className="admin-panel admin-details" open={Boolean(source || target)}>
+      <summary>合并筛选归属</summary>
+      <form action="/admin/genres" method="get" className="mt-4 grid gap-4 md:grid-cols-2">
         <input type="hidden" name="q" value={query} />
         <input type="hidden" name="page" value={page} />
         <FormField controlId="genre-source" label="类型 A">
@@ -85,16 +88,17 @@ export default function AdminGenresPage() {
           <Button type="submit">确认合并两组</Button>
         </RedirectForm> : sourceMembers.length && targetMembers.length ? <p>这两个类型已经属于同一组。</p> : null}
       </div> : null}
-    </Pane>
-    <form action="/admin/genres" method="get" className="flex items-end gap-3">
+    </details>
+    <form action="/admin/genres" method="get" className="admin-filter-row">
       <input type="hidden" name="source" value={sourceValue} />
       <input type="hidden" name="target" value={targetValue} />
-      <FormField controlId="genre-query" label="搜索类型">
+      <div className="admin-field admin-field-search"><FormField controlId="genre-query" label="搜索类型">
         <Input id="genre-query" name="q" defaultValue={query} maxLength={WORK_GENRE_MAX_LENGTH} />
-      </FormField>
+      </FormField></div>
       <Button type="submit" variant="outline">搜索</Button>
     </form>
-    <ul aria-label="类型" className="m-0 flex list-none flex-wrap items-start gap-2 p-0">
+    <AdminListMeta total={result.total} noun="类型组" pageSize={50} />
+    <ul aria-label="类型" className="admin-panel m-0 flex list-none flex-wrap items-start gap-2">
       {result.items.map((group) => <li key={group.id} className="inline-flex min-h-7.5 min-w-0 max-w-full items-center gap-1.5 rounded-full border border-secondary/30 px-2.75 py-1 text-sm font-medium text-secondary">
         <span className="min-w-0 [overflow-wrap:anywhere]">
           {group.members.map((genre, index) => <Fragment key={genre.id}>

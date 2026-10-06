@@ -21,7 +21,7 @@ import {
   hasPermission,
 } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -107,6 +107,7 @@ export default function AdminCharactersPage() {
           { value: "name", label: "名称" },
           { value: "works", label: "登场作品数" },
         ]}
+        pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
@@ -116,34 +117,34 @@ export default function AdminCharactersPage() {
               <th>角色</th>
               <th>登场作品</th>
               <th>更新时间</th>
-              <th>操作</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
             {result.items.map((character) => (
               <tr key={character.id}>
                 <td>
-                  <strong>{character.primaryName}</strong>
+                  <strong className="admin-cell-title">{character.primaryName}</strong>
                   {character.originalName ? (
-                    <span className="text-sm text-muted">
+                    <span className="admin-cell-meta">
                       {character.originalName}
                     </span>
                   ) : null}
                 </td>
                 <td>{formatNumber(character.workCount)}</td>
-                <td>{character.updatedAt}</td>
-                <td>
+                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(character.updatedAt)}</td>
+                <td className="admin-action-column">
                   {CHARACTER_DETAIL_PERMISSIONS.some((key) =>
                     hasPermission(adminUser, key),
                   ) ? (
                     <Link
-                      className={buttonVariants()}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/characters/${character.id}`}
                     >
                       查看与维护
                     </Link>
                   ) : (
-                    <span className="text-sm text-muted">只读</span>
+                    <span className="admin-cell-meta">只读</span>
                   )}
                 </td>
               </tr>

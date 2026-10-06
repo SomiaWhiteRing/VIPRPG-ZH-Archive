@@ -593,7 +593,7 @@ export function PortraitLibraryEditor({
         <TabsContent value={kind} className="pb-0 pt-3">
           <div
             className={cn(
-              "relative grid min-w-0 overflow-hidden rounded-md border bg-card lg:h-[660px] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
+              "admin-workspace-panel relative grid min-w-0 overflow-hidden border bg-card lg:h-[660px] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]",
               dragging ? "border-primary ring-2 ring-primary" : "border-border",
             )}
             onDragStartCapture={(event) => {
@@ -1292,7 +1292,7 @@ export function PortraitLibraryEditor({
           {error}
         </div>
       ) : null}
-      <div className="sticky bottom-3 z-20 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3 shadow-surface">
+      <div className="admin-save-bar">
         <div
           className="min-w-0 flex-1 wrap-anywhere text-sm"
           role="status"

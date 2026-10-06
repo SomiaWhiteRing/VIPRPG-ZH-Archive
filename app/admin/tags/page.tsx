@@ -85,6 +85,7 @@ export default function AdminTagsPage() {
         noun="标签"
         query={query}
         status={namespace}
+        statusLabel="命名空间"
         statusOptions={[
           { value: "all", label: "全部命名空间" },
           { value: "genre", label: "类型" },
@@ -100,6 +101,7 @@ export default function AdminTagsPage() {
           { value: "name", label: "名称" },
           { value: "works", label: "关联作品数" },
         ]}
+        pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
@@ -109,27 +111,27 @@ export default function AdminTagsPage() {
               <th>标签</th>
               <th>命名空间</th>
               <th>关联</th>
-              <th>操作</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
             {result.items.map((tag) => (
               <tr key={tag.name}>
                 <td>
-                  <strong>{tag.name}</strong>
+                  <strong className="admin-cell-title">{tag.name}</strong>
                 </td>
                 <td>{namespaceLabel(tag.namespace)}</td>
                 <td>{formatNumber(tag.workCount)} 部作品</td>
-                <td>
+                <td className="admin-action-column">
                   {hasPermission(adminUser, "tag.metadata.update_any") ? (
                     <Link
-                      className={buttonVariants()}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/tags/edit?name=${encodeURIComponent(tag.name)}`}
                     >
                       编辑
                     </Link>
                   ) : (
-                    <span className="text-sm text-muted">只读</span>
+                    <span className="admin-cell-meta">只读</span>
                   )}
                 </td>
               </tr>

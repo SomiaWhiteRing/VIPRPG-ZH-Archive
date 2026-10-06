@@ -34,15 +34,15 @@ export function ArchiveVersionTable({
           <th>状态</th>
           <th>规模</th>
           <th>时间</th>
-          <th>操作</th>
+          <th className="admin-action-column">操作</th>
         </tr>
       </thead>
       <tbody>
         {archiveVersions.map((archiveVersion) => (
           <tr key={archiveVersion.id}>
             <td>
-              <strong>{archiveVersion.workTitle}</strong>
-              <span className="font-mono text-sm text-primary text-sm text-muted">
+              <strong className="admin-cell-title">{archiveVersion.workTitle}</strong>
+              <span className="admin-cell-meta font-mono">
                 #{archiveVersion.id} / {languageLabel(archiveVersion.language)}
               </span>
             </td>
@@ -53,12 +53,12 @@ export function ArchiveVersionTable({
                 value={archiveVersion.status}
               />
               {archiveVersion.isCurrent ? (
-                <span className="text-sm text-muted">当前版本</span>
+                <span className="admin-cell-meta">当前版本</span>
               ) : null}
             </td>
             <td>
               {formatNumber(archiveVersion.totalFiles)} 文件
-              <span className="text-sm text-muted">
+              <span className="admin-cell-meta">
                 {formatBytes(archiveVersion.totalSizeBytes)} / 约{" "}
                 {formatNumber(archiveVersion.estimatedR2GetCount)}{" "}
                 次对象存储读取
@@ -67,22 +67,22 @@ export function ArchiveVersionTable({
             <td>
               {formatDate(archiveVersion.createdAt)}
               {archiveVersion.deletedAt ? (
-                <span className="text-sm text-muted">
+                <span className="admin-cell-meta">
                   放入回收站：{formatDate(archiveVersion.deletedAt)}
                 </span>
               ) : null}
               {archiveVersion.purgedAt ? (
-                <span className="text-sm text-muted">
+                <span className="admin-cell-meta">
                   最终清理：{formatDate(archiveVersion.purgedAt)}
                 </span>
               ) : null}
               {archiveVersion.uploaderName ? (
-                <span className="text-sm text-muted">
+                <span className="admin-cell-meta">
                   上传者：{archiveVersion.uploaderName}
                 </span>
               ) : null}
             </td>
-            <td>
+            <td className="admin-action-column">
               <ArchiveActions
                 actor={actor}
                 archiveVersion={archiveVersion}
@@ -111,11 +111,11 @@ function ArchiveActions({
 
   if (archiveVersion.status === "deleted") {
     if (archiveVersion.purgedAt) {
-      return <span className="text-sm text-muted">已最终清理，不能还原</span>;
+      return <span className="admin-cell-meta">已最终清理，不能还原</span>;
     }
 
     if (!canRestore) {
-      return <span className="text-sm text-muted">需要管理员还原</span>;
+      return <span className="admin-cell-meta">需要管理员还原</span>;
     }
 
     return (
@@ -124,7 +124,7 @@ function ArchiveActions({
         method="post"
         className="inline-flex"
       >
-        <Button type="submit">还原</Button>
+        <Button size="sm" type="submit">还原</Button>
       </RedirectForm>
     );
   }
@@ -136,10 +136,10 @@ function ArchiveActions({
     mode === "active" && canDeleteArchiveVersion(actor, maintainerId);
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="admin-row-actions">
       {canUpdateArchive ? (
         <Link
-          className={buttonVariants()}
+          className={buttonVariants({ variant: "ghost", size: "sm" })}
           to={`/admin/archive-versions/${archiveVersion.id}`}
         >
           编辑版本
@@ -153,7 +153,7 @@ function ArchiveActions({
           method="post"
           className="inline-flex"
         >
-          <Button variant="outline" type="submit">
+          <Button size="sm" variant="outline" type="submit">
             设为当前
           </Button>
         </RedirectForm>

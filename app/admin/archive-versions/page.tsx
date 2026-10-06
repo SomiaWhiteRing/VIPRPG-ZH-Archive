@@ -106,6 +106,7 @@ export default function AdminArchiveVersionsPage() {
           { value: "processing", label: "处理中" },
           { value: "hidden", label: "隐藏" },
         ]}
+        pageSize={PAGE_SIZE}
         total={result.total}
       />
       <ArchiveVersionTable

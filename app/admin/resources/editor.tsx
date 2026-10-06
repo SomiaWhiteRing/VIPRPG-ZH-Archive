@@ -9,6 +9,7 @@ import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { SelectField } from "@/app/components/ui/select";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { StickySaveBar } from "@/app/admin/admin-list-controls";
 import {
   fileSize,
   targetLabel,
@@ -117,7 +118,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
           </Button>
         }
       />
-      <section className="flex flex-wrap items-center gap-4 rounded-md border border-border bg-card p-4">
+      <section className="admin-panel flex flex-wrap items-center gap-4">
         {resource.icon_blob_sha256 ? (
           <img
             src={`${base}/icon?v=${resource.revision}`}
@@ -141,9 +142,9 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
       <form
         key={`resource-${formKey}`}
         onSubmit={save}
-        className="grid gap-4 rounded-md border border-border bg-card p-4"
+        className="admin-panel grid gap-4"
       >
-        <h2 className="text-lg font-bold">链接资料</h2>
+        <h2 className="admin-section-title">链接资料</h2>
         <p className="text-sm text-muted">
           固定名称：{resource.slug} ·{" "}
           {resource.kind === "tool" ? "软件" : "站外网站"}
@@ -203,14 +204,14 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             />
           </Field>
         </div>
-        <Button disabled={busy} className="justify-self-start">
+        <StickySaveBar><Button disabled={busy}>
           保存资料
-        </Button>
+        </Button></StickySaveBar>
       </form>
       {resource.kind === "tool" ? (
         <>
-          <section className="grid gap-3 rounded-md border border-border bg-card p-4">
-            <h2 className="text-lg font-bold">当前推荐</h2>
+          <section className="admin-panel grid gap-3">
+            <h2 className="admin-section-title">当前推荐</h2>
             {RESOURCE_TARGETS.filter((target) => !automaticPackage || target === (android ? "android-universal" : "windows-x64")).map((target) => {
               const channel = data.channels.find((c) => c.target === target);
               const artifact = data.artifacts.find(
@@ -259,9 +260,9 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                 notes: values.get("notes"),
               });
             }}
-            className="grid gap-3 rounded-md border border-border bg-card p-4"
+            className="admin-panel grid gap-3"
           >
-            <h2 className="text-lg font-bold">新建本站版本</h2>
+            <h2 className="admin-section-title">新建本站版本</h2>
             <p className="text-sm text-muted">
               版本名与更新说明由本站维护。发布时自动分配更新序号，与 GitHub
               无关。
@@ -284,9 +285,9 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               id={`release-${release.id}`}
               key={`${release.id}-${formKey}`}
               open={release.status === "draft"}
-              className="rounded-md border border-border bg-card p-4"
+              className="admin-panel admin-details"
             >
-              <summary className="cursor-pointer font-bold">
+              <summary>
                 {release.version_label} ·{" "}
                 {
                   { draft: "草稿", published: "已发布", withdrawn: "已撤回" }[

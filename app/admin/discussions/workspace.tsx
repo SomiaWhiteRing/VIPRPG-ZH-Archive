@@ -1,3 +1,5 @@
+import { AdminListMeta } from "@/app/admin/admin-list-controls";
+import { TableWrap } from "@/app/components/ui/table-wrap";
 import { useToast } from "@/app/components/ui/toast";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
@@ -60,7 +62,7 @@ export function AdminDiscussions({
   return (
     <main>
       <PageHeader compact title="讨论管理" />
-      <nav className="flex flex-wrap gap-4 text-sm" aria-label="讨论管理视图">
+      <nav className="admin-tabs" aria-label="讨论管理视图">
         {(viewer.moderate
           ? [
               ["reports", "待处理举报"],
@@ -71,7 +73,6 @@ export function AdminDiscussions({
         ).map(([value, label]) => (
           <Link
             key={value}
-            className={view === value ? "font-bold text-primary underline" : ""}
             aria-current={view === value ? "page" : undefined}
             to={forumHref("/admin/discussions", { view: value })}
           >
@@ -85,15 +86,15 @@ export function AdminDiscussions({
         ) : null}
       </nav>
       <form
-        className="flex flex-wrap items-end gap-3"
+        className="admin-filter-row"
         action="/admin/discussions"
       >
         <input type="hidden" name="view" value={view} />
-        <div className="min-w-48 flex-1">
+        <div className="admin-field admin-field-search">
           <Label htmlFor="admin-forum-query">标题、正文、TAG、作者或 ID</Label>
           <Input id="admin-forum-query" name="q" defaultValue={query} />
         </div>
-        <div>
+        <div className="admin-field">
           <Label htmlFor="admin-forum-state">内容状态</Label>
           <SelectField
             id="admin-forum-state"
@@ -109,15 +110,15 @@ export function AdminDiscussions({
         </div>
         <Button type="submit">查询</Button>
       </form>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table className="text-left">
+      <AdminListMeta total={data.total} noun="记录" pageSize={data.pageSize} />
+      {data.items.length ? <TableWrap compact label="讨论管理记录" minWidth={0}>
           <thead>
             <tr className="border-b border-border">
-              <th className="p-3">目标</th>
-              <th className="hidden p-3 md:table-cell">作者／举报人</th>
-              <th className="hidden p-3 md:table-cell">状态／原因</th>
-              <th className="hidden p-3 md:table-cell">时间</th>
-              <th className="w-20 whitespace-nowrap p-3">操作</th>
+              <th>目标</th>
+              <th className="hidden md:table-cell">作者／举报人</th>
+              <th className="hidden md:table-cell">状态／原因</th>
+              <th className="hidden md:table-cell">时间</th>
+              <th className="admin-action-column">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -126,8 +127,8 @@ export function AdminDiscussions({
                 className="border-b border-border"
                 key={`${row.reportId ?? row.kind}-${row.id}`}
               >
-                <td className="max-w-96 p-3">
-                  <strong className="wrap-anywhere">
+                <td className="max-w-96">
+                  <strong className="admin-cell-title wrap-anywhere">
                     {row.title || "已删除主题"}
                   </strong>
                   <p className="text-xs text-muted">
@@ -150,13 +151,13 @@ export function AdminDiscussions({
                     {row.reason ?? contentStateLabel(row.state)}
                   </p>
                 </td>
-                <td className="hidden p-3 md:table-cell">
+                <td className="hidden md:table-cell">
                   {row.author}
                   {row.reporter ? (
                     <p className="text-xs">举报人：{row.reporter}</p>
                   ) : null}
                 </td>
-                <td className="hidden p-3 md:table-cell">
+                <td className="hidden md:table-cell">
                   {row.reason ??
                     { published: "公开", hidden: "隐藏", deleted: "删除" }[
                       row.state
@@ -168,12 +169,12 @@ export function AdminDiscussions({
                     </p>
                   ) : null}
                 </td>
-                <td className="hidden p-3 md:table-cell">
+                <td className="hidden md:table-cell">
                   <Timestamp value={row.createdAt} />
                 </td>
-                <td className="p-3">
+                <td className="admin-action-column">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={busy}
                     onClick={() => void open(row)}
@@ -185,15 +186,7 @@ export function AdminDiscussions({
               </tr>
             ))}
           </tbody>
-        </Table>
-        {!data.items.length ? (
-          <EmptyState
-            title="没有匹配的记录。"
-            variant="plain"
-            className="p-4"
-          />
-        ) : null}
-      </div>
+        </TableWrap> : <EmptyState title="没有匹配的记录。" />}
       <PaginationLinks
         basePath="/admin/discussions"
         page={data.page}
@@ -448,4 +441,3 @@ function AdminDiscussionPanel({
     </ForumModal>
   );
 }
-import { Table } from "@/app/components/ui/table";
