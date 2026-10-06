@@ -74,13 +74,26 @@ npm run db:production:migrate -- --apply
 
 ## 中国大陆下载备用入口
 
-`download.viprpg.org` 是公开 ZIP 的专用入口，不承载页面、登录或用户存档。独立 `viprpg-download` Worker 仅通过 `ARCHIVE_SOURCE` service binding 调用当前正式 Worker；每次下载仍核实归档及作品的发布状态，不复制 D1/R2，不建立独立缓存。
+`download.viprpg.org` 和 `download-asia.viprpg.org` 是公开 ZIP 的专用入口，不承载页面、登录或用户存档。同一个独立 `viprpg-download` Worker 仅通过 `ARCHIVE_SOURCE` service binding 调用当前正式 Worker；每次下载仍核实归档及作品的发布状态，不复制 D1/R2，不建立独立缓存。
 
-执行 `npm run deploy:download -- --plan` 只读核对当前资源并预览。取得本次正式入口部署授权、候选已提交且工作树干净后，执行 `npm run deploy:download -- --confirm viprpg.org`。脚本创建或更新唯一 `download.viprpg.org` 灰云 A 和精确 HTTPS Route，拒绝覆盖不属于该入口的 DNS/Route/绑定；记录保存在忽略的 `output/download-relay-deployment/`。先发布入口，再发布主站代码；日常主站发布不重新部署该独立 Worker，修改它时须运行本命令。
+执行 `npm run deploy:download -- --plan` 只读核对当前资源并预览。取得本次正式入口部署授权、候选已提交且工作树干净后，执行 `npm run deploy:download -- --confirm viprpg.org`。脚本先核对两个入口的所有冲突，再创建或更新各自灰云 A 和精确 HTTPS Route，拒绝覆盖不属于该入口的 DNS/Route/绑定；记录保存在忽略的 `output/download-relay-deployment/`。先发布入口，再发布主站代码；日常主站发布不重新部署该独立 Worker，修改它时须运行本命令。
 
-2026-10-06 联通探针对 `162.159.140.245` 的正常 DNS HTTPS 测试获得有效证书、完整内容及更高成功率。灰云 A + Route 是当前实测可用的备用技巧，官方 Route 文档仍要求 proxied DNS，不能保证该 IP 长期进入同一机房或持续提供证书。保留主站原入口，不盲目更改主站 A/AAAA 或使用第三方代理 IP。
+2026-10-06 联通探针对 `download.viprpg.org` 的 `162.159.140.245` 正常 DNS HTTPS 测试获得有效证书和完整内容；电信、移动对该地址未见稳定通用收益，因此另选 `download-asia.viprpg.org` 的 Cloudflare 自有地址 `172.64.155.209`，同 Host/SNI 对照中电信进入 SIN、移动进入 HKG。地址自身不保证机房，不能用地理位置代替速度测量。灰云 A + Route 是当前实测可用的备用技巧，官方 Route 文档仍要求 proxied DNS，不能保证这些 IP 长期进入同一机房或持续提供证书。保留主站原入口，不更改主站 A/AAAA 或使用第三方代理 IP。
 
-主站只对大陆 AS4837 的原生下载导航自动转到备用入口；其他大陆请求获得内部候选响应头，在线安装器从原源开始，网络停滞或持续低速时有限换源并以强 ETag 和 Range 续传。未发布对象仍为 404。`download_source=origin` 可强制返回原源，作为下载入口故障时的回退；该参数不改变 ZIP 字节、ETag 或缓存身份。预生产及本地不开启正式备用入口。
+2026-09-30 至 2026-10-06 的 26 个日志窗口均没有查询截断或额外自适应抽样；剔除测试请求、重定向以及 11 次内存和 5 次子请求限额后，保留 1,590 个下载请求。原始 Worker 日志仍可能采样，取消不等于线路故障，大文件耗时长也不能单独证明线路慢。以下按实际 ASN 配置，未按运营商品牌扩到所有网络：
+
+| ASN | 日志中的异常依据 | 首次原生下载入口 |
+| --- | --- | --- |
+| 4837、17816（联通） | 长时间取消；广东联通 18 次无 Range 尝试有 15 次取消 | `download.viprpg.org` |
+| 4134（电信） | 排除资源异常后，166.5 MB 完整包仍耗约 25.8 分钟 | `download-asia.viprpg.org` |
+| 9808（移动） | 144.1 MB 完整包耗约 14.3 分钟 | `download-asia.viprpg.org` |
+| 24445（移动） | 54.9 MB 完整包耗约 6.7 分钟；原入口三轮探针连接失败 | `download-asia.viprpg.org` |
+| 56041（移动） | 83.4 MB 完整包耗约 7.4 分钟，CPU 仅 2 ms | `download-asia.viprpg.org` |
+| 56044（移动） | 166.5 MB 完整包耗约 16.8 分钟 | `download-asia.viprpg.org` |
+
+地方 ASN 17816、56041、56044 按日志选入，当前无公开同 ASN 探针，不能称为逐线路实测收益。公开探针只验证 8 KiB 完整 ZIP Range、证书和连接等待，不证明大 ZIP 持续吞吐；Globalping 大响应会停止读取，不能用它的截断响应估算整包下载速度。本机忽略目录 `output/download-route-expansion-20261006/` 保存原始查询、排除明细、固定探针对照及发布验证。
+
+主站对上述大陆 ASN 的首次原生 GET 下载导航自动转到对应备用入口，已有 Range 请求保留当前源；其他请求保留原入口。大陆响应提供按 ASN 选择的候选响应头，在线安装器从原源开始，网络停滞或持续低速时有限换源并以强 ETag 和 Range 续传；响应头到达前的网络故障仍使用默认 `download.viprpg.org`。未发布对象仍为 404；共享播放器先固定版本，再选择下载入口。`download_source=origin` 可强制返回原源，作为下载入口故障时的回退；该参数不改变 ZIP 字节、ETag 或缓存身份。预生产及本地不开启正式备用入口。只修改已有入口的 ASN 映射时无需重部署独立 Worker；增加入口域名时先更新独立 Worker、DNS/Route 和安装器精确 origin 白名单。
 
 回退时发布此前主站/安装器候选即可恢复原源；可先保留备用域名以服务已开始的下载。删除 DNS、Route 或独立 Worker 属于另行批准的配置操作。
 
