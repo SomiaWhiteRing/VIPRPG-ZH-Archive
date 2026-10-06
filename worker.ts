@@ -8,6 +8,8 @@ import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 import { drainViewMerges } from "./app/.server/views/service";
+import { runScheduledAuditReports } from "./app/.server/db/audit-reports";
+import { DAILY_AUDIT_CRON } from "./lib/audit-report-config.mjs";
 
 export { ViewStats } from "./app/.server/views/durable-object";
 export { EternalSeaRoom } from "./app/.server/sea/durable-object";
@@ -81,6 +83,10 @@ app.all("*", async (c) => {
 export default {
   fetch: app.fetch,
   scheduled(controller, env, ctx) {
+    if (controller.cron === DAILY_AUDIT_CRON) {
+      ctx.waitUntil(runScheduledAuditReports(env.DB, controller.scheduledTime));
+      return;
+    }
     ctx.waitUntil(drainViewMerges(env).catch(() => {
       console.error("Scheduled view merge retry failed");
     }));

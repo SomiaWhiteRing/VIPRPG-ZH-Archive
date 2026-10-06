@@ -6,6 +6,7 @@ import { timelineApi } from "./timeline/api";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
+import * as auditReportExportEndpoint from "@/app/.server/endpoints/api/admin/audit/reports/[date]/export/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
@@ -121,6 +122,11 @@ export const api = new Hono<{
 api.onError((error) => jsonError("请求失败", error));
 api.route("/", sitemapApi);
 api.route("/", seaApi);
+api.get("/api/admin/audit/reports/:date/export", (c) => auditReportExportEndpoint.GET(c.get("runtime"), c.req.raw,
+  { params: Promise.resolve({ date: c.req.param("date") }) }));
+api.options("/api/admin/audit/reports/:date/export", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));
+api.all("/api/admin/audit/reports/:date/export", (_c) => jsonResponse({ ok: false, error: "Method not allowed" },
+  { status: 405, headers: { Allow: "GET, OPTIONS" } }));
 api.get("/api/users/mentions", (c) => searchMentionUsers(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/works/random", async (c) =>
   jsonResponse({ ok: true, works: await listRandomGameWorks(c.get("runtime")) }, { status: 200, headers: { "Cache-Control": "no-store" } }),

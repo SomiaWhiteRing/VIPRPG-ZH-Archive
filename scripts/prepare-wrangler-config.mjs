@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { parse } from "jsonc-parser";
 import { downloadSubrequestLimit } from "../lib/archive/download.ts";
+import { DAILY_AUDIT_CRON } from "../lib/audit-report-config.mjs";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
 const { values } = parseArgs({ options: { env: { type: "string" } } });
@@ -20,6 +21,8 @@ const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_dat
   "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement"];
 const target = structuredClone(base);
 for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
+// Code-owned daily reporting must survive resource secrets with older cron lists.
+target.triggers = { ...target.triggers, crons: [...new Set([...(target.triggers?.crons ?? []), DAILY_AUDIT_CRON])] };
 // Resource secrets can carry older limits; retain CPU settings while enforcing
 // the same subrequest budget used by the download handler.
 target.limits = { ...target.limits, subrequests: downloadSubrequestLimit };
