@@ -152,6 +152,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       archiveVersionId: installation.archiveVersionId,
       manifestSha256: installation.manifestSha256,
       engineFamily: installation.engineFamily!,
+      easyRpg: installation.easyRpg,
       playKey: installation.playKey,
       runtimeBasePath: easyRpgRuntimeBasePath,
     }, () => {}, () => {}, () => { playerRef.current = null; onClose(); });

@@ -1,6 +1,7 @@
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
+import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { interceptPlayerDownloads } from "./web-play-player-download";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
@@ -64,7 +65,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "engineFamily"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "engineFamily" | "easyRpg"
 >;
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -228,8 +229,8 @@ export function createPlayerSession(
       onScreenshot,
       onError: error => onLog("error", `处理播放器文件失败：${formatLogValue(error)}`),
     });
-    const args: string[] = [];
-    if (metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
+    const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
+    if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
     runtimeCreation = playerWindow.createEasyRpgPlayer({

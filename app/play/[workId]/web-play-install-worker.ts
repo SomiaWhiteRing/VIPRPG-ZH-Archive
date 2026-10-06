@@ -770,6 +770,7 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     title: metadata.title,
     originalTitle: metadata.originalTitle,
     engineFamily: metadata.engineFamily,
+    easyRpg: metadata.easyRpg,
     coverBlobSha256: metadata.coverBlobSha256,
     status: "created",
     phase: "metadata",

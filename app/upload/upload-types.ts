@@ -9,6 +9,7 @@ import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { ResourceCleanupReport } from "@/lib/archive/resource-cleanup";
 import type { MissingResourceReport } from "@/lib/archive/missing-resources";
 import type { SharedPlayerReplacement } from "@/lib/archive/shared-player";
+import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 
@@ -118,6 +119,7 @@ export type UploadTaxonomySuggestion = {
 };
 
 export type PreparedArchiveSource = {
+  easyRpg?: EasyRpgConfig;
   useSharedPlayer?: boolean;
   sourceKind: UploadSourceKind;
   sourceName: string;

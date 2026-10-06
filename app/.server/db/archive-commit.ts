@@ -22,7 +22,7 @@ import { assertTranslationLanguageChangeAllowed } from "@/app/.server/db/relatio
 import { normalizeHttpUrl } from "@/app/.server/http/safe-url";
 import { parseWorkMoreInfo } from "@/app/.server/http/work-more-info";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { putManifest } from "@/app/.server/storage/archive-bucket";
+import { getBlob, putManifest } from "@/app/.server/storage/archive-bucket";
 import { ensureCharacterFaceSheets } from "@/app/.server/storage/character-portraits";
 import { type CorePackMetadata, validateCorePackMetadata, validateCorePackReferences } from "@/app/.server/storage/core-pack-validation";
 
@@ -42,6 +42,7 @@ import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import { isArchiveEngineFamily, isLanguageCode } from "@/lib/labels";
+import { detectEasyRpgConfig, isEasyRpgDetectionFile, parseEasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
   parseOriginalReleaseDate,
@@ -331,8 +332,34 @@ export async function verifyArchiveSourceManifest(
   validateBlobReferences(manifest, objectLedger.blobs);
   const cleanup = manifest.archiveVersion.resourceCleanup;
   const scan = cleanup?.excluded.length ? new ResourceReferenceScan([...manifest.files, ...cleanup.excluded]) : null;
+  const detectionBytes = new Map<string, Uint8Array>();
   await validateCorePackReferences(runtime, manifest, objectLedger.corePacks,
-    scan ? (path, bytes) => scan.consume(path, bytes) : undefined);
+    scan || manifest.archiveVersion.easyRpg ? (path, bytes) => {
+      scan?.consume(path, bytes);
+      if (manifest.archiveVersion.easyRpg && isEasyRpgDetectionFile(path)) detectionBytes.set(path.toLowerCase(), bytes);
+    } : undefined);
+  if (manifest.archiveVersion.easyRpg) {
+    const detected = await detectEasyRpgConfig([...manifest.files, ...(cleanup?.excluded ?? [])].map(file => ({
+      path: file.path, size: file.size,
+      bytes: async () => {
+        const archived = manifest.files.find(entry => entry.path === file.path);
+        if (!archived) throw new HttpError(400, `引擎检测文件不能被素材清理移除：${file.path}`);
+        if (archived.storage.kind === "core_pack") {
+          const bytes = detectionBytes.get(file.path.toLowerCase());
+          if (!bytes) throw new HttpError(400, `引擎检测文件缺失：${file.path}`);
+          return bytes;
+        }
+        const object = await getBlob(runtime, file.sha256);
+        if (!object || object.size !== file.size) throw new HttpError(400, `引擎检测文件缺失：${file.path}`);
+        const bytes = new Uint8Array(await object.arrayBuffer());
+        if (await sha256Hex(bytes.buffer) !== file.sha256) throw new HttpError(400, `引擎检测文件校验失败：${file.path}`);
+        return bytes;
+      },
+    })));
+    if (stableJson(detected) !== stableJson(manifest.archiveVersion.easyRpg)) {
+      throw new HttpError(400, "EasyRPG 运行配置未通过服务器复核，请重新选择原始游戏文件上传");
+    }
+  }
   if (scan && cleanup) {
     const allowed = new Set(scan.finish().excluded.map((file) => file.path));
     if (cleanup.excluded.some((file) => !allowed.has(file.path))) {
@@ -359,6 +386,7 @@ function sourceManifestFromArchive(
       excludedSize: manifest.archiveVersion.excludedSize,
       resourceCleanup: manifest.archiveVersion.resourceCleanup,
       ...(manifest.archiveVersion.sharedPlayer !== undefined ? { sharedPlayer: manifest.archiveVersion.sharedPlayer } : {}),
+      ...(manifest.archiveVersion.easyRpg !== undefined ? { easyRpg: manifest.archiveVersion.easyRpg } : {}),
     },
     corePacks: manifest.corePacks,
     files: manifest.files,
@@ -691,6 +719,10 @@ export function parseArchiveSourceManifest(
   }
 
   const archiveVersion = value.archiveVersion;
+  if (archiveVersion.easyRpg !== undefined) {
+    try { parseEasyRpgConfig(archiveVersion.easyRpg); }
+    catch { throw new HttpError(400, "EasyRPG 运行配置无效"); }
+  }
   if (
     typeof archiveVersion.filePolicyVersion !== "string" ||
     typeof archiveVersion.packerVersion !== "string" ||

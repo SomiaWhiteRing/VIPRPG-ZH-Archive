@@ -1,4 +1,7 @@
+import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
+
 export type WebPlayMetadata = {
+  easyRpg?: EasyRpgConfig;
   ok: true;
   archiveVersionId: number;
   workId: number;
@@ -37,6 +40,7 @@ export type WebPlayInstallPhase =
   | "ready";
 
 export type WebPlayInstallation = {
+  easyRpg?: EasyRpgConfig;
   playKey: string;
   workId?: number;
   archiveVersionId: number;
