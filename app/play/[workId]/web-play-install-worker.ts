@@ -1,4 +1,4 @@
-import { ApiResponseError, requestOk } from "@/lib/ui/api-response";
+import { ApiResponseError } from "@/lib/ui/api-response";
 import { formatBytes, formatDuration } from "@/lib/format";
 
 /// <reference lib="webworker" />
@@ -13,6 +13,7 @@ import { cacheWebPlayCover } from "./web-play-cover";
 import { renewGameBucket } from "./web-play-storage";
 import { notifyGameResourcesChanged } from "./web-play-events";
 import { finishInstallObservation, installObserver, observeInstallTask, startInstallObservation } from "./web-play-install-observer";
+import { WebPlayDownload } from "./web-play-download";
 
 type LocalZipEntry = {
   name: string;
@@ -53,6 +54,7 @@ type PackEntryLocation = {
 type ByteChunk = Uint8Array<ArrayBufferLike>;
 
 const canceledPlayKeys = new Set<string>();
+const installAbortControllers = new Map<string, AbortController>();
 const lastEmitAt = new Map<string, number>();
 const zipTextDecoder = new TextDecoder();
 const localFileHeaderSignature = 0x04034b50;
@@ -94,6 +96,7 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
   if (message.type === "cancel") {
     installObserver?.event("cancel.received", { playKey: message.playKey });
     canceledPlayKeys.add(message.playKey);
+    installAbortControllers.get(message.playKey)?.abort();
   }
 };
 
@@ -103,8 +106,11 @@ async function runInstall(
   storageSnapshot?: WebPlayStorageSnapshot,
 ): Promise<void> {
   let installation: WebPlayInstallation = { ...createInitialInstallation(metadata), storageKind };
+  const controller = new AbortController();
+  installAbortControllers.set(metadata.playKey, controller);
 
   try {
+    assertNotCanceled(metadata.playKey);
     const previous = await observeInstallTask("idb.previous-installation", () => getWebPlayInstallation(metadata.playKey));
     if (previous) await observeInstallTask("opfs.reset-previous", () => resetGameOpfsDirectory(previous));
     // Persist the resource location before writing any files or caching a cover.
@@ -121,6 +127,7 @@ async function runInstall(
           metadata,
           installation,
           attempt,
+          signal: controller.signal,
         });
         return;
       } catch (error) {
@@ -141,7 +148,7 @@ async function runInstall(
           "warning",
           `安装遇到可重试错误：${message}。${formatDuration(delayMs, { precision: 2, compact: true })} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
         );
-        await observeInstallTask("retry.wait", () => delay(delayMs), { attempt, nextAttempt: attempt + 1, delayMs, restartsFromZero: true });
+        await observeInstallTask("retry.wait", () => delay(delayMs, controller.signal), { attempt, nextAttempt: attempt + 1, delayMs, restartsFromZero: true });
         assertNotCanceled(metadata.playKey);
       }
     }
@@ -161,6 +168,8 @@ async function runInstall(
       installation: failed,
     } satisfies WebPlayInstallWorkerOutput);
     postLog(metadata.playKey, "error", message);
+  } finally {
+    installAbortControllers.delete(metadata.playKey);
   }
 }
 
@@ -168,6 +177,7 @@ async function runInstallAttempt(input: {
   metadata: WebPlayMetadata;
   installation: WebPlayInstallation;
   attempt: number;
+  signal: AbortSignal;
 }): Promise<WebPlayInstallation> {
   const { metadata, attempt } = input;
   let installation = input.installation;
@@ -201,26 +211,22 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  const response = await observeInstallTask("network.headers", () => requestOk(metadata.downloadUrl, {
-    credentials: "same-origin",
-    cache: "no-store",
-  }), { url: metadata.downloadUrl });
-
-  const headerLength = numberHeader(response.headers.get("Content-Length"));
-  installation = await persistAndPost(
-    {
-      ...installation,
-      downloadBytesTotal: headerLength ?? metadata.installTotalSizeBytes,
-      updatedAt: new Date().toISOString(),
-    },
-    true,
-  );
-
-  const result = await streamZipToPacks({
-    metadata,
-    response,
-    installation,
-  });
+  const download = new WebPlayDownload(metadata.downloadUrl, input.signal);
+  let result: Awaited<ReturnType<typeof streamZipToPacks>>;
+  try {
+    await observeInstallTask("network.headers", () => download.open(), { url: metadata.downloadUrl });
+    installation = await persistAndPost(
+      {
+        ...installation,
+        downloadBytesTotal: download.totalBytes ?? metadata.installTotalSizeBytes,
+        updatedAt: new Date().toISOString(),
+      },
+      true,
+    );
+    result = await streamZipToPacks({ metadata, download, installation });
+  } finally {
+    download.close();
+  }
   installation = result.installation;
 
   assertNotCanceled(metadata.playKey);
@@ -295,7 +301,7 @@ async function requestStorage(
 
 async function streamZipToPacks(input: {
   metadata: WebPlayMetadata;
-  response: Response;
+  download: WebPlayDownload;
   installation: WebPlayInstallation;
 }): Promise<{
   installation: WebPlayInstallation;
@@ -389,20 +395,7 @@ async function streamZipToPacks(input: {
     lastDiagnosticAt = now;
   };
 
-  let body: ReadableStream<ByteChunk> | null = input.response.body;
-
-  if (!body) {
-    const bytes = new Uint8Array(await observeInstallTask("network.array-buffer-fallback", () => input.response.arrayBuffer()));
-    downloadedBytes = bytes.byteLength;
-    queueProgress(true);
-    body = streamBytes(bytes);
-  }
-
-  if (!body) {
-    throw new Error("浏览器无法读取下载内容，请重试。");
-  }
-
-  const reader = new ZipStreamReader(input.metadata.playKey, body, (bytes) => {
+  const reader = new ZipStreamReader(input.metadata.playKey, input.download, (bytes) => {
     downloadedBytes = bytes;
     queueProgress();
     logDiagnostics();
@@ -603,7 +596,6 @@ class PackWriter {
 }
 
 class ZipStreamReader {
-  private readonly reader: ReadableStreamDefaultReader<ByteChunk>;
   private buffer: ByteChunk = new Uint8Array(0);
   private done = false;
   private downloadedBytes = 0;
@@ -614,11 +606,9 @@ class ZipStreamReader {
 
   constructor(
     private readonly playKey: string,
-    body: ReadableStream<ByteChunk>,
+    private readonly download: WebPlayDownload,
     private readonly onDownload: (downloadedBytes: number) => void,
-  ) {
-    this.reader = body.getReader();
-  }
+  ) {}
 
   async readNextEntry(): Promise<LocalZipEntry | null> {
     const hasSignature = await this.ensure(4, true);
@@ -740,7 +730,7 @@ class ZipStreamReader {
       return;
     }
 
-    const result = await observeInstallTask("network.read", () => this.reader.read(), { downloadedBytes: this.downloadedBytes, bufferedBytes: this.buffer.byteLength, offset: this.offset });
+    const result = await observeInstallTask("network.read", () => this.download.read(), { downloadedBytes: this.downloadedBytes, bufferedBytes: this.buffer.byteLength, offset: this.offset });
 
     if (result.done) {
       this.done = true;
@@ -901,20 +891,20 @@ function retryDelayMs(attempt: number): number {
   return retryBaseDelayMs * 2 ** Math.max(0, attempt - 1);
 }
 
-async function delay(durationMs: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, durationMs);
+async function delay(durationMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new Error("安装已取消。");
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      reject(new Error("安装已取消。"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, durationMs);
+    signal.addEventListener("abort", abort, { once: true });
   });
-}
-
-function numberHeader(value: string | null): number | null {
-  if (!value || !/^\d+$/.test(value)) {
-    return null;
-  }
-
-  const number = Number(value);
-
-  return Number.isSafeInteger(number) ? number : null;
 }
 
 function appendChunk(left: ByteChunk, right: ByteChunk): ByteChunk {
@@ -928,15 +918,6 @@ function appendChunk(left: ByteChunk, right: ByteChunk): ByteChunk {
   result.set(right, left.byteLength);
 
   return result;
-}
-
-function streamBytes(bytes: ByteChunk): ReadableStream<ByteChunk> {
-  return new ReadableStream<ByteChunk>({
-    start(controller) {
-      controller.enqueue(bytes);
-      controller.close();
-    },
-  });
 }
 
 function coalesceChunks(

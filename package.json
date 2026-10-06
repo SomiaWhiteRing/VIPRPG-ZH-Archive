@@ -12,6 +12,7 @@
     "deploy": "node scripts/app.mjs deploy",
     "deploy:staging": "node scripts/app.mjs deploy --env staging",
     "deploy:production": "node scripts/app.mjs deploy --env production",
+    "deploy:download": "node scripts/deploy-download-relay.mjs",
     "db:production:migrate": "node scripts/production-migrations.mjs",
     "db:local:migrate": "wrangler d1 migrations apply DB --local",
     "db:local:reset": "node scripts/local-d1-reset.mjs",
