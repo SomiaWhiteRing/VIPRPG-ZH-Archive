@@ -8,7 +8,8 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { InboxReadOnView } from "@/app/inbox/read-on-view";
-import { forumHref, forumListReturn, forumPage } from "@/lib/forum";
+import { forumHref, forumHistoryHref, forumListReturn, forumPage } from "@/lib/forum";
+import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -42,7 +43,13 @@ const loadDetail = async (
       await getCurrentUser(runtime),
     );
   } catch (error) {
-    if (error instanceof HttpError && error.status === 404) throwNotFound();
+    if (error instanceof HttpError && error.status === 404) {
+      if (hasPermission(await getCurrentUser(runtime), "forum.content.moderate_any") &&
+        await runtime.db.prepare("SELECT id FROM forum_topics WHERE id=? AND status IN('hidden','deleted')").bind(id).first()) {
+        redirectPage(forumHistoryHref({ kind: "topic", id }));
+      }
+      throwNotFound();
+    }
     throw error;
   }
 };

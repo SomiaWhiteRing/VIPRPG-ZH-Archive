@@ -22,6 +22,7 @@ import { MessageSquare, ThumbsUp, UserRound } from "lucide-react";
 import { Fragment, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { Link, useLocation, useNavigate, useNavigationType, useRevalidator, useRouteLoaderData } from "react-router";
 import { type ForumDialogAction, type ForumMenuItem, ForumActionDialog, ForumMenu } from "./actions";
+import { ForumHistoryDialog } from "./history";
 
 import { type ForumDraft, draftSnapshot, draftValue, forumReplyLauncherClass } from "./draft";
 import { deleteForumDraft, forumDraftKey, readForumDraft, restoreForumDraft, saveForumDraft } from "./draft-cache";
@@ -100,6 +101,12 @@ export function DiscussionWorkspace({
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const hideDeletedContent = root?.session?.preferences.hideDeletedContent ?? false;
   const location = useLocation();
+  const [selectedHistory, setSelectedHistory] = useState<ForumTarget | null>(null);
+  const historyParams = new URLSearchParams(location.search);
+  const historyKind = historyParams.get("historyKind"), historyId = Number(historyParams.get("historyId"));
+  const linkedHistory: ForumTarget | null = (historyKind === "topic" || historyKind === "post" || historyKind === "comment") && Number.isSafeInteger(historyId) && historyId > 0
+    ? { kind: historyKind, id: historyId } : null;
+  const historyTarget = viewer?.moderate ? selectedHistory ?? linkedHistory : null;
   const toast = useToast();
   const navigationType = useNavigationType();
   const navigate = useNavigate();
@@ -559,6 +566,7 @@ export function DiscussionWorkspace({
       topicRevision: detail.topic.revision,
     };
     const items: ForumMenuItem[] = [];
+    if (viewer?.moderate) items.push({ label: "编辑历史", run: () => setSelectedHistory(target) });
     if (content.capabilities.edit)
       items.push({ label: "编辑", run: () => void edit(content) });
     if (content.capabilities.delete)
@@ -587,6 +595,7 @@ export function DiscussionWorkspace({
   const topic = detail?.topic;
   const topicMenu: ForumMenuItem[] = topic
     ? [
+        ...(viewer?.moderate ? [{ label: "编辑历史", run: () => setSelectedHistory({ kind: "topic", id: topic.id }) }] : []),
         ...(topic.capabilities.edit
           ? [
               {
@@ -1093,6 +1102,14 @@ export function DiscussionWorkspace({
         </div>
       )}
       {draft?.mode === "topic" ? editor : null}
+      {historyTarget ? <ForumHistoryDialog key={`${historyTarget.kind}:${historyTarget.id}`} target={historyTarget} onClose={() => {
+        setSelectedHistory(null);
+        if (linkedHistory) {
+          const params = new URLSearchParams(location.search);
+          params.delete("historyKind"); params.delete("historyId");
+          void navigate(location.pathname + (params.size ? `?${params}` : ""), { replace: true });
+        }
+      }} /> : null}
       {action ? (
         <ForumActionDialog
           action={action}

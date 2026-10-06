@@ -21,7 +21,12 @@ import { addCatalogItem, createCatalog, deleteCatalog, removeCatalogItem, update
 import { readShowcase, saveShowcase } from "../app/.server/db/showcase";
 import { mergeWorks } from "../app/.server/db/catalog-maintenance";
 import { createExternalWork } from "../app/.server/db/game-library";
-import { editForum, publishForum } from "../app/.server/forum/mutations";
+import { deleteForum, editForum, publishForum } from "../app/.server/forum/mutations";
+import { forumHistory } from "../app/.server/forum/history";
+import { GET as discussionGet } from "../app/.server/forum/handler";
+import { hashSessionToken } from "../app/.server/auth/session-token";
+import { adminForumDetail } from "../app/.server/forum/admin";
+import { searchAdminAuditLogs } from "../app/.server/db/admin-audit";
 import type { ForumRuntime } from "../app/.server/forum/runtime";
 
 // Real migrations and production mutation/query functions. Only the D1/R2/DO
@@ -374,6 +379,111 @@ await check("work/creator/character main comments and current source visibility"
   assert.equal(items.length, 2, "only readable main comments remain in the timeline");
   assert.ok(items.every((item) => item.text !== "work reply"));
   assert.ok(items.every((item) => !item.text.includes("Changed work comment")));
+});
+
+await check("comment edit histories retain all targets, attachments and deleted content atomically", async (f) => {
+  const targets = [{ kind: "work" as const, id: 2 }, { kind: "creator" as const, id: 1 }, { kind: "character" as const, id: 1 }];
+  const histories = (id: number) => searchAdminAuditLogs(f.runtime, { targetType: "comment", targetId: String(id) });
+  const count = () => f.number("SELECT COUNT(*) FROM auth_audit_logs WHERE event_type='comment_edit'");
+  const roots: number[] = [];
+  for (const target of targets) {
+    const root = await createComment(f.runtime, target, 1, "Original comment");
+    roots.push(root.id);
+    const reply = await createComment(f.runtime, target, 1, "Original reply", root.id);
+    await assert.rejects(updateComment(f.runtime, root.id, 2, "Other author"), { status: 404 });
+    assert.equal((await histories(root.id)).total, 0);
+    await updateComment(f.runtime, root.id, 1, "Changed comment");
+    await updateComment(f.runtime, root.id, 1, "Changed comment");
+    await updateComment(f.runtime, reply.id, 1, "Changed reply");
+    const logs = await histories(root.id);
+    assert.equal(logs.total, 1, "same-value saves do not add revisions");
+    const detail = logs.items[0].detail as { before: { body: string }; after: { body: string }; actor: { userId: number; displayName: string }; authorization: { basis: string } };
+    assert.equal(detail.before.body, "Original comment");
+    assert.equal(detail.after.body, "Changed comment");
+    assert.deepEqual([detail.actor.userId, detail.actor.displayName, detail.authorization.basis], [1, "Timeline A", "content_author"]);
+    assert.equal((await histories(reply.id)).total, 1);
+  }
+  assert.equal(count(), 6);
+  const imageId = "comment-edit-history-image";
+  f.sqlite.prepare(`INSERT INTO comment_images(id,user_id,client_id,fingerprint,status,object_key,format,size,width,height)
+    VALUES(?,1,?,?,'ready',?,'png',?,1,1)`).run(imageId, imageId, coverHash, `comment-images/${imageId}`, png.length);
+  await updateComment(f.runtime, roots[0], 1, "Changed comment", [imageId]);
+  const imageEdit = (await histories(roots[0])).items[0].detail as { before: { images: unknown[] }; after: { images: { id: string; fingerprint: string }[] } };
+  assert.deepEqual(imageEdit.before.images, []);
+  assert.equal(imageEdit.after.images[0].id, imageId);
+  assert.equal(imageEdit.after.images[0].fingerprint, coverHash);
+  const saved = f.sqlite.prepare("SELECT body,edited_at FROM comments WHERE id=?").get(roots[0]);
+  f.sqlite.exec(`CREATE TRIGGER reject_comment_edit_audit BEFORE UPDATE OF detail_json ON auth_audit_logs
+    WHEN NEW.event_type='comment_edit' BEGIN SELECT RAISE(ABORT,'edit audit failed'); END`);
+  await assert.rejects(updateComment(f.runtime, roots[0], 1, "Rejected body", []), /edit audit failed/);
+  assert.deepEqual(f.sqlite.prepare("SELECT body,edited_at FROM comments WHERE id=?").get(roots[0]), saved);
+  assert.equal(f.number("SELECT comment_id FROM comment_images WHERE id=?", imageId), roots[0]);
+  assert.equal(count(), 7, "a failed snapshot write rolls back content, attachments and the audit insert");
+  f.sqlite.exec("DROP TRIGGER reject_comment_edit_audit");
+  const batch = f.db.batch.bind(f.db);
+  f.db.batch = async (statements) => {
+    f.sqlite.prepare("UPDATE comments SET body='Concurrent edit' WHERE id=?").run(roots[1]);
+    f.db.batch = batch;
+    return batch(statements);
+  };
+  await updateComment(f.runtime, roots[1], 1, "After concurrent edit");
+  assert.equal(((await histories(roots[1])).items[0].detail as { before: { body: string } }).before.body, "Concurrent edit",
+    "the old value is captured inside the transaction rather than from a stale preflight read");
+  await deleteComment(f.runtime, roots[0], 1);
+  assert.equal((await histories(roots[0])).total, 2, "deletion preserves earlier edits");
+});
+
+await check("discussion edit histories cover topics, floors and replies without curator exposure", async (f) => {
+  const ctx = { db: f.db } as ForumRuntime, actor = f.actor(1);
+  const topic = await publishForum(ctx, actor, { kind: "topic", title: "Original title", body: "Original topic", tags: ["Original"], requestKey: "edit-history-topic" });
+  const post = await publishForum(ctx, actor, { kind: "post", topicId: topic.target.id, body: "Original floor", requestKey: "edit-history-post" });
+  const reply = await publishForum(ctx, actor, { kind: "comment", postId: post.target.id, body: "Original reply", requestKey: "edit-history-reply" });
+  const revision = (target: typeof topic.target) => f.sqlite.prepare(`SELECT revision FROM ${target.kind === "comment" ? "forum_post_comments" : "forum_posts"}
+    WHERE ${target.kind === "topic" ? "topic_id=? AND post_number=1" : "id=?"}`).get(target.id)!.revision;
+  const input = (target: typeof topic.target, body: string) => ({ target, body, revision: revision(target),
+    topicRevision: f.sqlite.prepare("SELECT revision FROM forum_topics WHERE id=?").get(topic.target.id)!.revision });
+  const imageId = "forum-edit-history-image";
+  f.sqlite.prepare(`INSERT INTO forum_images(id,user_id,client_id,fingerprint,status,object_key,format,size,width,height)
+    VALUES(?,1,?,?,'ready',?,'png',?,1,1)`).run(imageId, imageId, coverHash, `forum-images/${imageId}`, png.length);
+  await editForum(ctx, actor, { ...input(topic.target, "Changed topic"), title: "Changed title", tagsChanged: true, tags: ["Second", "First"] });
+  await editForum(ctx, actor, { ...input(post.target, "Changed floor"), images: [imageId], imageOffsets: [0] });
+  await editForum(ctx, actor, input(reply.target, "Changed reply"));
+  await editForum(ctx, actor, input(reply.target, "Changed reply"));
+  const count = () => f.number("SELECT COUNT(*) FROM auth_audit_logs WHERE event_type='forum_edit'");
+  assert.equal(count(), 3);
+  for (const target of [topic.target, post.target, reply.target]) {
+    const logs = await searchAdminAuditLogs(f.runtime, { targetType: `forum_${target.kind}`, targetId: String(target.id) });
+    assert.equal(logs.total, 1, "each target has an independent history despite overlapping numeric IDs");
+    const detail = logs.items[0].detail as { before: { body: string; title?: string; tags?: { name: string }[] }; after: { body: string; title?: string; tags?: { name: string }[]; images?: { id: string; offset: number }[] } };
+    assert.match(detail.before.body, /^Original /);
+    assert.match(detail.after.body, /^Changed /);
+    if (target.kind === "topic") {
+      assert.deepEqual([detail.before.title, detail.after.title], ["Original title", "Changed title"]);
+      assert.deepEqual(detail.before.tags?.map((tag) => tag.name), ["Original"]);
+      assert.deepEqual(detail.after.tags?.map((tag) => tag.name), ["Second", "First"]);
+    }
+    if (target.kind === "post") assert.deepEqual(detail.after.images?.map((image) => [image.id, image.offset]), [[imageId, 0]]);
+  }
+  const moderator = await adminForumDetail(ctx, f.actor(3), topic.target);
+  assert.equal(moderator.audit.filter((entry) => entry.event === "forum_edit").length, 3);
+  const curator = { ...f.actor(2), permissionKeys: ["forum.topic.feature_any" as const] };
+  assert.equal((await adminForumDetail(ctx, curator, topic.target)).audit.length, 0, "curators cannot read old content");
+  await assert.rejects(adminForumDetail(ctx, f.actor(2), topic.target), { status: 403 });
+  await assert.rejects(editForum(ctx, f.actor(2), input(post.target, "Other author")), { status: 403 });
+  const before = f.sqlite.prepare("SELECT title,revision FROM forum_topics WHERE id=?").get(topic.target.id);
+  const rootBefore = f.sqlite.prepare("SELECT body FROM forum_posts WHERE topic_id=? AND post_number=1").get(topic.target.id);
+  const tagsBefore = f.sqlite.prepare("SELECT tag_id,position FROM forum_topic_tags WHERE topic_id=? ORDER BY position").all(topic.target.id);
+  f.sqlite.exec(`CREATE TRIGGER reject_forum_edit_audit BEFORE UPDATE OF detail_json ON auth_audit_logs
+    WHEN NEW.event_type='forum_edit' BEGIN SELECT RAISE(ABORT,'edit audit failed'); END`);
+  await assert.rejects(editForum(ctx, actor, { ...input(topic.target, "Rejected topic"), title: "Rejected title", tagsChanged: true, tags: [] }), /edit audit failed/);
+  assert.deepEqual(f.sqlite.prepare("SELECT title,revision FROM forum_topics WHERE id=?").get(topic.target.id), before);
+  assert.deepEqual(f.sqlite.prepare("SELECT body FROM forum_posts WHERE topic_id=? AND post_number=1").get(topic.target.id), rootBefore);
+  assert.deepEqual(f.sqlite.prepare("SELECT tag_id,position FROM forum_topic_tags WHERE topic_id=? ORDER BY position").all(topic.target.id), tagsBefore);
+  assert.equal(count(), 3);
+  f.sqlite.exec("DROP TRIGGER reject_forum_edit_audit");
+  f.sqlite.prepare("UPDATE forum_topics SET status='hidden' WHERE id=?").run(topic.target.id);
+  assert.equal((await adminForumDetail(ctx, f.actor(3), topic.target)).audit.filter((entry) => entry.event === "forum_edit").length, 3);
+  await assert.rejects(adminForumDetail(ctx, curator, topic.target), { status: 404 });
 });
 
 await check("discussion topics only; replies and edits stay outside timeline", async (f) => {
@@ -951,6 +1061,74 @@ await check("game comment pins survive migration and enforce a single atomic slo
     (104,1,1,'Hidden','hidden','2022-01-01'),
     (105,1,1,NULL,'deleted','2023-01-01'),
     (106,1,6,'Disabled author','published','2024-01-01');`);
+});
+
+await check("discussion histories preserve deletion snapshots and enforce live read permissions", async (f) => {
+  const ctx = { db: f.db } as ForumRuntime, actor = f.actor(1), moderator = f.actor(3);
+  const topic = await publishForum(ctx, actor, { kind: "topic", title: "Never edited title", body: "Never edited body", tags: ["Keep"], requestKey: "history-delete-topic" });
+  const input = (target: typeof topic.target) => ({ target,
+    topicRevision: f.sqlite.prepare("SELECT revision FROM forum_topics WHERE id=?").get(target.kind === "topic" ? target.id : topic.target.id)!.revision });
+  const saved = f.sqlite.prepare("SELECT title,revision FROM forum_topics WHERE id=?").get(topic.target.id);
+  f.sqlite.exec(`CREATE TRIGGER reject_forum_delete_audit BEFORE UPDATE OF detail_json ON auth_audit_logs
+    WHEN NEW.event_type='forum_delete' BEGIN SELECT RAISE(ABORT,'delete audit failed'); END`);
+  await assert.rejects(deleteForum(ctx, actor, input(topic.target)), /delete audit failed/);
+  assert.deepEqual(f.sqlite.prepare("SELECT title,revision FROM forum_topics WHERE id=?").get(topic.target.id), saved);
+  assert.equal((await forumHistory(ctx, moderator, topic.target)).total, 0);
+  assert.equal(f.sqlite.prepare("SELECT body FROM forum_posts WHERE topic_id=?").get(topic.target.id)!.body, "Never edited body");
+  f.sqlite.exec("DROP TRIGGER reject_forum_delete_audit");
+  await deleteForum(ctx, actor, input(topic.target));
+  const deleted = await forumHistory(ctx, moderator, topic.target);
+  assert.equal(deleted.state, "deleted");
+  assert.equal(deleted.total, 1, "deletion creates a snapshot even without any prior edit");
+  const entry = deleted.items[0];
+  assert.equal(entry.operation, "delete");
+  assert.equal(entry.before?.body, "Never edited body");
+  assert.equal(entry.before?.title, "Never edited title");
+  assert.equal(entry.before?.authorName, "Timeline A");
+  assert.equal(typeof entry.before?.createdAt, "string");
+  assert.deepEqual((entry.before?.tags as { name: string }[]).map((tag) => tag.name), ["Keep"]);
+  assert.equal(entry.after?.body, "");
+
+  f.sqlite.exec(`INSERT INTO roles(key,name,priority,kind) VALUES('history_curator','History curator',200,'custom');
+    INSERT INTO user_roles(user_id,role_id) SELECT 2,id FROM roles WHERE key='history_curator';
+    INSERT INTO role_permissions(role_id,permission_key) SELECT id,'forum.topic.feature_any' FROM roles WHERE key='history_curator';
+    INSERT INTO role_permissions(role_id,permission_key) SELECT id,'forum.tag.manage' FROM roles WHERE key='history_curator';`);
+  for (const id of [1, 2, 3]) f.sqlite.prepare("INSERT INTO user_sessions(user_id,session_hash,expires_at) VALUES(?,?,datetime('now','+1 hour'))")
+    .run(id, await hashSessionToken(String(id).repeat(43)));
+  const request = (id?: number, op = "history") => discussionGet(f.runtime, new Request(`https://timeline.example.test/api/discussions?op=${op}&kind=topic&id=${topic.target.id}&topicId=${topic.target.id}`,
+    { headers: { origin: f.runtime.origin, ...(id ? { cookie: `viprpg_session=${String(id).repeat(43)}` } : {}) } }));
+  for (const [id, status] of [[undefined, 401], [1, 403], [2, 403]] as const) {
+    const response = await request(id);
+    assert.equal(response.status, status, "anonymous users, authors and curators cannot read history");
+    assert.ok(!(await response.text()).includes("Never edited body"));
+  }
+  const response = await request(3);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const payload = await response.json() as { history: { items: Record<string, unknown>[] } };
+  assert.equal(payload.history.items.length, 1);
+  assert.ok(!Object.hasOwn(payload.history.items[0], "authorization"));
+  assert.ok(!Object.hasOwn(payload.history.items[0], "email"));
+  assert.equal((await request(undefined, "detail")).status, 404, "deleted content remains absent from public detail");
+  f.sqlite.exec("INSERT INTO user_permission_blocks(user_id,permission_key) VALUES(3,'forum.content.moderate_any')");
+  assert.equal((await request(3)).status, 403, "existing sessions lose history access immediately after revocation");
+  f.sqlite.exec("DELETE FROM user_permission_blocks WHERE user_id=3 AND permission_key='forum.content.moderate_any'");
+
+  const live = await publishForum(ctx, actor, { kind: "topic", title: "History pagination", body: "Root", tags: [], requestKey: "history-pages-topic" });
+  const post = await publishForum(ctx, actor, { kind: "post", topicId: live.target.id, body: "Unedited floor", requestKey: "history-pages-floor" });
+  const comment = await publishForum(ctx, actor, { kind: "comment", postId: post.target.id, body: "Unedited nested reply", requestKey: "history-pages-reply" });
+  const topicRevision = () => f.sqlite.prepare("SELECT revision FROM forum_topics WHERE id=?").get(live.target.id)!.revision;
+  await deleteForum(ctx, actor, { target: comment.target, topicRevision: topicRevision() });
+  assert.equal((await forumHistory(ctx, moderator, comment.target)).items[0].before?.body, "Unedited nested reply");
+  for (let n = 1; n <= 32; n++) await editForum(ctx, actor, { target: post.target, body: `Version ${n}`, topicRevision: topicRevision(),
+    revision: f.sqlite.prepare("SELECT revision FROM forum_posts WHERE id=?").get(post.target.id)!.revision });
+  await deleteForum(ctx, actor, { target: post.target, topicRevision: topicRevision() });
+  const first = await forumHistory(ctx, moderator, post.target), second = await forumHistory(ctx, moderator, post.target, 2);
+  assert.deepEqual([first.total, first.items.length, second.items.length], [33, 30, 3]);
+  assert.equal(first.items[0].before?.body, "Version 32");
+  assert.equal(second.items.at(-1)?.before?.body, "Unedited floor");
+  assert.ok(first.items.every((row) => !second.items.some((other) => row.id === other.id)));
+  assert.equal((await forumHistory(ctx, moderator, comment.target)).total, 1, "deleting a parent retains nested history");
 });
 
 console.log("Timeline persistent contracts passed");

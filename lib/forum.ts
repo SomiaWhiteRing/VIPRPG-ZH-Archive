@@ -118,6 +118,23 @@ export type ForumPage<T> = {
   page: number;
   pageSize: number;
 };
+export type ForumHistoryEntry = {
+  id: number;
+  operation: "edit" | "delete";
+  actor: { id: number | null; name: string };
+  createdAt: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+};
+export type ForumHistory = ForumPage<ForumHistoryEntry> & {
+  target: ForumTarget;
+  topicId: number;
+  state: ForumState;
+};
+
+export function forumHistoryHref(target: ForumTarget): string {
+  return forumHref("/discussions", { historyKind: target.kind, historyId: target.id });
+}
 export type ForumFloor = ForumContent & {
   commentPreview: ForumContent[];
   comments: ForumPage<ForumContent>;

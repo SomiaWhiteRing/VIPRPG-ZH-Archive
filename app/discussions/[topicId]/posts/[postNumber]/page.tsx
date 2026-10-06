@@ -1,4 +1,7 @@
 import { getForumRuntime } from "@/app/.server/forum/context";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { hasPermission } from "@/lib/authz/permissions";
+import { forumHistoryHref } from "@/lib/forum";
 import { forumLocation } from "@/app/.server/forum/location";
 import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
@@ -25,7 +28,15 @@ export async function loader(args: LoaderFunctionArgs) {
       })
     ).href;
   } catch (error) {
-    if (error instanceof HttpError && error.status === 404) throwNotFound();
+    if (error instanceof HttpError && error.status === 404) {
+      if (hasPermission(await getCurrentUser(runtime), "forum.content.moderate_any")) {
+        const post = await runtime.db.prepare("SELECT id FROM forum_posts WHERE topic_id=? AND post_number=?")
+          .bind(Number(value.topicId), Number(value.postNumber)).first<{ id: number }>();
+        if (post) redirectPage(forumHistoryHref(Number(value.postNumber) === 1
+          ? { kind: "topic", id: Number(value.topicId) } : { kind: "post", id: post.id }));
+      }
+      throwNotFound();
+    }
     throw error;
   }
   redirectPage(href);

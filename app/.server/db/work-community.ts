@@ -4,6 +4,8 @@ import { commentImageGuard, commentImageStatements, commentImagesById, parseComm
 import { sha256Hex } from "@/lib/sha256";
 import type { CommentImage } from "@/lib/comment-images";
 import { getD1 } from "@/app/.server/db/d1";
+import { auditedEntityBatch, commentAuditSnapshot } from "@/app/.server/db/entity-audit";
+import { findUserById } from "@/app/.server/db/users";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   DEFAULT_CHARACTER_PORTRAIT_JOINS,
@@ -680,6 +682,8 @@ export async function updateComment(
 ): Promise<CommentDto> {
   const body = normalizeCommentBody(bodyInput);
   const db = getD1(runtime);
+  const actor = await findUserById(runtime, userId);
+  if (!actor || actor.status !== "active") throw new HttpError(403, "账号不可用");
   const previous = await db
     .prepare(
       "SELECT body FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')",
@@ -695,7 +699,7 @@ export async function updateComment(
   const guard = ids === undefined ? { sql: "1", args: [] } : commentImageGuard(ids, userId, id);
   if (!(await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()))
     throw new HttpError(409, "图片不可用或已被其他评论使用。");
-  const results = await db.batch([
+  const results = await auditedEntityBatch(db, [
     db
       .prepare(
         `UPDATE comments SET body=CASE WHEN ${guard.sql} THEN ? ELSE NULL END,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
@@ -713,7 +717,8 @@ export async function updateComment(
       false,
     ),
     ...(ids === undefined ? [] : commentImageStatements(db, ids, userId, source, [id, userId])),
-  ]);
+  ], { actor, eventType: "comment_edit", targets: [{ type: "comment", id }], snapshot: commentAuditSnapshot(id),
+    permission: null, authorizationBasis: "content_author", source: "owned", operation: "edit" });
   if ((results[0].meta.changes ?? 0) !== 1)
     throw new HttpError(404, "评论不存在或不可编辑");
   return requiredComment(runtime, id, userId);

@@ -6,6 +6,7 @@ import { loadRequestSession } from "../auth/request-auth";
 import { parsePositiveId } from "../http/request";
 import { getForumRequestRuntime } from "./context";
 import { forumDetail, forumEmojis } from "./detail";
+import { forumHistory } from "./history";
 import { forumCommentLikes } from "./engagement";
 import { forumLocation } from "./location";
 import {
@@ -47,6 +48,11 @@ async function read(runtime: AppRuntime, request: Request) {
   const id = (key: string) => parsePositiveId(p.get(key) ?? "");
   const tags = p.getAll("tag").map((v) => parsePositiveId(v));
   switch (p.get("op")) {
+    case "history": {
+      const auth = await requireForumUser(ctx, request, ["forum.content.moderate_any"]);
+      const target = forumTarget({ kind: p.get("kind"), id: id("id") });
+      return result({ history: await forumHistory(ctx, auth.user, target, forumPage(p.get("page"))) });
+    }
     case "detail": {
       const detail = await forumDetail(
         ctx,

@@ -1,5 +1,8 @@
+import { forumHistoryHref } from "./forum";
+
 export const AUDIT_TARGET_LABELS = {
   work: "作品", creator: "作者", character: "角色", category: "角色分类", tag: "标签",
+  comment: "评论／回复", forum_topic: "讨论主题", forum_post: "讨论楼层", forum_comment: "讨论楼内回复",
 } as const;
 
 export type EntityAuditTarget = { type: keyof typeof AUDIT_TARGET_LABELS; id: string | number; name: string | null };
@@ -29,6 +32,9 @@ export function entityAuditTargetHref(target: EntityAuditTarget): string {
   if (target.type === "creator") return `/admin/creators/${id}`;
   if (target.type === "character") return `/admin/characters/${id}`;
   if (target.type === "tag") return `/admin/tags/edit?name=${id}`;
+  if (target.type === "comment") return `/admin/audit?targetType=comment&targetId=${id}`;
+  if (target.type === "forum_topic") return forumHistoryHref({ kind: "topic", id: Number(target.id) });
+  if (target.type === "forum_post" || target.type === "forum_comment") return forumHistoryHref({ kind: target.type === "forum_post" ? "post" : "comment", id: Number(target.id) });
   return `/admin/characters/index?category=${id}`;
 }
 
@@ -44,6 +50,10 @@ const FIELD_LABELS: Record<string, string> = {
   faceSheets: "脸图绑定", defaultPortrait: "默认头像", materials: "素材绑定", sha256: "文件 SHA-256", kind: "素材类型", row: "行", column: "列",
   source: "合并来源", target: "合并目标", workCredits: "登场作品", workId: "作品 ID", relations: "作品关联",
   work: "作品", relatedCharacters: "涉及角色", translationRelations: "翻译关联", maintainers: "维护者",
+  body: "正文", title: "标题", images: "配图", fingerprint: "图片 SHA-256", position: "顺序", offset: "正文位置",
+  topicId: "讨论主题 ID", postId: "楼层 ID", postNumber: "楼层号", commentNumber: "楼内回复号", rootCommentId: "主评论 ID",
+  replyToCommentId: "回复对象 ID", userId: "作者 ID", width: "宽度", height: "高度", size: "文件大小", format: "文件格式",
+  authorName: "作者", createdAt: "发表时间",
   fromWorkId: "来源作品 ID", toWorkId: "目标作品 ID", type: "类型", inverse: "反向关系", createdByUserId: "创建者 ID", url: "网址", id: "ID",
 };
 
