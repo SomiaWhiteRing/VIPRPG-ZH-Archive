@@ -37,6 +37,7 @@ export async function searchAdminAuditLogs(
     eventType?: string;
     targetType?: string;
     targetId?: string;
+    logId?: number;
     page?: number;
     pageSize?: number;
   },
@@ -51,6 +52,7 @@ export async function searchAdminAuditLogs(
   const clauses: string[] = [];
   const detailSql = "CASE WHEN json_valid(a.detail_json) THEN a.detail_json ELSE NULL END";
   const binds: Array<string | number> = [];
+  if (input.logId) { clauses.push("a.id=?"); binds.push(input.logId); }
   if (input.query?.trim()) {
     const value = `%${input.query.trim()}%`;
     clauses.push(

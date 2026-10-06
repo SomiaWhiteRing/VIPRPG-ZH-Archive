@@ -3,9 +3,9 @@
   "capturedAt": "2026-10-03T17:08:34.857Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "91e53b29b2d1fb1195c7053c322dc06b99c3344854b52f4c2ff8ede4f41f04c7",
+    "sha256": "8bdfffd7689643336981046cded2c8cff216ea8cdcf5415a180797b1844de118",
     "size": 13234176,
-    "gzipSha256": "7c7e1cd1d655ee8c01dac3041ead37182802380c66423ea68a07a0b4ba2eed97",
+    "gzipSha256": "7d02417ff93f0b43f3e7a90f19d9489b0edcd8bdad10da012ce168a63e8dd38c",
     "tables": {
       "_cf_METADATA": 1,
       "archive_gc_cursors": 0,
@@ -15,6 +15,7 @@
       "archive_version_blob_refs": 0,
       "archive_version_core_pack_refs": 5,
       "archive_versions": 5,
+      "audit_daily_reports": 0,
       "auth_audit_logs": 166,
       "blobs": 17178,
       "catalog_items": 12,
@@ -40,7 +41,7 @@
       "counted_work_genres": 3,
       "creator_aliases": 6,
       "creators": 6,
-      "d1_migrations": 34,
+      "d1_migrations": 35,
       "default_face_emojis": 30,
       "download_builds": 2,
       "email_verification_challenges": 0,

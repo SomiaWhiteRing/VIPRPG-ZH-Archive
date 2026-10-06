@@ -18,6 +18,8 @@ import { SelectField } from "@/app/components/ui/select";
 import { AUDIT_TARGET_LABELS, auditRecord, entityAuditChanges, entityAuditTargets, entityAuditTargetHref } from "@/lib/entity-audit";
 import { PERMISSIONS } from "@/lib/authz/permissions";
 import { formatDate } from "@/lib/format";
+import { listDailyAuditReports } from "@/app/.server/db/audit-reports";
+import { DailyAuditReportPane } from "@/app/admin/audit/daily-report";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
@@ -35,27 +37,32 @@ export async function loader(args: LoaderFunctionArgs) {
   const rawTargetType = searchParam(params.targetType);
   const targetType = Object.hasOwn(AUDIT_TARGET_LABELS, rawTargetType) ? rawTargetType : "";
   const targetId = searchParam(params.targetId);
+  const logIdText = searchParam(params.logId);
+  const logId = /^\d+$/.test(logIdText) && Number.isSafeInteger(Number(logIdText)) && Number(logIdText) > 0 ? Number(logIdText) : undefined;
+  const reportDate = searchParam(params.reportDate);
   const page = parseAdminPage(params.page);
-  const [auditResult, roleEvents] = await Promise.all([
+  const [auditResult, roleEvents, dailyReports] = await Promise.all([
     searchAdminAuditLogs(runtime, {
       query,
       eventType,
       targetType,
       targetId,
+      logId,
       page,
       pageSize: PAGE_SIZE,
     }),
     listAdminRoleEvents(runtime, 100),
+    listDailyAuditReports(runtime, reportDate),
   ]);
 
-  return { query, eventType, targetType, targetId, page, auditResult, roleEvents };
+  return { query, eventType, targetType, targetId, logId, page, auditResult, roleEvents, dailyReports };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: ["审计日志", "控制台"], page: loaderData?.page }, error);
 
 export default function AdminAuditPage() {
-  const { query, eventType, targetType, targetId, page, auditResult, roleEvents } =
+  const { query, eventType, targetType, targetId, logId, page, auditResult, roleEvents, dailyReports } =
     useLoaderData<typeof loader>();
   return (
     <main>
@@ -64,6 +71,8 @@ export default function AdminAuditPage() {
         title="审计日志"
         subtitle="按操作者或条目核查资料修改、关联整理与授权记录。"
       />
+
+      <DailyAuditReportPane {...dailyReports} />
 
       <form
         key={JSON.stringify([query, eventType, targetType, targetId])}
@@ -97,7 +106,7 @@ export default function AdminAuditPage() {
           <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
         </Label>
         <Button type="submit">应用</Button>
-        {query || eventType || targetType || targetId ? (
+        {query || eventType || targetType || targetId || logId ? (
           <Link
             className={buttonVariants({ variant: "ghost" })}
             to="/admin/audit"
@@ -106,6 +115,7 @@ export default function AdminAuditPage() {
           </Link>
         ) : null}
         <span className="pb-2 font-mono text-xs text-muted">
+          {logId ? `日志 #${logId} · ` : ""}
           共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
         </span>
       </form>
@@ -178,7 +188,7 @@ export default function AdminAuditPage() {
             </thead>
             <tbody>
               {auditResult.items.map((log) => (
-                <tr key={log.id}>
+                <tr key={log.id} id={`audit-log-${log.id}`}>
                   <td>{formatDate(log.createdAt)}</td>
                   <td>
                     <span className="font-mono text-sm text-primary">
@@ -215,7 +225,7 @@ export default function AdminAuditPage() {
         page={page}
         pageSize={PAGE_SIZE}
         total={auditResult.total}
-        params={{ q: query || undefined, action: eventType || undefined, targetType: targetType || undefined, targetId: targetId || undefined }}
+        params={{ q: query || undefined, action: eventType || undefined, targetType: targetType || undefined, targetId: targetId || undefined, logId: logId ? String(logId) : undefined }}
       />
     </main>
   );
