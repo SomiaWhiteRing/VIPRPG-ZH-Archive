@@ -14,8 +14,6 @@ class DownloadResponseError extends Error {}
 export class WebPlayDownload {
   private controller: AbortController | null = null;
   private reader: ReadableStreamDefaultReader<ByteChunk> | null = null;
-  private alternateUrl: string | null = null;
-  private currentUrl: string;
   private etag: string | null = null;
   private resumable = false;
   private downloadedBytes = 0;
@@ -28,8 +26,6 @@ export class WebPlayDownload {
   totalBytes: number | null = null;
 
   constructor(private readonly url: string, private readonly signal: AbortSignal) {
-    this.currentUrl = url;
-    this.alternateUrl = defaultDownloadAlternate(url);
     signal.addEventListener("abort", this.abort);
   }
 
@@ -100,7 +96,7 @@ export class WebPlayDownload {
       headers.Range = `bytes=${this.downloadedBytes}-`;
       headers["If-Range"] = this.etag!;
     }
-    const response = await this.waitForNetwork(requestOk(this.currentUrl, {
+    const response = await this.waitForNetwork(requestOk(this.url, {
       credentials: "same-origin",
       cache: "no-store",
       headers,
@@ -125,9 +121,6 @@ export class WebPlayDownload {
         this.totalBytes = length;
         this.etag = etag;
         this.resumable = length !== null && etag !== null && (encoding === null || encoding.toLowerCase() === "identity");
-        if (this.currentUrl === this.url) {
-          this.alternateUrl = downloadAlternate(this.url, response.headers.get("X-Archive-Download-Alternate")) ?? this.alternateUrl;
-        }
       }
       if (!response.body) throw new Error("浏览器无法读取下载内容，请重试。");
       this.reader = response.body.getReader();
@@ -140,9 +133,7 @@ export class WebPlayDownload {
   private async reconnect(error: unknown): Promise<void> {
     this.assertNotCanceled();
     this.disconnect();
-    // A stale alternate route may return 403/404; the original still owns authorization.
-    if (!isNetworkFailure(error) && !(this.currentUrl === this.alternateUrl &&
-      (error instanceof ApiResponseError || error instanceof DownloadResponseError))) throw error;
+    if (!isNetworkFailure(error)) throw error;
     // Without a byte validator, the caller may perform its existing safe full restart.
     if (this.downloadedBytes > 0 && !this.resumable) throw error;
     if (this.reconnects >= maxReconnects) {
@@ -150,7 +141,6 @@ export class WebPlayDownload {
       throw new Error("请求失败：无法连接服务器，请检查网络后重试。");
     }
     this.reconnects += 1;
-    this.currentUrl = this.alternateUrl && this.currentUrl === this.url ? this.alternateUrl : this.url;
     this.networkReadMs = 0;
     this.networkReadBytes = 0;
     await this.waitForNetwork(new Promise<void>((resolve) => setTimeout(resolve, 500 * this.reconnects)));
@@ -195,31 +185,6 @@ export class WebPlayDownload {
 
   private assertNotCanceled(): void {
     if (this.signal.aborted) throw new Error("安装已取消。");
-  }
-}
-
-function downloadAlternate(originalUrl: string, value: string | null): string | null {
-  if (!value || !defaultDownloadAlternate(originalUrl)) return null;
-  try {
-    const original = new URL(originalUrl, self.location.href);
-    const alternate = new URL(value);
-    return ["https://download.viprpg.org", "https://download-asia.viprpg.org"].includes(alternate.origin) &&
-      !alternate.username && !alternate.password &&
-      !alternate.hash && alternate.pathname === original.pathname && alternate.search === original.search
-      ? alternate.href : null;
-  } catch {
-    return null;
-  }
-}
-
-function defaultDownloadAlternate(originalUrl: string): string | null {
-  try {
-    const original = new URL(originalUrl, self.location.href);
-    return original.origin === "https://viprpg.org" && !original.username && !original.password &&
-      /^\/api\/archive-versions\/\d+\/download\/?$/.test(original.pathname)
-      ? `https://download.viprpg.org${original.pathname}${original.search}` : null;
-  } catch {
-    return null;
   }
 }
 

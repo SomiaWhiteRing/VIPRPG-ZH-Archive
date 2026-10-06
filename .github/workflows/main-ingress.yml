@@ -1,0 +1,60 @@
+name: Mainland ingress selection
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Report, or apply the previously approved main DNS policy
+        type: choice
+        options: [report, apply]
+        default: report
+
+permissions:
+  contents: read
+
+# Also excludes a main release while measuring and applying. Local maintenance must respect this lock.
+concurrency:
+  group: production-maintenance
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MAIN_INGRESS_AUTO_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: https://viprpg.org
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Verify DNS safety and measurement contracts
+        run: node --test scripts/ingress-policy.test.mjs scripts/ingress-measurements.test.mjs scripts/ingress-trial-config.test.mjs
+      - name: Compare mainland carrier probes
+        env:
+          MAIN_INGRESS_AUTO_ENABLED: ${{ vars.MAIN_INGRESS_AUTO_ENABLED }}
+          MAIN_INGRESS_CONFIG_JSON: ${{ secrets.PRODUCTION_INGRESS_CONFIG_JSON }}
+          INGRESS_CF_READ_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+          INGRESS_CF_DNS_TOKEN: ${{ (github.event_name == 'schedule' || inputs.mode == 'apply') && vars.MAIN_INGRESS_AUTO_ENABLED == 'true' && secrets.PRODUCTION_CLOUDFLARE_API_TOKEN || '' }}
+          APPLY_SELECTION: ${{ github.event_name == 'schedule' || inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          if [ "$APPLY_SELECTION" = 'true' ]; then
+            node scripts/select-main-ingress.mjs --apply --confirm viprpg.org
+          else
+            node scripts/select-main-ingress.mjs
+          fi
+      - name: Preserve measurements and DNS receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-ingress-${{ github.run_id }}
+          path: output/main-ingress-selection/
+          retention-days: 7
+          if-no-files-found: ignore

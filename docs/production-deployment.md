@@ -24,9 +24,13 @@ production Environment 不配置 required reviewers，继续保存正式 secrets
 | --- | --- |
 | `PRODUCTION_CLOUDFLARE_ACCOUNT_ID` | 已核实的正式 Cloudflare account |
 | `PRODUCTION_CLOUDFLARE_API_TOKEN` | 正式部署所需 token，只在受保护 job 中注入 |
-| `PRODUCTION_WRANGLER_CONFIG_JSONC` | 仅含正式资源的 JSONC，结构为本地 Wrangler 顶层 |
+| `PRODUCTION_WRANGLER_CONFIG_JSONC` | 仅含正式资源的 JSONC，结构为本地 Wrangler 顶层；24小时入口试用仍保持原Custom Domain基线 |
 
 staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`WRANGLER_CONFIG_JSONC`。配置生成器接受目标资源对象，也可从完整本地配置选择 staging；输出不携带另一环境的实际资源；staging 构建的未选中顶层不绑定远端资源，正式构建移除 staging 段。生产 token 不应另存绕过环境隔离的仓库级副本。旧仓库凭据先核对消费者和权限，再迁移或撤销，不能盲删仍在使用的凭据。
+
+本次24小时主站入口试用候选不永久修改 `PRODUCTION_WRANGLER_CONFIG_JSONC`。工作流将 `PRODUCTION_INGRESS_CONFIG_JSON` 映射为 `MAIN_INGRESS_CONFIG_JSON`，仅在其中trial有效时覆盖生成配置的routes；trial包含id、startsAt、expiresAt，并记录originalDomainId。到期prepare自然回到原Custom Domain基线。使用试用routes时，build前及publish前各检查至少10分钟余额，不足即停止该次试用发布。
+
+入口工作流本次暂复用现有 `PRODUCTION_CLOUDFLARE_API_TOKEN`，显式映射 `INGRESS_CF_READ_TOKEN`/`INGRESS_CF_DNS_TOKEN`，程序以严限定的目标身份及API方法/路径allowlist约束操作。这不是已经建立最小权限的两枚token；未来再拆分专用只读与DNS写入凭据，不向公开artifact输出凭据。
 
 ## 本地准备与执行
 
@@ -72,30 +76,32 @@ npm run db:production:migrate -- --apply
 4. 核实部署计划后由负责人发布，确认正式 robots 允许索引、staging 仍 noindex、健康接口、邮件与匿名权限；UI／真实设备验收按任务授权另行执行。
 5. 正式入口就绪后，再批准状态页和正式 Android／Kai 包发布。更新网站频道属于独立数据写入，不由 GitHub Release 自动触发。
 
-## 中国大陆下载备用入口
+## 下载统一主站与旧入口撤销候选
 
-`download.viprpg.org` 和 `download-asia.viprpg.org` 是公开 ZIP 的专用入口，不承载页面、登录或用户存档。同一个独立 `viprpg-download` Worker 仅通过 `ARCHIVE_SOURCE` service binding 调用当前正式 Worker；每次下载仍核实归档及作品的发布状态，不复制 D1/R2，不建立独立缓存。
+2026-10-06 负责人已批准全主站使用候选 IP试用24小时，并撤销 `download.viprpg.org`、`download-asia.viprpg.org` 的额外下载入口。本地候选已取消首次原生下载的 ASN重定向、跨域候选响应头及安装器换源；公开 ZIP、页面和 API统一经 `https://viprpg.org`。相关 relay Worker源码、部署脚本及 `deploy:download` 命令已删除。此处记录候选与授权，不能当作已部署或已删除正式资源的证明；迁移与验收见[主站入口说明](./main-ingress-selection.md)。
 
-执行 `npm run deploy:download -- --plan` 只读核对当前资源并预览。取得本次正式入口部署授权、候选已提交且工作树干净后，执行 `npm run deploy:download -- --confirm viprpg.org`。脚本先核对两个入口的所有冲突，再创建或更新各自灰云 A 和精确 HTTPS Route，拒绝覆盖不属于该入口的 DNS/Route/绑定；记录保存在忽略的 `output/download-relay-deployment/`。先发布入口，再发布主站代码；日常主站发布不重新部署该独立 Worker，修改它时须运行本命令。
+同源安装器仍保留15秒网络等待限制、30秒低速检测、最多两次重连、强 ETag与Range续传、取消和现有进度。ZIP构建、缓存、版本固定、未发布对象的访问检查及归档字节协议没有回退；不复制或清理 D1/R2/DO及用户存档。
 
-2026-10-06 联通探针对 `download.viprpg.org` 的 `162.159.140.245` 正常 DNS HTTPS 测试获得有效证书和完整内容；电信、移动对该地址未见稳定通用收益，因此另选 `download-asia.viprpg.org` 的 Cloudflare 自有地址 `172.64.155.209`，同 Host/SNI 对照中电信进入 SIN、移动进入 HKG。地址自身不保证机房，不能用地理位置代替速度测量。灰云 A + Route 是当前实测可用的备用技巧，官方 Route 文档仍要求 proxied DNS，不能保证这些 IP 长期进入同一机房或持续提供证书。保留主站原入口，不更改主站 A/AAAA 或使用第三方代理 IP。
+先保存旧 DNS、Route、独立 `viprpg-download` Worker源码/绑定、主站版本和配置；发布并验证主站同源产品后，再删除归属本项目的两个下载域名 DNS/Routes及独立 Worker。最终不保留历史 relay。已保存的旧域名下载链接会在 DNS缓存过期后失效；已打开或缓存旧安装器的页面、正在中断重试的旧下载可能需要刷新主站并重新生成链接。回滚旧分流代码前必须同时恢复旧入口资源。
 
-2026-09-30 至 2026-10-06 的 26 个日志窗口均没有查询截断或额外自适应抽样；剔除测试请求、重定向以及 11 次内存和 5 次子请求限额后，保留 1,590 个下载请求。原始 Worker 日志仍可能采样，取消不等于线路故障，大文件耗时长也不能单独证明线路慢。以下按实际 ASN 配置，未按运营商品牌扩到所有网络：
+六小时selector在trial到期后停止PATCH。[到期巡检工作流](../.github/workflows/main-ingress-trial.yml) 每15分钟核实是否应恢复，按owned资源身份先删除试用A，再通过公开Custom Domain PUT API绑定回同一个正式Worker；正常DNS与HTTPS健康确认后才删除trial Route。GitHub排程可能延迟或丢任务，不能承诺秒准恢复。原CD配置secret保持不变，到期后的准备和日常发布使用该基线。
 
-| ASN | 日志中的异常依据 | 首次原生下载入口 |
-| --- | --- | --- |
-| 4837、17816（联通） | 长时间取消；广东联通 18 次无 Range 尝试有 15 次取消 | `download.viprpg.org` |
-| 4134（电信） | 排除资源异常后，166.5 MB 完整包仍耗约 25.8 分钟 | `download-asia.viprpg.org` |
-| 9808（移动） | 144.1 MB 完整包耗约 14.3 分钟 | `download-asia.viprpg.org` |
-| 24445（移动） | 54.9 MB 完整包耗约 6.7 分钟；原入口三轮探针连接失败 | `download-asia.viprpg.org` |
-| 56041（移动） | 83.4 MB 完整包耗约 7.4 分钟，CPU 仅 2 ms | `download-asia.viprpg.org` |
-| 56044（移动） | 166.5 MB 完整包耗约 16.8 分钟 | `download-asia.viprpg.org` |
+正常到期只恢复主站接入，继续当前候选的新同源下载产品，不回滚产品代码或恢复这两个废旧下载域名。完整旧版本回滚属于另外的操作范围；若需要恢复旧分流，须同时恢复其relay资源。
 
-地方 ASN 17816、56041、56044 按日志选入，当前无公开同 ASN 探针，不能称为逐线路实测收益。公开探针只验证 8 KiB 完整 ZIP Range、证书和连接等待，不证明大 ZIP 持续吞吐；Globalping 大响应会停止读取，不能用它的截断响应估算整包下载速度。本机忽略目录 `output/download-route-expansion-20261006/` 保存原始查询、排除明细、固定探针对照及发布验证。
+历史上，这两个专用入口只服务公开 ZIP；独立 Worker仅通过 `ARCHIVE_SOURCE` service binding调用正式 Worker，不复制 D1/R2或另建缓存。2026-10-06 初测中，联通使用 `162.159.140.245`，电信/移动另测 `172.64.155.209`，部分小分段响应得到改善；这些是当时的有限测量，不能证明固定机房、所有省份或大包持续吞吐。
 
-主站对上述大陆 ASN 的首次原生 GET 下载导航自动转到对应备用入口，已有 Range 请求保留当前源；其他请求保留原入口。大陆响应提供按 ASN 选择的候选响应头，在线安装器从原源开始，网络停滞或持续低速时有限换源并以强 ETag 和 Range 续传；响应头到达前的网络故障仍使用默认 `download.viprpg.org`。未发布对象仍为 404；共享播放器先固定版本，再选择下载入口。`download_source=origin` 可强制返回原源，作为下载入口故障时的回退；该参数不改变 ZIP 字节、ETag 或缓存身份。预生产及本地不开启正式备用入口。只修改已有入口的 ASN 映射时无需重部署独立 Worker；增加入口域名时先更新独立 Worker、DNS/Route 和安装器精确 origin 白名单。
+先前分流依据来自2026-09-30至2026-10-06的26个日志窗口：剔除测试、重定向及11次内存和5次子请求限额后，保留1,590个下载请求。原始日志仍可能采样；取消不等于线路故障，大文件耗时长也不能单独证明线路慢。以下仅保存历史诊断，不代表新候选仍按 ASN分流：
 
-回退时发布此前主站/安装器候选即可恢复原源；可先保留备用域名以服务已开始的下载。删除 DNS、Route 或独立 Worker 属于另行批准的配置操作。
+| ASN | 历史日志中的异常依据 |
+| --- | --- |
+| 4837、17816（联通） | 长时间取消；广东联通18次无Range尝试有15次取消 |
+| 4134（电信） | 排除资源异常后，166.5 MB完整包仍耗约25.8分钟 |
+| 9808（移动） | 144.1 MB完整包耗约14.3分钟 |
+| 24445（移动） | 54.9 MB完整包耗约6.7分钟；原入口三轮探针连接失败 |
+| 56041（移动） | 83.4 MB完整包耗约7.4分钟，CPU仅2 ms |
+| 56044（移动） | 166.5 MB完整包耗约16.8分钟 |
+
+地方 ASN 17816、56041、56044当时按日志选入，没有公开同 ASN探针证明逐线路收益。公开探针验证了8 KiB完整 ZIP Range、证书和等待；Globalping会停止读取大响应，不能据此估算整包速度。忽略目录 `output/download-route-expansion-20261006/` 保存原始查询、排除明细、固定探针对照及历史发布验证。
 
 ## 迁移、备份与恢复
 

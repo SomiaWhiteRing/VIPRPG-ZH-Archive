@@ -1,0 +1,44 @@
+name: Restore main ingress after trial
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-maintenance
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main' && vars.MAIN_INGRESS_TRIAL_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://viprpg.org
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Verify restoration guards
+        run: node --test scripts/ingress-trial-config.test.mjs scripts/restore-main-ingress.test.mjs
+      - name: Restore expired trial
+        env:
+          MAIN_INGRESS_CONFIG_JSON: ${{ secrets.PRODUCTION_INGRESS_CONFIG_JSON }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
+        run: node scripts/restore-main-ingress.mjs --restore --confirm viprpg.org
+      - name: Preserve restoration receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-ingress-trial-${{ github.run_id }}
+          path: output/main-ingress-restoration/
+          retention-days: 7
+          if-no-files-found: ignore
