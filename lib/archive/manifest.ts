@@ -2,6 +2,7 @@ import type { ArchiveFileRole } from "@/lib/archive/file-policy";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import type { ResourceCleanupReport } from "./resource-cleanup";
 import type { SharedPlayerReplacement } from "./shared-player";
+import type { EasyRpgConfig } from "./easyrpg-config";
 
 import type {
   CharacterPortraitChoice,
@@ -33,6 +34,7 @@ export type ArchiveManifest = {
     excludedSize: number;
     resourceCleanup?: ResourceCleanupReport | null;
     sharedPlayer?: SharedPlayerReplacement | null;
+    easyRpg?: EasyRpgConfig;
   };
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
@@ -53,6 +55,7 @@ export type ArchiveSourceManifest = {
     | "excludedSize"
     | "resourceCleanup"
     | "sharedPlayer"
+    | "easyRpg"
   >;
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];

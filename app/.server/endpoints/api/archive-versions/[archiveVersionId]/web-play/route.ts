@@ -3,6 +3,7 @@ import {
   parseArchiveVersionId,
 } from "@/app/.server/db/archive-downloads";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { readArchiveEasyRpgConfig } from "@/app/.server/storage/archive-bucket";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import {
   buildWebPlayDownloadUrl,
@@ -68,6 +69,7 @@ export async function GET(
       installTotalSizeBytes: record.installTotalSizeBytes,
       estimatedR2GetCount: record.estimatedR2GetCount,
       engineFamily: record.engineFamily,
+      easyRpg: await readArchiveEasyRpgConfig(runtime, record.manifestSha256),
     });
   } catch (error) {
     return jsonError("Web Play metadata failed", error);

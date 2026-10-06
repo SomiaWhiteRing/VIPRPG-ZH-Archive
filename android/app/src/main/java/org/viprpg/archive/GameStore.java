@@ -186,7 +186,7 @@ final class GameStore {
         if (!metadata.optString("manifestSha256").equals(task.optString("manifestSha256")) || !metadata.optString("downloadUrl").equals(task.optString("downloadUrl"))) partial.delete();
         synchronized (this) {
             check(task);
-            for (String field : new String[]{"workId", "title", "manifestSha256", "coverBlobSha256", "engineFamily", "downloadUrl", "installTotalSizeBytes", "installTotalFiles"}) task.put(field, metadata.opt(field));
+            for (String field : new String[]{"workId", "title", "manifestSha256", "coverBlobSha256", "engineFamily", "easyRpg", "downloadUrl", "installTotalSizeBytes", "installTotalFiles"}) task.put(field, metadata.opt(field));
             update(task, "installing", null);
         }
         long offset = partial.length(); HttpURLConnection download = connect(metadata.getString("downloadUrl"), offset);

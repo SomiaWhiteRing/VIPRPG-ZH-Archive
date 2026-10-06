@@ -3,6 +3,7 @@ import {
   getPublishedArchiveDownloadRecord,
 } from "@/app/.server/db/archive-downloads";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
+import { readArchiveEasyRpgConfig } from "@/app/.server/storage/archive-bucket";
 import {
   getWorkCommunitySummary,
   listRootComments,
@@ -101,6 +102,7 @@ export async function loader(args: LoaderFunctionArgs) {
     installTotalSizeBytes: record.installTotalSizeBytes,
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
+    easyRpg: await readArchiveEasyRpgConfig(runtime, record.manifestSha256),
   };
 
   return {

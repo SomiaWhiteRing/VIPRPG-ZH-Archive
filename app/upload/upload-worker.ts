@@ -11,6 +11,7 @@ import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
 import { createRtpResolver } from "@/lib/archive/rtp-restore";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
+import { detectEasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import type { ArchiveCommitMetadata, ArchiveManifest, ArchiveManifestFile, ArchiveSourceManifest, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
 import type { BrowserUploadTaskSnapshot, MetadataBlobUpload, PreparedArchiveSource, UploadRecoveryDraft, UploadFormDraft, UploadSourceKind, UploadTaskCommitResult, UploadTaskPhase, UploadTaskStats, UploadWorkerInput, UploadWorkerOutput } from "@/app/upload/upload-types";
 import { deleteUploadDraft, draftKey, putUploadDraft } from "@/app/upload/upload-drafts";
@@ -187,6 +188,11 @@ async function startSource(
     const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer, message.checkMissingResources, message.includeSaves);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
+    const easyRpg = await detectEasyRpgConfig(sourceFiles.map(file => ({
+      ...file,
+      bytes: async () => scan.includedFiles.find(included => included.path === file.path)?.cachedBytes ?? file.bytes(),
+    })));
+    await waitForCancellation(runtime);
 
     try {
       // Choose covers only after cleanup; title and face-sheet metadata still use the original source.
@@ -194,6 +200,8 @@ async function startSource(
         sourceFiles,
         message.cleanupResources ? scan.includedFiles.map((file) => file.source) : sourceFiles,
       );
+      prefill.hasManiacPatch ||= easyRpg.patches.maniac > 0;
+      prefill.hasUltimateRuntime ||= easyRpg.engine?.startsWith("rpg2k3") ?? false;
       await waitForCancellation(runtime);
       self.postMessage({ type: "source_prefill", prefill } satisfies UploadWorkerOutput);
     } catch (error) {
@@ -294,6 +302,7 @@ async function startSource(
     runtime.task = task;
     await waitForCancellation(runtime);
     const preparedSource: PreparedArchiveSource = {
+      easyRpg,
       useSharedPlayer: message.useSharedPlayer,
       sourceKind: message.sourceKind,
       sourceName: task.sourceName,
@@ -935,6 +944,7 @@ function buildSourceManifest(
       excludedSize: source.stats.excludedSizeBytes,
       resourceCleanup: source.stats.resourceCleanup,
       ...(source.stats.sharedPlayer ? { sharedPlayer: source.stats.sharedPlayer } : {}),
+      ...(source.easyRpg ? { easyRpg: source.easyRpg } : {}),
     },
     corePacks: [
       {
