@@ -31,7 +31,6 @@ export async function canManageWorkMaintainers(runtime: AppRuntime, workId: numb
 }
 
 export async function canReviewWorkMaintainerRequests(runtime: AppRuntime, actor: ArchiveUser) {
-  if (hasPermission(actor, 'work.maintainer.manage_any')) return true;
   if (!hasPermission(actor, 'work.update_own')) return false;
   return !!await getD1(runtime).prepare(`SELECT 1 FROM work_uploaders wu JOIN works w ON w.id=wu.work_id
     WHERE wu.user_id=? AND w.status<>'deleted' LIMIT 1`).bind(actor.id).first();
@@ -159,15 +158,17 @@ export async function resolveWorkMaintainerRequest(runtime: AppRuntime, actor: A
   const request = await db.prepare(`SELECT r.* FROM work_maintainer_requests r JOIN inbox_items i ON i.work_maintainer_request_id=r.id WHERE i.id=?`)
     .bind(itemId).first<{ id: number; work_id: number; applicant_user_id: number; status: MaintainerRequestStatus }>();
   if (!request) throw new HttpError(404, '申请不存在。');
-  if (decision === 'withdraw' ? request.applicant_user_id !== actor.id : request.applicant_user_id === actor.id || !await canManageWorkMaintainers(runtime, request.work_id, actor))
+  if (decision === 'withdraw' ? request.applicant_user_id !== actor.id : request.applicant_user_id === actor.id || !await db
+    .prepare(`SELECT 1 WHERE ${workMaintainerRecipientSql('?', '?')}`)
+    .bind(actor.id, request.work_id, actor.id).first())
     throw new HttpError(403, '没有处理此申请的权限。');
   const reason = decision === 'reject' ? normalizeRejectionReason(rejectionReason) : null;
   const key = crypto.randomUUID();
   const status = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'withdrawn';
   const actorGuard = decision === 'withdraw' ? `applicant_user_id=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')`
     : `applicant_user_id<>? AND EXISTS(SELECT 1 FROM works w WHERE w.id=work_id AND w.status<>'deleted'
-        AND ${workMaintainerManagerSql('w.id', '?')})`;
-  const actorBinds = decision === 'withdraw' ? [actor.id, actor.id] : [actor.id, actor.id, actor.id, actor.id];
+        AND ${workMaintainerRecipientSql('w.id', '?')})`;
+  const actorBinds = decision === 'withdraw' ? [actor.id, actor.id] : [actor.id, actor.id, actor.id];
   const statements = [db.prepare(`UPDATE work_maintainer_requests SET status=?,resolved_at=CURRENT_TIMESTAMP,resolved_by_user_id=?,resolution_key=?
     WHERE id=? AND status='pending' AND ${actorGuard}
       ${decision === 'approve' ? `AND ${userPermissionSql('applicant_user_id', 'work.update_own')}
