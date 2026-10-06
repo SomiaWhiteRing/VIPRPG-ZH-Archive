@@ -30,8 +30,35 @@ const blobReadCacheMaxTotalBytes = 64 * 1024 * 1024;
 // Cache only immutable layout metadata. R2 streams and promises remain request-local.
 const zipLayoutCaches = new WeakMap();
 const zipLayoutCacheMaxBytes = 8 * 1024 * 1024;
+const productionOrigin = "https://viprpg.org";
+const downloadMirrorOrigin = "https://download.viprpg.org";
+const downloadOriginHeader = "X-Viprpg-Download-Origin";
+// Repeated mainland probes verified this ingress for China Unicom AS4837.
+const nativeDownloadMirrorAsn = 4837;
+const downloadExposedHeaders = "Accept-Ranges, Content-Disposition, Content-Length, Content-Range, ETag, X-Archive-Version-Id, X-Manifest-SHA256, X-Estimated-R2-Get-Count, X-Download-Cache, X-Download-Cache-Tier, X-Download-Zip-Builder, X-Player-SHA256, X-Archive-Download-Alternate";
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
+  const response = await handleArchiveDownload(request, env, ctx);
+  if (response && (response.status === 200 || response.status === 206) &&
+      env.APP_ORIGIN === productionOrigin) {
+    const url = new URL(request.url);
+    if (url.origin === productionOrigin && /^\/api\/archive-versions\/\d+\/download\/?$/.test(url.pathname)) {
+      // Every response here already passed the public publication check.
+      // Cross-origin delivery never relies on cookies or exposes private data.
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      response.headers.set("Access-Control-Expose-Headers", downloadExposedHeaders);
+      // This is transport metadata for an already-authorized public response.
+      // Never include the explicit direct-source fallback in an alternate URL.
+      if (request.cf?.country === "CN" || request.headers.get(downloadOriginHeader) === "1") {
+        url.searchParams.delete("download_source");
+        response.headers.set("X-Archive-Download-Alternate", `${downloadMirrorOrigin}${url.pathname}${url.search}`);
+      }
+    }
+  }
+  return response;
+}
+
+async function handleArchiveDownload(request, env, ctx) {
   const startedAt = Date.now();
   const url = new URL(request.url);
   const match = /^\/api\/archive-versions\/(\d+)\/(download|kai-import)\/?$/.exec(url.pathname);
@@ -100,6 +127,22 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
         return new Response(null, { status: 307, headers: { Location: url.href, "Cache-Control": "no-store" } });
       }
       record = { ...record, playerSha256: player.sha256 };
+    }
+
+    if (env.APP_ORIGIN === productionOrigin && url.origin === productionOrigin &&
+        request.cf?.country === "CN" && request.cf?.asn === nativeDownloadMirrorAsn && request.method === "GET" &&
+        request.headers.get("Sec-Fetch-Mode") === "navigate" && !request.headers.has("Range") &&
+        request.headers.get(downloadOriginHeader) !== "1" &&
+        url.searchParams.get("download_source") !== "origin") {
+      // Publication and fixed player selection are checked before redirecting.
+      // Only the final source invocation records a completed download.
+      return new Response(null, {
+        status: 307,
+        headers: {
+          Location: `${downloadMirrorOrigin}${url.pathname}${url.search}`,
+          "Cache-Control": "no-store",
+        },
+      });
     }
 
     const cacheRequest = downloadCacheRequest(request, record, profile);

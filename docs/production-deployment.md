@@ -72,6 +72,18 @@ npm run db:production:migrate -- --apply
 4. 核实部署计划后由负责人发布，确认正式 robots 允许索引、staging 仍 noindex、健康接口、邮件与匿名权限；UI／真实设备验收按任务授权另行执行。
 5. 正式入口就绪后，再批准状态页和正式 Android／Kai 包发布。更新网站频道属于独立数据写入，不由 GitHub Release 自动触发。
 
+## 中国大陆下载备用入口
+
+`download.viprpg.org` 是公开 ZIP 的专用入口，不承载页面、登录或用户存档。独立 `viprpg-download` Worker 仅通过 `ARCHIVE_SOURCE` service binding 调用当前正式 Worker；每次下载仍核实归档及作品的发布状态，不复制 D1/R2，不建立独立缓存。
+
+执行 `npm run deploy:download -- --plan` 只读核对当前资源并预览。取得本次正式入口部署授权、候选已提交且工作树干净后，执行 `npm run deploy:download -- --confirm viprpg.org`。脚本创建或更新唯一 `download.viprpg.org` 灰云 A 和精确 HTTPS Route，拒绝覆盖不属于该入口的 DNS/Route/绑定；记录保存在忽略的 `output/download-relay-deployment/`。先发布入口，再发布主站代码；日常主站发布不重新部署该独立 Worker，修改它时须运行本命令。
+
+2026-10-06 联通探针对 `162.159.140.245` 的正常 DNS HTTPS 测试获得有效证书、完整内容及更高成功率。灰云 A + Route 是当前实测可用的备用技巧，官方 Route 文档仍要求 proxied DNS，不能保证该 IP 长期进入同一机房或持续提供证书。保留主站原入口，不盲目更改主站 A/AAAA 或使用第三方代理 IP。
+
+主站只对大陆 AS4837 的原生下载导航自动转到备用入口；其他大陆请求获得内部候选响应头，在线安装器从原源开始，网络停滞或持续低速时有限换源并以强 ETag 和 Range 续传。未发布对象仍为 404。`download_source=origin` 可强制返回原源，作为下载入口故障时的回退；该参数不改变 ZIP 字节、ETag 或缓存身份。预生产及本地不开启正式备用入口。
+
+回退时发布此前主站/安装器候选即可恢复原源；可先保留备用域名以服务已开始的下载。删除 DNS、Route 或独立 Worker 属于另行批准的配置操作。
+
 ## 迁移、备份与恢复
 
 `0001_init_archive_schema.sql` 为首发基线。正式初始化后冻结已应用 migration，后续结构、权限、触发器改动追加有序迁移，不再改写 0001；代码、固定开发种子和迁移账本同步。干净种子准备脚本在临时库执行完整迁移链，并在 manifest 保存每个文件的校验和。
