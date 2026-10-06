@@ -1,4 +1,7 @@
 import { getForumRuntime } from "@/app/.server/forum/context";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { hasPermission } from "@/lib/authz/permissions";
+import { forumHistoryHref } from "@/lib/forum";
 import { forumLocation } from "@/app/.server/forum/location";
 import { redirectPage, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
@@ -25,7 +28,14 @@ export async function loader(args: LoaderFunctionArgs) {
       })
     ).href;
   } catch (error) {
-    if (error instanceof HttpError && error.status === 404) throwNotFound();
+    if (error instanceof HttpError && error.status === 404) {
+      if (hasPermission(await getCurrentUser(runtime), "forum.content.moderate_any") &&
+        await runtime.db.prepare("SELECT c.id FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id WHERE c.id=? AND p.topic_id=?")
+          .bind(Number(value.commentId), Number(value.topicId)).first()) {
+        redirectPage(forumHistoryHref({ kind: "comment", id: Number(value.commentId) }));
+      }
+      throwNotFound();
+    }
     throw error;
   }
   redirectPage(href);

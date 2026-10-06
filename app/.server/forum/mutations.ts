@@ -1,6 +1,7 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
+import { auditedEntityBatch, forumEditAuditSnapshot } from "@/app/.server/db/entity-audit";
 import { forumBodyLength } from "@/lib/face-emojis";
 import { canInsertForumElements, FORUM_ELEMENT_COUNT, FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
 import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
@@ -587,7 +588,12 @@ export async function editForum(
     ),
   );
   statements.push(mentionNotification(ctx.db, actor.id, body, row.body ?? "", target.kind === "comment" ? "forum-comment" : "post", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
-  await runGuarded(ctx, statements);
+  const result = await auditedEntityBatch(ctx.db, statements, {
+    actor, eventType: "forum_edit", targets: [{ type: target.kind === "topic" ? "forum_topic" : target.kind === "post" ? "forum_post" : "forum_comment", id: target.id }],
+    snapshot: forumEditAuditSnapshot(target), permission: "forum.use", authorizationBasis: "content_author",
+    source: "owned", operation: "edit", context: { topicId: topic.id, target },
+  });
+  if (!result[0].meta.changes) conflict();
   return { target };
 }
 export async function deleteForum(
@@ -649,7 +655,12 @@ export async function deleteForum(
       "delete",
     ),
   );
-  await runGuarded(ctx, statements);
+  const result = await auditedEntityBatch(ctx.db, statements, {
+    actor, eventType: "forum_delete", targets: [{ type: target.kind === "topic" ? "forum_topic" : target.kind === "post" ? "forum_post" : "forum_comment", id: target.id }],
+    snapshot: forumEditAuditSnapshot(target), permission: "forum.use", authorizationBasis: "content_author",
+    source: "owned", operation: "delete", context: { topicId: topic.id, target },
+  });
+  if (!result[0].meta.changes) conflict();
 }
 export async function likeForum(
   ctx: ForumRuntime,

@@ -103,7 +103,7 @@ export async function adminForumDetail(
     .prepare(
       `SELECT a.id,u.display_name AS actor,a.event_type AS event,${auditDetail} AS detail,a.created_at AS createdAt
     FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.event_type LIKE 'forum_%'
-    AND json_extract(a.detail_json,'$.topicId')=? ${moderate ? "" : "AND a.event_type IN('forum_feature','forum_unfeature','forum_tags')"} ORDER BY a.id DESC LIMIT 50`,
+    AND COALESCE(json_extract(a.detail_json,'$.topicId'),json_extract(a.detail_json,'$.context.topicId'))=? ${moderate ? "" : "AND a.event_type IN('forum_feature','forum_unfeature','forum_tags')"} ORDER BY a.id DESC LIMIT 50`,
     )
     .bind(topic.id)
     .all<ForumAdminDetail["audit"][number]>();

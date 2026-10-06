@@ -1,9 +1,11 @@
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import { characterNameKey, type CharacterCreditSelection } from "@/lib/character-names";
+import type { EntityAuditTarget } from "@/lib/entity-audit";
+import type { ForumTarget } from "@/lib/forum";
 
 export type AuditTarget = {
-  type: "work" | "creator" | "character" | "category" | "tag";
+  type: EntityAuditTarget["type"];
   id: string | number;
 };
 
@@ -20,6 +22,7 @@ export async function auditedEntityBatch(
     targets: AuditTarget[] | "character";
     snapshot: AuditSnapshot;
     permission: PermissionKey | null;
+    authorizationBasis?: "permission" | "work_maintainer" | "content_author";
     source: "admin" | "public" | "owned";
     operation?: string;
     context?: Record<string, unknown>;
@@ -33,6 +36,10 @@ export async function auditedEntityBatch(
       WHEN 'creator' THEN (SELECT name FROM creators WHERE id=json_extract(value,'$.id'))
       WHEN 'character' THEN (SELECT primary_name FROM characters WHERE id=json_extract(value,'$.id'))
       WHEN 'category' THEN (SELECT label FROM character_categories WHERE id=json_extract(value,'$.id'))
+      WHEN 'comment' THEN '评论 #' || json_extract(value,'$.id')
+      WHEN 'forum_topic' THEN (SELECT title FROM forum_topics WHERE id=json_extract(value,'$.id'))
+      WHEN 'forum_post' THEN (SELECT t.title || ' #' || p.post_number FROM forum_posts p JOIN forum_topics t ON t.id=p.topic_id WHERE p.id=json_extract(value,'$.id'))
+      WHEN 'forum_comment' THEN (SELECT t.title || ' #' || p.post_number || ' 回复 #' || c.comment_number FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id JOIN forum_topics t ON t.id=p.topic_id WHERE c.id=json_extract(value,'$.id'))
       WHEN 'tag' THEN json_extract(value,'$.id') END)) FROM json_each(?)))`;
   const result = await database.batch([
     database.prepare(`INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
@@ -43,7 +50,7 @@ export async function auditedEntityBatch(
         input.source, input.operation ?? null,
         JSON.stringify(input.context ?? {}),
         JSON.stringify({ userId: actor.id, displayName: actor.displayName, roleKeys: actor.roleKeys, roleNames: actor.roleNames }),
-        JSON.stringify({ permission: input.permission, basis: input.permission === null ? "work_maintainer" : "permission",
+        JSON.stringify({ permission: input.permission, basis: input.authorizationBasis ?? (input.permission === null ? "work_maintainer" : "permission"),
           permissionKeys: actor.permissionKeys, isBootstrapAdmin: actor.isBootstrapAdmin }),
         ...snapshot.binds),
     ...statements,
@@ -69,6 +76,31 @@ export async function auditedEntityBatch(
       .bind(input.eventType, editId),
   ]);
   return result.slice(1, 1 + statements.length);
+}
+
+export function commentAuditSnapshot(id: number): AuditSnapshot {
+  return { sql: `SELECT json_object('id',id,'workId',work_id,'creatorId',creator_id,'characterId',character_id,
+    'userId',user_id,'rootCommentId',root_comment_id,'replyToCommentId',reply_to_comment_id,'body',body,
+    'images',json((SELECT json_group_array(json_object('id',id,'fingerprint',fingerprint,'format',format,
+      'width',width,'height',height,'size',size,'position',position)) FROM
+      (SELECT * FROM comment_images WHERE comment_id=c.id AND status='ready' ORDER BY position))))
+    FROM comments c WHERE id=?`, binds: [id] };
+}
+
+export function forumEditAuditSnapshot(target: ForumTarget): AuditSnapshot {
+  if (target.kind === "comment") return { sql: `SELECT json_object('id',c.id,'topicId',p.topic_id,'postId',p.id,
+    'postNumber',p.post_number,'commentNumber',c.comment_number,'userId',c.user_id,'body',c.body,'status',c.status,
+    'authorName',(SELECT display_name FROM users WHERE id=c.user_id),'createdAt',c.created_at,'replyToCommentId',c.reply_to_id)
+    FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id WHERE c.id=?`, binds: [target.id] };
+  return { sql: `SELECT json_object('id',p.id,'topicId',p.topic_id,'postNumber',p.post_number,'userId',p.user_id,'body',p.body,'status',p.status,
+    'authorName',(SELECT display_name FROM users WHERE id=p.user_id),'createdAt',p.created_at,
+    ${target.kind === "topic" ? `'title',t.title,'tags',json((SELECT json_group_array(json_object('id',id,'name',name,'position',position))
+      FROM (SELECT g.id,g.name,x.position FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id ORDER BY x.position))),` : ""}
+    'images',json((SELECT json_group_array(json_object('id',id,'fingerprint',fingerprint,'format',format,
+      'width',width,'height',height,'size',size,'position',position,'offset',body_offset)) FROM
+      (SELECT * FROM forum_images WHERE post_id=p.id AND status='ready' ORDER BY position))))
+    FROM forum_posts p JOIN forum_topics t ON t.id=p.topic_id WHERE ${target.kind === "topic" ? "t.id=? AND p.post_number=1" : "p.id=?"}`,
+    binds: [target.id] };
 }
 
 export function creatorAuditSnapshot(id: number, includeWorks = false): AuditSnapshot {

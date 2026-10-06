@@ -84,9 +84,13 @@ const db = {
 const ctx = { db } as ForumRuntime;
 const actor = {
   id: 1,
+  email: "forum-contract@example.test",
+  displayName: "Fixture",
   status: "active",
   permissionKeys: ["forum.use"],
   roleKeys: [],
+  roleNames: [],
+  isBootstrapAdmin: false,
 } as unknown as ArchiveUser;
 const requestCtx = {
   ...ctx,

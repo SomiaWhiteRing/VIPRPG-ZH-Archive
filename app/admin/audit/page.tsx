@@ -69,7 +69,7 @@ export default function AdminAuditPage() {
       <PageHeader
         compact
         title="审计日志"
-        subtitle="按操作者或条目核查资料修改、关联整理与授权记录。"
+        subtitle="按操作者或条目核查资料、评论与讨论的编辑历史及授权记录。"
       />
 
       <DailyAuditReportPane {...dailyReports} />
@@ -256,7 +256,7 @@ function AuditDetail({ detail }: { detail: unknown }) {
     </ul> : null}
     {authorization ? <p className="text-sm text-muted">
       操作时角色：{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || "无角色" : "未记录"}；
-      授权依据：{authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}
+      授权依据：{authorization.basis === "content_author" ? "本人内容编辑" : authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}
       {data?.source ? `；入口：${data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}` : ""}
     </p> : null}
     {hasSnapshots ? (changes.length ? <details className="admin-details">
