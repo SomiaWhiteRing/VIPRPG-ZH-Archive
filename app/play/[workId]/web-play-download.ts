@@ -203,7 +203,8 @@ function downloadAlternate(originalUrl: string, value: string | null): string | 
   try {
     const original = new URL(originalUrl, self.location.href);
     const alternate = new URL(value);
-    return alternate.origin === "https://download.viprpg.org" && !alternate.username && !alternate.password &&
+    return ["https://download.viprpg.org", "https://download-asia.viprpg.org"].includes(alternate.origin) &&
+      !alternate.username && !alternate.password &&
       !alternate.hash && alternate.pathname === original.pathname && alternate.search === original.search
       ? alternate.href : null;
   } catch {

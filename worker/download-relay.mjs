@@ -1,5 +1,5 @@
 const sourceOrigin = "https://viprpg.org";
-const relayOrigin = "https://download.viprpg.org";
+const relayOrigins = new Set(["https://download.viprpg.org", "https://download-asia.viprpg.org"]);
 const downloadPath = /^\/api\/archive-versions\/[1-9]\d*\/download\/?$/;
 const expose = "Content-Length, Content-Range, Content-Disposition, ETag, Accept-Ranges, X-Archive-Download-Alternate, X-Archive-Download-Relay, X-Download-Cache, X-Download-Cache-Tier";
 
@@ -24,7 +24,7 @@ function unavailable(request, url) {
 export default {
   async fetch(request, env) {
     const incoming = new URL(request.url);
-    if (incoming.origin !== relayOrigin) return new Response(null, { status: 404 });
+    if (!relayOrigins.has(incoming.origin)) return new Response(null, { status: 404 });
     if (!downloadPath.test(incoming.pathname)) return new Response(null, { status: 404, headers: cors(new Headers({ "Cache-Control": "no-store" })) });
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors(new Headers({
@@ -62,7 +62,7 @@ export default {
         const pinned = location ? new URL(location, source) : null;
         await response.body?.cancel();
         if (!pinned || pinned.origin !== sourceOrigin || pinned.pathname !== source.pathname) return unavailable(request, source);
-        pinned.hostname = "download.viprpg.org";
+        pinned.hostname = incoming.hostname;
         pinned.searchParams.delete("download_source");
         return new Response(null, { status: 307, headers: cors(new Headers({ Location: pinned.href, "Cache-Control": "no-store" })) });
       }
