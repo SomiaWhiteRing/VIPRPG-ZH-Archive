@@ -63,12 +63,19 @@ export async function restoreMainIngress({ config, restore = false, confirm, api
   if (restore && (confirm !== hostname || !trial.expired)) throw Error("Restoration requires --confirm viprpg.org and an expired trial");
   if (typeof api !== "function") throw Error("Cloudflare API transport is required");
   if (!Number.isInteger(domainWaitMs) || domainWaitMs < 0 || domainWaitMs > 30000) throw Error("Domain propagation wait must be bounded to 30 seconds");
-  const read = async () => ({
-    zone: await api(`/zones/${config.zoneId}`),
-    domains: await api(`/accounts/${config.accountId}/workers/domains`),
-    dns: await api(`/zones/${config.zoneId}/dns_records?name=${hostname}&per_page=100`),
-    routes: await api(`/zones/${config.zoneId}/workers/routes`),
-  });
+  const read = async deadline => {
+    const get = resource => {
+      const remaining = deadline === undefined ? 15000 : deadline - Date.now();
+      if (remaining <= 0) throw Error("Custom Domain propagation verification deadline expired; keep Route");
+      return api(resource, "GET", undefined, { timeoutMs: Math.min(15000, remaining) });
+    };
+    return {
+      zone: await get(`/zones/${config.zoneId}`),
+      domains: await get(`/accounts/${config.accountId}/workers/domains`),
+      dns: await get(`/zones/${config.zoneId}/dns_records?name=${hostname}&per_page=100`),
+      routes: await get(`/zones/${config.zoneId}/workers/routes`),
+    };
+  };
   let state = await read();
   let current = inspect(state, config);
   await save("before", { at: new Date(now).toISOString(), trial: config.trial, state });
@@ -83,7 +90,7 @@ export async function restoreMainIngress({ config, restore = false, confirm, api
     // A lost response is not evidence that a mutation failed. Never blindly retry.
     const deadline = Date.now() + (method === "PUT" ? domainWaitMs : 0);
     do {
-      state = await read();
+      state = await read(method === "PUT" && domainWaitMs > 0 ? deadline : undefined);
       current = inspect(state, config);
       if (verified(current) || Date.now() >= deadline) break;
       await delay(Math.max(0, Math.min(1000, deadline - Date.now())));
@@ -125,14 +132,15 @@ export function createRestorationApi(config, token) {
   const reads = new Set([`/zones/${config.zoneId}`, domainPath,
     `/zones/${config.zoneId}/dns_records?name=${hostname}&per_page=100`, `/zones/${config.zoneId}/workers/routes`]);
   const deletes = new Set([`/zones/${config.zoneId}/dns_records/${config.recordId}`, `/zones/${config.zoneId}/workers/routes/${config.routeId}`]);
-  return async (resource, method = "GET", body) => {
+  return async (resource, method = "GET", body, { timeoutMs = 15000 } = {}) => {
     const allowed = method === "GET" && reads.has(resource) && body === undefined
       || method === "DELETE" && deletes.has(resource) && body === undefined
       || method === "PUT" && resource === domainPath && body && Object.keys(body).length === 3
         && body.hostname === hostname && body.service === config.worker && body.zone_id === config.zoneId;
     if (!allowed) throw Error("Restoration API permits only scoped reads, the owned trial deletes and the exact main Custom Domain PUT");
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 15000) throw Error("Invalid restoration API timeout");
     const response = await fetch(`https://api.cloudflare.com/client/v4${resource}`, {
-      method, redirect: "error", signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      method, redirect: "error", signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     const data = await response.json();
