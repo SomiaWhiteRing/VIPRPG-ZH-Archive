@@ -34,6 +34,8 @@ export const LANGUAGE_OPTIONS = [
   { value: "vi", label: "越南语" },
 ] as const;
 
+export const PRIMARY_LANGUAGE_OPTIONS = LANGUAGE_OPTIONS.slice(0, 4);
+
 export const ENGINE_OPTIONS = [
   { value: "rpg_maker_2000", label: "RPG Maker 2000", shortLabel: "2k", distribution: "archive" },
   { value: "rpg_maker_2003", label: "RPG Maker 2003", shortLabel: "2k3", distribution: "archive" },

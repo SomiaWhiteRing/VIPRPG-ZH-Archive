@@ -12,7 +12,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
 import { formatNumber, formatDate } from "@/lib/format";
-import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
+import { ENGINE_OPTIONS, PRIMARY_LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 import { WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { LayoutGrid, List } from "lucide-react";
 import type { ReactNode } from "react";
@@ -228,7 +228,7 @@ export function GameLibrary({
               {language ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, language: undefined })}
-                  label={`语言：${languageLabel(language)}`}
+                  label={`语言：${language === "other" ? "其他" : languageLabel(language)}`}
                 />
               ) : null}
               {original ? (
@@ -335,31 +335,30 @@ export function GameLibrary({
               ))}
             </FilterSection>
             <FilterSection label="语言">
-              <CollapsibleFilterLinks
-                options={[
-                  {
-                    active: !language,
-                    href: gamesHref({
-                      ...activeParams,
-                      language: undefined,
-                      page: undefined,
-                    }),
-                    label: "全部",
-                    value: "all",
-                  },
-                  ...LANGUAGE_OPTIONS.map(({ value, label }) => ({
-                    active: language === value,
-                    href: gamesHref({
-                      ...activeParams,
-                      language: value,
-                      page: undefined,
-                    }),
-                    label,
-                    value,
-                  })),
-                ]}
-                visibleCount={3}
+              <FilterLink
+                active={!language}
+                href={gamesHref({
+                  ...activeParams,
+                  language: undefined,
+                  page: undefined,
+                })}
+                label="全部"
               />
+              {[
+                ...PRIMARY_LANGUAGE_OPTIONS,
+                { value: "other", label: "其他" },
+              ].map(({ value, label }) => (
+                <FilterLink
+                  key={value}
+                  active={language === value}
+                  href={gamesHref({
+                    ...activeParams,
+                    language: value,
+                    page: undefined,
+                  })}
+                  label={label}
+                />
+              ))}
             </FilterSection>
             {releaseFilter}
             <FilterSection label="标签">
@@ -369,56 +368,6 @@ export function GameLibrary({
         </aside> : null}
       </div>
     </div>
-  );
-}
-
-type FilterOptionLink = {
-  active: boolean;
-  href: string;
-  label: string;
-  value: string;
-};
-
-function CollapsibleFilterLinks({
-  options,
-  visibleCount,
-}: {
-  options: readonly FilterOptionLink[];
-  visibleCount: number;
-}) {
-  const visibleOptions = options.slice(0, visibleCount);
-  const overflowOptions = options.slice(visibleCount);
-
-  return (
-    <>
-      {visibleOptions.map((option) => (
-        <FilterLink
-          active={option.active}
-          href={option.href}
-          key={option.value}
-          label={option.label}
-        />
-      ))}
-      {overflowOptions.length > 0 ? (
-        <details
-          className="group contents"
-          open={overflowOptions.some((option) => option.active)}
-        >
-          <summary className="order-last inline-flex min-h-8 cursor-pointer list-none items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10 [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">展开</span>
-            <span className="hidden group-open:inline">折叠</span>
-          </summary>
-          {overflowOptions.map((option) => (
-            <FilterLink
-              active={option.active}
-              href={option.href}
-              key={option.value}
-              label={option.label}
-            />
-          ))}
-        </details>
-      ) : null}
-    </>
   );
 }
 
