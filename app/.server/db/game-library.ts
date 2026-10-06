@@ -76,7 +76,6 @@ import {
   isArchiveEngineFamily,
   isEngineFamily,
   isLanguageCode,
-  PRIMARY_LANGUAGE_OPTIONS,
 } from "@/lib/labels";
 import {
   ORIGINAL_RELEASE_DATE_FORMAT_ERROR,
@@ -1712,10 +1711,7 @@ function buildWhere(input: Filters): {
     clauses.push("w.is_original=?");
     binds.push(input.isOriginal ? 1 : 0);
   }
-  if (input.language === "other") {
-    clauses.push(`w.language NOT IN (${PRIMARY_LANGUAGE_OPTIONS.map(() => "?").join(",")})`);
-    binds.push(...PRIMARY_LANGUAGE_OPTIONS.map((option) => option.value));
-  } else if (input.language) {
+  if (input.language) {
     clauses.push("w.language=?");
     binds.push(input.language);
   }
