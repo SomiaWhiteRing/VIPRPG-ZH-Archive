@@ -2,9 +2,9 @@ import type { AppRuntime } from "./runtime";
 import type { SiteAnalyticsConfig } from "@/lib/analytics";
 
 export function getSiteAnalyticsConfig(runtime: AppRuntime): SiteAnalyticsConfig | null {
-  const env = runtime.env as CloudflareEnv & {
-    GA_ENABLED?: string; GA_MEASUREMENT_ID?: string; GA_GATEWAY_PATH?: string;
-  };
+  const env: {
+    GA_ENABLED?: string; GA_MEASUREMENT_ID?: string; GA_GATEWAY_PATH?: string; SITE_NOINDEX?: string;
+  } = runtime.env;
   if (env.GA_ENABLED !== "true" || runtime.origin !== "https://viprpg.org"
     || new URL(runtime.request.url).hostname !== "viprpg.org"
     || env.SITE_NOINDEX !== "false" || !/^G-[A-Z0-9]+$/.test(env.GA_MEASUREMENT_ID ?? "")
