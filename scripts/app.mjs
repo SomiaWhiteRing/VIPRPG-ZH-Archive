@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation, deploymentSummary, confirmProduction } from "./deployment-config.mjs";
-import { readTrialConfig, assertTrialDeployment } from "./ingress-trial-config.mjs";
 
 const [command = "dev", ...args] = process.argv.slice(2);
 const { values, positionals } = parseArgs({ args, strict: false, allowPositionals: true, options: {
@@ -34,8 +33,6 @@ else if (command === "preview") {
     throw new Error("Deploy accepts only --env, --plan, --confirm and --apply-migrations");
   const config = readConfig();
   const target = validateDeployment(selectDeployment(config, environment), environment);
-  const trial = environment === "production" ? readTrialConfig() : null;
-  if (environment === "production") assertTrialDeployment(target, trial);
   validateIsolation(config);
   const summary = deploymentSummary(target, environment);
   console.log(JSON.stringify({ ...summary, applyMigrations: values["apply-migrations"] === true }, null, 2));
@@ -58,7 +55,6 @@ else if (command === "preview") {
     } else if (values["apply-migrations"]) {
       run("node_modules/wrangler/bin/wrangler.js", ["d1", "migrations", "apply", "DB", "--remote", "--env", "staging", "--config", "wrangler.jsonc"]);
     }
-    if (environment === "production") assertTrialDeployment(built, trial);
     run("node_modules/wrangler/bin/wrangler.js", ["deploy", "--config", "build/server/wrangler.json"]);
   }
 } else throw new Error(`Unknown app command: ${command}`);

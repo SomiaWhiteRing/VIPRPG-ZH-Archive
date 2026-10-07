@@ -101,7 +101,6 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.PRODUCTION_CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.PRODUCTION_CLOUDFLARE_API_TOKEN }}
-      MAIN_INGRESS_CONFIG_JSON: ${{ secrets.PRODUCTION_INGRESS_CONFIG_JSON }}
     steps:
       - uses: actions/checkout@v6
         with:

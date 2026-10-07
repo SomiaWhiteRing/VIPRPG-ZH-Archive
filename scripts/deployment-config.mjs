@@ -36,13 +36,14 @@ export function validateDeployment(target, environment, directory = ".") {
   if (target.vars?.APP_ORIGIN !== origin || target.vars?.SITE_NOINDEX !== String(environment === "staging"))
     throw new Error(`${environment} requires APP_ORIGIN=${origin} and the matching SITE_NOINDEX`);
   const route = Array.isArray(target.routes) && target.routes.length === 1 ? target.routes[0] : null;
-  const customDomain = route?.pattern === new URL(origin).hostname && route.custom_domain === true;
-  const productionRoute = environment === "production" && route?.pattern === `${origin}/*` &&
-    /^[a-f0-9]{32}$/i.test(route.zone_id ?? "") &&
+  const hostname = new URL(origin).hostname;
+  const customDomain = route?.pattern === hostname && route.custom_domain === true;
+  const productionRoute = environment === "production" && route?.pattern === `${hostname}/*` &&
+    route.zone_name === hostname &&
     (route.custom_domain === undefined || route.custom_domain === false) &&
-    Object.keys(route).every((key) => ["pattern", "zone_id", "custom_domain"].includes(key));
+    Object.keys(route).every((key) => ["pattern", "zone_name", "custom_domain"].includes(key));
   if (target.workers_dev !== false || target.preview_urls !== false || (!customDomain && !productionRoute))
-    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? " or its exact HTTPS Route with zone_id" : ""}; disable workers_dev and preview_urls`);
+    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? ` or ${hostname}/* Route with zone_name=${hostname}` : ""}; disable workers_dev and preview_urls`);
   const database = target.d1_databases?.find((binding) => binding.binding === "DB");
   const bucket = target.r2_buckets?.find((binding) => binding.binding === "ARCHIVE_BUCKET");
   if (target.d1_databases?.length !== 1 || target.r2_buckets?.length !== 1 ||
