@@ -1,4 +1,5 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { readCharacterIndexStatic } from "./character-index-static";
 import { auditedEntityBatch, classificationAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { characterIndexPermission } from "@/lib/authz/character-permissions";
@@ -53,26 +54,20 @@ export function readCharacterIndexStructure(
 async function loadCharacterIndex(
   runtime: AppRuntime,
 ): Promise<CharacterIndexData> {
-  const database = getD1(runtime);
-  const [[categories, memberships, sources], { commentCounts, materialCounts }, characters] = await Promise.all([
-    database.batch([
-      ...structureStatements(database),
-      database.prepare(
-        "SELECT character_id AS characterId,url FROM character_sources ORDER BY sort_order,url",
-      ),
-    ]),
+  const [{ categories, memberships, sources }, { commentCounts, materialCounts }, characters] = await Promise.all([
+    readCharacterIndexStatic(runtime),
     readCharacterCounts(runtime),
     listPublicCharacterIndex(runtime),
   ]);
   const urlsByCharacter = new Map<number, string[]>();
-  for (const row of sources.results as { characterId: number; url: string }[]) {
+  for (const row of sources) {
     const urls = urlsByCharacter.get(row.characterId) ?? [];
     urls.push(row.url);
     urlsByCharacter.set(row.characterId, urls);
   }
   return {
-    categories: categories.results as CharacterCategory[],
-    memberships: memberships.results as CharacterMembership[],
+    categories,
+    memberships,
     characters: characters.map((character) => ({
       id: character.id,
       key: `character-${character.id}`,

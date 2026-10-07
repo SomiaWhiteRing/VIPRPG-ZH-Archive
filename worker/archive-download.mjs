@@ -9,7 +9,7 @@ import {
   shouldSkipWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
-import { hotDownloadCache, readDownloadCache, cacheDownloadResponse } from "./download-cache.mjs";
+import { hotDownloadCache, readDownloadCache, createCachedDownloadStream } from "./download-cache.mjs";
 
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
@@ -79,7 +79,7 @@ async function handleArchiveDownload(request, env, ctx) {
   let record = null;
   let cacheKey = null;
   let player = null;
-  const metrics = { r2GetCount: 0 };
+  const metrics = { r2GetCount: 0, cachedBytes: 0 };
   const bucket = {
     get(...args) { metrics.r2GetCount += 1; return env.ARCHIVE_BUCKET.get(...args); },
     head(...args) { return env.ARCHIVE_BUCKET.head(...args); },
@@ -228,8 +228,20 @@ async function handleArchiveDownload(request, env, ctx) {
       return new Response(null, { headers });
     }
 
-    const zipStream = createFixedLengthZipStream(layout, bucket, player, range);
-    let response = new Response(zipStream.readable, {
+    const parts = sharedCache ? Math.floor((range?.end ?? zipSizeBytes - 1) / downloadCacheMaxBytes)
+      - Math.floor((range?.start ?? 0) / downloadCacheMaxBytes) + 1 : 0;
+    // Allow for segment boundary reopens plus HEAD/GET/PUT and their race guards.
+    const storage = prepareZipRead(layout, bucket, player, range, parts * 5);
+    const zipStream = sharedCache
+      ? await createCachedDownloadStream(env.ARCHIVE_BUCKET, bucket, sharedCache, zipSizeBytes, range,
+          (part) => createFixedLengthZipStream(layout, storage, part),
+          record.estimatedR2GetCount, ctx, metrics)
+      : createFixedLengthZipStream(layout, storage, range);
+    if (sharedCache) {
+      headers.set("X-Download-Cache-Tier", "r2-segments");
+      if (zipStream.allCached) headers.set("X-Download-Cache", "HIT");
+    }
+    const response = new Response(zipStream.readable, {
       status: range ? 206 : 200,
       headers,
     });
@@ -239,12 +251,7 @@ async function handleArchiveDownload(request, env, ctx) {
       isRange: Boolean(range), metrics, startedAt, stage: "zip-stream",
     });
 
-    if (sharedCache && Number(headers.get("Content-Length")) <= downloadCacheMaxBytes) {
-      // Store exactly the bytes already being served, including resumable tails.
-      // Never construct an extra full ZIP just to warm a Range request's cache.
-      response = await cacheDownloadResponse(env.ARCHIVE_BUCKET, sharedCache, response,
-        record.estimatedR2GetCount, zipSizeBytes, range, ctx);
-    } else if (!range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
+    if (!sharedCache && !range && !bypassDownloadCache && shouldTryWorkersCache(zipSizeBytes)) {
       ctx.waitUntil(
         caches.default
           .put(cacheRequest, withDownloadCacheHeader(response.clone(), "HIT", "public, max-age=31536000, immutable"))
@@ -623,7 +630,7 @@ function firstOverlappingEntry(entries, offset, endOf) {
   return low;
 }
 
-function createFixedLengthZipStream(layout, bucket, player, range) {
+function prepareZipRead(layout, bucket, player, range, cacheOperations = 0) {
   const { entries } = layout;
   const firstLocal = range ? firstOverlappingEntry(entries, range.start, (entry) => entry.dataStart + entry.size) : 0;
   let lastLocal = firstLocal;
@@ -634,7 +641,7 @@ function createFixedLengthZipStream(layout, bucket, player, range) {
     const entry = entries[lastLocal++];
     if (range && (entry.size === 0 || entry.dataStart > range.end || entry.dataStart + entry.size <= range.start)) continue;
     // Count each blob/player opening. Repeated blobs may exceed the byte cache
-    // budget, and Range opens never reuse it. Core packs are fetched once each.
+    // budget; partially covered files cannot reuse it. Core packs are fetched once each.
     if (entry.storage.kind !== "core_pack") {
       sourceReadUpperBound += 1;
       continue;
@@ -646,10 +653,16 @@ function createFixedLengthZipStream(layout, bucket, player, range) {
     names.add(entry.storage.entry);
   }
   sourceReadUpperBound += storage.corePackEntries.size;
-  if (sourceReadUpperBound + downloadSubrequestReserve > downloadSubrequestLimit) {
+  if (sourceReadUpperBound + downloadSubrequestReserve + cacheOperations > downloadSubrequestLimit) {
     throw new HttpError(503, "此归档需要分段下载，当前下载范围过大。请缩小下载范围后重试。", "download_requires_range");
   }
-  // Reject before opening any source body or emitting the first ZIP header.
+  return storage;
+}
+
+function createFixedLengthZipStream(layout, storage, range) {
+  const firstLocal = range ? firstOverlappingEntry(layout.entries, range.start, (entry) => entry.dataStart + entry.size) : 0;
+  const lastLocal = range ? firstOverlappingEntry(layout.entries, range.end, (entry) => entry.localHeaderOffset) : layout.entries.length;
+  // The entire request's source budget was checked before opening a body.
   const { readable, writable } = new FixedLengthStream(range ? range.end - range.start + 1 : layout.size);
   const writer = writable.getWriter();
   const completion = writeZip(writer, layout, storage, range, firstLocal, lastLocal)
@@ -701,7 +714,7 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
       const dataStart = entry.dataStart;
       const dataEnd = dataStart + entry.size;
       if (!range || (entry.size > 0 && dataStart <= range.end && dataEnd > range.start)) {
-        const fileRange = range ? {
+        const fileRange = range && (range.start > dataStart || range.end + 1 < dataEnd) ? {
           offset: Math.max(0, range.start - dataStart),
           length: Math.min(dataEnd, range.end + 1) - Math.max(dataStart, range.start),
         } : null;
@@ -1107,7 +1120,7 @@ async function recordDownloadAccess(db, input) {
       input.isRange ? 1 : 0,
       !input.isRange ? hitIncrement : 0,
       input.responseSizeBytes,
-      hitIncrement ? input.responseSizeBytes : 0,
+      hitIncrement ? input.responseSizeBytes : input.cachedBytes,
       input.actualR2GetCount,
       input.cacheStatus,
       input.durationMs,
@@ -1197,6 +1210,8 @@ function observeDownloadCompletion(completion, db, ctx, request, input) {
   ctx.waitUntil(completion.then(
     () => recordDownloadAccess(db, {
       ...input, actualR2GetCount: input.metrics.r2GetCount,
+      cachedBytes: input.metrics.cachedBytes,
+      cacheStatus: input.metrics.cachedBytes === input.responseSizeBytes ? "HIT" : input.cacheStatus,
       durationMs: Date.now() - input.startedAt,
     }),
     (error) => {

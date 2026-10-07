@@ -2,7 +2,7 @@ import { requestJsonValue } from "@/lib/ui/api-response";
 import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { useLocation, useSearchParams } from "react-router";
+import { useLocation, useRouteLoaderData, useSearchParams } from "react-router";
 
 export function InboxIndicator({
   initialUnread,
@@ -15,14 +15,17 @@ export function InboxIndicator({
   const navigationParams = new URLSearchParams(useSearchParams()[0]);
   if (pathname === "/me/permissions") navigationParams.delete("role");
   const query = navigationParams.toString();
+  const serverTime = useRouteLoaderData<{ serverTime: number }>("root")?.serverTime;
   const [snapshot, setSnapshot] = useState({
     initial: initialUnread,
+    serverTime,
     unread: initialUnread,
   });
   const mounted = useRef(false);
   const lastSuccess = useRef(0);
-  if (snapshot.initial !== initialUnread) {
-    setSnapshot({ initial: initialUnread, unread: initialUnread });
+  const lastLoader = useRef<number | undefined>(undefined);
+  if (snapshot.initial !== initialUnread || snapshot.serverTime !== serverTime) {
+    setSnapshot({ initial: initialUnread, serverTime, unread: initialUnread });
   }
 
   useEffect(() => {
@@ -69,8 +72,13 @@ export function InboxIndicator({
     const onChanged = () => {
       void refresh(true);
     };
-    if (mounted.current) void refresh();
-    else mounted.current = true;
+    // A fresh root loader already counted unread items, even if the number did
+    // not change. Navigations which reuse the loader still refresh normally.
+    if (serverTime !== undefined && lastLoader.current !== serverTime) {
+      lastLoader.current = serverTime;
+      lastSuccess.current = Date.now();
+    } else if (mounted.current) void refresh();
+    mounted.current = true;
     window.addEventListener("focus", onFocus);
     window.addEventListener("pageshow", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -83,7 +91,7 @@ export function InboxIndicator({
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
     };
-  }, [pathname, query]);
+  }, [pathname, query, serverTime]);
 
   return children(snapshot.unread);
 }

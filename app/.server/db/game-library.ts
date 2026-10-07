@@ -1577,7 +1577,8 @@ function gameWorksListStatement(
   input: ListInput,
   columns = summarySql(),
 ): D1PreparedStatement {
-  const { where, binds } = buildWhere(input);
+  // Test publication per candidate so an ordered LIMIT can stop early.
+  const { where, binds } = buildWhere(input, true);
   const selectedIds = input.workIds ? " AND w.id IN (SELECT value FROM json_each(?))" : "";
   const limit = clamp(input.limit ?? 80, 1, 200);
   const offset = Math.max(0, Math.floor(input.offset ?? 0));
@@ -1589,7 +1590,6 @@ function gameWorksListStatement(
        LEFT JOIN archive_versions av
          ON av.work_id=w.id AND av.status='published' AND av.is_current=1
        WHERE ${where}${selectedIds}
-       GROUP BY w.id
        ORDER BY ${order},w.id DESC
        LIMIT ? OFFSET ?`,
     )
@@ -1662,7 +1662,7 @@ function gameWorksCountStatement(
     .bind(...binds);
 }
 
-function buildWhere(input: Filters): {
+function buildWhere(input: Filters, orderedList = false): {
   where: string;
   binds: Array<string | number>;
 } {
@@ -1671,7 +1671,7 @@ function buildWhere(input: Filters): {
         ? input.includeDeleted
           ? "1=1"
           : "w.status <> 'deleted'"
-        : input.genre
+        : input.genre || orderedList
           ? "EXISTS(SELECT 1 FROM public_works pw WHERE pw.id=w.id)"
           : `w.id IN (SELECT id FROM public_works)`,
     ],

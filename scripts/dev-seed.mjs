@@ -165,11 +165,11 @@ function requireEmptyDatabase(path) {
   if (!path) return;
   const db = new DatabaseSync(path, { readOnly: true });
   try {
-    // Fresh migrations populate permission templates and FTS internals only.
+    // Fresh migrations populate permission templates, revision metadata and FTS internals.
     const tables = db.prepare(`SELECT name FROM pragma_table_list
       WHERE schema = 'main' AND type IN ('table', 'virtual')
         AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'
-        AND name NOT IN ('d1_migrations', 'roles', 'role_permissions')`).all();
+        AND name NOT IN ('d1_migrations', 'roles', 'role_permissions', 'character_index_revision')`).all();
     for (const { name } of tables) {
       if (db.prepare(`SELECT count(*) AS n FROM ${quote(name)}`).get().n) {
         throw new Error("Local database contains application data. Seed restoration requires an empty database; stop the server and back up your data before db:local:reset.");

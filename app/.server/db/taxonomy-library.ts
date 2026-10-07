@@ -6,6 +6,7 @@ import {
   mapCharacterPortrait,
 } from "@/app/.server/db/character-portrait-library";
 import { getD1 } from "@/app/.server/db/d1";
+import { readCharacterIndexStatic } from "./character-index-static";
 import { auditedEntityBatch, characterAuditSnapshot, combinedAuditSnapshot, tagAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { memoizeRequest, type AppRuntime } from "@/app/.server/runtime";
@@ -136,20 +137,14 @@ async function readPublicCharacterIndex(
   runtime: AppRuntime,
 ): Promise<PublicCharacterIndexEntry[]> {
   const database = getD1(runtime);
-  const [characters, aliases] = await database.batch([
+  const [characters, { aliases }] = await Promise.all([
     database.prepare(
       `${characterSql(true, true, "index")} ORDER BY ch.primary_name,ch.id`,
-    ),
-    database.prepare(
-      "SELECT character_id,name,language FROM character_aliases ORDER BY character_id,language,name",
-    ),
+    ).all<CharacterRow>(),
+    readCharacterIndexStatic(runtime),
   ]);
   const byCharacter = new Map<number, CharacterAliasSuggestion[]>();
-  for (const row of (aliases.results ?? []) as Array<{
-    character_id: number;
-    name: string;
-    language: "ja" | "zh";
-  }>) {
+  for (const row of aliases) {
     const names = byCharacter.get(row.character_id) ?? [];
     names.push({ name: row.name, language: row.language });
     byCharacter.set(row.character_id, names);

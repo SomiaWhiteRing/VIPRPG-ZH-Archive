@@ -9,6 +9,7 @@ import { join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
 import { crc32, Crc32 } from "../lib/archive/crc32.ts";
+import { downloadCacheMaxBytes } from "../lib/archive/download.ts";
 
 // Exercise backpressured ZIP -> R2.put and conditional full/partial cache reads
 // in workerd, including an archive larger than 128 MiB. Local only.
@@ -27,7 +28,7 @@ const manifest = JSON.stringify({ schema: "viprpg-archive.manifest.v1", archiveV
     crc32: crc32(bytes), mtimeMs: null, storage: { kind: "blob", blobSha256: blobHash } },
 ] });
 const manifestHash = sha(manifest);
-const bigSize = 142_439_000;
+const bigSize = 285_213_672;
 const chunk = Uint8Array.from({ length: 65536 }, (_, i) => i % 251);
 const bigHashState = createHash("sha256");
 const bigCrc = new Crc32();
@@ -144,7 +145,7 @@ try {
   assert.equal(head.headers.get("Content-Length"), String(zip.length));
   assert.equal((await head.arrayBuffer()).byteLength, 0);
   assert.deepEqual(await (await request("/__conditional", { method: "POST" })).json(), { hasBody: false });
-  console.log("Small ZIP workerd/R2 contracts passed; checking streamed 142 MB ZIP and Range-only promotion.");
+  console.log("Small ZIP workerd/R2 contracts passed; checking streamed 285 MB ZIP and segmented Range reuse.");
   assert.equal((await request("/__setup-big", { method: "POST" })).status, 200);
   await request("/__clear-cache", { method: "POST" });
   const bigPath = "/api/archive-versions/2/download";
@@ -153,20 +154,25 @@ try {
   assert.equal(big.status, 200);
   const bigZip = await digestResponse(big, tailStart, true);
   assert.equal(big.headers.get("Content-Length"), String(bigZip.size));
-  assert.ok(bigZip.size > 128 * 1024 * 1024);
-  await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size), "large R2 PUT");
+  assert.ok(bigZip.size > 256 * 1024 * 1024);
+  await until(async () => {
+    const objects = await (await request("/__cache")).json();
+    assert.ok(objects.every(o => o.size <= downloadCacheMaxBytes));
+    return objects.reduce((n, o) => n + o.size, 0) === bigZip.size;
+  }, "segmented R2 PUT");
   const bigHit = await request(bigPath);
-  assert.equal(bigHit.headers.get("X-Download-Cache-Tier"), "r2");
+  assert.equal(bigHit.headers.get("X-Download-Cache-Tier"), "r2-segments");
+  assert.equal(bigHit.headers.get("X-Download-Cache"), "HIT");
   assert.deepEqual(await digestResponse(bigHit, tailStart), bigZip);
   await request("/__clear-cache", { method: "POST" });
   const coldTail = await request(bigPath, { headers: { Range: `bytes=${tailStart}-` } });
   assert.equal(coldTail.headers.get("Content-Length"), String(bigZip.size - tailStart));
   assert.equal(coldTail.status, 206);
   assert.equal((await digestResponse(coldTail)).hash, bigZip.tail);
-  await until(async () => (await (await request("/__cache")).json()).some(o => o.size === bigZip.size-tailStart), "Range-only R2 PUT");
+  await until(async () => (await (await request("/__cache")).json()).reduce((n, o) => n + o.size, 0) === bigZip.size-tailStart, "Range-only R2 PUT");
   const cachedTail = await request(bigPath, { headers: { Range: `bytes=${tailStart}-` } });
   assert.equal(cachedTail.status, 206);
-  assert.equal(cachedTail.headers.get("X-Download-Cache-Tier"), "r2");
+  assert.equal(cachedTail.headers.get("X-Download-Cache-Tier"), "r2-segments");
   assert.equal(cachedTail.headers.get("Content-Range"), `bytes ${tailStart}-${bigZip.size-1}/${bigZip.size}`);
   assert.equal((await digestResponse(cachedTail)).hash, bigZip.tail);
   const partialHead = await request(bigPath, { method: "HEAD" });

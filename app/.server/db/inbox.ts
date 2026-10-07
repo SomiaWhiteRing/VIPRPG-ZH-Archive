@@ -70,7 +70,8 @@ type InboxItemRow = {
   is_recipient: number;
 };
 
-const INBOX_SELECT = `SELECT
+function inboxSelect(details: boolean) {
+  return `SELECT
   i.id,
   i.type,
   i.work_comment_id,
@@ -83,47 +84,46 @@ const INBOX_SELECT = `SELECT
   json_extract(i.metadata_json,'$.workTitle') AS maintainer_work_title,
   maintainer_work.status AS maintainer_work_status,
   maintainer_request.status AS maintainer_request_status,
-  target.avatar_blob_sha256 AS applicant_avatar,
-  i.status,
-  i.sender_user_id,
+${details ? `target.avatar_blob_sha256 AS applicant_avatar,
   sender.display_name AS sender_display_name,
   sender.status AS sender_status,
   sender.avatar_blob_sha256 AS sender_avatar,
+  target.display_name AS target_display_name,
+  resolver.display_name AS resolved_by_display_name,
+  i.title,i.body,
+  json_extract(i.metadata_json,'$.closedReason') AS closed_reason,
+  json_extract(i.metadata_json,'$.rejectionReason') AS rejection_reason,
+  CASE WHEN i.requested_role_id IS NOT NULL THEN ${roleAccessSql("target.id", "i.requested_role_id")} ELSE 0 END AS already_assigned,` : ""}
+  i.status,
+  i.sender_user_id,
   CASE WHEN i.type='system_notice' THEN json_extract(i.metadata_json,'$.friend') END AS friend_action,
   i.recipient_user_id,
   i.required_permission_key,
   i.target_user_id,
-  target.display_name AS target_display_name,
   i.requested_role_id,
   i.requested_role_key_snapshot,
   i.requested_role_name_snapshot,
   i.role_event_id,
   i.resolved_by_user_id,
-  resolver.display_name AS resolved_by_display_name,
   i.resolved_at,
-  i.title,
-  i.body,
-  json_extract(i.metadata_json,'$.closedReason') AS closed_reason,
-  json_extract(i.metadata_json,'$.rejectionReason') AS rejection_reason,
   i.created_at,
   target.status AS target_status,
-  COALESCE((SELECT MAX(r.priority) FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) AS target_priority,
+  CASE WHEN i.type='role_change_request' THEN COALESCE((SELECT MAX(r.priority) FROM effective_user_roles ur JOIN roles r ON r.id=ur.role_id AND r.status='active' WHERE ur.user_id=target.id),0) ELSE 0 END AS target_priority,
   requested_role.key AS role_key,
   requested_role.priority AS role_priority,
   requested_role.kind AS role_kind,
   requested_role.status AS role_status,
   requested_role.application_enabled AS role_application_enabled,
   requested_role.available_to_all AS role_available_to_all,
-  ${roleAccessSql("target.id", "i.requested_role_id")} AS already_assigned,
   reads.read_at AS recorded_read_at
 FROM inbox_items i
 LEFT JOIN work_maintainer_requests maintainer_request ON maintainer_request.id=i.work_maintainer_request_id
 LEFT JOIN works maintainer_work ON maintainer_work.id=maintainer_request.work_id
-LEFT JOIN users sender ON sender.id = i.sender_user_id
+${details ? "LEFT JOIN users sender ON sender.id = i.sender_user_id LEFT JOIN users resolver ON resolver.id = i.resolved_by_user_id" : ""}
 LEFT JOIN users target ON target.id = i.target_user_id
 LEFT JOIN roles requested_role ON requested_role.id=i.requested_role_id
-LEFT JOIN users resolver ON resolver.id = i.resolved_by_user_id
 LEFT JOIN inbox_item_reads reads ON reads.item_id = i.id AND reads.user_id = ?`;
+}
 
 export function buildInboxVisibilityClause(
   user: ArchiveUser,
@@ -142,30 +142,30 @@ export function buildInboxVisibilityClause(
   };
 }
 
-function inboxQuery(user: ArchiveUser) {
+function inboxQuery(user: ArchiveUser, details = true, selection?: { sql: string; binds: (string | number)[] }) {
   const visibility = buildInboxVisibilityClause(user);
   return {
-    sql: `WITH visible AS (${INBOX_SELECT} WHERE (${visibility.sql})), actionable AS (
+    sql: `WITH visible AS (${inboxSelect(details)}
+      WHERE ${selection ? `i.id IN (${selection.sql})` : `(${visibility.sql})`}), actionable AS (
       SELECT *, recipient_user_id=${user.id} AS is_recipient,
-        EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=${user.id} AND f.followed_user_id=sender_user_id) AS friend_is_following,
+        ${details ? `EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=${user.id} AND f.followed_user_id=sender_user_id) AS friend_is_following,
+        CASE WHEN work_maintainer_request_id IS NOT NULL THEN (${userPermissionSql('target_user_id', 'work.update_own')} AND NOT EXISTS
+          (SELECT 1 FROM work_uploaders WHERE work_id=maintainer_work_id AND user_id=target_user_id)) ELSE 0 END AS can_approve_maintainer,` : ""}
         CASE WHEN work_maintainer_request_id IS NOT NULL AND
           (recipient_user_id=${user.id} OR NOT ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))})
           THEN COALESCE(recorded_read_at,created_at) ELSE recorded_read_at END AS read_at,
-        (${userPermissionSql('target_user_id', 'work.update_own')} AND NOT EXISTS
-          (SELECT 1 FROM work_uploaders WHERE work_id=maintainer_work_id AND user_id=target_user_id)) AS can_approve_maintainer,
-        ((type='role_change_request' AND status='pending' AND ?
+        CASE WHEN type='role_change_request' THEN (status='pending' AND ?
         AND target_user_id<>? AND target_status='active' AND role_priority IS NOT NULL
         AND (role_kind='custom' OR role_key IN ('uploader','admin')) AND role_status='active'
         AND role_application_enabled=1 AND role_available_to_all=0
         AND ?>target_priority AND ?>role_priority)
-        OR (work_maintainer_request_id IS NOT NULL AND maintainer_request_status='pending'
+        WHEN work_maintainer_request_id IS NOT NULL THEN (maintainer_request_status='pending'
           AND target_user_id<>${user.id} AND maintainer_work_status<>'deleted'
-          AND ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))})) AS can_reject
+          AND ${workMaintainerRecipientSql('maintainer_work_id', String(user.id))}) ELSE 0 END AS can_reject
       FROM visible)`,
     binds: [
       user.id,
-      user.id,
-      ...visibility.audienceBinds,
+      ...(selection?.binds ?? [user.id, ...visibility.audienceBinds]),
       canResolveInboxRequests(user) ? 1 : 0,
       user.id,
       user.maxRolePriority,
@@ -192,7 +192,7 @@ export async function listInboxItemsForUser(
     cursor?: InboxCursor;
   },
 ) {
-  const query = inboxQuery(user);
+  const query = inboxQuery(user, false);
   const categorySql = {
     all: "1",
     comments: "work_comment_id IS NOT NULL",
@@ -241,18 +241,21 @@ export async function listInboxItemsForUser(
         1,
         Math.min(input.page, Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE))),
       );
-  const rows = await getD1(runtime)
-    .prepare(
-      `${query.sql} SELECT * FROM actionable WHERE ${filter}${boundary}
-    ORDER BY created_at ${order},id ${order} LIMIT ? OFFSET ?`,
-    )
-    .bind(
+  // The LIMIT stays inside the ID subquery. Hydration and permission filtering
+  // share one SQL snapshot, without scanning the audience again for each row.
+  const details = inboxQuery(user, true, {
+    sql: `${query.sql} SELECT id FROM actionable WHERE ${filter}${boundary}
+      ORDER BY created_at ${order},id ${order} LIMIT ? OFFSET ?`,
+    binds: [
       ...query.binds,
       ...boundaryBinds,
       INBOX_PAGE_SIZE,
       (page - 1) * INBOX_PAGE_SIZE,
-    )
-    .all<InboxItemRow>();
+    ],
+  });
+  const rows = await getD1(runtime)
+    .prepare(`${details.sql} SELECT * FROM actionable ORDER BY created_at ${order},id ${order}`)
+    .bind(...details.binds).all<InboxItemRow>();
   const items = (rows.results ?? []).map((row) => mapInboxItemRow(row, user));
   if (newer) items.reverse();
   await attachInteractions(runtime, items);
@@ -280,22 +283,18 @@ export async function listInboxItemsForUser(
   };
 }
 
-export async function countUnreadInboxItemsForUser(
-  runtime: AppRuntime,
-  user: ArchiveUser,
-): Promise<number> {
+function unreadInboxAudience(user: ArchiveUser) {
   // Keep each audience on its index. UNION removes items visible in multiple ways.
   const permissionAudience = user.permissionKeys.length
     ? `UNION SELECT id FROM inbox_items
         WHERE type<>'role_change_request'
           AND required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})`
     : "";
-  const row = await getD1(runtime)
-    .prepare(
-      `WITH current_administrator AS MATERIALIZED (
+  return {
+    sql: `current_administrator AS MATERIALIZED (
         SELECT ${administratorSql("?", "'admin'")} AS can_review_admin
         WHERE ${administratorSql("?")}
-      ), visible AS (
+      ), audience AS (
         SELECT id FROM inbox_items WHERE recipient_user_id=? AND work_maintainer_request_id IS NULL
         ${permissionAudience}
         UNION SELECT i.id FROM work_uploaders wu
@@ -308,13 +307,25 @@ export async function countUnreadInboxItemsForUser(
           WHERE i.type='role_change_request'
             AND (current_administrator.can_review_admin OR
               COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)<>'admin')
-      )
-      SELECT COUNT(*) AS count FROM visible i
+      )`,
+    binds: [user.id, user.id, user.id, ...user.permissionKeys],
+  };
+}
+
+export async function countUnreadInboxItemsForUser(
+  runtime: AppRuntime,
+  user: ArchiveUser,
+): Promise<number> {
+  const audience = unreadInboxAudience(user);
+  const row = await getD1(runtime)
+    .prepare(
+      `WITH ${audience.sql}
+      SELECT COUNT(*) AS count FROM audience i
       WHERE NOT EXISTS (
         SELECT 1 FROM inbox_item_reads reads WHERE reads.item_id=i.id AND reads.user_id=?
       )`,
     )
-    .bind(user.id, user.id, user.id, ...user.permissionKeys, user.id)
+    .bind(...audience.binds, user.id)
     .first<{ count: number }>();
   return row?.count ?? 0;
 }
@@ -368,7 +379,11 @@ export async function getInboxItemForUser(
   itemId: number,
   viewer: ArchiveUser,
 ): Promise<InboxItem> {
-  const query = inboxQuery(viewer);
+  const visibility = buildInboxVisibilityClause(viewer);
+  const query = inboxQuery(viewer, true, {
+    sql: `SELECT i.id FROM inbox_items i WHERE i.id=? AND (${visibility.sql})`,
+    binds: [itemId, viewer.id, ...visibility.audienceBinds],
+  });
   const row = await getD1(runtime)
     .prepare(`${query.sql} SELECT * FROM actionable WHERE id=?`)
     .bind(...query.binds, itemId)
