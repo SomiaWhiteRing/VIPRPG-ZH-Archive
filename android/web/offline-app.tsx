@@ -87,6 +87,8 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
   const [portrait, setPortrait] = useState(window.matchMedia("(orientation: portrait)").matches);
   const { preferences, loaded, setOrientation, setTouchEnabled, saveLayout } = useWebPlayControlsPreferences();
   const { capture, capturing } = useWebPlayScreenshots(installation.workId!, installation.title);
+  const captureRef = useRef(capture);
+  useEffect(() => { captureRef.current = capture; }, [capture]);
   const orientation = preferences.orientation;
 
   useEffect(() => {
@@ -155,7 +157,9 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       easyRpg: installation.easyRpg,
       playKey: installation.playKey,
       runtimeBasePath: easyRpgRuntimeBasePath,
-    }, () => {}, () => {}, () => { playerRef.current = null; onClose(); });
+    }, () => {}, () => {}, () => { playerRef.current = null; onClose(); }, image => {
+      void captureRef.current(async () => image).then(result => setFeedback(result ?? null));
+    });
     playerRef.current = session;
     void session.ready.then(async () => {
       setStarting(false);
@@ -177,7 +181,11 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
         immersive
         layout={preferences.layouts[orientation]}
         mobile
-        onCaptureScreenshot={() => { void capture(playerRef.current).then((result) => setFeedback(result ?? null)); }}
+        onCaptureScreenshot={() => {
+          const player = playerRef.current;
+          if (!player || starting || capturing || stoppingRef.current) return;
+          void capture(() => player.captureScreenshot()).then(result => setFeedback(result ?? null));
+        }}
         onSaveLayout={saveLayout}
         onTouchEnabledChange={setTouchEnabled}
         orientation={orientation}
