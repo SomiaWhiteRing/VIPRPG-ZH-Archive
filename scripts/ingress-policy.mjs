@@ -13,8 +13,8 @@ export function validateIngressConfig(config, apply = false) {
     throw Error("Only the explicitly configured viprpg.org Worker is allowed");
   if (!/^\/api\/archive-versions\/\d+\/download\?profile=web-play-v2&download_source=origin$/.test(config.archivePath ?? ""))
     throw Error("Configure an existing published archive version with origin bypass");
-  if (apply && (!/^[a-f0-9]{32}$/.test(config.recordId ?? "") || !/^[a-f0-9]{32}$/.test(config.routeId ?? "")))
-    throw Error("Register the approved DNS record and Route IDs before enabling apply");
+  if (apply && !/^[a-f0-9]{32}$/.test(config.recordId ?? ""))
+    throw Error("Register the approved DNS record ID before enabling apply");
   return config;
 }
 
@@ -27,6 +27,16 @@ export function coveringRoutes(routes) {
   });
 }
 
+// Wrangler replaces Route IDs on deployment. Match the exact, unique main Route
+// in the already verified zone, then use its current ID for scoped operations.
+export function resolveMainRoute(routes, config) {
+  const matches = coveringRoutes(routes);
+  if (matches.length > 1 || matches.some(route => route.pattern !== routePattern || route.script !== config.worker ||
+      !/^[a-f0-9]{32}$/i.test(route.id ?? "")))
+    throw Error("Main Route identity or conflict mismatch");
+  return matches[0];
+}
+
 export function assertOwnedState(state, config, now = Date.now()) {
   if (state.zone.id !== config.zoneId || state.zone.name !== hostname || state.zone.account?.id !== config.accountId || state.zone.status !== "active")
     throw Error("Zone/account identity mismatch");
@@ -36,8 +46,7 @@ export function assertOwnedState(state, config, now = Date.now()) {
       record.proxied !== false || record.ttl !== 60 || record.comment !== ownerComment || isIP(record.content) !== 4)
     throw Error("Expected the single registered, owned gray A record with TTL 60; stop on extra A/AAAA/CNAME");
   if (state.domains.some(x => x.hostname === hostname)) throw Error("Managed Custom Domain is still present");
-  const routes = coveringRoutes(state.routes);
-  if (routes.length !== 1 || routes[0].id !== config.routeId || routes[0].pattern !== routePattern || routes[0].script !== config.worker)
+  if (!resolveMainRoute(state.routes, config))
     throw Error("Main Route identity or conflict mismatch");
   const certificate = state.certificates.some(pack => pack.status === "active" && pack.hosts?.includes(hostname) &&
     pack.certificates?.some(cert => cert.status === "active" && Date.parse(cert.expires_on) > now + 7 * 86400000));

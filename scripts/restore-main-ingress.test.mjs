@@ -166,21 +166,25 @@ test("scoped transport refuses unrelated writes and undocumented PUT fields befo
 
 test("real empty 200/204 responses are accepted only for scoped DELETE and PUT mutations", async t => {
   for (const status of [200, 204]) await t.test(String(status), async t => {
-    const fetch = t.mock.method(globalThis, "fetch", async () => new Response(null, { status }));
+    const fetch = t.mock.method(globalThis, "fetch", async (url, init) =>
+      init.method === "GET" && new URL(url).pathname.endsWith("/workers/routes")
+        ? new Response(JSON.stringify({ success: true, result: fixture().routes }), { status: 200 })
+        : new Response(null, { status }));
     const api = createRestorationApi(config, "fake-restoration-token");
     assert.equal(await api(recordPath, "DELETE"), null);
+    await api(`/zones/${config.zoneId}/workers/routes`);
     assert.equal(await api(routePath, "DELETE"), null);
     assert.equal(await api(domainPath, "PUT", { hostname: config.hostname, service: config.worker, zone_id: config.zoneId }), null);
     // Reads must still contain the successful JSON envelope; an empty body is not state evidence.
     await assert.rejects(api(`/zones/${config.zoneId}`), SyntaxError);
-    assert.equal(fetch.mock.callCount(), 4);
+    assert.equal(fetch.mock.callCount(), 5);
     for (const [resource, method, body] of [
       [`/zones/${config.zoneId}/dns_records/unregistered`, "DELETE"],
       [`/zones/${config.zoneId}/workers/routes/unregistered`, "DELETE"],
       [domainPath, "PUT", { hostname: "elsewhere.example", service: config.worker, zone_id: config.zoneId }],
       [recordPath, "PATCH", { content: "8.35.211.227" }],
     ]) await assert.rejects(api(resource, method, body), /permits only scoped/);
-    assert.equal(fetch.mock.callCount(), 4, "unscoped writes are rejected before the mocked transport");
+    assert.equal(fetch.mock.callCount(), 5, "unscoped writes are rejected before the mocked transport");
   });
 });
 
