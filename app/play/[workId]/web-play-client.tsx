@@ -6,6 +6,8 @@ import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { setAndroidOnlinePlaying } from "@/lib/browser/android-screenshots";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { reportWorkPlayed } from "@/lib/browser/work-play";
+import { canTrackAnalytics, trackAnalytics } from "@/lib/browser/site-analytics";
+import { analyticsDurationBucket, analyticsSizeBucket } from "@/lib/analytics";
 
 import {
   AlertDialog,
@@ -125,6 +127,7 @@ export function WebPlayClient({
   const [orientationLockActive, setOrientationLockActive] = useState(false);
   const [viewportPortrait, setViewportPortrait] = useState(false);
   const workerRef = useRef<Worker | null>(null);
+  const analyticsInstallStarted = useRef<number | null>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerSession | null>(null);
   const lifetimeRef = useRef<AbortController | null>(null);
@@ -358,6 +361,21 @@ export function WebPlayClient({
     worker.onmessage = (event: MessageEvent<WebPlayInstallWorkerOutput>) => {
       const message = event.data;
 
+      if (message.type === "install-measurement") {
+        const start = analyticsInstallStarted.current;
+        analyticsInstallStarted.current = null;
+        if (start !== null) {
+          const { outcome, download_unpack_ms, ...metrics } = message.measurement;
+          const duration = Math.round(performance.now() - start);
+          trackAnalytics("install_result", { ...metrics, duration_ms: duration,
+            ...(download_unpack_ms === null ? {} : { download_unpack_ms }),
+            install_outcome: outcome, duration_bucket: analyticsDurationBucket(duration),
+            size_bucket: analyticsSizeBucket(metadata.installTotalSizeBytes),
+            work_id: metadata.workId, archive_version_id: metadata.archiveVersionId });
+        }
+        return;
+      }
+
       if (message.type === "install-finished") {
         setInstallSessionActive(false);
         return;
@@ -380,11 +398,16 @@ export function WebPlayClient({
     workerRef.current = worker;
 
     return worker;
-  }, [addLog]);
+  }, [addLog, metadata]);
 
   const startInstall = useCallback(async () => {
     const signal = lifetimeRef.current!.signal;
     setOperationError(null);
+
+    analyticsInstallStarted.current = canTrackAnalytics() ? performance.now() : null;
+    if (analyticsInstallStarted.current !== null) trackAnalytics("install_start", {
+      work_id: metadata.workId, archive_version_id: metadata.archiveVersionId,
+      size_bucket: analyticsSizeBucket(metadata.installTotalSizeBytes) });
 
     try {
       if (playerBusy) {
@@ -415,10 +438,17 @@ export function WebPlayClient({
         metadata,
         storageKind: chooseGameStorage(),
         storageSnapshot,
+        analyticsEnabled: analyticsInstallStarted.current !== null,
       } satisfies WebPlayInstallWorkerInput);
       addLog("info", "开始下载并安装到浏览器本地。");
     } catch (error) {
       if (signal.aborted) return;
+      const start = analyticsInstallStarted.current;
+      analyticsInstallStarted.current = null;
+      if (start !== null) trackAnalytics("install_result", {
+        install_outcome: "error", duration_ms: Math.round(performance.now() - start),
+        size_bucket: analyticsSizeBucket(metadata.installTotalSizeBytes),
+        work_id: metadata.workId, archive_version_id: metadata.archiveVersionId });
       setInstallSessionActive(false);
       const message = error instanceof Error ? error.message : "启动安装失败。";
       setOperationError(message);
@@ -463,6 +493,9 @@ export function WebPlayClient({
     const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
+    const analyticsStarted = canTrackAnalytics() ? performance.now() : null;
+    if (analyticsStarted !== null) trackAnalytics("play_start", { work_id: metadata.workId,
+      archive_version_id: metadata.archiveVersionId });
     try {
       if (!installed) {
         throw new Error("需要先完成本地安装。");
@@ -489,9 +522,15 @@ export function WebPlayClient({
       focusPlayerCanvas();
       signal.throwIfAborted();
       reportWorkPlayed(metadata.workId);
+      if (analyticsStarted !== null) trackAnalytics("play_result", { install_outcome: "success",
+        duration_ms: Math.round(performance.now() - analyticsStarted), work_id: metadata.workId,
+        archive_version_id: metadata.archiveVersionId });
       return true;
     } catch (error) {
       if (signal.aborted) return false;
+      if (analyticsStarted !== null) trackAnalytics("play_result", { install_outcome: "error",
+        duration_ms: Math.round(performance.now() - analyticsStarted), work_id: metadata.workId,
+        archive_version_id: metadata.archiveVersionId });
       playerRef.current?.dispose();
       playerRef.current = null;
       const message =

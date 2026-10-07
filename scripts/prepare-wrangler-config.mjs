@@ -23,6 +23,12 @@ const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_dat
 const target = structuredClone(base);
 for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
 if (values.env === "production") {
+  // Public analytics switches come from the production Environment, separately
+  // from the resource secret so enabling analytics cannot replace ingress data.
+  target.vars = { ...target.vars };
+  for (const key of ["GA_ENABLED", "GA_MEASUREMENT_ID", "GA_GATEWAY_PATH"]) {
+    if (process.env[key]) target.vars[key] = process.env[key];
+  }
   const trial = readTrialConfig();
   applyTrialRoute(target, trial);
   assertTrialDeployment(target, trial);

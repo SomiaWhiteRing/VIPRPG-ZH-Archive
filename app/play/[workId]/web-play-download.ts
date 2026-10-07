@@ -19,6 +19,7 @@ export class WebPlayDownload {
   private finished = false;
   private readonly abort = () => this.controller?.abort(new Error("安装已取消。"));
   totalBytes: number | null = null;
+  get reconnectCount(): number { return this.reconnects; }
 
   constructor(private readonly url: string, private readonly signal: AbortSignal) {
     signal.addEventListener("abort", this.abort);

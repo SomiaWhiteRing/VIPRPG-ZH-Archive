@@ -120,6 +120,9 @@ jobs:
         run: node scripts/prepare-wrangler-config.mjs --env production
         env:
           WRANGLER_CONFIG_JSONC: ${{ secrets.PRODUCTION_WRANGLER_CONFIG_JSONC }}
+          GA_ENABLED: ${{ vars.GA_ENABLED || 'false' }}
+          GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          GA_GATEWAY_PATH: ${{ vars.GA_GATEWAY_PATH }}
       - name: Deploy approved candidate
         run: npm run deploy:production -- --apply-migrations --confirm viprpg.org
       - run: npm run smoke:production

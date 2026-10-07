@@ -1,9 +1,10 @@
 import type { WebPlayInstallWorkerInput } from "./web-play-types";
+import { createInstallMeasurement } from "./web-play-install-measurement";
 
 export type TraceFields = Record<string, unknown>;
 export type InstallInput = Extract<WebPlayInstallWorkerInput, { type: "install" }>;
 
-/** Optional observation only: no timers, logging, storage or downloads in the normal entry. */
+/** Optional observation only; detailed diagnostics and consented aggregate measurement are separate. */
 export interface InstallObserver {
   event(kind: string, fields?: TraceFields): void;
   task<T>(kind: string, action: () => Promise<T>, fields?: TraceFields,
@@ -19,7 +20,15 @@ export function registerInstallObserver(value: typeof factory): void {
 }
 
 export function startInstallObservation(input: InstallInput): void {
-  try { installObserver = factory?.(input); }
+  try {
+    const diagnostics = factory?.(input);
+    const measurement = input.analyticsEnabled ? createInstallMeasurement() : undefined;
+    installObserver = diagnostics && measurement ? {
+      event(kind, fields) { diagnostics.event(kind, fields); measurement.event(kind, fields); },
+      task(kind, action, fields, result) { return diagnostics.task(kind, () => measurement.task(kind, action), fields, result); },
+      finish(outcome) { try { diagnostics.finish(outcome); } finally { measurement.finish(outcome); } },
+    } : diagnostics ?? measurement;
+  }
   catch (error) {
     installObserver = undefined;
     console.warn("Install diagnostics could not start", error);

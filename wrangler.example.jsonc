@@ -62,6 +62,9 @@
     }
   ],
   "vars": {
+    "GA_ENABLED": "false",
+    "GA_MEASUREMENT_ID": "G-2X5NL5DG0X",
+    "GA_GATEWAY_PATH": "/metrics",
     "SITE_NOINDEX": "false",
     "EMAIL_FROM": "noreply@viprpg.org",
     "APP_ORIGIN": "https://viprpg.org"
