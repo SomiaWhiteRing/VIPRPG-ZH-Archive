@@ -75,6 +75,15 @@ export async function searchAdminAuditLogs(
       binds.push(input.targetId.trim());
       return `CAST(json_extract(${detailSql},'${path}') AS TEXT)=?`;
     });
+    if (!input.targetType || input.targetType === "genre_group") {
+      for (const path of ["$.sourceGroup", "$.targetGroup"]) {
+        const event = "a.event_type='admin_genre_merge'";
+        if (input.targetId?.trim()) {
+          legacyClauses.push(`(${event} AND CAST(json_extract(${detailSql},'${path}') AS TEXT)=?)`);
+          binds.push(input.targetId.trim());
+        } else legacyClauses.push(`(${event} AND json_extract(${detailSql},'${path}') IS NOT NULL)`);
+      }
+    }
     clauses.push(`(EXISTS(SELECT 1 FROM json_each(${detailSql},'$.targets') target WHERE ${targetClauses.join(" AND ")})
       ${legacyClauses.length ? `OR (${legacyClauses.join(" OR ")})` : ""})`);
   }

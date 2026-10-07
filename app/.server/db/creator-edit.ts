@@ -58,7 +58,7 @@ export async function editPublicCreator(
       targets: [{ type: "creator", id: creatorId, name: before.name }], source: "public",
       actor: { userId: actor.id, displayName: actor.displayName, roleKeys: actor.roleKeys, roleNames: actor.roleNames },
       authorization: { permission: hasPermission(actor, "creator.metadata.update_any") ? "creator.metadata.update_any" : "creator.metadata.update_public",
-        permissionKeys: actor.permissionKeys, isBootstrapAdmin: actor.isBootstrapAdmin },
+        basis: "permission", permissionKeys: actor.permissionKeys, isBootstrapAdmin: actor.isBootstrapAdmin },
       before: beforeDetail, after: afterDetail,
     }), creatorId, userId, ...expected)];
 

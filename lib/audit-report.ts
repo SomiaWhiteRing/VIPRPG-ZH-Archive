@@ -1,4 +1,4 @@
-import { AUDIT_TARGET_LABELS, auditRecord, entityAuditChanges, entityAuditTargets, type EntityAuditTarget } from "./entity-audit";
+import { AUDIT_TARGET_LABELS, auditRecord, entityAuditChanges, entityAuditEditedTargets, type EntityAuditTarget } from "./entity-audit";
 
 const MAX_FINDINGS = 200;
 const MAX_REFERENCES = 20;
@@ -19,7 +19,7 @@ export type AuditReportFinding = {
   targets: EntityAuditTarget[];
 };
 export type DailyAuditSummary = {
-  version: 1;
+  version: 1 | 2;
   reportDate: string;
   windowStart: string;
   windowEnd: string;
@@ -67,7 +67,7 @@ export class DailyAuditAnalyzer {
 
   constructor(reportDate: string, totalLogs: number, sourceMaxLogId: number) {
     const window = auditReportWindow(reportDate);
-    this.summary = { version: 1, reportDate, windowStart: window.start, windowEnd: window.end, totalLogs, sourceMaxLogId,
+    this.summary = { version: 2, reportDate, windowStart: window.start, windowEnd: window.end, totalLogs, sourceMaxLogId,
       scannedLogs: 0, entityEdits: 0, completeSnapshots: 0, incompleteEdits: 0, changedFields: 0,
       authorizationChanges: 0, targetCounts: Object.fromEntries(Object.keys(AUDIT_TARGET_LABELS).map((type) => [type, 0])) as DailyAuditSummary["targetCounts"],
       actors: [], findings: [], findingCounts: {}, omittedFindings: 0 };
@@ -78,18 +78,21 @@ export class DailyAuditAnalyzer {
     let detail: unknown;
     try { detail = JSON.parse(log.detail_json ?? "null"); } catch { detail = null; }
     const data = auditRecord(detail);
+    // Applying for authority or rejecting an application does not grant it and
+    // does not edit the requested entity.
+    if (/^(?:role|work_maintainer)_request_(?:created|rejected|withdrawn|cancelled)$/.test(log.event_type)) return;
     const actor = auditRecord(data?.actor);
     const historicalId = actor?.userId;
     const userId = typeof historicalId === "number" && Number.isSafeInteger(historicalId) && historicalId > 0 ? historicalId : log.user_id;
     const name = String(actor?.displayName ?? log.actor_name ?? (userId ? `用户 #${userId}` : "系统／未记录")).slice(0, 200);
-    const targets = [...new Map(entityAuditTargets(detail).map((target) => [`${target.type}:${target.id}`, target])).values()];
+    const targets = [...new Map(entityAuditEditedTargets(detail).map((target) => [`${target.type}:${target.id}`, target])).values()];
     const reference = { actorUserId: userId, actorName: name, logIds: [log.id], targets: targets.slice(0, 10).map(shortTarget) };
-    if (/^(?:role_|user_role_|user_permission_)/.test(log.event_type)) {
+    if (/^(?:role_(?:created|updated|permissions_updated)|user_role_(?:assigned|removed)|user_permission_updated)$/.test(log.event_type)) {
       this.summary.authorizationChanges++;
       this.find({ ...reference, kind: "authorization", message: "账户角色或权限发生调整，请核查是否为预期授权。" });
     }
     const isEntityEdit = targets.length > 0 || data?.auditVersion === 1
-      || /(?:work|creator|character|classification|category|tag|relation|comment|forum).*(?:update|edit|delete|merge|create|commit|change)/.test(log.event_type);
+      || /(?:work|creator|character|classification|category|tag|relation|comment|forum|genre).*(?:update|edit|delete|merge|create|commit|change)/.test(log.event_type);
     if (!isEntityEdit) return;
     this.summary.entityEdits++;
     const actorKey = userId === null ? `unknown:${name}` : String(userId);
@@ -112,14 +115,22 @@ export class DailyAuditAnalyzer {
     }
     const authorization = auditRecord(data?.authorization);
     const hasSnapshots = data && Object.hasOwn(data, "before") && Object.hasOwn(data, "after");
-    const hasIdentity = userId !== null && actor && Array.isArray(actor.roleKeys);
+    const hasIdentity = typeof historicalId === "number" && Number.isSafeInteger(historicalId) && historicalId > 0
+      && actor && typeof actor.displayName === "string" && Array.isArray(actor.roleKeys);
+    // The first public-creator writer stored the exact permission and grant
+    // snapshot without a basis field. Interpret only that known historical
+    // format; never reconstruct authorization from current account data.
+    const permissionBased = authorization?.basis === "permission" || (authorization?.basis === undefined && data?.auditVersion === 1
+      && /^(?:creator_metadata_update|creator_avatar_update)$/.test(log.event_type)
+      && (authorization?.permission === "creator.metadata.update_public" || authorization?.permission === "creator.metadata.update_any"));
     const hasAuthorization = authorization && (authorization.basis === "work_maintainer" || authorization.basis === "content_author"
-      || (authorization.basis === "permission" && typeof authorization.permission === "string" && Array.isArray(authorization.permissionKeys)));
-    if (!hasSnapshots || !hasIdentity || !hasAuthorization || !targets.length) {
+      || (permissionBased && typeof authorization.permission === "string" && Array.isArray(authorization.permissionKeys)));
+    const missing = [!hasSnapshots && "修改前后快照", !hasIdentity && "操作时身份／角色", !hasAuthorization && "操作时授权依据", !targets.length && "编辑目标"].filter(Boolean);
+    if (missing.length) {
       this.summary.incompleteEdits++;
-      this.find({ ...reference, kind: "coverage", message: "此编辑的前后快照、目标或操作时身份／授权记录不完整，无法充分核查。" });
+      this.find({ ...reference, kind: "coverage", message: `此编辑缺少${missing.join("、")}，无法充分核查。` });
     } else this.summary.completeSnapshots++;
-    if (authorization?.basis === "permission" && typeof authorization.permission === "string"
+    if (permissionBased && typeof authorization?.permission === "string"
       && Array.isArray(authorization.permissionKeys) && authorization.isBootstrapAdmin !== true
       && !authorization.permissionKeys.includes(authorization.permission)) {
       this.find({ ...reference, kind: "authorization", message: "操作要求的权限未出现在操作时有效权限快照中，请核查授权依据。" });
@@ -127,13 +138,13 @@ export class DailyAuditAnalyzer {
     if (log.user_id !== null && userId !== log.user_id) {
       this.find({ ...reference, kind: "authorization", message: "日志的操作用户与操作时身份快照不一致，请核查审计记录。" });
     }
-    if (!hasSnapshots) return;
-    const changes = entityAuditChanges(data.before, data.after);
+    const changes = hasSnapshots ? entityAuditChanges(data.before, data.after) : [];
     this.summary.changedFields += changes.length;
-    if (/(?:delete|remove|merge)/i.test(String(data.operation ?? "")) || /(?:deleted?|merged?|removed?)/.test(log.event_type)
-      || changes.some((change) => change.field.endsWith("状态") && change.after === "deleted") || (data.before != null && data.after == null)) {
+    if (/(?:delete|remove|merge)/i.test(String(data?.operation ?? "")) || /(?:deleted?|merged?|removed?)/.test(log.event_type)
+      || changes.some((change) => change.field.endsWith("状态") && change.after === "deleted") || (hasSnapshots && data.before != null && data.after == null)) {
       this.find({ ...reference, kind: "destructive", message: "发生删除、移除、合并或条目删除状态变更，请复核受影响资料。" });
     }
+    if (!hasSnapshots) return;
     const cleared = changes.filter((change) => /(?:名称|中文名|原名|标题|简介|正文|配图|别名|制作人员|登场角色|分类归属|来源链接|标签|封面|外部链接)/.test(change.field)
       && ((nonempty(change.before) && !nonempty(change.after))
         || (typeof change.before === "string" && change.before.length >= 80 && typeof change.after === "string" && change.after.length <= change.before.length * .2)));
