@@ -28,7 +28,7 @@ production Environment 不配置 required reviewers，继续保存正式 secrets
 
 staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`WRANGLER_CONFIG_JSONC`。配置生成器接受目标资源对象，也可从完整本地配置选择 staging；输出不携带另一环境的实际资源；staging 构建的未选中顶层不绑定远端资源，正式构建移除 staging 段。生产 token 不应另存绕过环境隔离的仓库级副本。旧仓库凭据先核对消费者和权限，再迁移或撤销，不能盲删仍在使用的凭据。
 
-正式入口候选采用[主站社区 CNAME 优选](./main-ingress-selection.md)：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`。正式配置直接保存 routes，不再加载或覆盖试用配置。当前仓库清理不代表入口已经切换；正式 secret、Route、DNS 的变更及发布须另行取得本次目标和操作范围的确认。
+正式入口采用[主站社区 CNAME 优选](./main-ingress-selection.md)：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`。2026-10-08 已按负责人授权切换并同步正式配置 secret，routes 直接保存，不再加载或覆盖试用配置。后续正式 secret、Route、DNS 的变更及发布仍须取得对应目标和操作范围的确认。
 
 ## 本地准备与执行
 
@@ -76,7 +76,7 @@ npm run db:production:migrate -- --apply
 
 ## 主站入口与同源下载
 
-公开 ZIP、页面和 API 统一使用 `https://viprpg.org`。主站候选使用原 Worker Route 与社区 CNAME，配置、一次性切换及回退见[主站入口说明](./main-ingress-selection.md)。2026-10-08 只读核对确认旧试用已恢复为主站 managed Custom Domain，旧试用 Route 已删除；本次简单方案尚待正式确认和执行。
+公开 ZIP、页面和 API 统一使用 `https://viprpg.org`。2026-10-08 已按负责人授权使用原 Worker Route 与社区 CNAME，主站 managed Custom Domain 已解除；九项正式 smoke 返回 200，公开 ZIP 的分段字节和 ETag 与切换前一致。配置、切换及回退见[主站入口说明](./main-ingress-selection.md)。
 
 同源安装器保留15秒网络等待限制、最多两次故障重连、强 ETag与Range续传、取消和现有进度。持续收到数据的低速传输继续下载，不因低于某个速率消耗重连次数。ZIP构建、缓存、版本固定、未发布对象的访问检查及归档字节协议没有回退；不复制或清理 D1/R2/DO及用户存档。
 

@@ -18,7 +18,7 @@
 
 `cf.090227.xyz` 是文章列出的社区入口，维护者负责更新其候选地址。本仓库不再扫描或修改它的地址。2026-10-08 已读到该域名的有效 CNAME/A 解析；这不是全国三网或完整大文件速度验收。
 
-2026-10-08 的 Cloudflare 只读核对显示，旧试用已恢复为主站 managed Custom Domain，原试用 Route 已删除，主站 HTTPS 正常。当前这次代码清理和模板变更尚未切换正式 DNS、GitHub 配置或部署，需按[正式手册](./production-deployment.md#环境与授权)确认后执行。
+2026-10-08 已按负责人授权完成入口切换：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`，主站 managed Custom Domain 已解除。旧选点／恢复工作流、两个入口开关及两项专用试用 secret 已清理；正式配置 secret 和本地配置已同步为持久 Route。HTTPS 传播约 20 秒后恢复，九项正式 smoke 均返回 200；公开 ZIP 的 8 KiB Range 返回 206，ETag 和字节摘要与切换前一致。后续正式操作仍按[正式手册](./production-deployment.md#环境与授权)确认。
 
 ## Wrangler 持久配置
 
