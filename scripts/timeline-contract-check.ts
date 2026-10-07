@@ -28,6 +28,10 @@ import { hashSessionToken } from "../app/.server/auth/session-token";
 import { adminForumDetail } from "../app/.server/forum/admin";
 import { searchAdminAuditLogs } from "../app/.server/db/admin-audit";
 import type { ForumRuntime } from "../app/.server/forum/runtime";
+import { countUnreadInboxItemsForUser, listInboxItemsForUser, markInboxItemRead } from "../app/.server/db/inbox";
+import { readCharacterIndexStatic } from "../app/.server/db/character-index-static";
+import { listPublicCharacterIndex } from "../app/.server/db/taxonomy-library";
+import { listGameWorks } from "../app/.server/db/game-library";
 
 // Real migrations and production mutation/query functions. Only the D1/R2/DO
 // transports are adapted; no dev seed, network, credentials or shared state.
@@ -1160,6 +1164,78 @@ await check("profile comment pagination retains public visibility and private hi
   assert.ok(own.items.every((row) => ![204, 205, 206].includes(row.id)));
   f.sqlite.exec("UPDATE users SET status='disabled' WHERE id=1");
   assert.equal((await searchUserComments(f.runtime, { userId: 1, publicOnly: true })).total, 0);
+});
+
+await check("inbox indexed audiences retain deduplication, unread cursors and live maintainer access", async (f) => {
+  f.sqlite.exec(`INSERT INTO user_roles(user_id,role_id) SELECT 1,id FROM roles WHERE key='uploader';
+    INSERT INTO work_uploaders(work_id,user_id) VALUES(1,1);
+    INSERT INTO work_maintainer_requests(id,work_id,applicant_user_id,submission_key) VALUES(1,1,2,'fixture-request');
+    INSERT INTO inbox_items(id,type,recipient_user_id,required_permission_key,title,body,created_at) VALUES
+      (2001,'system_notice',1,'work.update_own','Two audiences','Once','2026-01-01');
+    INSERT INTO inbox_items(id,type,status,recipient_user_id,target_user_id,sender_user_id,work_maintainer_request_id,title,body,created_at)
+      VALUES(2002,'system_notice','pending',2,2,2,1,'Maintainer request','','2026-01-01');
+    INSERT INTO inbox_items(id,type,status,recipient_user_id,target_user_id,required_permission_key,requested_role_id,requested_role_key_snapshot,title,body,created_at)
+      SELECT 2003,'role_change_request','pending',2,2,'inbox.role_request.resolve',id,key,'Role request','','2026-01-01' FROM roles WHERE key='uploader';`);
+  for (let id = 1001; id <= 1037; id++) f.sqlite.prepare(
+    "INSERT INTO inbox_items(id,type,recipient_user_id,sender_user_id,title,body,created_at) VALUES(?,'system_notice',1,2,'Notice','Content','2026-01-01')").run(id);
+  const user = (await findUserById(f.runtime, 1))!;
+  const first = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: true, page: 1 });
+  assert.equal(first.total, 39);
+  assert.equal(first.items.length, 30);
+  assert.equal(first.pending, 1);
+  assert.equal(await countUnreadInboxItemsForUser(f.runtime, user), first.unread);
+  assert.deepEqual(first.items.slice(0, 2).map((row) => row.id), [2002, 2001]);
+  for (const item of first.items) await markInboxItemRead(f.runtime, { user, itemId: item.id });
+  const older = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: true, page: 1, cursor: first.nextCursor });
+  assert.equal(older.items.length, 9, "just-read boundary remains a valid cursor");
+  assert.ok(older.items.every((row) => !first.items.some((item) => item.id === row.id)));
+  assert.equal(await countUnreadInboxItemsForUser(f.runtime, user), 9);
+  const administrator = (await findUserById(f.runtime, 3))!;
+  const adminPage = await listInboxItemsForUser(f.runtime, administrator, { category: "all", unread: false, page: 1 });
+  assert.ok(adminPage.items.some((row) => row.id === 2003));
+  assert.ok(adminPage.items.every((row) => row.id !== 2002), "global management permission is not a maintainer audience");
+  const applicant = (await findUserById(f.runtime, 2))!;
+  const ownRequest = await listInboxItemsForUser(f.runtime, applicant, { category: "all", unread: false, page: 1 });
+  assert.ok(ownRequest.items.find((row) => row.id === 2002)?.readAt, "own maintainer request is not an unread notification");
+  f.sqlite.exec("DELETE FROM work_uploaders WHERE work_id=1 AND user_id=1");
+  const revoked = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: false, page: 1 });
+  assert.equal(revoked.pending, 0);
+  assert.ok(revoked.items.every((row) => row.id !== 2002));
+});
+
+await check("directory revision invalidates settled snapshots on edits and cascades", async (f) => {
+  f.sqlite.exec(`INSERT INTO character_categories(id,label,original_name,sort_order) VALUES('fixture','Category','Category',0);
+    INSERT INTO character_category_memberships(category_id,character_id,sort_order) VALUES('fixture',1,0);
+    INSERT INTO character_sources(character_id,url,sort_order) VALUES(1,'https://example.test/first',0);
+    INSERT INTO character_aliases(character_id,name,language,name_key,source) VALUES(1,'Alias','zh','alias','admin');`);
+  const request = () => ({ ...f.runtime, memo: new Map<string, unknown>() });
+  const first = await readCharacterIndexStatic(request());
+  assert.equal(await readCharacterIndexStatic(request()), first, "an unchanged revision reuses settled values");
+  f.sqlite.exec("UPDATE character_categories SET label='Edited' WHERE id='fixture'");
+  assert.equal((await readCharacterIndexStatic(request())).categories[0].label, "Edited");
+  f.sqlite.exec("UPDATE character_category_memberships SET display_name='Display' WHERE character_id=1");
+  assert.equal((await readCharacterIndexStatic(request())).memberships[0].displayName, "Display");
+  f.sqlite.exec("UPDATE character_sources SET url='https://example.test/second' WHERE character_id=1");
+  assert.equal((await readCharacterIndexStatic(request())).sources[0].url, "https://example.test/second");
+  f.sqlite.exec("UPDATE character_aliases SET name='New alias' WHERE character_id=1");
+  assert.equal((await listPublicCharacterIndex(request()))[0].aliases[0].name, "New alias");
+  f.sqlite.exec("DELETE FROM characters WHERE id=1");
+  const deleted = await readCharacterIndexStatic(request());
+  assert.equal(deleted.memberships.length + deleted.sources.length + deleted.aliases.length, 0);
+  assert.equal(first.memberships.length, 1, "refreshing does not mutate an earlier request's snapshot");
+});
+
+await check("ordered work cards filter publication before pagination and preserve sorting", async (f) => {
+  f.sqlite.exec("UPDATE works SET status='hidden' WHERE id=4");
+  const request = () => ({ ...f.runtime, memo: new Map<string, unknown>() });
+  const first = await listGameWorks(request(), { limit: 2 });
+  const second = await listGameWorks(request(), { limit: 2, offset: 2 });
+  assert.deepEqual(first.map((row) => row.id), [5, 3]);
+  assert.deepEqual(second.map((row) => row.id), [2, 1]);
+  const titled = await listGameWorks(request(), { sort: "title" });
+  assert.deepEqual(titled.map((row) => row.id), [1, 5, 3, 2]);
+  const searched = await listGameWorks(request(), { query: "Work", sort: "relevance", limit: 2 });
+  assert.deepEqual(searched.map((row) => row.id), [5, 3]);
 });
 
 console.log("Timeline persistent contracts passed");

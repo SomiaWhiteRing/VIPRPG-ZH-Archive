@@ -6,8 +6,8 @@ import { unzipSync, zipSync } from "fflate";
 import { crc32 } from "../lib/archive/crc32";
 import { maybeHandleArchiveDownload } from "../worker/archive-download.mjs";
 import { advanceGcCursor, scanGcCandidates } from "../app/.server/storage/gc-candidates";
-import { hotDownloadCache, sweepDownloadCache, cacheDownloadResponse, readDownloadCache } from "../worker/download-cache.mjs";
-import { downloadCacheMaxAgeMs, downloadCacheMaxBytes, downloadCacheSmallMaxBytes, downloadCacheMinR2Gets } from "../lib/archive/download";
+import { hotDownloadCache, sweepDownloadCache, cacheDownloadResponse, readDownloadCache, downloadCacheSegment, createCachedDownloadStream } from "../worker/download-cache.mjs";
+import { downloadCacheMaxAgeMs, downloadCacheMaxBytes, downloadCacheMinR2Gets } from "../lib/archive/download";
 
 // Emulate only platform transports; exercise the public download handler itself.
 Object.defineProperty(globalThis, "FixedLengthStream", { value: class extends TransformStream<Uint8Array, Uint8Array> {
@@ -81,6 +81,7 @@ async function checkDownload(sharedPlayer: boolean, hot = false) {
       if (options?.onlyIf && faults.replaceBeforeRange) {
         faults.replaceBeforeRange = false;
         objects.set(objectKey, encode("another ZIP won the slot"));
+        cacheMetadata.get(objectKey)!.customMetadata.cacheDigest = "replacement variant";
       }
       const bytes = objects.get(objectKey);
       if (!bytes) return null;
@@ -197,7 +198,7 @@ async function checkDownload(sharedPlayer: boolean, hot = false) {
     for (const entry of needed.filter((e) => !sourceKeys.get(e.path)!.startsWith("core-packs/"))) {
       const read = bodyReads.find((r) => r.key === sourceKeys.get(entry.path))!;
       const length = Math.min(entry.end, end + 1) - Math.max(entry.start, start);
-      assert.deepEqual(read.range, { offset: Math.max(0, start - entry.start), length });
+      assert.deepEqual(read.range, length === entry.end - entry.start ? undefined : { offset: Math.max(0, start - entry.start), length });
       assert.equal(read.length, length, "read no bytes outside the requested blob interval");
     }
   }
@@ -252,8 +253,9 @@ async function checkSharedCacheBounds() {
   for (let i = 0; i < 1000; i++) {
     for (const slot of (await hotDownloadCache(db, `/variant/${i}`))!.slots) slots.add(slot.objectKey);
   }
-  assert.equal(slots.size, 40);
-  assert.equal(32 * downloadCacheSmallMaxBytes + 8 * downloadCacheMaxBytes, 4 * 1024 ** 3);
+  for (let i = 0; i < 256; i++) slots.add(downloadCacheSegment(variant, i * downloadCacheMaxBytes).objectKey);
+  assert.equal(slots.size, 256);
+  assert.equal(256 * downloadCacheMaxBytes, 4 * 1024 ** 3);
   assert.notEqual((await hotDownloadCache(db, "/variant/web-play-v2"))!.digest, variant.digest);
   assert.notEqual((await hotDownloadCache(db, "/variant/player/sha"))!.digest, variant.digest);
   row.full_download_count = 0;
@@ -267,9 +269,9 @@ async function checkSharedCacheBounds() {
   assert.ok(await hotDownloadCache(db, "/previously-costly"));
   // Check the real object bound, independently of admission/whole-archive size.
   for (const size of [downloadCacheMaxBytes, downloadCacheMaxBytes + 1]) {
-    const result = await readDownloadCache({ async head() { return { size, uploaded: new Date(),
-      customMetadata: { cacheDigest: variant.digest, zipSize: String(size), zipOffset: "0" } }; } },
-    { ...variant, slots: [variant.slots[1]] }, "HEAD", null, () => null);
+    const result = await readDownloadCache({ async head(key: string) { return key.startsWith("download-cache/v4/") ? { size, uploaded: new Date(),
+      customMetadata: { cacheDigest: variant.digest, zipSize: String(size), zipOffset: "0" } } : null; } },
+    variant, "HEAD", null, () => null);
     assert.equal(Boolean(result), size <= downloadCacheMaxBytes);
   }
   const old = new Date(Date.now() - downloadCacheMaxAgeMs - 1000);
@@ -282,17 +284,84 @@ async function checkSharedCacheBounds() {
       { key: "download-cache/v2/slots/2.zip", size: 40, uploaded: old },
       { key: "download-cache/v3/slots/small/1f.zip", size: 50, uploaded: old },
       { key: "download-cache/v3/slots/large/7.zip", size: 60, uploaded: old },
+      { key: "download-cache/v4/slots/ff.zip", size: 80, uploaded: old },
+      { key: "download-cache/v4/slots/100.zip", size: 90, uploaded: old },
       { key: "download-cache/v3/slots/small/20.zip", size: 70, uploaded: old },
       { key: "download-cache/v1/slots/source.zip", size: 30, uploaded: old },
     ] }; },
     async delete(key: string) { if (fail) throw new Error("Injected cache delete failure"); deleted.push(key); },
   } };
-  assert.equal((await sweepDownloadCache(env)).failedCount, 4);
+  assert.equal((await sweepDownloadCache(env)).failedCount, 5);
   fail = false;
   const swept = await sweepDownloadCache(env);
   assert.deepEqual(deleted, ["download-cache/v1/slots/0.zip", "download-cache/v2/slots/2.zip",
-    "download-cache/v3/slots/small/1f.zip", "download-cache/v3/slots/large/7.zip"]);
-  assert.equal(swept.purgedSizeBytes, 160);
+    "download-cache/v3/slots/small/1f.zip", "download-cache/v3/slots/large/7.zip", "download-cache/v4/slots/ff.zip"]);
+  assert.equal(swept.purgedSizeBytes, 240);
+}
+
+async function checkSegmentRecovery() {
+  const size = downloadCacheMaxBytes * 2 + 1234;
+  const cache = { digest: "a".repeat(64) };
+  const objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string> }>();
+  const metadata = (key: string) => {
+    const object = objects.get(key);
+    return object ? { ...object, size: object.bytes.length, etag: sha(object.bytes), uploaded: new Date(Date.now() - 61_000) } : null;
+  };
+  const bucket = {
+    async head(key: string) { return metadata(key); },
+    async get(key: string, options: { range: Slice; onlyIf: { etagMatches: string } }) {
+      const object = metadata(key);
+      if (!object || object.etag !== options.onlyIf.etagMatches) return object;
+      return { ...object, body: new Response(object.bytes.slice(options.range.offset, options.range.offset + options.range.length)).body };
+    },
+    async put(key: string, body: ReadableStream, options: { customMetadata: Record<string, string> }) {
+      const bytes = new Uint8Array(await new Response(body).arrayBuffer());
+      objects.set(key, { bytes, customMetadata: options.customMetadata });
+    },
+  };
+  const built: number[] = [];
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil(p: Promise<unknown>) { pending.push(p); } };
+  const build = (range: { start: number; end: number }) => {
+    built.push(range.start);
+    let offset = range.start;
+    const readable = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset > range.end) { controller.close(); return; }
+        const bytes = Uint8Array.from({ length: Math.min(65536, range.end + 1 - offset) }, (_, i) => (offset + i) % 251);
+        offset += bytes.length;
+        controller.enqueue(bytes);
+      },
+    });
+    return { readable, completion: Promise.resolve() };
+  };
+  const metrics = { cachedBytes: 0 };
+  const interrupted = await createCachedDownloadStream(bucket, bucket, cache, size, null, build, 200, ctx, metrics);
+  const failure = interrupted.completion.catch(() => undefined);
+  const reader = interrupted.readable.getReader();
+  let received = 0;
+  while (received < downloadCacheMaxBytes + 65536) received += (await reader.read()).value!.length;
+  await reader.cancel(new DOMException("fixture disconnected", "AbortError"));
+  await failure;
+  await Promise.all(pending);
+  assert.equal(objects.size, 1, "completed first segment survives cancellation; unfinished segment does not publish");
+  assert.equal(objects.values().next().value!.bytes.length, downloadCacheMaxBytes);
+  built.length = 0;
+  const resumed = await createCachedDownloadStream(bucket, bucket, cache, size, null, build, 200, ctx, metrics);
+  const actual = new Uint8Array(await new Response(resumed.readable).arrayBuffer());
+  await resumed.completion;
+  await Promise.all(pending);
+  assert.deepEqual(built, [downloadCacheMaxBytes, downloadCacheMaxBytes * 2], "rebuild only the uncached segments");
+  assert.equal(metrics.cachedBytes, downloadCacheMaxBytes);
+  assert.equal(actual.length, size);
+  for (let i = 0; i < actual.length; i++) assert.equal(actual[i], i % 251);
+  built.length = 0;
+  const crossing = { start: downloadCacheMaxBytes - 13, end: downloadCacheMaxBytes + 31 };
+  const hit = await createCachedDownloadStream(bucket, bucket, cache, size, crossing, build, 200, ctx, metrics);
+  assert.equal(hit.allCached, true);
+  assert.deepEqual(new Uint8Array(await new Response(hit.readable).arrayBuffer()), actual.slice(crossing.start, crossing.end + 1));
+  await hit.completion;
+  assert.deepEqual(built, [], "a Range crossing segment boundaries uses only cached bytes");
 }
 
 async function checkCacheBackpressure() {
@@ -308,7 +377,7 @@ async function checkCacheBackpressure() {
     const reader = body.getReader();
     while (!(await reader.read()).done) { /* fast storage consumer */ }
     published = true;
-  } }, { slots: [{ objectKey: "fixture", maxBytes: downloadCacheSmallMaxBytes }], digest: "fixture" },
+  } }, { slots: [{ objectKey: "fixture", maxBytes: downloadCacheMaxBytes }], digest: "fixture" },
   new Response(source, { headers: { "Content-Length": String(100 * 65536) } }), 1, 100 * 65536, null,
   { waitUntil(promise: Promise<unknown>) { pending.push(promise); } });
   const reader = response.body!.getReader();
@@ -322,7 +391,7 @@ async function checkCacheBackpressure() {
 }
 
 async function checkCacheWriteContention() {
-  const cache = { digest: "fixture", slots: [{ objectKey: "fixture", maxBytes: downloadCacheSmallMaxBytes }] };
+  const cache = { digest: "fixture", slots: [{ objectKey: "fixture", maxBytes: downloadCacheMaxBytes }] };
   const pending: Promise<unknown>[] = [];
   const ctx = { waitUntil(promise: Promise<unknown>) { pending.push(promise); } };
   const response = () => new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Length": "3" } });
@@ -434,6 +503,7 @@ await checkDownload(true);
 await checkDownload(false, true);
 await checkDownload(true, true);
 await checkSharedCacheBounds();
+await checkSegmentRecovery();
 await checkCacheBackpressure();
 await checkCacheWriteContention();
 await checkGc();
