@@ -12,6 +12,7 @@ import { StatusBody, StatusEditor, type StatusEditorHandle } from "./status-edit
 import { CommentImages } from "@/app/components/comments/images";
 import { StatusInteractions } from "./status-interactions";
 import { TimelineWorkPreview } from "./work-preview";
+import { InboxReadOnView } from "@/app/inbox/read-on-view";
 import { useTimelineDraft } from "./draft-cache";
 import { bodyLength } from "@/lib/face-emojis";
 import { formatDate, formatDateKey, parseTimestamp } from "@/lib/format";
@@ -19,7 +20,7 @@ import { Timestamp } from "@/app/components/ui/timestamp";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
-import { TIMELINE_FILTER_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
+import { TIMELINE_FILTER_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineReplyPage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
 import { cn } from "@/lib/ui/cn";
 
 type Props = {
@@ -35,6 +36,10 @@ type Props = {
   canCompose?: boolean;
   canPublish?: boolean;
   hasCursor?: boolean;
+  focused?: boolean;
+  initialReplies?: TimelineReplyPage;
+  targetReplyId?: number | null;
+  inboxItemId?: number;
 };
 
 function timelineHref(basePath: string, view: TimelineView, kind?: TimelineKind, cursor?: string | null) {
@@ -73,7 +78,7 @@ export function TimelineWorkspace(props: Props) {
   return <TimelineWorkspaceContent key={`${props.viewerId}:${location.pathname}${location.search}`} {...props} />;
 }
 
-function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false }: Props) {
+function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false, focused = false, initialReplies, targetReplyId = null, inboxItemId }: Props) {
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const mine = view === "mine";
   const [replyBusy, setReplyBusy] = useState<Record<number, boolean>>({});
@@ -176,7 +181,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
 
   return (
     <div className="grid w-full min-w-0 gap-3">
-      {!profile && <div className="rounded-xl border border-border bg-card">
+      {!profile && !focused && <div className="rounded-xl border border-border bg-card">
         {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">时间线已停止记录业务动态。<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">开启时间线</Link>，记录操作和发布吐槽。</p>}
         {canCompose && settings?.enabled && !canPublish && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">当前账号暂时不能发布新吐槽，仍可查看动态。</p>}
         {allowCreate && <section aria-label="发布吐槽" className="p-3 sm:p-4">{editor()}</section>}
@@ -220,7 +225,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                     <Timestamp value={item.createdAt} format="duration" className="text-muted" />
                     {item.canDelete && (!profile || item.actor.id === viewerId) && <Button variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-muted" type="button" disabled={busy} onClick={() => void remove(item)} aria-label={item.kind === "status" ? "删除吐槽" : "移除动态"}><Trash2 aria-hidden />{item.kind === "status" ? "删除" : "移除"}</Button>}
                   </>;
-                  return <li key={item.id} className={cn("px-3 sm:px-4", compact ? "py-3" : "py-4")}>
+                  return <li key={item.id} id={`timeline-event-${item.id}`} className={cn("scroll-mt-24 px-3 sm:px-4", compact ? "py-3" : "py-4")}>
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">
                       {showAuthor && (continued ? <span aria-hidden className="size-9 shrink-0" /> : <Link className="shrink-0" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>)}
                       <div className="min-w-0 flex-1">
@@ -234,11 +239,12 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                         {item.text && <div className={cn((showAuthor || item.kind !== "status") && "mt-2", item.kind !== "status" && "rounded-r-md border-l-2 border-primary/20 bg-muted/5 py-2 pl-3 pr-2")}><StatusBody segments={item.body} collapse /></div>}
                         <CommentImages images={item.images} imageLabel={item.kind === "comment" ? "评论图片" : "吐槽图片"} />
                         {item.work && <TimelineWorkPreview work={item.work} compact={compact} />}
-                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={profile} expandReplies={expandReplies} onCacheError={reportCacheError} onBusyChange={(value) => setReplyBusy((current) => ({ ...current, [item.id]: value }))}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={profile} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={(value) => setReplyBusy((current) => ({ ...current, [item.id]: value }))}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                           {footer}
                         </div>}
                       </div>
                     </article>
+                    {focused && inboxItemId && <InboxReadOnView itemId={inboxItemId} eventId={item.id} replyId={targetReplyId} />}
                   </li>;
                 })}
               </ol>

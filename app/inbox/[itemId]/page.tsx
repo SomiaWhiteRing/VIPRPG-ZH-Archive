@@ -49,6 +49,7 @@ export const meta: MetaFunction = ({ error }) =>
 
 export default function InboxTargetPage() {
   const { item } = useLoaderData<typeof loader>();
+  const contentNotification = item.timelineNotification ?? item.commentNotification;
   const contentRef = useRef<HTMLDivElement>(null);
   const { readAt, error } = useInboxAutoRead(item, contentRef);
   return (
@@ -68,9 +69,9 @@ export default function InboxTargetPage() {
           </p>
         </div> : <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>}
         {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
-        {item.commentNotification ? <>
-          <Link to={item.commentNotification.href} className="mt-2 block text-primary hover:underline">{item.commentNotification.targetTitle}</Link>
-          <p className="mt-2 whitespace-pre-wrap">{item.commentNotification.excerpt}</p>
+        {contentNotification ? <>
+          <Link to={contentNotification.href} className="mt-2 block text-primary hover:underline">{contentNotification.targetTitle}</Link>
+          <p className="mt-2 whitespace-pre-wrap">{contentNotification.excerpt}</p>
         </> : null}
         {item.body ? <p className="mt-2 whitespace-pre-wrap">{item.body}</p> : null}
         {item.closedReason ? <p className="mt-2 text-muted">{item.closedReason}</p> : null}

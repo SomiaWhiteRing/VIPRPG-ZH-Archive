@@ -48,6 +48,18 @@ export type InboxItem = {
   } | null;
   interaction: InboxInteraction | null;
   friendNotification: InboxFriendNotification | null;
+  timelineNotification: {
+    eventId: number;
+    replyId: number | null;
+    kind: "reply" | "like";
+    targetTitle: string;
+    href: string;
+    excerpt: string;
+    actorName: string;
+    actorHref: string | null;
+    actorAvatar: string | null;
+    action: string;
+  } | null;
   commentNotification: {
     kind: "comment" | "reply" | "like" | "mention";
     targetTitle: string;
@@ -58,6 +70,10 @@ export type InboxItem = {
     action: string;
   } | null;
 };
+
+export type InboxReadTarget =
+  | { topicId: number; postNumber: number; commentId: number | null }
+  | { eventId: number; replyId: number | null };
 
 export type InboxFriendNotification = {
   userId: number | null;

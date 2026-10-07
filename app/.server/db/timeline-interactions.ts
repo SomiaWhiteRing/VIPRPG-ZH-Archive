@@ -20,9 +20,16 @@ export async function setTimelineLike(runtime: AppRuntime, eventId: number, user
   await assertTimelinePermission(runtime, userId, ["timeline.status.like"]);
   if (liked) {
     await requirePublicStatus(db, eventId);
-    await db.prepare(`INSERT INTO timeline_status_likes(event_id,user_id)
+    await db.batch([
+      db.prepare(`INSERT INTO timeline_status_likes(event_id,user_id)
       SELECT ?,id FROM users WHERE id=? AND status='active' AND ${userPermissionSql("users.id", "timeline.status.like")}
-      AND EXISTS(${PUBLIC_STATUS}) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(eventId, userId, eventId).run();
+      AND EXISTS(${PUBLIC_STATUS}) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(eventId, userId, eventId),
+      // Immediately follow the relationship INSERT; unlike/re-like preserves the original event.
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id)
+        SELECT 'system_notice',?,e.user_id,'','','timeline:like:'||?||':'||e.id||':'||e.user_id,e.id
+        FROM timeline_events e WHERE e.id=? AND e.user_id<>? AND EXISTS(${PUBLIC_STATUS})
+        AND changes()=1 ON CONFLICT(event_key) DO NOTHING`).bind(userId, userId, eventId, userId, eventId),
+    ]);
   } else {
     await db.prepare(`DELETE FROM timeline_status_likes WHERE event_id=? AND user_id=?
       AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active' AND ${userPermissionSql("users.id", "timeline.status.like")})`)
@@ -74,6 +81,12 @@ export async function createTimelineReply(runtime: AppRuntime, eventId: number, 
       AND EXISTS(${PUBLIC_STATUS})
       AND (SELECT COUNT(*) FROM timeline_status_replies WHERE user_id=? AND created_at>=datetime('now','-1 minute'))<10
       ON CONFLICT(event_id,user_id,request_key) DO NOTHING`).bind(eventId, body, key, hash, userId, ...guard.args, eventId, userId),
+    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id,timeline_reply_id)
+      SELECT 'system_notice',r.user_id,e.user_id,'','','timeline:reply:'||r.id||':'||e.user_id,e.id,r.id
+      FROM timeline_status_replies r JOIN timeline_events e ON e.id=r.event_id
+      WHERE r.event_id=? AND r.user_id=? AND r.request_key=? AND r.request_hash=?
+        AND r.hidden_at IS NULL AND r.user_id<>e.user_id AND EXISTS(${PUBLIC_STATUS})
+        AND changes()=1 ON CONFLICT(event_key) DO NOTHING`).bind(eventId, userId, key, hash, eventId),
     ...contentEmojiStatements(db, "timelineReply",
       "SELECT id FROM timeline_status_replies WHERE event_id=? AND user_id=? AND request_key=? AND body=? AND hidden_at IS NULL",
       [eventId, userId, key, body], body, userId, true),

@@ -2,20 +2,20 @@ import { requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
 import { notifyInboxChanged } from "@/lib/inbox-events";
+import type { InboxReadTarget } from "@/lib/dto/db/inbox";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 export function InboxReadOnView({
   itemId,
-  topicId,
-  postNumber,
-  commentId,
+  ...target
 }: {
   itemId: number;
-  topicId: number;
-  postNumber: number;
-  commentId: number | null;
-}) {
+} & InboxReadTarget) {
+  const targetId = "eventId" in target
+    ? target.replyId === null ? `timeline-event-${target.eventId}` : `timeline-reply-item-${target.replyId}`
+    : target.commentId ? `comment-${target.commentId}` : `post-${target.postNumber}`;
+  const body = JSON.stringify(target);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -24,9 +24,7 @@ export function InboxReadOnView({
     const controller = new AbortController();
     const read = async () => {
       if (started || document.visibilityState !== "visible") return;
-      const target = document.getElementById(
-        commentId ? `comment-${commentId}` : `post-${postNumber}`,
-      );
+      const target = document.getElementById(targetId);
       if (!target) return;
       started = true;
       try {
@@ -36,7 +34,7 @@ export function InboxReadOnView({
             Accept: "application/json",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ topicId, postNumber, commentId }),
+          body,
           signal: controller.signal,
         });
 
@@ -56,7 +54,7 @@ export function InboxReadOnView({
       controller.abort();
       document.removeEventListener("visibilitychange", read);
     };
-  }, [itemId, topicId, postNumber, commentId, attempt]);
+  }, [itemId, targetId, body, attempt]);
   if (!error) return null;
   return (
     <div

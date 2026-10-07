@@ -174,12 +174,13 @@ function InboxRow({
   const rowRef = useRef<HTMLLIElement>(null);
   const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
-  const actor = interaction ?? item.friendNotification ?? item.commentNotification;
-  const avatar = interaction ?? item.friendNotification;
+  const contentNotification = item.timelineNotification ?? item.commentNotification;
+  const actor = interaction ?? item.friendNotification ?? contentNotification;
+  const avatar = interaction ?? item.friendNotification ?? item.timelineNotification;
   const Icon =
-    item.type === "forum_like" || item.commentNotification?.kind === "like"
+    item.type === "forum_like" || contentNotification?.kind === "like"
       ? ThumbsUp
-      : item.type === "forum_reply" || item.commentNotification
+      : item.type === "forum_reply" || contentNotification
         ? MessageCircle
         : item.type === "role_change_request"
           ? ShieldCheck
@@ -256,10 +257,10 @@ function InboxRow({
           </>
         ) : (
           <>
-            {item.commentNotification ? (
+            {contentNotification ? (
               <Link to={`/inbox/${item.id}`} prefetch="none" className="mt-1 block rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-primary">
-                <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.commentNotification.targetTitle}</span>
-                <span className="mt-2 line-clamp-2 text-foreground">{item.commentNotification.excerpt}</span>
+                <span className="line-clamp-2 font-semibold text-primary hover:underline">{contentNotification.targetTitle}</span>
+                <span className="mt-2 line-clamp-2 text-foreground">{contentNotification.excerpt}</span>
               </Link>
             ) : null}
             {item.type === "role_change_request" ? (

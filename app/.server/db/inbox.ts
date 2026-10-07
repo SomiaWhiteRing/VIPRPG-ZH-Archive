@@ -11,6 +11,7 @@ import type {
   InboxItem,
   InboxItemStatus,
   InboxItemType,
+  InboxReadTarget,
 } from "@/lib/dto/db/inbox";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
@@ -57,6 +58,8 @@ type InboxItemRow = {
   work_comment_id: number | null;
   reply_comment_id: number | null;
   like_comment_id: number | null;
+  timeline_event_id: number | null;
+  timeline_reply_id: number | null;
   work_maintainer_request_id: number | null;
   maintainer_work_id: number | null;
   maintainer_work_title: string | null;
@@ -73,6 +76,8 @@ const INBOX_SELECT = `SELECT
   i.work_comment_id,
   i.reply_comment_id,
   i.like_comment_id,
+  i.timeline_event_id,
+  i.timeline_reply_id,
   i.work_maintainer_request_id,
   maintainer_request.work_id AS maintainer_work_id,
   json_extract(i.metadata_json,'$.workTitle') AS maintainer_work_title,
@@ -191,15 +196,15 @@ export async function listInboxItemsForUser(
   const categorySql = {
     all: "1",
     comments: "work_comment_id IS NOT NULL",
-    replies: "reply_comment_id IS NOT NULL",
+    replies: "reply_comment_id IS NOT NULL OR timeline_reply_id IS NOT NULL",
     forum: "type='forum_reply'",
-    likes: "(type='forum_like' OR like_comment_id IS NOT NULL)",
+    likes: "(type='forum_like' OR like_comment_id IS NOT NULL OR (timeline_event_id IS NOT NULL AND timeline_reply_id IS NULL))",
     friends: "friend_action IN ('added','returned')",
     system:
-      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
+      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
     pending: "can_reject=1",
   }[input.category];
-  const filter = `${categorySql} AND ${input.unread ? "read_at IS NULL" : "1"}`;
+  const filter = `(${categorySql}) AND ${input.unread ? "read_at IS NULL" : "1"}`;
   // Resolve the boundary from all visible items, including ones just marked read.
   // Filtering unread rows before resolving it would lose the pagination anchor.
   const anchor =
@@ -252,6 +257,7 @@ export async function listInboxItemsForUser(
   if (newer) items.reverse();
   await attachInteractions(runtime, items);
   await attachCommentNotifications(runtime, items, rows.results ?? []);
+  await attachTimelineNotifications(runtime, items, rows.results ?? []);
   const firstId = items[0]?.id ?? anchor?.id;
   const lastId = items.at(-1)?.id ?? anchor?.id;
   const hasNewer = newer ? matching > INBOX_PAGE_SIZE : total > matching;
@@ -318,17 +324,14 @@ export async function markInboxItemRead(
   input: {
     user: ArchiveUser;
     itemId: number;
-    target?: { topicId: number; postNumber: number; commentId: number | null };
+    target?: InboxReadTarget;
   },
 ): Promise<void> {
   const item = await getInboxItemForUser(runtime, input.itemId, input.user);
-  if (
-    input.target &&
-    (!item.interaction ||
-      item.interaction.topicId !== input.target.topicId ||
-      item.interaction.postNumber !== input.target.postNumber ||
-      item.interaction.commentId !== input.target.commentId)
-  ) {
+  const target = input.target;
+  if (target && ("eventId" in target
+    ? !item.timelineNotification || item.timelineNotification.eventId !== target.eventId || item.timelineNotification.replyId !== target.replyId
+    : !item.interaction || item.interaction.topicId !== target.topicId || item.interaction.postNumber !== target.postNumber || item.interaction.commentId !== target.commentId)) {
     throw new HttpError(409, "提醒对应的内容已变化或不可用。");
   }
   const visibility = buildInboxVisibilityClause(input.user);
@@ -379,6 +382,7 @@ export async function getInboxItemForUser(
 
   await attachInteractions(runtime, [item]);
   await attachCommentNotifications(runtime, [item], [row]);
+  await attachTimelineNotifications(runtime, [item], [row]);
   return item;
 }
 
@@ -407,6 +411,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
     interaction: null,
     friendNotification,
     commentNotification: null,
+    timelineNotification: null,
     id: row.id,
     type: row.type,
     status: row.status,
@@ -482,6 +487,46 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       kind: row.mention ? "mention" : row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
       href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,
+      excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
+    };
+  }
+}
+
+async function attachTimelineNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
+  const ids = source.filter((row) => row.timeline_event_id !== null).map((row) => row.id);
+  if (!ids.length) return;
+  const rows = await getD1(runtime).prepare(`SELECT i.id,e.id AS event_id,r.id AS reply_id,
+      CASE WHEN i.timeline_reply_id IS NULL THEN e.body ELSE r.body END AS body,
+      sender.id AS sender_id,sender.display_name,sender.avatar_blob_sha256,
+      CASE WHEN i.timeline_reply_id IS NULL THEN
+        (SELECT COUNT(*) FROM comment_images ci WHERE ci.status='ready' AND ci.timeline_event_id=e.id)
+        ELSE (SELECT COUNT(*) FROM comment_images ci WHERE ci.status='ready' AND ci.timeline_reply_id=r.id) END AS image_count
+    FROM inbox_items i JOIN timeline_events e ON e.id=i.timeline_event_id AND e.kind='status' AND e.hidden_at IS NULL
+    JOIN users author ON author.id=e.user_id AND author.status='active'
+    JOIN users sender ON sender.id=i.sender_user_id AND sender.status='active'
+    LEFT JOIN timeline_status_replies r ON r.id=i.timeline_reply_id AND r.event_id=e.id AND r.user_id=sender.id AND r.hidden_at IS NULL
+    WHERE i.id IN (SELECT value FROM json_each(?)) AND (i.timeline_reply_id IS NULL OR r.id IS NOT NULL)`)
+    .bind(JSON.stringify(ids)).all<{
+      id: number; event_id: number; reply_id: number | null; body: string; sender_id: number;
+      display_name: string; avatar_blob_sha256: string | null; image_count: number;
+    }>();
+  const byId = new Map(rows.results.map((row) => [row.id, row]));
+  const noticeIds = new Set(ids);
+  for (const item of items) {
+    if (!noticeIds.has(item.id)) continue;
+    item.senderUserId = null;
+    item.senderDisplayName = null;
+    item.title = "相关内容已不可用";
+    item.body = "";
+    const row = byId.get(item.id);
+    if (!row) continue;
+    const action = row.reply_id === null ? "赞了你的吐槽" : "回复了你的吐槽";
+    item.title = row.display_name + action;
+    item.timelineNotification = {
+      eventId: row.event_id, replyId: row.reply_id, kind: row.reply_id === null ? "like" : "reply",
+      actorName: row.display_name, actorHref: `/users/${row.sender_id}`, actorAvatar: row.avatar_blob_sha256,
+      action, targetTitle: "你的吐槽",
+      href: `/timeline?event=${row.event_id}${row.reply_id === null ? `#timeline-event-${row.event_id}` : `&reply=${row.reply_id}#timeline-reply-item-${row.reply_id}`}`,
       excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
     };
   }
@@ -564,6 +609,7 @@ export async function inboxTargetLocation(
   runtime: AppRuntime,
   item: InboxItem,
 ) {
+  if (item.timelineNotification) return { href: item.timelineNotification.href };
   if (item.commentNotification) return { href: item.commentNotification.href };
   if (!item.interaction) return null;
   const target = item.interaction;

@@ -10,8 +10,9 @@ import { UserAvatar } from "@/app/components/ui/user-avatar";
 export function TimelinePageContent({ values, basePath }: { values: TimelinePageData; basePath: string }) {
   const { viewer, topics, ...workspace } = values;
   return <PageContainer>
+    {workspace.focused && <Link to="/timeline" className="mb-3 inline-block text-sm text-primary hover:underline">返回时间线</Link>}
     <DetailPageLayout compactSidebar sidebarLabel="个人入口与讨论区"
-      main={<TimelineWorkspace {...workspace} basePath={basePath} canCompose={!!workspace.viewerId} />}
+      main={<TimelineWorkspace {...workspace} basePath={basePath} canCompose={!!workspace.viewerId && !workspace.focused} />}
       sidebar={<div className="hidden min-w-0 gap-6 min-[981px]:grid">
         {viewer ? <AccountSection title="我的主页" href={`/users/${viewer.id}`} divided={false} linkText="进入 →">
           <Link to={`/users/${viewer.id}`} className="flex min-w-0 items-center gap-3 hover:text-primary">
