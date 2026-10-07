@@ -30,7 +30,7 @@ on:
       - 'app/play/*/web-play-locks.ts'
       - 'app/play/*/web-play-opfs.ts'
       - 'app/play/*/web-play-player.ts'
-      - 'app/play/*/web-play-save-download.ts'
+      - 'app/play/*/web-play-player-download.ts'
       - 'app/play/*/web-play-save-transfer.ts'
       - 'app/play/*/web-play-screenshot-db.ts'
       - 'app/play/*/web-play-screenshots.ts'
