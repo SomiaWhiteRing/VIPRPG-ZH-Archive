@@ -22,15 +22,15 @@
 
 [main-ingress.yml](../.github/workflows/main-ingress.yml) 每六小时执行，对应香港时间 02:17、08:17、14:17、20:17。公开仓库标准 GitHub runner不依赖维护者电脑或 Codex对话。
 
-1. 从 [WeTest免费 API](https://www.wetest.vip/page/api/get_cloudflare_ip.html) 取三网候选，最多三个新 IPv4，并始终比较当前地址。整源不可用时尝试已测备用候选；拒绝非官方类型、私网、陈旧或未来时间、异常响应。
+1. 最多扫描40个新IPv4，并始终保留当前地址。候选来自[WeTest免费 API](https://www.wetest.vip/page/api/get_cloudflare_ip.html)的电信、联通、移动和三网列表、[IPDB的BestCF IPv4列表](https://github.com/ymyuuu/IPDB/blob/main/BestCF/bestcfv4.txt)、[LancelotRar独立扫描Top100](https://github.com/LancelotRar/best-cf-ips/blob/main/best-cf-ip-scanned-top100.txt)，以及已有验证记录的备用地址。按来源轮流取点并去重，避免一个来源占满候选池；拒绝私网和非443端口。WeTest逐条核实官方类型及24小时内时间；GitHub列表核实文件最近提交在24小时内，再按该提交SHA读取固定版本。陈旧、未来时间、异常或不可用来源单独剔除。第三方排名只提供候选，不直接作为本站切换依据。
 2. 地址必须属于实时 [CF公布 IPv4段](https://www.cloudflare.com/ips-v4/)，或经 RIPE当前 AS13335/AS209242公告与非 invalid RPKI核验。unknown明确记录，不能解释为已验证 ROA或长期所有权保证。无法核实时停止。
-3. 用 [Globalping官方 API](https://globalping.io/docs/api.globalping.io) 按大陆 AS4134、AS4837、AS9808家庭网络各请求两个 ready IPv4测点，再严格核验返回六点、每网两个不同城市。公开库存隐藏 IPv4能力，不能先按库存城市挑点。同一批六测点重复两轮，验证真实本站 Host/SNI、可信 TLS及完整 ASCII `/robots.txt` 内容，比较扣除 DNS用时的小型 HTTP响应。运行器自身速度不参与排名。
+3. 用[Globalping官方 API](https://globalping.io/docs/api.globalping.io)分两阶段测量：先按大陆AS4134、AS4837、AS9808家庭网络各请求一个ready IPv4测点，以同一批三点扫描当前地址和全部候选，选出本站HTTPS响应合格且平均响应最快的前三名；初筛不能授权DNS写入。再为前三名及当前地址重新选取三网六点，每网两个不同城市，用同一批六测点复核两轮，轮间至少间隔60秒并交替测量顺序。公开库存隐藏IPv4能力，不能先按库存城市挑点。两阶段均验证本站Host/SNI、可信TLS及完整ASCII `/robots.txt`内容，比较扣除DNS用时的小型HTTP响应。运行器自身速度不参与排名。
 4. 两轮均改善至少20%且50ms，各运营商及单点没有明显退化，才进行健康优化；最短持有12小时。故障恢复需两轮同一节点可重复故障、合格候选及独立合格回退地址，并保护仍健康的节点；恢复可以绕过健康优化的持有期。
 5. 候选和回退地址均做两轮4096字节公开 ZIP Range的206、强 ETag、长度、区间与完成状态检查。ZIP响应不能明显退化。写前再检查两个地址、额度和维护窗口；缺测、异常或没有收益都保留 DNS。
 6. 仅在24小时试用仍有效时PATCH已登记 A record的 `content`。核对 account/zone、trial身份及时间、Worker、唯一精确HTTPS Route、唯一 owned灰 A、TTL、无额外 AAAA/CNAME或冲突 Route、无 managed Custom Domain，以及有效证书。与正式发布和到期恢复共用 `production-maintenance`互斥组，不自动取消正在执行的维护。
 7. 保存原状态、PATCH acknowledgement和readback，等待TTL后用大陆测点验证正常 DNS下的本站 HTTPS。失败时仅回退仍完全匹配本次写入的记录，避免覆盖人工更改。PATCH回应不确定时保留证据供人工检查，不盲目写第二次。
 
-只使用匿名免费测量，不传 Globalping token以免额度耗尽后消费 credits。每次本地上限120个 probe tests，写前保留回退额度；当前匿名免费额度为250个/小时，共享 runner IP可能被其他任务消耗，余量不足则停止。
+只使用匿名免费测量，不传Globalping token以免额度耗尽后消费credits。当前匿名免费额度为250个/小时，程序保留12次远端余量，本次本地预算上限238次。最大流程为：41个地址三点初筛123次、4个地址六点两轮复核48次、候选与回退ZIP验证24次、写前复查12次、切换后及回退验证最多24次，合计最多231次。共享runner IP可能被其他任务消耗，余量不足则停止，不能以跳过复核或回退预算来继续写入。工作流超时45分钟，开始30分钟后不再发起切换；试用截止时间及写前至少10分钟余额的限制不变。
 
 Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对 ASCIIcanary做精确内容验证；ZIP只能验证小分段元数据与完成状态，不能冒充二进制摘要或大包持续下载速度。六点抽样不代表全国；覆盖不足时不降级为单运营商。
 

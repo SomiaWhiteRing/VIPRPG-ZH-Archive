@@ -4,6 +4,10 @@ const RANGE_URL = "https://www.cloudflare.com/ips-v4/";
 const FEED_URL = "https://www.wetest.vip/api/cf2dns/get_cloudflare_ip";
 const RIPE_URL = "https://stat.ripe.net/data/";
 const BOOTSTRAP = ["172.64.155.209", "8.35.211.227", "8.39.125.89"];
+const GITHUB_FEEDS = [
+  { repository: "ymyuuu/IPDB", path: "BestCF/bestcfv4.txt" },
+  { repository: "LancelotRar/best-cf-ips", path: "best-cf-ip-scanned-top100.txt" },
+];
 const CARRIERS = ["CT", "CU", "CM", "CN"];
 const ALLOWED_ASNS = new Set(["13335", "209242"]);
 const NON_PUBLIC_RANGES = [
@@ -118,9 +122,9 @@ async function validateAddress(ip, ranges, evidence) {
  * `save`, when supplied, is an async (filename, JSON-value) evidence writer.
  * This module only performs public reads when loadCandidates is called; it never writes DNS.
  */
-export async function loadCandidates({ currentIp, limit = 3, save } = {}) {
+export async function loadCandidates({ currentIp, limit = 40, save } = {}) {
   if (currentIp !== undefined && !isPublicIpv4(currentIp)) throw new Error("currentIp must be a public IPv4 address");
-  if (!Number.isInteger(limit) || limit < 0 || limit > 3) throw new Error("limit must be between 0 and 3");
+  if (!Number.isInteger(limit) || limit < 0 || limit > 40) throw new Error("limit must be between 0 and 40");
   if (save !== undefined && typeof save !== "function") throw new Error("save must be a function");
   const evidence = currentIp === undefined ? [] : [{ source: "current", ip: currentIp, retained: true }];
   const candidates = currentIp === undefined ? [] : [currentIp], seen = new Set(candidates);
@@ -154,7 +158,7 @@ export async function loadCandidates({ currentIp, limit = 3, save } = {}) {
     evidence.push({ source, ip, selected: true });
     return true;
   };
-  const feedStart = candidates.length;
+  const queues = [];
   try {
     const url = new URL(FEED_URL);
     url.search = new URLSearchParams({ key: "o1zrmHAF", type: "v4" }).toString();
@@ -165,6 +169,7 @@ export async function loadCandidates({ currentIp, limit = 3, save } = {}) {
     const now = Math.floor(Date.now() / 1000);
     evidence.push({ source: FEED_URL, status: "ok", counts: Object.fromEntries(CARRIERS.map((line) => [line, feed.info[line].length])) });
     for (const line of CARRIERS) {
+      const ips = [];
       for (const entry of feed.info[line]) {
         const ip = entry?.ip;
         let reason;
@@ -176,15 +181,45 @@ export async function loadCandidates({ currentIp, limit = 3, save } = {}) {
           evidence.push({ source: FEED_URL, line, rejected: true, ...(isPublicIpv4(ip) ? { ip } : {}), reason });
           continue;
         }
-        if (await append(ip, `WeTest:${line}`)) break;
+        ips.push(ip);
       }
+      queues.push({ source: `WeTest:${line}`, ips });
     }
   } catch (error) {
     evidence.push({ source: FEED_URL, status: "failed", reason: failureReason(error) });
   }
-  if (candidates.length === feedStart) {
-    evidence.push({ source: "bootstrap", reason: "feed-supplied-no-new-validated-candidate" });
-    for (const ip of BOOTSTRAP) await append(ip, "previously-tested-bootstrap");
+  for (const feed of GITHUB_FEEDS) {
+    const source = `GitHub:${feed.repository}/${feed.path}`;
+    try {
+      const commits = await readJson(`https://api.github.com/repos/${feed.repository}/commits?${new URLSearchParams({ path: feed.path, per_page: "1" })}`);
+      const commit = commits?.[0];
+      const updatedAt = Date.parse(commit?.commit?.committer?.date);
+      if (!/^[a-f0-9]{40}$/.test(commit?.sha ?? "") || !Number.isFinite(updatedAt) ||
+          updatedAt > Date.now() || Date.now() - updatedAt > 86_400_000) throw Error("invalid-feed");
+      // Read the exact revision whose age was checked, not a moving branch.
+      const body = await readText(`https://raw.githubusercontent.com/${feed.repository}/${commit.sha}/${feed.path}`);
+      const lines = body.trim().split(/\r?\n/);
+      if (lines.length > 400) throw Error("invalid-feed");
+      const ips = [];
+      for (const line of lines) {
+        if (!line.trim() || line.trim().startsWith("#")) continue;
+        const address = line.split("#")[0].trim();
+        const match = /^(\d{1,3}(?:\.\d{1,3}){3})(?::443)?$/.exec(address);
+        if (match && isPublicIpv4(match[1])) ips.push(match[1]);
+      }
+      if (!ips.length) throw Error("invalid-feed");
+      evidence.push({ source, status: "ok", revision: commit.sha, updatedAt: new Date(updatedAt).toISOString(), count: ips.length });
+      queues.push({ source, ips });
+    } catch (error) {
+      evidence.push({ source, status: "failed", reason: failureReason(error) });
+    }
   }
+  queues.push({ source: "previously-tested-bootstrap", ips: [...BOOTSTRAP] });
+  // Interleave providers and carrier lists so one source cannot fill the pool.
+  while (queues.some(queue => queue.ips.length) && candidates.length < baselineCount + limit)
+    for (const queue of queues) {
+      while (queue.ips.length && candidates.length < baselineCount + limit)
+        if (await append(queue.ips.shift(), queue.source)) break;
+    }
   return finish();
 }

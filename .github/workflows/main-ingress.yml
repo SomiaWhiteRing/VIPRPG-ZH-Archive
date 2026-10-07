@@ -24,7 +24,7 @@ jobs:
   select:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MAIN_INGRESS_AUTO_ENABLED == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     environment:
       name: production
       url: https://viprpg.org
