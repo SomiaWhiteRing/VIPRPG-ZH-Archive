@@ -27,7 +27,7 @@
 3. 用 [Globalping官方 API](https://globalping.io/docs/api.globalping.io) 按大陆 AS4134、AS4837、AS9808家庭网络各请求两个 ready IPv4测点，再严格核验返回六点、每网两个不同城市。公开库存隐藏 IPv4能力，不能先按库存城市挑点。同一批六测点重复两轮，验证真实本站 Host/SNI、可信 TLS及完整 ASCII `/robots.txt` 内容，比较扣除 DNS用时的小型 HTTP响应。运行器自身速度不参与排名。
 4. 两轮均改善至少20%且50ms，各运营商及单点没有明显退化，才进行健康优化；最短持有12小时。故障恢复需两轮同一节点可重复故障、合格候选及独立合格回退地址，并保护仍健康的节点；恢复可以绕过健康优化的持有期。
 5. 候选和回退地址均做两轮4096字节公开 ZIP Range的206、强 ETag、长度、区间与完成状态检查。ZIP响应不能明显退化。写前再检查两个地址、额度和维护窗口；缺测、异常或没有收益都保留 DNS。
-6. 仅在24小时试用仍有效时PATCH已登记 A record的 `content`。核对 account/zone、trial身份及时间、Worker/Route ID、唯一 owned灰 A、TTL、无额外 AAAA/CNAME或冲突 Route、无 managed Custom Domain，以及有效证书。与正式发布和到期恢复共用 `production-maintenance`互斥组，不自动取消正在执行的维护。
+6. 仅在24小时试用仍有效时PATCH已登记 A record的 `content`。核对 account/zone、trial身份及时间、Worker、唯一精确HTTPS Route、唯一 owned灰 A、TTL、无额外 AAAA/CNAME或冲突 Route、无 managed Custom Domain，以及有效证书。与正式发布和到期恢复共用 `production-maintenance`互斥组，不自动取消正在执行的维护。
 7. 保存原状态、PATCH acknowledgement和readback，等待TTL后用大陆测点验证正常 DNS下的本站 HTTPS。失败时仅回退仍完全匹配本次写入的记录，避免覆盖人工更改。PATCH回应不确定时保留证据供人工检查，不盲目写第二次。
 
 只使用匿名免费测量，不传 Globalping token以免额度耗尽后消费 credits。每次本地上限120个 probe tests，写前保留回退额度；当前匿名免费额度为250个/小时，共享 runner IP可能被其他任务消耗，余量不足则停止。
@@ -36,7 +36,7 @@ Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对
 
 ## 配置
 
-填写 [main-ingress.example.json](../scripts/main-ingress.example.json)，真实配置/资源 ID留在忽略目录及 production Environment secret。在Custom Domain基线下执行report可省略recordId/routeId；试用期间apply必须登记当前唯一 A和精确 Route，以及trial的id/startsAt/expiresAt和原originalDomainId。archivePath选择已发布归档版本；样本撤回或协议改变时停止写入，重新核实后更换样本。
+填写 [main-ingress.example.json](../scripts/main-ingress.example.json)，真实配置/资源 ID留在忽略目录及 production Environment secret。在Custom Domain基线下执行report可省略recordId；试用期间apply必须登记当前唯一 A，以及trial的id/startsAt/expiresAt和原originalDomainId。Route通过已核实zone中的唯一精确`https://viprpg.org/*`及指定Worker识别，不登记固定routeId：Wrangler部署会替换Route ID。选点每次读取重新核验，到期恢复删除前重新读取并只允许删除刚核验的当前ID；多条、通配冲突或指向其他Worker均停止。已有配置残留的routeId不参与判断。archivePath选择已发布归档版本；样本撤回或协议改变时停止写入，重新核实后更换样本。
 
 本次试用的production配置来源：
 

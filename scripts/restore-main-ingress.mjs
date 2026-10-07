@@ -5,11 +5,11 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { readTrialConfig, trialState } from "./ingress-trial-config.mjs";
-import { coveringRoutes, hostname, ownerComment, routePattern } from "./ingress-policy.mjs";
+import { resolveMainRoute, hostname, ownerComment } from "./ingress-policy.mjs";
 
 function validateConfig(config) {
   if (!config || config.hostname !== hostname || config.worker !== "viprpg-zh-archive") throw Error("Only the approved viprpg.org Worker can be restored");
-  for (const field of ["accountId", "zoneId", "recordId", "routeId"])
+  for (const field of ["accountId", "zoneId", "recordId"])
     if (!/^[a-f0-9]{32}$/i.test(config[field] ?? "")) throw Error(`Invalid restoration ${field}`);
 }
 
@@ -44,11 +44,7 @@ function inspect(state, config) {
   const managed = addresses.filter(record => domain && record.proxied === true && record.meta?.read_only === true && record.meta?.origin_worker_id === domain.id);
   if (addresses.some(address => address !== record && !managed.includes(address)))
     throw Error("Unrelated main-host A/AAAA/CNAME records block restoration; no DNS records will be overwritten");
-  const routes = coveringRoutes(state.routes);
-  if (routes.some(route => route.id !== config.routeId || route.pattern !== routePattern || route.script !== config.worker))
-    throw Error("Main trial Route identity changed or a conflicting Route exists");
-  const route = state.routes.find(route => route.id === config.routeId);
-  if (route && (route.pattern !== routePattern || route.script !== config.worker)) throw Error("Registered Route no longer targets the approved main Worker");
+  const route = resolveMainRoute(state.routes, config);
   return { domain, record, route, restored: Boolean(domain && !record && managed.length) };
 }
 
@@ -154,7 +150,7 @@ export async function restoreMainIngress({ config, restore = false, confirm, api
   state = await read();
   current = inspect(state, config);
   if (!current.restored) throw Error("Managed main-host state changed after health verification; keep Route");
-  if (current.route) await observedWrite(`/zones/${config.zoneId}/workers/routes/${config.routeId}`, "DELETE", undefined,
+  if (current.route) await observedWrite(`/zones/${config.zoneId}/workers/routes/${current.route.id}`, "DELETE", undefined,
     value => value.restored && !value.route, "after-trial-route-delete");
   const result = { mode: "restored", hostname, worker: config.worker, trialId: config.trial.id, routeRemoved: !current.route };
   await save("result", result);
@@ -167,16 +163,18 @@ export function createRestorationApi(config, token) {
   const domainPath = `/accounts/${config.accountId}/workers/domains`;
   const dnsPath = `/zones/${config.zoneId}/dns_records`;
   const dnsRead = `${dnsPath}?name=${hostname}&per_page=100`;
+  const routesPath = `/zones/${config.zoneId}/workers/routes`;
   const reads = new Set([`/zones/${config.zoneId}`, domainPath,
-    dnsRead, `/zones/${config.zoneId}/workers/routes`]);
-  const deletes = new Set([`/zones/${config.zoneId}/dns_records/${config.recordId}`, `/zones/${config.zoneId}/workers/routes/${config.routeId}`]);
+    dnsRead, routesPath]);
+  const deletes = new Set([`/zones/${config.zoneId}/dns_records/${config.recordId}`]);
+  let routeDeletePath;
   let recoveryRecords = new Set();
   let recovery;
   let addressMissing = false;
   let domainRejected = false;
   return async (resource, method = "GET", body, { timeoutMs = 15000 } = {}) => {
     const allowed = method === "GET" && reads.has(resource) && body === undefined
-      || method === "DELETE" && (deletes.has(resource) || recoveryRecords.has(resource)) && body === undefined
+      || method === "DELETE" && (deletes.has(resource) || recoveryRecords.has(resource) || routeDeletePath && resource === routeDeletePath) && body === undefined
       || method === "POST" && resource === dnsPath && domainRejected && addressMissing && recovery && body
         && Object.keys(body).length === Object.keys(recovery).length
         && Object.entries(recovery).every(([key, value]) => body[key] === value)
@@ -184,6 +182,7 @@ export function createRestorationApi(config, token) {
         && body.hostname === hostname && body.service === config.worker && body.zone_id === config.zoneId;
     if (!allowed) throw Error("Restoration API permits only scoped reads, owned trial deletes, exact DNS recovery and the main Custom Domain PUT");
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 15000) throw Error("Invalid restoration API timeout");
+    if (resource === routesPath || resource === routeDeletePath) routeDeletePath = undefined;
     if (method === "PUT" || method === "POST") domainRejected = false;
     const response = await fetch(`https://api.cloudflare.com/client/v4${resource}`, {
       method, redirect: "error", signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -203,6 +202,10 @@ export function createRestorationApi(config, token) {
       recoveryRecords = new Set(owned.map(record => `${dnsPath}/${record.id}`));
       addressMissing = !data.result.some(record => record.name === hostname && ["A", "AAAA", "CNAME"].includes(record.type));
       if (owned.length === 1 && trialState(config)) recovery = recoveryBody(owned[0], config);
+    }
+    if (method === "GET" && resource === routesPath) {
+      const route = resolveMainRoute(data.result, config);
+      if (route) routeDeletePath = `${routesPath}/${route.id}`;
     }
     return data.result;
   };
