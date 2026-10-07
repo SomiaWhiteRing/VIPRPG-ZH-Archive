@@ -800,7 +800,7 @@ await check("likes and replies deduplicate and enforce current permissions and a
   await assert.rejects(listTimelineReplies(f.runtime, event), { status: 404 });
   await assert.rejects(setTimelineLike(f.runtime, event, 2, true), { status: 404 });
   assert.equal(f.count(), 1);
-  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items"), 0);
+  assert.equal(f.number("SELECT COUNT(*) FROM inbox_items"), 2, "one like and one reply notify the author; retries and self-replies do not");
 });
 
 await check("status and reply rate limits include deleted content and exempt identical retries", async (f) => {

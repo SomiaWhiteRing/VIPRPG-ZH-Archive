@@ -27,7 +27,10 @@ export async function POST(
     let target;
     if (request.headers.get("content-type")?.includes("application/json")) {
       const body = await readJsonObject(request, "提醒目标无效。");
-      target = {
+      target = body.eventId !== undefined ? {
+        eventId: parsePositiveId(String(body.eventId)),
+        replyId: body.replyId == null ? null : parsePositiveId(String(body.replyId)),
+      } : {
         topicId: parsePositiveId(String(body.topicId)),
         postNumber: parsePositiveId(String(body.postNumber)),
         commentId:

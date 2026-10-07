@@ -24,14 +24,16 @@ async function request(path: string, method = "GET", body?: unknown) {
   return result;
 }
 
-export function StatusInteractions({ item, viewerId, readOnly = false, expandReplies = true, onCacheError, onBusyChange, children }: {
+export function StatusInteractions({ item, viewerId, readOnly = false, expandReplies = true, initialPage, onCacheError, onBusyChange, children }: {
   item: TimelineItem; viewerId: number | null; onCacheError: () => void; onBusyChange: (value: boolean) => void;
   readOnly?: boolean;
   expandReplies?: boolean;
+  initialPage?: TimelineReplyPage;
   children?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const [page, setPage] = useState<TimelineReplyPage | null>(null);
+  const [open, setOpen] = useState(!!initialPage);
+  const [page, setPage] = useState<TimelineReplyPage | null>(initialPage ?? null);
+  const [addressed, setAddressed] = useState(!!initialPage);
   const [actionBusy, setBusy] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -54,6 +56,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
   async function load(cursor?: number | null) {
     const result = await request(`/api/timeline/${item.id}/replies${cursor ? `?cursor=${cursor}` : ""}`) as TimelineReplyPage;
     setPage((current) => ({ ...result, items: cursor && current ? [...current.items, ...result.items.filter((reply) => !current.items.some((old) => old.id === reply.id))] : result.items }));
+    if (!cursor) setAddressed(false);
   }
   function toggle() {
     if (busy || !expandReplies) return;
@@ -99,6 +102,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
       {children}
     </div>
     {expandReplies && open && <section id={regionId} aria-label="吐槽回复" aria-busy={busy} className={nestedRepliesClassName}>
+      {addressed && <Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load())}>查看全部回复</Button>}
       {error && <Notice role="alert" className="mb-3">{error}<Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load())}>重新加载回复</Button></Notice>}
       {!page && busy && <p className="m-0 text-sm text-muted">加载回复中……</p>}
       {page?.items.map((reply) => <NestedReply key={reply.id} id={`timeline-reply-item-${reply.id}`}

@@ -143,9 +143,10 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
       hasPermission(viewer, row.kind === "status" ? "timeline.status.moderate_any" : "timeline.event.moderate_any")) };
 }
 export async function listTimeline(runtime: AppRuntime, input: {
-  viewerId?: number | null; actorUserId?: number; following?: boolean; cursor?: string | null; kind?: TimelineKind; limit?: number;
+  viewerId?: number | null; actorUserId?: number; eventId?: number; following?: boolean; cursor?: string | null; kind?: TimelineKind; limit?: number;
 } = {}): Promise<TimelinePage> {
   if (input.actorUserId !== undefined && (!Number.isSafeInteger(input.actorUserId) || input.actorUserId < 1)) throw new HttpError(400, "用户编号无效");
+  if (input.eventId !== undefined && (!Number.isSafeInteger(input.eventId) || input.eventId < 1)) throw new HttpError(400, "动态编号无效");
   if (input.kind !== undefined && !isTimelineKind(input.kind)) throw new HttpError(400, "动态类型无效");
   const limit = Number.isSafeInteger(input.limit) ? Math.min(50, Math.max(1, input.limit!)) : 30;
   const actor = input.actorUserId ?? null, kind = input.kind ?? null;
@@ -161,6 +162,7 @@ export async function listTimeline(runtime: AppRuntime, input: {
   if (cursor && followingUserId !== null && cursor.followingRevision !== followingRevision) throw new HttpError(409, "好友关系已变化，请返回最新动态", "timeline_cursor_changed");
   const args: Bind[] = [];
   let filter = "";
+  if (input.eventId !== undefined) { filter += " AND e.id=?"; args.push(input.eventId); }
   if (actor !== null) { filter += " AND e.user_id=?"; args.push(actor); }
   if (followingUserId !== null) {
     filter += " AND e.user_id IN (SELECT followed_user_id FROM user_follows WHERE follower_user_id=? UNION ALL SELECT ?)";
