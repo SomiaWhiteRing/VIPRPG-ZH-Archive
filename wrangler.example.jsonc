@@ -180,8 +180,8 @@
   },
   "routes": [
     {
-      "pattern": "viprpg.org",
-      "custom_domain": true
+      "pattern": "viprpg.org/*",
+      "zone_name": "viprpg.org"
     }
   ],
   "workers_dev": false,

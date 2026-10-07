@@ -4,7 +4,6 @@ import { parse } from "jsonc-parser";
 import { downloadSubrequestLimit } from "../lib/archive/download.ts";
 import { DAILY_AUDIT_CRON } from "../lib/audit-report-config.mjs";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
-import { readTrialConfig, applyTrialRoute, assertTrialDeployment } from "./ingress-trial-config.mjs";
 
 const { values } = parseArgs({ options: { env: { type: "string" } } });
 const template = readConfig("wrangler.example.jsonc");
@@ -29,9 +28,6 @@ if (values.env === "production") {
   for (const key of ["GA_ENABLED", "GA_MEASUREMENT_ID", "GA_GATEWAY_PATH"]) {
     if (process.env[key]) target.vars[key] = process.env[key];
   }
-  const trial = readTrialConfig();
-  applyTrialRoute(target, trial);
-  assertTrialDeployment(target, trial);
 }
 // Code-owned daily reporting must survive resource secrets with older cron lists.
 target.triggers = { ...target.triggers, crons: [...new Set([...(target.triggers?.crons ?? []), DAILY_AUDIT_CRON])] };

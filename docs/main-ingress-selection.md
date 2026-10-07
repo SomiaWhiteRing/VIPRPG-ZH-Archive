@@ -1,71 +1,58 @@
-# 主站大陆入口自动优选
+# 主站社区 CNAME 优选
 
-目标为 `https://viprpg.org` 的页面、API 和公开下载。已部署版本取消下载按 ASN 转往旧域名的分流与跨域换源，全部通过主站，保留同源超时、取消及强 ETag/Range 续传；界面、进度、登录 origin、存档和 ZIP 协议不变。
+主站已经是 Worker，采用作者[配套文章](https://b.acofork.com/posts/cf-fastip/#worker项目优选-最简单)的 Worker 方案：使用原正式 Worker 的 `viprpg.org/*` Route，将主站 DNS CNAME 到社区优选域名。页面、API 和公开下载仍使用 `https://viprpg.org`。
 
-2026-10-06 已按负责人授权发布同源产品并实施24小时入口试用：香港时间23:20:48将主站切为灰云 A `8.35.211.227`，试用到期为2026-10-07 23:20:48（香港时间）。正式Worker版本为 `ff38e592-869a-48f1-b7f3-634e303c2ccc`，原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 的Custom Domain基线未改。12项DNS及指定入口HTTPS核验通过，覆盖首页、robots、健康接口、DB/R2与8 KiB ZIP Range，下载内容摘要一致；实际大陆三网表现及大包持续吞吐仍待观测。
+仓库已移除自建候选发现、Globalping 测量、DNS 自动选点和到期恢复代码。这里不运行选点任务，不维护固定 IP，也不新增 Worker 反代、SaaS 或 R2 公共域名。
 
-主站同源产品核验后，两个额外下载域名的DNS、Routes及独立 `viprpg-download` Worker已删除并回读确认，没有删除业务数据。恢复材料已保存。六小时选点与15分钟到期巡检工作流已推送，两个repository开关已启用。三网六点的新IP分段下载均返回有效206，HTTP到HTTPS跳转正常；大包持续速度仍待一天观测。试用到期仅恢复主站managed Custom Domain接入，继续运行新的同源下载产品，不恢复这两个废旧入口。
+## 配置与当前状态
 
-两个旧入口已撤销，不保留历史 relay。`download.viprpg.org`、`download-asia.viprpg.org` 的已保存链接会在DNS缓存过期后失效；已打开或缓存旧安装器的页面可能仍尝试旧域名，下载中断后的重试也可能失败。需要刷新主站页面或重新生成主站下载链接。已经安装的游戏及用户存档不因入口撤销而删除。
+| 配置项 | 简单方案 |
+| --- | --- |
+| 正式 Worker | 当前 `viprpg-zh-archive`，使用原正式资源绑定 |
+| Worker Route | `viprpg.org/*`，区域 `viprpg.org` |
+| DNS 名称 | `@`，即 `viprpg.org` |
+| DNS 类型与目标 | CNAME `cf.090227.xyz` |
+| 代理状态 | DNS only，灰云 |
+| TTL | Auto；根域名 CNAME 由 Cloudflare flattening 处理 |
+| staging | 继续使用原 `staging.viprpg.org` Custom Domain |
 
-## 启用边界
+`cf.090227.xyz` 是文章列出的社区入口，维护者负责更新其候选地址。本仓库不再扫描或修改它的地址。2026-10-08 已读到该域名的有效 CNAME/A 解析；这不是全国三网或完整大文件速度验收。
 
-主站现已临时迁移为原 Worker的精确 `https://viprpg.org/*` Route及 TTL 60的owned灰云 IPv4 A。配置的 `trial` 记录唯一 `id`、`startsAt`、`expiresAt`，并在配置中记录原 Custom Domain身份 `originalDomainId`；不能靠是否存在灰云记录无限延长试用。六小时自动选点受 `MAIN_INGRESS_AUTO_ENABLED=true` 控制，到期巡检受 `MAIN_INGRESS_TRIAL_ENABLED=true` 控制；工作流文件存在不代表开关已启用。手动 report不写 DNS。
+2026-10-08 的 Cloudflare 只读核对显示，旧试用已恢复为主站 managed Custom Domain，原试用 Route 已删除，主站 HTTPS 正常。当前这次代码清理和模板变更尚未切换正式 DNS、GitHub 配置或部署，需按[正式手册](./production-deployment.md#环境与授权)确认后执行。
 
-`PRODUCTION_WRANGLER_CONFIG_JSONC` 始终保留原 managed Custom Domain基线。本次不把该 secret永久改成Route。构建准备阶段仅在 `MAIN_INGRESS_CONFIG_JSON` 中的试用有效时覆盖生成配置的routes；到期不再覆盖，prepare自然选择原Custom Domain。使用试用Route构建及发布前分别检查至少10分钟余额，不足时停止该次试用发布。staging接入不变。
+## Wrangler 持久配置
 
-六小时选点程序只在试用有效期内更新owned A的content，到期不再PATCH；apply缺少trial时在任何网络请求前拒绝执行。它不迁移接入、不部署 Worker、不改证书或数据。独立的15分钟到期巡检负责恢复主站Custom Domain，职责和写入范围见后文。
+正式配置使用：
 
-灰云 A 指向 CF 入口是社区实践。官方 [Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/) 要求 proxied DNS，故实测可用不代表长期支持，也不保证固定机房、全省可用或 Chinaz全绿。单一地址不能给三网各自分配不同入口。
+```json
+"routes": [
+  { "pattern": "viprpg.org/*", "zone_name": "viprpg.org" }
+]
+```
 
-## 测量与切换
+应同步更新 production Environment 的 `PRODUCTION_WRANGLER_CONFIG_JSONC`，只替换其 `routes`；原 Worker、DB、R2、DO、邮件、限流、变量及其他设置从已核实的原配置保留。CI 不再读取旧试用配置，也不按时间覆盖 routes。
 
-[main-ingress.yml](../.github/workflows/main-ingress.yml) 每六小时执行，对应香港时间 02:17、08:17、14:17、20:17。公开仓库标准 GitHub runner不依赖维护者电脑或 Codex对话。
+仅修改本地文件或模板不会更新 GitHub secret、Cloudflare Route 或 DNS。正式配置校验也接受原 Custom Domain，供实际回退；staging 仅接受其原 Custom Domain。
 
-1. 最多扫描40个新IPv4，并始终保留当前地址。候选来自[WeTest免费 API](https://www.wetest.vip/page/api/get_cloudflare_ip.html)的电信、联通、移动和三网列表、[IPDB的BestCF IPv4列表](https://github.com/ymyuuu/IPDB/blob/main/BestCF/bestcfv4.txt)、[LancelotRar独立扫描Top100](https://github.com/LancelotRar/best-cf-ips/blob/main/best-cf-ip-scanned-top100.txt)，以及已有验证记录的备用地址。按来源轮流取点并去重，避免一个来源占满候选池；拒绝私网和非443端口。WeTest逐条核实官方类型及24小时内时间；GitHub列表核实文件最近提交在24小时内，再按该提交SHA读取固定版本。陈旧、未来时间、异常或不可用来源单独剔除。第三方排名只提供候选，不直接作为本站切换依据。
-2. 地址必须属于实时 [CF公布 IPv4段](https://www.cloudflare.com/ips-v4/)，或经 RIPE当前 AS13335/AS209242公告与非 invalid RPKI核验。unknown明确记录，不能解释为已验证 ROA或长期所有权保证。无法核实时停止。
-3. 用[Globalping官方 API](https://globalping.io/docs/api.globalping.io)分两阶段测量：先按大陆AS4134、AS4837、AS9808家庭网络各请求一个ready IPv4测点，以同一批三点扫描当前地址和全部候选，选出本站HTTPS响应合格且平均响应最快的前三名；初筛不能授权DNS写入。再为前三名及当前地址重新选取三网六点，每网两个不同城市，用同一批六测点复核两轮，轮间至少间隔60秒并交替测量顺序。公开库存隐藏IPv4能力，不能先按库存城市挑点。两阶段均验证本站Host/SNI、可信TLS及完整ASCII `/robots.txt`内容，比较扣除DNS用时的小型HTTP响应。运行器自身速度不参与排名。
-4. 两轮均改善至少20%且50ms，各运营商及单点没有明显退化，才进行健康优化；最短持有12小时。故障恢复需两轮同一节点可重复故障、合格候选及独立合格回退地址，并保护仍健康的节点；恢复可以绕过健康优化的持有期。
-5. 候选和回退地址均做两轮4096字节公开 ZIP Range的206、强 ETag、长度、区间与完成状态检查。ZIP响应不能明显退化。写前再检查两个地址、额度和维护窗口；缺测、异常或没有收益都保留 DNS。
-6. 仅在24小时试用仍有效时PATCH已登记 A record的 `content`。核对 account/zone、trial身份及时间、Worker、唯一精确HTTPS Route、唯一 owned灰 A、TTL、无额外 AAAA/CNAME或冲突 Route、无 managed Custom Domain，以及有效证书。与正式发布和到期恢复共用 `production-maintenance`互斥组，不自动取消正在执行的维护。
-7. 保存原状态、PATCH acknowledgement和readback，等待TTL后用大陆测点验证正常 DNS下的本站 HTTPS。失败时仅回退仍完全匹配本次写入的记录，避免覆盖人工更改。PATCH回应不确定时保留证据供人工检查，不盲目写第二次。
+## 一次性切换
 
-只使用匿名免费测量，不传Globalping token以免额度耗尽后消费credits。当前匿名免费额度为250个/小时，程序保留12次远端余量，本次本地预算上限238次。最大流程为：41个地址三点初筛123次、4个地址六点两轮复核48次、候选与回退ZIP验证24次、写前复查12次、切换后及回退验证最多24次，合计最多231次。共享runner IP可能被其他任务消耗，余量不足则停止，不能以跳过复核或回退预算来继续写入。工作流超时45分钟，开始30分钟后不再发起切换；试用截止时间及写前至少10分钟余额的限制不变。
+负责人确认目标与操作范围后，在 `production-maintenance` 无其他正式发布或维护操作时执行：
 
-Globalping把 body解码为 UTF-8，并在10000字符终止读取。因此仅对 ASCIIcanary做精确内容验证；ZIP只能验证小分段元数据与完成状态，不能冒充二进制摘要或大包持续下载速度。六点抽样不代表全国；覆盖不足时不降级为单运营商。
+1. 保存当前主站 Custom Domain、DNS、Route、Worker 版本及正式配置。先停用并移除旧选点／试用恢复工作流，核实没有仍运行的旧任务。
+2. 提交并推送这次代码清理；移除两个旧入口开关、两项专用试用 secret。只删除专用 secret 副本，不撤销可能被其他消费者使用的原 token。
+3. 将原 Worker 绑定到 `viprpg.org/*` Route。保留当前网站代码和资源，不创建替代 Worker。
+4. 解除主站 managed Custom Domain，移除它管理的主站占位记录，再创建 `@` CNAME `cf.090227.xyz`、灰云。保留 TXT、MX 等无关记录；不添加一条绕开该 CNAME 的独立 AAAA。
+5. 同步正式配置 secret 的 routes，运行候选检查通过后的正式部署，核对其路由确实仍为 `viprpg.org/*`。
+6. 核对根域名 A/AAAA、可信 TLS、首页、robots、健康接口和已发布 ZIP 的小段 Range。大文件吞吐和不同运营商表现应另行观察，不能用本地连接速度或小段 Range 证明。
 
-## 配置
+从移除 managed DNS 到创建 CNAME 期间可能有短暂解析窗口，应在同一个维护批次连续完成；异常时按下面步骤恢复。
 
-填写 [main-ingress.example.json](../scripts/main-ingress.example.json)，真实配置/资源 ID留在忽略目录及 production Environment secret。在Custom Domain基线下执行report可省略recordId；试用期间apply必须登记当前唯一 A，以及trial的id/startsAt/expiresAt和原originalDomainId。Route通过已核实zone中的唯一精确`https://viprpg.org/*`及指定Worker识别，不登记固定routeId：Wrangler部署会替换Route ID。选点每次读取重新核验，到期恢复删除前重新读取并只允许删除刚核验的当前ID；多条、通配冲突或指向其他Worker均停止。已有配置残留的routeId不参与判断。archivePath选择已发布归档版本；样本撤回或协议改变时停止写入，重新核实后更换样本。
+## 影响与回退
 
-本次试用的production配置来源：
+登录 origin、API、下载地址、安装器续传、ZIP 字节协议和用户存档保持原业务模型。R2 是正式 Worker 的私有绑定，不因换入口变成公共 bucket，也不需要 Cloud Connector。持续有数据进展的慢下载继续运行；超时、取消、强 ETag/Range 和故障重连处理保留。
 
-- `PRODUCTION_WRANGLER_CONFIG_JSONC`：保持原Custom Domain的正式资源基线，试用到期后仍能生成正常接入配置。
-- `PRODUCTION_INGRESS_CONFIG_JSON`：试用资源与时间配置，工作流映射为 `MAIN_INGRESS_CONFIG_JSON`，用于有限期routes覆盖、六小时选点及到期恢复。
-- `PRODUCTION_INGRESS_API_TOKEN`：本次复用已验证入口读写权限的运维凭据，单独保存于production Environment；原正式发布凭据不改。工作流映射为 `INGRESS_CF_READ_TOKEN` 和需要写入时的 `INGRESS_CF_DNS_TOKEN`。
+社区 CNAME 把入口维护交给第三方，地址和线路质量可能变化。灰云入口是文章演示的社区实践；当前官方 [Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/) 文档仍要求 proxied DNS，不能把一次实测可用解释为长期官方支持。该方案减少自建维护成本，速度收益仍需实际观察。
 
-选点工作流的两个INGRESS环境变量映射同一个已验证运维凭据，到期巡检则显式映射为 `CLOUDFLARE_API_TOKEN`；不能解释为已经创建专用只读或DNS Edit token，也不能声称该凭据没有Worker或其他正式权限。程序通过严限定的account/zone/资源身份及HTTP方法、路径allowlist约束自身操作；未来再拆分最小权限token。配置不能输出凭据或把它写入公开artifact。
+回退使用同一个正式 Worker：先删除本次主站 CNAME，再恢复 `viprpg.org` managed Custom Domain；DNS 和 HTTPS 核验正常后删除这条简单 Route，并将正式配置 secret 的 routes 恢复成主站 Custom Domain。无需回滚业务代码或恢复已退休的下载域名。
 
-本次批次已取得明确试用与入口撤销授权；完成验收后才设置repository variable `MAIN_INGRESS_AUTO_ENABLED=true`。本地report显式提供 `INGRESS_CF_READ_TOKEN` 与 `node scripts/select-main-ingress.mjs --config output/main-ingress/config.json`；脚本不自行回落部署token。apply另需显式的 `INGRESS_CF_DNS_TOKEN`、启用变量和已批准范围下的 `--apply --confirm viprpg.org`；开关不能代替人的确认。
-
-报告与原始测量保存在忽略目录 `output/main-ingress-selection/`，GitHub artifact保留七天。持有期使用 DNS modified_on，不新增 DB/KV或自动提交循环。
-
-## 24小时迁移与到期恢复
-
-本次迁移已备份Custom Domain/关联DNS、Routes、证书、Worker版本与绑定、production配置及HTTP/IPv6状态，并完成同源产品和入口核验。已解除主站Custom Domain、在同Worker建立精确HTTPS Route及owned灰 A，发布同源下载产品并撤销两个额外下载入口。原 `PRODUCTION_WRANGLER_CONFIG_JSONC` 未改，由active trial临时覆盖生成配置；有限期试用配置决定到期恢复，自动任务是否启用仍须核对对应开关。
-
-[main-ingress-trial.yml](../.github/workflows/main-ingress-trial.yml) 每15分钟在云端巡检到期状态，不依赖本机或Codex会话。到期恢复核实trial与目标资源归属后，先删除试用owned A，再通过Cloudflare公开的Custom Domain PUT API将原主站hostname绑定回同一个Worker；核实正常DNS及HTTPS健康后，才删除该次trial Route。身份、DNS或健康检查不一致时停止并保存证据，不删除不属于本次试用的记录。
-
-若Custom Domain PUT返回明确的4xx JSON拒绝（不含408），且重新读取确认没有Custom Domain、没有其他主站地址、原Route仍在，则重建刚删除的A记录并检查HTTPS健康。补偿记录只使用刚读取的IP、TTL 60和灰云属性，comment包含本次trial UUID；下一轮巡检可识别其新记录ID并继续恢复，不需要修改secret。超时、连接中断、5xx或无法确认当前状态时不猜测写入结果，不盲目创建记录。补偿失败仍可能需要人工恢复，所有收据保存在工作流artifact。
-
-共享`production-maintenance`的正式发布、选点、到期巡检、状态服务与Android正式任务使用`queue: max`，互斥执行并保留多个排队任务；`cancel-in-progress: false`本身不保护默认的单个pending槽位。
-
-正常到期恢复不回滚产品代码，不重新部署旧版本，也不恢复两个下载域名或relay Worker。页面、API和下载继续使用新同源产品，只有主站入口回到CF正常managed DNS与IPv6。若另行决定回到包含旧分流的旧代码，则须先恢复对应下载DNS/Routes和relay资源，不能把这种完整旧版本回滚混同于试用到期。
-
-不清理MX/TXT/CAA、D1/R2/DO、账号或存档。新入口只发布IPv4 A，原managed IPv6入口会改变，需要验证HTTP跳转及IPv6用户影响。保留现有apex证书并核实DCV续期；[解除Custom Domain不自动删除Advanced Certificate](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)，但不能对灰云入口未来证书呈现作官方保证。
-
-试用期间生成的Environment routes为唯一 `{ "pattern": "https://viprpg.org/*", "zone_id": "<approved zone>" }`；IP只存在DNS，不能写回Wrangler。到期prepare使用未改变的Custom Domain基线，后续正常发布不会把试用Route永久写回。
-
-停用自动选点前检查运行队列；关闭变量不会终止已在执行的维护，也不代表主站已经恢复。六小时selector到期不更新IP，15分钟巡检按本次已批准范围恢复入口；IP公告无法验证、测量故障、恢复资源冲突或PATCH outcome不确定时可能需要人工处理。
-
-GitHub [schedule](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) 可能延迟或丢任务，公开仓库六十天无活动会停用；15分钟巡检频率不承诺在expiresAt后一秒准确恢复，排队或检查失败可延后。试用到期时程序停止新的试用DNS写入，入口恢复须以云端DNS/HTTPS核验记录为准。[公开仓库标准runner免费](https://docs.github.com/en/billing/concepts/product-billing/github-actions)，额外artifact存储及未来付费测量服务另计；无需购买优选IP。程序不使用Chinaz付费API或抓取ITDOG网页。
+既有 `npm run deploy:production -- --plan` 仅预览本地候选，`npm run smoke:production` 负责只读 HTTP 核对。所有正式操作遵守项目授权边界。
