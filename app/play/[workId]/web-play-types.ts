@@ -1,4 +1,5 @@
 import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
+import type { InstallMeasurement } from "@/lib/analytics";
 
 export type WebPlayMetadata = {
   easyRpg?: EasyRpgConfig;
@@ -93,6 +94,7 @@ export type WebPlayInstallWorkerInput =
       metadata: WebPlayMetadata;
       storageKind: WebPlayStorageKind;
       storageSnapshot?: WebPlayStorageSnapshot;
+      analyticsEnabled?: boolean;
     }
   | {
       type: "cancel";
@@ -100,6 +102,7 @@ export type WebPlayInstallWorkerInput =
     };
 
 export type WebPlayInstallWorkerOutput =
+  | { type: "install-measurement"; measurement: InstallMeasurement }
   | { type: "install-finished" }
   | { type: "install-rejected"; message: string }
   | {

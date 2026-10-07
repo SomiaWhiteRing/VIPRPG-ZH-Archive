@@ -8,6 +8,7 @@ import { Download, ExternalLink } from "lucide-react";
 import { KaiImportLink } from "./kai-import-link";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
 import { reportWorkPlayed } from "@/lib/browser/work-play";
+import { trackDownloadClick } from "@/lib/browser/site-analytics";
 
 type Props = {
   workId: number;
@@ -35,6 +36,10 @@ export function WorkActionBar({
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   const { downloadUrl, downloadSize } = useArchiveDownload();
   const sizeBytes = archive ? downloadSize(archive) : null;
+  const reportDownload = () => {
+    reportWorkPlayed(workId);
+    trackDownloadClick(workId, archive?.id ?? null, sizeBytes, !archive);
+  };
   return (
     <div className="grid gap-3.5" aria-label="主操作">
       {archive ? (
@@ -44,8 +49,8 @@ export function WorkActionBar({
             {!native && <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
               href={downloadUrl(archive.id)}
-              onClick={() => reportWorkPlayed(workId)}
-              onAuxClick={(event) => { if (event.button === 1) reportWorkPlayed(workId); }}
+              onClick={reportDownload}
+              onAuxClick={(event) => { if (event.button === 1) reportDownload(); }}
             >
               <Download aria-hidden />
               下载 ZIP
@@ -64,8 +69,8 @@ export function WorkActionBar({
           aria-label="外部下载：前往下载页"
           className={`${buttonVariants({ variant: "rm2k" })} min-h-12.5 w-full text-base`}
           href={externalDownload.url}
-          onClick={() => reportWorkPlayed(workId)}
-          onAuxClick={(event) => { if (event.button === 1) reportWorkPlayed(workId); }}
+          onClick={reportDownload}
+          onAuxClick={(event) => { if (event.button === 1) reportDownload(); }}
           rel="noreferrer"
           target="_blank"
         >

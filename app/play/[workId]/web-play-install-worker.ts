@@ -225,6 +225,7 @@ async function runInstallAttempt(input: {
     );
     result = await streamZipToPacks({ metadata, download, installation });
   } finally {
+    installObserver?.event("network.end", { reconnects: download.reconnectCount });
     download.close();
   }
   installation = result.installation;

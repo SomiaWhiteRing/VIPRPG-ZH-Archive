@@ -20,6 +20,8 @@ import {
 import { getCurrentUser } from "./.server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "./.server/db/inbox";
 import { runtimeContext } from "./.server/router-context";
+import { getSiteAnalyticsConfig } from "./.server/analytics";
+import { SiteAnalytics } from "./components/site-analytics";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
@@ -45,6 +47,7 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     serverTime: Date.now(),
     embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
+    analytics: getSiteAnalyticsConfig(runtime),
     session: user
       ? {
           id: user.id,
@@ -106,12 +109,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session, embedded } = useLoaderData<typeof loader>();
+  const { session, embedded, analytics } = useLoaderData<typeof loader>();
   const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
   const { pathname } = useLocation();
   const inSea = pathname === "/sea";
   return (
     <>
+      <SiteAnalytics config={analytics} embedded={inFrame} />
       {!inFrame ? <GameStorageBoundary /> : null}
       <NavigationProgress />
       {!inFrame && !inSea ? <SiteHeaderNav
