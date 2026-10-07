@@ -11,6 +11,9 @@ import { hostname, validateIngressConfig, assertOwnedState, healthyRounds, choos
 import { trialState } from "./ingress-trial-config.mjs";
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const probeBudget = 238; // Anonymous 250/hour minus the transport's 12-probe reserve.
+const confirmationRounds = 2;
+const roundIntervalMs = 60_000;
 
 export function cloudflareClient(config, readToken, dnsToken) {
   if (!readToken) throw Error("A read-only Cloudflare token is required");
@@ -105,18 +108,47 @@ export async function runSelection({ config, apply = false, out, environment = p
   const measured = {};
   const report = { createdAt: new Date().toISOString(), mode: apply ? "apply" : "report", hostname, current,
     scope: "Existing main DNS content only; no Worker, Route, certificate, deployment, DB, R2 or DO changes",
-    limitations: "Six available carrier/city probes and small HTTPS transfers; not a nationwide or large-ZIP throughput guarantee" };
+    limitations: "Three-point screening, then six fixed carrier/city probes and small HTTPS transfers; not a nationwide or large-ZIP throughput guarantee",
+    plan: { candidateLimit: 40, screeningProbes: 3, finalists: 3, confirmationRounds, roundIntervalMs, probeBudget } };
   save("report", report);
-  const pool = await loadCandidates({ currentIp: before?.content, limit: 3, save });
+  const pool = await loadCandidates({ currentIp: before?.content, limit: 40, save });
   save("candidate-pool", pool);
   if (before && !pool.evidence.some(x => x.source === "current" && x.ip === current && x.ownershipVerified === true))
     throw Error("Current IP announcement could not be verified; refusing selection");
-  const targets = [...new Set([current, ...pool.candidates])].slice(0, 4);
+  const targets = [...new Set([current, ...pool.candidates])].slice(0, 41);
   if (targets.length < 2) throw Error("No verified alternative candidate");
-  const measurements = createMeasurements({ hostname, expectedBody: publicRobots(`https://${hostname}`), budget: 120, save });
-  let locations = await measurements.inventory();
-  for (let round = 0; round < 2; round++) {
-    for (const target of round === 0 ? targets : [...targets].reverse()) {
+  const measurements = createMeasurements({ hostname, expectedBody: publicRobots(`https://${hostname}`), budget: probeBudget, save });
+  let locations = await measurements.inventory(1);
+  const screened = {};
+  for (const target of targets) {
+    const result = await measurements.measure(target, { locations });
+    locations = result.locations;
+    screened[target] = result;
+    save("screened", screened);
+  }
+  const finalists = Object.entries(screened).filter(([target, round]) => target !== current &&
+    round.rows.every(row => row.valid && row.totalMs > 0))
+    .sort((left, right) => left[1].rows.reduce((sum, row) => sum + row.ingressMs, 0) - right[1].rows.reduce((sum, row) => sum + row.ingressMs, 0))
+    .slice(0, 3).map(([target]) => target);
+  if (!finalists.length || Object.values(screened).some(round => round.rows.some(row => row.status === "offline"))) {
+    Object.assign(report, { decision: { change: false, reason: finalists.length ? "measurement-probe-offline" : "no-healthy-screening-candidate" },
+      measurementProbeTests: measurements.used() });
+    save("report", report);
+    return report;
+  }
+  // The cheap screen only chooses finalists; it can never authorize a DNS write.
+  const baseline = await measurements.measure(current, { locations: await measurements.inventory(2) });
+  locations = baseline.locations;
+  measured[current] = [baseline];
+  const probeCount = baseline.rows.length;
+  const confirmationTargets = [current, ...finalists];
+  Object.assign(report, { finalists, confirmationProbes: probeCount, measurementProbeTests: measurements.used() });
+  save("report", report);
+  for (let round = 0; round < confirmationRounds; round++) {
+    if (round > 0) await delay(roundIntervalMs);
+    const order = round % 2 ? [...confirmationTargets].reverse() : confirmationTargets;
+    for (const target of order) {
+      if (round === 0 && target === current) continue;
       const result = await measurements.measure(target, { locations });
       locations = result.locations;
       (measured[target] ??= []).push(result);
@@ -158,11 +190,11 @@ export async function runSelection({ config, apply = false, out, environment = p
   // Fresh mainland check inside the deployment mutex immediately precedes the write.
   for (const target of [decision.selected, decision.fallback]) {
     const fresh = await measurements.measure(target, { locations });
-    if (!fresh.rows.every(x => x.valid) || fresh.rows.length !== 6) throw Error("Winner or fallback became unhealthy; keep DNS");
+    if (!fresh.rows.every(x => x.valid) || fresh.rows.length !== probeCount) throw Error("Winner or fallback became unhealthy; keep DNS");
   }
-  if (await measurements.remaining() < 36) throw Error("Insufficient free quota for post-check and rollback; keep DNS");
-  if (measurements.used() + 24 > 120) throw Error("Insufficient local probe budget for post-check and rollback; keep DNS");
-  if (Date.now() - startedAt > 10 * 60000) throw Error("Insufficient maintenance window for apply and rollback; keep DNS");
+  if (await measurements.remaining() < probeCount * 4 + 12) throw Error("Insufficient free quota for post-check and rollback; keep DNS");
+  if (measurements.used() + probeCount * 4 > probeBudget) throw Error("Insufficient local probe budget for post-check and rollback; keep DNS");
+  if (Date.now() - startedAt > 30 * 60000) throw Error("Insufficient maintenance window for apply and rollback; keep DNS");
   if (!trialState(config)?.active || trialState(config).expiresAt - Date.now() < 10 * 60000)
     throw Error("Trial has insufficient time for DNS verification and rollback; keep DNS");
   const read = async () => assertOwnedState(await cf.readState(), config);
@@ -176,7 +208,7 @@ export async function runSelection({ config, apply = false, out, environment = p
       await delay(60000);
       const result = await measurements.measure(hostname, { locations });
       save(`dns-verification-${expected}-${attempt}`, result);
-      if (result.rows.length === 6 && result.rows.every(x => x.valid && x.resolvedAddress === expected)) return;
+      if (result.rows.length === probeCount && result.rows.every(x => x.valid && x.resolvedAddress === expected)) return;
     }
     throw Error("Mainland normal-DNS HTTPS validation did not converge to the selected address");
   };

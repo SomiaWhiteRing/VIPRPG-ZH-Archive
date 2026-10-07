@@ -6,6 +6,7 @@ const carrierAsns = [4134, 4837, 9808];
 const reserve = 12;
 const maxBodyBytes = 8192;
 const pollDeadlineMs = 45000;
+const countNames = ["zero", "one", "two"];
 
 function splitPath(value) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || /[\r\n#]/.test(value))
@@ -26,19 +27,21 @@ function fingerprint(probe) {
 }
 
 function validateLocations(locations) {
-  if (!Array.isArray(locations) || ![3, 6].includes(locations.length)) throw new Error("Three carrier filters or six explicit mainland city locations are required");
-  const carrierFilters = locations.length === 3;
+  if (!Array.isArray(locations) || ![3, 6].includes(locations.length)) throw new Error("Three carrier filters or three or six explicit mainland city locations are required");
+  const carrierFilters = locations.every(location => location.city === undefined);
+  const perCarrier = locations.reduce((sum, location) => sum + location.limit, 0) / 3;
+  if (![1, 2].includes(perCarrier)) throw new Error("Request one or two probes per carrier");
   const slots = new Set();
   for (const location of locations) {
     if (location.country !== "CN" || !carrierAsns.includes(location.asn)
       || !Array.isArray(location.tags) || !location.tags.includes("eyeball-network")
-      || (carrierFilters ? location.city !== undefined || location.limit !== 2
+      || (carrierFilters ? location.limit !== perCarrier
         : typeof location.city !== "string" || !location.city.trim() || location.limit !== 1))
-      throw new Error("Locations must request two mainland eyeball probes per carrier, or one per explicit city");
+      throw new Error("Locations must request balanced mainland eyeball probes per carrier, or one per explicit city");
     slots.add(carrierFilters ? location.asn : slot(location));
   }
-  if (slots.size !== locations.length || carrierAsns.some(asn => locations.filter(location => location.asn === asn).length !== (carrierFilters ? 1 : 2)))
-    throw new Error("Each mainland carrier requires two distinct cities");
+  if (slots.size !== locations.length || carrierAsns.some(asn => locations.filter(location => location.asn === asn).length !== (carrierFilters ? 1 : perCarrier)))
+    throw new Error("Each mainland carrier requires the same number of distinct cities");
   return locations.map(({ country, asn, city, limit }) => ({ country, asn, ...(city === undefined ? {} : { city }), tags: ["eyeball-network"], limit }));
 }
 
@@ -100,7 +103,8 @@ export function createMeasurements(options) {
     return quota.remaining;
   }
 
-  async function inventory() {
+  async function inventory(perCarrier = 2) {
+    if (![1, 2].includes(perCarrier)) throw new Error("Request one or two probes per carrier");
     const data = await api("/probes");
     if (!Array.isArray(data)) throw new Error("Globalping probe inventory is malformed");
     const eligible = data.filter(probe => probe.location?.country === "CN"
@@ -108,13 +112,13 @@ export function createMeasurements(options) {
       && typeof probe.location.city === "string" && probe.location.city.trim());
     const locations = carrierAsns.map(asn => {
       const cities = new Set(eligible.filter(probe => probe.location.asn === asn).map(probe => probe.location.city.toLowerCase()));
-      if (cities.size < 2) throw new Error(`AS${asn} has fewer than two mainland eyeball probe cities; keep DNS unchanged`);
+      if (cities.size < perCarrier) throw new Error(`AS${asn} has fewer than ${countNames[perCarrier]} mainland eyeball probe cities; keep DNS unchanged`);
       // Public inventory omits IPv4 capability. The backend selects ready IPv4 probes
       // and diversifies locations; verify the actual two cities after the first test.
-      return { country: "CN", asn, tags: ["eyeball-network"], limit: 2 };
+      return { country: "CN", asn, tags: ["eyeball-network"], limit: perCarrier };
     });
     selectedLocations = validateLocations(locations);
-    await record("probe-inventory", { selectedLocations, eligible: eligible.map(probe => ({ ...probe.location, tags: probe.tags })) });
+    await record(`probe-inventory-${perCarrier}`, { selectedLocations, eligible: eligible.map(probe => ({ ...probe.location, tags: probe.tags })) });
     return structuredClone(selectedLocations);
   }
 
@@ -128,6 +132,7 @@ export function createMeasurements(options) {
       const seed = typeof locations === "string" ? seeds.get(locations) : { locations: validateLocations(locations) };
       if (!seed) throw new Error("Fixed probe ID must belong to this measurement cycle");
       const count = seed.locations.reduce((sum, location) => sum + location.limit, 0);
+      const perCarrier = count / 3;
       let requestPath = canaryRequest;
       let expectedLength = Buffer.byteLength(expectedBody);
       const headers = { "Accept-Encoding": "identity" };
@@ -169,8 +174,9 @@ export function createMeasurements(options) {
       const fingerprints = [];
       const rows = raw.results.map(({ probe, result }, index) => {
         if (!probe || !result || probe.country !== "CN" || !carrierAsns.includes(probe.asn) || typeof probe.city !== "string" || !probe.city.trim()
-          || (expectedSlots && !expectedSlots.has(slot(probe))) || !probe.tags?.includes("eyeball-network") || seen.has(slot(probe)))
+          || (expectedSlots && !expectedSlots.has(slot(probe))) || !probe.tags?.includes("eyeball-network"))
           throw new Error("Measurement probe coverage differs from the required mainland carrier cities");
+        if (seen.has(slot(probe))) throw new Error("Measurement probe coverage has duplicate mainland carrier cities");
         seen.add(slot(probe));
         fingerprints.push(fingerprint(probe));
         if (seed.fingerprints && seed.fingerprints[index] !== fingerprints[index])
@@ -195,8 +201,8 @@ export function createMeasurements(options) {
           code: result.statusCode ?? null, status: result.status, headers: responseHeaders,
         };
       });
-      if (carrierAsns.some(asn => rows.filter(row => row.asn === asn).length !== 2))
-        throw new Error("Actual measurement requires two distinct cities per mainland carrier");
+      if (carrierAsns.some(asn => rows.filter(row => row.asn === asn).length !== perCarrier))
+        throw new Error(`Actual measurement requires ${countNames[perCarrier]} distinct cities per mainland carrier`);
       const actualLocations = raw.results.map(({ probe }) => ({ country: probe.country, asn: probe.asn, city: probe.city, tags: ["eyeball-network"], limit: 1 }));
       seeds.set(created.id, { locations: actualLocations, fingerprints });
       firstId ??= created.id;
