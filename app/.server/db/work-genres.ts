@@ -1,6 +1,8 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
+import { auditedEntityBatch } from "@/app/.server/db/entity-audit";
 
 export type WorkGenre = { id: number; name: string; group_id: number; public_count: number };
 export type WorkGenreGroup = { id: number; members: WorkGenre[]; publicCount: number };
@@ -58,14 +60,14 @@ export async function mergeWorkGenreGroups(runtime: AppRuntime, input: {
   targetGroup: number;
   sourceSnapshot: string;
   targetSnapshot: string;
-  userId: number;
+  actor: ArchiveUser;
 }) {
   if (input.sourceGroup === input.targetGroup || !input.sourceSnapshot || !input.targetSnapshot) {
     throw new HttpError(400, "请选择两个不同的类型组。");
   }
   const database = getD1(runtime);
   try {
-    await database.batch([
+    await auditedEntityBatch(database, [
       // A failed preview comparison aborts the entire D1 batch, including the audit.
       database.prepare(`SELECT CASE WHEN
         (SELECT group_concat(id, ',') FROM (SELECT id FROM work_genres WHERE group_id=? ORDER BY id))=?
@@ -74,9 +76,14 @@ export async function mergeWorkGenreGroups(runtime: AppRuntime, input: {
         .bind(input.sourceGroup, input.sourceSnapshot, input.targetGroup, input.targetSnapshot),
       database.prepare("UPDATE work_genres SET group_id=? WHERE group_id=?")
         .bind(input.targetGroup, input.sourceGroup),
-      database.prepare(`INSERT INTO auth_audit_logs(user_id,event_type,detail_json)
-        VALUES(?,'admin_genre_merge',?)`).bind(input.userId, JSON.stringify(input)),
-    ]);
+    ], {
+      actor: input.actor, eventType: "admin_genre_merge", source: "admin", operation: "merge", permission: "genre.manage",
+      targets: [{ type: "genre_group", id: input.sourceGroup }, { type: "genre_group", id: input.targetGroup }],
+      snapshot: { sql: `SELECT json_group_array(json_object('id',id,'name',name,'groupId',group_id))
+        FROM (SELECT id,name,group_id FROM work_genres WHERE group_id IN (?,?) ORDER BY id)`,
+        binds: [input.sourceGroup, input.targetGroup] },
+      context: { sourceGroup: input.sourceGroup, targetGroup: input.targetGroup },
+    });
   } catch (error) {
     if (/malformed JSON/i.test(String(error))) {
       throw new HttpError(409, "类型组已变化，请重新预览后再合并。");

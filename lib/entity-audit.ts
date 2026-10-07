@@ -1,7 +1,7 @@
 import { forumHistoryHref } from "./forum";
 
 export const AUDIT_TARGET_LABELS = {
-  work: "作品", creator: "作者", character: "角色", category: "角色分类", tag: "标签",
+  work: "作品", creator: "作者", character: "角色", category: "角色分类", tag: "标签", genre_group: "作品类型组",
   comment: "评论／回复", forum_topic: "讨论主题", forum_post: "讨论楼层", forum_comment: "讨论楼内回复",
 } as const;
 
@@ -20,10 +20,33 @@ export function entityAuditTargets(detail: unknown): EntityAuditTarget[] {
     return [{ type: target.type as EntityAuditTarget["type"], id: target.id, name: typeof target.name === "string" ? target.name : null }];
   });
   // Older entries can identify the target, but lack complete edit history.
-  return (["work", "creator", "character", "category"] as const).flatMap((type) => {
+  const targets: EntityAuditTarget[] = (["work", "creator", "character", "category"] as const).flatMap((type) => {
     const id = data?.[`${type}Id`];
     return typeof id === "string" || typeof id === "number" ? [{ type, id, name: null }] : [];
   });
+  for (const key of ["sourceGroup", "targetGroup"]) {
+    const id = data?.[key];
+    if (typeof id === "number") targets.push({ type: "genre_group", id, name: null });
+  }
+  return targets;
+}
+
+// Older work-edit snapshots also include unchanged character context. Keep the
+// original evidence intact, but count only characters whose global data changed.
+export function entityAuditEditedTargets(detail: unknown): EntityAuditTarget[] {
+  const data = auditRecord(detail);
+  const before = auditRecord(data?.before)?.relatedCharacters;
+  const after = auditRecord(data?.after)?.relatedCharacters;
+  const targets = entityAuditTargets(detail);
+  if (!Array.isArray(before) || !Array.isArray(after)) return targets;
+  const entries = (values: unknown[]) => new Map(values.flatMap((value) => {
+    const row = auditRecord(value);
+    return row && (typeof row.id === "number" || typeof row.id === "string") ? [[String(row.id), row] as const] : [];
+  }));
+  const left = entries(before);
+  const right = entries(after);
+  return targets.filter((target) => target.type !== "character" || (!left.has(String(target.id)) && !right.has(String(target.id)))
+    || entityAuditChanges(left.get(String(target.id)), right.get(String(target.id))).length > 0);
 }
 
 export function entityAuditTargetHref(target: EntityAuditTarget): string {
@@ -32,6 +55,7 @@ export function entityAuditTargetHref(target: EntityAuditTarget): string {
   if (target.type === "creator") return `/admin/creators/${id}`;
   if (target.type === "character") return `/admin/characters/${id}`;
   if (target.type === "tag") return `/admin/tags/edit?name=${id}`;
+  if (target.type === "genre_group") return `/admin/audit?targetType=genre_group&targetId=${id}`;
   if (target.type === "comment") return `/admin/audit?targetType=comment&targetId=${id}`;
   if (target.type === "forum_topic") return forumHistoryHref({ kind: "topic", id: Number(target.id) });
   if (target.type === "forum_post" || target.type === "forum_comment") return forumHistoryHref({ kind: target.type === "forum_post" ? "post" : "comment", id: Number(target.id) });
@@ -55,6 +79,7 @@ const FIELD_LABELS: Record<string, string> = {
   replyToCommentId: "回复对象 ID", userId: "作者 ID", width: "宽度", height: "高度", size: "文件大小", format: "文件格式",
   authorName: "作者", createdAt: "发表时间",
   fromWorkId: "来源作品 ID", toWorkId: "目标作品 ID", type: "类型", inverse: "反向关系", createdByUserId: "创建者 ID", url: "网址", id: "ID",
+  sourceGroup: "来源类型组", targetGroup: "目标类型组", groupId: "类型组 ID",
 };
 
 export type AuditFieldChange = { field: string; before: unknown; after: unknown };

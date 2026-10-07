@@ -36,6 +36,7 @@ export async function auditedEntityBatch(
       WHEN 'creator' THEN (SELECT name FROM creators WHERE id=json_extract(value,'$.id'))
       WHEN 'character' THEN (SELECT primary_name FROM characters WHERE id=json_extract(value,'$.id'))
       WHEN 'category' THEN (SELECT label FROM character_categories WHERE id=json_extract(value,'$.id'))
+      WHEN 'genre_group' THEN (SELECT group_concat(name,'、') FROM (SELECT name FROM work_genres WHERE group_id=json_extract(value,'$.id') ORDER BY id))
       WHEN 'comment' THEN '评论 #' || json_extract(value,'$.id')
       WHEN 'forum_topic' THEN (SELECT title FROM forum_topics WHERE id=json_extract(value,'$.id'))
       WHEN 'forum_post' THEN (SELECT t.title || ' #' || p.post_number FROM forum_posts p JOIN forum_topics t ON t.id=p.topic_id WHERE p.id=json_extract(value,'$.id'))
@@ -61,12 +62,27 @@ export async function auditedEntityBatch(
       json_array(json_object('type','character','id',json_extract(detail_json,'$.after.id'),'name',json_extract(detail_json,'$.after.primaryName'))))
       WHERE id=(SELECT id FROM auth_audit_logs WHERE event_type=? AND json_extract(detail_json,'$.editId')=? ORDER BY id DESC LIMIT 1)`)
       .bind(input.eventType, editId)] : []),
-    ...(Array.isArray(input.targets) && input.targets.some((target) => target.type === "work") ? [database.prepare(`UPDATE auth_audit_logs SET detail_json=json_set(detail_json,'$.targets',
+    ...(Array.isArray(input.targets) && input.targets.some((target) => target.type === "work") ? [
+      // Keep complete before/after evidence for changed global characters, but
+      // avoid repeating every unchanged sheet/material binding on a work save.
+      database.prepare(`UPDATE auth_audit_logs SET detail_json=json_set(detail_json,
+        '$.before.relatedCharacters',json((SELECT json_group_array(json(b.value)) FROM json_each(detail_json,'$.before.relatedCharacters') b
+          WHERE NOT EXISTS(SELECT 1 FROM json_each(detail_json,'$.after.relatedCharacters') a
+            WHERE json_extract(a.value,'$.id')=json_extract(b.value,'$.id') AND a.value=b.value))),
+        '$.after.relatedCharacters',json((SELECT json_group_array(json(a.value)) FROM json_each(detail_json,'$.after.relatedCharacters') a
+          WHERE NOT EXISTS(SELECT 1 FROM json_each(detail_json,'$.before.relatedCharacters') b
+            WHERE json_extract(b.value,'$.id')=json_extract(a.value,'$.id') AND b.value=a.value))))
+        WHERE id=(SELECT id FROM auth_audit_logs WHERE event_type=? AND json_extract(detail_json,'$.editId')=? ORDER BY id DESC LIMIT 1)
+          AND json_type(detail_json,'$.before.relatedCharacters')='array' AND json_type(detail_json,'$.after.relatedCharacters')='array'`)
+        .bind(input.eventType, editId),
+      database.prepare(`UPDATE auth_audit_logs SET detail_json=json_set(detail_json,'$.targets',
       json((SELECT json_group_array(json(target)) FROM (
         SELECT value AS target FROM json_each(detail_json,'$.targets')
         UNION ALL SELECT json_object('type','character','id',json_extract(c.value,'$.id'),'name',json_extract(c.value,'$.primaryName'))
-        FROM json_each(detail_json,'$.after.relatedCharacters') c
-        WHERE NOT EXISTS(SELECT 1 FROM json_each(detail_json,'$.targets') t WHERE json_extract(t.value,'$.type')='character' AND json_extract(t.value,'$.id')=json_extract(c.value,'$.id'))))))
+        FROM (SELECT value FROM json_each(detail_json,'$.before.relatedCharacters')
+          UNION ALL SELECT value FROM json_each(detail_json,'$.after.relatedCharacters')) c
+        WHERE NOT EXISTS(SELECT 1 FROM json_each(detail_json,'$.targets') t WHERE json_extract(t.value,'$.type')='character' AND json_extract(t.value,'$.id')=json_extract(c.value,'$.id'))
+        GROUP BY json_extract(c.value,'$.id')))))
       WHERE id=(SELECT id FROM auth_audit_logs WHERE event_type=? AND json_extract(detail_json,'$.editId')=? ORDER BY id DESC LIMIT 1)`)
       .bind(input.eventType, editId)] : []),
     // Saving identical business values is not evidence of an edit. Ignore

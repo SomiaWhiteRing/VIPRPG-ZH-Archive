@@ -24,6 +24,7 @@ export function DailyAuditReportPane({ dates, report, expectedDate }: {
   expectedDate: string;
 }) {
   const summary = report?.summary;
+  const targetLabel = summary?.version === 2 ? "实际变化条目" : "涉及条目";
   const latestDate = dates[0]?.reportDate;
   const findingCount = summary ? Object.values(summary.findingCounts).reduce((sum, count) => sum + (count ?? 0), 0) : 0;
   return (
@@ -81,11 +82,12 @@ export function DailyAuditReportPane({ dates, report, expectedDate }: {
                     ? "核查不完整，无法给出当日风险结论。"
                     : findingCount ? `发现 ${findingCount} 条需要复核的线索。` : "已扫描日志未命中当前复核规则，仍不能证明不存在恶意编辑。"}</p>
                   <p className="text-xs text-muted">规则命中是复核线索，是否恶意仍需核对具体内容。</p>
+                  {summary.version === 1 ? <p className="text-xs text-muted">此日报按首版规则保存，涉及条目可能包含未变化的关联角色，申请记录也可能被计入编辑或授权变更。</p> : null}
                   {summary.scannedLogs < summary.totalLogs ? <p className="text-danger">当日日志超出扫描上限或扫描记录发生变化，请到系统审计日志核查剩余记录。</p> : null}
                 </div>
 
                 <div className="grid gap-2">
-                  <h3 className="text-xs font-medium text-muted">涉及条目</h3>
+                  <h3 className="text-xs font-medium text-muted">{targetLabel}</h3>
                   {Object.values(summary.targetCounts).some((count) => count > 0) ? (
                     <ChipList items={Object.entries(summary.targetCounts).filter(([, count]) => count > 0).map(([type, count]) => ({
                       label: `${AUDIT_TARGET_LABELS[type as keyof typeof AUDIT_TARGET_LABELS]} · ${count}`,
@@ -136,7 +138,7 @@ export function DailyAuditReportPane({ dates, report, expectedDate }: {
                   <details className="admin-details">
                     <summary>操作者编辑汇总 · {summary.actors.length} 人（最多 100 名）</summary>
                     <TableWrap compact label="操作者编辑汇总" minWidth={600}>
-                      <thead><tr><th>操作者</th><th>编辑次数</th><th>涉及条目</th><th>记录</th></tr></thead>
+                      <thead><tr><th>操作者</th><th>编辑次数</th><th>{targetLabel}</th><th>记录</th></tr></thead>
                       <tbody>{summary.actors.map((actor, index) => <tr key={`${actor.userId}:${index}`}>
                         <td>{actor.name}{actor.userId ? <span className="admin-cell-meta font-mono">#{actor.userId}</span> : null}</td>
                         <td className="tabular-nums">{actor.edits}</td><td className="tabular-nums">{actor.targets}</td>
@@ -155,6 +157,7 @@ export function DailyAuditReportPane({ dates, report, expectedDate }: {
           <summary>核查范围与规则</summary>
           <div className="mt-3 grid gap-3 text-sm leading-relaxed text-muted">
             <p>资料删除／合并、主要字段清空、80 字以上文本缩减至少 80%、新增外链域名、授权快照异常、账户角色／权限调整、同一操作者每天至少 30 次编辑或涉及 15 个条目、同一条目每天至少 5 次改写。正常整理也可能命中。</p>
+            <p>作品编辑中的关联角色仅在角色主资料实际变化时计入条目数。角色或维护者申请的提交、驳回和撤回不计作资料编辑或授权变更；作品类型组合并同样纳入核查。</p>
             <p>每天最多扫描 5,000 条日志，最多展开 200 条线索。仅覆盖已有审计日志，未记录的直接数据库改动及内容语义中的恶意无法由这些规则确认。</p>
           </div>
         </details>

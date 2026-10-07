@@ -14,7 +14,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       targetGroup: parsePositiveId(String(form.get("target_group") ?? "")),
       sourceSnapshot: String(form.get("source_snapshot") ?? ""),
       targetSnapshot: String(form.get("target_snapshot") ?? ""),
-      userId: auth.user.id,
+      actor: auth.user,
     });
     return redirectResponse(new URL("/admin/genres", request.url));
   } catch (error) {
