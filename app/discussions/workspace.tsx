@@ -1053,8 +1053,7 @@ export function DiscussionWorkspace({
                           · {item.replies} 回复 ·{" "}
                           <Timestamp value={item.activeAt} format="duration" />
                         </span>
-                        {item.lastAuthor &&
-                        item.lastAuthor.id !== item.author.id ? (
+                        {item.lastAuthor ? (
                           <span className="hidden md:inline">
                             {" "}
                             · 最后回复：
