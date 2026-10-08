@@ -1,0 +1,146 @@
+/* Website-only material search; its header, footer and work cards use the site components. */
+.material-search-page {
+  box-sizing: border-box;
+  position: relative;
+  min-height: 620px;
+  padding: 60px 24px 68px;
+  overflow: clip;
+  isolation: isolate;
+}
+
+.material-search-body {
+  width: min(100%, 860px);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.material-search-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.material-search-page:is([data-status="idle"], [data-status="searching"]) .material-search-stage {
+  min-height: 492px;
+}
+
+.material-search-source {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  min-height: 0;
+  margin-bottom: 14px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-muted) 15%, var(--color-background));
+  transform-origin: 0 0;
+}
+
+.material-search-page[data-status="searching"] .material-search-source {
+  width: 152px;
+  height: 152px;
+}
+
+.material-search-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.material-search-fallback {
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: normal;
+  color: var(--color-muted);
+}
+
+.material-search-prompt,
+.material-search-sentence,
+.material-search-retry,
+.material-search-more {
+  margin: 0;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: normal;
+  font: 400 16px/1.5 "Noto Serif SC", "Songti SC", "SimSun", serif;
+}
+
+.material-search-prompt {
+  font-size: 17px;
+  letter-spacing: .06em;
+}
+
+.material-search-page[data-dragging="true"] .material-search-prompt,
+.material-search-page[data-dragging="true"] .material-search-source {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.material-search-sentence,
+.material-search-retry,
+.material-search-more {
+  color: var(--color-muted);
+}
+
+.material-search-retry {
+  margin: -10px -4px;
+}
+
+.material-search-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+  text-align: left;
+}
+
+.material-search-card {
+  min-width: 0;
+  animation: material-search-enter 220ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+.material-search-results {
+  animation: material-search-enter 200ms 140ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+.material-search-loading {
+  animation: material-search-enter 200ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+.material-search-more {
+  margin-top: 28px;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+@keyframes material-search-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 640px) {
+  .material-search-page { padding: 54px 16px 60px; }
+  .material-search-page:is([data-status="idle"], [data-status="searching"]) .material-search-stage { min-height: 506px; }
+  .material-search-source { width: 80px; height: 80px; }
+  .material-search-page[data-status="searching"] .material-search-source { width: 128px; height: 128px; }
+  .material-search-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .material-search-sentence,
+  .material-search-retry { font-size: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .material-search-results,
+  .material-search-card,
+  .material-search-loading { animation: none; }
+}

@@ -1,4 +1,5 @@
 import { json as jsonResponse, jsonError } from "@/lib/http";
+import * as materialSearchEndpoint from "./endpoints/api/material-search/route";
 import { searchMentionUsers } from "./mentions";
 import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintainers/route';
 import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
@@ -120,6 +121,10 @@ export const api = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.get("/api/material-search", (c) => materialSearchEndpoint.GET(c.get("runtime"), c.req.raw));
+api.options("/api/material-search", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));
+api.all("/api/material-search", (_c) => jsonResponse({ ok: false, error: "Method not allowed" },
+  { status: 405, headers: { Allow: "GET, OPTIONS" } }));
 api.route("/", sitemapApi);
 api.route("/", seaApi);
 api.get("/api/admin/audit/reports/:date/export", (c) => auditReportExportEndpoint.GET(c.get("runtime"), c.req.raw,

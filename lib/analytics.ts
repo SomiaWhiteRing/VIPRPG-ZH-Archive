@@ -21,6 +21,7 @@ const publicPages: Record<string, string> = {
   "/discussions/search": "讨论搜索", "/search": "搜索", "/explore": "探索",
   "/resources": "素材", "/tags": "标签", "/timeline": "动态",
   "/installed": "本地游戏", "/rakuen": "乐园", "/sea": "永恒之海",
+  "/material-search": "大镜",
 };
 
 export function analyticsPage(pathname: string): string | null {
