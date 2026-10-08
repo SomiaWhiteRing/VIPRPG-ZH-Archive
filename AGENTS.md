@@ -1,5 +1,7 @@
 # Project constraints
 
+- 提交信息必须使用简体中文：标题采用直接的中文摘要，说明实际改动，以中文开头，不使用 `feat:`、`fix:`、`chore:` 等英文类型前缀；正文中的自然语言说明也必须使用中文。产品名、技术名、文件路径、命令、版本号、提交 SHA、PR 编号及 Git trailers 保留原文。合并、压缩合并和回退提交同样适用，不接受 Git/GitHub 自动生成的英文说明。
+- 提交前必须启用仓库钩子（`npm run hooks:install`）；`.githooks/commit-msg` 校验中文标题与正文。不得用 `--no-verify`、临时禁用钩子或添加无意义中文来绕过检查；命令和代码放入反引号或代码块，具体格式见[维护手册](docs/maintenance-regression.md#提交信息检查)。
 - 远端访问入口与配置来源见 [docs/staging-deployment.md](docs/staging-deployment.md#环境地址与配置来源)。不要从 Worker 名称、历史白名单或本地顶层配置推断当前站点地址。
 - 本项目由一人维护。主站正式发布由负责人手动选择 `target=production` 并运行 workflow 即完成确认，候选检查通过后直接发布，不再要求 `Review deployments`；production Environment 不配置 required reviewers。Codex 代为触发仍须本次任务已有明确部署授权，不因技术上可运行而自行发布。不要求第二位审核人、强制 PR 或多人评审。预生产继续随 main 推送自动发布。
 - 正式目标为 `https://viprpg.org`。Codex 执行正式部署、回滚、配置或凭据变更，以及 D1、R2、DO、后台/API 的数据写入、导入、修复、清理、恢复或根账户轮换前，必须取得用户对具体目标和操作范围的明确确认。先完成候选、适用检查、目标和影响预览；确认可覆盖明确批次，范围未变时不重复询问。修改代码或推送 main 不自动授权正式发布或正式数据操作；token、会话、`--confirm` 和 `CI=true` 不代替用户确认。具体入口见 [正式部署手册](docs/production-deployment.md)。
