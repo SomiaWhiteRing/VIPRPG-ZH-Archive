@@ -9,6 +9,7 @@ on:
       - 'android/**'
       - '!android/**/*.md'
       - 'scripts/build-android-assets.mjs'
+      - 'scripts/style-namespace.mjs'
       - 'scripts/android-runtime-adapter.mjs'
       - 'scripts/inspect-android-package.ts'
       - 'package.json'

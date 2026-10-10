@@ -1,7 +1,10 @@
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
 
+import { styleNamespace } from "../scripts/style-namespace.mjs";
+
 export default defineConfig({
+  plugins: [styleNamespace()],
   root: fileURLToPath(new URL("web/", import.meta.url)),
   publicDir: false,
   base: "/_android/",

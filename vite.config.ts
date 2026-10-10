@@ -3,8 +3,11 @@ import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { fileURLToPath } from "node:url";
 
+import { styleNamespace } from "./scripts/style-namespace.mjs";
+
 export default defineConfig({
   plugins: [
+    styleNamespace(),
     cloudflare({
       viteEnvironment: { name: "ssr" },
     }),
